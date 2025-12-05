@@ -5,6 +5,15 @@
   "references": [
     {
       "path": "./apps/web"
+    },
+    {
+      "path": "./libs/shared-types"
+    },
+    {
+      "path": "./libs/database"
+    },
+    {
+      "path": "./libs/bhapi-client"
     }
   ]
 }
