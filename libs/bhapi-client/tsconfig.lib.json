@@ -9,8 +9,15 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@brawltome/shared-types": ["../shared-types/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
-  "references": []
+  "references": [
+    {
+      "path": "../shared-types/tsconfig.lib.json"
+    }
+  ]
 }

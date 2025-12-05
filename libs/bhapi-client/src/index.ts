@@ -1,1 +1,1 @@
-export * from './lib/bhapi-client.js';
+export * from './lib/client.js';
