@@ -14,13 +14,22 @@ datasource db {
 }
 
 model Player {
-  brawlhallaId Int @id
+  rank Int? @default(0)
   name String
+  aliases String[]
+  brawlhallaId Int @id
+  bestLegend String?
+  bestLegendGames Int? @default(0)
+  bestLegendWins Int? @default(0)
   rating Int @default(0)
   tier String?
+  games Int @default(0)
   wins Int @default(0)
+  region String?
+  peakRating Int? @default(0)
   viewCount Int @default(0)
   lastUpdated DateTime @default(now())
   lastViewedAt DateTime @default(now())
   @@index([name])
+  @@index([aliases(any)])
 }
