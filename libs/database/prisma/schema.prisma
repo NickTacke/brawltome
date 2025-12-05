@@ -12,3 +12,15 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Player {
+  brawlhallaId Int @id
+  name String
+  rating Int @default(0)
+  tier String?
+  wins Int @default(0)
+  viewCount Int @default(0)
+  lastUpdated DateTime @default(now())
+  lastViewedAt DateTime @default(now())
+  @@index([name])
+}
