@@ -1,1 +1,1 @@
-export * from './lib/shared-types.js';
+export * from './lib/player.interface.js';
