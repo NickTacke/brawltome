@@ -16,8 +16,8 @@
     }
   },
   "dependencies": {
-    "@prisma/client": "^7.1.0",
-    "prisma": "^7.1.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "dotenv": "^17.2.3",
+    "prisma": "^7.1.0"
   }
 }
