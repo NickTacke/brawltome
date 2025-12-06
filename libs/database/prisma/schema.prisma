@@ -92,7 +92,7 @@ model PlayerStatsLegend {
   damageGadgets String
 
   // Relations
-  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 
   @@id([brawlhallaId, legendId])
 }
@@ -108,7 +108,7 @@ model PlayerClan {
   personalXp Int
 
   // Relations
-  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 }
 
 model PlayerStats {
@@ -141,12 +141,13 @@ model PlayerStats {
   clan PlayerClan?
   
   // Relations
-  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 }
 
 model PlayerRankedLegend {
   brawlhallaId Int
   legendId Int
+  legendNameKey String
   
   // Ranked stats
   rating Int
@@ -156,7 +157,7 @@ model PlayerRankedLegend {
   games Int
 
   // Relations
-  ranked PlayerRanked @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  ranked PlayerRanked @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
   
   @@id([brawlhallaId, legendId])
 }
@@ -198,5 +199,5 @@ model PlayerRanked {
   teams PlayerRankedTeam[]
 
   // Relations
-  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 }
