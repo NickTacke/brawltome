@@ -111,6 +111,7 @@ model PlayerClan {
 
 model PlayerStats {
   brawlhallaId Int @id
+  lastUpdated DateTime @default(now())
 
   // Account stats
   xp Int
@@ -159,10 +160,6 @@ model PlayerRankedLegend {
 }
 
 model PlayerRankedTeam {
-  id Int @id @default(autoincrement())
-  brawlhallaId Int
-
-  // Team information
   brawlhallaIdOne Int
   brawlhallaIdTwo Int
   teamName String
@@ -179,11 +176,14 @@ model PlayerRankedTeam {
   globalRank Int?
   
   // Relations
-  ranked PlayerRanked @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  ranked PlayerRanked @relation(fields: [brawlhallaIdOne], references: [brawlhallaId], onDelete: Cascade)
+  
+  @@id([brawlhallaIdOne, brawlhallaIdTwo])
 }
 
 model PlayerRanked {
   brawlhallaId Int @id
+  lastUpdated DateTime @default(now())
 
   // Rank numbers
   globalRank Int?
