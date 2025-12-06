@@ -17,7 +17,9 @@ model Player {
   brawlhallaId Int @id
   name String
   region String?
-  aliases String[] @default([])
+
+  aliasesKeys String[] @default([])
+  aliasesValues String[] @default([])
 
   // Ranked stats
   rating Int @default(0)
@@ -44,7 +46,7 @@ model Player {
 
   // Fuzzy search for name and aliases
   @@index([name])
-  @@index([aliases(any)])
+  @@index([aliasesKeys(any)])
 
   // Sort by rating descending
   @@index([rating(sort: Desc)])
@@ -161,7 +163,7 @@ model PlayerRankedLegend {
 
 model PlayerRankedTeam {
   brawlhallaId Int
-  
+
   brawlhallaIdOne Int
   brawlhallaIdTwo Int
   teamName String
