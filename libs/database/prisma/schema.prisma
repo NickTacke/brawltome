@@ -14,22 +14,34 @@ datasource db {
 }
 
 model Player {
-  rank Int? @default(0)
-  name String
-  aliases String[]
   brawlhallaId Int @id
-  bestLegend String?
-  bestLegendGames Int? @default(0)
-  bestLegendWins Int? @default(0)
+  name String
+  region String?
+  aliases String[] @default([])
+
+  // Ranked stats
   rating Int @default(0)
+  peakRating Int? @default(0)
   tier String?
   games Int @default(0)
   wins Int @default(0)
-  region String?
-  peakRating Int? @default(0)
-  viewCount Int @default(0)
+
+  // Legend stats
+  bestLegend Int? @default(0)
+  bestLegendGames Int? @default(0)
+  bestLegendWins Int? @default(0)
+
+  // "Economy" metadata
   lastUpdated DateTime @default(now())
+
+  // "Janitor" metrics
+  viewCount Int @default(0)
   lastViewedAt DateTime @default(now())
+
+  // Fuzzy search for name and aliases
   @@index([name])
   @@index([aliases(any)])
+
+  // Sort by rating descending
+  @@index([rating(sort: Desc)])
 }
