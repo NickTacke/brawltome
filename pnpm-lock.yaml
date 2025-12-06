@@ -238,6 +238,12 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.1(react@19.2.1)
+      swr:
+        specifier: ^2.3.7
+        version: 2.3.7(react@19.2.1)
+      use-debounce:
+        specifier: ^10.0.6
+        version: 10.0.6(react@19.2.1)
 
   libs/bhapi-client:
     dependencies:
@@ -8155,6 +8161,12 @@ packages:
 
   url-join@4.0.1:
     resolution: {integrity: sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==}
+
+  use-debounce@10.0.6:
+    resolution: {integrity: sha512-C5OtPyhAZgVoteO9heXMTdW7v/IbFI+8bSVKYCJrSmiWWCLsbUxiBSp4t9v0hNBTGY97bT72ydDIDyGSFWfwXg==}
+    engines: {node: '>= 16.0.0'}
+    peerDependencies:
+      react: '*'
 
   use-sync-external-store@1.6.0:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
@@ -17711,6 +17723,10 @@ snapshots:
       punycode: 2.3.1
 
   url-join@4.0.1: {}
+
+  use-debounce@10.0.6(react@19.2.1):
+    dependencies:
+      react: 19.2.1
 
   use-sync-external-store@1.6.0(react@19.2.1):
     dependencies:
