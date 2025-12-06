@@ -38,10 +38,169 @@ model Player {
   viewCount Int @default(0)
   lastViewedAt DateTime @default(now())
 
+  // Relations
+  stats PlayerStats?
+  ranked PlayerRanked?
+
   // Fuzzy search for name and aliases
   @@index([name])
   @@index([aliases(any)])
 
   // Sort by rating descending
   @@index([rating(sort: Desc)])
+}
+
+model PlayerStatsLegend {
+  brawlhallaId Int
+
+  // Legend information
+  legendId Int
+  legendNameKey String
+  
+  // XP information
+  xp Int
+  level Int
+  xpPercentage Float
+
+  // General statistics
+  games Int
+  wins Int
+  matchTime Int
+  KOs Int
+  teamKOs Int
+  suicides Int
+  falls Int
+  damageDealt String
+  damageTaken String
+  
+  // Weapon statistics
+  damageWeaponOne String
+  damageWeaponTwo String
+  timeHeldWeaponOne Int
+  timeHeldWeaponTwo Int
+  KOWeaponOne Int
+  KOWeaponTwo Int
+
+  // Specific KO/Damage statistics
+  KOUnarmed Int
+  KOThrownItem Int
+  KOGadgets Int
+  damageUnarmed String
+  damageThrownItem String
+  damageGadgets String
+
+  // Relations
+  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId])
+
+  @@id([brawlhallaId, legendId])
+}
+
+model PlayerClan {
+  brawlhallaId Int @id
+
+  // Clan information
+  clanName String
+  clanId Int
+  clanXp String
+  clanLifetimeXp String
+  personalXp String
+
+  // Relations
+  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId])
+}
+
+model PlayerStats {
+  brawlhallaId Int @id
+
+  // Account stats
+  xp Int
+  level Int
+  xpPercentage Float
+  games Int // Total games played
+  wins Int // Total wins
+  
+  // Gadget damage
+  damageBomb String
+  damageMine String
+  damageSpikeball String
+  damageSidekick String
+
+  // Gadget hits / kills
+  hitSnowball Int
+  koBomb Int
+  koMine Int
+  koSpikeball Int
+  koSidekick Int
+  koSnowball Int
+
+  // Legends & Clan
+  legends PlayerStatsLegend[]
+  clan PlayerClan?
+  
+  // Relations
+  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId])
+}
+
+model PlayerRankedLegend {
+  brawlhallaId Int
+  legendId Int
+  
+  // Ranked stats
+  rating Int
+  peakRating Int
+  tier String
+  wins Int
+  games Int
+
+  // Relations
+  ranked PlayerRanked @relation(fields: [brawlhallaId], references: [brawlhallaId])
+  
+  @@id([brawlhallaId, legendId])
+}
+
+model PlayerRankedTeam {
+  id Int @id @default(autoincrement())
+  brawlhallaId Int
+
+  // Team information
+  brawlhallaIdOne Int
+  brawlhallaIdTwo Int
+  teamName String
+  
+  // Ranked stats
+  rating Int
+  peakRating Int
+  tier String
+  wins Int
+  games Int
+  
+  // Rank information
+  region String?
+  globalRank Int?
+  
+  // Relations
+  ranked PlayerRanked @relation(fields: [brawlhallaId], references: [brawlhallaId])
+}
+
+model PlayerRanked {
+  brawlhallaId Int @id
+  
+  // Ranked stats
+  rating Int
+  peakRating Int
+  tier String
+  wins Int
+  games Int
+  
+  // Rank information
+  region String?
+  globalRank Int?
+  regionRank Int?
+  
+  // Legends & Teams
+  legends PlayerRankedLegend[]
+  teams PlayerRankedTeam[]
+
+  // Relations
+  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId])
 }
