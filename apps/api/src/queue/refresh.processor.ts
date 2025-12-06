@@ -41,15 +41,40 @@ export class RefreshProcessor extends WorkerHost {
 
                 // Ranked upsert
                 await this.prisma.$transaction(async (tx) => {
+                    const existing = await tx.player.findUnique({
+                        where: { brawlhallaId: id },
+                        select: { name: true, brawlhallaId: true }
+                    });
+
+                    const aliasUpdate = (existing && existing.name !== data.name) ? {
+                        aliases: {
+                            upsert: {
+                                where: {
+                                    brawlhallaId_key: {
+                                        brawlhallaId: id,
+                                        key: existing.name.toLowerCase()
+                                    }
+                                },
+                                create: {
+                                    key: existing.name.toLowerCase(),
+                                    value: existing.name
+                                },
+                                update: {}
+                            }
+                        }
+                    } : {};
+
                     await tx.player.update({
                         where: { brawlhallaId: id },
                         data: {
+                            name: data.name,
                             rating: data.rating,
                             peakRating: data.peak_rating,
                             tier: data.tier,
                             games: data.games,
                             wins: data.wins,
                             lastUpdated: new Date(),
+                            ...aliasUpdate
                         },
                     });
 

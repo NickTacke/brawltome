@@ -81,13 +81,21 @@ export class PlayerService {
             }
         }
 
-        await this.refreshQueue.add(name, data, {
-            jobId,
-            priority,
-            removeOnComplete: true,
-            removeOnFail: true, // Auto-remove on fail to prevent "stuck" jobs if our manual check misses something
-        });
-        this.logger.debug(`Queued ${name} for ${data.id} with priority ${priority}`);
+        try {
+            await this.refreshQueue.add(name, data, {
+                jobId,
+                priority,
+                removeOnComplete: true,
+                removeOnFail: true, // Auto-remove on fail to prevent "stuck" jobs if our manual check misses something
+            });
+            this.logger.debug(`Queued ${name} for ${data.id} with priority ${priority}`);
+        } 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        catch (error: any) {
+            if (!error.message?.includes('already exists')) {
+                this.logger.error(`Error queuing ${name} for ${data.id}`, error);
+            }
+        }
     }
 
     private async incrementViewCount(id: number) {
