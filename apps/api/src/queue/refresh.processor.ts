@@ -17,11 +17,14 @@ export class RefreshProcessor extends WorkerHost {
         private prisma: PrismaService,
     ) {
         super();
+        this.logger.log('RefreshProcessor instantiated!');
     }
 
     async process(job: Job<{ id: number }>) {
+        this.logger.log(`👷 WORKER STARTED job: ${job.name} for ${job.data.id}`);
         const { id } = job.data;
         const remainingTokens = await this.bhApiClient.getRemainingTokens();
+        this.logger.debug(`Remaining tokens: ${remainingTokens}`);
         
         // Halt refreshing stats if we're on a low budget (more priority on ranked)
         if (remainingTokens < STATS_MIN_TOKENS && job.name === 'refresh-stats') {
@@ -61,7 +64,7 @@ export class RefreshProcessor extends WorkerHost {
                         },
                         teams: {
                             deleteMany: {},
-                            create: this.mapTeams(data.teams),
+                            create: this.mapTeams(data['2v2']),
                         },
                     },
                     create: {
@@ -73,7 +76,7 @@ export class RefreshProcessor extends WorkerHost {
                             create: this.mapLegends(data.legends),
                         },
                         teams: {
-                            create: this.mapTeams(data.teams),
+                            create: this.mapTeams(data['2v2']),
                         },
                     },
                 });
@@ -168,6 +171,7 @@ export class RefreshProcessor extends WorkerHost {
     }
 
     private mapLegends(legends: PlayerRankedLegendDTO[]) {
+        if (!legends) return [];
         return legends.map((legend) => ({
             legendId: legend.legend_id,
             rating: legend.rating,
@@ -179,19 +183,33 @@ export class RefreshProcessor extends WorkerHost {
     }
 
     private mapTeams(teams: PlayerRankedTeamDTO[]) {
-        return teams.map((team) => ({
-            brawlhallaIdOne: team.brawlhalla_id_one,
-            brawlhallaIdTwo: team.brawlhalla_id_two,
-            teamName: team.teamname,
-            rating: team.rating,
-            peakRating: team.peak_rating,
-            tier: team.tier,
-            wins: team.wins,
-            games: team.games,
-        }));
+        if (!teams) return [];
+        
+        // Deduplicate teams based on ID pairs
+        const uniqueTeams = new Map<string, PlayerRankedTeamDTO>();
+        for (const team of teams) {
+            const key = `${team.brawlhalla_id_one}-${team.brawlhalla_id_two}`;
+            if (!uniqueTeams.has(key)) {
+                uniqueTeams.set(key, team);
+            }
+        }
+
+        return Array.from(uniqueTeams.values()).map((team) => {
+            return {
+                brawlhallaIdOne: team.brawlhalla_id_one,
+                brawlhallaIdTwo: team.brawlhalla_id_two,
+                teamName: team.teamname,
+                rating: team.rating,
+                peakRating: team.peak_rating,
+                tier: team.tier,
+                wins: team.wins,
+                games: team.games,
+            };
+        });
     }
 
     private mapStatsLegends(legends: PlayerStatsLegendDTO[]) {
+        if (!legends) return [];
         return legends
         .filter((legend) => legend.legend_id !== 0)
         .map((legend) => ({
