@@ -4,13 +4,21 @@
     "outDir": "dist",
     "module": "nodenext",
     "types": ["node"],
-    "rootDir": "src",
+    "rootDir": "../../",
     "moduleResolution": "nodenext",
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "target": "es2021"
+    "target": "es2021",
+    "paths": {
+      "@brawltome/database": ["../../libs/database/src/index.ts"]
+    }
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["eslint.config.js", "eslint.config.cjs", "eslint.config.mjs"]
+  "include": ["src/**/*.ts", "../../libs/database/src/index.ts"],
+  "exclude": ["eslint.config.js", "eslint.config.cjs", "eslint.config.mjs"],
+  "references": [
+    {
+      "path": "../../libs/database/tsconfig.lib.json"
+    }
+  ]
 }

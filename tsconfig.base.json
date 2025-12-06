@@ -16,6 +16,9 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
-    "customConditions": ["@brawltome/source"]
+    "customConditions": ["@brawltome/source"],
+    "paths": {
+      "@brawltome/database": ["libs/database/src/index.ts"]
+    }
   }
 }
