@@ -21,8 +21,18 @@ export class PlayerService {
         const player = await this.prisma.player.findUnique({
             where: { brawlhallaId: id },
             include: {
-                stats: true,
-                ranked: true,
+                stats: {
+                    include: {
+                        legends: true,
+                        clan: true,
+                    },
+                },
+                ranked: {
+                    include: {
+                        legends: true,
+                        teams: true,
+                    },
+                },
             },
         });
         if (!player) return null;
