@@ -102,8 +102,8 @@ model PlayerClan {
   clanName String
   clanId Int
   clanXp String
-  clanLifetimeXp String
-  personalXp String
+  clanLifetimeXp Int
+  personalXp Int
 
   // Relations
   stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId])
@@ -160,6 +160,8 @@ model PlayerRankedLegend {
 }
 
 model PlayerRankedTeam {
+  brawlhallaId Int
+  
   brawlhallaIdOne Int
   brawlhallaIdTwo Int
   teamName String
@@ -176,9 +178,9 @@ model PlayerRankedTeam {
   globalRank Int?
   
   // Relations
-  ranked PlayerRanked @relation(fields: [brawlhallaIdOne], references: [brawlhallaId], onDelete: Cascade)
+  ranked PlayerRanked @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
   
-  @@id([brawlhallaIdOne, brawlhallaIdTwo])
+  @@id([brawlhallaId, brawlhallaIdOne, brawlhallaIdTwo])
 }
 
 model PlayerRanked {
