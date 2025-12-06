@@ -14,7 +14,7 @@ export class SearchService {
     // Local Search
     async searchLocal(query: string) {
         // Sanitize the query - remove special characters
-        const sanitized = query.replace(/[^\w\s-]/gi, '').toLowerCase();
+        const sanitized = query.replace(/[^\w\s-]/gi, '');
 
         // Return empty array if query is too short
         if (sanitized.length < 2) return [];
@@ -31,8 +31,13 @@ export class SearchService {
                         },
                     },
                     {
-                        aliasesKeys: {
-                            hasSome: [sanitized],
+                        aliases: {
+                            some: {
+                                key: {
+                                    contains: sanitized,
+                                    mode: 'insensitive',
+                                },
+                            },
                         },
                     },
                 ],
@@ -44,8 +49,12 @@ export class SearchService {
             select: {
                 brawlhallaId: true,
                 name: true,
-                aliasesKeys: true,
-                aliasesValues: true,
+                aliases: {
+                    select: {
+                        key: true,
+                        value: true,
+                    }
+                },
                 rating: true,
                 tier: true,
                 games: true,
@@ -76,35 +85,45 @@ export class SearchService {
                     // Check if player exists
                     const existing = await tx.player.findUnique({
                         where: { brawlhallaId: p.brawlhalla_id },
-                        select: { name: true, aliasesKeys: true, aliasesValues: true },
+                        select: { name: true, brawlhallaId: true },
                     });
 
                     // If player exists and name changed, add old name to aliases
-                    const updatedAliasesKeys = existing && existing.name !== p.name
-                        ? [...new Set([...(existing.aliasesKeys || []), existing.name.toLowerCase()])]
-                        : existing?.aliasesKeys || [];
-                    
-                    const updatedAliasesValues = existing && existing.name !== p.name
-                        ? [...new Set([...(existing.aliasesValues || []), existing.name])]
-                        : existing?.aliasesValues || [];
+                    const aliasUpdate = (existing && existing.name !== p.name) ? {
+                        aliases: {
+                            upsert: {
+                                where: {
+                                    brawlhallaId_key: {
+                                        brawlhallaId: existing.brawlhallaId,
+                                        key: existing.name.toLowerCase()
+                                    }
+                                },
+                                create: {
+                                    key: existing.name.toLowerCase(),
+                                    value: existing.name
+                                },
+                                update: {}
+                            }
+                        }
+                    } : {};
 
                     await tx.player.upsert({
                         where: { brawlhallaId: p.brawlhalla_id },
                         create: {
                             brawlhallaId: p.brawlhalla_id,
                             name: p.name,
-                            aliasesKeys: [],
-                            aliasesValues: [],
+                            region: p.region,
                             rating: p.rating,
+                            peakRating: p.peak_rating,
                             tier: p.tier,
                             games: p.games,
                             wins: p.wins,
                         },
                         update: {
                             name: p.name,
-                            aliasesKeys: updatedAliasesKeys,
-                            aliasesValues: updatedAliasesValues,
+                            ...aliasUpdate,
                             rating: p.rating,
+                            peakRating: p.peak_rating,
                             tier: p.tier,
                             games: p.games,
                             wins: p.wins,
