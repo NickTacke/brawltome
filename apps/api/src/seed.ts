@@ -38,11 +38,13 @@ async function bootstrap() {
                     where: { brawlhallaId: p.brawlhalla_id },
                 });
 
-                let aliases: string[] = existing?.aliases || [];
+                let aliasesKeys: string[] = existing?.aliasesKeys || [];
+                let aliasesValues: string[] = existing?.aliasesValues || [];
                 
                 // If player exists and name changed, add old name to aliases
                 if (existing && existing.name !== p.name) {
-                    aliases = [...new Set([...existing.aliases, existing.name])];
+                    aliasesKeys = [...new Set([...existing.aliasesKeys, existing.name.toLowerCase()])];
+                    aliasesValues = [...new Set([...existing.aliasesValues, existing.name])];
                 }
 
                 await prisma.player.upsert({
@@ -50,7 +52,8 @@ async function bootstrap() {
                     update: {
                         name: p.name,
                         region: p.region,
-                        aliases: aliases,
+                        aliasesKeys: aliasesKeys,
+                        aliasesValues: aliasesValues,
                         rating: p.rating,
                         peakRating: p.peak_rating,
                         tier: p.tier,
@@ -65,7 +68,8 @@ async function bootstrap() {
                         brawlhallaId: p.brawlhalla_id,
                         name: p.name,
                         region: p.region,
-                        aliases: aliases,
+                        aliasesKeys: aliasesKeys,
+                        aliasesValues: aliasesValues,
                         rating: p.rating,
                         peakRating: p.peak_rating,
                         tier: p.tier,
