@@ -18,8 +18,7 @@ model Player {
   name String
   region String?
 
-  aliasesKeys String[] @default([])
-  aliasesValues String[] @default([])
+  aliases PlayerAlias[]
 
   // Ranked stats
   rating Int @default(0)
@@ -46,10 +45,19 @@ model Player {
 
   // Fuzzy search for name and aliases
   @@index([name])
-  @@index([aliasesKeys(any)])
 
   // Sort by rating descending
   @@index([rating(sort: Desc)])
+}
+
+model PlayerAlias {
+  brawlhallaId Int
+
+  key String
+  value String
+
+  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
+  @@id([brawlhallaId, key])
 }
 
 model PlayerStatsLegend {
