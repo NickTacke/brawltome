@@ -52,8 +52,6 @@ export interface PlayerRankedTeamDTO {
   wins: number;
   games: number;
   teamname: string;
-  region: number;
-  global_rank: number;
 }
 
 // Player General Statistics
