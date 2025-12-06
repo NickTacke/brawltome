@@ -21,6 +21,13 @@
           }
         }
       },
+      "seed": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm dlx tsx --tsconfig tsconfig.app.json src/seed.ts",
+          "cwd": "apps/api"
+        }
+      },
       "prune-lockfile": {
         "dependsOn": [
           "build"
@@ -84,6 +91,7 @@
     "@prisma/client": "^7.1.0",
     "@brawltome/database": "workspace:*",
     "@brawltome/bhapi-client": "workspace:*",
+    "@brawltome/shared-types": "workspace:*",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
     "tslib": "^2.3.0"

@@ -12,7 +12,8 @@
     "target": "es2021",
     "paths": {
       "@brawltome/database": ["../../libs/database/src/index.ts"],
-      "@brawltome/bhapi-client": ["../../libs/bhapi-client/src/index.ts"]
+      "@brawltome/bhapi-client": ["../../libs/bhapi-client/src/index.ts"],
+      "@brawltome/shared-types": ["../../libs/shared-types/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],
@@ -23,6 +24,9 @@
     },
     {
       "path": "../../libs/bhapi-client/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/shared-types/tsconfig.lib.json"
     }
   ]
 }
