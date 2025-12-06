@@ -22,6 +22,7 @@ export class BhApiClientService implements OnModuleInit {
         this.http = axios.create({
             baseURL: 'https://api.brawlhalla.com',
             params: { api_key: apiKey },
+            timeout: 10000, // 10s timeout
         });
 
         // Initialize Redis connection manually to ensure URL is used correctly
@@ -33,7 +34,7 @@ export class BhApiClientService implements OnModuleInit {
         this.limiter = new Bottleneck({
             // Cluster settings
             id: 'bhapi-limiter',
-            datastore: 'redis',
+            datastore: 'ioredis',
             connection,
             clearDatastore: false,
 
