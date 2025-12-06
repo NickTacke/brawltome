@@ -184,16 +184,8 @@ model PlayerRankedTeam {
 
 model PlayerRanked {
   brawlhallaId Int @id
-  
-  // Ranked stats
-  rating Int
-  peakRating Int
-  tier String
-  wins Int
-  games Int
-  
-  // Rank information
-  region String?
+
+  // Rank numbers
   globalRank Int?
   regionRank Int?
   
