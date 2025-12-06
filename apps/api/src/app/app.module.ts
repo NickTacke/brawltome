@@ -9,6 +9,7 @@ import { QueueModule } from '../queue/queue.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PlayerModule } from '../player/player.module';
+import { SearchModule } from '../search/search.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PlayerModule } from '../player/player.module';
     BhApiClientModule,
     QueueModule,
     PlayerModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],
