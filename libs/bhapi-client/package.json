@@ -16,6 +16,10 @@
     }
   },
   "dependencies": {
+    "@nestjs/config": "^4.0.2",
+    "axios": "^1.13.2",
+    "bottleneck": "^2.19.5",
+    "ioredis": "^5.8.2",
     "tslib": "^2.3.0"
   }
 }
