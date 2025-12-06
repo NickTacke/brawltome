@@ -1,1 +1,1 @@
-export * from './lib/player.interface.js';
+export * from './lib/player.interface';
