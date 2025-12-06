@@ -16,9 +16,13 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
     "customConditions": ["@brawltome/source"],
     "paths": {
-      "@brawltome/database": ["libs/database/src/index.ts"]
+      "@brawltome/database": ["libs/database/src/index.ts"],
+      "@brawltome/bhapi-client": ["libs/bhapi-client/src/index.ts"]
     }
   }
 }
