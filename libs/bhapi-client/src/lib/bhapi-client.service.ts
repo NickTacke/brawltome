@@ -1,8 +1,8 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Bottleneck from 'bottleneck';
-import axios, { AxiosInstance } from 'axios';
 import Redis from 'ioredis';
+import axios, { AxiosInstance } from 'axios';
 
 @Injectable()
 export class BhApiClientService implements OnModuleInit {
@@ -12,6 +12,9 @@ export class BhApiClientService implements OnModuleInit {
 
     constructor(private config: ConfigService) {
         const redisUrl = this.config.getOrThrow<string>('REDIS_URL');
+        // Log the URL (masked) to verify we are getting it
+        this.logger.log(`Using Redis URL: ${redisUrl.replace(/:\/\/.*@/, '://***@')}`);
+
         const apiKey = this.config.getOrThrow<string>('BRAWLHALLA_API_KEY');
 
         // Initialize HTTP client
@@ -20,18 +23,17 @@ export class BhApiClientService implements OnModuleInit {
             params: { api_key: apiKey },
         });
 
-        // Initialize Redis connection
-        const redisConnection = new Redis(redisUrl);
+        // Initialize Redis connection manually to ensure URL is used correctly
+        const connection = new Bottleneck.IORedisConnection({
+            client: new Redis(redisUrl),
+        });
 
         // Initialize rate limiter
         this.limiter = new Bottleneck({
             // Cluster settings
             id: 'bhapi-limiter',
-            datastore: "ioredis",
+            connection,
             clearDatastore: false,
-            clientOptions: {
-                client: redisConnection
-            },
 
             // Traffic settings
             minTime: 100,
@@ -44,6 +46,7 @@ export class BhApiClientService implements OnModuleInit {
         });
 
         // Debug logging
+        this.limiter.on('error', (err) => this.logger.error('⚠️ Bottleneck error', err));
         this.limiter.on('depleted', () => this.logger.warn('⚠️ API Quota Depleted!'));
     }
 
