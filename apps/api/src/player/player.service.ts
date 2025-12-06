@@ -45,28 +45,49 @@ export class PlayerService {
 
         // Queue jobs if necessary
         if (rankedAge > RANKED_TTL) {
-            const priority = this.calculatePriority(player.viewCount, rankedAge, 'ranked');
-            await this.refreshQueue.add('refresh-ranked', { id }, {
-                jobId: `refresh-ranked-${id}`,
-                priority: priority,
-                removeOnComplete: true
-            });
-            this.logger.debug(`Queued ranked refresh for ${id} with priority ${priority}`);
+            try {
+                const priority = this.calculatePriority(player.viewCount, rankedAge, 'ranked');
+                await this.addJob('refresh-ranked', { id }, priority);
+            } catch (error) {
+                this.logger.error(`Error queuing ranked refresh for ${id}`, error);
+            }
         }
         if (statsAge > STATS_TTL) {
-            const priority = this.calculatePriority(player.viewCount, statsAge, 'stats');
-            await this.refreshQueue.add('refresh-stats', { id }, {
-                jobId: `refresh-stats-${id}`,
-                priority: priority,
-                removeOnComplete: true
-            });
-            this.logger.debug(`Queued stats refresh for ${id} with priority ${priority}`);
+            try {
+                const priority = this.calculatePriority(player.viewCount, statsAge, 'stats');
+                await this.addJob('refresh-stats', { id }, priority);
+            } catch (error) {
+                this.logger.error(`Error queuing stats refresh for ${id}`, error);
+            }
         }
 
         return {
             ...player,
             isRefreshing: rankedAge > RANKED_TTL || statsAge > STATS_TTL
         };
+    }
+
+    private async addJob(name: string, data: { id: number }, priority: number) {
+        const jobId = `${name}-${data.id}`;
+        const job = await this.refreshQueue.getJob(jobId);
+
+        if (job) {
+            const state = await job.getState();
+            if (state === 'failed') {
+                await job.remove();
+                this.logger.warn(`Removed failed job ${jobId} to re-queue`);
+            } else {
+                return;
+            }
+        }
+
+        await this.refreshQueue.add(name, data, {
+            jobId,
+            priority,
+            removeOnComplete: true,
+            removeOnFail: true, // Auto-remove on fail to prevent "stuck" jobs if our manual check misses something
+        });
+        this.logger.debug(`Queued ${name} for ${data.id} with priority ${priority}`);
     }
 
     private async incrementViewCount(id: number) {
