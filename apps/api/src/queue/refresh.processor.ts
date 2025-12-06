@@ -22,107 +22,140 @@ export class RefreshProcessor extends WorkerHost {
 
     async process(job: Job<{ id: number }>) {
         this.logger.log(`👷 WORKER STARTED job: ${job.name} for ${job.data.id}`);
-        const { id } = job.data;
-        const remainingTokens = await this.bhApiClient.getRemainingTokens();
-        this.logger.debug(`Remaining tokens: ${remainingTokens}`);
-        
-        // Halt refreshing stats if we're on a low budget (more priority on ranked)
-        if (remainingTokens < STATS_MIN_TOKENS && job.name === 'refresh-stats') {
-            this.logger.warn(`Skipping stats refresh for ${id} (Tokens: ${remainingTokens})`);
-            return;
-        } else if (remainingTokens < RANKED_MIN_TOKENS && job.name === 'refresh-ranked') {
-            this.logger.warn(`Skipping ranked refresh for ${id} (Tokens: ${remainingTokens})`);
-            return;
-        }
+        try {
+            const { id } = job.data;
+            const remainingTokens = await this.bhApiClient.getRemainingTokens();
+            this.logger.debug(`Remaining tokens: ${remainingTokens}`);
+            
+            // Halt refreshing stats if we're on a low budget (more priority on ranked)
+            if (remainingTokens < STATS_MIN_TOKENS && job.name === 'refresh-stats') {
+                this.logger.warn(`Skipping stats refresh for ${id} (Tokens: ${remainingTokens})`);
+                return;
+            } else if (remainingTokens < RANKED_MIN_TOKENS && job.name === 'refresh-ranked') {
+                this.logger.warn(`Skipping ranked refresh for ${id} (Tokens: ${remainingTokens})`);
+                return;
+            }
 
-        if (job.name === 'refresh-ranked') {
-            const data = await this.bhApiClient.getPlayerRanked(id);
+            if (job.name === 'refresh-ranked') {
+                const data = await this.bhApiClient.getPlayerRanked(id);
 
-            // Ranked upsert
-            await this.prisma.$transaction(async (tx) => {
-                await tx.player.update({
-                    where: { brawlhallaId: id },
-                    data: {
-                        rating: data.rating,
-                        peakRating: data.peak_rating,
-                        tier: data.tier,
-                        games: data.games,
-                        wins: data.wins,
-                        lastUpdated: new Date(),
-                    },
-                });
-
-                await tx.playerRanked.upsert({
-                    where: { brawlhallaId: id },
-                    update: {
-                        globalRank: data.global_rank,
-                        regionRank: data.region_rank,
-                        lastUpdated: new Date(),
-                        legends: {
-                            deleteMany: {},
-                            create: this.mapLegends(data.legends),
-                        },
-                        teams: {
-                            deleteMany: {},
-                            create: this.mapTeams(data['2v2']),
-                        },
-                    },
-                    create: {
-                        brawlhallaId: id,
-                        globalRank: data.global_rank,
-                        regionRank: data.region_rank,
-                        lastUpdated: new Date(),
-                        legends: {
-                            create: this.mapLegends(data.legends),
-                        },
-                        teams: {
-                            create: this.mapTeams(data['2v2']),
-                        },
-                    },
-                });
-            });
-        } else if (job.name === 'refresh-stats') {
-            const data = await this.bhApiClient.getPlayerStats(id);
-
-            await this.prisma.$transaction(async (tx) => {
-                // If clan data is missing, ensure we clean up any existing clan record
-                if (!data.clan) {
-                    await tx.playerClan.deleteMany({
+                // Ranked upsert
+                await this.prisma.$transaction(async (tx) => {
+                    await tx.player.update({
                         where: { brawlhallaId: id },
-                    });
-                }
-
-                await tx.playerStats.upsert({
-                    where: { brawlhallaId: id },
-                    update: {
-                        xp: data.xp,
-                        level: data.level,
-                        xpPercentage: data.xp_percentage,
-                        games: data.games,
-                        wins: data.wins,
-                        damageBomb: data.damagebomb,
-                        damageMine: data.damagemine,
-                        damageSpikeball: data.damagespikeball,
-                        damageSidekick: data.damagesidekick,
-                        hitSnowball: data.hitsnowball,
-                        koBomb: data.kobomb,
-                        koMine: data.komine,
-                        koSpikeball: data.kospikeball,
-                        koSidekick: data.kosidekick,
-                        koSnowball: data.kosnowball,
-                        legends: {
-                            deleteMany: {},
-                            create: this.mapStatsLegends(data.legends),
+                        data: {
+                            rating: data.rating,
+                            peakRating: data.peak_rating,
+                            tier: data.tier,
+                            games: data.games,
+                            wins: data.wins,
+                            lastUpdated: new Date(),
                         },
-                        clan: data.clan ? {
-                            upsert: {
-                                update: {
-                                    clanName: data.clan.clan_name,
-                                    clanId: data.clan.clan_id,
-                                    clanXp: data.clan.clan_xp,
-                                    clanLifetimeXp: data.clan.clan_lifetime_xp,
-                                    personalXp: data.clan.personal_xp,
-                                },
+                    });
+
+                    await tx.playerRanked.upsert({
+                        where: { brawlhallaId: id },
+                        update: {
+                            globalRank: data.global_rank,
+                            regionRank: data.region_rank,
+                            lastUpdated: new Date(),
+                            legends: {
+                                deleteMany: {},
+                                create: this.mapLegends(data.legends),
+                            },
+                            teams: {
+                                deleteMany: {},
+                                create: this.mapTeams(data['2v2']),
+                            },
+                        },
+                        create: {
+                            brawlhallaId: id,
+                            globalRank: data.global_rank,
+                            regionRank: data.region_rank,
+                            lastUpdated: new Date(),
+                            legends: {
+                                create: this.mapLegends(data.legends),
+                            },
+                            teams: {
+                                create: this.mapTeams(data['2v2']),
+                            },
+                        },
+                    });
+                });
+            } else if (job.name === 'refresh-stats') {
+                const data = await this.bhApiClient.getPlayerStats(id);
+
+                await this.prisma.$transaction(async (tx) => {
+                    // If clan data is missing, ensure we clean up any existing clan record
+                    if (!data.clan) {
+                        await tx.playerClan.deleteMany({
+                            where: { brawlhallaId: id },
+                        });
+                    }
+
+                    await tx.playerStats.upsert({
+                        where: { brawlhallaId: id },
+                        update: {
+                            xp: data.xp,
+                            level: data.level,
+                            xpPercentage: data.xp_percentage,
+                            games: data.games,
+                            wins: data.wins,
+                            damageBomb: data.damagebomb,
+                            damageMine: data.damagemine,
+                            damageSpikeball: data.damagespikeball,
+                            damageSidekick: data.damagesidekick,
+                            hitSnowball: data.hitsnowball,
+                            koBomb: data.kobomb,
+                            koMine: data.komine,
+                            koSpikeball: data.kospikeball,
+                            koSidekick: data.kosidekick,
+                            koSnowball: data.kosnowball,
+                            legends: {
+                                deleteMany: {},
+                                create: this.mapStatsLegends(data.legends),
+                            },
+                            clan: data.clan ? {
+                                upsert: {
+                                    update: {
+                                        clanName: data.clan.clan_name,
+                                        clanId: data.clan.clan_id,
+                                        clanXp: data.clan.clan_xp,
+                                        clanLifetimeXp: data.clan.clan_lifetime_xp,
+                                        personalXp: data.clan.personal_xp,
+                                    },
+                                    create: {
+                                        clanName: data.clan.clan_name,
+                                        clanId: data.clan.clan_id,
+                                        clanXp: data.clan.clan_xp,
+                                        clanLifetimeXp: data.clan.clan_lifetime_xp,
+                                        personalXp: data.clan.personal_xp,
+                                    }
+                                }
+                            } : undefined,
+                            lastUpdated: new Date(),
+                        },
+                        create: {
+                            brawlhallaId: id,
+                            xp: data.xp,
+                            level: data.level,
+                            xpPercentage: data.xp_percentage,
+                            games: data.games,
+                            wins: data.wins,
+                            damageBomb: data.damagebomb,
+                            damageMine: data.damagemine,
+                            damageSpikeball: data.damagespikeball,
+                            damageSidekick: data.damagesidekick,
+                            hitSnowball: data.hitsnowball,
+                            koBomb: data.kobomb,
+                            koMine: data.komine,
+                            koSpikeball: data.kospikeball,
+                            koSidekick: data.kosidekick,
+                            koSnowball: data.kosnowball,
+                            legends: {
+                                create: this.mapStatsLegends(data.legends),
+                            },
+                            clan: data.clan ? {
                                 create: {
                                     clanName: data.clan.clan_name,
                                     clanId: data.clan.clan_id,
@@ -130,43 +163,17 @@ export class RefreshProcessor extends WorkerHost {
                                     clanLifetimeXp: data.clan.clan_lifetime_xp,
                                     personalXp: data.clan.personal_xp,
                                 }
-                            }
-                        } : undefined,
-                        lastUpdated: new Date(),
-                    },
-                    create: {
-                        brawlhallaId: id,
-                        xp: data.xp,
-                        level: data.level,
-                        xpPercentage: data.xp_percentage,
-                        games: data.games,
-                        wins: data.wins,
-                        damageBomb: data.damagebomb,
-                        damageMine: data.damagemine,
-                        damageSpikeball: data.damagespikeball,
-                        damageSidekick: data.damagesidekick,
-                        hitSnowball: data.hitsnowball,
-                        koBomb: data.kobomb,
-                        koMine: data.komine,
-                        koSpikeball: data.kospikeball,
-                        koSidekick: data.kosidekick,
-                        koSnowball: data.kosnowball,
-                        legends: {
-                            create: this.mapStatsLegends(data.legends),
+                            } : undefined,
+                            lastUpdated: new Date(),
                         },
-                        clan: data.clan ? {
-                            create: {
-                                clanName: data.clan.clan_name,
-                                clanId: data.clan.clan_id,
-                                clanXp: data.clan.clan_xp,
-                                clanLifetimeXp: data.clan.clan_lifetime_xp,
-                                personalXp: data.clan.personal_xp,
-                            }
-                        } : undefined,
-                        lastUpdated: new Date(),
-                    },
+                    });
                 });
-            });
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const stack = error instanceof Error ? error.stack : undefined;
+            this.logger.error(`Failed to process job ${job.name} for ${job.data.id}: ${message}`, stack);
+            throw error;
         }
     }
 
@@ -174,6 +181,7 @@ export class RefreshProcessor extends WorkerHost {
         if (!legends) return [];
         return legends.map((legend) => ({
             legendId: legend.legend_id,
+            legendNameKey: legend.legend_name_key,
             rating: legend.rating,
             peakRating: legend.peak_rating,
             tier: legend.tier,
