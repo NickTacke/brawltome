@@ -11,14 +11,18 @@
     "emitDecoratorMetadata": true,
     "target": "es2021",
     "paths": {
-      "@brawltome/database": ["../../libs/database/src/index.ts"]
+      "@brawltome/database": ["../../libs/database/src/index.ts"],
+      "@brawltome/bhapi-client": ["../../libs/bhapi-client/src/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "../../libs/database/src/**/*.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["eslint.config.js", "eslint.config.cjs", "eslint.config.mjs"],
   "references": [
     {
       "path": "../../libs/database/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/bhapi-client/tsconfig.lib.json"
     }
   ]
 }
