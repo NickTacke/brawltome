@@ -37,7 +37,7 @@ export class PlayerService {
         });
         if (!player) return null;
         
-        await this.incrementViewCount(id); // Fire and forget
+        void this.incrementViewCount(id); // Fire and forget
 
         const now = Date.now();
         const rankedAge = player.ranked ? now - player.ranked.lastUpdated.getTime() : Infinity;
