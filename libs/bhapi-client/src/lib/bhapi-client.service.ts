@@ -33,6 +33,7 @@ export class BhApiClientService implements OnModuleInit {
         this.limiter = new Bottleneck({
             // Cluster settings
             id: 'bhapi-limiter',
+            datastore: 'redis',
             connection,
             clearDatastore: false,
 
