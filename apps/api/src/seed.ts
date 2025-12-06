@@ -36,24 +36,33 @@ async function bootstrap() {
             for (const p of players) {
                 const existing = await prisma.player.findUnique({
                     where: { brawlhallaId: p.brawlhalla_id },
+                    select: { brawlhallaId: true, name: true }
                 });
 
-                let aliasesKeys: string[] = existing?.aliasesKeys || [];
-                let aliasesValues: string[] = existing?.aliasesValues || [];
-                
-                // If player exists and name changed, add old name to aliases
-                if (existing && existing.name !== p.name) {
-                    aliasesKeys = [...new Set([...existing.aliasesKeys, existing.name.toLowerCase()])];
-                    aliasesValues = [...new Set([...existing.aliasesValues, existing.name])];
-                }
+                const aliasUpdate = (existing && existing.name !== p.name) ? {
+                    aliases: {
+                        upsert: {
+                            where: {
+                                brawlhallaId_key: {
+                                    brawlhallaId: existing.brawlhallaId,
+                                    key: existing.name.toLowerCase()
+                                }
+                            },
+                            create: {
+                                key: existing.name.toLowerCase(),
+                                value: existing.name
+                            },
+                            update: {}
+                        }
+                    }
+                } : {};
 
                 await prisma.player.upsert({
                     where: { brawlhallaId: p.brawlhalla_id },
                     update: {
                         name: p.name,
                         region: p.region,
-                        aliasesKeys: aliasesKeys,
-                        aliasesValues: aliasesValues,
+                        ...aliasUpdate,
                         rating: p.rating,
                         peakRating: p.peak_rating,
                         tier: p.tier,
@@ -68,8 +77,6 @@ async function bootstrap() {
                         brawlhallaId: p.brawlhalla_id,
                         name: p.name,
                         region: p.region,
-                        aliasesKeys: aliasesKeys,
-                        aliasesValues: aliasesValues,
                         rating: p.rating,
                         peakRating: p.peak_rating,
                         tier: p.tier,
