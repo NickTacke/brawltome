@@ -1,17 +1,13 @@
-import { Player } from '@brawltome/database';
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
+import { Player, PrismaService } from '@brawltome/database';
 
 @Injectable()
 export class AppService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  getData(): { message: string } {
-    return { message: 'Hello API' };
-  }
-
-  async getPlayer(brawlhallaId: number): Promise<Player> {
-    return await this.prisma.player.findMany({
-    }) ?? null;
+  async getPlayer(brawlhallaId: number): Promise<Player | null> {
+    return await this.prisma.player.findUnique({
+      where: { brawlhallaId },
+    });
   }
 }
