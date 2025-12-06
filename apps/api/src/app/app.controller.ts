@@ -5,11 +5,6 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly appService: AppService ) {}
 
-  @Get('search/:name')
-  async searchPlayer(@Param('name') name: string) {
-    return this.appService.searchPlayer(name);
-  }
-
   @Get('rankings/:bracket/:region/:page')
   async getRankings(@Param('bracket') bracket: '1v1' | '2v2' | 'rotational', @Param('region') region: string, @Param('page') page: number) {
     return this.appService.getRankings(bracket, region, page);
