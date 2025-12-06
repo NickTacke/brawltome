@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PlayerDTO } from '@brawltome/shared-types';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
@@ -61,16 +62,16 @@ export class BhApiClientService implements OnModuleInit {
         return reservoir || 0;
     }
 
-    async getPlayerStats(brawlhallaId: number) {
+    async getPlayerStats(brawlhallaId: number): Promise<PlayerDTO> {
         return this.limiter.schedule(() => this.performRequest(`/player/${brawlhallaId}/stats`));
     }
 
-    async getRankings(bracket: '1v1' | '2v2' | 'rotational', region: string, page: number, name: string | null = null) {
+    async getRankings(bracket: '1v1' | '2v2' | 'rotational', region: string, page: number, name: string | null = null): Promise<PlayerDTO[]> {
         const params = name ? { name } : {};
         return this.limiter.schedule(() => this.performRequest(`/rankings/${bracket}/${region}/${page}`, params));
     }
 
-    async searchPlayer(name: string) {
+    async searchPlayer(name: string): Promise<PlayerDTO[]> {
         return this.getRankings('1v1', 'all', 1, name);
     }
 
