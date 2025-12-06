@@ -85,13 +85,15 @@
     }
   },
   "dependencies": {
+    "@brawltome/bhapi-client": "workspace:*",
+    "@brawltome/database": "workspace:*",
+    "@brawltome/shared-types": "workspace:*",
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@prisma/client": "^7.1.0",
-    "@brawltome/database": "workspace:*",
-    "@brawltome/bhapi-client": "workspace:*",
-    "@brawltome/shared-types": "workspace:*",
+    "bullmq": "^5.65.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
     "tslib": "^2.3.0"
