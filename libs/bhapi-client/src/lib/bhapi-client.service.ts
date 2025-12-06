@@ -89,7 +89,8 @@ export class BhApiClientService implements OnModuleInit {
             return response.data;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
-            if (error.status === 429) {
+            const status = error.response?.status ?? error.status;
+            if (status === 429) {
                 this.logger.error(`ALERT! Rate Limit Exceeded Unexpectedly!`);
             }
             throw error;
