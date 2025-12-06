@@ -4,9 +4,11 @@ import { BullModule } from '@nestjs/bullmq';
 
 import { DatabaseModule } from '@brawltome/database';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
+import { QueueModule } from '../queue/queue.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { PlayerModule } from '../player/player.module';
 
 @Module({
   imports: [
@@ -18,13 +20,15 @@ import { AppService } from './app.service';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         connection: {
-          url: configService.get('REDIS_URL'),
+          url: configService.getOrThrow<string>('REDIS_URL'),
         },
       }),
       inject: [ConfigService],
     }),
     DatabaseModule,
     BhApiClientModule,
+    QueueModule,
+    PlayerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
