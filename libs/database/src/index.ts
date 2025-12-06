@@ -1,4 +1,4 @@
-export * from './generated/prisma/client.js';
+export * from './generated/prisma/client';
 
-export * from './lib/database.module.js';
-export * from './lib/prisma.service.js';
+export * from './lib/database.module';
+export * from './lib/prisma.service';
