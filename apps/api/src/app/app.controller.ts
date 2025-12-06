@@ -1,17 +1,16 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, NotFoundException } from '@nestjs/common';
 import { AppService } from './app.service';
 
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
-  getData() {
-    return this.appService.getData();
-  }
-
   @Get('player/:brawlhallaId')
-  getPlayer(@Param('brawlhallaId') brawlhallaId: number) {
-    return this.appService.getPlayer(brawlhallaId);
+  async getPlayer(@Param('brawlhallaId', ParseIntPipe) brawlhallaId: number) {
+    const player = await this.appService.getPlayer(brawlhallaId);
+    if (!player) {
+      throw new NotFoundException(`Player with ID ${brawlhallaId} not found`);
+    }
+    return player;
   }
 }
