@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 
 import { DatabaseModule } from '@brawltome/database';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
@@ -12,6 +13,15 @@ import { AppService } from './app.service';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env']
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        connection: {
+          url: configService.get('REDIS_URL'),
+        },
+      }),
+      inject: [ConfigService],
     }),
     DatabaseModule,
     BhApiClientModule,
