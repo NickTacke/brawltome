@@ -30,7 +30,7 @@ export interface PlayerRankedDTO {
   global_rank: number;
   region_rank: number;
   legends: PlayerRankedLegendDTO[];
-  teams: PlayerRankedTeamDTO[];
+  "2v2": PlayerRankedTeamDTO[];
 }
 
 export interface PlayerRankedLegendDTO {
@@ -124,6 +124,6 @@ export interface PlayerClanDTO {
   clan_name: string;
   clan_id: number;
   clan_xp: string;
-  clan_lifetime_xp: string;
-  personal_xp: string;
+  clan_lifetime_xp: number;
+  personal_xp: number;
 }
