@@ -16,14 +16,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-background text-foreground min-h-screen font-sans antialiased">
+      <body className="min-h-screen font-sans antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <div className="bg-background text-foreground min-h-screen">
+            {children}
+          </div>
         </ThemeProvider>
       </body>
     </html>
