@@ -1,20 +1,39 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '@brawltome/database';
 
 // Thresholds
-const RANKED_TTL = 1000 * 60 * 15; // 15 minutes
-const STATS_TTL = 6 * 1000 * 60 * 60; // 6 hours
+const RANKED_TTL = 1000 * 60 * 60; // 1 hour
+const STATS_TTL = 12 * 1000 * 60 * 60; // 12 hours
 
 @Injectable()
-export class PlayerService {
+export class PlayerService implements OnModuleInit {
     private readonly logger = new Logger(PlayerService.name);
+    private legendCache: Map<number, string> = new Map();
+    private legendKeyCache: Map<string, string> = new Map();
 
     constructor(
         private prisma: PrismaService,
         @InjectQueue('refresh-queue') private refreshQueue: Queue
     ) {}
+
+    async onModuleInit() {
+        await this.refreshLegendCache();
+    }
+
+    async refreshLegendCache() {
+        try {
+            const legends = await this.prisma.legend.findMany({
+                select: { legendId: true, legendNameKey: true, bioName: true }
+            });
+            this.legendCache = new Map(legends.map(l => [l.legendId, l.bioName]));
+            this.legendKeyCache = new Map(legends.map(l => [l.legendNameKey, l.bioName]));
+            this.logger.log(`Loaded ${this.legendCache.size} legends into cache 🛡️`);
+        } catch (error) {
+            this.logger.error('Failed to load legend cache', error);
+        }
+    }
 
     async getPlayer(id: number) {
         // Fetch Player from database
@@ -61,23 +80,42 @@ export class PlayerService {
             }
         }
 
+        // Enrich legends with bioName
+        if (player.stats?.legends) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (player.stats.legends as any[]) = player.stats.legends.map(l => ({
+                ...l,
+                bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey
+            }));
+        }
+
+        if (player.ranked?.legends) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (player.ranked.legends as any[]) = player.ranked.legends.map(l => ({
+                ...l,
+                bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey
+            }));
+        }
+
         return {
             ...player,
             isRefreshing: rankedAge > RANKED_TTL || statsAge > STATS_TTL
         };
     }
 
-    async getLeaderboard(page: number, region?: string, limit?: number) {
+    async getLeaderboard(page: number, region?: string, sort: 'rating' | 'wins' | 'games' | 'peakRating' = 'rating', limit?: number) {
         const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
         const safePage = Math.max(page || 1, 1);
         const skip = (safePage - 1) * safeTake;
 
         const where = region && region !== 'all' ? { region } : {};
 
+        const orderBy = { [sort]: 'desc' };
+
         const [players, total] = await Promise.all([
             this.prisma.player.findMany({
                 where,
-                orderBy: { rating: 'desc' },
+                orderBy,
                 take: safeTake,
                 skip,
                 select: {
@@ -89,13 +127,20 @@ export class PlayerService {
                     tier: true,
                     wins: true,
                     games: true,
+                    bestLegend: true,
                 }
             }),
             this.prisma.player.count({ where })
         ]);
 
+        // Enrich with Legend Names from Cache
+        const enrichedPlayers = players.map(p => ({
+            ...p,
+            bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null
+        }));
+
         return {
-            data: players,
+            data: enrichedPlayers,
             meta: {
                 page: safePage,
                 total,
