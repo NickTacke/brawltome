@@ -81,7 +81,7 @@ export class SearchService implements OnModuleInit {
                         },
                     ],
                 },
-                take: 10,
+                take: 8,
                 orderBy: {
                     rating: 'desc',
                 },
