@@ -40,7 +40,7 @@ export default async function Page({ params }: PageProps) {
 
     // Pass to client component
     return (
-        <main className="min-h-screen bg-background py-10">
+        <main className="min-h-screen bg-background py-8">
             <PlayerProfile initialData={initialData} id={id} />
         </main>
     );

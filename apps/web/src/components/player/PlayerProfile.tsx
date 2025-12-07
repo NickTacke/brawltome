@@ -19,6 +19,7 @@ import {
     Button
 } from '@brawltome/ui';
 import { ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface PlayerProfileProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,8 +76,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8">
-            {/* Back Button */}
-            <div>
+            {/* Top Navbar */}
+            <div className="flex justify-between items-center">
                 <Link 
                     href="/"
                     className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
@@ -86,14 +87,15 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                     </svg>
                     Back to Search
                 </Link>
+                <ModeToggle />
             </div>
 
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
                     {/* Best Legend Avatar (if available from stats) */}
                     {allLegends.length > 0 && (
-                        <Avatar className="h-24 w-24 border-4 border-card rounded-2xl">
+                        <Avatar className="h-24 w-24 border-4 border-card rounded-2xl flex-shrink-0">
                             <AvatarImage 
                                 src={`/images/legends/${allLegends[0].bioName}.png`} 
                                 alt={allLegends[0].bioName} 
@@ -104,8 +106,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             </AvatarFallback>
                         </Avatar>
                     )}
-                    <div>
-                        <h1 className="text-5xl font-black text-foreground tracking-tight">{fixEncoding(player.name)}</h1>
+                    <div className="min-w-0">
+                        <h1 className="text-3xl sm:text-5xl font-black text-foreground tracking-tight truncate">{fixEncoding(player.name)}</h1>
                         <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
                             <div className="flex items-center gap-2">
                                 <Badge variant="outline">{player.region}</Badge>
@@ -323,7 +325,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             {/* Teams */}
             {rankedTeams && rankedTeams.length > 0 && (
                 <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-foreground">2v2 Teammates</h2>
+                    <h2 className="text-2xl font-bold text-foreground">2v2 Teams</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {rankedTeams.map((team: any, i: number) => {
@@ -348,7 +350,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer h-36 relative overflow-visible mt-4"
                             >
                                 {/* Rank Banner on Left - Bleeding Out */}
-                                <div className="hidden sm:block absolute -top-0.5 left-4 w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
+                                <div className="absolute -top-0.5 left-2 sm:left-4 w-16 sm:w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
                                     <div 
                                         className="w-full h-full bg-top bg-no-repeat bg-contain transition-transform duration-300"
                                         style={{ backgroundImage: `url(${bannerUrl})` }}
@@ -356,12 +358,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 </div>
                                 
                                 {/* Content Spacer for Banner */}
-                                <div className="hidden sm:block w-32 flex-shrink-0" />
+                                <div className="w-20 sm:w-32 flex-shrink-0" />
                                 
                                 {/* Content */}
                                 <div className="flex-1 p-4 flex flex-col justify-between">
                                     <div className="flex justify-between items-start gap-4">
-                                        <div className="w-[120px] sm:w-[180px]">
+                                        <div className="w-[180px] sm:w-[180px]">
                                             <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors truncate">
                                                 {teammateName}
                                             </h3>
