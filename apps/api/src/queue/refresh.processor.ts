@@ -50,7 +50,7 @@ export class RefreshProcessor extends WorkerHost {
                     const newName = data.name;
                     const shouldUpdateName = newName && newName.trim().length > 0;
 
-                    const aliasUpdate = (shouldUpdateName && existing && existing.name !== newName) ? {
+                    const aliasUpdate = (shouldUpdateName && existing && existing.name && existing.name !== newName) ? {
                         aliases: {
                             upsert: {
                                 where: {
