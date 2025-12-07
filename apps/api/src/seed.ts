@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app/app.module';
+import { SeederModule } from './seeder.module';
 import { ConfigService } from '@nestjs/config';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
@@ -7,7 +7,7 @@ import { Logger } from '@nestjs/common';
 
 async function bootstrap() {
     const logger = new Logger('Seeder');
-    const app = await NestFactory.createApplicationContext(AppModule);
+    const app = await NestFactory.createApplicationContext(SeederModule);
     
     const configService = app.get(ConfigService);
     console.log('DEBUG: API KEY present?', !!configService.get('BRAWLHALLA_API_KEY'));
@@ -33,12 +33,16 @@ async function bootstrap() {
             }
 
             // Bulk upsert
-            for (const p of players) {
-                const existing = await prisma.player.findUnique({
-                    where: { brawlhallaId: p.brawlhalla_id },
-                    select: { brawlhallaId: true, name: true }
-                });
+            const brawlhallaIds = players.map(p => p.brawlhalla_id);
+            const existingPlayers = await prisma.player.findMany({
+                where: { brawlhallaId: { in: brawlhallaIds } },
+                select: { brawlhallaId: true, name: true }
+            });
+            const existingMap = new Map(existingPlayers.map(p => [p.brawlhallaId, p]));
 
+            const operations = players.map(p => {
+                const existing = existingMap.get(p.brawlhalla_id);
+                
                 const aliasUpdate = (existing && existing.name !== p.name) ? {
                     aliases: {
                         upsert: {
@@ -57,7 +61,7 @@ async function bootstrap() {
                     }
                 } : {};
 
-                await prisma.player.upsert({
+                return prisma.player.upsert({
                     where: { brawlhallaId: p.brawlhalla_id },
                     update: {
                         name: p.name,
@@ -88,7 +92,9 @@ async function bootstrap() {
                         lastUpdated: new Date(),
                     }
                 });
-            }
+            });
+
+            await prisma.$transaction(operations);
 
             logger.log(`✅ Indexed Global Page ${page} (Rank ${1 + (page - 1) * 50} - ${page * 50})`);
         } catch (error) {
