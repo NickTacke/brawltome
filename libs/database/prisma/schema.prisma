@@ -209,3 +209,30 @@ model PlayerRanked {
   // Relations
   player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 }
+
+// Static Legend Data
+
+model Legend {
+  legendId Int @id
+  legendNameKey String
+
+  // Biography
+  bioName String
+  bioAka String?
+  bioQuote String?
+  bioQuoteAboutAttrib String
+  bioQuoteFrom String?
+  bioQuoteFromAttrib String?
+  bioText String?
+  botName String?
+
+  // Weapons
+  weaponOne String
+  weaponTwo String
+
+  // Stats
+  strength String
+  dexterity String
+  defense String
+  speed String
+}
