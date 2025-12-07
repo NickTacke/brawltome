@@ -129,9 +129,12 @@ export class JanitorService {
                 // Queue a stats refresh with low priority
                 await this.refreshQueue.add('refresh-stats', { id: vip.brawlhallaId }, {
                     priority: 100, // Lowest priority
-                    jobId: `janitor-stats-${vip.brawlhallaId}-${Date.now()}`,
+                    jobId: `janitor-stats-${vip.brawlhallaId}`,
                     removeOnComplete: true,
                     removeOnFail: true
+                })
+                .catch(() => {
+                    // Ignore duplicate job errors
                 });
             }
         }
