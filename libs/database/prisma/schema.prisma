@@ -236,3 +236,29 @@ model Legend {
   defense String
   speed String
 }
+
+// Clan Data
+
+model ClanMember {
+  clanId Int
+  brawlhallaId Int
+  name String
+  rank String
+  joinDate DateTime
+  xp Int
+  legendNameKey String?
+
+  clan Clan @relation(fields: [clanId], references: [clanId], onDelete: Cascade)
+  
+  @@id([clanId, brawlhallaId])
+}
+
+model Clan {
+  clanId Int @id
+  clanName String
+  clanCreateDate DateTime
+  clanXp String
+  clanLifetimeXp Int
+  members ClanMember[]
+  lastUpdated DateTime @default(now())
+}
