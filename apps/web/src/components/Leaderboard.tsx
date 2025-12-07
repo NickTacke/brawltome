@@ -5,6 +5,23 @@ import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Button,
+  Skeleton,
+  Card,
+  Badge
+} from '@brawltome/ui';
 
 const REGIONS = [
   { id: 'all', label: 'Global' },
@@ -36,18 +53,9 @@ export function Leaderboard() {
 
   if (error) {
     return (
-      <div className="w-full max-w-4xl mx-auto mt-12 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <span className="text-yellow-500">🏆</span> Leaderboard
-          </h2>
-        </div>
-        <div className="p-6 border-t border-slate-800 flex justify-between items-center bg-slate-900/50">
-          <span className="text-sm text-slate-500 font-mono">
-            Error loading leaderboard: {error.message}
-          </span>
-        </div>
-      </div>
+      <Card className="w-full max-w-4xl mx-auto mt-12 bg-destructive/10 border-destructive text-destructive-foreground p-6 text-center">
+          Error loading leaderboard: {error.message}
+      </Card>
     );
   }
 
@@ -56,118 +64,149 @@ export function Leaderboard() {
     setPage(1); // Reset to page 1 on filter change
   };
 
+  const getRankStyle = (rank: number) => {
+    if (rank === 1) return "text-yellow-500 font-black text-xl";
+    if (rank === 2) return "text-slate-400 font-black text-xl";
+    if (rank === 3) return "text-amber-700 font-black text-xl";
+    return "text-muted-foreground font-mono";
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto mt-12 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+    <Card className="w-full max-w-5xl mx-auto mt-12 bg-card/50 backdrop-blur-sm border-border">
       {/* Header */}
-      <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+      <div className="p-6 border-b border-border flex flex-col sm:flex-row justify-between items-center gap-4">
+        <h2 className="text-2xl font-bold text-card-foreground flex items-center gap-2">
           <span className="text-yellow-500">🏆</span> Leaderboard
         </h2>
         
         {/* Region Filter */}
         <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-400 font-bold uppercase">Region:</span>
-            <select
-                value={region}
-                onChange={(e) => handleRegionChange(e.target.value)}
-                className="bg-slate-800 text-white text-sm font-bold py-2 px-4 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer hover:bg-slate-700 transition-colors"
-            >
+            <span className="text-sm text-muted-foreground font-bold uppercase">Region:</span>
+            <Select value={region} onValueChange={handleRegionChange}>
+              <SelectTrigger className="w-[180px] font-bold">
+                <SelectValue placeholder="Select Region" />
+              </SelectTrigger>
+              <SelectContent>
                 {REGIONS.map((r) => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
+                  <SelectItem key={r.id} value={r.id} className="cursor-pointer">
+                    {r.label}
+                  </SelectItem>
                 ))}
-            </select>
+              </SelectContent>
+            </Select>
         </div>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase font-bold tracking-wider">
-            <tr>
-              <th className="p-4 w-16 text-center">Rank</th>
-              <th className="p-4">Player</th>
-              <th className="p-4 text-center">Rating / Peak</th>
-              <th className="p-4 text-center hidden sm:table-cell">Wins</th>
-              <th className="p-4 text-center hidden sm:table-cell">Games</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            <TableRow className="border-border hover:bg-transparent">
+              <TableHead className="w-20 text-center font-bold">Rank</TableHead>
+              <TableHead className="font-bold">Player</TableHead>
+              <TableHead className="text-center font-bold">Rating</TableHead>
+              <TableHead className="text-center font-bold">Win Rate</TableHead>
+              <TableHead className="text-center hidden sm:table-cell font-bold">Wins</TableHead>
+              <TableHead className="text-center hidden sm:table-cell font-bold">Games</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {isLoading ? (
               // Skeleton Loading State
               Array.from({ length: 10 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
-                  <td className="p-4"><div className="h-4 w-8 bg-slate-800 rounded mx-auto" /></td>
-                  <td className="p-4"><div className="h-4 w-32 bg-slate-800 rounded" /></td>
-                  <td className="p-4"><div className="h-4 w-12 bg-slate-800 rounded mx-auto" /></td>
-                  <td className="p-4 hidden sm:table-cell"><div className="h-4 w-12 bg-slate-800 rounded mx-auto" /></td>
-                  <td className="p-4 hidden sm:table-cell"><div className="h-4 w-12 bg-slate-800 rounded mx-auto" /></td>
-                </tr>
+                <TableRow key={i} className="border-border hover:bg-transparent">
+                  <TableCell className="p-4"><Skeleton className="h-6 w-8 mx-auto" /></TableCell>
+                  <TableCell className="p-4">
+                    <Skeleton className="h-5 w-32 mb-2" />
+                    <Skeleton className="h-3 w-20" />
+                  </TableCell>
+                  <TableCell className="p-4"><Skeleton className="h-6 w-16 mx-auto" /></TableCell>
+                  <TableCell className="p-4"><Skeleton className="h-5 w-12 mx-auto" /></TableCell>
+                  <TableCell className="p-4 hidden sm:table-cell"><Skeleton className="h-5 w-10 mx-auto" /></TableCell>
+                  <TableCell className="p-4 hidden sm:table-cell"><Skeleton className="h-5 w-10 mx-auto" /></TableCell>
+                </TableRow>
               ))
             ) : players.length > 0 ? (
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              players.map((p: any, i: number) => (
-                <tr 
+              players.map((p: any, i: number) => {
+                const globalRank = ((page - 1) * PAGE_SIZE) + i + 1;
+                const winrate = p.games > 0 ? (p.wins / p.games) * 100 : 0;
+                
+                return (
+                <TableRow 
                   key={p.brawlhallaId}
                   onClick={() => router.push(`/player/${p.brawlhallaId}`)}
-                  className="hover:bg-slate-800/50 cursor-pointer transition-colors group"
+                  className="border-border cursor-pointer transition-colors group h-16"
                 >
-                  <td className="p-4 text-center font-mono text-slate-500 group-hover:text-white">
-                    #{((page - 1) * PAGE_SIZE) + i + 1}
-                  </td>
-                  <td className="p-4">
-                    <div className="font-bold text-slate-200 group-hover:text-blue-400 transition-colors">
-                      {fixEncoding(p.name)}
+                  <TableCell className={`text-center ${getRankStyle(globalRank)}`}>
+                    #{globalRank}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                        <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
+                        {fixEncoding(p.name)}
+                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">
+                                {p.tier}
+                            </Badge>
+                        </div>
                     </div>
-                    <div className="text-xs text-slate-500">{p.region} • {p.tier}</div>
-                  </td>
-                  <td className="p-4 text-center">
-                    <div className="font-bold text-white text-lg">
-                        <span className="text-yellow-500">{p.rating}</span>
-                        <span className="text-slate-600 mx-1">/</span>
-                        <span className="text-slate-400 text-sm">{p.peakRating || '---'}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex flex-col items-center">
+                        <span className="font-black text-foreground text-lg tracking-tight">{p.rating}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold">Peak: {p.peakRating || '---'}</span>
                     </div>
-                  </td>
-                  <td className="p-4 text-center hidden sm:table-cell text-slate-400">
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className={`font-bold ${winrate >= 60 ? 'text-green-500' : winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {winrate.toFixed(1)}%
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
                     {p.wins}
-                  </td>
-                  <td className="p-4 text-center hidden sm:table-cell text-slate-400">
+                  </TableCell>
+                  <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
                     {p.games}
-                  </td>
-                </tr>
-              ))
+                  </TableCell>
+                </TableRow>
+              )})
             ) : (
               // Empty State
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-slate-500">
+              <TableRow className="border-border hover:bg-transparent">
+                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                   No players found for this region.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* Pagination */}
-      <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50">
-        <button
+      <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
+        <Button
+          variant="outline"
+          size="sm"
           disabled={page === 1 || isLoading}
           onClick={() => setPage(p => Math.max(1, p - 1))}
-          className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 disabled:opacity-50 hover:bg-slate-700 transition-colors text-sm font-bold"
         >
           ← Prev
-        </button>
-        <span className="text-sm text-slate-500 font-mono">
+        </Button>
+        <span className="text-sm text-muted-foreground font-mono">
           Page {page} of {totalPages || '?'}
         </span>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           disabled={page >= totalPages || isLoading}
           onClick={() => setPage(p => p + 1)}
-          className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 disabled:opacity-50 hover:bg-slate-700 transition-colors text-sm font-bold"
         >
           Next →
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
-
