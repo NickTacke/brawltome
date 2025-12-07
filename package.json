@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "seed:api": "nx run api:seed"
+    "seed:api": "nx run api:seed",
+    "seed:legends": "nx run api:seed-legends"
   },
   "private": true,
   "dependencies": {
