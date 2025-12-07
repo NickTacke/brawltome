@@ -26,13 +26,30 @@ export function Leaderboard() {
   const [region, setRegion] = useState('all');
   const router = useRouter();
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, error } = useSWR(
     `/player/leaderboard/${page}?region=${region}&limit=${PAGE_SIZE}`,
     fetcher
   );
 
   const players = data?.data || [];
   const totalPages = data?.meta?.totalPages || 1;
+
+  if (error) {
+    return (
+      <div className="w-full max-w-4xl mx-auto mt-12 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            <span className="text-yellow-500">🏆</span> Leaderboard
+          </h2>
+        </div>
+        <div className="p-6 border-t border-slate-800 flex justify-between items-center bg-slate-900/50">
+          <span className="text-sm text-slate-500 font-mono">
+            Error loading leaderboard: {error.message}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const handleRegionChange = (newRegion: string) => {
     setRegion(newRegion);
