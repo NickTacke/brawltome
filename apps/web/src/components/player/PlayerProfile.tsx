@@ -95,13 +95,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
                     {/* Best Legend Avatar (if available from stats) */}
                     {allLegends.length > 0 && (
-                        <Avatar className="h-24 w-24 border-4 border-card rounded-2xl flex-shrink-0">
+                        <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-card rounded-2xl flex-shrink-0">
                             <AvatarImage 
                                 src={`/images/legends/${allLegends[0].bioName}.png`} 
                                 alt={allLegends[0].bioName} 
                                 className="object-cover object-top"
                             />
-                            <AvatarFallback className="bg-muted text-3xl font-bold text-muted-foreground capitalize rounded-2xl">
+                            <AvatarFallback className="bg-muted text-xl sm:text-3xl font-bold text-muted-foreground capitalize rounded-2xl">
                                 {allLegends[0].bioName?.[0] || '?'}
                             </AvatarFallback>
                         </Avatar>
@@ -148,36 +148,33 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             {player.ranked?.lastUpdated && (
                                 <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5 hover:bg-muted/50 transition-colors">
                                     <Clock className="w-3 h-3" />
-                                    Updated {timeAgo(player.ranked.lastUpdated)}
+                                    <span className="hidden sm:inline">Updated </span>{timeAgo(player.ranked.lastUpdated)}
                                 </Badge>
                             )}
                         </div>
                     </CardHeader>
                     <CardContent className="relative z-10">
                         <div className="flex flex-col gap-8">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-6xl font-black text-foreground tracking-tighter">{player.rating}</span>
-                                        <span className="text-xl font-medium text-muted-foreground">ELO</span>
+                                    <div className="flex justify-between items-start">
+                                        <div className="min-w-0 flex-1 pr-2">
+                                            <div className="flex items-baseline gap-2 flex-wrap">
+                                                <span className="text-4xl sm:text-6xl font-black text-foreground tracking-tighter">{player.rating}</span>
+                                                <span className="text-2xl sm:text-4xl font-bold text-muted-foreground/50 tracking-tight">/ {player.peakRating}</span>
+                                                <span className="text-sm sm:text-xl font-medium text-muted-foreground ml-1">ELO</span>
+                                            </div>
+                                            <div className="mt-2">
+                                                <Badge variant="secondary" className="uppercase tracking-wider">
+                                                    {player.tier}
+                                                </Badge>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="mt-2">
-                                        <Badge variant="secondary" className="uppercase tracking-wider">
-                                            {player.tier}
-                                        </Badge>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Peak Rating</div>
-                                    <div className="text-4xl font-black text-foreground">{player.peakRating}</div>
-                                </div>
-                            </div>
 
                             <div className="grid grid-cols-2 gap-y-6 gap-x-8 pt-6 border-t border-border">
                                 <div className="col-span-2">
                                     <div className="flex justify-between items-end mb-2">
                                         <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Win Rate</div>
-                                        <div className={`text-2xl font-black ${winrate >= 50 ? 'text-green-500' : 'text-foreground'}`}>
+                                        <div className={`text-xl sm:text-2xl font-black ${winrate >= 50 ? 'text-green-500' : 'text-foreground'}`}>
                                             {winrate.toFixed(1)}%
                                         </div>
                                     </div>
@@ -189,14 +186,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 </div>
                                 {player.ranked?.regionRank > 0 && (
                                     <div>
-                                        <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Region Rank</div>
-                                        <div className="text-2xl text-foreground font-bold mt-1">#{player.ranked.regionRank}</div>
+                                        <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">Region Rank</div>
+                                        <div className="text-xl sm:text-2xl text-foreground font-bold mt-1">#{player.ranked.regionRank}</div>
                                     </div>
                                 )}
                                 {player.ranked?.globalRank > 0 && (
                                     <div>
-                                        <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Global Rank</div>
-                                        <div className="text-2xl text-foreground font-bold mt-1">#{player.ranked.globalRank}</div>
+                                        <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">Global Rank</div>
+                                        <div className="text-xl sm:text-2xl text-foreground font-bold mt-1">#{player.ranked.globalRank}</div>
                                     </div>
                                 )}
                             </div>
@@ -214,7 +211,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             {player.stats?.lastUpdated && (
                                 <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5 hover:bg-muted/50 transition-colors">
                                     <Clock className="w-3 h-3" />
-                                    Updated {timeAgo(player.stats.lastUpdated)}
+                                    <span className="hidden sm:inline">Updated </span>{timeAgo(player.stats.lastUpdated)}
                                 </Badge>
                             )}
                         </div>
@@ -224,13 +221,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             <div className="space-y-8">
                                 <div className="grid grid-cols-2 gap-6">
                                     <div>
-                                        <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Account Level</div>
-                                        <div className="text-3xl font-black text-foreground mt-1">{player.stats.level}</div>
+                                        <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">Account Level</div>
+                                        <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{player.stats.level}</div>
                                         <div className="text-xs text-muted-foreground mt-1">{player.stats.xpPercentage ? Math.floor(player.stats.xpPercentage * 100) : 0}% to next level</div>
                                     </div>
                                     <div>
-                                        <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Total Games</div>
-                                        <div className="text-3xl font-black text-foreground mt-1">{player.stats.games.toLocaleString()}</div>
+                                        <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">Total Games</div>
+                                        <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{player.stats.games.toLocaleString()}</div>
                                     </div>
                                 </div>
 
@@ -372,8 +369,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                             </div>
                                         </div>
                                         
-                                        <div className="flex justify-end w-full sm:w-auto sm:block sm:text-right mt-2 sm:mt-0">
-                                            <div className="text-right flex-shrink-0 flex items-baseline justify-end gap-2 sm:block sm:gap-0">
+                                        <div className="flex justify-start w-full sm:w-auto sm:block sm:text-right mt-2 sm:mt-0">
+                                            <div className="text-left sm:text-right flex-shrink-0 flex items-baseline justify-start sm:justify-end gap-2 sm:block sm:gap-0">
                                                 <div className="text-xl sm:text-2xl font-black text-chart-3 leading-none whitespace-nowrap">
                                                     {team.rating}
                                                     <span className="text-xs sm:text-sm font-medium text-muted-foreground ml-1.5 align-baseline opacity-80">
