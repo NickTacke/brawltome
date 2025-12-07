@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from 'use-debounce';
+import { Shield } from 'lucide-react';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
 import { Input, Card, Avatar, AvatarImage, AvatarFallback } from '@brawltome/ui';
@@ -15,14 +16,24 @@ interface SearchBarProps {
 export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     const [query, setQuery] = useState('');
     const [debouncedQuery] = useDebounce(query, 500);
-    interface SearchResult {
+    interface PlayerResult {
         brawlhallaId: number;
         name: string;
         region?: string;
         rating?: number;
         bestLegendName?: string;
     }
-    const [results, setResults] = useState<SearchResult[]>([]);
+
+    interface ClanResult {
+        clanId: number;
+        name: string;
+        xp: string;
+        memberCount: number;
+    }
+
+    const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
+    const [clanResults, setClanResults] = useState<ClanResult[]>([]);
+    const [showClans, setShowClans] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
@@ -50,7 +61,8 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     useEffect(() => {
         setError(null);
         if (!debouncedQuery || debouncedQuery.length < 3) {
-            setResults([]);
+            setPlayerResults([]);
+            setClanResults([]);
             return;
         }
 
@@ -58,17 +70,24 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         fetcher(`/search/local?q=${encodeURIComponent(debouncedQuery)}`)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .then((data: any) => {
-            setResults(data);
+            // Handle both old (array) and new (object) API responses
+            const players = Array.isArray(data) ? data : (data.players || []);
+            const clans = Array.isArray(data) ? [] : (data.clans || []);
+
+            setPlayerResults(players);
+            setClanResults(clans);
+            setShowClans(false);
             setIsSearching(false);
-            if (data.length === 0) {
+
+            if (players.length === 0 && clans.length === 0) {
                  // Check if it looks like an ID (all digits)
                  if (/^\d+$/.test(debouncedQuery)) {
                      // The backend handles ID search automatically in "local" endpoint
                      // If it returned 0 results, it means the ID wasn't found even after API lookup
-                     setError('Player ID not found.');
+                     setError('ID not found.');
                  } else {
                      // It's a name search, and we only search locally
-                     setError('Player not found locally. Try searching by ID.');
+                     setError('No results found.');
                  }
             }
         })
@@ -95,7 +114,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         setQuery(e.target.value);
                         setError(null);
                     }}
-                    placeholder="Search player..."
+                    placeholder="Search player or clan..."
                     className="w-full h-14 bg-background/50 text-foreground text-lg rounded-xl border-border focus-visible:ring-primary backdrop-blur-sm pr-12"
                 />
                 
@@ -106,18 +125,18 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                 )}
             </div>
     
-            <div className={`transition-all duration-300 ease-in-out ${(query.length >= 3 && (results.length > 0 || error)) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
-                {(results.length > 0 || error) && (
-                <Card className="absolute w-full mt-2 bg-card border-border overflow-hidden shadow-2xl z-50">
+            <div className={`transition-all duration-300 ease-in-out ${(query.length >= 3 && (playerResults.length > 0 || clanResults.length > 0 || error)) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
+                {(playerResults.length > 0 || clanResults.length > 0 || error) && (
+                <Card className="absolute w-full mt-2 bg-card border-border overflow-hidden shadow-2xl z-50 max-h-[80vh] overflow-y-auto">
                     {error ? (
                         <div className="p-4 text-center text-muted-foreground text-sm">
                             {error}
                         </div>
                     ) : (
                         <>
-                        {results.map((p) => (
+                        {playerResults.map((p) => (
                         <button
-                            key={p.brawlhallaId}
+                            key={`p-${p.brawlhallaId}`}
                             onClick={() => router.push(`/player/${p.brawlhallaId}`)}
                             className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                         >
@@ -142,6 +161,38 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             <div className="text-sm font-mono text-primary">{p.rating || '0'}</div>
                         </button>
                         ))}
+
+                        {clanResults.length > 0 && (
+                            <>
+                                <button 
+                                    onClick={() => setShowClans(!showClans)}
+                                    className="w-full p-2 bg-muted/50 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors border-t border-border flex items-center justify-center gap-2"
+                                >
+                                    {showClans ? 'Hide Clans' : `Show ${clanResults.length} Clan${clanResults.length === 1 ? '' : 's'}`}
+                                </button>
+                                
+                                {showClans && clanResults.map((c) => (
+                                    <button
+                                        key={`c-${c.clanId}`}
+                                        onClick={() => router.push(`/clan/${c.clanId}`)}
+                                        className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-full border border-border bg-muted flex items-center justify-center">
+                                                <Shield className="h-5 w-5 text-muted-foreground fill-current" />
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-card-foreground">{fixEncoding(c.name)}</div>
+                                                <div className="text-xs text-muted-foreground">{c.memberCount} members</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-xs font-mono text-muted-foreground">
+                                            {c.xp ? parseInt(c.xp).toLocaleString() : '0'} XP
+                                        </div>
+                                    </button>
+                                ))}
+                            </>
+                        )}
                         </>
                     )}
                 </Card>
