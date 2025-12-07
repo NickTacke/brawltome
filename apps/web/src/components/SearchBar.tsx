@@ -4,8 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from 'use-debounce';
 import { fetcher } from '@/lib/api';
+import { fixEncoding } from '@/lib/utils';
 
-export function SearchBar() {
+interface SearchBarProps {
+    onFocus?: () => void;
+    onBlur?: () => void;
+}
+
+export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     const [query, setQuery] = useState('');
     const [debouncedQuery] = useDebounce(query, 500);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,6 +58,8 @@ export function SearchBar() {
             <input
                 type="text"
                 value={query}
+                onFocus={onFocus}
+                onBlur={onBlur}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search player..."
                 className="w-full bg-slate-800 text-white p-4 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500 transition-colors"
@@ -72,7 +80,7 @@ export function SearchBar() {
                     className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800 last:border-0 flex justify-between items-center group"
                 >
                     <div>
-                    <div className="font-bold text-slate-200 group-hover:text-white">{p.name}</div>
+                    <div className="font-bold text-slate-200 group-hover:text-white">{fixEncoding(p.name)}</div>
                     <div className="text-xs text-slate-500">{p.region}</div>
                     </div>
                     <div className="text-sm font-mono text-yellow-500">{p.rating || '---'}</div>
