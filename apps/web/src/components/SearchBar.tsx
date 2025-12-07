@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useDebounce } from 'use-debounce';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
-import { Input, Button, Card } from '@brawltome/ui';
+import { Input, Button, Card, Avatar, AvatarImage, AvatarFallback } from '@brawltome/ui';
 
 interface SearchBarProps {
     onFocus?: () => void;
@@ -101,9 +101,23 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         onClick={() => router.push(`/player/${p.brawlhallaId}`)}
                         className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                     >
-                        <div>
-                        <div className="font-bold text-card-foreground">{fixEncoding(p.name)}</div>
-                        <div className="text-xs text-muted-foreground">{p.region}</div>
+                        <div className="flex items-center gap-3">
+                            {p.bestLegendName && (
+                                <Avatar className="h-8 w-8 border border-border bg-muted">
+                                    <AvatarImage 
+                                        src={`/images/legends/${p.bestLegendName}.png`} 
+                                        alt={p.bestLegendName} 
+                                        className="object-cover"
+                                    />
+                                    <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground">
+                                        {p.bestLegendName.substring(0, 2)}
+                                    </AvatarFallback>
+                                </Avatar>
+                            )}
+                            <div>
+                                <div className="font-bold text-card-foreground">{fixEncoding(p.name)}</div>
+                                <div className="text-xs text-muted-foreground">{p.region}</div>
+                            </div>
                         </div>
                         <div className="text-sm font-mono text-primary">{p.rating || '---'}</div>
                     </button>
