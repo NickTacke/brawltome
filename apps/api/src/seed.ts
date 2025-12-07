@@ -17,8 +17,8 @@ async function bootstrap() {
 
     const REGION = 'all';
     const BRACKET = '1v1';
-    const START_PAGE = 1;
-    const MAX_PAGES = 1000;
+    const START_PAGE = parseInt(process.env.SEED_START_PAGE || '1', 10);
+    const MAX_PAGES = parseInt(process.env.SEED_MAX_PAGES || '4000', 10);
 
     logger.log(`🚀 Starting seeding from page ${START_PAGE} to ${MAX_PAGES}!`);
 
