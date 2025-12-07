@@ -46,7 +46,11 @@ export class RefreshProcessor extends WorkerHost {
                         select: { name: true, brawlhallaId: true }
                     });
 
-                    const aliasUpdate = (existing && existing.name !== data.name) ? {
+                    // Only update name if it's not empty/whitespace
+                    const newName = data.name;
+                    const shouldUpdateName = newName && newName.trim().length > 0;
+
+                    const aliasUpdate = (shouldUpdateName && existing && existing.name !== newName) ? {
                         aliases: {
                             upsert: {
                                 where: {
@@ -67,7 +71,7 @@ export class RefreshProcessor extends WorkerHost {
                     await tx.player.update({
                         where: { brawlhallaId: id },
                         data: {
-                            name: data.name,
+                            ...(shouldUpdateName ? { name: newName } : {}),
                             rating: data.rating,
                             peakRating: data.peak_rating,
                             tier: data.tier,
@@ -111,6 +115,24 @@ export class RefreshProcessor extends WorkerHost {
                 const data = await this.bhApiClient.getPlayerStats(id);
 
                 await this.prisma.$transaction(async (tx) => {
+                    // Update main player name if Stats has a better name and current is empty/missing
+                    // Or simply trust Stats name if we want to be robust
+                    if (data.name && data.name.trim().length > 0) {
+                        const existing = await tx.player.findUnique({
+                             where: { brawlhallaId: id },
+                             select: { name: true }
+                        });
+                        
+                        // If current name is empty or missing, update it
+                        // Or if we want to enforce stats name as primary
+                        if (existing && (!existing.name || existing.name.trim().length === 0)) {
+                             await tx.player.update({
+                                 where: { brawlhallaId: id },
+                                 data: { name: data.name }
+                             });
+                        }
+                    }
+
                     // If clan data is missing, ensure we clean up any existing clan record
                     if (!data.clan) {
                         await tx.playerClan.deleteMany({
