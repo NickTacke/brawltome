@@ -5,7 +5,7 @@ import { PrismaService } from '@brawltome/database';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
-const IDLE_TOKEN_THRESHOLD = 140; // Only run if we have plenty of tokens
+const IDLE_TOKEN_THRESHOLD = 100; // Only run if we have plenty of tokens
 const VIP_VIEW_THRESHOLD = 10; // Players with more views than this are VIPs - TODO: Dynamic threshold based on average view count
 const VIP_STALE_HOURS = 24; // Refresh VIPs if data is older than this
 
@@ -34,6 +34,7 @@ export class JanitorService {
 
         await this.refreshRankingsPage();
         await this.refreshStaleVIPs();
+        await this.queueMissingDataRefreshes();
     }
 
     private async refreshRankingsPage() {
@@ -133,6 +134,46 @@ export class JanitorService {
                     removeOnFail: true
                 });
             }
+        }
+    }
+
+    private async queueMissingDataRefreshes() {
+        const missingDataPlayers = await this.prisma.player.findMany({
+            where: {
+                OR: [
+                    { stats: null },
+                    { ranked: null }
+                ]
+            },
+            orderBy: { rating: 'desc' },
+            take: 10,
+            include: { stats: { select: { brawlhallaId: true } }, ranked: { select: { brawlhallaId: true } } }
+        });
+
+        if (missingDataPlayers.length > 0) {
+             this.logger.log(`Found ${missingDataPlayers.length} players with missing data. Queuing...`);
+             for (const p of missingDataPlayers) {
+                 if (!p.stats) {
+                     await this.refreshQueue.add('refresh-stats', { id: p.brawlhallaId }, {
+                         priority: 100,
+                         jobId: `missing-stats-${p.brawlhallaId}`, // Deduplication
+                         removeOnComplete: true,
+                         removeOnFail: true
+                     }).catch(() => {
+                         // Ignore duplicate job errors
+                     });
+                 }
+                 if (!p.ranked) {
+                      await this.refreshQueue.add('refresh-ranked', { id: p.brawlhallaId }, {
+                         priority: 100,
+                         jobId: `missing-ranked-${p.brawlhallaId}`,
+                         removeOnComplete: true,
+                         removeOnFail: true
+                     }).catch(() => {
+                         // Ignore duplicate job errors
+                     });
+                 }
+             }
         }
     }
 }
