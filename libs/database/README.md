@@ -1,7 +1,17 @@
 # database
 
-This library was generated with [Nx](https://nx.dev).
+Contains the Prisma schema and client configuration for the Brawltome project.
 
-## Building
+## Usage
 
-Run `nx build database` to build the library.
+This library exports the `PrismaService` and generated types for database interaction.
+
+## Useful Commands
+
+```bash
+# Apply migrations
+npx nx run database:db-migrate
+
+# Generate Prisma Client
+npx nx run database:db-generate
+```

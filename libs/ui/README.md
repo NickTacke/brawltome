@@ -1,7 +1,13 @@
 # ui
 
-This library was generated with [Nx](https://nx.dev).
+Shared React components and UI utilities.
 
-## Building
+## Stack
 
-Run `nx build ui` to build the library.
+- **Radix UI**: Headless accessible components.
+- **Tailwind CSS**: Styling.
+- **Lucide React**: Icons.
+
+## Components
+
+Includes reusable components like `Button`, `Input`, `Card`, and other design system elements.
