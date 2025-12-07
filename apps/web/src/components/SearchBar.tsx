@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from 'use-debounce';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
+import { Input, Button, Card } from '@brawltome/ui';
 
 interface SearchBarProps {
     onFocus?: () => void;
@@ -19,6 +20,24 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     const [isSearching, setIsSearching] = useState(false);
     const [showGlobalOption, setShowGlobalOption] = useState(false);
     const router = useRouter();
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Handle click outside to clear query
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setQuery('');
+                // We don't clear results here to allow the fade-out animation to play
+                // The useDebounce effect will eventually clear them
+                if (onBlur) onBlur();
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [onBlur]);
 
     // Local Search
     useEffect(() => {
@@ -54,49 +73,54 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     }
 
     return (
-        <div className="relative w-full max-w-lg mx-auto z-50">
-            <input
-                type="text"
-                value={query}
-                onFocus={onFocus}
-                onBlur={onBlur}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search player..."
-                className="w-full bg-slate-800 text-white p-4 rounded-xl border border-slate-700 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            
-            {isSearching && (
-            <div className="absolute right-4 top-4">
-                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-            )}
-    
-            {(results.length > 0 || showGlobalOption) && (
-            <div className="absolute w-full mt-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-                {results.map((p) => (
-                <button
-                    key={p.brawlhallaId}
-                    onClick={() => router.push(`/player/${p.brawlhallaId}`)}
-                    className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800 last:border-0 flex justify-between items-center group"
-                >
-                    <div>
-                    <div className="font-bold text-slate-200 group-hover:text-white">{fixEncoding(p.name)}</div>
-                    <div className="text-xs text-slate-500">{p.region}</div>
+        <div ref={containerRef} className="relative w-full max-w-lg mx-auto z-50">
+            <div className="relative">
+                <Input
+                    type="text"
+                    value={query}
+                    onFocus={onFocus}
+                    // onBlur removed to prevent conflict with click-outside logic
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search player..."
+                    className="w-full h-14 bg-background/50 text-foreground text-lg rounded-xl border-border focus-visible:ring-primary backdrop-blur-sm pr-12"
+                />
+                
+                {isSearching && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     </div>
-                    <div className="text-sm font-mono text-yellow-500">{p.rating || '---'}</div>
-                </button>
-                ))}
-    
-                {showGlobalOption && !isSearching && (
-                <button
-                    onClick={handleGlobalSearch}
-                    className="w-full p-4 bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 text-center transition-colors"
-                >
-                    Not found locally. <span className="font-bold underline">Search Official API?</span>
-                </button>
                 )}
             </div>
-            )}
+    
+            <div className={`transition-all duration-300 ease-in-out ${(query.length >= 3 && (results.length > 0 || showGlobalOption)) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
+                {(results.length > 0 || showGlobalOption) && (
+                <Card className="absolute w-full mt-2 bg-card border-border overflow-hidden shadow-2xl z-50">
+                    {results.map((p) => (
+                    <button
+                        key={p.brawlhallaId}
+                        onClick={() => router.push(`/player/${p.brawlhallaId}`)}
+                        className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
+                    >
+                        <div>
+                        <div className="font-bold text-card-foreground">{fixEncoding(p.name)}</div>
+                        <div className="text-xs text-muted-foreground">{p.region}</div>
+                        </div>
+                        <div className="text-sm font-mono text-primary">{p.rating || '---'}</div>
+                    </button>
+                    ))}
+        
+                    {showGlobalOption && !isSearching && (
+                    <Button
+                        variant="ghost"
+                        onClick={handleGlobalSearch}
+                        className="w-full h-auto p-4 rounded-none text-primary hover:text-primary hover:bg-primary/10"
+                    >
+                        Not found locally. <span className="font-bold underline ml-1">Search Official API?</span>
+                    </Button>
+                    )}
+                </Card>
+                )}
+            </div>
         </div>
     );
 }
