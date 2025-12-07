@@ -15,101 +15,104 @@ async function bootstrap() {
     const bhApiClient = app.get(BhApiClientService);
     const prisma = app.get(PrismaService);
 
-    const REGION = 'all';
+    const REGIONS = ['us-e', 'us-w', 'eu', 'sea', 'aus', 'brz', 'jpn'];
     const BRACKET = '1v1';
     const START_PAGE = parseInt(process.env.SEED_START_PAGE || '1', 10);
-    const MAX_PAGES = parseInt(process.env.SEED_MAX_PAGES || '4000', 10);
+    const MAX_PAGES = parseInt(process.env.SEED_MAX_PAGES || '1000', 10);
 
-    logger.log(`🚀 Starting seeding from page ${START_PAGE} to ${MAX_PAGES}!`);
+    logger.log(`🚀 Starting seeding from page ${START_PAGE} to ${MAX_PAGES} for regions: ${REGIONS.join(', ')}!`);
 
-    for (let page = START_PAGE; page <= MAX_PAGES; page++) {
-        try {
-            const remainingTokens = await bhApiClient.getRemainingTokens();
-            if(remainingTokens < 10) {
-                logger.log(`🔍 Not enough tokens to fetch rankings, waiting a minute!`);
-                // Keep waiting until we have more tokens
-                page--;
-                await new Promise((r) => setTimeout(r, 1 * 60 * 1000));
+    for (const region of REGIONS) {
+        logger.log(`🌍 Starting region: ${region}`);
+        for (let page = START_PAGE; page <= MAX_PAGES; page++) {
+            try {
+                const remainingTokens = await bhApiClient.getRemainingTokens();
+                if(remainingTokens < 10) {
+                    logger.log(`🔍 Not enough tokens to fetch rankings, waiting a minute!`);
+                    // Keep waiting until we have more tokens
+                    page--;
+                    await new Promise((r) => setTimeout(r, 1 * 60 * 1000));
+                    continue;
+                }
+
+                // Fetch global rankings
+                const players = await bhApiClient.getRankings(BRACKET, region, page);
+
+                if(!players || players.length === 0) {
+                    logger.log(`🔍 No players found in ${region} on page ${page}, moving to next region!`);
+                    break;
+                }
+
+                // Bulk upsert
+                const brawlhallaIds = players.map(p => p.brawlhalla_id);
+                const existingPlayers = await prisma.player.findMany({
+                    where: { brawlhallaId: { in: brawlhallaIds } },
+                    select: { brawlhallaId: true, name: true }
+                });
+                const existingMap = new Map(existingPlayers.map(p => [p.brawlhallaId, p]));
+
+                const operations = players.map(p => {
+                    const existing = existingMap.get(p.brawlhalla_id);
+                    
+                    const aliasUpdate = (existing && existing.name !== p.name) ? {
+                        aliases: {
+                            upsert: {
+                                where: {
+                                    brawlhallaId_key: {
+                                        brawlhallaId: existing.brawlhallaId,
+                                        key: existing.name.toLowerCase()
+                                    }
+                                },
+                                create: {
+                                    key: existing.name.toLowerCase(),
+                                    value: existing.name
+                                },
+                                update: {}
+                            }
+                        }
+                    } : {};
+
+                    return prisma.player.upsert({
+                        where: { brawlhallaId: p.brawlhalla_id },
+                        update: {
+                            name: p.name,
+                            region: p.region,
+                            ...aliasUpdate,
+                            rating: p.rating,
+                            peakRating: p.peak_rating,
+                            tier: p.tier,
+                            games: p.games,
+                            wins: p.wins,
+                            bestLegend: p.best_legend,
+                            bestLegendGames: p.best_legend_games,
+                            bestLegendWins: p.best_legend_wins,
+                            lastUpdated: new Date(),
+                        },
+                        create: {
+                            brawlhallaId: p.brawlhalla_id,
+                            name: p.name,
+                            region: p.region,
+                            rating: p.rating,
+                            peakRating: p.peak_rating,
+                            tier: p.tier,
+                            games: p.games,
+                            wins: p.wins,
+                            bestLegend: p.best_legend,
+                            bestLegendGames: p.best_legend_games,
+                            bestLegendWins: p.best_legend_wins,
+                            lastUpdated: new Date(),
+                        }
+                    });
+                });
+
+                await prisma.$transaction(operations);
+
+                logger.log(`✅ Indexed ${region} Page ${page} (Rank ${1 + (page - 1) * 50} - ${page * 50})`);
+            } catch (error) {
+                logger.error(`🚨 Error fetching rankings for ${region} page ${page}:`, error);
+                await new Promise((r) => setTimeout(r, 2000));
                 continue;
             }
-
-            // Fetch global rankings
-            const players = await bhApiClient.getRankings(BRACKET, REGION, page);
-
-            if(!players || players.length === 0) {
-                logger.log(`🔍 No players found on page ${page}, stopping!`);
-                break;
-            }
-
-            // Bulk upsert
-            const brawlhallaIds = players.map(p => p.brawlhalla_id);
-            const existingPlayers = await prisma.player.findMany({
-                where: { brawlhallaId: { in: brawlhallaIds } },
-                select: { brawlhallaId: true, name: true }
-            });
-            const existingMap = new Map(existingPlayers.map(p => [p.brawlhallaId, p]));
-
-            const operations = players.map(p => {
-                const existing = existingMap.get(p.brawlhalla_id);
-                
-                const aliasUpdate = (existing && existing.name !== p.name) ? {
-                    aliases: {
-                        upsert: {
-                            where: {
-                                brawlhallaId_key: {
-                                    brawlhallaId: existing.brawlhallaId,
-                                    key: existing.name.toLowerCase()
-                                }
-                            },
-                            create: {
-                                key: existing.name.toLowerCase(),
-                                value: existing.name
-                            },
-                            update: {}
-                        }
-                    }
-                } : {};
-
-                return prisma.player.upsert({
-                    where: { brawlhallaId: p.brawlhalla_id },
-                    update: {
-                        name: p.name,
-                        region: p.region,
-                        ...aliasUpdate,
-                        rating: p.rating,
-                        peakRating: p.peak_rating,
-                        tier: p.tier,
-                        games: p.games,
-                        wins: p.wins,
-                        bestLegend: p.best_legend,
-                        bestLegendGames: p.best_legend_games,
-                        bestLegendWins: p.best_legend_wins,
-                        lastUpdated: new Date(),
-                    },
-                    create: {
-                        brawlhallaId: p.brawlhalla_id,
-                        name: p.name,
-                        region: p.region,
-                        rating: p.rating,
-                        peakRating: p.peak_rating,
-                        tier: p.tier,
-                        games: p.games,
-                        wins: p.wins,
-                        bestLegend: p.best_legend,
-                        bestLegendGames: p.best_legend_games,
-                        bestLegendWins: p.best_legend_wins,
-                        lastUpdated: new Date(),
-                    }
-                });
-            });
-
-            await prisma.$transaction(operations);
-
-            logger.log(`✅ Indexed Global Page ${page} (Rank ${1 + (page - 1) * 50} - ${page * 50})`);
-        } catch (error) {
-            logger.error(`🚨 Error fetching rankings for page ${page}:`, error);
-            await new Promise((r) => setTimeout(r, 2000));
-            continue;
         }
     }
 
