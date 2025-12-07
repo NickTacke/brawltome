@@ -3,6 +3,7 @@
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher } from '@/lib/api';
+import { fixEncoding } from '@/lib/utils';
 
 interface PlayerProfileProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,7 +46,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-5xl font-black text-white tracking-tight">{player.name}</h1>
+                    <h1 className="text-5xl font-black text-white tracking-tight">{fixEncoding(player.name)}</h1>
                     <div className="flex flex-wrap items-center gap-4 mt-2 text-slate-400">
                         <div className="flex items-center gap-2">
                             <span className="font-bold text-white">{player.region}</span>
@@ -57,7 +58,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 <span>•</span>
                                 <div className="flex items-center gap-2">
                                     <span className="text-slate-400">Clan:</span>
-                                    <span className="text-yellow-400 font-bold">{player.stats.clan.clanName}</span>
+                                    <span className="text-yellow-400 font-bold">{fixEncoding(player.stats.clan.clanName)}</span>
                                 </div>
                             </>
                         )}
@@ -209,11 +210,11 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 <div className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">2v2 Teams</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {rankedTeams.map((team: any, i: number) => (
                             <div key={i} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
                                 <div className="flex justify-between items-start mb-4">
-                                    <h3 className="font-bold text-white truncate max-w-[70%]">{team.teamName}</h3>
+                                    <h3 className="font-bold text-white truncate max-w-[70%]">{fixEncoding(team.teamName)}</h3>
                                     <div className="text-right">
                                         <div className="text-yellow-400 font-bold">{team.rating}</div>
                                         <div className="text-xs text-slate-500">{team.tier}</div>
