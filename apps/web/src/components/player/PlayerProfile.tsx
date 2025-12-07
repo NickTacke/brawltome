@@ -1,9 +1,11 @@
 'use client';
 
+import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetcher } from '@/lib/api';
-import { fixEncoding } from '@/lib/utils';
+import { fixEncoding, timeAgo } from '@/lib/utils';
 import { 
     Card, 
     CardContent, 
@@ -12,8 +14,11 @@ import {
     Badge,
     Progress,
     Avatar,
-    AvatarFallback
+    AvatarFallback,
+    AvatarImage,
+    Button
 } from '@brawltome/ui';
+import { ChevronDown, ChevronUp, Clock } from 'lucide-react';
 
 interface PlayerProfileProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,7 +26,25 @@ interface PlayerProfileProps {
     id: string;
 }
 
+const RANK_BANNERS: Record<string, string> = {
+    'Diamond': '/images/banners/Diamond.png',
+    'Platinum': '/images/banners/Platinum.png',
+    'Gold': '/images/banners/Gold.png',
+    'Silver': '/images/banners/Silver.png',
+    'Bronze': '/images/banners/Bronze.png',
+    'Tin': '/images/banners/Tin.png',
+    'Valhallan': '/images/banners/Valhallan.png',
+};
+
+const getRankBanner = (tier: string) => {
+    const baseTier = tier.split(' ')[0];
+    return RANK_BANNERS[baseTier] || '/images/banners/Unranked.png';
+}
+
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
+    const router = useRouter();
+    const [showAllLegends, setShowAllLegends] = useState(false);
+
     // SWR with fallback data
     const { data: player } = useSWR(`/player/${id}`, fetcher, {
         fallbackData: initialData,
@@ -29,14 +52,26 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     });
     const isRefreshing = player?.isRefreshing;
 
-    const topLegends = player?.stats?.legends
+    const allLegends = player?.stats?.legends
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ?.sort((a: any, b: any) => b.xp - a.xp)
-        .slice(0, 6);
+        ?.sort((a: any, b: any) => b.xp - a.xp) || [];
+
+    const displayedLegends = showAllLegends ? allLegends : allLegends.slice(0, 6);
+
+    const legendsRef = useRef<HTMLDivElement>(null);
+
+    const handleToggleLegends = () => {
+        if (showAllLegends) {
+            legendsRef.current?.scrollIntoView({ behavior: 'instant' });
+        }
+        setShowAllLegends(!showAllLegends);
+    };
 
     const rankedTeams = player?.ranked?.teams
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?.sort((a: any, b: any) => b.rating - a.rating);
+
+    const winrate = player.games > 0 ? (player.wins / player.games) * 100 : 0;
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8">
@@ -55,23 +90,38 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-5xl font-black text-foreground tracking-tight">{fixEncoding(player.name)}</h1>
-                    <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline">{player.region}</Badge>
+                <div className="flex items-center gap-6">
+                    {/* Best Legend Avatar (if available from stats) */}
+                    {allLegends.length > 0 && (
+                        <Avatar className="h-24 w-24 border-4 border-card rounded-2xl">
+                            <AvatarImage 
+                                src={`/images/legends/${allLegends[0].bioName}.png`} 
+                                alt={allLegends[0].bioName} 
+                                className="object-cover object-top"
+                            />
+                            <AvatarFallback className="bg-muted text-3xl font-bold text-muted-foreground capitalize rounded-2xl">
+                                {allLegends[0].bioName[0]}
+                            </AvatarFallback>
+                        </Avatar>
+                    )}
+                    <div>
+                        <h1 className="text-5xl font-black text-foreground tracking-tight">{fixEncoding(player.name)}</h1>
+                        <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline">{player.region}</Badge>
+                            </div>
+                            <span>•</span>
+                            <div>ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span></div>
+                            {player.stats?.clan && (
+                                <>
+                                    <span>•</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">Clan:</span>
+                                        <span className="text-primary font-bold">{fixEncoding(player.stats.clan.clanName)}</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
-                        <span>•</span>
-                        <div>ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span></div>
-                        {player.stats?.clan && (
-                            <>
-                                <span>•</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-muted-foreground">Clan:</span>
-                                    <span className="text-primary font-bold">{fixEncoding(player.stats.clan.clanName)}</span>
-                                </div>
-                            </>
-                        )}
                     </div>
                 </div>
 
@@ -89,34 +139,50 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 {/* Card: Ranked Performance */}
                 <Card className="bg-gradient-to-br from-card to-background border-border relative overflow-hidden">
                     <CardHeader>
-                        <CardTitle className="text-xl font-bold text-primary flex items-center gap-2">
-                            🏆 Ranked Performance
-                        </CardTitle>
+                        <div className="flex justify-between items-center">
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                🏆 Ranked Performance
+                            </CardTitle>
+                            {player.ranked?.lastUpdated && (
+                                <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5 hover:bg-muted/50 transition-colors">
+                                    <Clock className="w-3 h-3" />
+                                    Updated {timeAgo(player.ranked.lastUpdated)}
+                                </Badge>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent className="relative z-10">
                         <div className="flex flex-col gap-8">
-                            <div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-6xl font-black text-foreground tracking-tighter">{player.rating}</span>
-                                    <span className="text-xl font-medium text-muted-foreground">ELO</span>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-6xl font-black text-foreground tracking-tighter">{player.rating}</span>
+                                        <span className="text-xl font-medium text-muted-foreground">ELO</span>
+                                    </div>
+                                    <div className="mt-2">
+                                        <Badge variant="secondary" className="uppercase tracking-wider">
+                                            {player.tier}
+                                        </Badge>
+                                    </div>
                                 </div>
-                                <div className="mt-2">
-                                    <Badge variant="secondary" className="uppercase tracking-wider">
-                                        {player.tier}
-                                    </Badge>
+                                <div className="text-right">
+                                    <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Peak Rating</div>
+                                    <div className="text-4xl font-black text-foreground">{player.peakRating}</div>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-y-6 gap-x-8 pt-6 border-t border-border">
-                                <div>
-                                    <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Peak Rating</div>
-                                    <div className="text-2xl text-foreground font-bold mt-1">{player.peakRating}</div>
-                                </div>
-                                <div>
-                                    <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Win Rate</div>
-                                    <div className="text-2xl text-foreground font-bold mt-1">
-                                        {((player.wins / player.games) * 100).toFixed(1)}%
-                                        <span className="text-sm text-muted-foreground font-normal ml-2">({player.wins}W - {player.games - player.wins}L)</span>
+                                <div className="col-span-2">
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">Win Rate</div>
+                                        <div className={`text-2xl font-black ${winrate >= 50 ? 'text-green-500' : 'text-foreground'}`}>
+                                            {winrate.toFixed(1)}%
+                                        </div>
+                                    </div>
+                                    <Progress value={winrate} className="h-4" />
+                                    <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
+                                        <span>{player.wins} Wins</span>
+                                        <span>{player.games - player.wins} Losses</span>
                                     </div>
                                 </div>
                                 {player.ranked?.regionRank > 0 && (
@@ -139,9 +205,17 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 {/* Card: Combat Record */}
                 <Card className="bg-gradient-to-br from-card to-background border-border">
                     <CardHeader>
-                        <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">
-                            📊 Combat Record
-                        </CardTitle>
+                        <div className="flex justify-between items-center">
+                            <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">
+                                📊 Combat Record
+                            </CardTitle>
+                            {player.stats?.lastUpdated && (
+                                <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5 hover:bg-muted/50 transition-colors">
+                                    <Clock className="w-3 h-3" />
+                                    Updated {timeAgo(player.stats.lastUpdated)}
+                                </Badge>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {player.stats ? (
@@ -187,23 +261,33 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 </Card>
             </div>
 
-            {/* Top Legends */}
-            {topLegends && topLegends.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-foreground">Top Legends (by XP)</h2>
+            {/* Legends */}
+            {allLegends.length > 0 && (
+                <div id="legends-section" ref={legendsRef} className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-foreground">Legend Statistics</h2>
+                        <span className="text-sm text-muted-foreground font-mono">{allLegends.length} Legends Played</span>
+                    </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {topLegends.map((legend: any) => (
+                        {displayedLegends.map((legend: any) => (
                             <Card key={legend.legendId} className="hover:bg-accent hover:text-accent-foreground transition-colors cursor-default">
                                 <CardContent className="p-4 flex items-center gap-4">
-                                    <Avatar className="w-12 h-12">
-                                        <AvatarFallback className="bg-muted text-xl font-bold text-muted-foreground capitalize">
-                                            {legend.legendNameKey[0]}
+                                    <Avatar className="w-12 h-12 rounded-md">
+                                        <AvatarImage 
+                                            src={`/images/legends/${legend.bioName}.png`} 
+                                            alt={legend.bioName} 
+                                            className="object-cover object-top"
+                                            loading="lazy"
+                                        />
+                                        <AvatarFallback className="bg-muted text-xl font-bold text-muted-foreground capitalize rounded-md">
+                                            {legend.bioName[0]}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-start">
-                                            <h3 className="font-bold capitalize truncate">{legend.legendNameKey}</h3>
+                                            <h3 className="font-bold capitalize truncate">{legend.bioName || legend.legendNameKey}</h3>
                                             <Badge variant="secondary" className="text-xs font-mono">Lvl {legend.level}</Badge>
                                         </div>
                                         <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
@@ -217,38 +301,95 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             </Card>
                         ))}
                     </div>
+                    
+                    {allLegends.length > 6 && (
+                        <div className="flex justify-center mt-6">
+                            <Button 
+                                variant="outline" 
+                                onClick={handleToggleLegends}
+                                className="gap-2"
+                            >
+                                {showAllLegends ? (
+                                    <>Show Less <ChevronUp className="h-4 w-4" /></>
+                                ) : (
+                                    <>Show All Legends <ChevronDown className="h-4 w-4" /></>
+                                )}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* Teams */}
             {rankedTeams && rankedTeams.length > 0 && (
                 <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-foreground">2v2 Teams</h2>
+                    <h2 className="text-2xl font-bold text-foreground">2v2 Teammates</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {rankedTeams.map((team: any, i: number) => (
-                            <Card key={i}>
-                                <CardContent className="p-6">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <h3 className="font-bold text-foreground truncate max-w-[70%]">{fixEncoding(team.teamName)}</h3>
-                                        <div className="text-right">
-                                            <div className="text-primary font-bold">{team.rating}</div>
-                                            <div className="text-xs text-muted-foreground">{team.tier}</div>
+                        {rankedTeams.map((team: any, i: number) => {
+                            const teammateId = team.brawlhallaIdOne === parseInt(id) ? team.brawlhallaIdTwo : team.brawlhallaIdOne;
+                            const bannerUrl = getRankBanner(team.tier);
+                            
+                            const teamNameParts = fixEncoding(team.teamName).split('+');
+                            const teammateName = teamNameParts.find(part => part.trim() !== fixEncoding(player.name))?.trim() || teamNameParts[0]?.trim() || fixEncoding(team.teamName);
+
+                            return (
+                            <div 
+                                key={i} 
+                                onClick={() => router.push(`/player/${teammateId}`)}
+                                className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer h-36 relative overflow-visible mt-4"
+                            >
+                                {/* Rank Banner on Left - Bleeding Out */}
+                                <div className="absolute -top-0.5 left-4 w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
+                                    <div 
+                                        className="w-full h-full bg-top bg-no-repeat bg-contain transition-transform duration-300"
+                                        style={{ backgroundImage: `url(${bannerUrl})` }}
+                                    />
+                                </div>
+                                
+                                {/* Content Spacer for Banner */}
+                                <div className="w-32 flex-shrink-0" />
+                                
+                                {/* Content */}
+                                <div className="flex-1 p-4 flex flex-col justify-between">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div>
+                                            <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors line-clamp-1">
+                                                {teammateName}
+                                            </h3>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs font-mono text-muted-foreground">Teammate ID: {teammateId}</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <div className="text-2xl font-black text-chart-3 leading-none">
+                                                {team.rating}
+                                                <span className="text-sm font-medium text-muted-foreground ml-1.5 align-baseline opacity-80">
+                                                    / {team.peakRating}
+                                                </span>
+                                            </div>
+                                            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">{team.tier}</div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="bg-muted/50 rounded p-2 text-center">
-                                            <div className="text-muted-foreground text-xs uppercase">Wins</div>
-                                            <div className="text-foreground font-mono">{team.wins}</div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mt-2">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Wins / Games</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-foreground font-mono font-bold">{team.wins}</span>
+                                                <span className="text-xs text-muted-foreground">/ {team.games}</span>
+                                            </div>
                                         </div>
-                                        <div className="bg-muted/50 rounded p-2 text-center">
-                                            <div className="text-muted-foreground text-xs uppercase">Games</div>
-                                            <div className="text-foreground font-mono">{team.games}</div>
+                                        <div className="flex flex-col text-right">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Win Rate</span>
+                                            <span className={`font-mono font-bold ${((team.wins / team.games) * 100) >= 50 ? 'text-green-500' : 'text-foreground'}`}>
+                                                {((team.wins / team.games) * 100).toFixed(1)}%
+                                            </span>
                                         </div>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                </div>
+                            </div>
+                        )})}
                     </div>
                 </div>
             )}
