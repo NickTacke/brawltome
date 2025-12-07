@@ -347,7 +347,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 }}
                                 role="button"
                                 tabIndex={0}
-                                className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer h-36 relative overflow-visible mt-4"
+                                className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-[9rem] relative overflow-visible mt-4"
                             >
                                 {/* Rank Banner on Left - Bleeding Out */}
                                 <div className="absolute -top-0.5 left-2 sm:left-4 w-16 sm:w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
@@ -361,24 +361,27 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 <div className="w-20 sm:w-32 flex-shrink-0" />
                                 
                                 {/* Content */}
-                                <div className="flex-1 p-4 flex flex-col justify-between">
-                                    <div className="flex justify-between items-start gap-4">
-                                        <div className="w-[180px] sm:w-[180px]">
+                                <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-4">
+                                        <div className="min-w-0 w-full">
                                             <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors truncate">
                                                 {teammateName}
                                             </h3>
                                             <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-xs font-mono text-muted-foreground">Teammate ID: {teammateId}</span>
+                                                <span className="text-xs font-mono text-muted-foreground truncate">Teammate ID: {teammateId}</span>
                                             </div>
                                         </div>
-                                        <div className="text-right flex-shrink-0">
-                                            <div className="text-2xl font-black text-chart-3 leading-none">
-                                                {team.rating}
-                                                <span className="text-sm font-medium text-muted-foreground ml-1.5 align-baseline opacity-80">
-                                                    / {team.peakRating}
-                                                </span>
+                                        
+                                        <div className="flex justify-end w-full sm:w-auto sm:block sm:text-right mt-2 sm:mt-0">
+                                            <div className="text-right flex-shrink-0 flex items-baseline justify-end gap-2 sm:block sm:gap-0">
+                                                <div className="text-xl sm:text-2xl font-black text-chart-3 leading-none whitespace-nowrap">
+                                                    {team.rating}
+                                                    <span className="text-xs sm:text-sm font-medium text-muted-foreground ml-1.5 align-baseline opacity-80">
+                                                        / {team.peakRating}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider sm:mt-1">{team.tier}</div>
                                             </div>
-                                            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-1">{team.tier}</div>
                                         </div>
                                     </div>
                                     
