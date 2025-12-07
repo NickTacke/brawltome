@@ -51,6 +51,15 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
         // Debug logging
         this.limiter.on('error', (err) => this.logger.error('⚠️ Bottleneck error', err));
         this.limiter.on('depleted', () => this.logger.warn('⚠️ API Quota Depleted!'));
+        this.limiter.on('failed', async (error, jobInfo) => {
+            const status = error.response?.status ?? error.status;
+            if (status === 429) {
+                const waitTime = 1000 * Math.pow(2, jobInfo.retryCount); // Exponential backoff
+                this.logger.warn(`Rate limit hit! Retrying in ${waitTime}ms (Attempt ${jobInfo.retryCount + 1})`);
+                return waitTime;
+            }
+            return null;
+        });
     }
 
     onModuleInit() {
