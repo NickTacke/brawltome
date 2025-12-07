@@ -11,6 +11,7 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
     private http: AxiosInstance;
     private readonly logger = new Logger(BhApiClientService.name);
     private readonly redisUrl: string;
+    private isShuttingDown = false;
 
     constructor(private config: ConfigService) {
         this.redisUrl = this.config.getOrThrow<string>('REDIS_URL');
@@ -65,7 +66,9 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
             if (err && err.message && err.message.includes('UNKNOWN_CLIENT')) {
                 this.logger.warn('🔄 Redis client lost (UNKNOWN_CLIENT). Re-initializing limiter...');
                 // Add a small delay to avoid rapid loops if the issue persists
-                setTimeout(() => this.initLimiter(), 1000);
+                if(!this.isShuttingDown) {
+                    setTimeout(() => this.initLimiter(), 1000);
+                }
             }
         });
         
@@ -89,6 +92,8 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
 
     async onModuleDestroy() {
         this.logger.log('Disconnecting BhApiClient...');
+        this.isShuttingDown = true;
+        await this.limiter.stop();
         await this.limiter.disconnect();
     }
 
