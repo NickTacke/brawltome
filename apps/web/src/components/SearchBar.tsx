@@ -55,7 +55,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         }
 
         setIsSearching(true);
-        fetcher(`/search/local?q=${debouncedQuery}`)
+        fetcher(`/search/local?q=${encodeURIComponent(debouncedQuery)}`)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .then((data: any) => {
             setResults(data);
