@@ -68,8 +68,9 @@ export class PlayerService {
     }
 
     async getLeaderboard(page: number, region?: string, limit?: number) {
-        const take = limit ?? 20;
-        const skip = (page - 1) * take;
+        const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
+        const safePage = Math.max(page || 1, 1);
+        const skip = (safePage - 1) * safeTake;
 
         const where = region && region !== 'all' ? { region } : {};
 
@@ -77,7 +78,7 @@ export class PlayerService {
             this.prisma.player.findMany({
                 where,
                 orderBy: { rating: 'desc' },
-                take,
+                take: safeTake,
                 skip,
                 select: {
                     brawlhallaId: true,
@@ -96,9 +97,9 @@ export class PlayerService {
         return {
             data: players,
             meta: {
-                page,
+                page: safePage,
                 total,
-                totalPages: Math.ceil(total / take)
+                totalPages: Math.ceil(total / safeTake)
             }
         };
     }
