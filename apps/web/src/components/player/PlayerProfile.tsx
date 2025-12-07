@@ -348,7 +348,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer h-36 relative overflow-visible mt-4"
                             >
                                 {/* Rank Banner on Left - Bleeding Out */}
-                                <div className="absolute -top-0.5 left-4 w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
+                                <div className="hidden sm:block absolute -top-0.5 left-4 w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
                                     <div 
                                         className="w-full h-full bg-top bg-no-repeat bg-contain transition-transform duration-300"
                                         style={{ backgroundImage: `url(${bannerUrl})` }}
@@ -356,12 +356,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 </div>
                                 
                                 {/* Content Spacer for Banner */}
-                                <div className="w-32 flex-shrink-0" />
+                                <div className="hidden sm:block w-32 flex-shrink-0" />
                                 
                                 {/* Content */}
                                 <div className="flex-1 p-4 flex flex-col justify-between">
                                     <div className="flex justify-between items-start gap-4">
-                                        <div className="min-w-0 flex-1">
+                                        <div className="w-[120px] sm:w-[180px]">
                                             <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors truncate">
                                                 {teammateName}
                                             </h3>
