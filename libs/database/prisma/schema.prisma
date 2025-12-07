@@ -214,7 +214,7 @@ model PlayerRanked {
 
 model Legend {
   legendId Int @id
-  legendNameKey String
+  legendNameKey String @unique
 
   // Biography
   bioName String
