@@ -1,5 +1,9 @@
 import './global.css';
 import { ThemeProvider } from '@/components/theme-provider';
+import { ComingSoon } from '@/components/ComingSoon';
+import { ModeToggle } from '@/components/mode-toggle';
+
+const IS_MAINTENANCE = true;
 
 export const metadata = {
   title: 'BrawlTome',
@@ -24,7 +28,16 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <div className="bg-background text-foreground min-h-screen">
-            {children}
+            {IS_MAINTENANCE ? (
+               <main className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+                 <div className="absolute top-4 right-4 z-[100]">
+                   <ModeToggle />
+                 </div>
+                 <ComingSoon />
+               </main>
+            ) : (
+                children
+            )}
           </div>
         </ThemeProvider>
       </body>
