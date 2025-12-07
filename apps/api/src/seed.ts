@@ -24,6 +24,15 @@ async function bootstrap() {
 
     for (let page = START_PAGE; page <= MAX_PAGES; page++) {
         try {
+            const remainingTokens = await bhApiClient.getRemainingTokens();
+            if(remainingTokens < 10) {
+                logger.log(`🔍 Not enough tokens to fetch rankings, waiting a minute!`);
+                // Keep waiting until we have more tokens
+                page--;
+                await new Promise((r) => setTimeout(r, 1 * 60 * 1000));
+                continue;
+            }
+
             // Fetch global rankings
             const players = await bhApiClient.getRankings(BRACKET, REGION, page);
 
