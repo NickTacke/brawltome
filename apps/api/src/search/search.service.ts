@@ -38,65 +38,105 @@ export class SearchService implements OnModuleInit {
     async searchLocal(query: string) {
         // Check if query is a Brawlhalla ID (numeric)
         if (/^\d+$/.test(query)) {
-            return this.searchById(parseInt(query, 10));
+            const id = parseInt(query, 10);
+            const players = await this.searchById(id);
+            const clan = await this.prisma.clan.findUnique({
+                where: { clanId: id },
+                select: { clanId: true, clanName: true, clanXp: true }
+            });
+            return {
+                players,
+                clans: clan ? [clan] : []
+            };
         }
 
         // Sanitize the query - remove special characters
         const sanitized = query.replace(/[^\w\s-]/gi, '');
 
-        // Return empty array if query is too short
-        if (sanitized.length < 2) return [];
+        // Return empty results if query is too short
+        if (sanitized.length < 2) return { players: [], clans: [] };
 
 
         this.logger.log(`🔍 Local search for "${sanitized}"`);
-        const players = await this.prisma.player.findMany({
-            where: {
-                OR: [
-                    {
-                        name: {
-                            contains: sanitized,
-                            mode: 'insensitive',
+        
+        const [players, clans] = await Promise.all([
+            this.prisma.player.findMany({
+                where: {
+                    OR: [
+                        {
+                            name: {
+                                contains: sanitized,
+                                mode: 'insensitive',
+                            },
                         },
-                    },
-                    {
-                        aliases: {
-                            some: {
-                                key: {
-                                    contains: sanitized,
-                                    mode: 'insensitive',
+                        {
+                            aliases: {
+                                some: {
+                                    key: {
+                                        contains: sanitized,
+                                        mode: 'insensitive',
+                                    },
                                 },
                             },
                         },
-                    },
-                ],
-            },
-            take: 10,
-            orderBy: {
-                rating: 'desc',
-            },
-            select: {
-                brawlhallaId: true,
-                name: true,
-                aliases: {
-                    select: {
-                        key: true,
-                        value: true,
-                    }
+                    ],
                 },
-                region: true, // Added
-                rating: true,
-                tier: true,
-                games: true,
-                wins: true,
-                bestLegend: true, // Added
-            },
-        });
+                take: 10,
+                orderBy: {
+                    rating: 'desc',
+                },
+                select: {
+                    brawlhallaId: true,
+                    name: true,
+                    aliases: {
+                        select: {
+                            key: true,
+                            value: true,
+                        }
+                    },
+                    region: true,
+                    rating: true,
+                    tier: true,
+                    games: true,
+                    wins: true,
+                    bestLegend: true,
+                },
+            }),
+            this.prisma.clan.findMany({
+                where: {
+                    clanName: {
+                        contains: sanitized,
+                        mode: 'insensitive',
+                    },
+                },
+                take: 5,
+                select: {
+                    clanId: true,
+                    clanName: true,
+                    clanXp: true,
+                    // Count members if possible, or just return basic info
+                    _count: {
+                        select: { members: true }
+                    }
+                }
+            })
+        ]);
 
         // Enrich with Legend Names
-        return players.map(p => ({
+        const enrichedPlayers = players.map(p => ({
             ...p,
             bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null
         }));
+
+        return {
+            players: enrichedPlayers,
+            clans: clans.map(c => ({
+                clanId: c.clanId,
+                name: c.clanName,
+                xp: c.clanXp,
+                memberCount: c._count.members
+            }))
+        };
     }
 
     private async searchById(id: number) {
