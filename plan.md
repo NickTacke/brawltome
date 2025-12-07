@@ -48,11 +48,12 @@ flowchart TD
     External[Brawlhalla Official API]
 
     %% User Flow: Search
-    Search -->|1. Type| SearchSvc
+    Search -->|1. Type Name| SearchSvc
     SearchSvc -->|2. Check Local DB| Postgres
-    SearchSvc --"Not Found? User Clicks Global"--> Gatekeeper
-    Gatekeeper --"Fetch 50 results"--> External
-    External --"Vacuum: Save ALL 50"--> Postgres
+    Search -->|2a. Type ID| SearchSvc
+    SearchSvc --"Not Found locally?"--> Gatekeeper
+    Gatekeeper --"Fetch ID"--> External
+    External --"Save New Player"--> Postgres
 
     %% User Flow: View Profile
     UI -->|3. Get Stats| PlayerSvc
@@ -76,103 +77,44 @@ flowchart TD
 
 | Component | Trigger | Priority | Budget Check |
 | :--- | :--- | :--- | :--- |
-| **Global Search** | User clicks "Search Official Servers" | **High** | Fail if tokens < 10 |
+| **ID Search** | User searches specific ID | **High** | Fail if tokens < 50 |
 | **Profile Load** | User visits Profile URL | **Critical** | Always return DB data. Queue refresh. |
 | **Refresh Worker** | Background Queue | **Variable** | **VIP System:** High view counts = Priority 1. |
-| **Janitor** | Cron (Every 1m) | **Low** | Only run if tokens > 140 (Idle). |
+| **Janitor** | Cron (Every 1m) | **Low** | Only run if tokens > 100 (Idle). |
 
 ---
 
-## 4. Implementation Steps
-
-### Phase 0: Infrastructure Setup
-*Do this before writing a single line of code.*
-
-1.  **Supabase:**
-    *   Create Project.
-    *   Go to *Settings > Database* and copy `Connection String` (Use Transaction Mode port 6543).
-2.  **Railway:**
-    *   Create Project.
-    *   Right Click -> Add Service -> **Redis**.
-    *   Copy the `REDIS_URL` from the *Connect* tab.
-3.  **Brawlhalla:**
-    *   Register for your API Key.
+## 4. Completed Phases ✅
 
 ### Phase 1: Nx Monorepo Initialization
-1.  **Create Workspace:**
-    ```bash
-    npx create-nx-workspace@latest brawlhalla-stats --preset=next
-    cd brawlhalla-stats
-    ```
-2.  **Add Backend:**
-    ```bash
-    npm install -D @nx/nest
-    npx nx g @nx/nest:app api
-    ```
-3.  **Install Core Deps:**
-    ```bash
-    npm install @prisma/client bottleneck bullmq @nestjs/bullmq @nestjs/config ioredis swr axios clsx tailwind-merge
-    npm install -D prisma
-    ```
+- [x] Create Workspace (`@nx/next`, `@nx/nest`)
+- [x] Install Core Deps (Prisma, BullMQ, Bottleneck, Axios)
 
 ### Phase 2: Shared Libraries & Database
-1.  **Create Libs:**
-    *   `libs/brawlhalla-client`: Wraps axios + `bottleneck` (The Gatekeeper).
-    *   `libs/database`: Holds Prisma schema and client.
-2.  **Prisma Schema (`libs/database/prisma/schema.prisma`):**
-    ```prisma
-    model Player {
-      brawlhallaId Int      @id
-      name         String
-      rating       Int      @default(0)
-      tier         String?
-      wins         Int      @default(0)
-      viewCount    Int      @default(0)  // For VIP Priority
-      lastUpdated  DateTime @default(now())
-      lastViewedAt DateTime @default(now())
+- [x] Create `libs/bhapi-client` (The Gatekeeper)
+- [x] Create `libs/database` (Prisma)
+- [x] Define Schema (Player, Stats, Ranked, Clan, Legend)
 
-      @@index([name]) // Critical for local search
-    }
-    ```
-3.  **The Gatekeeper (`libs/brawlhalla-client`):**
-    *   Initialize `Bottleneck` with `reservoir: 180` and `reservoirRefreshInterval: 15 * 60 * 1000`.
-    *   Set `datastore: 'redis'` to allow scaling on Railway.
-
-### Phase 3: The Seeder (Pre-Launch)
-*We need to pre-fill the database so early users don't hit the API limit.*
-
-1.  Create `apps/api/src/console/seed.ts`.
-2.  Write a script that:
-    *   Loops Regions: `US-E`, `EU`, `BRZ`, etc.
-    *   Loops Pages: `1` to `200`.
-    *   Upserts every player found into Postgres.
-3.  Run this locally pointing to your Supabase DB for 24-48 hours.
+### Phase 3: The Seeder
+- [x] Create `apps/api/src/seed.ts`
+- [x] Implement crawler for global rankings (Pages 1-200)
 
 ### Phase 4: API & "Smart Queue" Logic
-1.  **Queue Setup:**
-    *   Register `BullModule` in `app.module.ts`.
-2.  **Player Service (`getPlayer`):**
-    *   Fetch from DB.
-    *   Return immediately.
-    *   Calculate Priority: `Max(1, 100 - sqrt(viewCount))`.
-    *   Add to Queue: `refreshQueue.add('refresh', { id }, { priority, jobId: ... })`.
-3.  **Refresh Processor:**
-    *   Check `gatekeeper.getRemainingTokens()`.
-    *   If `< 20`, **Abort** (Save tokens for new user searches).
-    *   Else, Fetch API -> Update DB.
+- [x] Queue Setup (BullMQ)
+- [x] Player Service (Stale-While-Revalidate pattern)
+- [x] Refresh Processor (Token-aware worker)
+- [x] Janitor Service (Idle maintenance)
 
 ### Phase 5: Frontend Development
-1.  **Search Component:**
-    *   `input onChange`: Calls `/api/search/local`.
-    *   If `results.length === 0`: Show button *"Search Global Servers"*.
-    *   Button Click: Calls `/api/search/global` (The Vacuum).
-2.  **Profile Page:**
-    *   Use SWR: `useSWR('/api/player/123', { refreshInterval: data?.isRefreshing ? 5000 : 0 })`.
-    *   Show "Updating..." spinner when `isRefreshing` is true.
+- [x] Search Component (Local Name search + ID lookup)
+- [x] Profile Page (Live updates with SWR)
+- [x] Leaderboards (Filter by Region/Sort)
+- [x] Clan Support (Profile & Members)
+- [x] Server Status Widget
 
 ---
 
-## 5. Deployment Guide
+## 5. Deployment Guide (Next Steps 🚀)
 
 ### Backend (Railway)
 1.  **New Service:** GitHub Repo.
@@ -187,18 +129,52 @@ flowchart TD
 ### Frontend (Vercel)
 1.  **Import Repo.**
 2.  **Framework:** Next.js.
-3.  **Build Command:** `npx nx build web` (or leave default if Nx plugin is detected).
-4.  **Output:** `dist/apps/web/.next`.
+3.  **Build Command:** `npx nx build web`
+4.  **Output:** `dist/apps/web/.next`
 5.  **Variables:**
     *   `NEXT_PUBLIC_API_URL`: `https://[your-railway-url].up.railway.app`
 
 ---
 
-## 6. Checklist for Launch 🚀
+## 6. Roadmap & Future Features 🔮
 
-- [ ] **Database Seeded:** Have at least 200k players indexed.
-- [ ] **Rate Limiter Tested:** Verify `bottleneck` pauses after 180 requests locally.
-- [ ] **Vacuum Tested:** Confirm global search saves *all* 50 results, not just one.
-- [ ] **Priority Queue:** Verify "Sandstorm" (simulated high view count) cuts the line.
-- [ ] **Janitor:** Confirm it only runs when tokens > 140.
-- [ ] **Footer:** Add "Server Status" widget to UI (Green/Yellow/Red).
+### Phase 6: Analytics & Optimization
+- [ ] **Redis Response Caching:** Cache `GET /player/:id` responses for 60s to reduce DB hits during viral spikes.
+- [ ] **PostHog Integration:** Track "Search Misses" to improve seeding strategy.
+- [ ] **Sentry:** Error tracking for background workers.
+
+### Phase 7: Advanced Features
+- [ ] **ELO History Charts:** 
+    *   Create `PlayerRankedHistory` table.
+    *   Snapshot ELO daily via Janitor.
+    *   Visualize with Recharts.
+- [ ] **Twitch Integration:**
+    *   Allow streamers to "claim" their profile.
+    *   Show "Live Now" badge on profile if streaming.
+- [ ] **Discord Bot:**
+    *   `/stats [name]` command reusing `bhapi-client`.
+    *   Webhook alerts for clan changes.
+- [ ] **Mobile App:**
+    *   Capacitor or React Native wrapper for the web view.
+
+### Phase 8: "The Meta" (Global Analytics)
+- [ ] **Legend Tier Lists:**
+    *   Aggregate `PlayerRankedLegend` data from top 1000 players.
+    *   Calculate Win Rates & Pick Rates per legend.
+    *   Generate automatic Tier List (S/A/B/C) based on data.
+- [ ] **Weapon Analysis:**
+    *   Derive weapon performance by aggregating stats of legends sharing weapons.
+
+### Phase 9: Community & Social
+- [ ] **Claim Profile:**
+    *   Verify ownership via Steam/Ubisoft OAuth.
+    *   Custom banners/badges for verified users.
+- [ ] **Rivalries:**
+    *   "Head-to-Head" comparison tool (Player A vs Player B).
+    *   Clan vs Clan stat battles.
+
+### Phase 10: Esports
+- [ ] **Tournament Integration:**
+    *   Start.gg API integration.
+    *   Show "Recent Tournament Results" on player profiles.
+    *   "Pro Player" verification badge for Top 8 finishers.
