@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PlayerDTO, PlayerRankedDTO, PlayerStatsDTO } from '@brawltome/shared-types';
 import Bottleneck from 'bottleneck';
@@ -6,7 +6,7 @@ import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
 
 @Injectable()
-export class BhApiClientService implements OnModuleInit {
+export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
     private limiter: Bottleneck;
     private http: AxiosInstance;
     private readonly logger = new Logger(BhApiClientService.name);
@@ -55,6 +55,11 @@ export class BhApiClientService implements OnModuleInit {
 
     onModuleInit() {
         this.logger.log('Brawlhalla Gatekeeper Initialized 🛡️');
+    }
+
+    async onModuleDestroy() {
+        this.logger.log('Disconnecting BhApiClient...');
+        await this.limiter.disconnect();
     }
 
     // -- Public Methods --
