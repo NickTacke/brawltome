@@ -73,11 +73,25 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
         });
         
         this.limiter.on('depleted', () => this.logger.warn('⚠️ API Quota Depleted!'));
-        this.limiter.on('failed', async (error, jobInfo) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        this.limiter.on('failed', async (error, _jobInfo) => {
             const status = error.response?.status ?? error.status;
             if (status === 429) {
-                const waitTime = 1000 * Math.pow(2, jobInfo.retryCount); // Exponential backoff
-                this.logger.warn(`Rate limit hit! Retrying in ${waitTime}ms (Attempt ${jobInfo.retryCount + 1})`);
+                this.logger.warn(`Rate limit 429 hit! Resetting reservoir to 0 and synchronizing wait time...`);
+                
+                try {
+                    await this.limiter.updateSettings({
+                        reservoir: 0,
+                        reservoirRefreshAmount: 180,
+                        reservoirRefreshInterval: 15 * 60 * 1000
+                    });
+                } catch (e) {
+                    this.logger.error(`Failed to update limiter settings: ${e}`);
+                }
+
+                // Wait for the full refresh interval + buffer before retrying
+                const waitTime = 15 * 60 * 1000 + 5000; 
+                this.logger.warn(`Retrying request in ${waitTime}ms`);
                 return waitTime;
             }
             return null;
