@@ -28,6 +28,13 @@
           "cwd": "apps/api"
         }
       },
+      "seed-legends": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm dlx tsx --tsconfig tsconfig.app.json src/seed-legends.ts",
+          "cwd": "apps/api"
+        }
+      },
       "prune-lockfile": {
         "dependsOn": [
           "build"

@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlayerDTO, PlayerRankedDTO, PlayerStatsDTO } from '@brawltome/shared-types';
+import { LegendDTO, PlayerDTO, PlayerRankedDTO, PlayerStatsDTO } from '@brawltome/shared-types';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
@@ -95,6 +95,14 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
         return this.getRankings('1v1', 'all', 1, name);
     }
 
+    async getAllLegends(): Promise<LegendDTO[]> {
+        return this.limiter.schedule(() => this.performRequest(`/legend/all`));
+    }
+
+    async getLegend(legendId: number): Promise<LegendDTO> {
+        return this.limiter.schedule(() => this.performRequest(`/legend/${legendId}`));
+    }
+
     // -- Private Methods --
 
     private async performRequest(endpoint: string, params: Record<string, unknown> = {}) {
@@ -110,4 +118,4 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
             throw error;
         }
     }
-}   
+}
