@@ -57,6 +57,7 @@ export interface PlayerRankedTeamDTO {
 // Player General Statistics
 export interface PlayerStatsDTO {
   brawlhalla_id: number;
+  name: string;
   xp: number;
   level: number;
   xp_percentage: number;
