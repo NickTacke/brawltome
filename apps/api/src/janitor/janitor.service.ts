@@ -42,58 +42,56 @@ export class JanitorService {
             const rankings = await this.bhApiClient.getRankings('1v1', 'all', this.currentPage);
             
             if (rankings.length > 0) {
-                await this.prisma.$transaction(async (tx) => {
-                    for (const p of rankings) {
-                        // Skip if name is missing / shouldn't really happen
-                        if (!p.name) continue;
+                for (const p of rankings) {
+                    // Skip if name is missing / shouldn't really happen
+                    if (!p.name) continue;
 
-                         const existing = await tx.player.findUnique({
-                            where: { brawlhallaId: p.brawlhalla_id },
-                            select: { name: true, brawlhallaId: true }
-                        });
+                    const existing = await this.prisma.player.findUnique({
+                        where: { brawlhallaId: p.brawlhalla_id },
+                        select: { name: true, brawlhallaId: true }
+                    });
 
-                        const aliasUpdate = (existing && existing.name !== p.name) ? {
-                            aliases: {
-                                upsert: {
-                                    where: {
-                                        brawlhallaId_key: {
-                                            brawlhallaId: existing.brawlhallaId,
-                                            key: existing.name.toLowerCase()
-                                        }
-                                    },
-                                    create: {
-                                        key: existing.name.toLowerCase(),
-                                        value: existing.name
-                                    },
-                                    update: {}
-                                }
+                    const aliasUpdate = (existing && existing.name !== p.name) ? {
+                        aliases: {
+                            upsert: {
+                                where: {
+                                    brawlhallaId_key: {
+                                        brawlhallaId: existing.brawlhallaId,
+                                        key: existing.name.toLowerCase()
+                                    }
+                                },
+                                create: {
+                                    key: existing.name.toLowerCase(),
+                                    value: existing.name
+                                },
+                                update: {}
                             }
-                        } : {};
+                        }
+                    } : {};
 
-                        await tx.player.upsert({
-                            where: { brawlhallaId: p.brawlhalla_id },
-                            create: {
-                                brawlhallaId: p.brawlhalla_id,
-                                name: p.name,
-                                region: p.region,
-                                rating: p.rating,
-                                peakRating: p.peak_rating,
-                                tier: p.tier,
-                                games: p.games,
-                                wins: p.wins,
-                            },
-                            update: {
-                                name: p.name,
-                                ...aliasUpdate,
-                                rating: p.rating,
-                                peakRating: p.peak_rating,
-                                tier: p.tier,
-                                games: p.games,
-                                wins: p.wins,
-                            },
-                        });
-                    }
-                });
+                    await this.prisma.player.upsert({
+                        where: { brawlhallaId: p.brawlhalla_id },
+                        create: {
+                            brawlhallaId: p.brawlhalla_id,
+                            name: p.name,
+                            region: p.region,
+                            rating: p.rating,
+                            peakRating: p.peak_rating,
+                            tier: p.tier,
+                            games: p.games,
+                            wins: p.wins,
+                        },
+                        update: {
+                            name: p.name,
+                            ...aliasUpdate,
+                            rating: p.rating,
+                            peakRating: p.peak_rating,
+                            tier: p.tier,
+                            games: p.games,
+                            wins: p.wins,
+                        },
+                    });
+                }
                 this.logger.log(`Updated ${rankings.length} players from page ${this.currentPage}`);
             }
 
