@@ -100,7 +100,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 className="object-cover object-top"
                             />
                             <AvatarFallback className="bg-muted text-3xl font-bold text-muted-foreground capitalize rounded-2xl">
-                                {allLegends[0].bioName[0]}
+                                {allLegends[0].bioName?.[0] || '?'}
                             </AvatarFallback>
                         </Avatar>
                     )}
@@ -282,7 +282,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                             loading="lazy"
                                         />
                                         <AvatarFallback className="bg-muted text-xl font-bold text-muted-foreground capitalize rounded-md">
-                                            {legend.bioName[0]}
+                                            {legend.bioName?.[0] || '?'}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
@@ -337,6 +337,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             <div 
                                 key={i} 
                                 onClick={() => router.push(`/player/${teammateId}`)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        router.push(`/player/${teammateId}`);
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
                                 className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer h-36 relative overflow-visible mt-4"
                             >
                                 {/* Rank Banner on Left - Bleeding Out */}
