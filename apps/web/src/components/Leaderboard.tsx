@@ -19,13 +19,15 @@ const REGIONS = [
   { id: 'SA', label: 'South Africa' },
 ];
 
+const PAGE_SIZE = 20;
+
 export function Leaderboard() {
   const [page, setPage] = useState(1);
   const [region, setRegion] = useState('all');
   const router = useRouter();
 
   const { data, isLoading } = useSWR(
-    `/player/leaderboard/${page}?region=${region}&limit=20`,
+    `/player/leaderboard/${page}?region=${region}&limit=${PAGE_SIZE}`,
     fetcher
   );
 
@@ -93,7 +95,7 @@ export function Leaderboard() {
                   className="hover:bg-slate-800/50 cursor-pointer transition-colors group"
                 >
                   <td className="p-4 text-center font-mono text-slate-500 group-hover:text-white">
-                    #{((page - 1) * 20) + i + 1}
+                    #{((page - 1) * PAGE_SIZE) + i + 1}
                   </td>
                   <td className="p-4">
                     <div className="font-bold text-slate-200 group-hover:text-blue-400 transition-colors">
