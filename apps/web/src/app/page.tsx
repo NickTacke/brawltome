@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { SearchBar } from '@/components/SearchBar';
 import { ServerStatus } from '@/components/ServerStatus';
 import { Leaderboard } from '@/components/Leaderboard';
@@ -10,10 +11,17 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center p-4 relative">
-      <div className={`w-full max-w-4xl pt-20 pb-12 flex flex-col items-center text-center transition-all duration-300 relative z-50`}>
-        <h1 className={`text-6xl font-black text-foreground mb-8 tracking-tighter transition-all duration-300 ${isSearchFocused ? 'blur-sm opacity-50' : ''}`}>
-          brawltome.app
-        </h1>
+      <div className={`w-full max-w-4xl pt-6 pb-6 flex flex-col items-center text-center transition-all duration-300 relative z-50`}>
+        <div className={`mb-6 transition-all duration-300 ${isSearchFocused ? 'blur-sm opacity-50' : ''}`}>
+          <Image
+            src="/images/logo.png"
+            alt="BrawlTome Logo"
+            width={400}
+            height={100}
+            priority
+            className="h-auto w-auto max-w-[80vw] md:max-w-md"
+          />
+        </div>
         <SearchBar 
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => {
@@ -23,7 +31,7 @@ export default function Home() {
         />
       </div>
 
-      <div className={`w-full pb-20 transition-all duration-300 ${isSearchFocused ? 'blur-sm opacity-50 pointer-events-none' : ''}`}>
+      <div className={`w-full pb-12 transition-all duration-300 ${isSearchFocused ? 'blur-sm opacity-50 pointer-events-none' : ''}`}>
         <Leaderboard />
       </div>
       
