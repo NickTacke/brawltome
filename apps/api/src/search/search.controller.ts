@@ -12,12 +12,4 @@ export class SearchController {
         }
         return this.searchService.searchLocal(query);
     }
-
-    @Get('global')
-    async searchGlobal(@Query('q') query: string) {
-        if (!query || query.length < 3) {
-            throw new BadRequestException('Query must be at least 3 characters long');
-        }
-        return this.searchService.searchGlobal(query);
-    }
 }
