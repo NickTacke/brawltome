@@ -331,7 +331,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             const bannerUrl = getRankBanner(team.tier);
                             
                             const teamNameParts = fixEncoding(team.teamName).split('+');
-                            const teammateName = teamNameParts.find(part => part.trim() !== fixEncoding(player.name))?.trim() || teamNameParts[0]?.trim() || fixEncoding(team.teamName);
+                            const teammateNameIndex = team.brawlhallaIdOne === parseInt(id) ? 1 : 0;
+                            const teammateName = teamNameParts[teammateNameIndex]?.trim() || teamNameParts.find(part => part.trim() !== fixEncoding(player.name))?.trim() || fixEncoding(team.teamName);
 
                             return (
                             <div 
@@ -360,8 +361,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 {/* Content */}
                                 <div className="flex-1 p-4 flex flex-col justify-between">
                                     <div className="flex justify-between items-start gap-4">
-                                        <div>
-                                            <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors line-clamp-1">
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors truncate">
                                                 {teammateName}
                                             </h3>
                                             <div className="flex items-center gap-2 mt-1">
