@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LegendDTO, PlayerDTO, PlayerRankedDTO, PlayerStatsDTO } from '@brawltome/shared-types';
+import { ClanDTO, LegendDTO, PlayerDTO, PlayerRankedDTO, PlayerStatsDTO } from '@brawltome/shared-types';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
@@ -141,6 +141,10 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
 
     async getLegend(legendId: number): Promise<LegendDTO> {
         return this.limiter.schedule(() => this.performRequest(`/legend/${legendId}`));
+    }
+
+    async getClan(clanId: number): Promise<ClanDTO> {
+        return this.limiter.schedule(() => this.performRequest(`/clan/${clanId}`));
     }
 
     // -- Private Methods --
