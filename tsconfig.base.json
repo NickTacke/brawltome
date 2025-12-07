@@ -22,7 +22,8 @@
     "customConditions": ["@brawltome/source"],
     "paths": {
       "@brawltome/database": ["libs/database/src/index.ts"],
-      "@brawltome/bhapi-client": ["libs/bhapi-client/src/index.ts"]
+      "@brawltome/bhapi-client": ["libs/bhapi-client/src/index.ts"],
+      "@brawltome/ui": ["libs/ui/src/index.ts"]
     }
   }
 }
