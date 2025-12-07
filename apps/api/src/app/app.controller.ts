@@ -9,4 +9,9 @@ export class AppController {
   async getRankings(@Param('bracket') bracket: '1v1' | '2v2' | 'rotational', @Param('region') region: string, @Param('page', ParseIntPipe) page: number) {
     return this.appService.getRankings(bracket, region, page);
   } 
+
+  @Get('status')
+  async getServerStatus() {
+    return this.appService.getServerStatus();
+  }
 }

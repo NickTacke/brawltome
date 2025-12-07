@@ -16,4 +16,9 @@ export class AppService {
   async getRankings(bracket: '1v1' | '2v2' | 'rotational', region: string, page: number): Promise<PlayerDTO[]> {
     return await this.bhApiClient.getRankings(bracket, region, page);
   }
+
+  async getServerStatus() {
+    const tokens = await this.bhApiClient.getRemainingTokens();
+    return { tokens };
+  }
 }

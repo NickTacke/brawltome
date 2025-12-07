@@ -67,6 +67,42 @@ export class PlayerService {
         };
     }
 
+    async getLeaderboard(page: number, region?: string, limit?: number) {
+        const take = limit ?? 20;
+        const skip = (page - 1) * take;
+
+        const where = region && region !== 'all' ? { region } : {};
+
+        const [players, total] = await Promise.all([
+            this.prisma.player.findMany({
+                where,
+                orderBy: { rating: 'desc' },
+                take,
+                skip,
+                select: {
+                    brawlhallaId: true,
+                    name: true,
+                    region: true,
+                    rating: true,
+                    peakRating: true,
+                    tier: true,
+                    wins: true,
+                    games: true,
+                }
+            }),
+            this.prisma.player.count({ where })
+        ]);
+
+        return {
+            data: players,
+            meta: {
+                page,
+                total,
+                totalPages: Math.ceil(total / take)
+            }
+        };
+    }
+
     private async addJob(name: string, data: { id: number }, priority: number) {
         const jobId = `${name}-${data.id}`;
         const job = await this.refreshQueue.getJob(jobId);
