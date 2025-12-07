@@ -1,15 +1,32 @@
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common'
+import { Injectable, HttpException, HttpStatus, Logger, OnModuleInit } from '@nestjs/common'
 import { PrismaService } from '@brawltome/database'
 import { BhApiClientService } from '@brawltome/bhapi-client'
 
 @Injectable()
-export class SearchService {
+export class SearchService implements OnModuleInit {
     private readonly logger = new Logger(SearchService.name);
+    private legendCache: Map<number, string> = new Map();
 
     constructor(
         private prisma: PrismaService,
         private bhApiClient: BhApiClientService,
     ) {}
+
+    async onModuleInit() {
+        await this.refreshLegendCache();
+    }
+
+    async refreshLegendCache() {
+        try {
+            const legends = await this.prisma.legend.findMany({
+                select: { legendId: true, bioName: true }
+            });
+            this.legendCache = new Map(legends.map(l => [l.legendId, l.bioName]));
+            this.logger.log(`Loaded ${this.legendCache.size} legends into cache 🛡️`);
+        } catch (error) {
+            this.logger.error('Failed to load legend cache', error);
+        }
+    }
 
     // Local Search
     async searchLocal(query: string) {
@@ -21,7 +38,7 @@ export class SearchService {
 
 
         this.logger.log(`🔍 Local search for "${sanitized}"`);
-        return this.prisma.player.findMany({
+        const players = await this.prisma.player.findMany({
             where: {
                 OR: [
                     {
@@ -55,12 +72,20 @@ export class SearchService {
                         value: true,
                     }
                 },
+                region: true, // Added
                 rating: true,
                 tier: true,
                 games: true,
                 wins: true,
+                bestLegend: true, // Added
             },
         });
+
+        // Enrich with Legend Names
+        return players.map(p => ({
+            ...p,
+            bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null
+        }));
     }
 
     // Global Search
