@@ -111,6 +111,7 @@ async function bootstrap() {
             } catch (error) {
                 logger.error(`🚨 Error fetching rankings for ${region} page ${page}:`, error);
                 await new Promise((r) => setTimeout(r, 2000));
+                page--; // Retry the same page
                 continue;
             }
         }
