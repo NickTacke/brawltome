@@ -9,9 +9,10 @@ export class PlayerController {
     async getLeaderboard(
         @Param('page', ParseIntPipe) page: number,
         @Query('region') region?: string,
+        @Query('sort') sort?: 'rating' | 'wins' | 'games' | 'peakRating',
         @Query('limit', ParseIntPipe) limit?: number
     ) {
-        return this.playerService.getLeaderboard(page, region, limit);
+        return this.playerService.getLeaderboard(page, region, sort, limit);
     }
 
     @Get(':id')
