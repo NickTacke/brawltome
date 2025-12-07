@@ -24,7 +24,6 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     }
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [showGlobalOption, setShowGlobalOption] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -52,7 +51,6 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         setError(null);
         if (!debouncedQuery || debouncedQuery.length < 3) {
             setResults([]);
-            setShowGlobalOption(false);
             return;
         }
 
@@ -61,41 +59,30 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .then((data: any) => {
             setResults(data);
-            setShowGlobalOption(data.length === 0);
             setIsSearching(false);
+            if (data.length === 0) {
+                 // Check if it looks like an ID (all digits)
+                 if (/^\d+$/.test(debouncedQuery)) {
+                     // The backend handles ID search automatically in "local" endpoint
+                     // If it returned 0 results, it means the ID wasn't found even after API lookup
+                     setError('Player ID not found.');
+                 } else {
+                     // It's a name search, and we only search locally
+                     setError('Player not found locally. Try searching by ID.');
+                 }
+            }
         })
         .catch((err: unknown) => {
             setIsSearching(false);
             const error = err as Error & { cause?: string };
             if (error.message?.includes('429') || error.cause === 'Too Many Requests') {
                 setError('Server busy (High Traffic). Please try again later.');
+            } else {
+                setError('Search failed.');
             }
         });
     }, [debouncedQuery]);
-
-    // Vacuum Search Trigger
-    const handleGlobalSearch = async () => {
-        setIsSearching(true);
-        setError(null);
-        try {
-            const data = await fetcher(`/search/global?q=${query}`);
-            setResults(data);
-            if (data.length === 0) {
-                setError('No ranked players found. Try searching by Brawlhalla ID.');
-            }
-            setShowGlobalOption(false);
-        } catch (err: unknown) {
-             const error = err as Error & { cause?: string };
-             if (error.message?.includes('429') || error.cause === 'Too Many Requests') {
-                setError('Server busy. Global search temporarily disabled.');
-            } else {
-                setError('Failed to search. Please try again.');
-            }
-        } finally {
-            setIsSearching(false);
-        }
-    }
-
+    
     return (
         <div ref={containerRef} className="relative w-full max-w-lg mx-auto z-50">
             <div className="relative">
@@ -119,8 +106,8 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                 )}
             </div>
     
-            <div className={`transition-all duration-300 ease-in-out ${(query.length >= 3 && (results.length > 0 || showGlobalOption || error)) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
-                {(results.length > 0 || showGlobalOption || error) && (
+            <div className={`transition-all duration-300 ease-in-out ${(query.length >= 3 && (results.length > 0 || error)) ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
+                {(results.length > 0 || error) && (
                 <Card className="absolute w-full mt-2 bg-card border-border overflow-hidden shadow-2xl z-50">
                     {error ? (
                         <div className="p-4 text-center text-muted-foreground text-sm">
@@ -155,16 +142,6 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             <div className="text-sm font-mono text-primary">{p.rating || '---'}</div>
                         </button>
                         ))}
-            
-                        {showGlobalOption && !isSearching && (
-                        <Button
-                            variant="ghost"
-                            onClick={handleGlobalSearch}
-                            className="w-full h-auto p-4 rounded-none text-primary hover:text-primary hover:bg-primary/10"
-                        >
-                            Not found locally. <span className="font-bold underline ml-1">Search Official API?</span>
-                        </Button>
-                        )}
                         </>
                     )}
                 </Card>
