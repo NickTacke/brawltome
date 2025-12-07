@@ -75,7 +75,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         .catch((err: unknown) => {
             setIsSearching(false);
             const error = err as Error & { cause?: string };
-            if (error.message?.includes('429') || error.cause === 'Too Many Requests') {
+            if (error.cause === 'Too Many Requests') {
                 setError('Server busy (High Traffic). Please try again later.');
             } else {
                 setError('Search failed.');
@@ -139,7 +139,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                                     <div className="text-xs text-muted-foreground">{p.region}</div>
                                 </div>
                             </div>
-                            <div className="text-sm font-mono text-primary">{p.rating || '---'}</div>
+                            <div className="text-sm font-mono text-primary">{p.rating || '0'}</div>
                         </button>
                         ))}
                         </>
