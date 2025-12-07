@@ -18,7 +18,7 @@ export default async function Page({ params }: PageProps) {
         initialData = await fetcher(`/player/${id}`);
     } catch (err: unknown) {
         const error = err as Error & { cause?: string };
-        if (error.message?.includes('429') || error.cause === 'Too Many Requests') {
+        if (error.cause === 'Too Many Requests') {
              return (
                 <main className="min-h-screen bg-background py-10 flex items-center justify-center">
                     <Card className="p-8 text-center max-w-md">
