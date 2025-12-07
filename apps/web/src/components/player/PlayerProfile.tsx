@@ -235,9 +235,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 <div className="space-y-3">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Overall Win Rate</span>
-                                        <span className="text-foreground font-bold">{((player.stats.wins / player.stats.games) * 100).toFixed(1)}%</span>
+                                        <span className="text-foreground font-bold">{player.stats.games > 0 ? ((player.stats.wins / player.stats.games) * 100).toFixed(1) : 0}%</span>
                                     </div>
-                                    <Progress value={(player.stats.wins / player.stats.games) * 100} className="h-3" />
+                                    <Progress value={player.stats.games > 0 ? (player.stats.wins / player.stats.games) * 100 : 0} className="h-3" />
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span>{player.stats.wins.toLocaleString()} Wins</span>
                                         <span>{(player.stats.games - player.stats.wins).toLocaleString()} Losses</span>
@@ -292,8 +292,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         </div>
                                         <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
                                             <span>{legend.xp.toLocaleString()} XP</span>
-                                            <span className={legend.wins / legend.games > 0.5 ? "text-green-500" : "text-muted-foreground"}>
-                                                {((legend.wins / legend.games) * 100).toFixed(0)}% WR
+                                            <span className={legend.games > 0 && legend.wins / legend.games > 0.5 ? "text-green-500" : "text-muted-foreground"}>
+                                                {legend.games > 0 ? ((legend.wins / legend.games) * 100).toFixed(0) : 0}% WR
                                             </span>
                                         </div>
                                     </div>
@@ -382,8 +382,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         </div>
                                         <div className="flex flex-col text-right">
                                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Win Rate</span>
-                                            <span className={`font-mono font-bold ${((team.wins / team.games) * 100) >= 50 ? 'text-green-500' : 'text-foreground'}`}>
-                                                {((team.wins / team.games) * 100).toFixed(1)}%
+                                            <span className={`font-mono font-bold ${team.games > 0 && (team.wins / team.games) > 0.5 ? 'text-green-500' : 'text-foreground'}`}>
+                                                {team.games > 0 ? ((team.wins / team.games) * 100).toFixed(1) : 0}%
                                             </span>
                                         </div>
                                     </div>
