@@ -6,8 +6,6 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
 const IDLE_TOKEN_THRESHOLD = 100; // Only run if we have plenty of tokens
-const VIP_VIEW_THRESHOLD = 10; // Players with more views than this are VIPs - TODO: Dynamic threshold based on average view count
-const VIP_STALE_HOURS = 24; // Refresh VIPs if data is older than this
 
 @Injectable()
 export class JanitorService {
@@ -33,8 +31,8 @@ export class JanitorService {
         this.logger.log(`🧹 Janitor waking up! Tokens: ${tokens}`);
 
         await this.refreshRankingsPage();
-        await this.refreshStaleVIPs();
         await this.queueMissingDataRefreshes();
+        // TODO: After missing data is filled, start refreshing clans
     }
 
     private async refreshRankingsPage() {
@@ -104,39 +102,6 @@ export class JanitorService {
 
         } catch (error) {
             this.logger.error(`Failed to refresh rankings page ${this.currentPage}`, error);
-        }
-    }
-
-    private async refreshStaleVIPs() {
-        // Find players with high view counts who haven't been updated recently
-        const staleDate = new Date(Date.now() - VIP_STALE_HOURS * 60 * 60 * 1000);
-        
-        const staleVIPs = await this.prisma.player.findMany({
-            where: {
-                viewCount: { gte: VIP_VIEW_THRESHOLD },
-                stats: {
-                    lastUpdated: { lt: staleDate }
-                }
-            },
-            take: 5, // Process a few at a time
-            orderBy: { viewCount: 'desc' },
-            select: { brawlhallaId: true, name: true }
-        });
-
-        if (staleVIPs.length > 0) {
-            this.logger.log(`Found ${staleVIPs.length} stale VIPs. Queuing refresh...`);
-            for (const vip of staleVIPs) {
-                // Queue a stats refresh with low priority
-                await this.refreshQueue.add('refresh-stats', { id: vip.brawlhallaId }, {
-                    priority: 100, // Lowest priority
-                    jobId: `janitor-stats-${vip.brawlhallaId}`,
-                    removeOnComplete: true,
-                    removeOnFail: true
-                })
-                .catch(() => {
-                    // Ignore duplicate job errors
-                });
-            }
         }
     }
 
