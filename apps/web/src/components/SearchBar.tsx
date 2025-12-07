@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useDebounce } from 'use-debounce';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
-import { Input, Button, Card, Avatar, AvatarImage, AvatarFallback } from '@brawltome/ui';
+import { Input, Card, Avatar, AvatarImage, AvatarFallback } from '@brawltome/ui';
 
 interface SearchBarProps {
     onFocus?: () => void;
