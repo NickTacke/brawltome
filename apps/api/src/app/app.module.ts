@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PlayerModule } from '../player/player.module';
 import { SearchModule } from '../search/search.module';
+import { JanitorModule } from '../janitor/janitor.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { SearchModule } from '../search/search.module';
     QueueModule,
     PlayerModule,
     SearchModule,
+    JanitorModule,
   ],
   controllers: [AppController],
   providers: [AppService],
