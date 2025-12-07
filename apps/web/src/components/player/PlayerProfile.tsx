@@ -119,7 +119,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                     <span>•</span>
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground">Clan:</span>
-                                        <span className="text-primary font-bold">{fixEncoding(player.stats.clan.clanName)}</span>
+                                        <Link href={`/clan/${player.stats.clan.clanId}`} className="text-primary font-bold hover:underline">
+                                            {fixEncoding(player.stats.clan.clanName)}
+                                        </Link>
                                     </div>
                                 </>
                             )}
