@@ -20,7 +20,11 @@ import {
   Button,
   Skeleton,
   Card,
-  Badge
+  Badge,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Input
 } from '@brawltome/ui';
 
 const REGIONS = [
@@ -38,13 +42,21 @@ const REGIONS = [
 
 const PAGE_SIZE = 20;
 
+const SORT_OPTIONS = [
+  { id: 'rating', label: 'Elo' },
+  { id: 'peakRating', label: 'Peak Elo' },
+  { id: 'wins', label: 'Wins' },
+  { id: 'games', label: 'Games' },
+];
+
 export function Leaderboard() {
   const [page, setPage] = useState(1);
   const [region, setRegion] = useState('all');
+  const [sortBy, setSortBy] = useState('rating');
   const router = useRouter();
 
   const { data, isLoading, error } = useSWR(
-    `/player/leaderboard/${page}?region=${region}&limit=${PAGE_SIZE}`,
+    `/player/leaderboard/${page}?region=${region}&sort=${sortBy}&limit=${PAGE_SIZE}`,
     fetcher
   );
 
@@ -64,6 +76,11 @@ export function Leaderboard() {
     setPage(1); // Reset to page 1 on filter change
   };
 
+  const handleSortChange = (newSort: string) => {
+    setSortBy(newSort);
+    setPage(1); // Reset to page 1 on filter change
+  };
+
   const getRankStyle = (rank: number) => {
     if (rank === 1) return "text-yellow-500 font-black text-xl";
     if (rank === 2) return "text-slate-400 font-black text-xl";
@@ -79,21 +96,40 @@ export function Leaderboard() {
           <span className="text-yellow-500">🏆</span> Leaderboard
         </h2>
         
-        {/* Region Filter */}
-        <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground font-bold uppercase">Region:</span>
-            <Select value={region} onValueChange={handleRegionChange}>
-              <SelectTrigger className="w-[180px] font-bold">
-                <SelectValue placeholder="Select Region" />
-              </SelectTrigger>
-              <SelectContent>
-                {REGIONS.map((r) => (
-                  <SelectItem key={r.id} value={r.id} className="cursor-pointer">
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* Sort Filter */}
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
+                <Select value={sortBy} onValueChange={handleSortChange}>
+                <SelectTrigger className="w-[140px] font-bold">
+                    <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                    {SORT_OPTIONS.map((o) => (
+                    <SelectItem key={o.id} value={o.id} className="cursor-pointer">
+                        {o.label}
+                    </SelectItem>
+                    ))}
+                </SelectContent>
+                </Select>
+            </div>
+
+            {/* Region Filter */}
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-bold uppercase">Region:</span>
+                <Select value={region} onValueChange={handleRegionChange}>
+                <SelectTrigger className="w-[180px] font-bold">
+                    <SelectValue placeholder="Select Region" />
+                </SelectTrigger>
+                <SelectContent>
+                    {REGIONS.map((r) => (
+                    <SelectItem key={r.id} value={r.id} className="cursor-pointer">
+                        {r.label}
+                    </SelectItem>
+                    ))}
+                </SelectContent>
+                </Select>
+            </div>
         </div>
       </div>
 
@@ -142,15 +178,31 @@ export function Leaderboard() {
                     #{globalRank}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col">
-                        <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
-                        {fixEncoding(p.name)}
-                        </span>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">
-                                {p.tier}
-                            </Badge>
+                    <div className="flex items-center gap-3">
+                        {/* Best Legend Avatar */}
+                        {p.bestLegendName && (
+                            <Avatar className="h-10 w-10 border border-border bg-muted">
+                                <AvatarImage 
+                                    src={`/images/legends/${p.bestLegendName}.png`} 
+                                    alt={p.bestLegendName} 
+                                    className="object-cover"
+                                    loading="lazy"
+                                />
+                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground">
+                                    {p.bestLegendName.substring(0, 2)}
+                                </AvatarFallback>
+                            </Avatar>
+                        )}
+                        <div className="flex flex-col">
+                            <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
+                            {fixEncoding(p.name)}
+                            </span>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">
+                                    {p.tier}
+                                </Badge>
+                            </div>
                         </div>
                     </div>
                   </TableCell>
@@ -195,9 +247,23 @@ export function Leaderboard() {
         >
           ← Prev
         </Button>
-        <span className="text-sm text-muted-foreground font-mono">
-          Page {page} of {totalPages || '?'}
-        </span>
+        <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground font-mono">Page</span>
+            <Input
+                key={page}
+                defaultValue={page}
+                className="h-8 w-16 text-center font-mono"
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        const val = parseInt(e.currentTarget.value);
+                        if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                            setPage(val);
+                        }
+                    }
+                }}
+            />
+            <span className="text-sm text-muted-foreground font-mono">of {totalPages || '?'}</span>
+        </div>
         <Button
           variant="outline"
           size="sm"
