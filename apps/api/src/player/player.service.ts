@@ -1,7 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '@brawltome/database';
+import { BhApiClientService } from '@brawltome/bhapi-client';
+import { PlayerRankedLegendDTO, PlayerRankedTeamDTO } from '@brawltome/shared-types';
 
 // Thresholds
 const RANKED_TTL = 1000 * 60 * 60; // 1 hour
@@ -15,7 +17,8 @@ export class PlayerService implements OnModuleInit {
 
     constructor(
         private prisma: PrismaService,
-        @InjectQueue('refresh-queue') private refreshQueue: Queue
+        @InjectQueue('refresh-queue') private refreshQueue: Queue,
+        private bhApiClient: BhApiClientService,
     ) {}
 
     async onModuleInit() {
@@ -37,7 +40,7 @@ export class PlayerService implements OnModuleInit {
 
     async getPlayer(id: number) {
         // Fetch Player from database
-        const player = await this.prisma.player.findUnique({
+        let player = await this.prisma.player.findUnique({
             where: { brawlhallaId: id },
             include: {
                 stats: {
@@ -54,7 +57,12 @@ export class PlayerService implements OnModuleInit {
                 },
             },
         });
-        if (!player) return null;
+
+        // If not found, try to discover from API
+        if (!player) {
+            player = await this.discoverPlayer(id);
+            if (!player) return null;
+        }
         
         void this.incrementViewCount(id); // Fire and forget
 
@@ -101,6 +109,132 @@ export class PlayerService implements OnModuleInit {
             ...player,
             isRefreshing: rankedAge > RANKED_TTL || statsAge > STATS_TTL
         };
+    }
+
+    private async discoverPlayer(id: number) {
+        // Check tokens first
+        const tokens = await this.bhApiClient.getRemainingTokens();
+        if (tokens < 50) {
+            this.logger.warn(`Discovery blocked for ${id} due to low tokens (${tokens})`);
+            throw new HttpException('Server busy. Cannot fetch new player data right now.', HttpStatus.TOO_MANY_REQUESTS);
+        }
+
+        this.logger.log(`Discovering player ${id} from API...`);
+
+        try {
+            // Priority: Stats first (for name/existence), then Ranked
+            let name = '';
+            let region = 'UNKNOWN';
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let rankedData: any = {};
+            
+            try {
+                const statsData = await this.bhApiClient.getPlayerStats(id);
+                name = statsData.name || '';
+            } catch (e) {
+                 // Stats might fail for various reasons (404 etc), but it's our primary source for "existence"
+                 this.logger.warn(`Failed to fetch stats for ${id}: ${e}`);
+            }
+
+            // If we didn't find a name in stats, we can't create the player reliably
+            if (!name) {
+                this.logger.warn(`Could not find name for player ${id} in stats.`);
+                return null;
+            }
+
+            // Try fetching ranked data to enrich
+            try {
+                rankedData = await this.bhApiClient.getPlayerRanked(id);
+                region = rankedData.region || 'UNKNOWN';
+            } catch (e) {
+                this.logger.warn(`Failed to fetch ranked data for ${id}, using default values. ${e}`);
+            }
+
+            // Save to DB
+            await this.prisma.$transaction(async (tx) => {
+                 await tx.player.upsert({
+                    where: { brawlhallaId: id },
+                    create: {
+                        brawlhallaId: id,
+                        name: name,
+                        region: region,
+                        rating: rankedData.rating || 0,
+                        peakRating: rankedData.peak_rating || 0,
+                        tier: rankedData.tier || 'Unranked',
+                        games: rankedData.games || 0,
+                        wins: rankedData.wins || 0,
+                    },
+                    update: {
+                        name: name,
+                        rating: rankedData.rating || 0,
+                        peakRating: rankedData.peak_rating || 0,
+                        tier: rankedData.tier || 'Unranked',
+                        games: rankedData.games || 0,
+                        wins: rankedData.wins || 0,
+                    },
+                });
+
+                if (rankedData && rankedData.legends) {
+                    await tx.playerRanked.upsert({
+                        where: { brawlhallaId: id },
+                        update: {
+                            globalRank: rankedData.global_rank || 0,
+                            regionRank: rankedData.region_rank || 0,
+                            lastUpdated: new Date(),
+                            legends: {
+                                deleteMany: {},
+                                create: this.mapLegends(rankedData.legends),
+                            },
+                            teams: {
+                                deleteMany: {},
+                                create: this.mapTeams(rankedData['2v2']),
+                            },
+                        },
+                        create: {
+                            brawlhallaId: id,
+                            globalRank: rankedData.global_rank || 0,
+                            regionRank: rankedData.region_rank || 0,
+                            lastUpdated: new Date(),
+                            legends: {
+                                create: this.mapLegends(rankedData.legends),
+                            },
+                            teams: {
+                                create: this.mapTeams(rankedData['2v2']),
+                            },
+                        },
+                    });
+                }
+            });
+
+             // Queue full refreshes to ensure we have consistent data
+             await this.refreshQueue.add('refresh-stats', { id });
+             if (rankedData.legends) {
+                  await this.refreshQueue.add('refresh-ranked', { id });
+             }
+
+            // Return the newly created player
+            return this.prisma.player.findUnique({
+                where: { brawlhallaId: id },
+                include: {
+                    stats: {
+                        include: {
+                            legends: true,
+                            clan: true,
+                        },
+                    },
+                    ranked: {
+                        include: {
+                            legends: true,
+                            teams: true,
+                        },
+                    },
+                },
+            });
+
+        } catch (error) {
+            this.logger.warn(`Failed to discover player ${id}: ${error}`);
+            return null;
+        }
     }
 
     async getLeaderboard(page: number, region?: string, sort: 'rating' | 'wins' | 'games' | 'peakRating' = 'rating', limit?: number) {
@@ -199,5 +333,45 @@ export class PlayerService implements OnModuleInit {
         if (ageMs > 1000 * 60 * 60 * 24) priority -= 20; // If data is really old, boost priority
         if (type === 'stats') priority += 10; // Stats are less important than ranked
         return Math.max(1, Math.min(100, priority));
+    }
+
+    // Helper methods for mapping
+    private mapLegends(legends: PlayerRankedLegendDTO[]) {
+        if (!legends) return [];
+        return legends.map((legend) => ({
+            legendId: legend.legend_id,
+            legendNameKey: legend.legend_name_key,
+            rating: legend.rating,
+            peakRating: legend.peak_rating,
+            tier: legend.tier,
+            wins: legend.wins,
+            games: legend.games,
+        }));
+    }
+
+    private mapTeams(teams: PlayerRankedTeamDTO[]) {
+        if (!teams) return [];
+        
+        // Deduplicate teams based on ID pairs
+        const uniqueTeams = new Map<string, PlayerRankedTeamDTO>();
+        for (const team of teams) {
+            const key = `${team.brawlhalla_id_one}-${team.brawlhalla_id_two}`;
+            if (!uniqueTeams.has(key)) {
+                uniqueTeams.set(key, team);
+            }
+        }
+
+        return Array.from(uniqueTeams.values()).map((team) => {
+            return {
+                brawlhallaIdOne: team.brawlhalla_id_one,
+                brawlhallaIdTwo: team.brawlhalla_id_two,
+                teamName: team.teamname,
+                rating: team.rating,
+                peakRating: team.peak_rating,
+                tier: team.tier,
+                wins: team.wins,
+                games: team.games,
+            };
+        });
     }
 }
