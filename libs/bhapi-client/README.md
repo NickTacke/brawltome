@@ -1,7 +1,7 @@
 # bhapi-client
 
-This library was generated with [Nx](https://nx.dev).
+A type-safe TypeScript wrapper for the Brawlhalla API.
 
-## Building
+## Purpose
 
-Run `nx build bhapi-client` to build the library.
+This library abstracts direct HTTP calls to the Brawlhalla API, providing typed responses and error handling. It is used primarily by the `api` application to fetch raw data.

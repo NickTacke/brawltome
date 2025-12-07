@@ -1,7 +1,3 @@
 # shared-types
 
-This library was generated with [Nx](https://nx.dev).
-
-## Building
-
-Run `nx build shared-types` to build the library.
+Common TypeScript interfaces and types shared between the API and Web applications to ensure type safety across the network boundary.
