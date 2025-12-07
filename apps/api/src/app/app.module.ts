@@ -11,6 +11,7 @@ import { AppService } from './app.service';
 import { PlayerModule } from '../player/player.module';
 import { SearchModule } from '../search/search.module';
 import { JanitorModule } from '../janitor/janitor.module';
+import { ClanModule } from '../clan/clan.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { JanitorModule } from '../janitor/janitor.module';
     PlayerModule,
     SearchModule,
     JanitorModule,
+    ClanModule,
   ],
   controllers: [AppController],
   providers: [AppService],
