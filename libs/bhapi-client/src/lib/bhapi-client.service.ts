@@ -7,15 +7,13 @@ import axios, { AxiosInstance } from 'axios';
 
 @Injectable()
 export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
-    private limiter: Bottleneck;
+    private limiter!: Bottleneck;
     private http: AxiosInstance;
     private readonly logger = new Logger(BhApiClientService.name);
+    private readonly redisUrl: string;
 
     constructor(private config: ConfigService) {
-        const redisUrl = this.config.getOrThrow<string>('REDIS_URL');
-        // Log the URL (masked) to verify we are getting it
-        this.logger.log(`Using Redis URL: ${redisUrl.replace(/:\/\/.*@/, '://***@')}`);
-
+        this.redisUrl = this.config.getOrThrow<string>('REDIS_URL');
         const apiKey = this.config.getOrThrow<string>('BRAWLHALLA_API_KEY');
 
         // Initialize HTTP client
@@ -25,12 +23,24 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
             timeout: 10000, // 10s timeout
         });
 
-        // Initialize Redis connection manually to ensure URL is used correctly
+        // Initialize rate limiter
+        this.initLimiter();
+    }
+
+    private initLimiter() {
+        if (this.limiter) {
+            try {
+                // Best effort disconnect
+                this.limiter.disconnect();
+            } catch (e) {
+                this.logger.warn('Error disconnecting old limiter', e);
+            }
+        }
+
         const connection = new Bottleneck.IORedisConnection({
-            client: new Redis(redisUrl),
+            client: new Redis(this.redisUrl),
         });
 
-        // Initialize rate limiter
         this.limiter = new Bottleneck({
             // Cluster settings
             id: 'bhapi-limiter',
@@ -49,7 +59,16 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
         });
 
         // Debug logging
-        this.limiter.on('error', (err) => this.logger.error('⚠️ Bottleneck error', err));
+        this.limiter.on('error', (err) => {
+            this.logger.error('⚠️ Bottleneck error', err);
+            // Handle UNKNOWN_CLIENT error by reconnecting
+            if (err && err.message && err.message.includes('UNKNOWN_CLIENT')) {
+                this.logger.warn('🔄 Redis client lost (UNKNOWN_CLIENT). Re-initializing limiter...');
+                // Add a small delay to avoid rapid loops if the issue persists
+                setTimeout(() => this.initLimiter(), 1000);
+            }
+        });
+        
         this.limiter.on('depleted', () => this.logger.warn('⚠️ API Quota Depleted!'));
         this.limiter.on('failed', async (error, jobInfo) => {
             const status = error.response?.status ?? error.status;
@@ -60,6 +79,8 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
             }
             return null;
         });
+        
+        this.logger.log(`Initialized Bottleneck with Redis at ${this.redisUrl.replace(/:\/\/.*@/, '://***@')}`);
     }
 
     onModuleInit() {
