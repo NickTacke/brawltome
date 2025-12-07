@@ -2,7 +2,9 @@
   "name": "@brawltome/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "seed:api": "nx run api:seed"
+  },
   "private": true,
   "dependencies": {
     "@nestjs/common": "^11.0.0",
