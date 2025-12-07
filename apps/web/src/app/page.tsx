@@ -9,9 +9,9 @@ export default function Home() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   return (
-    <main className="min-h-screen bg-slate-950 flex flex-col items-center p-4 relative">
+    <main className="min-h-screen flex flex-col items-center p-4 relative">
       <div className={`w-full max-w-4xl pt-20 pb-12 flex flex-col items-center text-center transition-all duration-300 relative z-50`}>
-        <h1 className={`text-6xl font-black text-white mb-8 tracking-tighter transition-all duration-300 ${isSearchFocused ? 'blur-sm opacity-50' : ''}`}>
+        <h1 className={`text-6xl font-black text-foreground mb-8 tracking-tighter transition-all duration-300 ${isSearchFocused ? 'blur-sm opacity-50' : ''}`}>
           brawltome.app
         </h1>
         <SearchBar 
