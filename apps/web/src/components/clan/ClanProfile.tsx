@@ -240,8 +240,8 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                                                     {/* Legend Avatar Placeholder - In a real app we'd need to fetch this or include it in clan data */}
                                                     <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                                                         <AvatarImage 
-                                                            src={`/images/legends/avatars/${member.legendNameKey}.png`} 
-                                                            alt={member.legendNameKey}
+                                                            src={member.legendNameKey ? `/images/legends/avatars/${member.legendNameKey.toLowerCase()}.png` : undefined}
+                                                            alt={member.legendNameKey || 'Legend'}
                                                             className="object-cover object-top"
                                                             loading="lazy"
                                                         />
