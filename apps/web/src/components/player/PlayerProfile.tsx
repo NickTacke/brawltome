@@ -97,12 +97,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                     {allLegends.length > 0 && (
                         <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-card rounded-2xl flex-shrink-0">
                             <AvatarImage 
-                                src={`/images/legends/${allLegends[0].bioName}.png`} 
-                                alt={allLegends[0].bioName} 
+                                src={`/images/legends/avatars/${allLegends[0].legendNameKey}.png`} 
+                                alt={allLegends[0].legendNameKey} 
                                 className="object-cover object-top"
                             />
                             <AvatarFallback className="bg-muted text-xl sm:text-3xl font-bold text-muted-foreground capitalize rounded-2xl">
-                                {allLegends[0].bioName?.[0] || '?'}
+                                {allLegends[0].legendNameKey?.[0] || '?'}
                             </AvatarFallback>
                         </Avatar>
                     )}
@@ -267,7 +267,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 <div id="legends-section" ref={legendsRef} className="space-y-4">
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-foreground">Legend Statistics</h2>
-                        <span className="text-sm text-muted-foreground font-mono">{allLegends.length} Legends Played</span>
+                        <span className="text-sm text-muted-foreground font-mono">Played: {allLegends.length}</span>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -277,13 +277,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 <CardContent className="p-4 flex items-center gap-4">
                                     <Avatar className="w-12 h-12 rounded-md">
                                         <AvatarImage 
-                                            src={`/images/legends/${legend.bioName}.png`} 
-                                            alt={legend.bioName} 
+                                            src={`/images/legends/avatars/${legend.legendNameKey}.png`} 
+                                            alt={legend.legendNameKey} 
                                             className="object-cover object-top"
                                             loading="lazy"
                                         />
                                         <AvatarFallback className="bg-muted text-xl font-bold text-muted-foreground capitalize rounded-md">
-                                            {legend.bioName?.[0] || '?'}
+                                            {legend.legendNameKey?.[0] || '?'}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">

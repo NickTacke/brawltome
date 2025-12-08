@@ -14,6 +14,7 @@ export class PlayerService implements OnModuleInit {
     private readonly logger = new Logger(PlayerService.name);
     private legendCache: Map<number, string> = new Map();
     private legendKeyCache: Map<string, string> = new Map();
+    private legendIdToKeyCache: Map<number, string> = new Map();
 
     constructor(
         private prisma: PrismaService,
@@ -32,6 +33,7 @@ export class PlayerService implements OnModuleInit {
             });
             this.legendCache = new Map(legends.map(l => [l.legendId, l.bioName]));
             this.legendKeyCache = new Map(legends.map(l => [l.legendNameKey, l.bioName]));
+            this.legendIdToKeyCache = new Map(legends.map(l => [l.legendId, l.legendNameKey]));
             this.logger.log(`Loaded ${this.legendCache.size} legends into cache 🛡️`);
         } catch (error) {
             this.logger.error('Failed to load legend cache', error);
@@ -270,7 +272,8 @@ export class PlayerService implements OnModuleInit {
         // Enrich with Legend Names from Cache
         const enrichedPlayers = players.map(p => ({
             ...p,
-            bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null
+            bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
+            bestLegendNameKey: p.bestLegend ? this.legendIdToKeyCache.get(p.bestLegend) : null
         }));
 
         return {
