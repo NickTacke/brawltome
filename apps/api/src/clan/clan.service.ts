@@ -62,20 +62,20 @@ export class ClanService {
                 }
             });
 
-            // Now get the bioNames for these legendIds
+            // Now get the legendNameKeys for these legendIds
             const legendIds = bestLegends.map(bl => bl.legendId);
             const legends = await this.prisma.legend.findMany({
                 where: { legendId: { in: legendIds } },
-                select: { legendId: true, bioName: true }
+                select: { legendId: true, legendNameKey: true }
             });
 
-            const legendBioMap = new Map(legends.map(l => [l.legendId, l.bioName]));
+            const legendKeyMap = new Map(legends.map(l => [l.legendId, l.legendNameKey]));
             const playerLegendMap = new Map();
             
             for (const bl of bestLegends) {
-                const bioName = legendBioMap.get(bl.legendId);
-                if (bioName) {
-                    playerLegendMap.set(bl.brawlhallaId, bioName);
+                const legendNameKey = legendKeyMap.get(bl.legendId);
+                if (legendNameKey) {
+                    playerLegendMap.set(bl.brawlhallaId, legendNameKey);
                 }
             }
             
