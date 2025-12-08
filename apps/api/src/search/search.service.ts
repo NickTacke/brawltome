@@ -11,6 +11,7 @@ const API_SEARCH_TOKEN_THRESHOLD = 50;
 export class SearchService implements OnModuleInit {
     private readonly logger = new Logger(SearchService.name);
     private legendCache: Map<number, string> = new Map();
+    private legendIdToKeyCache: Map<number, string> = new Map();
 
     constructor(
         private prisma: PrismaService,
@@ -25,9 +26,10 @@ export class SearchService implements OnModuleInit {
     async refreshLegendCache() {
         try {
             const legends = await this.prisma.legend.findMany({
-                select: { legendId: true, bioName: true }
+                select: { legendId: true, legendNameKey: true, bioName: true }
             });
             this.legendCache = new Map(legends.map(l => [l.legendId, l.bioName]));
+            this.legendIdToKeyCache = new Map(legends.map(l => [l.legendId, l.legendNameKey]));
             this.logger.log(`Loaded ${this.legendCache.size} legends into cache 🛡️`);
         } catch (error) {
             this.logger.error('Failed to load legend cache', error);
@@ -125,7 +127,8 @@ export class SearchService implements OnModuleInit {
         // Enrich with Legend Names
         const enrichedPlayers = players.map(p => ({
             ...p,
-            bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null
+            bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
+            bestLegendNameKey: p.bestLegend ? this.legendIdToKeyCache.get(p.bestLegend) : null
         }));
 
         return {
@@ -170,7 +173,8 @@ export class SearchService implements OnModuleInit {
             
             return [{
                 ...player,
-                bestLegendName: player.bestLegend ? this.legendCache.get(player.bestLegend) : null
+                bestLegendName: player.bestLegend ? this.legendCache.get(player.bestLegend) : null,
+                bestLegendNameKey: player.bestLegend ? this.legendIdToKeyCache.get(player.bestLegend) : null
             }];
         }
 
@@ -290,6 +294,7 @@ export class SearchService implements OnModuleInit {
                 wins: rankedData.wins || 0,
                 bestLegend: null,
                 bestLegendName: null,
+                bestLegendNameKey: null,
             }];
 
         } catch (error) {

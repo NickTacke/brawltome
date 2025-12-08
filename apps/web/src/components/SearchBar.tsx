@@ -22,6 +22,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         region?: string;
         rating?: number;
         bestLegendName?: string;
+        bestLegendNameKey?: string;
     }
 
     interface ClanResult {
@@ -142,13 +143,13 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         >
                             <div className="flex items-center gap-3">
                                 {p.bestLegendName && (
-                                    <Avatar className="h-8 w-8 border border-border bg-muted">
+                                    <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                                         <AvatarImage 
-                                            src={`/images/legends/${p.bestLegendName}.png`} 
+                                            src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} 
                                             alt={p.bestLegendName} 
-                                            className="object-cover"
+                                            className="object-cover object-top"
                                         />
-                                        <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground">
+                                        <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
                                             {p.bestLegendName.substring(0, 2)}
                                         </AvatarFallback>
                                     </Avatar>
@@ -178,8 +179,8 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                                         className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-full border border-border bg-muted flex items-center justify-center">
-                                                <Shield className="h-5 w-5 text-muted-foreground fill-current" />
+                                            <div className="h-10 w-10 rounded-full border border-border bg-muted flex items-center justify-center">
+                                                <Shield className="h-6 w-6 text-muted-foreground fill-current" />
                                             </div>
                                             <div>
                                                 <div className="font-bold text-card-foreground">{fixEncoding(c.name)}</div>
