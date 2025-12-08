@@ -181,14 +181,14 @@ export function Leaderboard() {
                     <div className="flex items-center gap-3">
                         {/* Best Legend Avatar */}
                         {p.bestLegendName && (
-                            <Avatar className="h-10 w-10 border border-border bg-muted">
+                            <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                                 <AvatarImage 
-                                    src={`/images/legends/${p.bestLegendName}.png`} 
+                                    src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} 
                                     alt={p.bestLegendName} 
-                                    className="object-cover"
+                                    className="object-cover object-top"
                                     loading="lazy"
                                 />
-                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground">
+                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
                                     {p.bestLegendName.substring(0, 2)}
                                 </AvatarFallback>
                             </Avatar>
