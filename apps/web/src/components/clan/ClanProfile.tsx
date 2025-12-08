@@ -238,14 +238,14 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     {/* Legend Avatar Placeholder - In a real app we'd need to fetch this or include it in clan data */}
-                                                    <Avatar className="h-8 w-8 border border-border bg-muted">
+                                                    <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                                                         <AvatarImage 
-                                                            src={`/images/legends/${member.legendNameKey}.png`} 
+                                                            src={`/images/legends/avatars/${member.legendNameKey}.png`} 
                                                             alt={member.legendNameKey}
-                                                            className="object-cover"
+                                                            className="object-cover object-top"
                                                             loading="lazy"
                                                         />
-                                                        <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground">
+                                                        <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
                                                             {fixEncoding(member.name).substring(0, 2)}
                                                         </AvatarFallback>
                                                     </Avatar>
