@@ -48,6 +48,18 @@ const getRankBanner = (tier: string) => {
     return RANK_BANNERS[baseTier] || '/images/banners/Unranked.png';
 }
 
+const WinLossBar = ({ percent, className }: { percent: number; className?: string }) => {
+    const clamped = Math.max(0, Math.min(100, percent || 0));
+    return (
+        <div
+            className={`relative w-full overflow-hidden rounded-full bg-red-500/30 ${className || ''}`}
+            aria-label={`Win rate ${clamped.toFixed(1)}%`}
+        >
+            <div className="h-full bg-green-500 transition-all" style={{ width: `${clamped}%` }} />
+        </div>
+    );
+};
+
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     const router = useRouter();
     const [showAllLegends, setShowAllLegends] = useState(false);
@@ -106,21 +118,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     const playtimeSeconds = player?.stats?.playtimeSeconds ?? player?.stats?.matchTimeTotal ?? 0;
     const weaponStats = player?.stats?.weaponStats || [];
     const displayedWeapons = showAllWeapons ? weaponStats : weaponStats.slice(0, 3);
-
-    const WinLossBar = ({ percent, className }: { percent: number; className?: string }) => {
-        const clamped = Math.max(0, Math.min(100, percent || 0));
-        return (
-            <div
-                className={`relative w-full overflow-hidden rounded-full bg-red-500/30 ${className || ''}`}
-                aria-label={`Win rate ${clamped.toFixed(1)}%`}
-            >
-                <div
-                    className="h-full bg-green-500 transition-all"
-                    style={{ width: `${clamped}%` }}
-                />
-            </div>
-        );
-    };
     const aliases: string[] = (player?.aliases || [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((a: any) => a?.value)
@@ -187,8 +184,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="start">
-                                            {aliases.map((alias: string) => (
-                                                <DropdownMenuItem key={alias}>
+                                            {aliases.map((alias: string, idx: number) => (
+                                                <DropdownMenuItem key={`${alias}-${idx}`}>
                                                     {fixEncoding(alias)}
                                                 </DropdownMenuItem>
                                             ))}

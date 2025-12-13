@@ -94,6 +94,7 @@
   "dependencies": {
     "@brawltome/bhapi-client": "workspace:*",
     "@brawltome/database": "workspace:*",
+    "@brawltome/shared-utils": "workspace:*",
     "@brawltome/shared-types": "workspace:*",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.0",

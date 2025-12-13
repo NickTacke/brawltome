@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
 import { PlayerRankedLegendDTO, PlayerRankedTeamDTO, PlayerStatsLegendDTO } from '@brawltome/shared-types';
+import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
 
 const STATS_MIN_TOKENS = 40;
 const RANKED_MIN_TOKENS = 20;
@@ -126,35 +127,19 @@ export class RefreshProcessor extends WorkerHost {
                     const legendIdToWeapons = new Map<number, { weaponOne: string; weaponTwo: string }>(
                         legendWeapons.map((l) => [l.legendId, { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo }])
                     );
-
-                    const parseDamage = (value: string | null | undefined): number => {
-                        const n = parseInt(value || '0', 10);
-                        return Number.isFinite(n) ? n : 0;
-                    };
-
-                    type WeaponAgg = { weapon: string; timeHeld: number; damage: number; KOs: number };
-                    const weaponAgg = new Map<string, WeaponAgg>();
-                    const addWeapon = (weapon: string | undefined, timeHeld: number, damage: number, kos: number) => {
-                        const key = (weapon || '').trim();
-                        if (!key) return;
-                        const current = weaponAgg.get(key) || { weapon: key, timeHeld: 0, damage: 0, KOs: 0 };
-                        current.timeHeld += timeHeld || 0;
-                        current.damage += damage || 0;
-                        current.KOs += kos || 0;
-                        weaponAgg.set(key, current);
-                    };
+                    const weaponAgg = createWeaponAggregator();
 
                     for (const l of statsLegends) {
                         const weapons = legendIdToWeapons.get(l.legend_id);
                         if (!weapons) continue;
 
-                        addWeapon(
+                        weaponAgg.add(
                             weapons.weaponOne,
                             l.timeheldweaponone || 0,
                             parseDamage(l.damageweaponone),
                             l.koweaponone || 0
                         );
-                        addWeapon(
+                        weaponAgg.add(
                             weapons.weaponTwo,
                             l.timeheldweapontwo || 0,
                             parseDamage(l.damageweapontwo),
