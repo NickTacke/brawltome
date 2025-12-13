@@ -8,11 +8,13 @@
     "emitDeclarationOnly": false,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/generated/prisma/**/*.js", "src/generated/prisma/**/*.d.ts"],
   "references": []
 }

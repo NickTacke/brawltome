@@ -129,6 +129,7 @@ model PlayerStats {
   xpPercentage Float
   games Int // Total games played
   wins Int // Total wins
+  matchTimeTotal Int @default(0) // Sum of matchTime across all legends (seconds)
   
   // Gadget damage
   damageBomb String
@@ -146,10 +147,28 @@ model PlayerStats {
 
   // Legends & Clan
   legends PlayerStatsLegend[]
+  weaponStats PlayerWeaponStat[]
   clan PlayerClan?
   
   // Relations
   player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
+}
+
+model PlayerWeaponStat {
+  brawlhallaId Int
+
+  // Weapon key (e.g. "Sword", "Hammer")
+  weapon String
+
+  // Aggregates across all legends
+  timeHeld Int
+  damage String
+  KOs Int
+
+  // Relations
+  stats PlayerStats @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
+
+  @@id([brawlhallaId, weapon])
 }
 
 model PlayerRankedLegend {

@@ -115,6 +115,62 @@ export class RefreshProcessor extends WorkerHost {
                 const data = await this.bhApiClient.getPlayerStats(id);
 
                 await this.prisma.$transaction(async (tx) => {
+                    const statsLegends = (data.legends || []).filter((l) => l.legend_id !== 0);
+                    const matchTimeTotal = statsLegends.reduce((sum, l) => sum + (l.matchtime || 0), 0);
+
+                    const legendIds = Array.from(new Set(statsLegends.map((l) => l.legend_id)));
+                    const legendWeapons = await tx.legend.findMany({
+                        where: { legendId: { in: legendIds } },
+                        select: { legendId: true, weaponOne: true, weaponTwo: true },
+                    });
+                    const legendIdToWeapons = new Map<number, { weaponOne: string; weaponTwo: string }>(
+                        legendWeapons.map((l) => [l.legendId, { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo }])
+                    );
+
+                    const parseDamage = (value: string | null | undefined): number => {
+                        const n = parseInt(value || '0', 10);
+                        return Number.isFinite(n) ? n : 0;
+                    };
+
+                    type WeaponAgg = { weapon: string; timeHeld: number; damage: number; KOs: number };
+                    const weaponAgg = new Map<string, WeaponAgg>();
+                    const addWeapon = (weapon: string | undefined, timeHeld: number, damage: number, kos: number) => {
+                        const key = (weapon || '').trim();
+                        if (!key) return;
+                        const current = weaponAgg.get(key) || { weapon: key, timeHeld: 0, damage: 0, KOs: 0 };
+                        current.timeHeld += timeHeld || 0;
+                        current.damage += damage || 0;
+                        current.KOs += kos || 0;
+                        weaponAgg.set(key, current);
+                    };
+
+                    for (const l of statsLegends) {
+                        const weapons = legendIdToWeapons.get(l.legend_id);
+                        if (!weapons) continue;
+
+                        addWeapon(
+                            weapons.weaponOne,
+                            l.timeheldweaponone || 0,
+                            parseDamage(l.damageweaponone),
+                            l.koweaponone || 0
+                        );
+                        addWeapon(
+                            weapons.weaponTwo,
+                            l.timeheldweapontwo || 0,
+                            parseDamage(l.damageweapontwo),
+                            l.koweapontwo || 0
+                        );
+                    }
+
+                    const weaponStatsRows = Array.from(weaponAgg.values())
+                        .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
+                        .map((w) => ({
+                            weapon: w.weapon,
+                            timeHeld: w.timeHeld,
+                            damage: String(w.damage),
+                            KOs: w.KOs,
+                        }));
+
                     // Update main player name if Stats has a better name and current is empty/missing
                     // Or simply trust Stats name if we want to be robust
                     if (data.name && data.name.trim().length > 0) {
@@ -148,6 +204,7 @@ export class RefreshProcessor extends WorkerHost {
                             xpPercentage: data.xp_percentage,
                             games: data.games,
                             wins: data.wins,
+                            matchTimeTotal,
                             damageBomb: data.damagebomb,
                             damageMine: data.damagemine,
                             damageSpikeball: data.damagespikeball,
@@ -161,6 +218,10 @@ export class RefreshProcessor extends WorkerHost {
                             legends: {
                                 deleteMany: {},
                                 create: this.mapStatsLegends(data.legends),
+                            },
+                            weaponStats: {
+                                deleteMany: {},
+                                create: weaponStatsRows,
                             },
                             clan: data.clan ? {
                                 upsert: {
@@ -189,6 +250,7 @@ export class RefreshProcessor extends WorkerHost {
                             xpPercentage: data.xp_percentage,
                             games: data.games,
                             wins: data.wins,
+                            matchTimeTotal,
                             damageBomb: data.damagebomb,
                             damageMine: data.damagemine,
                             damageSpikeball: data.damagespikeball,
@@ -201,6 +263,9 @@ export class RefreshProcessor extends WorkerHost {
                             koSnowball: data.kosnowball,
                             legends: {
                                 create: this.mapStatsLegends(data.legends),
+                            },
+                            weaponStats: {
+                                create: weaponStatsRows,
                             },
                             clan: data.clan ? {
                                 create: {

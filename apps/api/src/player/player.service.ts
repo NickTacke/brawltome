@@ -15,6 +15,7 @@ export class PlayerService implements OnModuleInit {
     private legendCache: Map<number, string> = new Map();
     private legendKeyCache: Map<string, string> = new Map();
     private legendIdToKeyCache: Map<number, string> = new Map();
+    private legendIdToWeaponsCache: Map<number, { weaponOne: string; weaponTwo: string }> = new Map();
 
     constructor(
         private prisma: PrismaService,
@@ -29,11 +30,12 @@ export class PlayerService implements OnModuleInit {
     async refreshLegendCache() {
         try {
             const legends = await this.prisma.legend.findMany({
-                select: { legendId: true, legendNameKey: true, bioName: true }
+                select: { legendId: true, legendNameKey: true, bioName: true, weaponOne: true, weaponTwo: true }
             });
             this.legendCache = new Map(legends.map(l => [l.legendId, l.bioName]));
             this.legendKeyCache = new Map(legends.map(l => [l.legendNameKey, l.bioName]));
             this.legendIdToKeyCache = new Map(legends.map(l => [l.legendId, l.legendNameKey]));
+            this.legendIdToWeaponsCache = new Map(legends.map(l => [l.legendId, { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo }]));
             this.logger.log(`Loaded ${this.legendCache.size} legends into cache 🛡️`);
         } catch (error) {
             this.logger.error('Failed to load legend cache', error);
@@ -55,6 +57,7 @@ export class PlayerService implements OnModuleInit {
                     include: {
                         legends: true,
                         clan: true,
+                        weaponStats: true,
                     },
                 },
                 ranked: {
@@ -101,7 +104,9 @@ export class PlayerService implements OnModuleInit {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (player.stats.legends as any[]) = player.stats.legends.map(l => ({
                 ...l,
-                bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey
+                bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey,
+                weaponOne: this.legendIdToWeaponsCache.get(l.legendId)?.weaponOne,
+                weaponTwo: this.legendIdToWeaponsCache.get(l.legendId)?.weaponTwo,
             }));
         }
 
@@ -109,7 +114,104 @@ export class PlayerService implements OnModuleInit {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (player.ranked.legends as any[]) = player.ranked.legends.map(l => ({
                 ...l,
-                bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey
+                bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey,
+                weaponOne: this.legendIdToWeaponsCache.get(l.legendId)?.weaponOne,
+                weaponTwo: this.legendIdToWeaponsCache.get(l.legendId)?.weaponTwo,
+            }));
+        }
+
+        // Join stats legends with ranked legends (convenience view for frontend)
+        if (player.stats?.legends) {
+            const rankedByLegendId = new Map<number, {
+                rating: number;
+                peakRating: number;
+                tier: string;
+                wins: number;
+                games: number;
+            }>();
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            for (const rl of ((player.ranked?.legends || []) as any[])) {
+                rankedByLegendId.set(rl.legendId, {
+                    rating: rl.rating,
+                    peakRating: rl.peakRating,
+                    tier: rl.tier,
+                    wins: rl.wins,
+                    games: rl.games,
+                });
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (player.stats as any).legendsEnriched = (player.stats.legends as any[]).map((sl) => ({
+                ...sl,
+                ranked: rankedByLegendId.get(sl.legendId) || null,
+            }));
+        }
+
+        // Derived stats (persisted with fallback computation)
+        if (player.stats) {
+            const legends = (player.stats.legends || []) as Array<{
+                legendId: number;
+                matchTime: number;
+                timeHeldWeaponOne: number;
+                timeHeldWeaponTwo: number;
+                damageWeaponOne: string;
+                damageWeaponTwo: string;
+                KOWeaponOne: number;
+                KOWeaponTwo: number;
+            }>;
+
+            const playtimeSeconds =
+                (player.stats.matchTimeTotal ?? 0) > 0
+                    ? player.stats.matchTimeTotal
+                    : legends.reduce((sum, l) => sum + (l.matchTime || 0), 0);
+
+            const parseDamage = (value: string | null | undefined): number => {
+                const n = parseInt(value || '0', 10);
+                return Number.isFinite(n) ? n : 0;
+            };
+
+            type WeaponAgg = { weapon: string; timeHeld: number; damage: number; KOs: number };
+            const weaponAgg = new Map<string, WeaponAgg>();
+            const addWeapon = (weapon: string | undefined, timeHeld: number, damage: number, kos: number) => {
+                const key = (weapon || '').trim();
+                if (!key) return;
+                const current = weaponAgg.get(key) || { weapon: key, timeHeld: 0, damage: 0, KOs: 0 };
+                current.timeHeld += timeHeld || 0;
+                current.damage += damage || 0;
+                current.KOs += kos || 0;
+                weaponAgg.set(key, current);
+            };
+
+            // Prefer persisted rows, but if missing/stale, compute from legend breakdown using cached weapon mapping
+            if (player.stats.weaponStats && player.stats.weaponStats.length > 0) {
+                for (const w of player.stats.weaponStats as Array<{ weapon: string; timeHeld: number; damage: string; KOs: number }>) {
+                    addWeapon(w.weapon, w.timeHeld, parseDamage(w.damage), w.KOs);
+                }
+            } else {
+                for (const l of legends) {
+                    const weapons = this.legendIdToWeaponsCache.get(l.legendId);
+                    if (!weapons) continue;
+                    addWeapon(weapons.weaponOne, l.timeHeldWeaponOne || 0, parseDamage(l.damageWeaponOne), l.KOWeaponOne || 0);
+                    addWeapon(weapons.weaponTwo, l.timeHeldWeaponTwo || 0, parseDamage(l.damageWeaponTwo), l.KOWeaponTwo || 0);
+                }
+            }
+
+            const weaponStats = Array.from(weaponAgg.values())
+                .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
+                .sort((a, b) => b.timeHeld - a.timeHeld);
+
+            const totalTimeHeld = weaponStats.reduce((sum, w) => sum + w.timeHeld, 0);
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (player.stats as any).playtimeSeconds = playtimeSeconds;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (player.stats as any).weaponStats = weaponStats.map((w) => ({
+                weapon: w.weapon,
+                timeHeld: w.timeHeld,
+                damage: String(w.damage),
+                KOs: w.KOs,
+                share: totalTimeHeld > 0 ? w.timeHeld / totalTimeHeld : 0,
             }));
         }
 
@@ -224,10 +326,17 @@ export class PlayerService implements OnModuleInit {
             return this.prisma.player.findUnique({
                 where: { brawlhallaId: id },
                 include: {
+                    aliases: {
+                        select: {
+                            key: true,
+                            value: true,
+                        },
+                    },
                     stats: {
                         include: {
                             legends: true,
                             clan: true,
+                            weaponStats: true,
                         },
                     },
                     ranked: {
