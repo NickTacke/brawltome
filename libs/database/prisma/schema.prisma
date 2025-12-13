@@ -213,6 +213,35 @@ model PlayerRankedTeam {
   @@id([brawlhallaId, brawlhallaIdOne, brawlhallaIdTwo])
 }
 
+model Ranked2v2Team {
+  region String
+
+  // Canonicalized team ids: store (min, max) to avoid duplicates
+  brawlhallaIdOne Int
+  brawlhallaIdTwo Int
+
+  // Official ladder rank from /rankings/2v2
+  rank Int
+
+  teamName String
+
+  // Ladder stats
+  rating Int
+  peakRating Int
+  tier String
+  wins Int
+  games Int
+
+  lastUpdated DateTime @default(now())
+
+  @@id([region, brawlhallaIdOne, brawlhallaIdTwo])
+  @@index([region, rating(sort: Desc)])
+  @@index([region, peakRating(sort: Desc)])
+  @@index([region, wins(sort: Desc)])
+  @@index([region, games(sort: Desc)])
+  @@index([region, rank])
+}
+
 model PlayerRanked {
   brawlhallaId Int @id
   lastUpdated DateTime @default(now())
