@@ -12,6 +12,7 @@ import { PlayerModule } from '../player/player.module';
 import { SearchModule } from '../search/search.module';
 import { JanitorModule } from '../janitor/janitor.module';
 import { ClanModule } from '../clan/clan.module';
+import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ClanModule } from '../clan/clan.module';
     SearchModule,
     JanitorModule,
     ClanModule,
+    LeaderboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
