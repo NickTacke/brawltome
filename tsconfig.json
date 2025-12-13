@@ -23,6 +23,9 @@
     },
     {
       "path": "./libs/shared-utils"
+    },
+    {
+      "path": "./apps/worker"
     }
   ]
 }

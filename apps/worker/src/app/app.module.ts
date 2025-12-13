@@ -4,20 +4,16 @@ import { BullModule } from '@nestjs/bullmq';
 
 import { DatabaseModule } from '@brawltome/database';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
-import { QueueModule } from '../queue/queue.module';
 
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PlayerModule } from '../player/player.module';
-import { SearchModule } from '../search/search.module';
-import { ClanModule } from '../clan/clan.module';
-import { LeaderboardModule } from '../leaderboard/leaderboard.module';
+import { QueueModule } from '../queue/queue.module';
+import { JanitorModule } from '../janitor/janitor.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env']
+      envFilePath: ['.env'],
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -30,13 +26,10 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
     }),
     DatabaseModule,
     BhApiClientModule,
+    RedisModule,
     QueueModule,
-    PlayerModule,
-    SearchModule,
-    ClanModule,
-    LeaderboardModule,
+    JanitorModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
+
 export class AppModule {}
