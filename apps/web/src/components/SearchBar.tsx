@@ -23,6 +23,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         rating?: number;
         bestLegendName?: string;
         bestLegendNameKey?: string;
+        matchedAlias?: string;
     }
 
     interface ClanResult {
@@ -157,6 +158,11 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                                 <div>
                                     <div className="font-bold text-card-foreground">{fixEncoding(p.name)}</div>
                                     <div className="text-xs text-muted-foreground">{p.region}</div>
+                                    {p.matchedAlias && (
+                                        <div className="text-xs text-muted-foreground">
+                                            Matched alias: {fixEncoding(p.matchedAlias)}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="text-sm font-mono text-primary">{p.rating || '0'}</div>
