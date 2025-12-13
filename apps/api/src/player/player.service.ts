@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PlayerRankedLegendDTO, PlayerRankedTeamDTO } from '@brawltome/shared-types';
+import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
 
 // Thresholds
 const RANKED_TTL = 1000 * 60 * 60; // 1 hour
@@ -165,35 +166,19 @@ export class PlayerService implements OnModuleInit {
                 (player.stats.matchTimeTotal ?? 0) > 0
                     ? player.stats.matchTimeTotal
                     : legends.reduce((sum, l) => sum + (l.matchTime || 0), 0);
-
-            const parseDamage = (value: string | null | undefined): number => {
-                const n = parseInt(value || '0', 10);
-                return Number.isFinite(n) ? n : 0;
-            };
-
-            type WeaponAgg = { weapon: string; timeHeld: number; damage: number; KOs: number };
-            const weaponAgg = new Map<string, WeaponAgg>();
-            const addWeapon = (weapon: string | undefined, timeHeld: number, damage: number, kos: number) => {
-                const key = (weapon || '').trim();
-                if (!key) return;
-                const current = weaponAgg.get(key) || { weapon: key, timeHeld: 0, damage: 0, KOs: 0 };
-                current.timeHeld += timeHeld || 0;
-                current.damage += damage || 0;
-                current.KOs += kos || 0;
-                weaponAgg.set(key, current);
-            };
+            const weaponAgg = createWeaponAggregator();
 
             // Prefer persisted rows, but if missing/stale, compute from legend breakdown using cached weapon mapping
             if (player.stats.weaponStats && player.stats.weaponStats.length > 0) {
                 for (const w of player.stats.weaponStats as Array<{ weapon: string; timeHeld: number; damage: string; KOs: number }>) {
-                    addWeapon(w.weapon, w.timeHeld, parseDamage(w.damage), w.KOs);
+                    weaponAgg.add(w.weapon, w.timeHeld, parseDamage(w.damage), w.KOs);
                 }
             } else {
                 for (const l of legends) {
                     const weapons = this.legendIdToWeaponsCache.get(l.legendId);
                     if (!weapons) continue;
-                    addWeapon(weapons.weaponOne, l.timeHeldWeaponOne || 0, parseDamage(l.damageWeaponOne), l.KOWeaponOne || 0);
-                    addWeapon(weapons.weaponTwo, l.timeHeldWeaponTwo || 0, parseDamage(l.damageWeaponTwo), l.KOWeaponTwo || 0);
+                    weaponAgg.add(weapons.weaponOne, l.timeHeldWeaponOne || 0, parseDamage(l.damageWeaponOne), l.KOWeaponOne || 0);
+                    weaponAgg.add(weapons.weaponTwo, l.timeHeldWeaponTwo || 0, parseDamage(l.damageWeaponTwo), l.KOWeaponTwo || 0);
                 }
             }
 

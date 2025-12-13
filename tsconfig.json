@@ -20,6 +20,9 @@
     },
     {
       "path": "./libs/ui"
+    },
+    {
+      "path": "./libs/shared-utils"
     }
   ]
 }
