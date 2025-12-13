@@ -287,6 +287,51 @@ importers:
         specifier: ^10.0.6
         version: 10.0.6(react@19.2.1)
 
+  apps/worker:
+    dependencies:
+      '@brawltome/bhapi-client':
+        specifier: workspace:*
+        version: link:../../libs/bhapi-client
+      '@brawltome/database':
+        specifier: workspace:*
+        version: link:../../libs/database
+      '@brawltome/shared-types':
+        specifier: workspace:*
+        version: link:../../libs/shared-types
+      '@brawltome/shared-utils':
+        specifier: workspace:*
+        version: link:../../libs/shared-utils
+      '@nestjs/bullmq':
+        specifier: ^11.0.4
+        version: 11.0.4(@nestjs/common@11.1.9(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/core@11.1.9)(bullmq@5.65.1)
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.1.9(reflect-metadata@0.1.14)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: ^4.0.2
+        version: 4.0.2(@nestjs/common@11.1.9(reflect-metadata@0.1.14)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: ^11.0.0
+        version: 11.1.9(@nestjs/common@11.1.9(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/platform-express@11.1.9)(reflect-metadata@0.1.14)(rxjs@7.8.2)
+      '@nestjs/schedule':
+        specifier: ^6.0.1
+        version: 6.0.1(@nestjs/common@11.1.9(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/core@11.1.9)
+      bullmq:
+        specifier: ^5.65.1
+        version: 5.65.1
+      ioredis:
+        specifier: ^5.8.2
+        version: 5.8.2
+      reflect-metadata:
+        specifier: ^0.1.13
+        version: 0.1.14
+      rxjs:
+        specifier: ^7.8.0
+        version: 7.8.2
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+
   libs/bhapi-client:
     dependencies:
       '@nestjs/config':
