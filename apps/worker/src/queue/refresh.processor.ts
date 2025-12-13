@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { DelayedError, Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
@@ -8,6 +8,7 @@ import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
 
 const STATS_MIN_TOKENS = 40;
 const RANKED_MIN_TOKENS = 20;
+const RATE_LIMIT_DELAY_MS = 1000 * 60 * 5; // 5 minutes
 
 @Processor('refresh-queue')
 export class RefreshProcessor extends WorkerHost {
@@ -31,10 +32,12 @@ export class RefreshProcessor extends WorkerHost {
       // Halt refreshing stats if we're on a low budget (more priority on ranked)
       if (remainingTokens < STATS_MIN_TOKENS && job.name === 'refresh-stats') {
         this.logger.warn(`Delaying stats refresh for ${id} (Tokens: ${remainingTokens})`);
-        throw new Error('Rate-limited: insufficient tokens for stats refresh');
+        await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
+        throw new DelayedError('Rate-limited: insufficient tokens for stats refresh');
       } else if (remainingTokens < RANKED_MIN_TOKENS && job.name === 'refresh-ranked') {
         this.logger.warn(`Delaying ranked refresh for ${id} (Tokens: ${remainingTokens})`);
-        throw new Error('Rate-limited: insufficient tokens for ranked refresh');
+        await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
+        throw new DelayedError('Rate-limited: insufficient tokens for ranked refresh');
       }
 
       if (job.name === 'refresh-ranked') {
