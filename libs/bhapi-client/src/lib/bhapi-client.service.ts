@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClanDTO, LegendDTO, PlayerDTO, PlayerRankedDTO, PlayerStatsDTO } from '@brawltome/shared-types';
+import { ClanDTO, LegendDTO, PlayerDTO, PlayerRankedDTO, PlayerStatsDTO, Ranked2v2TeamDTO } from '@brawltome/shared-types';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
@@ -126,7 +126,9 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
         return this.limiter.schedule(() => this.performRequest(`/player/${brawlhallaId}/ranked`));
     }
 
-    async getRankings(bracket: '1v1' | '2v2' | 'rotational', region: string, page: number, name: string | null = null): Promise<PlayerDTO[]> {
+    async getRankings(bracket: '2v2', region: string, page: number, name?: string | null): Promise<Ranked2v2TeamDTO[]>;
+    async getRankings(bracket: '1v1' | 'rotational', region: string, page: number, name?: string | null): Promise<PlayerDTO[]>;
+    async getRankings(bracket: '1v1' | '2v2' | 'rotational', region: string, page: number, name: string | null = null): Promise<PlayerDTO[] | Ranked2v2TeamDTO[]> {
         const params = name ? { name } : {};
         return this.limiter.schedule(() => this.performRequest(`/rankings/${bracket}/${region}/${page}`, params));
     }
