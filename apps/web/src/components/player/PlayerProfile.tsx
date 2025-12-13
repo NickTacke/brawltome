@@ -408,6 +408,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             <Card
                                 key={legend.legendId}
                                 onClick={() => setExpandedLegendId(expandedLegendId === legend.legendId ? null : legend.legendId)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        setExpandedLegendId(expandedLegendId === legend.legendId ? null : legend.legendId);
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
                                 className="hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                             >
                                 <CardContent className="p-4 space-y-3">
