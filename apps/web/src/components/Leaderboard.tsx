@@ -41,6 +41,12 @@ const REGIONS = [
 ];
 
 const PAGE_SIZE = 20;
+const MAX_LEADERBOARD_PAGES = 500;
+
+const BRACKETS = [
+  { id: '1v1', label: '1v1' },
+  { id: '2v2', label: '2v2' },
+] as const;
 
 const SORT_OPTIONS = [
   { id: 'rating', label: 'Elo' },
@@ -50,18 +56,24 @@ const SORT_OPTIONS = [
 ];
 
 export function Leaderboard() {
+  const [bracket, setBracket] = useState<(typeof BRACKETS)[number]['id']>('1v1');
   const [page, setPage] = useState(1);
   const [region, setRegion] = useState('all');
   const [sortBy, setSortBy] = useState('rating');
   const router = useRouter();
 
+  const basePath =
+    bracket === '1v1'
+      ? `/player/leaderboard/${page}`
+      : `/leaderboard/2v2/${page}`;
+
   const { data, isLoading, error } = useSWR(
-    `/player/leaderboard/${page}?region=${region}&sort=${sortBy}&limit=${PAGE_SIZE}`,
+    `${basePath}?region=${region}&sort=${sortBy}&limit=${PAGE_SIZE}`,
     fetcher
   );
 
-  const players = data?.data || [];
-  const totalPages = data?.meta?.totalPages || 1;
+  const entries = data?.data || [];
+  const totalPages = Math.min(data?.meta?.totalPages || 1, MAX_LEADERBOARD_PAGES);
 
   if (error) {
     return (
@@ -73,6 +85,11 @@ export function Leaderboard() {
 
   const handleRegionChange = (newRegion: string) => {
     setRegion(newRegion);
+    setPage(1); // Reset to page 1 on filter change
+  };
+
+  const handleBracketChange = (newBracket: string) => {
+    setBracket(newBracket as (typeof BRACKETS)[number]['id']);
     setPage(1); // Reset to page 1 on filter change
   };
 
@@ -97,6 +114,23 @@ export function Leaderboard() {
         </h2>
         
         <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* Bracket */}
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-bold uppercase">Bracket:</span>
+                <Select value={bracket} onValueChange={handleBracketChange}>
+                <SelectTrigger className="w-[120px] font-bold">
+                    <SelectValue placeholder="Bracket" />
+                </SelectTrigger>
+                <SelectContent>
+                    {BRACKETS.map((b) => (
+                    <SelectItem key={b.id} value={b.id} className="cursor-pointer">
+                        {b.label}
+                    </SelectItem>
+                    ))}
+                </SelectContent>
+                </Select>
+            </div>
+
             {/* Sort Filter */}
             <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
@@ -139,7 +173,7 @@ export function Leaderboard() {
           <TableHeader className="bg-muted/50">
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-20 text-center font-bold">Rank</TableHead>
-              <TableHead className="font-bold">Player</TableHead>
+              <TableHead className="font-bold">{bracket === '1v1' ? 'Player' : 'Team'}</TableHead>
               <TableHead className="text-center font-bold">Rating</TableHead>
               <TableHead className="text-center font-bold">Win Rate</TableHead>
               <TableHead className="text-center hidden sm:table-cell font-bold">Wins</TableHead>
@@ -162,74 +196,140 @@ export function Leaderboard() {
                   <TableCell className="p-4 hidden sm:table-cell"><Skeleton className="h-5 w-10 mx-auto" /></TableCell>
                 </TableRow>
               ))
-            ) : players.length > 0 ? (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              players.map((p: any, i: number) => {
-                const globalRank = ((page - 1) * PAGE_SIZE) + i + 1;
-                const winrate = p.games > 0 ? (p.wins / p.games) * 100 : 0;
-                
-                return (
-                <TableRow 
-                  key={p.brawlhallaId}
-                  onClick={() => router.push(`/player/${p.brawlhallaId}`)}
-                  className="border-border cursor-pointer transition-colors group h-16"
-                >
-                  <TableCell className={`text-center ${getRankStyle(globalRank)}`}>
-                    #{globalRank}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                        {/* Best Legend Avatar */}
-                        {p.bestLegendName && (
-                            <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
-                                <AvatarImage 
-                                    src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} 
-                                    alt={p.bestLegendName} 
-                                    className="object-cover object-top"
-                                    loading="lazy"
-                                />
-                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
-                                    {p.bestLegendName.substring(0, 2)}
-                                </AvatarFallback>
-                            </Avatar>
-                        )}
+            ) : entries.length > 0 ? (
+              bracket === '1v1' ? (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                entries.map((p: any, i: number) => {
+                  const globalRank = ((page - 1) * PAGE_SIZE) + i + 1;
+                  const winrate = p.games > 0 ? (p.wins / p.games) * 100 : 0;
+                  
+                  return (
+                  <TableRow 
+                    key={p.brawlhallaId}
+                    onClick={() => router.push(`/player/${p.brawlhallaId}`)}
+                    className="border-border cursor-pointer transition-colors group h-16"
+                  >
+                    <TableCell className={`text-center ${getRankStyle(globalRank)}`}>
+                      #{globalRank}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                          {/* Best Legend Avatar */}
+                          {p.bestLegendName && (
+                              <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                                  <AvatarImage 
+                                      src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} 
+                                      alt={p.bestLegendName} 
+                                      className="object-cover object-top"
+                                      loading="lazy"
+                                  />
+                                  <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
+                                      {p.bestLegendName.substring(0, 2)}
+                                  </AvatarFallback>
+                              </Avatar>
+                          )}
+                          <div className="flex flex-col">
+                              <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
+                              {fixEncoding(p.name)}
+                              </span>
+                              <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">
+                                      {p.tier}
+                                  </Badge>
+                              </div>
+                          </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center">
+                          <span className="font-black text-foreground text-lg tracking-tight">{p.rating}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold">Peak: {p.peakRating || '---'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className={`font-bold ${winrate >= 60 ? 'text-green-500' : winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}>
+                          {winrate.toFixed(1)}%
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
+                      {p.wins}
+                    </TableCell>
+                    <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
+                      {p.games}
+                    </TableCell>
+                  </TableRow>
+                )})
+              ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                entries.map((t: any) => {
+                  const winrate = t.games > 0 ? (t.wins / t.games) * 100 : 0;
+
+                  return (
+                    <TableRow
+                      key={`${t.region}-${t.brawlhallaIdOne}-${t.brawlhallaIdTwo}`}
+                      className="border-border transition-colors group h-16"
+                    >
+                      <TableCell className={`text-center ${getRankStyle(t.rank)}`}>
+                        #{t.rank}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex flex-col">
-                            <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
-                            {fixEncoding(p.name)}
+                          <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal break-words leading-tight">
+                            <span
+                              className="cursor-pointer hover:text-primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/player/${t.brawlhallaIdOne}`);
+                              }}
+                            >
+                              {fixEncoding(t.playerOneName || 'Unknown')}
                             </span>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">
-                                    {p.tier}
-                                </Badge>
-                            </div>
+                            <span className="opacity-50"> + </span>
+                            <span
+                              className="cursor-pointer hover:text-primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/player/${t.brawlhallaIdTwo}`);
+                              }}
+                            >
+                              {fixEncoding(t.playerTwoName || 'Unknown')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground font-mono">
+                            <span>{t.region}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">
+                              {t.tier}
+                            </Badge>
+                          </div>
                         </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex flex-col items-center">
-                        <span className="font-black text-foreground text-lg tracking-tight">{p.rating}</span>
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold">Peak: {p.peakRating || '---'}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className={`font-bold ${winrate >= 60 ? 'text-green-500' : winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {winrate.toFixed(1)}%
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
-                    {p.wins}
-                  </TableCell>
-                  <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
-                    {p.games}
-                  </TableCell>
-                </TableRow>
-              )})
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="font-black text-foreground text-lg tracking-tight">{t.rating}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase font-bold">Peak: {t.peakRating || '---'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className={`font-bold ${winrate >= 60 ? 'text-green-500' : winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}>
+                          {winrate.toFixed(1)}%
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
+                        {t.wins}
+                      </TableCell>
+                      <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
+                        {t.games}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )
             ) : (
               // Empty State
               <TableRow className="border-border hover:bg-transparent">
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  No players found for this region.
+                  {bracket === '1v1' ? 'No players found for this region.' : 'No teams found for this region.'}
                 </TableCell>
               </TableRow>
             )}
