@@ -1,0 +1,56 @@
+{
+  "name": "@brawltome/worker",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "targets": {
+      "build": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "webpack-cli build",
+          "args": ["--node-env=production"],
+          "cwd": "apps/worker"
+        },
+        "configurations": {
+          "development": {
+            "args": ["--node-env=development"]
+          }
+        }
+      },
+      "serve": {
+        "continuous": true,
+        "executor": "@nx/js:node",
+        "defaultConfiguration": "development",
+        "dependsOn": ["build"],
+        "options": {
+          "buildTarget": "@brawltome/worker:build",
+          "runBuildTargetDependencies": false
+        },
+        "configurations": {
+          "development": {
+            "buildTarget": "@brawltome/worker:build:development"
+          },
+          "production": {
+            "buildTarget": "@brawltome/worker:build:production"
+          }
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "@brawltome/bhapi-client": "workspace:*",
+    "@brawltome/database": "workspace:*",
+    "@brawltome/shared-utils": "workspace:*",
+    "@brawltome/shared-types": "workspace:*",
+    "@nestjs/bullmq": "^11.0.4",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/schedule": "^6.0.1",
+    "bullmq": "^5.65.1",
+    "ioredis": "^5.8.2",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.3.0"
+  }
+}

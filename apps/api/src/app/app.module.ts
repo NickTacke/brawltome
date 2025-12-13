@@ -10,7 +10,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PlayerModule } from '../player/player.module';
 import { SearchModule } from '../search/search.module';
-import { JanitorModule } from '../janitor/janitor.module';
 import { ClanModule } from '../clan/clan.module';
 import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 
@@ -34,7 +33,6 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
     QueueModule,
     PlayerModule,
     SearchModule,
-    JanitorModule,
     ClanModule,
     LeaderboardModule,
   ],
