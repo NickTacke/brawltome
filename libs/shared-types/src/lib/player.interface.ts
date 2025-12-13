@@ -54,6 +54,20 @@ export interface PlayerRankedTeamDTO {
   teamname: string;
 }
 
+// /rankings/2v2/:region/:page response row
+export interface Ranked2v2TeamDTO {
+  rank: number;
+  teamname: string;
+  brawlhalla_id_one: number;
+  brawlhalla_id_two: number;
+  rating: number;
+  tier: string;
+  wins: number;
+  games: number;
+  region: string;
+  peak_rating: number;
+}
+
 // Player General Statistics
 export interface PlayerStatsDTO {
   brawlhalla_id: number;
