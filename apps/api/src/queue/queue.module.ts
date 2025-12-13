@@ -1,8 +1,5 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { RefreshProcessor } from './refresh.processor';
-import { BhApiClientModule } from '@brawltome/bhapi-client';
-import { DatabaseModule } from '@brawltome/database';
 
 @Module({
     imports: [
@@ -18,10 +15,8 @@ import { DatabaseModule } from '@brawltome/database';
                 },
             }
         }),
-        BhApiClientModule,
-        DatabaseModule,
     ],
-    providers: [RefreshProcessor],
+    providers: [],
     exports: [BullModule],
 })
 export class QueueModule {}
