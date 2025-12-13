@@ -53,6 +53,10 @@ const WinLossBar = ({ percent, className }: { percent: number; className?: strin
     return (
         <div
             className={`relative w-full overflow-hidden rounded-full bg-red-500/30 ${className || ''}`}
+            role="progressbar"
+            aria-valuenow={clamped}
+            aria-valuemin={0}
+            aria-valuemax={100}
             aria-label={`Win rate ${clamped.toFixed(1)}%`}
         >
             <div className="h-full bg-green-500 transition-all" style={{ width: `${clamped}%` }} />
