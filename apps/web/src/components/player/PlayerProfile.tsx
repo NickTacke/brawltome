@@ -411,6 +411,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                 onClick={() => setExpandedLegendId(expandedLegendId === legend.legendId ? null : legend.legendId)}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
                                         setExpandedLegendId(expandedLegendId === legend.legendId ? null : legend.legendId);
                                     }
                                 }}
