@@ -25,7 +25,6 @@ import {
     DropdownMenuTrigger,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
 } from '@brawltome/ui';
 
 interface PlayerProfileProps {
@@ -52,6 +51,8 @@ const getRankBanner = (tier: string) => {
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     const router = useRouter();
     const [showAllLegends, setShowAllLegends] = useState(false);
+    const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null);
+    const [showAllWeapons, setShowAllWeapons] = useState(false);
 
     // SWR with fallback data
     const { data: player } = useSWR(`/player/${id}`, fetcher, {
@@ -60,13 +61,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     });
     const isRefreshing = player?.isRefreshing;
 
-    const allLegends = player?.stats?.legends
+    const allLegends = (player?.stats?.legendsEnriched || player?.stats?.legends)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?.sort((a: any, b: any) => b.xp - a.xp) || [];
 
     const displayedLegends = showAllLegends ? allLegends : allLegends.slice(0, 6);
 
     const legendsRef = useRef<HTMLDivElement>(null);
+    const weaponsRef = useRef<HTMLDivElement>(null);
 
     const handleToggleLegends = () => {
         if (showAllLegends) {
@@ -75,11 +77,50 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         setShowAllLegends(!showAllLegends);
     };
 
+    const handleToggleWeapons = () => {
+        if (showAllWeapons) {
+            weaponsRef.current?.scrollIntoView({ behavior: 'instant' });
+        }
+        setShowAllWeapons(!showAllWeapons);
+    };
+
     const rankedTeams = player?.ranked?.teams
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?.sort((a: any, b: any) => b.rating - a.rating);
 
     const winrate = player.games > 0 ? (player.wins / player.games) * 100 : 0;
+
+    const formatHours = (totalSeconds: number) => {
+        const seconds = Math.max(0, Math.floor(totalSeconds || 0));
+        const hoursRaw = seconds / 3600;
+        const hoursRounded = Math.round(hoursRaw * 10) / 10; // 0.1h precision
+        const hoursStr = Number.isInteger(hoursRounded) ? String(hoursRounded) : hoursRounded.toFixed(1);
+        return `${hoursStr}h`;
+    };
+
+    const parseNum = (v: unknown) => {
+        const n = typeof v === 'number' ? v : parseInt(String(v ?? '0'), 10);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    const playtimeSeconds = player?.stats?.playtimeSeconds ?? player?.stats?.matchTimeTotal ?? 0;
+    const weaponStats = player?.stats?.weaponStats || [];
+    const displayedWeapons = showAllWeapons ? weaponStats : weaponStats.slice(0, 3);
+
+    const WinLossBar = ({ percent, className }: { percent: number; className?: string }) => {
+        const clamped = Math.max(0, Math.min(100, percent || 0));
+        return (
+            <div
+                className={`relative w-full overflow-hidden rounded-full bg-red-500/30 ${className || ''}`}
+                aria-label={`Win rate ${clamped.toFixed(1)}%`}
+            >
+                <div
+                    className="h-full bg-green-500 transition-all"
+                    style={{ width: `${clamped}%` }}
+                />
+            </div>
+        );
+    };
     const aliases: string[] = (player?.aliases || [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((a: any) => a?.value)
@@ -127,6 +168,15 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             </div>
                             <span>•</span>
                             <div>ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span></div>
+                            {player?.stats && (
+                                <>
+                                    <span>•</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">Playtime:</span>
+                                        <span className="font-mono text-foreground">{formatHours(playtimeSeconds)}</span>
+                                    </div>
+                                </>
+                            )}
                             {aliases.length > 0 && (
                                 <>
                                     <span>•</span>
@@ -212,7 +262,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                             {winrate.toFixed(1)}%
                                         </div>
                                     </div>
-                                    <Progress value={winrate} className="h-4" />
+                                    <WinLossBar percent={winrate} className="h-4" />
                                     <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
                                         <span>{player.wins} Wins</span>
                                         <span>{player.games - player.wins} Losses</span>
@@ -270,7 +320,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         <span className="text-muted-foreground">Overall Win Rate</span>
                                         <span className="text-foreground font-bold">{player.stats.games > 0 ? ((player.stats.wins / player.stats.games) * 100).toFixed(1) : 0}%</span>
                                     </div>
-                                    <Progress value={player.stats.games > 0 ? (player.stats.wins / player.stats.games) * 100 : 0} className="h-3" />
+                                    <WinLossBar percent={player.stats.games > 0 ? (player.stats.wins / player.stats.games) * 100 : 0} className="h-3" />
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span>{player.stats.wins.toLocaleString()} Wins</span>
                                         <span>{(player.stats.games - player.stats.wins).toLocaleString()} Losses</span>
@@ -294,6 +344,56 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 </Card>
             </div>
 
+            {/* Weapons */}
+            {weaponStats.length > 0 && (
+                <div ref={weaponsRef} className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-foreground">Weapon Statistics</h2>
+                    </div>
+
+                    <Card className="bg-gradient-to-br from-card to-background border-border">
+                        <CardContent className="space-y-4 mt-3">
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {displayedWeapons.map((w: any) => {
+                                const share = typeof w.share === 'number' ? w.share : 0;
+                                return (
+                                    <div key={w.weapon} className="space-y-2">
+                                        <div className="flex justify-between items-end gap-4">
+                                            <div className="min-w-0">
+                                                <div className="font-bold text-foreground truncate">{w.weapon}</div>
+                                                <div className="text-xs text-muted-foreground font-mono">
+                                                    {formatHours(parseNum(w.timeHeld))} held • {parseNum(w.KOs).toLocaleString()} KOs • {parseNum(w.damage).toLocaleString()} dmg
+                                                </div>
+                                            </div>
+                                            <div className="text-sm font-mono text-muted-foreground flex-shrink-0">
+                                                {(share * 100).toFixed(0)}%
+                                            </div>
+                                        </div>
+                                        <Progress value={share * 100} className="h-2" />
+                                    </div>
+                                );
+                            })}
+                        </CardContent>
+                    </Card>
+
+                    {weaponStats.length > 3 && (
+                        <div className="flex justify-center mt-6">
+                            <Button
+                                variant="outline"
+                                onClick={handleToggleWeapons}
+                                className="gap-2"
+                            >
+                                {showAllWeapons ? (
+                                    <>Show Less <ChevronUp className="h-4 w-4" /></>
+                                ) : (
+                                    <>Show All Weapons <ChevronDown className="h-4 w-4" /></>
+                                )}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Legends */}
             {allLegends.length > 0 && (
                 <div id="legends-section" ref={legendsRef} className="space-y-4">
@@ -305,31 +405,97 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {displayedLegends.map((legend: any) => (
-                            <Card key={legend.legendId} className="hover:bg-accent hover:text-accent-foreground transition-colors cursor-default">
-                                <CardContent className="p-4 flex items-center gap-4">
-                                    <Avatar className="w-12 h-12 rounded-md">
-                                        <AvatarImage 
-                                            src={`/images/legends/avatars/${legend.legendNameKey}.png`} 
-                                            alt={legend.legendNameKey} 
-                                            className="object-cover object-top"
-                                            loading="lazy"
-                                        />
-                                        <AvatarFallback className="bg-muted text-xl font-bold text-muted-foreground capitalize rounded-md">
-                                            {legend.legendNameKey?.[0] || '?'}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-start">
-                                            <h3 className="font-bold capitalize truncate">{legend.bioName || legend.legendNameKey}</h3>
-                                            <Badge variant="secondary" className="text-xs font-mono">Lvl {legend.level}</Badge>
-                                        </div>
-                                        <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                                            <span>{legend.xp.toLocaleString()} XP</span>
-                                            <span className={legend.games > 0 && legend.wins / legend.games > 0.5 ? "text-green-500" : "text-muted-foreground"}>
-                                                {legend.games > 0 ? ((legend.wins / legend.games) * 100).toFixed(0) : 0}% WR
-                                            </span>
+                            <Card
+                                key={legend.legendId}
+                                onClick={() => setExpandedLegendId(expandedLegendId === legend.legendId ? null : legend.legendId)}
+                                className="hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                            >
+                                <CardContent className="p-4 space-y-3">
+                                    <div className="flex items-center gap-4">
+                                        <Avatar className="w-12 h-12 rounded-md">
+                                            <AvatarImage
+                                                src={`/images/legends/avatars/${legend.legendNameKey}.png`}
+                                                alt={legend.legendNameKey}
+                                                className="object-cover object-top"
+                                                loading="lazy"
+                                            />
+                                            <AvatarFallback className="bg-muted text-xl font-bold text-muted-foreground capitalize rounded-md">
+                                                {legend.legendNameKey?.[0] || '?'}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <h3 className="font-bold capitalize truncate">{legend.bioName || legend.legendNameKey}</h3>
+                                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                                    <Badge variant="secondary" className="text-xs font-mono">Lvl {legend.level}</Badge>
+                                                    {legend.ranked && (
+                                                        <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                                                            {legend.ranked.tier} • {legend.ranked.rating}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                                                <span>{parseNum(legend.xp).toLocaleString()} XP</span>
+                                                <span className={legend.games > 0 && legend.wins / legend.games > 0.5 ? "text-green-500" : "text-muted-foreground"}>
+                                                    {legend.games > 0 ? ((legend.wins / legend.games) * 100).toFixed(0) : 0}% WR
+                                                </span>
+                                                <span className="font-mono">{formatHours(parseNum(legend.matchTime))}</span>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {expandedLegendId === legend.legendId && (
+                                        <div className="pt-3 border-t border-border/60 space-y-3">
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div>
+                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">KOs</div>
+                                                    <div className="font-mono font-bold text-foreground">{parseNum(legend.KOs).toLocaleString()}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Falls / Suicides</div>
+                                                    <div className="font-mono font-bold text-foreground">
+                                                        {parseNum(legend.falls).toLocaleString()} / {parseNum(legend.suicides).toLocaleString()}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Damage Dealt</div>
+                                                    <div className="font-mono font-bold text-foreground">{parseNum(legend.damageDealt).toLocaleString()}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Damage Taken</div>
+                                                    <div className="font-mono font-bold text-foreground">{parseNum(legend.damageTaken).toLocaleString()}</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Weapons</div>
+                                                <div className="grid grid-cols-1 gap-2 text-xs">
+                                                    <div className="flex justify-between gap-3">
+                                                        <span className="font-bold text-foreground truncate">{legend.weaponOne || 'Weapon 1'}</span>
+                                                        <span className="font-mono text-muted-foreground whitespace-nowrap">
+                                                            {formatHours(parseNum(legend.timeHeldWeaponOne))} • {parseNum(legend.KOWeaponOne).toLocaleString()} KOs • {parseNum(legend.damageWeaponOne).toLocaleString()} dmg
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-3">
+                                                        <span className="font-bold text-foreground truncate">{legend.weaponTwo || 'Weapon 2'}</span>
+                                                        <span className="font-mono text-muted-foreground whitespace-nowrap">
+                                                            {formatHours(parseNum(legend.timeHeldWeaponTwo))} • {parseNum(legend.KOWeaponTwo).toLocaleString()} KOs • {parseNum(legend.damageWeaponTwo).toLocaleString()} dmg
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {legend.ranked && (
+                                                <div className="space-y-1">
+                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ranked</div>
+                                                    <div className="text-xs text-muted-foreground font-mono">
+                                                        {legend.ranked.tier} • {legend.ranked.rating} (peak {legend.ranked.peakRating}) • {legend.ranked.wins}/{legend.ranked.games} W/G
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         ))}
