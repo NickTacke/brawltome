@@ -20,6 +20,13 @@ import {
 } from '@brawltome/ui';
 import { ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { ModeToggle } from '@/components/mode-toggle';
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+} from '@brawltome/ui';
 
 interface PlayerProfileProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,6 +80,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         ?.sort((a: any, b: any) => b.rating - a.rating);
 
     const winrate = player.games > 0 ? (player.wins / player.games) * 100 : 0;
+    const aliases: string[] = (player?.aliases || [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((a: any) => a?.value)
+        .filter((v: unknown): v is string => typeof v === 'string' && v.trim().length > 0)
+        .filter((v: string) => v.trim() !== player?.name)
+        .sort((a: string, b: string) => a.localeCompare(b));
 
     return (
         <div className="max-w-6xl mx-auto p-6 space-y-8">
@@ -114,6 +127,25 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                             </div>
                             <span>•</span>
                             <div>ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span></div>
+                            {aliases.length > 0 && (
+                                <>
+                                    <span>•</span>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm">
+                                                Aliases ({aliases.length})
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start">
+                                            {aliases.map((alias: string) => (
+                                                <DropdownMenuItem key={alias}>
+                                                    {fixEncoding(alias)}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </>
+                            )}
                             {player.stats?.clan && (
                                 <>
                                     <span>•</span>

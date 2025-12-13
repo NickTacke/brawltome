@@ -36,6 +36,35 @@ export class SearchService implements OnModuleInit {
         }
     }
 
+    private sanitizeQuery(query: string): string {
+        const withNormalizedPipeSpacing = query.replace(/\s*\|\s*/g, ' | ');
+        return withNormalizedPipeSpacing.replace(/[^\p{L}\p{N}_\s\-|]/gu, '');
+    }
+
+    private normalizeForPrefixMatch(input: string): string {
+        return input
+            .replace(/\s*\|\s*/g, ' | ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    private getPostTagPortion(name: string): string {
+        const parts = name.split('|');
+        return (parts[parts.length - 1] ?? name).trim();
+    }
+
+    private matchesNameOrBasePrefix(target: string, query: string): boolean {
+        const q = this.normalizeForPrefixMatch(query);
+        if (!q) return false;
+
+        const t = this.normalizeForPrefixMatch(target);
+        if (t.startsWith(q)) return true;
+
+        const base = this.normalizeForPrefixMatch(this.getPostTagPortion(target));
+        return base.startsWith(q);
+    }
+
     // Local Search
     async searchLocal(query: string) {
         // Check if query is a Brawlhalla ID (numeric)
@@ -52,8 +81,8 @@ export class SearchService implements OnModuleInit {
             };
         }
 
-        // Sanitize the query - remove special characters
-        const sanitized = query.replace(/[^\w\s-]/gi, '');
+        // Sanitize the query (preserve '|') and normalize pipe spacing for better matching against stored names
+        const sanitized = this.sanitizeQuery(query);
 
         // Return empty results if query is too short
         if (sanitized.length < 2) return { players: [], clans: [] };
@@ -83,7 +112,8 @@ export class SearchService implements OnModuleInit {
                         },
                     ],
                 },
-                take: 8,
+                // Pull more candidates, then filter by prefix rules in-memory.
+                take: 50,
                 orderBy: {
                     rating: 'desc',
                 },
@@ -124,8 +154,26 @@ export class SearchService implements OnModuleInit {
             })
         ]);
 
+        // Enforce prefix-only matching (with optional post-'|' base-name matching) and attach alias match metadata.
+        const filteredPlayers = players
+            .map((p) => {
+                const nameMatch = this.matchesNameOrBasePrefix(p.name, sanitized);
+                if (nameMatch) {
+                    return { ...p, matchedOn: 'name' as const };
+                }
+
+                const matchedAlias = p.aliases?.find((a) => this.matchesNameOrBasePrefix(a.value, sanitized));
+                if (matchedAlias) {
+                    return { ...p, matchedOn: 'alias' as const, matchedAlias: matchedAlias.value };
+                }
+
+                return null;
+            })
+            .filter((p): p is NonNullable<typeof p> => p !== null)
+            .slice(0, 8);
+
         // Enrich with Legend Names
-        const enrichedPlayers = players.map(p => ({
+        const enrichedPlayers = filteredPlayers.map(p => ({
             ...p,
             bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
             bestLegendNameKey: p.bestLegend ? this.legendIdToKeyCache.get(p.bestLegend) : null

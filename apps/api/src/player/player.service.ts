@@ -45,6 +45,12 @@ export class PlayerService implements OnModuleInit {
         let player = await this.prisma.player.findUnique({
             where: { brawlhallaId: id },
             include: {
+                aliases: {
+                    select: {
+                        key: true,
+                        value: true,
+                    },
+                },
                 stats: {
                     include: {
                         legends: true,
