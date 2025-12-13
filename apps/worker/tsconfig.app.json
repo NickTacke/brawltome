@@ -1,0 +1,36 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "esnext",
+    "types": ["node"],
+    "rootDir": "src",
+    "moduleResolution": "bundler",
+    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "target": "es2021",
+    "paths": {
+      "@brawltome/database": ["libs/database/src/index.ts"],
+      "@brawltome/bhapi-client": ["libs/bhapi-client/src/index.ts"],
+      "@brawltome/shared-utils": ["libs/shared-utils/src/index.ts"],
+      "@brawltome/shared-types": ["libs/shared-types/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["eslint.config.js", "eslint.config.cjs", "eslint.config.mjs"],
+  "references": [
+    {
+      "path": "../../libs/shared-types/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/shared-utils/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/database/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/bhapi-client/tsconfig.lib.json"
+    }
+  ]
+}
