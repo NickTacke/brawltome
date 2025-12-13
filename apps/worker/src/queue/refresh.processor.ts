@@ -30,11 +30,11 @@ export class RefreshProcessor extends WorkerHost {
 
       // Halt refreshing stats if we're on a low budget (more priority on ranked)
       if (remainingTokens < STATS_MIN_TOKENS && job.name === 'refresh-stats') {
-        this.logger.warn(`Skipping stats refresh for ${id} (Tokens: ${remainingTokens})`);
-        return;
+        this.logger.warn(`Delaying stats refresh for ${id} (Tokens: ${remainingTokens})`);
+        throw new Error('Rate-limited: insufficient tokens for stats refresh');
       } else if (remainingTokens < RANKED_MIN_TOKENS && job.name === 'refresh-ranked') {
-        this.logger.warn(`Skipping ranked refresh for ${id} (Tokens: ${remainingTokens})`);
-        return;
+        this.logger.warn(`Delaying ranked refresh for ${id} (Tokens: ${remainingTokens})`);
+        throw new Error('Rate-limited: insufficient tokens for ranked refresh');
       }
 
       if (job.name === 'refresh-ranked') {
@@ -283,6 +283,9 @@ export class RefreshProcessor extends WorkerHost {
             },
           });
         });
+      } else {
+        this.logger.warn(`Unknown job name: ${job.name} for ${id}`);
+        throw new Error(`Unknown job name: ${job.name}`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
