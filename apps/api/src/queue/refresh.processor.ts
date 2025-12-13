@@ -44,7 +44,7 @@ export class RefreshProcessor extends WorkerHost {
                 await this.prisma.$transaction(async (tx) => {
                     const existing = await tx.player.findUnique({
                         where: { brawlhallaId: id },
-                        select: { name: true, brawlhallaId: true }
+                        select: { name: true, brawlhallaId: true, tier: true, lastUpdated: true }
                     });
 
                     // Only update name if it's not empty/whitespace
@@ -69,16 +69,29 @@ export class RefreshProcessor extends WorkerHost {
                         }
                     } : {};
 
+                    // Tier logic:
+                    // - We do NOT want refresh-ranked to downgrade Valhallan -> Diamond (tier accuracy should come from janitor rankings).
+                    // - Exception: if the player hasn't been leaderboard-updated in > 24h (likely not on leaderboard / season reset), allow the downgrade.
+                    const ONE_DAY_MS = 1000 * 60 * 60 * 24;
+                    const existingTier = existing?.tier ?? null;
+                    const lastLeaderboardUpdate = existing?.lastUpdated ?? null;
+                    const leaderboardStale =
+                        !lastLeaderboardUpdate || (Date.now() - lastLeaderboardUpdate.getTime() > ONE_DAY_MS);
+
+                    const nextTier =
+                        existingTier === 'Valhallan' && data.tier === 'Diamond' && !leaderboardStale
+                            ? 'Valhallan'
+                            : data.tier;
+
                     await tx.player.update({
                         where: { brawlhallaId: id },
                         data: {
                             ...(shouldUpdateName ? { name: newName } : {}),
                             rating: data.rating,
                             peakRating: data.peak_rating,
-                            tier: data.tier,
+                            tier: nextTier,
                             games: data.games,
                             wins: data.wins,
-                            lastUpdated: new Date(),
                             ...aliasUpdate
                         },
                     });

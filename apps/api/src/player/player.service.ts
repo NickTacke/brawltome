@@ -340,34 +340,43 @@ export class PlayerService implements OnModuleInit {
     }
 
     async getLeaderboard(page: number, region?: string, sort: 'rating' | 'wins' | 'games' | 'peakRating' = 'rating', limit?: number) {
+        const MAX_RANKINGS_PAGES = 200; // How many BHAPI pages the janitor keeps fresh
+        const RANKINGS_PAGE_SIZE = 50; // BHAPI rankings page size
+        const MAX_RANKINGS_ENTRIES = MAX_RANKINGS_PAGES * RANKINGS_PAGE_SIZE;
+
         const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
-        const safePage = Math.max(page || 1, 1);
-        const skip = (safePage - 1) * safeTake;
+        const requestedPage = Math.max(page || 1, 1);
 
         const where = region && region !== 'all' ? { region } : {};
 
         const orderBy = { [sort]: 'desc' };
 
-        const [players, total] = await Promise.all([
-            this.prisma.player.findMany({
-                where,
-                orderBy,
-                take: safeTake,
-                skip,
-                select: {
-                    brawlhallaId: true,
-                    name: true,
-                    region: true,
-                    rating: true,
-                    peakRating: true,
-                    tier: true,
-                    wins: true,
-                    games: true,
-                    bestLegend: true,
-                }
-            }),
-            this.prisma.player.count({ where })
-        ]);
+        const maxPagesForTake = Math.max(1, Math.ceil(MAX_RANKINGS_ENTRIES / safeTake));
+        const prelimPage = Math.min(requestedPage, maxPagesForTake);
+
+        const total = await this.prisma.player.count({ where });
+        const cappedTotal = Math.min(total, MAX_RANKINGS_ENTRIES);
+        const totalPages = Math.max(1, Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake));
+        const safePage = Math.min(prelimPage, totalPages);
+        const skip = (safePage - 1) * safeTake;
+
+        const players = await this.prisma.player.findMany({
+            where,
+            orderBy,
+            take: safeTake,
+            skip,
+            select: {
+                brawlhallaId: true,
+                name: true,
+                region: true,
+                rating: true,
+                peakRating: true,
+                tier: true,
+                wins: true,
+                games: true,
+                bestLegend: true,
+            }
+        });
 
         // Enrich with Legend Names from Cache
         const enrichedPlayers = players.map(p => ({
@@ -380,8 +389,8 @@ export class PlayerService implements OnModuleInit {
             data: enrichedPlayers,
             meta: {
                 page: safePage,
-                total,
-                totalPages: Math.ceil(total / safeTake)
+                total: cappedTotal,
+                totalPages
             }
         };
     }
