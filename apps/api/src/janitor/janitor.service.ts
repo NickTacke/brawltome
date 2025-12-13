@@ -6,11 +6,13 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
 const IDLE_TOKEN_THRESHOLD = 100; // Only run if we have plenty of tokens
+const MAX_RANKINGS_PAGES = 200;
 
 @Injectable()
 export class JanitorService {
     private readonly logger = new Logger(JanitorService.name);
-    private currentPage = 1;
+    private current1v1Page = 1;
+    private current2v2Page = 1;
 
     constructor(
         private bhApiClient: BhApiClientService,
@@ -30,15 +32,16 @@ export class JanitorService {
 
         this.logger.log(`🧹 Janitor waking up! Tokens: ${tokens}`);
 
-        await this.refreshRankingsPage();
+        await this.refresh1v1RankingsPage();
+        await this.refresh2v2RankingsPage();
         await this.queueMissingDataRefreshes();
         // TODO: After missing data is filled, start refreshing clans
     }
 
-    private async refreshRankingsPage() {
+    private async refresh1v1RankingsPage() {
         try {
-            this.logger.log(`Refreshing rankings page ${this.currentPage}...`);
-            const rankings = await this.bhApiClient.getRankings('1v1', 'all', this.currentPage);
+            this.logger.log(`Refreshing 1v1 rankings page ${this.current1v1Page}...`);
+            const rankings = await this.bhApiClient.getRankings('1v1', 'all', this.current1v1Page);
             
             if (rankings.length > 0) {
                 for (const p of rankings) {
@@ -79,6 +82,7 @@ export class JanitorService {
                             tier: p.tier,
                             games: p.games,
                             wins: p.wins,
+                            lastUpdated: new Date(),
                         },
                         update: {
                             name: p.name,
@@ -88,20 +92,77 @@ export class JanitorService {
                             tier: p.tier,
                             games: p.games,
                             wins: p.wins,
+                            lastUpdated: new Date(),
                         },
                     });
                 }
-                this.logger.log(`Updated ${rankings.length} players from page ${this.currentPage}`);
+                this.logger.log(`Updated ${rankings.length} players from 1v1 page ${this.current1v1Page}`);
             }
 
-            // Cycle pages (1 to 100 covers top 5000 players)
-            this.currentPage++;
-            if (this.currentPage > 100) {
-                this.currentPage = 1;
+            // Cycle pages (1..MAX_RANKINGS_PAGES)
+            this.current1v1Page++;
+            if (this.current1v1Page > MAX_RANKINGS_PAGES) {
+                this.current1v1Page = 1;
             }
 
         } catch (error) {
-            this.logger.error(`Failed to refresh rankings page ${this.currentPage}`, error);
+            this.logger.error(`Failed to refresh 1v1 rankings page ${this.current1v1Page}`, error);
+        }
+    }
+
+    private async refresh2v2RankingsPage() {
+        try {
+            this.logger.log(`Refreshing 2v2 rankings page ${this.current2v2Page}...`);
+            const teams = await this.bhApiClient.getRankings('2v2', 'all', this.current2v2Page);
+
+            if (teams.length > 0) {
+                for (const t of teams) {
+                    const idOne = Math.min(t.brawlhalla_id_one, t.brawlhalla_id_two);
+                    const idTwo = Math.max(t.brawlhalla_id_one, t.brawlhalla_id_two);
+
+                    await this.prisma.ranked2v2Team.upsert({
+                        where: {
+                            region_brawlhallaIdOne_brawlhallaIdTwo: {
+                                region: t.region,
+                                brawlhallaIdOne: idOne,
+                                brawlhallaIdTwo: idTwo,
+                            },
+                        },
+                        create: {
+                            region: t.region,
+                            brawlhallaIdOne: idOne,
+                            brawlhallaIdTwo: idTwo,
+                            rank: t.rank,
+                            teamName: t.teamname,
+                            rating: t.rating,
+                            peakRating: t.peak_rating,
+                            tier: t.tier,
+                            wins: t.wins,
+                            games: t.games,
+                            lastUpdated: new Date(),
+                        },
+                        update: {
+                            rank: t.rank,
+                            teamName: t.teamname,
+                            rating: t.rating,
+                            peakRating: t.peak_rating,
+                            tier: t.tier,
+                            wins: t.wins,
+                            games: t.games,
+                            lastUpdated: new Date(),
+                        },
+                    });
+                }
+                this.logger.log(`Updated ${teams.length} teams from 2v2 page ${this.current2v2Page}`);
+            }
+
+            this.current2v2Page++;
+            if (this.current2v2Page > MAX_RANKINGS_PAGES) {
+                this.current2v2Page = 1;
+            }
+
+        } catch (error) {
+            this.logger.error(`Failed to refresh 2v2 rankings page ${this.current2v2Page}`, error);
         }
     }
 
