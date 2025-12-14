@@ -11,13 +11,12 @@ The backend service for Brawltome, built with [NestJS](https://nestjs.com/).
 
 ## Environment Variables
 
-Create a `.env` file in this directory with the following variables:
+Copy `apps/api/.env.example` to `apps/api/.env` and fill in required values:
 
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/brawltome?schema=public"
 BRAWLHALLA_API_KEY="your-api-key"
-REDIS_HOST="localhost"
-REDIS_PORT=6379
+REDIS_URL="redis://localhost:6379"
 ```
 
 ## Running the API
@@ -25,4 +24,3 @@ REDIS_PORT=6379
 ```bash
 npx nx serve api
 ```
-
