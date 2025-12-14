@@ -225,7 +225,8 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             </div>
                           </div>
                           <div className="text-xs font-mono text-muted-foreground">
-                            {c.xp ? parseInt(c.xp).toLocaleString() : '0'} XP
+                            {c.xp ? parseInt(c.xp, 10).toLocaleString() : '0'}{' '}
+                            XP
                           </div>
                         </button>
                       ))}
