@@ -1,4 +1,6 @@
-# brawltome.app
+<p align="center">
+  <img src="apps/web/public/images/logo.png" alt="BrawlTome logo" width="320" />
+</p>
 
 BrawlTome is a comprehensive Brawlhalla tracking application built with a modern monorepo architecture. It provides player statistics, rankings, and detailed insights into Brawlhalla gameplay.
 
