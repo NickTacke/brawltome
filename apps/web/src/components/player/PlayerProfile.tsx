@@ -86,12 +86,22 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     fallbackData: initialData,
     refreshInterval: (data) => (data?.isRefreshing ? 2000 : 0),
   });
+
+  if (!player) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="text-muted-foreground">Player not found.</div>
+      </div>
+    );
+  }
+
   const isRefreshing = player?.isRefreshing;
 
-  const allLegends =
-    (player?.stats?.legendsEnriched || player?.stats?.legends)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ?.sort((a: any, b: any) => b.xp - a.xp) || [];
+  const legendsSource =
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (player.stats?.legendsEnriched || player.stats?.legends || []) as any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allLegends = [...legendsSource].sort((a: any, b: any) => b.xp - a.xp);
 
   const displayedLegends = showAllLegends ? allLegends : allLegends.slice(0, 6);
 
@@ -112,9 +122,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     setShowAllWeapons(!showAllWeapons);
   };
 
-  const rankedTeams = player?.ranked?.teams
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ?.sort((a: any, b: any) => b.rating - a.rating);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rankedTeamsSource = (player.ranked?.teams || []) as any[];
+   
+  const rankedTeams = [...rankedTeamsSource].sort(
+    (a: any, b: any) => b.rating - a.rating
+  );
 
   const winrate = player.games > 0 ? (player.wins / player.games) * 100 : 0;
 
