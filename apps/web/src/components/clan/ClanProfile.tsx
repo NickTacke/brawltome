@@ -87,6 +87,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
     clan?.members
 
       ?.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (m: any) =>
           !searchTerm ||
           m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
