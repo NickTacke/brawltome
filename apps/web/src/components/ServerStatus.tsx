@@ -30,7 +30,7 @@ export function ServerStatus() {
   const { tokens } = data;
   let statusColor = 'bg-emerald-500';
   let statusText = 'Operational';
-  
+
   if (tokens < 20) {
     statusColor = 'bg-destructive';
     statusText = 'High Load';
@@ -42,8 +42,12 @@ export function ServerStatus() {
   return (
     <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-border bg-card/80 backdrop-blur-sm shadow-sm hover:bg-card/90 transition-colors">
       <div className="relative flex h-2 w-2">
-        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor}`}></span>
-        <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`}></span>
+        <span
+          className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor}`}
+        ></span>
+        <span
+          className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`}
+        ></span>
       </div>
       <span className="text-xs font-medium text-muted-foreground">
         {statusText}

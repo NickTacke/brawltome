@@ -17,7 +17,6 @@ import { REDIS_CLIENT } from './redis.constants';
   ],
   exports: [REDIS_CLIENT],
 })
-
 export class RedisModule implements OnModuleDestroy {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 

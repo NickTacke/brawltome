@@ -22,7 +22,13 @@ export class LeaderboardService {
 
     const where = region && region !== 'all' ? { region } : {};
 
-    const safeSort: LeaderboardSort = ['rating', 'wins', 'games', 'peakRating', 'rank'].includes(sort)
+    const safeSort: LeaderboardSort = [
+      'rating',
+      'wins',
+      'games',
+      'peakRating',
+      'rank',
+    ].includes(sort)
       ? sort
       : 'rating';
 
@@ -37,12 +43,18 @@ export class LeaderboardService {
       { brawlhallaIdTwo: 'asc' as const },
     ];
 
-    const maxPagesForTake = Math.max(1, Math.ceil(MAX_RANKINGS_ENTRIES / safeTake));
+    const maxPagesForTake = Math.max(
+      1,
+      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake)
+    );
     const prelimPage = Math.min(requestedPage, maxPagesForTake);
 
     const total = await this.prisma.ranked2v2Team.count({ where });
     const cappedTotal = Math.min(total, MAX_RANKINGS_ENTRIES);
-    const totalPages = Math.max(1, Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake));
+    const totalPages = Math.max(
+      1,
+      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake)
+    );
     const safePage = Math.min(prelimPage, totalPages);
     const skip = (safePage - 1) * safeTake;
 

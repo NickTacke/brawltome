@@ -6,7 +6,7 @@ export function fixEncoding(str: string | null | undefined): string {
     // escape() converts string to %XX format, decodeURIComponent reads it back as UTF-8
     // valid for restoring UTF-8 bytes that were interpreted as Latin-1
     return decodeURIComponent(escape(str));
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (err) {
     // If it fails (e.g. valid UTF-8 already that would break this hack), return original
     return str;
@@ -36,7 +36,7 @@ export function timeAgo(date: string | Date | number): string {
   if (days < 30) {
     return `${days}d ago`;
   }
-  
+
   const months = Math.floor(days / 30);
   if (months < 12) {
     return `${months}mo ago`;

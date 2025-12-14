@@ -6,8 +6,8 @@ import { QueueModule } from '../queue/queue.module';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
 
 @Module({
-    imports: [DatabaseModule, QueueModule, BhApiClientModule],
-    controllers: [PlayerController],
-    providers: [PlayerService],
+  imports: [DatabaseModule, QueueModule, BhApiClientModule],
+  controllers: [PlayerController],
+  providers: [PlayerService],
 })
 export class PlayerModule {}

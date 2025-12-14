@@ -8,12 +8,16 @@
         "executor": "nx:run-commands",
         "options": {
           "command": "webpack-cli build",
-          "args": ["--node-env=production"],
+          "args": [
+            "--node-env=production"
+          ],
           "cwd": "apps/worker"
         },
         "configurations": {
           "development": {
-            "args": ["--node-env=development"]
+            "args": [
+              "--node-env=development"
+            ]
           }
         }
       },
@@ -21,7 +25,9 @@
         "continuous": true,
         "executor": "@nx/js:node",
         "defaultConfiguration": "development",
-        "dependsOn": ["build"],
+        "dependsOn": [
+          "build"
+        ],
         "options": {
           "buildTarget": "@brawltome/worker:build",
           "runBuildTargetDependencies": false

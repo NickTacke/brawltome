@@ -6,8 +6,8 @@ import { BhApiClientModule } from '@brawltome/bhapi-client';
 import { QueueModule } from '../queue/queue.module';
 
 @Module({
-    imports: [DatabaseModule, BhApiClientModule, QueueModule],
-    controllers: [SearchController],
-    providers: [SearchService],
+  imports: [DatabaseModule, BhApiClientModule, QueueModule],
+  controllers: [SearchController],
+  providers: [SearchService],
 })
 export class SearchModule {}
