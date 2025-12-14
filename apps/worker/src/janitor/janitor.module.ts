@@ -7,9 +7,13 @@ import { JanitorService } from './janitor.service';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), DatabaseModule, BhApiClientModule, QueueModule, RedisModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    DatabaseModule,
+    BhApiClientModule,
+    QueueModule,
+    RedisModule,
+  ],
   providers: [JanitorService],
 })
 export class JanitorModule {}
-
-

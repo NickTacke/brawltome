@@ -30,7 +30,7 @@ export interface PlayerRankedDTO {
   global_rank: number;
   region_rank: number;
   legends: PlayerRankedLegendDTO[];
-  "2v2": PlayerRankedTeamDTO[];
+  '2v2': PlayerRankedTeamDTO[];
 }
 
 export interface PlayerRankedLegendDTO {
@@ -77,7 +77,7 @@ export interface PlayerStatsDTO {
   xp_percentage: number;
   games: number;
   wins: number;
-  
+
   // Gadget damage
   damagebomb: string;
   damagemine: string;
@@ -99,7 +99,7 @@ export interface PlayerStatsDTO {
 export interface PlayerStatsLegendDTO {
   legend_id: number;
   legend_name_key: string;
-  
+
   // XP information
   xp: number;
   level: number;

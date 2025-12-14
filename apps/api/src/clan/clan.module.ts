@@ -10,4 +10,3 @@ import { BhApiClientModule } from '@brawltome/bhapi-client';
   providers: [ClanService],
 })
 export class ClanModule {}
-
