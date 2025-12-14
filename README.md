@@ -33,18 +33,29 @@ This project is organized as an [Nx](https://nx.dev) monorepo:
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/NickTacke/brawltome
    cd brawltome
    ```
 
 2. Install dependencies:
+
    ```bash
    pnpm install
    ```
 
-3. Environment Setup:
-   Create `.env` files in `apps/api` and `apps/web` (see their respective READMEs for details).
+3. Start local dependencies (optional but recommended):
+
+   ```bash
+   docker compose up -d
+   ```
+
+4. Environment Setup:
+   Copy the example env files and fill in required values:
+   - `apps/api/.env.example` → `apps/api/.env`
+   - `apps/worker/.env.example` → `apps/worker/.env`
+   - `apps/web/.env.example` → `apps/web/.env.local`
 
 ### Running the Application
 
@@ -52,10 +63,13 @@ Start the development servers:
 
 ```bash
 # Start the API
-npx nx serve api
+pnpm dev:api
+
+# Start the Worker
+pnpm dev:worker
 
 # Start the Web App
-npx nx dev web
+pnpm dev:web
 ```
 
 ### Seeding Data
@@ -63,11 +77,16 @@ npx nx dev web
 Populate the database with initial static data (Legends, etc.):
 
 ```bash
-npm run seed:legends
+pnpm seed:legends
 ```
 
 ## 📜 Scripts
 
-- `npm run seed:api`: Run general API seeder.
-- `npm run seed:legends`: Seed static Legend data from the Brawlhalla API.
+- `pnpm seed:api`: Run general API seeder.
+- `pnpm seed:legends`: Seed static Legend data from the Brawlhalla API.
+- `pnpm lint`: Lint all projects.
+- `pnpm typecheck`: Typecheck all projects.
+- `pnpm build`: Build all projects.
+- `pnpm format`: Format all projects.
+- `pnpm format:check`: Verify formatting for all projects.
 - `npx nx graph`: Visualize the project dependency graph.
