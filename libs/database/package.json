@@ -40,7 +40,6 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.1.0",
     "@nestjs/common": "^11.0.0",
-    "prisma": "^7.1.0",
     "tslib": "^2.3.0"
   }
 }
