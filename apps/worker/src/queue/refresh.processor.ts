@@ -3,41 +3,88 @@ import { DelayedError, Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
-import { PlayerRankedLegendDTO, PlayerRankedTeamDTO, PlayerStatsLegendDTO } from '@brawltome/shared-types';
-import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
+import {
+  PlayerRankedLegendDTO,
+  PlayerRankedTeamDTO,
+  PlayerStatsLegendDTO,
+} from '@brawltome/shared-types';
+import {
+  createWeaponAggregator,
+  parseDamage,
+  REFRESH_RANKED_MIN_TOKENS,
+  REFRESH_STATS_MIN_TOKENS,
+} from '@brawltome/shared-utils';
 
-const STATS_MIN_TOKENS = 40;
-const RANKED_MIN_TOKENS = 20;
 const RATE_LIMIT_DELAY_MS = 1000 * 60 * 5; // 5 minutes
 
 @Processor('refresh-queue')
 export class RefreshProcessor extends WorkerHost {
   private readonly logger = new Logger(RefreshProcessor.name);
+  private legendWeaponsCache = new Map<
+    number,
+    { weaponOne: string; weaponTwo: string }
+  >();
+  private legendWeaponsCacheUpdatedAt = 0;
 
   constructor(
     private bhApiClient: BhApiClientService,
     private prisma: PrismaService
   ) {
     super();
-    this.logger.log('RefreshProcessor instantiated!');
+  }
+
+  private async getLegendWeaponsMap(): Promise<
+    Map<number, { weaponOne: string; weaponTwo: string }>
+  > {
+    const ONE_HOUR_MS = 1000 * 60 * 60;
+    const isFresh =
+      this.legendWeaponsCache.size > 0 &&
+      Date.now() - this.legendWeaponsCacheUpdatedAt < ONE_HOUR_MS;
+    if (isFresh) return this.legendWeaponsCache;
+
+    const legends = await this.prisma.legend.findMany({
+      select: { legendId: true, weaponOne: true, weaponTwo: true },
+    });
+    this.legendWeaponsCache = new Map(
+      legends.map((l) => [
+        l.legendId,
+        { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo },
+      ])
+    );
+    this.legendWeaponsCacheUpdatedAt = Date.now();
+    return this.legendWeaponsCache;
   }
 
   async process(job: Job<{ id: number }>) {
-    this.logger.log(`👷 WORKER STARTED job: ${job.name} for ${job.data.id}`);
+    this.logger.debug(`Job started name=${job.name} id=${job.data.id}`);
     try {
       const { id } = job.data;
       const remainingTokens = await this.bhApiClient.getRemainingTokens();
       this.logger.debug(`Remaining tokens: ${remainingTokens}`);
 
       // Halt refreshing stats if we're on a low budget (more priority on ranked)
-      if (remainingTokens < STATS_MIN_TOKENS && job.name === 'refresh-stats') {
-        this.logger.warn(`Delaying stats refresh for ${id} (Tokens: ${remainingTokens})`);
+      if (
+        remainingTokens < REFRESH_STATS_MIN_TOKENS &&
+        job.name === 'refresh-stats'
+      ) {
+        this.logger.warn(
+          `Delaying stats refresh for ${id} (Tokens: ${remainingTokens})`
+        );
         await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
-        throw new DelayedError('Rate-limited: insufficient tokens for stats refresh');
-      } else if (remainingTokens < RANKED_MIN_TOKENS && job.name === 'refresh-ranked') {
-        this.logger.warn(`Delaying ranked refresh for ${id} (Tokens: ${remainingTokens})`);
+        throw new DelayedError(
+          'Rate-limited: insufficient tokens for stats refresh'
+        );
+      } else if (
+        remainingTokens < REFRESH_RANKED_MIN_TOKENS &&
+        job.name === 'refresh-ranked'
+      ) {
+        this.logger.warn(
+          `Delaying ranked refresh for ${id} (Tokens: ${remainingTokens})`
+        );
         await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
-        throw new DelayedError('Rate-limited: insufficient tokens for ranked refresh');
+        throw new DelayedError(
+          'Rate-limited: insufficient tokens for ranked refresh'
+        );
       }
 
       if (job.name === 'refresh-ranked') {
@@ -47,7 +94,12 @@ export class RefreshProcessor extends WorkerHost {
         await this.prisma.$transaction(async (tx) => {
           const existing = await tx.player.findUnique({
             where: { brawlhallaId: id },
-            select: { name: true, brawlhallaId: true, tier: true, lastUpdated: true },
+            select: {
+              name: true,
+              brawlhallaId: true,
+              tier: true,
+              lastUpdated: true,
+            },
           });
 
           // Only update name if it's not empty/whitespace
@@ -55,7 +107,10 @@ export class RefreshProcessor extends WorkerHost {
           const shouldUpdateName = newName && newName.trim().length > 0;
 
           const aliasUpdate =
-            shouldUpdateName && existing && existing.name && existing.name !== newName
+            shouldUpdateName &&
+            existing &&
+            existing.name &&
+            existing.name !== newName
               ? {
                   aliases: {
                     upsert: {
@@ -82,10 +137,15 @@ export class RefreshProcessor extends WorkerHost {
           const existingTier = existing?.tier ?? null;
           const lastLeaderboardUpdate = existing?.lastUpdated ?? null;
           const leaderboardStale =
-            !lastLeaderboardUpdate || Date.now() - lastLeaderboardUpdate.getTime() > ONE_DAY_MS;
+            !lastLeaderboardUpdate ||
+            Date.now() - lastLeaderboardUpdate.getTime() > ONE_DAY_MS;
 
           const nextTier =
-            existingTier === 'Valhallan' && data.tier === 'Diamond' && !leaderboardStale ? 'Valhallan' : data.tier;
+            existingTier === 'Valhallan' &&
+            data.tier === 'Diamond' &&
+            !leaderboardStale
+              ? 'Valhallan'
+              : data.tier;
 
           await tx.player.update({
             where: { brawlhallaId: id },
@@ -131,19 +191,17 @@ export class RefreshProcessor extends WorkerHost {
         });
       } else if (job.name === 'refresh-stats') {
         const data = await this.bhApiClient.getPlayerStats(id);
+        const legendIdToWeapons = await this.getLegendWeaponsMap();
 
         await this.prisma.$transaction(async (tx) => {
-          const statsLegends = (data.legends || []).filter((l) => l.legend_id !== 0);
-          const matchTimeTotal = statsLegends.reduce((sum, l) => sum + (l.matchtime || 0), 0);
-
-          const legendIds = Array.from(new Set(statsLegends.map((l) => l.legend_id)));
-          const legendWeapons = await tx.legend.findMany({
-            where: { legendId: { in: legendIds } },
-            select: { legendId: true, weaponOne: true, weaponTwo: true },
-          });
-          const legendIdToWeapons = new Map<number, { weaponOne: string; weaponTwo: string }>(
-            legendWeapons.map((l) => [l.legendId, { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo }])
+          const statsLegends: PlayerStatsLegendDTO[] = (
+            data.legends || []
+          ).filter((l: PlayerStatsLegendDTO) => l.legend_id !== 0);
+          const matchTimeTotal = statsLegends.reduce(
+            (sum: number, l: PlayerStatsLegendDTO) => sum + (l.matchtime || 0),
+            0
           );
+
           const weaponAgg = createWeaponAggregator();
 
           for (const l of statsLegends) {
@@ -183,7 +241,10 @@ export class RefreshProcessor extends WorkerHost {
 
             // If current name is empty or missing, update it
             // Or if we want to enforce stats name as primary
-            if (existing && (!existing.name || existing.name.trim().length === 0)) {
+            if (
+              existing &&
+              (!existing.name || existing.name.trim().length === 0)
+            ) {
               await tx.player.update({
                 where: { brawlhallaId: id },
                 data: { name: data.name },
@@ -293,7 +354,10 @@ export class RefreshProcessor extends WorkerHost {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`Failed to process job ${job.name} for ${job.data.id}: ${message}`, stack);
+      this.logger.error(
+        `Failed to process job ${job.name} for ${job.data.id}: ${message}`,
+        stack
+      );
       throw error;
     }
   }
@@ -371,5 +435,3 @@ export class RefreshProcessor extends WorkerHost {
       }));
   }
 }
-
-
