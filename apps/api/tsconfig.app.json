@@ -9,13 +9,7 @@
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "target": "es2021",
-    "paths": {
-      "@brawltome/database": ["libs/database/src/index.ts"],
-      "@brawltome/bhapi-client": ["libs/bhapi-client/src/index.ts"],
-      "@brawltome/shared-utils": ["libs/shared-utils/src/index.ts"],
-      "@brawltome/shared-types": ["libs/shared-types/src/index.ts"]
-    }
+    "target": "es2021"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["eslint.config.js", "eslint.config.cjs", "eslint.config.mjs"],
