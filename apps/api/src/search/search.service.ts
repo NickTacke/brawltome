@@ -182,7 +182,9 @@ export class SearchService implements OnModuleInit {
       const legendIdForAvatar = rankedBestLegendId || fallbackLegendId || 0;
       const legendNameKeyForAvatar =
         rankedBestLegendId && rankedBestLegendId > 0
-          ? this.legendIdToKeyCache.get(rankedBestLegendId) ?? null
+          ? this.legendIdToKeyCache.get(rankedBestLegendId) ??
+            statsBestLegend?.legendNameKey ??
+            null
           : statsBestLegend?.legendNameKey ?? null;
       const legendNameForAvatar =
         legendIdForAvatar && legendIdForAvatar > 0
@@ -412,6 +414,7 @@ export class SearchService implements OnModuleInit {
             if (legends.length === 0) return null;
 
             const best = legends.sort(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (a: any, b: any) => (b?.xp ?? 0) - (a?.xp ?? 0)
             )[0];
             const legendId = best?.legend_id ?? 0;
@@ -424,6 +427,7 @@ export class SearchService implements OnModuleInit {
             if (legends.length === 0) return null;
 
             const best = legends.sort(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (a: any, b: any) => (b?.xp ?? 0) - (a?.xp ?? 0)
             )[0];
             return best?.legend_name_key ?? null;
