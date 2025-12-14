@@ -70,8 +70,10 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
 
   // Local Search
   useEffect(() => {
+    let cancelled = false;
     setError(null);
     if (!debouncedQuery || debouncedQuery.length < 3) {
+      setIsSearching(false);
       setPlayerResults([]);
       setClanResults([]);
       return;
@@ -81,6 +83,15 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     fetcher(`/search/local?q=${encodeURIComponent(debouncedQuery)}`)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((data: any) => {
+        if (cancelled) return;
+        if (!data) {
+          setPlayerResults([]);
+          setClanResults([]);
+          setShowClans(false);
+          setIsSearching(false);
+          setError('No results found.');
+          return;
+        }
         // Handle both old (array) and new (object) API responses
         const players = Array.isArray(data) ? data : data.players || [];
         const clans = Array.isArray(data) ? [] : data.clans || [];
@@ -103,6 +114,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         }
       })
       .catch((err: unknown) => {
+        if (cancelled) return;
         setIsSearching(false);
         const error = err as Error & { cause?: string };
         if (error.cause === 'Too Many Requests') {
@@ -111,6 +123,9 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
           setError('Search failed.');
         }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery]);
 
   return (
