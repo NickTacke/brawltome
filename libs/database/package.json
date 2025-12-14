@@ -2,6 +2,28 @@
   "name": "@brawltome/database",
   "version": "0.0.1",
   "private": true,
+  "nx": {
+    "targets": {
+      "db-generate": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm prisma generate --schema libs/database/prisma/schema.prisma"
+        }
+      },
+      "db-migrate": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm prisma migrate deploy --schema libs/database/prisma/schema.prisma"
+        }
+      },
+      "db-validate": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm prisma validate --schema libs/database/prisma/schema.prisma"
+        }
+      }
+    }
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -17,9 +39,8 @@
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.1.0",
-    "@prisma/client": "^7.1.0",
-    "dotenv": "^17.2.3",
-    "pg": "^8.16.3",
+    "@nestjs/common": "^11.0.0",
+    "prisma": "^7.1.0",
     "tslib": "^2.3.0"
   }
 }
