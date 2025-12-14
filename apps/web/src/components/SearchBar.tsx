@@ -175,18 +175,20 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                     className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      {p.bestLegendName && p.bestLegendNameKey && (
-                        <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                      <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                        {p.bestLegendNameKey ? (
                           <AvatarImage
                             src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
-                            alt={p.bestLegendName}
+                            alt={p.bestLegendName || p.bestLegendNameKey}
                             className="object-cover object-top"
                           />
-                          <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
-                            {p.bestLegendName.substring(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
+                        ) : null}
+                        <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
+                          {(p.bestLegendName || fixEncoding(p.name) || '?')
+                            .substring(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <div className="font-bold text-card-foreground">
                           {fixEncoding(p.name)}
