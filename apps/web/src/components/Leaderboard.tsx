@@ -438,9 +438,12 @@ export function Leaderboard() {
             className="h-8 w-16 text-center font-mono"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                const val = parseInt(e.currentTarget.value);
+                const val = parseInt(e.currentTarget.value.trim(), 10);
                 if (!isNaN(val) && val >= 1 && val <= totalPages) {
                   setPage(val);
+                } else {
+                  setPage(1);
+                  e.currentTarget.value = '1';
                 }
               }
             }}
