@@ -216,7 +216,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             </Avatar>
           )}
           <div className="min-w-0">
-            <h1 className="text-3xl sm:text-5xl font-black text-foreground tracking-tight truncate">
+            <h1 className="text-3xl sm:text-5xl sm:h-14 font-black text-foreground tracking-tight truncate">
               {fixEncoding(player.name)}
             </h1>
             <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
