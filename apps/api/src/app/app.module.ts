@@ -17,7 +17,7 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env']
+      envFilePath: ['.env'],
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],

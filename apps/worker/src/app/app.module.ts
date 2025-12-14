@@ -31,5 +31,4 @@ import { RedisModule } from '../redis/redis.module';
     JanitorModule,
   ],
 })
-
 export class AppModule {}

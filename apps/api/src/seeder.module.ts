@@ -7,11 +7,10 @@ import { BhApiClientModule } from '@brawltome/bhapi-client';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env']
+      envFilePath: ['.env'],
     }),
     DatabaseModule,
     BhApiClientModule,
   ],
 })
 export class SeederModule {}
-

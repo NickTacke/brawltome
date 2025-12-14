@@ -6,41 +6,43 @@ import { Card } from '@brawltome/ui';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-    params: { id: string };
+  params: { id: string };
 }
 
 export default async function Page({ params }: PageProps) {
-    const { id } = await params;
-    
-    let initialData;
-    try {
-        initialData = await fetcher(`/clan/${id}`);
-    } catch (err: unknown) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const error = err as any;
-        if (error.cause === 'Too Many Requests') {
-             return (
-                <main className="min-h-screen bg-background py-10 flex items-center justify-center">
-                    <Card className="p-8 text-center max-w-md">
-                        <h1 className="text-2xl font-bold mb-4 text-destructive">Server Busy</h1>
-                        <p className="text-muted-foreground mb-4">
-                            We are experiencing high traffic and cannot fetch clan data at this time.
-                            Please try again later.
-                        </p>
-                    </Card>
-                </main>
-            );
-        }
-        throw err;
-    }
+  const { id } = await params;
 
-    if(!initialData) {
-        notFound();
-    }
-
-    return (
-        <main className="min-h-screen bg-background py-6">
-            <ClanProfile initialData={initialData} id={id} />
+  let initialData;
+  try {
+    initialData = await fetcher(`/clan/${id}`);
+  } catch (err: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const error = err as any;
+    if (error.cause === 'Too Many Requests') {
+      return (
+        <main className="min-h-screen bg-background py-10 flex items-center justify-center">
+          <Card className="p-8 text-center max-w-md">
+            <h1 className="text-2xl font-bold mb-4 text-destructive">
+              Server Busy
+            </h1>
+            <p className="text-muted-foreground mb-4">
+              We are experiencing high traffic and cannot fetch clan data at
+              this time. Please try again later.
+            </p>
+          </Card>
         </main>
-    );
+      );
+    }
+    throw err;
+  }
+
+  if (!initialData) {
+    notFound();
+  }
+
+  return (
+    <main className="min-h-screen bg-background py-6">
+      <ClanProfile initialData={initialData} id={id} />
+    </main>
+  );
 }

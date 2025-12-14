@@ -29,14 +29,14 @@ export default function RootLayout({
         >
           <div className="bg-background text-foreground min-h-screen">
             {IS_MAINTENANCE ? (
-               <main className="min-h-screen flex flex-col items-center justify-center p-4 relative">
-                 <div className="absolute top-4 right-4 z-[100]">
-                   <ModeToggle />
-                 </div>
-                 <ComingSoon />
-               </main>
+              <main className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+                <div className="absolute top-4 right-4 z-[100]">
+                  <ModeToggle />
+                </div>
+                <ComingSoon />
+              </main>
             ) : (
-                children
+              children
             )}
           </div>
         </ThemeProvider>
