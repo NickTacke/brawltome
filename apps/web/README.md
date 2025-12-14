@@ -11,7 +11,7 @@ The frontend application for Brawltome, built with [Next.js](https://nextjs.org/
 
 ## Environment Variables
 
-Create a `.env.local` file in this directory:
+Copy `apps/web/.env.example` to `apps/web/.env.local` and set:
 
 ```env
 NEXT_PUBLIC_API_URL="http://localhost:3000/api"
@@ -20,6 +20,5 @@ NEXT_PUBLIC_API_URL="http://localhost:3000/api"
 ## Running the Web App
 
 ```bash
-npx nx serve web
+pnpm dev:web
 ```
-

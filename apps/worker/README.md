@@ -7,7 +7,7 @@ Background worker for BrawlTome. Runs:
 
 ## Environment Variables
 
-Create a `.env` file in this directory with at least:
+Copy `apps/worker/.env.example` to `apps/worker/.env` and fill in required values:
 
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/brawltome?schema=public"
@@ -18,7 +18,5 @@ REDIS_URL="redis://localhost:6379"
 ## Running the Worker
 
 ```bash
-pnpm exec nx serve worker
+pnpm dev:worker
 ```
-
-
