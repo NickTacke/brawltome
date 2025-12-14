@@ -5,7 +5,7 @@ import { AppModule } from './app/app.module';
 async function bootstrap() {
   // Worker does not expose HTTP; it runs cron + BullMQ processors.
   await NestFactory.createApplicationContext(AppModule);
-  Logger.log('👷 Worker application context started');
+  Logger.log('Worker application context started');
 }
 
 void bootstrap();
