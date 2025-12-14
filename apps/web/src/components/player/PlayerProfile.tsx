@@ -100,14 +100,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const handleToggleLegends = () => {
     if (showAllLegends) {
-      legendsRef.current?.scrollIntoView({ behavior: 'instant' });
+      legendsRef.current?.scrollIntoView({ behavior: 'auto' });
     }
     setShowAllLegends(!showAllLegends);
   };
 
   const handleToggleWeapons = () => {
     if (showAllWeapons) {
-      weaponsRef.current?.scrollIntoView({ behavior: 'instant' });
+      weaponsRef.current?.scrollIntoView({ behavior: 'auto' });
     }
     setShowAllWeapons(!showAllWeapons);
   };
