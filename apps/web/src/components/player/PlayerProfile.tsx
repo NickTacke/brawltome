@@ -153,6 +153,17 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const displayedWeapons = showAllWeapons
     ? weaponStats
     : weaponStats.slice(0, 3);
+
+  const teamsTotals = rankedTeams.reduce(
+    (acc, team) => {
+      acc.games += parseNum(team?.games);
+      acc.wins += parseNum(team?.wins);
+      return acc;
+    },
+    { games: 0, wins: 0 }
+  );
+  const teamsWinrate =
+    teamsTotals.games > 0 ? (teamsTotals.wins / teamsTotals.games) * 100 : 0;
   const aliases: string[] = (player?.aliases || [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((a: any) => a?.value)
@@ -740,7 +751,47 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       {/* Teams */}
       {rankedTeams && rankedTeams.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-2xl font-bold text-foreground">2v2 Teams</h2>
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <h2 className="text-2xl font-bold text-foreground">2v2 Teams</h2>
+            <span className="text-sm text-muted-foreground font-mono">
+              Teams: {rankedTeams.length}
+            </span>
+          </div>
+
+          <Card className="bg-gradient-to-br from-card to-background border-border">
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
+                    Total Games
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
+                    {teamsTotals.games.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
+                    Total Wins
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
+                    {teamsTotals.wins.toLocaleString()}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-end">
+                    <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
+                      Overall Win Rate
+                    </div>
+                    <div className="text-xl sm:text-2xl font-black text-foreground">
+                      {teamsWinrate.toFixed(1)}%
+                    </div>
+                  </div>
+                  <WinLossBar percent={teamsWinrate} className="h-3" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {rankedTeams.map((team: any) => {
