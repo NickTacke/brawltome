@@ -31,7 +31,15 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
     this.redisUrl = this.config.getOrThrow<string>('REDIS_URL');
     const apiKey = this.config.getOrThrow<string>('BRAWLHALLA_API_KEY');
 
-    this.redis = new Redis(this.redisUrl);
+    try {
+      this.redis = new Redis(this.redisUrl);
+      this.initLimiter();
+    } catch (reconnectError) {
+      this.logger.error('Error initializing Redis client', reconnectError);
+      void this.recoverLimiter();
+    } finally {
+      this.isRecoveringLimiter = false;
+    }
 
     // Initialize HTTP client
     this.http = axios.create({
@@ -39,9 +47,6 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
       params: { api_key: apiKey },
       timeout: 10000, // 10s timeout
     });
-
-    // Initialize rate limiter
-    this.initLimiter();
   }
 
   private async recoverLimiter() {
@@ -85,7 +90,7 @@ export class BhApiClientService implements OnModuleInit, OnModuleDestroy {
     if (this.limiter) {
       try {
         // Best effort disconnect
-        this.limiter.disconnect();
+        void this.limiter.disconnect().catch(() => undefined);
       } catch (e) {
         this.logger.warn('Error disconnecting old limiter', e);
       }
