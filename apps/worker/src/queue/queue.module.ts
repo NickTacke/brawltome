@@ -24,5 +24,4 @@ import { RefreshProcessor } from './refresh.processor';
   providers: [RefreshProcessor],
   exports: [BullModule],
 })
-
 export class QueueModule {}
