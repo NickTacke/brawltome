@@ -22,6 +22,11 @@ import {
   AvatarFallback,
   Input,
   Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@brawltome/ui';
 import {
   ChevronLeft,
@@ -50,8 +55,21 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'default' | 'rating' | 'peakRating'>(
+    'default'
+  );
 
   const isLoading = !clan;
+
+  const formatJoinedDate = (value: string | Date) => {
+    const d = new Date(value);
+    // Non-ambiguous, human-readable (avoids MM/DD/YYYY confusion)
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(d);
+  };
 
   const getRankIcon = (rank: string) => {
     switch (rank.toLowerCase()) {
@@ -83,23 +101,51 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
     }
   };
 
-  const sortedMembers =
-    clan?.members
-
-      ?.filter(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (m: any) =>
-          !searchTerm ||
-          m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          m.brawlhallaId.toString().includes(searchTerm)
-      )
+  const filteredMembers =
+    clan?.members?.filter(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ?.sort((a: any, b: any) => {
-        const rankDiff = getRankValue(b.rank) - getRankValue(a.rank);
-        if (rankDiff !== 0) return rankDiff;
-        // Secondary sort by join date (oldest first)
-        return new Date(a.joinDate).getTime() - new Date(b.joinDate).getTime();
-      }) || [];
+      (m: any) =>
+        !searchTerm ||
+        m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.brawlhallaId.toString().includes(searchTerm)
+    ) || [];
+
+  // Sort AFTER filtering, BEFORE pagination
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sortedMembers = [...filteredMembers].sort((a: any, b: any) => {
+    if (sortBy === 'rating' || sortBy === 'peakRating') {
+      const aElo = typeof a.elo === 'number' && a.elo > 0 ? a.elo : null;
+      const bElo = typeof b.elo === 'number' && b.elo > 0 ? b.elo : null;
+      const aPeak =
+        typeof a.peakElo === 'number' && a.peakElo > 0 ? a.peakElo : null;
+      const bPeak =
+        typeof b.peakElo === 'number' && b.peakElo > 0 ? b.peakElo : null;
+
+      const aVal = sortBy === 'peakRating' ? aPeak : aElo;
+      const bVal = sortBy === 'peakRating' ? bPeak : bElo;
+
+      // Unknown Elo always last, regardless of direction
+      if (aVal === null && bVal !== null) return 1;
+      if (aVal !== null && bVal === null) return -1;
+
+      // Descending (leaderboard-style)
+      if (aVal !== null && bVal !== null && aVal !== bVal) {
+        return bVal - aVal;
+      }
+      // Tie-breakers for deterministic ordering
+      const rankDiff = getRankValue(b.rank) - getRankValue(a.rank);
+      if (rankDiff !== 0) return rankDiff;
+      const joinDiff =
+        new Date(a.joinDate).getTime() - new Date(b.joinDate).getTime();
+      if (joinDiff !== 0) return joinDiff;
+      return String(a.name).localeCompare(String(b.name));
+    }
+
+    // Default sort: Rank (desc) then join date (oldest first)
+    const rankDiff = getRankValue(b.rank) - getRankValue(a.rank);
+    if (rankDiff !== 0) return rankDiff;
+    return new Date(a.joinDate).getTime() - new Date(b.joinDate).getTime();
+  });
 
   const totalPages = Math.ceil(sortedMembers.length / PAGE_SIZE);
   const paginatedMembers = sortedMembers.slice(
@@ -230,17 +276,47 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
           <CardTitle className="flex items-center gap-2">
             <span className="text-yellow-500">🏆</span> Clan Members
           </CardTitle>
-          <div className="relative w-64">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search members..."
-              className="pl-8 h-9"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1); // Reset to page 1 on search
-              }}
-            />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground font-bold uppercase">
+                Sort:
+              </span>
+              <Select
+                value={sortBy}
+                onValueChange={(v) => {
+                  setSortBy(v as typeof sortBy);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[140px] font-bold h-9">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default" className="cursor-pointer">
+                    Clan Rank
+                  </SelectItem>
+                  <SelectItem value="rating" className="cursor-pointer">
+                    Elo
+                  </SelectItem>
+                  <SelectItem value="peakRating" className="cursor-pointer">
+                    Peak Elo
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="relative w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search members..."
+                className="pl-8 h-9"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(1); // Reset to page 1 on search
+                }}
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -252,9 +328,21 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                 </TableHead>
                 <TableHead className="font-bold">Player</TableHead>
                 <TableHead className="text-right font-bold">
-                  Contribution
+                  <span className="inline-flex items-center gap-1">
+                    Elo
+                    {sortBy === 'rating' && (
+                      <span className="text-xs text-muted-foreground">↓</span>
+                    )}
+                    {sortBy === 'peakRating' && (
+                      <span className="text-xs text-muted-foreground">
+                        (Peak) ↓
+                      </span>
+                    )}
+                  </span>
                 </TableHead>
-                <TableHead className="text-right font-bold">XP</TableHead>
+                <TableHead className="text-right font-bold">
+                  XP / Contribution
+                </TableHead>
                 <TableHead className="text-right font-bold hidden sm:table-cell">
                   Joined
                 </TableHead>
@@ -274,11 +362,11 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                       <TableCell className="p-4">
                         <Skeleton className="h-6 w-32" />
                       </TableCell>
-                      <TableCell className="p-4 flex justify-end">
-                        <Skeleton className="h-6 w-12" />
-                      </TableCell>
                       <TableCell className="p-4">
                         <Skeleton className="h-6 w-16 ml-auto" />
+                      </TableCell>
+                      <TableCell className="p-4">
+                        <Skeleton className="h-6 w-24 ml-auto" />
                       </TableCell>
                       <TableCell className="p-4 hidden sm:table-cell">
                         <Skeleton className="h-6 w-24 ml-auto" />
@@ -289,6 +377,14 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                   paginatedMembers.map((member: any) => {
                     const totalClanXp = parseInt(clan.clanXp) || 1;
                     const contribution = (member.xp / totalClanXp) * 100;
+                    const elo =
+                      typeof member.elo === 'number' && member.elo > 0
+                        ? member.elo
+                        : null;
+                    const peakElo =
+                      typeof member.peakElo === 'number' && member.peakElo > 0
+                        ? member.peakElo
+                        : null;
 
                     return (
                       <TableRow
@@ -325,14 +421,32 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">
-                          {contribution.toFixed(1)}%
+                        <TableCell className="text-right font-mono">
+                          {elo === null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex flex-col items-end leading-tight">
+                              <span className="font-bold">{elo}</span>
+                              {peakElo !== null && (
+                                <span className="text-xs text-muted-foreground">
+                                  Peak {peakElo}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
-                        <TableCell className="text-right font-mono font-bold">
-                          {member.xp.toLocaleString()}
+                        <TableCell className="text-right font-mono">
+                          <div className="flex flex-col items-end leading-tight">
+                            <span className="font-bold">
+                              {member.xp.toLocaleString()}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {contribution.toFixed(1)}%
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground text-sm hidden sm:table-cell">
-                          {new Date(member.joinDate).toLocaleDateString()}
+                          {formatJoinedDate(member.joinDate)}
                         </TableCell>
                       </TableRow>
                     );
