@@ -113,6 +113,19 @@ export class SearchService implements OnModuleInit {
           games: true,
           wins: true,
           bestLegend: true,
+          stats: {
+            select: {
+              legends: {
+                orderBy: { xp: 'desc' },
+                take: 1,
+                select: {
+                  legendId: true,
+                  legendNameKey: true,
+                  xp: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.clan.findMany({
@@ -160,13 +173,31 @@ export class SearchService implements OnModuleInit {
       .slice(0, 8);
 
     // Enrich with Legend Names
-    const enrichedPlayers = filteredPlayers.map((p) => ({
-      ...p,
-      bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
-      bestLegendNameKey: p.bestLegend
-        ? this.legendIdToKeyCache.get(p.bestLegend)
-        : null,
-    }));
+    const enrichedPlayers = filteredPlayers.map((p) => {
+      const rankedBestLegendId =
+        typeof p.bestLegend === 'number' && p.bestLegend > 0 ? p.bestLegend : 0;
+      const statsBestLegend = p.stats?.legends?.[0] ?? null;
+      const fallbackLegendId = statsBestLegend?.legendId ?? 0;
+
+      const legendIdForAvatar = rankedBestLegendId || fallbackLegendId || 0;
+      const legendNameKeyForAvatar =
+        rankedBestLegendId && rankedBestLegendId > 0
+          ? this.legendIdToKeyCache.get(rankedBestLegendId) ?? null
+          : statsBestLegend?.legendNameKey ?? null;
+      const legendNameForAvatar =
+        legendIdForAvatar && legendIdForAvatar > 0
+          ? this.legendCache.get(legendIdForAvatar) ?? null
+          : null;
+
+      // Don't leak nested stats payload to the search endpoint response
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { stats, ...rest } = p;
+      return {
+        ...rest,
+        bestLegendName: legendNameForAvatar,
+        bestLegendNameKey: legendNameKeyForAvatar,
+      };
+    });
 
     return {
       players: enrichedPlayers,
@@ -200,6 +231,19 @@ export class SearchService implements OnModuleInit {
         games: true,
         wins: true,
         bestLegend: true,
+        stats: {
+          select: {
+            legends: {
+              orderBy: { xp: 'desc' },
+              take: 1,
+              select: {
+                legendId: true,
+                legendNameKey: true,
+                xp: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -208,15 +252,33 @@ export class SearchService implements OnModuleInit {
       await this.refreshQueue.add('refresh-ranked', { id });
       await this.refreshQueue.add('refresh-stats', { id });
 
+      const rankedBestLegendId =
+        typeof player.bestLegend === 'number' && player.bestLegend > 0
+          ? player.bestLegend
+          : 0;
+      const statsBestLegend = player.stats?.legends?.[0] ?? null;
+      const fallbackLegendId = statsBestLegend?.legendId ?? 0;
+
+      const legendIdForAvatar = rankedBestLegendId || fallbackLegendId || 0;
+      const legendNameKeyForAvatar =
+        rankedBestLegendId && rankedBestLegendId > 0
+          ? this.legendIdToKeyCache.get(rankedBestLegendId) ?? null
+          : statsBestLegend?.legendNameKey ?? null;
+      const legendNameForAvatar =
+        legendIdForAvatar && legendIdForAvatar > 0
+          ? this.legendCache.get(legendIdForAvatar) ?? null
+          : null;
+
       return [
         {
-          ...player,
-          bestLegendName: player.bestLegend
-            ? this.legendCache.get(player.bestLegend)
-            : null,
-          bestLegendNameKey: player.bestLegend
-            ? this.legendIdToKeyCache.get(player.bestLegend)
-            : null,
+          // Don't leak nested stats payload to the search endpoint response
+          ...(() => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { stats, ...rest } = player;
+            return rest;
+          })(),
+          bestLegendName: legendNameForAvatar,
+          bestLegendNameKey: legendNameKeyForAvatar,
         },
       ];
     }
@@ -240,11 +302,13 @@ export class SearchService implements OnModuleInit {
       let name = '';
       let region = 'UNKNOWN';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let statsData: any = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let rankedData: any = {};
 
       try {
-        const statsData = await this.bhApiClient.getPlayerStats(id);
-        name = statsData.name || '';
+        statsData = await this.bhApiClient.getPlayerStats(id);
+        name = statsData?.name || '';
       } catch (e) {
         // Stats might fail for various reasons (404 etc), but it's our primary source for "existence"
         this.logger.warn(`Failed to fetch stats for ${id}: ${e}`);
@@ -341,8 +405,29 @@ export class SearchService implements OnModuleInit {
           games: rankedData.games || 0,
           wins: rankedData.wins || 0,
           bestLegend: null,
-          bestLegendName: null,
-          bestLegendNameKey: null,
+          bestLegendName: (() => {
+            const legends = (statsData?.legends || [])
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .filter((l: any) => (l?.legend_id ?? 0) !== 0);
+            if (legends.length === 0) return null;
+
+            const best = legends.sort(
+              (a: any, b: any) => (b?.xp ?? 0) - (a?.xp ?? 0)
+            )[0];
+            const legendId = best?.legend_id ?? 0;
+            return legendId ? this.legendCache.get(legendId) ?? null : null;
+          })(),
+          bestLegendNameKey: (() => {
+            const legends = (statsData?.legends || [])
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .filter((l: any) => (l?.legend_id ?? 0) !== 0);
+            if (legends.length === 0) return null;
+
+            const best = legends.sort(
+              (a: any, b: any) => (b?.xp ?? 0) - (a?.xp ?? 0)
+            )[0];
+            return best?.legend_name_key ?? null;
+          })(),
         },
       ];
     } catch (error) {
