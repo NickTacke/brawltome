@@ -60,6 +60,24 @@ export class ClanService {
       ])
     );
 
+    // Fallback legend avatar: if member.legendNameKey is missing (no ranked 1v1 legend),
+    // use the highest-XP stats legend (if available).
+    const missingLegendKeyIds = clan.members
+      .filter((m) => !m.legendNameKey)
+      .map((m) => m.brawlhallaId);
+    const statsBestLegends =
+      missingLegendKeyIds.length > 0
+        ? await this.prisma.playerStatsLegend.findMany({
+            where: { brawlhallaId: { in: missingLegendKeyIds } },
+            orderBy: { xp: 'desc' },
+            distinct: ['brawlhallaId'],
+            select: { brawlhallaId: true, legendNameKey: true },
+          })
+        : [];
+    const statsLegendKeyById = new Map(
+      statsBestLegends.map((l) => [l.brawlhallaId, l.legendNameKey])
+    );
+
     return {
       ...clan,
       members: clan.members.map((m) => {
@@ -68,6 +86,8 @@ export class ClanService {
           ...m,
           elo: ranked?.elo ?? null,
           peakElo: ranked?.peakElo ?? null,
+          legendNameKey:
+            m.legendNameKey ?? statsLegendKeyById.get(m.brawlhallaId) ?? null,
         };
       }),
     };
@@ -111,6 +131,24 @@ export class ClanService {
         const legendNameKey = legendKeyMap.get(bl.legendId);
         if (legendNameKey) {
           playerLegendMap.set(bl.brawlhallaId, legendNameKey);
+        }
+      }
+
+      // Fallback: highest-XP stats legend for members without a ranked-1v1 legend
+      const missingRankedIds = memberIds.filter(
+        (pid) => !playerLegendMap.has(pid)
+      );
+      if (missingRankedIds.length > 0) {
+        const statsFallback = await this.prisma.playerStatsLegend.findMany({
+          where: { brawlhallaId: { in: missingRankedIds } },
+          orderBy: { xp: 'desc' },
+          distinct: ['brawlhallaId'],
+          select: { brawlhallaId: true, legendNameKey: true },
+        });
+        for (const row of statsFallback) {
+          if (row.legendNameKey) {
+            playerLegendMap.set(row.brawlhallaId, row.legendNameKey);
+          }
         }
       }
 
