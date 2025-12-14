@@ -126,6 +126,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const rankedTeamsSource = (player.ranked?.teams || []) as any[];
 
   const rankedTeams = [...rankedTeamsSource].sort(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (a: any, b: any) => b.rating - a.rating
   );
 
