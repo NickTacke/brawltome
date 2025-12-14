@@ -4,8 +4,27 @@
   "private": true,
   "nx": {
     "targets": {
+      "build": {
+        "dependsOn": [
+          "db-generate",
+          "^build"
+        ],
+        "executor": "nx:run-commands",
+        "cache": true,
+        "outputs": [
+          "{projectRoot}/dist"
+        ],
+        "options": {
+          "cwd": "libs/database",
+          "command": "tsc --build tsconfig.lib.json"
+        }
+      },
       "db-generate": {
         "executor": "nx:run-commands",
+        "cache": true,
+        "outputs": [
+          "{projectRoot}/src/generated/prisma"
+        ],
         "options": {
           "command": "pnpm prisma generate --schema libs/database/prisma/schema.prisma"
         }
@@ -39,7 +58,9 @@
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.1.0",
+    "@prisma/client": "^7.1.0",
     "@nestjs/common": "^11.0.0",
+    "prisma": "^7.1.0",
     "tslib": "^2.3.0"
   }
 }
