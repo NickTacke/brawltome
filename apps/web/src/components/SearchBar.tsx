@@ -159,7 +159,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                     className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      {p.bestLegendName && (
+                      {p.bestLegendName && p.bestLegendNameKey && (
                         <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                           <AvatarImage
                             src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
