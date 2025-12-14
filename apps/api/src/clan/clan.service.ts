@@ -40,7 +40,37 @@ export class ClanService {
       }
     }
 
-    return clan;
+    if (!clan?.members?.length) return clan;
+
+    // Enrich clan members with overall 1v1 Elo (Player.rating) and peak rating.
+    // Some members may not exist in the Player table yet; those will return null.
+    const memberIds = clan.members.map((m) => m.brawlhallaId);
+    const players = await this.prisma.player.findMany({
+      where: { brawlhallaId: { in: memberIds } },
+      select: { brawlhallaId: true, rating: true, peakRating: true },
+    });
+
+    const ratingById = new Map(
+      players.map((p) => [
+        p.brawlhallaId,
+        {
+          elo: p.rating && p.rating > 0 ? p.rating : null,
+          peakElo: p.peakRating && p.peakRating > 0 ? p.peakRating : null,
+        },
+      ])
+    );
+
+    return {
+      ...clan,
+      members: clan.members.map((m) => {
+        const ranked = ratingById.get(m.brawlhallaId);
+        return {
+          ...m,
+          elo: ranked?.elo ?? null,
+          peakElo: ranked?.peakElo ?? null,
+        };
+      }),
+    };
   }
 
   private async fetchAndSaveClan(id: number) {
