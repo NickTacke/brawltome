@@ -154,6 +154,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
               <>
                 {playerResults.map((p) => (
                   <button
+                    type="button"
                     key={`p-${p.brawlhallaId}`}
                     onClick={() => router.push(`/player/${p.brawlhallaId}`)}
                     className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
@@ -194,6 +195,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                 {clanResults.length > 0 && (
                   <>
                     <button
+                      type="button"
                       onClick={() => setShowClans(!showClans)}
                       className="w-full p-2 bg-muted/50 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors border-t border-border flex items-center justify-center gap-2"
                     >
@@ -207,6 +209,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                     {showClans &&
                       clanResults.map((c) => (
                         <button
+                          type="button"
                           key={`c-${c.clanId}`}
                           onClick={() => router.push(`/clan/${c.clanId}`)}
                           className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
