@@ -729,9 +729,10 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           <h2 className="text-2xl font-bold text-foreground">2v2 Teams</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {rankedTeams.map((team: any, i: number) => {
+            {rankedTeams.map((team: any) => {
+              const idNumber = parseInt(id, 10);
               const teammateId =
-                team.brawlhallaIdOne === parseInt(id)
+                team.brawlhallaIdOne === idNumber
                   ? team.brawlhallaIdTwo
                   : team.brawlhallaIdOne;
               const bannerUrl = getRankBanner(team.tier);
@@ -748,10 +749,11 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
               return (
                 <div
-                  key={i}
+                  key={`${team.brawlhallaIdOne}-${team.brawlhallaIdTwo}`}
                   onClick={() => router.push(`/player/${teammateId}`)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
                       router.push(`/player/${teammateId}`);
                     }
                   }}
