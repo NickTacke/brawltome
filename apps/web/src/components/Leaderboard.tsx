@@ -247,6 +247,14 @@ export function Leaderboard() {
                   return (
                     <TableRow
                       key={p.brawlhallaId}
+                      role="link"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          router.push(`/player/${p.brawlhallaId}`);
+                        }
+                      }}
                       onClick={() => router.push(`/player/${p.brawlhallaId}`)}
                       className="border-border cursor-pointer transition-colors group h-16"
                     >
