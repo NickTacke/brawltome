@@ -35,6 +35,13 @@
           "cwd": "apps/api"
         }
       },
+      "seed-team-aliases": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "pnpm dlx tsx --tsconfig tsconfig.app.json src/seed-team-aliases.ts",
+          "cwd": "apps/api"
+        }
+      },
       "prune-lockfile": {
         "dependsOn": [
           "build"
