@@ -43,8 +43,8 @@ const RANK_BANNERS: Record<string, string> = {
   Valhallan: '/images/banners/Valhallan.png',
 };
 
-const getRankBanner = (tier: string) => {
-  const baseTier = tier.split(' ')[0];
+const getRankBanner = (tier?: string | null) => {
+  const baseTier = (tier ?? '').split(' ')[0];
   return RANK_BANNERS[baseTier] || '/images/banners/Unranked.png';
 };
 
@@ -124,7 +124,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rankedTeamsSource = (player.ranked?.teams || []) as any[];
-   
+
   const rankedTeams = [...rankedTeamsSource].sort(
     (a: any, b: any) => b.rating - a.rating
   );
