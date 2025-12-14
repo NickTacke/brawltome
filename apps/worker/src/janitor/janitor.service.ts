@@ -199,9 +199,9 @@ export class JanitorService {
         this.current1v1Page = 1;
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Failed to refresh 1v1 rankings page ${this.current1v1Page}`,
-        error
+        `Failed to refresh 1v1 rankings page ${this.current1v1Page}: ${msg}`
       );
     }
   }
@@ -263,9 +263,9 @@ export class JanitorService {
         this.current2v2Page = 1;
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Failed to refresh 2v2 rankings page ${this.current2v2Page}`,
-        error
+        `Failed to refresh 2v2 rankings page ${this.current2v2Page}: ${msg}`
       );
     }
   }
@@ -300,8 +300,18 @@ export class JanitorService {
                 removeOnFail: true,
               }
             )
-            .catch(() => {
-              // Ignore duplicate job errors
+            .catch((e) => {
+              // Ignore duplicate job errors; log everything else
+              const msg = e instanceof Error ? e.message : String(e);
+              if (
+                !msg.toLowerCase().includes('job') ||
+                !msg.toLowerCase().includes('exists')
+              ) {
+                this.logger.warn(
+                  `Failed to queue stats refresh for ${p.brawlhallaId}`,
+                  e
+                );
+              }
             });
         }
         if (!p.ranked) {
