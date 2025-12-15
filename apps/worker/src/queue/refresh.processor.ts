@@ -79,11 +79,11 @@ export class RefreshProcessor extends WorkerHost {
         job.name === 'refresh-ranked'
       ) {
         this.logger.warn(
-          `Delaying ranked refresh for ${id} (Tokens: ${remainingTokens})`
+          `Delaying ${job.name} for ${id} (Tokens: ${remainingTokens})`
         );
         await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
         throw new DelayedError(
-          'Rate-limited: insufficient tokens for ranked refresh'
+          `Rate-limited: insufficient tokens for ${job.name}`
         );
       }
 

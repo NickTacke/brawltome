@@ -102,15 +102,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         setIsSearching(false);
 
         if (players.length === 0 && clans.length === 0) {
-          // Check if it looks like an ID (all digits)
-          if (/^\d+$/.test(debouncedQuery)) {
-            // The backend handles ID search automatically in "local" endpoint
-            // If it returned 0 results, it means the ID wasn't found even after API lookup
-            setError('ID not found.');
-          } else {
-            // It's a name search, and we only search locally
-            setError('No results found.');
-          }
+          setError('No results found.');
         }
       })
       .catch((err: unknown) => {
@@ -128,6 +120,17 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     };
   }, [debouncedQuery]);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const isIdLike = /^\d{5,}$/.test(query);
+      if (isIdLike) {
+        router.push(`/player/${query}`);
+        if (onBlur) onBlur();
+        setQuery('');
+      }
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative w-full max-w-lg mx-auto z-50">
       <div className="relative">
@@ -135,6 +138,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
           type="text"
           value={query}
           onFocus={onFocus}
+          onKeyDown={handleKeyDown}
           // onBlur removed to prevent conflict with click-outside logic
           onChange={(e) => {
             setQuery(e.target.value);
