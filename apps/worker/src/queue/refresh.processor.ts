@@ -16,6 +16,7 @@ import {
 } from '@brawltome/shared-utils';
 
 const RATE_LIMIT_DELAY_MS = 1000 * 60 * 5; // 5 minutes
+const WORKED_RESET_DELAY_MS = 1000 * 60 * 15; // 15 minutes
 
 @Processor('refresh-queue')
 export class RefreshProcessor extends WorkerHost {
@@ -63,6 +64,24 @@ export class RefreshProcessor extends WorkerHost {
       this.logger.debug(`Remaining tokens: ${remainingTokens}`);
 
       // Halt refreshing stats if we're on a low budget (more priority on ranked)
+      const isCritical = remainingTokens <= 1;
+      if (isCritical) {
+        this.logger.warn(
+          `Tokens depleted (${remainingTokens}). Pausing worker for ${WORKED_RESET_DELAY_MS}ms.`
+        );
+        if (!this.worker.isPaused()) {
+          await this.worker.pause();
+          setTimeout(() => {
+            this.logger.log('Resuming worker after rate limit delay');
+            this.worker.resume();
+          }, WORKED_RESET_DELAY_MS);
+        }
+        await job.moveToDelayed(Date.now() + WORKED_RESET_DELAY_MS, job.token);
+        throw new DelayedError(
+          'Rate-limited: insufficient tokens (worker paused)'
+        );
+      }
+
       if (
         remainingTokens < REFRESH_STATS_MIN_TOKENS &&
         job.name === 'refresh-stats'
