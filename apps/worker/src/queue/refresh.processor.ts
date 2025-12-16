@@ -1,31 +1,62 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { DelayedError, Job } from 'bullmq';
+import { Job, UnrecoverableError } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
+
 import {
   PlayerRankedLegendDTO,
   PlayerRankedTeamDTO,
   PlayerStatsLegendDTO,
 } from '@brawltome/shared-types';
-import {
-  createWeaponAggregator,
-  parseDamage,
-  REFRESH_RANKED_MIN_TOKENS,
-  REFRESH_STATS_MIN_TOKENS,
-} from '@brawltome/shared-utils';
+import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
 
-const RATE_LIMIT_DELAY_MS = 1000 * 60 * 5; // 5 minutes
-const WORKED_RESET_DELAY_MS = 1000 * 60 * 15; // 15 minutes
-
-@Processor('refresh-queue')
+@Processor('refresh-queue', {
+  concurrency: 10,
+})
 export class RefreshProcessor extends WorkerHost {
   private readonly logger = new Logger(RefreshProcessor.name);
+
+  // Cache logic
   private legendWeaponsCache = new Map<
     number,
     { weaponOne: string; weaponTwo: string }
   >();
-  private legendWeaponsCacheUpdatedAt = 0;
+
+  private async getLegendWeaponsMap(): Promise<
+    Map<number, { weaponOne: string; weaponTwo: string }>
+  > {
+    // Return cache if the data was already loaded
+    if (this.legendWeaponsCache.size > 0) return this.legendWeaponsCache;
+
+    // Fetch legends from database
+    const legends = await this.prisma.legend.findMany({
+      select: { legendId: true, weaponOne: true, weaponTwo: true },
+    });
+
+    // Update cache
+    this.legendWeaponsCache = new Map(
+      legends.map((l) => [
+        l.legendId,
+        {
+          // Convert Fists and Pistol to Gauntlets and Blasters for database consistency
+          weaponOne:
+            l.weaponOne === 'Fists'
+              ? 'Gauntlets'
+              : l.weaponOne === 'Pistol'
+              ? 'Blasters'
+              : l.weaponOne,
+          weaponTwo:
+            l.weaponTwo === 'Fists'
+              ? 'Gauntlets'
+              : l.weaponTwo === 'Pistol'
+              ? 'Blasters'
+              : l.weaponTwo,
+        },
+      ])
+    );
+    return this.legendWeaponsCache;
+  }
 
   constructor(
     private bhApiClient: BhApiClientService,
@@ -34,352 +65,277 @@ export class RefreshProcessor extends WorkerHost {
     super();
   }
 
-  private async getLegendWeaponsMap(): Promise<
-    Map<number, { weaponOne: string; weaponTwo: string }>
-  > {
-    const ONE_HOUR_MS = 1000 * 60 * 60;
-    const isFresh =
-      this.legendWeaponsCache.size > 0 &&
-      Date.now() - this.legendWeaponsCacheUpdatedAt < ONE_HOUR_MS;
-    if (isFresh) return this.legendWeaponsCache;
-
-    const legends = await this.prisma.legend.findMany({
-      select: { legendId: true, weaponOne: true, weaponTwo: true },
-    });
-    this.legendWeaponsCache = new Map(
-      legends.map((l) => [
-        l.legendId,
-        { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo },
-      ])
-    );
-    this.legendWeaponsCacheUpdatedAt = Date.now();
-    return this.legendWeaponsCache;
-  }
-
   async process(job: Job<{ id: number }>) {
-    this.logger.debug(`Job started name=${job.name} id=${job.data.id}`);
+    const { id } = job.data;
+
     try {
-      const { id } = job.data;
-      const remainingTokens = await this.bhApiClient.getRemainingTokens();
-      this.logger.debug(`Remaining tokens: ${remainingTokens}`);
-
-      // Halt refreshing stats if we're on a low budget (more priority on ranked)
-      const isCritical = remainingTokens <= 1;
-      if (isCritical) {
-        this.logger.warn(
-          `Tokens depleted (${remainingTokens}). Pausing worker for ${WORKED_RESET_DELAY_MS}ms.`
-        );
-        if (!this.worker.isPaused()) {
-          await this.worker.pause();
-          setTimeout(() => {
-            this.logger.log('Resuming worker after rate limit delay');
-            this.worker.resume();
-          }, WORKED_RESET_DELAY_MS);
-        }
-        await job.moveToDelayed(Date.now() + WORKED_RESET_DELAY_MS, job.token);
-        throw new DelayedError(
-          'Rate-limited: insufficient tokens (worker paused)'
-        );
-      }
-
-      if (
-        remainingTokens < REFRESH_STATS_MIN_TOKENS &&
-        job.name === 'refresh-stats'
-      ) {
-        this.logger.warn(
-          `Delaying stats refresh for ${id} (Tokens: ${remainingTokens})`
-        );
-        await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
-        throw new DelayedError(
-          'Rate-limited: insufficient tokens for stats refresh'
-        );
-      } else if (
-        remainingTokens < REFRESH_RANKED_MIN_TOKENS &&
-        job.name === 'refresh-ranked'
-      ) {
-        this.logger.warn(
-          `Delaying ${job.name} for ${id} (Tokens: ${remainingTokens})`
-        );
-        await job.moveToDelayed(Date.now() + RATE_LIMIT_DELAY_MS, job.token);
-        throw new DelayedError(
-          `Rate-limited: insufficient tokens for ${job.name}`
-        );
-      }
-
-      if (job.name === 'refresh-ranked') {
-        const data = await this.bhApiClient.getPlayerRanked(id);
-
-        // Ranked upsert
-        await this.prisma.$transaction(async (tx) => {
-          const existing = await tx.player.findUnique({
-            where: { brawlhallaId: id },
-            select: {
-              name: true,
-              brawlhallaId: true,
-              tier: true,
-              lastUpdated: true,
-            },
-          });
-
-          // Only update name if it's not empty/whitespace
-          const newName = data.name;
-          const shouldUpdateName = newName && newName.trim().length > 0;
-
-          const aliasUpdate =
-            shouldUpdateName &&
-            existing &&
-            existing.name &&
-            existing.name !== newName
-              ? {
-                  aliases: {
-                    upsert: {
-                      where: {
-                        brawlhallaId_key: {
-                          brawlhallaId: id,
-                          key: existing.name.toLowerCase(),
-                        },
-                      },
-                      create: {
-                        key: existing.name.toLowerCase(),
-                        value: existing.name,
-                      },
-                      update: {},
-                    },
-                  },
-                }
-              : {};
-
-          // Tier logic:
-          // - We do NOT want refresh-ranked to downgrade Valhallan -> Diamond (tier accuracy should come from janitor rankings).
-          // - Exception: if the player hasn't been leaderboard-updated in > 24h (likely not on leaderboard / season reset), allow the downgrade.
-          const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-          const existingTier = existing?.tier ?? null;
-          const lastLeaderboardUpdate = existing?.lastUpdated ?? null;
-          const leaderboardStale =
-            !lastLeaderboardUpdate ||
-            Date.now() - lastLeaderboardUpdate.getTime() > ONE_DAY_MS;
-
-          const nextTier =
-            existingTier === 'Valhallan' &&
-            data.tier === 'Diamond' &&
-            !leaderboardStale
-              ? 'Valhallan'
-              : data.tier;
-
-          await tx.player.update({
-            where: { brawlhallaId: id },
-            data: {
-              ...(shouldUpdateName ? { name: newName } : {}),
-              rating: data.rating,
-              peakRating: data.peak_rating,
-              tier: nextTier,
-              games: data.games,
-              wins: data.wins,
-              ...aliasUpdate,
-            },
-          });
-
-          await tx.playerRanked.upsert({
-            where: { brawlhallaId: id },
-            update: {
-              globalRank: data.global_rank,
-              regionRank: data.region_rank,
-              lastUpdated: new Date(),
-              legends: {
-                deleteMany: {},
-                create: this.mapLegends(data.legends),
-              },
-              teams: {
-                deleteMany: {},
-                create: this.mapTeams(data['2v2']),
-              },
-            },
-            create: {
-              brawlhallaId: id,
-              globalRank: data.global_rank,
-              regionRank: data.region_rank,
-              lastUpdated: new Date(),
-              legends: {
-                create: this.mapLegends(data.legends),
-              },
-              teams: {
-                create: this.mapTeams(data['2v2']),
-              },
-            },
-          });
-        });
-      } else if (job.name === 'refresh-stats') {
-        const data = await this.bhApiClient.getPlayerStats(id);
-        const legendIdToWeapons = await this.getLegendWeaponsMap();
-
-        await this.prisma.$transaction(async (tx) => {
-          const statsLegends: PlayerStatsLegendDTO[] = (
-            data.legends || []
-          ).filter((l: PlayerStatsLegendDTO) => l.legend_id !== 0);
-          const matchTimeTotal = statsLegends.reduce(
-            (sum: number, l: PlayerStatsLegendDTO) => sum + (l.matchtime || 0),
-            0
-          );
-
-          const weaponAgg = createWeaponAggregator();
-
-          for (const l of statsLegends) {
-            const weapons = legendIdToWeapons.get(l.legend_id);
-            if (!weapons) continue;
-
-            weaponAgg.add(
-              weapons.weaponOne,
-              l.timeheldweaponone || 0,
-              parseDamage(l.damageweaponone),
-              l.koweaponone || 0
-            );
-            weaponAgg.add(
-              weapons.weaponTwo,
-              l.timeheldweapontwo || 0,
-              parseDamage(l.damageweapontwo),
-              l.koweapontwo || 0
-            );
-          }
-
-          const weaponStatsRows = Array.from(weaponAgg.values())
-            .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
-            .map((w) => ({
-              weapon: w.weapon,
-              timeHeld: w.timeHeld,
-              damage: String(w.damage),
-              KOs: w.KOs,
-            }));
-
-          // Update main player name if Stats has a better name and current is empty/missing
-          // Or simply trust Stats name if we want to be robust
-          if (data.name && data.name.trim().length > 0) {
-            const existing = await tx.player.findUnique({
-              where: { brawlhallaId: id },
-              select: { name: true },
-            });
-
-            // If current name is empty or missing, update it
-            // Or if we want to enforce stats name as primary
-            if (
-              existing &&
-              (!existing.name || existing.name.trim().length === 0)
-            ) {
-              await tx.player.update({
-                where: { brawlhallaId: id },
-                data: { name: data.name },
-              });
-            }
-          }
-
-          // If clan data is missing, ensure we clean up any existing clan record
-          if (!data.clan) {
-            await tx.playerClan.deleteMany({
-              where: { brawlhallaId: id },
-            });
-          }
-
-          await tx.playerStats.upsert({
-            where: { brawlhallaId: id },
-            update: {
-              xp: data.xp,
-              level: data.level,
-              xpPercentage: data.xp_percentage,
-              games: data.games,
-              wins: data.wins,
-              matchTimeTotal,
-              damageBomb: data.damagebomb,
-              damageMine: data.damagemine,
-              damageSpikeball: data.damagespikeball,
-              damageSidekick: data.damagesidekick,
-              hitSnowball: data.hitsnowball,
-              koBomb: data.kobomb,
-              koMine: data.komine,
-              koSpikeball: data.kospikeball,
-              koSidekick: data.kosidekick,
-              koSnowball: data.kosnowball,
-              legends: {
-                deleteMany: {},
-                create: this.mapStatsLegends(data.legends),
-              },
-              weaponStats: {
-                deleteMany: {},
-                create: weaponStatsRows,
-              },
-              clan: data.clan
-                ? {
-                    upsert: {
-                      update: {
-                        clanName: data.clan.clan_name,
-                        clanId: data.clan.clan_id,
-                        clanXp: data.clan.clan_xp,
-                        clanLifetimeXp: data.clan.clan_lifetime_xp,
-                        personalXp: data.clan.personal_xp,
-                      },
-                      create: {
-                        clanName: data.clan.clan_name,
-                        clanId: data.clan.clan_id,
-                        clanXp: data.clan.clan_xp,
-                        clanLifetimeXp: data.clan.clan_lifetime_xp,
-                        personalXp: data.clan.personal_xp,
-                      },
-                    },
-                  }
-                : undefined,
-              lastUpdated: new Date(),
-            },
-            create: {
-              brawlhallaId: id,
-              xp: data.xp,
-              level: data.level,
-              xpPercentage: data.xp_percentage,
-              games: data.games,
-              wins: data.wins,
-              matchTimeTotal,
-              damageBomb: data.damagebomb,
-              damageMine: data.damagemine,
-              damageSpikeball: data.damagespikeball,
-              damageSidekick: data.damagesidekick,
-              hitSnowball: data.hitsnowball,
-              koBomb: data.kobomb,
-              koMine: data.komine,
-              koSpikeball: data.kospikeball,
-              koSidekick: data.kosidekick,
-              koSnowball: data.kosnowball,
-              legends: {
-                create: this.mapStatsLegends(data.legends),
-              },
-              weaponStats: {
-                create: weaponStatsRows,
-              },
-              clan: data.clan
-                ? {
-                    create: {
-                      clanName: data.clan.clan_name,
-                      clanId: data.clan.clan_id,
-                      clanXp: data.clan.clan_xp,
-                      clanLifetimeXp: data.clan.clan_lifetime_xp,
-                      personalXp: data.clan.personal_xp,
-                    },
-                  }
-                : undefined,
-              lastUpdated: new Date(),
-            },
-          });
-        });
-      } else {
-        this.logger.warn(`Unknown job name: ${job.name} for ${id}`);
-        throw new Error(`Unknown job name: ${job.name}`);
+      switch (job.name) {
+        case 'refresh-ranked':
+          await this.processRefreshRanked(id);
+          break;
+        case 'refresh-stats':
+          await this.processRefreshStats(id);
+          break;
+        default:
+          throw new UnrecoverableError(`Unknown job name: ${job.name}`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const stack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(
-        `Failed to process job ${job.name} for ${job.data.id}: ${message}`,
-        stack
-      );
+      this.logger.error(`Failed to process job ${job.name} for ${id}:`, error);
       throw error;
     }
   }
+
+  // -- Private Methods --
+
+  private async processRefreshRanked(id: number) {
+    const data = await this.bhApiClient.getPlayerRanked(id);
+
+    // Ranked upsert
+    await this.prisma.$transaction(async (tx) => {
+      // Check if the player already exists
+      const existing = await tx.player.findUnique({
+        where: { brawlhallaId: id },
+        select: {
+          name: true,
+          brawlhallaId: true,
+          tier: true,
+          lastUpdated: true,
+        },
+      });
+
+      // Check if the player name should be updated
+      const newName = data.name;
+      const shouldUpdateName = newName && newName.trim().length > 0;
+      const aliasUpdate =
+        shouldUpdateName &&
+        existing &&
+        existing.name &&
+        existing.name !== newName
+          ? {
+              aliases: {
+                upsert: {
+                  where: {
+                    brawlhallaId_key: {
+                      brawlhallaId: existing.brawlhallaId,
+                      key: existing.name.toLowerCase(),
+                    },
+                  },
+                  create: {
+                    key: existing.name.toLowerCase(),
+                    value: existing.name,
+                  },
+                  update: {},
+                },
+              },
+            }
+          : {};
+
+      // TODO: Tier override logic (Valhallan downgrade prevention)
+      // Need some sort of "seen on leaderboard" timestamp to prevent downgrade
+
+      // Update the Player table
+      await tx.player.update({
+        where: { brawlhallaId: id },
+        data: {
+          ...(shouldUpdateName ? { name: newName } : {}),
+          rating: data.rating,
+          peakRating: data.peak_rating,
+          tier: data.tier,
+          games: data.games,
+          wins: data.wins,
+          ...aliasUpdate,
+        },
+      });
+
+      // Upsert the PlayerRanked table
+      await tx.playerRanked.upsert({
+        where: { brawlhallaId: id },
+        update: {
+          legends: {
+            deleteMany: {},
+            create: this.mapLegends(data.legends),
+          },
+          teams: {
+            deleteMany: {},
+            create: this.mapTeams(data['2v2']),
+          },
+          lastUpdated: new Date(),
+        },
+        create: {
+          brawlhallaId: id,
+          legends: {
+            create: this.mapLegends(data.legends),
+          },
+          teams: {
+            create: this.mapTeams(data['2v2']),
+          },
+          lastUpdated: new Date(),
+        },
+      });
+    });
+  }
+
+  private async processRefreshStats(id: number) {
+    const data = await this.bhApiClient.getPlayerStats(id);
+    const legendIdToWeapons = await this.getLegendWeaponsMap();
+
+    // Stats upsert
+    await this.prisma.$transaction(async (tx) => {
+      const statsLegends: PlayerStatsLegendDTO[] = data.legends || [];
+      const totalPlaytime = statsLegends.reduce(
+        (sum, l) => sum + (l.matchtime || 0),
+        0
+      );
+
+      // Weapon aggregation derived from per-legend stats
+      const weaponAgg = createWeaponAggregator();
+
+      // For each legend, look up weapons and add to aggregator
+      for (const l of statsLegends) {
+        const weapons = legendIdToWeapons.get(l.legend_id);
+        if (!weapons) continue;
+
+        weaponAgg.add(
+          weapons.weaponOne,
+          l.timeheldweaponone || 0,
+          parseDamage(l.damageweaponone),
+          l.koweaponone || 0
+        );
+        weaponAgg.add(
+          weapons.weaponTwo,
+          l.timeheldweapontwo || 0,
+          parseDamage(l.damageweapontwo),
+          l.koweapontwo || 0
+        );
+      }
+
+      // Filter out zero-valued rows and map to database rows
+      const weaponStatsRows = Array.from(weaponAgg.values())
+        .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
+        .map((w) => ({
+          brawlhallaId: id,
+          weapon: w.weapon,
+          timeHeld: w.timeHeld,
+          damage: String(w.damage),
+          KOs: w.KOs,
+        }));
+
+      // Check if player name is better than existing name
+      // Fixes name for players that haven't played ranked 1v1 yet
+      if (data.name && data.name.trim().length > 0) {
+        const existing = await tx.player.findUnique({
+          where: { brawlhallaId: id },
+          select: { name: true },
+        });
+        // If current name is empty or missing, update it
+        if (existing && (!existing.name || existing.name.trim().length === 0)) {
+          await tx.player.update({
+            where: { brawlhallaId: id },
+            data: { name: data.name },
+          });
+        }
+      }
+
+      // If clan data is missing, clean up existing clan records
+      if (!data.clan) {
+        await tx.playerClan.deleteMany({
+          where: { brawlhallaId: id },
+        });
+      }
+
+      // Upsert player stats
+      await tx.playerStats.upsert({
+        where: { brawlhallaId: id },
+        update: {
+          xp: data.xp,
+          level: data.level,
+          xpPercentage: data.xp_percentage,
+          games: data.games,
+          wins: data.wins,
+          matchTimeTotal: totalPlaytime,
+          damageBomb: data.damagebomb,
+          damageMine: data.damagemine,
+          damageSpikeball: data.damagespikeball,
+          damageSidekick: data.damagesidekick,
+          hitSnowball: data.hitsnowball,
+          koBomb: data.kobomb,
+          koMine: data.komine,
+          koSpikeball: data.kospikeball,
+          koSidekick: data.kosidekick,
+          koSnowball: data.kosnowball,
+          legends: {
+            deleteMany: {},
+            create: this.mapStatsLegends(statsLegends),
+          },
+          weaponStats: {
+            deleteMany: {},
+            create: weaponStatsRows,
+          },
+          clan: data.clan
+            ? {
+                upsert: {
+                  where: { brawlhallaId: id },
+                  update: {
+                    clanName: data.clan.clan_name,
+                    clanId: data.clan.clan_id,
+                    clanXp: data.clan.clan_xp,
+                    clanLifetimeXp: data.clan.clan_lifetime_xp,
+                    personalXp: data.clan.personal_xp,
+                  },
+                  create: {
+                    clanName: data.clan.clan_name,
+                    clanId: data.clan.clan_id,
+                    clanXp: data.clan.clan_xp,
+                    clanLifetimeXp: data.clan.clan_lifetime_xp,
+                    personalXp: data.clan.personal_xp,
+                  },
+                },
+              }
+            : undefined,
+          lastUpdated: new Date(),
+        },
+        create: {
+          brawlhallaId: id,
+          xp: data.xp,
+          level: data.level,
+          xpPercentage: data.xp_percentage,
+          games: data.games,
+          wins: data.wins,
+          matchTimeTotal: totalPlaytime,
+          damageBomb: data.damagebomb,
+          damageMine: data.damagemine,
+          damageSpikeball: data.damagespikeball,
+          damageSidekick: data.damagesidekick,
+          hitSnowball: data.hitsnowball,
+          koBomb: data.kobomb,
+          koMine: data.komine,
+          koSpikeball: data.kospikeball,
+          koSidekick: data.kosidekick,
+          koSnowball: data.kosnowball,
+          legends: {
+            create: this.mapStatsLegends(statsLegends),
+          },
+          weaponStats: {
+            create: weaponStatsRows,
+          },
+          clan: data.clan
+            ? {
+                create: {
+                  clanName: data.clan.clan_name,
+                  clanId: data.clan.clan_id,
+                  clanXp: data.clan.clan_xp,
+                  clanLifetimeXp: data.clan.clan_lifetime_xp,
+                  personalXp: data.clan.personal_xp,
+                },
+              }
+            : undefined,
+          lastUpdated: new Date(),
+        },
+      });
+    });
+  }
+
+  // -- Helper Methods --
 
   private mapLegends(legends: PlayerRankedLegendDTO[]) {
     if (!legends) return [];
