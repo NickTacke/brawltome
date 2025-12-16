@@ -179,47 +179,48 @@ export class RefreshProcessor extends WorkerHost {
     const data = await this.bhApiClient.getPlayerStats(id);
     const legendIdToWeapons = await this.getLegendWeaponsMap();
 
+    // Prepare all data in memory first
+    const statsLegends: PlayerStatsLegendDTO[] = data.legends || [];
+    const totalPlaytime = statsLegends.reduce(
+      (sum, l) => sum + (l.matchtime || 0),
+      0
+    );
+
+    // Weapon aggregation derived from per-legend stats
+    const weaponAgg = createWeaponAggregator();
+
+    // For each legend, look up weapons and add to aggregator
+    for (const l of statsLegends) {
+      const weapons = legendIdToWeapons.get(l.legend_id);
+      if (!weapons) continue;
+
+      weaponAgg.add(
+        weapons.weaponOne,
+        l.timeheldweaponone || 0,
+        parseDamage(l.damageweaponone),
+        l.koweaponone || 0
+      );
+      weaponAgg.add(
+        weapons.weaponTwo,
+        l.timeheldweapontwo || 0,
+        parseDamage(l.damageweapontwo),
+        l.koweapontwo || 0
+      );
+    }
+
+    // Filter out zero-valued rows and map to database rows
+    const weaponStatsRows = Array.from(weaponAgg.values())
+      .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
+      .map((w) => ({
+        brawlhallaId: id,
+        weapon: w.weapon,
+        timeHeld: w.timeHeld,
+        damage: String(w.damage),
+        KOs: w.KOs,
+      }));
+
     // Stats upsert
     await this.prisma.$transaction(async (tx) => {
-      const statsLegends: PlayerStatsLegendDTO[] = data.legends || [];
-      const totalPlaytime = statsLegends.reduce(
-        (sum, l) => sum + (l.matchtime || 0),
-        0
-      );
-
-      // Weapon aggregation derived from per-legend stats
-      const weaponAgg = createWeaponAggregator();
-
-      // For each legend, look up weapons and add to aggregator
-      for (const l of statsLegends) {
-        const weapons = legendIdToWeapons.get(l.legend_id);
-        if (!weapons) continue;
-
-        weaponAgg.add(
-          weapons.weaponOne,
-          l.timeheldweaponone || 0,
-          parseDamage(l.damageweaponone),
-          l.koweaponone || 0
-        );
-        weaponAgg.add(
-          weapons.weaponTwo,
-          l.timeheldweapontwo || 0,
-          parseDamage(l.damageweapontwo),
-          l.koweapontwo || 0
-        );
-      }
-
-      // Filter out zero-valued rows and map to database rows
-      const weaponStatsRows = Array.from(weaponAgg.values())
-        .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
-        .map((w) => ({
-          brawlhallaId: id,
-          weapon: w.weapon,
-          timeHeld: w.timeHeld,
-          damage: String(w.damage),
-          KOs: w.KOs,
-        }));
-
       // Check if player name is better than existing name
       // Fixes name for players that haven't played ranked 1v1 yet
       if (data.name && data.name.trim().length > 0) {
