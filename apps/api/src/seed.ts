@@ -3,6 +3,7 @@ import { SeederModule } from './seeder.module';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
 import { Logger } from '@nestjs/common';
+import { RankingBracket, REGIONS } from '@brawltome/shared-types';
 
 async function bootstrap() {
   const logger = new Logger('Seeder');
@@ -11,8 +12,7 @@ async function bootstrap() {
   const bhApiClient = app.get(BhApiClientService);
   const prisma = app.get(PrismaService);
 
-  const REGIONS = ['us-e', 'us-w', 'eu', 'sea', 'aus', 'brz', 'jpn'];
-  const BRACKET = '1v1';
+  const BRACKET: RankingBracket = '1v1';
   const START_PAGE = parseInt(process.env.SEED_START_PAGE || '1', 10);
   const MAX_PAGES = parseInt(process.env.SEED_MAX_PAGES || '1000', 10);
 
@@ -36,7 +36,11 @@ async function bootstrap() {
         }
 
         // Fetch global rankings
-        const players = await bhApiClient.getRankings(BRACKET, region, page);
+        const players = await bhApiClient.getRankings<typeof BRACKET>(
+          BRACKET,
+          region,
+          page
+        );
 
         if (!players || players.length === 0) {
           logger.log(
