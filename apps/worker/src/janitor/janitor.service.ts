@@ -8,21 +8,9 @@ import { REDIS_CLIENT } from '../redis/redis.constants';
 import type Redis from 'ioredis';
 import { randomUUID } from 'crypto';
 import { JANITOR_IDLE_MIN_TOKENS } from '@brawltome/shared-utils';
+import { REGIONS } from '@brawltome/shared-types';
 
 const MAX_RANKINGS_PAGES = 200;
-
-const GLOBAL_REGION = 'all';
-const NON_GLOBAL_REGIONS = [
-  'us-e',
-  'us-w',
-  'eu',
-  'sea',
-  'aus',
-  'brz',
-  'jpn',
-  'me',
-  'sa',
-] as const;
 
 // Keep top pages “hot” (refreshed faster than deeper pages).
 const GLOBAL_HOT_MAX_PAGE = 20;
@@ -203,11 +191,10 @@ export class JanitorService {
     const page = (await this.getInt(pageKey)) ?? 1;
 
     const safeRegionIndex =
-      ((regionIndex % NON_GLOBAL_REGIONS.length) + NON_GLOBAL_REGIONS.length) %
-      NON_GLOBAL_REGIONS.length;
+      ((regionIndex % REGIONS.length) + REGIONS.length) % REGIONS.length;
     const safePage = Math.min(Math.max(page, 1), MAX_RANKINGS_PAGES);
 
-    const region = NON_GLOBAL_REGIONS[safeRegionIndex];
+    const region = REGIONS[safeRegionIndex];
 
     // Advance cursor
     const nextPage = safePage + 1;
@@ -229,8 +216,8 @@ export class JanitorService {
       this.getAndAdvanceCursor(CURSOR_GLOBAL_2V2_HOT, 1, GLOBAL_HOT_MAX_PAGE),
     ]);
 
-    await this.refresh1v1Rankings(GLOBAL_REGION, page1v1, 'global-hot');
-    await this.refresh2v2Rankings(GLOBAL_REGION, page2v2, 'global-hot');
+    await this.refresh1v1Rankings('all', page1v1, 'global-hot');
+    await this.refresh2v2Rankings('all', page2v2, 'global-hot');
   }
 
   private async refreshGlobalColdPages() {
@@ -249,8 +236,8 @@ export class JanitorService {
       ),
     ]);
 
-    await this.refresh1v1Rankings(GLOBAL_REGION, page1v1, 'global-cold');
-    await this.refresh2v2Rankings(GLOBAL_REGION, page2v2, 'global-cold');
+    await this.refresh1v1Rankings('all', page1v1, 'global-cold');
+    await this.refresh2v2Rankings('all', page2v2, 'global-cold');
   }
 
   private async refreshRegionalPages() {
