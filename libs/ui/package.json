@@ -22,7 +22,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.556.0",
+    "lucide-react": "^0.561.0",
     "react": "^19.0.0",
     "tailwind-merge": "^3.4.0",
     "tslib": "^2.3.0",
