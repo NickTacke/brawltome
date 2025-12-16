@@ -3,7 +3,7 @@ import { SeederModule } from './seeder.module';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PrismaService } from '@brawltome/database';
 import { Logger } from '@nestjs/common';
-import { RankingBracket, Region, REGIONS } from '@brawltome/shared-types';
+import { RankingBracket, REGIONS } from '@brawltome/shared-types';
 
 async function bootstrap() {
   const logger = new Logger('Seeder');
