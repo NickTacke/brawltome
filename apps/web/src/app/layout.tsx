@@ -3,7 +3,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { ComingSoon } from '@/components/ComingSoon';
 import { ModeToggle } from '@/components/mode-toggle';
 
-const IS_MAINTENANCE = true;
+const IS_MAINTENANCE = false;
 
 export const metadata = {
   title: 'BrawlTome',
