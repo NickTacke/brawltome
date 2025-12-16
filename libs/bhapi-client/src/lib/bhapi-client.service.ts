@@ -3,10 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import {
   ClanDTO,
   LegendDTO,
-  PlayerDTO,
   PlayerRankedDTO,
   PlayerStatsDTO,
-  Ranked2v2TeamDTO,
+  RankingBracket,
+  RankingsResponseMap,
+  Region,
 } from '@brawltome/shared-types';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
@@ -98,55 +99,93 @@ export class BhApiClientService {
 
   // -- Public Methods --
 
+  /**
+   * Get the number of remaining tokens in the limiter.
+   * @returns Number of remaining tokens
+   */
   async getRemainingTokens(): Promise<number> {
     const reservoir = await this.limiter.currentReservoir();
     return reservoir || 0;
   }
 
+  /**
+   * Fetches the player stats for a given brawlhalla ID.
+   * @param brawlhallaId - Brawlhalla ID
+   * @returns General player statistics
+   */
   async getPlayerStats(brawlhallaId: number): Promise<PlayerStatsDTO> {
     return this.limiter.schedule(() =>
       this.performRequest(`/player/${brawlhallaId}/stats`)
     );
   }
 
+  /**
+   * Fetches the player ranked data for a given brawlhalla ID.
+   * @param brawlhallaId - Brawlhalla ID
+   * @returns Ranked player data
+   */
   async getPlayerRanked(brawlhallaId: number): Promise<PlayerRankedDTO> {
     return this.limiter.schedule(() =>
       this.performRequest(`/player/${brawlhallaId}/ranked`)
     );
   }
 
-  async getRankings(
-    bracket: '1v1' | '2v2' | 'rotational',
-    region: string,
+  /**
+   * Fetches the rankings for a given bracket, region, and page.
+   * @param bracket - Game mode (1v1, 2v2, rotational)
+   * @param region - Server region
+   * @param page - Pagination number
+   * @param name - (Optional) Filter by player name
+   * @returns Rankings for the given bracket, region, and page.
+   */
+  async getRankings<K extends RankingBracket>(
+    bracket: K,
+    region: Region,
     page: number,
     name: string | null = null
-  ): Promise<PlayerDTO[] | Ranked2v2TeamDTO[]> {
+  ): Promise<RankingsResponseMap[K]> {
     const params = name ? { name } : {};
     return this.limiter.schedule(() =>
       this.performRequest(`/rankings/${bracket}/${region}/${page}`, params)
     );
   }
 
-  async searchPlayer(name: string): Promise<PlayerDTO[]> {
-    return this.getRankings('1v1', 'all', 1, name) as Promise<PlayerDTO[]>;
-  }
-
+  /**
+   * Fetches static legend data.
+   * @returns All legends
+   */
   async getAllLegends(): Promise<LegendDTO[]> {
     return this.limiter.schedule(() => this.performRequest(`/legend/all`));
   }
 
+  /**
+   * Fetches static legend data for a given legend ID.
+   * @param legendId - Legend ID
+   * @returns Specific legend data
+   */
   async getLegend(legendId: number): Promise<LegendDTO> {
     return this.limiter.schedule(() =>
       this.performRequest(`/legend/${legendId}`)
     );
   }
 
+  /**
+   * Fetches clan data for a given clan ID.
+   * @param clanId - Clan ID
+   * @returns Overall clan data
+   */
   async getClan(clanId: number): Promise<ClanDTO> {
     return this.limiter.schedule(() => this.performRequest(`/clan/${clanId}`));
   }
 
   // -- Private Methods --
 
+  /**
+   * Performs an HTTP request to the Brawlhalla API.
+   * @param endpoint - API endpoint
+   * @param params - Query parameters
+   * @returns API response
+   */
   private async performRequest(
     endpoint: string,
     params: Record<string, unknown> = {}
