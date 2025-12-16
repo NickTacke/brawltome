@@ -171,7 +171,7 @@ export class JanitorService {
 
       const data = {
         name: p.name,
-        region: p.region,
+        region: p.region.toUpperCase(),
         rating: p.rating,
         peakRating: p.peak_rating,
         tier: p.tier,
@@ -220,6 +220,7 @@ export class JanitorService {
     const operations = teams.map((t) => {
       const idOne = Math.min(t.brawlhalla_id_one, t.brawlhalla_id_two);
       const idTwo = Math.max(t.brawlhalla_id_one, t.brawlhalla_id_two);
+      const actualRegion = t.region.toUpperCase();
 
       const data = {
         rank: t.rank,
@@ -235,13 +236,13 @@ export class JanitorService {
       return this.prisma.ranked2v2Team.upsert({
         where: {
           region_brawlhallaIdOne_brawlhallaIdTwo: {
-            region: region,
+            region: actualRegion,
             brawlhallaIdOne: idOne,
             brawlhallaIdTwo: idTwo,
           },
         },
         create: {
-          region: region,
+          region: actualRegion,
           brawlhallaIdOne: idOne,
           brawlhallaIdTwo: idTwo,
           ...data,
