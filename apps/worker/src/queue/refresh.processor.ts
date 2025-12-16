@@ -67,6 +67,7 @@ export class RefreshProcessor extends WorkerHost {
 
   async process(job: Job<{ id: number }>) {
     const { id } = job.data;
+    this.logger.log(`Processing ${job.name} for player ${id}`);
 
     try {
       switch (job.name) {
@@ -212,7 +213,6 @@ export class RefreshProcessor extends WorkerHost {
     const weaponStatsRows = Array.from(weaponAgg.values())
       .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
       .map((w) => ({
-        brawlhallaId: id,
         weapon: w.weapon,
         timeHeld: w.timeHeld,
         damage: String(w.damage),
