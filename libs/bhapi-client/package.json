@@ -24,5 +24,9 @@
     "ioredis": "^5.8.2",
     "tslib": "^2.3.0",
     "vitest": "^2.1.9"
+  },
+  "devDependencies": {
+    "@types/ioredis-mock": "^8.2.6",
+    "ioredis-mock": "^8.13.1"
   }
 }
