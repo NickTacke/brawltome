@@ -54,8 +54,9 @@ export class BhApiClientService {
       this.logger.warn('API quota depleted. Pausing...')
     );
 
-    this.limiter.on('failed', async (error) => {
+    this.limiter.on('failed', async (error, jobInfo) => {
       const status = error.response?.status ?? error.status;
+      const endpoint = error.config?.url;
 
       if (status === 429) {
         // Try to read retry-after header (not sure if brawlhalla includes this, will check)
@@ -85,7 +86,26 @@ export class BhApiClientService {
         return waitTime;
       }
 
-      // Do not retry
+      // Network errors (5xx) - retry once, then give up
+      if (
+        status >= 500 ||
+        error.code == 'ECONNRESET' ||
+        error.code == 'ETIMEDOUT'
+      ) {
+        if (jobInfo.retryCount < 1) {
+          this.logger.error(
+            `API Error [${status}] on ${endpoint}: ${
+              error.message
+            } - ${JSON.stringify(error.response?.data || {})}`
+          );
+          return 1000;
+        }
+      }
+
+      // Handle other errors
+      this.handleAxiosError(error, endpoint);
+
+      // Don't retry, return null
       return null;
     });
 
@@ -179,6 +199,27 @@ export class BhApiClientService {
   }
 
   // -- Private Methods --
+
+  /**
+   * Handles API error and logs it to railway logs.
+   * @param error - Axios error
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private handleAxiosError(error: any, endpoint: string) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      // Truncate data to 500 characters
+      let dataStr = JSON.stringify(error.response?.data || {});
+      if (dataStr.length > 500) {
+        dataStr = dataStr.substring(0, 500) + '...';
+      }
+      this.logger.error(
+        `API Error [${status}] on ${endpoint}: ${error.message} - ${dataStr}`
+      );
+    } else {
+      this.logger.error(`Unknown error on ${endpoint}: ${error.message}`);
+    }
+  }
 
   /**
    * Performs an HTTP request to the Brawlhalla API.
