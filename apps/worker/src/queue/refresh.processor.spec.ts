@@ -13,8 +13,6 @@ const mockRankedData = {
   tier: 'Gold 1',
   games: 100,
   wins: 50,
-  global_rank: 999,
-  region_rank: 50,
   legends: [],
   '2v2': [],
 };
