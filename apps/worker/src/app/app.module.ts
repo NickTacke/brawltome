@@ -6,8 +6,8 @@ import { DatabaseModule } from '@brawltome/database';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
 
 import { QueueModule } from '../queue/queue.module';
-import { JanitorModule } from '../janitor/janitor.module';
 import { RedisModule } from '../redis/redis.module';
+import { JanitorModule } from '../janitor/janitor.module';
 
 @Module({
   imports: [

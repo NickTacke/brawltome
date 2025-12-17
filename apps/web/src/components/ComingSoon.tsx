@@ -18,7 +18,7 @@ export function ComingSoon() {
       </div>
 
       <div className="space-y-4 max-w-md px-4">
-        <h1 className="text-5xl font-black text-foreground tracking-tight drop-shadow-sm">
+        <h1 className="text-5xl font-black text-foreground tracking-tight drop-shadow-xs">
           MAINTENANCE
         </h1>
 
