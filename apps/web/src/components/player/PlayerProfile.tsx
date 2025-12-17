@@ -361,16 +361,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                     </div>
                   </div>
                 )}
-                {player.ranked?.globalRank > 0 && (
-                  <div>
-                    <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
-                      Global Rank
-                    </div>
-                    <div className="text-xl sm:text-2xl text-foreground font-bold mt-1">
-                      #{player.ranked.globalRank}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </CardContent>
