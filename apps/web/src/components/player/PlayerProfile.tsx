@@ -204,7 +204,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
           {/* Best Legend Avatar (if available from stats) */}
           {allLegends.length > 0 && (
-            <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-card rounded-2xl flex-shrink-0">
+            <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-card rounded-2xl shrink-0">
               <AvatarImage
                 src={`/images/legends/avatars/${allLegends[0].legendNameKey}.png`}
                 alt={allLegends[0].legendNameKey}
@@ -289,7 +289,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Card: Ranked Performance */}
-        <Card className="bg-gradient-to-br from-card to-background border-border relative overflow-hidden">
+        <Card className="bg-linear-to-br from-card to-background border-border relative overflow-hidden">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -379,7 +379,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         </Card>
 
         {/* Card: Combat Record */}
-        <Card className="bg-gradient-to-br from-card to-background border-border">
+        <Card className="bg-linear-to-br from-card to-background border-border">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">
@@ -488,7 +488,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             </h2>
           </div>
 
-          <Card className="bg-gradient-to-br from-card to-background border-border">
+          <Card className="bg-linear-to-br from-card to-background border-border">
             <CardContent className="space-y-4 mt-3">
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {displayedWeapons.map((w: any) => {
@@ -506,7 +506,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                           {parseNum(w.damage).toLocaleString()} dmg
                         </div>
                       </div>
-                      <div className="text-sm font-mono text-muted-foreground flex-shrink-0">
+                      <div className="text-sm font-mono text-muted-foreground shrink-0">
                         {(share * 100).toFixed(0)}%
                       </div>
                     </div>
@@ -595,7 +595,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                         <h3 className="font-bold capitalize truncate">
                           {legend.bioName || legend.legendNameKey}
                         </h3>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-1 shrink-0">
                           <Badge
                             variant="secondary"
                             className="text-xs font-mono"
@@ -758,7 +758,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             </span>
           </div>
 
-          <Card className="bg-gradient-to-br from-card to-background border-border">
+          <Card className="bg-linear-to-br from-card to-background border-border">
             <CardContent className="pt-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
@@ -824,7 +824,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                   }}
                   role="button"
                   tabIndex={0}
-                  className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-[9rem] relative overflow-visible mt-4"
+                  className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-36 relative overflow-visible mt-4"
                 >
                   {/* Rank Banner on Left - Bleeding Out */}
                   <div className="absolute -top-0.5 left-2 sm:left-4 w-16 sm:w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
@@ -835,7 +835,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                   </div>
 
                   {/* Content Spacer for Banner */}
-                  <div className="w-20 sm:w-32 flex-shrink-0" />
+                  <div className="w-20 sm:w-32 shrink-0" />
 
                   {/* Content */}
                   <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between">
@@ -852,7 +852,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                       </div>
 
                       <div className="flex justify-start w-full sm:w-auto sm:block sm:text-right mt-2 sm:mt-0">
-                        <div className="text-left sm:text-right flex-shrink-0 flex items-baseline justify-start sm:justify-end gap-2 sm:block sm:gap-0">
+                        <div className="text-left sm:text-right shrink-0 flex items-baseline justify-start sm:justify-end gap-2 sm:block sm:gap-0">
                           <div className="text-xl sm:text-2xl font-black text-chart-3 leading-none whitespace-nowrap">
                             {team.rating}
                             <span className="text-xs sm:text-sm font-medium text-muted-foreground ml-1.5 align-baseline opacity-80">

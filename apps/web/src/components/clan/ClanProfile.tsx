@@ -271,7 +271,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       </div>
 
       {/* Members List */}
-      <Card className="bg-card/50 backdrop-blur-sm border-border">
+      <Card className="bg-card/50 backdrop-blur-xs border-border">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2">
             <span className="text-yellow-500">🏆</span> Clan Members
