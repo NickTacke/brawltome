@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from 'use-debounce';
 import { Shield } from 'lucide-react';
@@ -46,6 +47,16 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleResultNavigate = (e: React.MouseEvent) => {
+    // Let the browser handle new-tab / new-window gestures.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
+    if (onBlur) onBlur();
+    setQuery('');
+    setError(null);
+  };
 
   // Handle click outside to clear query
   useEffect(() => {
@@ -172,10 +183,10 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
             ) : (
               <>
                 {playerResults.map((p) => (
-                  <button
-                    type="button"
+                  <Link
                     key={`p-${p.brawlhallaId}`}
-                    onClick={() => router.push(`/player/${p.brawlhallaId}`)}
+                    href={`/player/${p.brawlhallaId}`}
+                    onClick={handleResultNavigate}
                     className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                   >
                     <div className="flex items-center gap-3">
@@ -210,7 +221,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                     <div className="text-sm font-mono text-primary">
                       {p.rating || '0'}
                     </div>
-                  </button>
+                  </Link>
                 ))}
 
                 {clanResults.length > 0 && (
@@ -229,10 +240,10 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
 
                     {showClans &&
                       clanResults.map((c) => (
-                        <button
-                          type="button"
+                        <Link
                           key={`c-${c.clanId}`}
-                          onClick={() => router.push(`/clan/${c.clanId}`)}
+                          href={`/clan/${c.clanId}`}
+                          onClick={handleResultNavigate}
                           className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
                         >
                           <div className="flex items-center gap-3">
@@ -252,7 +263,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             {c.xp ? parseInt(c.xp, 10).toLocaleString() : '0'}{' '}
                             XP
                           </div>
-                        </button>
+                        </Link>
                       ))}
                   </>
                 )}

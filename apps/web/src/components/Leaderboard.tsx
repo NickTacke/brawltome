@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
 import {
@@ -61,7 +61,6 @@ export function Leaderboard() {
   const [page, setPage] = useState(1);
   const [region, setRegion] = useState('all');
   const [sortBy, setSortBy] = useState('rating');
-  const router = useRouter();
 
   const basePath =
     bracket === '1v1'
@@ -243,88 +242,94 @@ export function Leaderboard() {
                 entries.map((p: any, i: number) => {
                   const globalRank = (page - 1) * PAGE_SIZE + i + 1;
                   const winrate = p.games > 0 ? (p.wins / p.games) * 100 : 0;
+                  const href = `/player/${p.brawlhallaId}`;
 
                   return (
                     <TableRow
                       key={p.brawlhallaId}
-                      role="link"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          router.push(`/player/${p.brawlhallaId}`);
-                        }
-                      }}
-                      onClick={() => router.push(`/player/${p.brawlhallaId}`)}
                       className="border-border cursor-pointer transition-colors group h-16"
                     >
                       <TableCell
-                        className={`text-center ${getRankStyle(globalRank)}`}
+                        className={`p-0 text-center ${getRankStyle(
+                          globalRank
+                        )}`}
                       >
-                        #{globalRank}
+                        <Link href={href} className="block w-full h-full p-4">
+                          #{globalRank}
+                        </Link>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {/* Best Legend Avatar */}
-                          {p.bestLegendName && (
-                            <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
-                              <AvatarImage
-                                src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
-                                alt={p.bestLegendName}
-                                className="object-cover object-top"
-                                loading="lazy"
-                              />
-                              <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
-                                {p.bestLegendName.substring(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-                          <div className="flex flex-col">
-                            <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
-                              {fixEncoding(p.name)}
-                            </span>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-muted-foreground font-mono">
-                                {p.region}
+                      <TableCell className="p-0">
+                        <Link href={href} className="block w-full h-full p-4">
+                          <div className="flex items-center gap-3">
+                            {/* Best Legend Avatar */}
+                            {p.bestLegendName && (
+                              <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                                <AvatarImage
+                                  src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
+                                  alt={p.bestLegendName}
+                                  className="object-cover object-top"
+                                  loading="lazy"
+                                />
+                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
+                                  {p.bestLegendName.substring(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className="flex flex-col">
+                              <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
+                                {fixEncoding(p.name)}
                               </span>
-                              <Badge
-                                variant="secondary"
-                                className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border"
-                              >
-                                {p.tier}
-                              </Badge>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  {p.region}
+                                </span>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border"
+                                >
+                                  {p.tier}
+                                </Badge>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="font-black text-foreground text-lg tracking-tight">
-                            {p.rating}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground uppercase font-bold">
-                            Peak: {p.peakRating || '---'}
-                          </span>
-                        </div>
+                      <TableCell className="p-0 text-center">
+                        <Link href={href} className="block w-full h-full p-4">
+                          <div className="flex flex-col items-center">
+                            <span className="font-black text-foreground text-lg tracking-tight">
+                              {p.rating}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold">
+                              Peak: {p.peakRating || '---'}
+                            </span>
+                          </div>
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <div
-                          className={`font-bold ${
-                            winrate >= 60
-                              ? 'text-green-500'
-                              : winrate >= 50
-                              ? 'text-primary'
-                              : 'text-muted-foreground'
-                          }`}
-                        >
-                          {winrate.toFixed(1)}%
-                        </div>
+                      <TableCell className="p-0 text-center">
+                        <Link href={href} className="block w-full h-full p-4">
+                          <div
+                            className={`font-bold ${
+                              winrate >= 60
+                                ? 'text-green-500'
+                                : winrate >= 50
+                                ? 'text-primary'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {winrate.toFixed(1)}%
+                          </div>
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
-                        {p.wins}
+                      <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
+                        <Link href={href} className="block w-full h-full p-4">
+                          {p.wins}
+                        </Link>
                       </TableCell>
-                      <TableCell className="text-center hidden sm:table-cell text-muted-foreground font-mono">
-                        {p.games}
+                      <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
+                        <Link href={href} className="block w-full h-full p-4">
+                          {p.games}
+                        </Link>
                       </TableCell>
                     </TableRow>
                   );
@@ -347,25 +352,19 @@ export function Leaderboard() {
                       <TableCell>
                         <div className="flex flex-col">
                           <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal wrap-break-word leading-tight">
-                            <span
-                              className="cursor-pointer hover:text-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/player/${t.brawlhallaIdOne}`);
-                              }}
+                            <Link
+                              href={`/player/${t.brawlhallaIdOne}`}
+                              className="hover:text-primary"
                             >
                               {fixEncoding(t.playerOneName || 'Unknown')}
-                            </span>
+                            </Link>
                             <span className="opacity-50"> + </span>
-                            <span
-                              className="cursor-pointer hover:text-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/player/${t.brawlhallaIdTwo}`);
-                              }}
+                            <Link
+                              href={`/player/${t.brawlhallaIdTwo}`}
+                              className="hover:text-primary"
                             >
                               {fixEncoding(t.playerTwoName || 'Unknown')}
-                            </span>
+                            </Link>
                           </div>
                           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground font-mono">
                             <span>{t.region}</span>
