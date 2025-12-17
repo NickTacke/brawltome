@@ -13,7 +13,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center p-4 relative">
-      <div className="absolute top-4 right-4 z-100 flex items-center gap-2">
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
         <Link
           href="https://discord.gg/ft5CJyjkkS"
           target="_blank"
