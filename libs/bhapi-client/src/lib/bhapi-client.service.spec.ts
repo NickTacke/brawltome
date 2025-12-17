@@ -165,7 +165,9 @@ describe('BhApiClientService (Rate Limiter Integration)', () => {
 
     // Throws 500, so expect a rejection
     await expect(service.getPlayerRanked(1234567890)).rejects.toThrow();
-    expect(mockGet).toHaveBeenCalledTimes(1);
+
+    // Call 1: Fails with 500 -> Retry once -> Call 2: Fails with 500 -> No retry
+    expect(mockGet).toHaveBeenCalledTimes(2);
   }, 10000);
 
   // Simulating strict server
