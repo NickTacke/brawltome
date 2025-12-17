@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
   Card,
@@ -52,7 +51,6 @@ interface ClanProfileProps {
 }
 
 export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
-  const router = useRouter();
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'peakRating'>(
@@ -377,6 +375,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                   paginatedMembers.map((member: any) => {
                     const totalClanXp = parseInt(clan.clanXp) || 1;
                     const contribution = (member.xp / totalClanXp) * 100;
+                    const href = `/player/${member.brawlhallaId}`;
                     const elo =
                       typeof member.elo === 'number' && member.elo > 0
                         ? member.elo
@@ -389,64 +388,71 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                     return (
                       <TableRow
                         key={member.brawlhallaId}
-                        className="cursor-pointer border-border hover:bg-muted/50 transition-colors h-16"
-                        onClick={() =>
-                          router.push(`/player/${member.brawlhallaId}`)
-                        }
+                        className="border-border hover:bg-muted/50 transition-colors h-16 group"
                       >
-                        <TableCell>
-                          <div className="flex items-center justify-center">
-                            {getRankIcon(member.rank)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
-                              <AvatarImage
-                                src={
-                                  member.legendNameKey
-                                    ? `/images/legends/avatars/${member.legendNameKey.toLowerCase()}.png`
-                                    : undefined
-                                }
-                                alt={member.legendNameKey || 'Legend'}
-                                className="object-cover object-top"
-                                loading="lazy"
-                              />
-                              <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
-                                {fixEncoding(member.name).substring(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
-                              {fixEncoding(member.name)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {elo === null ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            <div className="flex flex-col items-end leading-tight">
-                              <span className="font-bold">{elo}</span>
-                              {peakElo !== null && (
-                                <span className="text-xs text-muted-foreground">
-                                  Peak {peakElo}
-                                </span>
-                              )}
+                        <TableCell className="p-0">
+                          <Link href={href} className="block w-full h-full p-4">
+                            <div className="flex items-center justify-center">
+                              {getRankIcon(member.rank)}
                             </div>
-                          )}
+                          </Link>
                         </TableCell>
-                        <TableCell className="text-right font-mono">
-                          <div className="flex flex-col items-end leading-tight">
-                            <span className="font-bold">
-                              {member.xp.toLocaleString()}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {contribution.toFixed(1)}%
-                            </span>
-                          </div>
+                        <TableCell className="p-0">
+                          <Link href={href} className="block w-full h-full p-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                                <AvatarImage
+                                  src={
+                                    member.legendNameKey
+                                      ? `/images/legends/avatars/${member.legendNameKey.toLowerCase()}.png`
+                                      : undefined
+                                  }
+                                  alt={member.legendNameKey || 'Legend'}
+                                  className="object-cover object-top"
+                                  loading="lazy"
+                                />
+                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
+                                  {fixEncoding(member.name).substring(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
+                                {fixEncoding(member.name)}
+                              </span>
+                            </div>
+                          </Link>
                         </TableCell>
-                        <TableCell className="text-right text-muted-foreground text-sm hidden sm:table-cell">
-                          {formatJoinedDate(member.joinDate)}
+                        <TableCell className="p-0 text-right font-mono">
+                          <Link href={href} className="block w-full h-full p-4">
+                            {elo === null ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <div className="flex flex-col items-end leading-tight">
+                                <span className="font-bold">{elo}</span>
+                                {peakElo !== null && (
+                                  <span className="text-xs text-muted-foreground">
+                                    Peak {peakElo}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="p-0 text-right font-mono">
+                          <Link href={href} className="block w-full h-full p-4">
+                            <div className="flex flex-col items-end leading-tight">
+                              <span className="font-bold">
+                                {member.xp.toLocaleString()}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {contribution.toFixed(1)}%
+                              </span>
+                            </div>
+                          </Link>
+                        </TableCell>
+                        <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
+                          <Link href={href} className="block w-full h-full p-4">
+                            {formatJoinedDate(member.joinDate)}
+                          </Link>
                         </TableCell>
                       </TableRow>
                     );

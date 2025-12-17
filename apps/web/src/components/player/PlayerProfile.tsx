@@ -3,7 +3,6 @@
 import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { fetcher } from '@/lib/api';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
@@ -76,7 +75,6 @@ const WinLossBar = ({
 };
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
-  const router = useRouter();
   const [showAllLegends, setShowAllLegends] = useState(false);
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null);
   const [showAllWeapons, setShowAllWeapons] = useState(false);
@@ -800,6 +798,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 team.brawlhallaIdOne === idNumber
                   ? team.brawlhallaIdTwo
                   : team.brawlhallaIdOne;
+              const teammateHref = `/player/${teammateId}`;
               const bannerUrl = getRankBanner(team.tier);
 
               const teamNameParts = fixEncoding(team.teamName).split('+');
@@ -813,17 +812,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 fixEncoding(team.teamName);
 
               return (
-                <div
+                <Link
                   key={`${team.brawlhallaIdOne}-${team.brawlhallaIdTwo}`}
-                  onClick={() => router.push(`/player/${teammateId}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      router.push(`/player/${teammateId}`);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
+                  href={teammateHref}
                   className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-36 relative overflow-visible mt-4"
                 >
                   {/* Rank Banner on Left - Bleeding Out */}
@@ -899,7 +890,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                       </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
