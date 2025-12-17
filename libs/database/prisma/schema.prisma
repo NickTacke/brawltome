@@ -246,10 +246,6 @@ model PlayerRanked {
   brawlhallaId Int @id
   lastUpdated DateTime @default(now())
 
-  // Rank numbers
-  globalRank Int?
-  regionRank Int?
-  
   // Legends & Teams
   legends PlayerRankedLegend[]
   teams PlayerRankedTeam[]
