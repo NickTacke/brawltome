@@ -35,7 +35,7 @@ export class BhApiClientService {
       clearDatastore: false,
 
       // Traffic settings
-      minTime: 100,
+      minTime: 110,
       maxConcurrent: 5,
 
       // Economy settings
