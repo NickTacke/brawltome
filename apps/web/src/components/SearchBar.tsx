@@ -145,7 +145,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
             setError(null);
           }}
           placeholder="Search player or clan..."
-          className="w-full h-14 bg-background/50 text-foreground text-lg rounded-xl border-border focus-visible:ring-primary backdrop-blur-sm pr-12"
+          className="w-full h-14 bg-background/50 text-foreground text-lg rounded-xl border-border focus-visible:ring-primary backdrop-blur-xs pr-12"
         />
 
         {isSearching && (
