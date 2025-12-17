@@ -63,9 +63,7 @@ export class SearchService implements OnModuleInit {
         },
         // Pull more candidates, then filter by prefix rules in-memory.
         take: 50,
-        orderBy: {
-          rating: 'desc',
-        },
+        orderBy: [{ rating: 'desc' }, { viewCount: 'desc' }],
         select: {
           brawlhallaId: true,
           name: true,
