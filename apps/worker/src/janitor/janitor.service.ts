@@ -135,9 +135,17 @@ export class JanitorService {
 
       if (bracket === '1v1') {
         const data = await this.bhApiClient.getRankings('1v1', region, page);
+        if (!data || data.length === 0) {
+          await this.handleEmptyPage(bracket, scope);
+          return;
+        }
         await this.savePlayers(data, region);
       } else if (bracket === '2v2') {
         const data = await this.bhApiClient.getRankings('2v2', region, page);
+        if (!data || data.length === 0) {
+          await this.handleEmptyPage(bracket, scope);
+          return;
+        }
         await this.saveTeams(data, region);
       }
     } catch (error) {
@@ -145,6 +153,48 @@ export class JanitorService {
         `Error syncing ${bracket} ${scope} for region ${region} page ${page}:`,
         error instanceof Error ? error.message : String(error)
       );
+    }
+  }
+
+  /**
+   * Handles empty page by resetting cursor to beginning/next region.
+   */
+  private async handleEmptyPage(bracket: Bracket, scope: Scope) {
+    // Global hot (page 1-20): Reset to page 1
+    if (scope === 'global-hot') {
+      const key =
+        bracket === '1v1'
+          ? CONFIG.KEYS.CURSORS.GLOBAL_1V1_HOT
+          : CONFIG.KEYS.CURSORS.GLOBAL_2V2_HOT;
+      await this.redis.set(key, 1);
+    }
+
+    // Global cold (page 21-200): Reset to page 21
+    if (scope === 'global-cold') {
+      const key =
+        bracket === '1v1'
+          ? CONFIG.KEYS.CURSORS.GLOBAL_1V1_COLD
+          : CONFIG.KEYS.CURSORS.GLOBAL_2V2_COLD;
+      await this.redis.set(key, CONFIG.PAGES.COLD_START);
+    }
+
+    // Regional: Reset to page 1
+    if (scope === 'regional') {
+      const indexKey =
+        bracket === '1v1'
+          ? CONFIG.KEYS.CURSORS.REGIONAL_1V1_REGION_INDEX
+          : CONFIG.KEYS.CURSORS.REGIONAL_2V2_REGION_INDEX;
+      const pageKey =
+        bracket === '1v1'
+          ? CONFIG.KEYS.CURSORS.REGIONAL_1V1_PAGE
+          : CONFIG.KEYS.CURSORS.REGIONAL_2V2_PAGE;
+
+      // Reset page to 1
+      await this.redis.set(pageKey, 1);
+
+      // Increment index and wrap around
+      const index = Number(await this.redis.get(indexKey)) || 0;
+      await this.redis.set(indexKey, (index + 1) % FILTERED_REGIONS.length);
     }
   }
 
