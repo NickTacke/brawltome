@@ -35,7 +35,7 @@ export class BhApiClientService {
       clearDatastore: false,
 
       // Traffic settings
-      minTime: 110,
+      minTime: 150,
       maxConcurrent: 5,
 
       // Economy settings
@@ -190,13 +190,7 @@ export class BhApiClientService {
     endpoint: string,
     params: Record<string, unknown> = {}
   ) {
-    try {
-      const response = await this.http.get(endpoint, { params });
-      return response.data;
-    } catch (error) {
-      // Can keep track in Railway logs
-      this.logger.error('Request failed', error);
-      throw error;
-    }
+    const response = await this.http.get(endpoint, { params });
+    return response.data;
   }
 }

@@ -183,7 +183,7 @@ describe('BhApiClientService (Rate Limiter Integration)', () => {
 
       // Simulate server logic
       // If requests come faster than 50ms, throw 429
-      if (timeDiff < 100 && serverRequestCount > 1) {
+      if (timeDiff < 120 && serverRequestCount > 1) {
         // Simulate API "banning" us
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const error = new Error('Too Many Requests') as any;
