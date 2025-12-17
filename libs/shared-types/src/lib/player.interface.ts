@@ -27,8 +27,6 @@ export interface PlayerRankedDTO {
   wins: number;
   games: number;
   region: string;
-  global_rank: number;
-  region_rank: number;
   legends: PlayerRankedLegendDTO[];
   '2v2': PlayerRankedTeamDTO[];
 }
