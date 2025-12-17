@@ -110,7 +110,7 @@ export function Leaderboard() {
   };
 
   return (
-    <Card className="w-full max-w-5xl mx-auto mt-12 bg-card/50 backdrop-blur-sm border-border">
+    <Card className="w-full max-w-5xl mx-auto mt-12 bg-card/50 backdrop-blur-xs border-border">
       {/* Header */}
       <div className="p-6 border-b border-border flex flex-col sm:flex-row justify-between items-center gap-4">
         <h2 className="text-2xl font-bold text-card-foreground flex items-center gap-2">
@@ -346,7 +346,7 @@ export function Leaderboard() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal break-words leading-tight">
+                          <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal wrap-break-word leading-tight">
                             <span
                               className="cursor-pointer hover:text-primary"
                               onClick={(e) => {
