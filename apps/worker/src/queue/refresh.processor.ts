@@ -69,19 +69,15 @@ export class RefreshProcessor extends WorkerHost {
     const { id } = job.data;
     this.logger.log(`Processing ${job.name} for player ${id}`);
 
-    try {
-      switch (job.name) {
-        case 'refresh-ranked':
-          await this.processRefreshRanked(id);
-          break;
-        case 'refresh-stats':
-          await this.processRefreshStats(id);
-          break;
-        default:
-          throw new UnrecoverableError(`Unknown job name: ${job.name}`);
-      }
-    } catch {
-      // Do nothing, let the job fail
+    switch (job.name) {
+      case 'refresh-ranked':
+        await this.processRefreshRanked(id);
+        break;
+      case 'refresh-stats':
+        await this.processRefreshStats(id);
+        break;
+      default:
+        throw new UnrecoverableError(`Unknown job name: ${job.name}`);
     }
   }
 
