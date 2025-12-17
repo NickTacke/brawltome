@@ -80,9 +80,8 @@ export class RefreshProcessor extends WorkerHost {
         default:
           throw new UnrecoverableError(`Unknown job name: ${job.name}`);
       }
-    } catch (error) {
-      this.logger.error(`Failed to process job ${job.name} for ${id}:`, error);
-      throw error;
+    } catch {
+      // Do nothing, let the job fail
     }
   }
 
