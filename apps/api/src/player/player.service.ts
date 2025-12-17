@@ -343,8 +343,6 @@ export class PlayerService implements OnModuleInit {
           await tx.playerRanked.upsert({
             where: { brawlhallaId: id },
             update: {
-              globalRank: rankedData.global_rank || 0,
-              regionRank: rankedData.region_rank || 0,
               lastUpdated: new Date(),
               legends: {
                 deleteMany: {},
@@ -357,8 +355,6 @@ export class PlayerService implements OnModuleInit {
             },
             create: {
               brawlhallaId: id,
-              globalRank: rankedData.global_rank || 0,
-              regionRank: rankedData.region_rank || 0,
               lastUpdated: new Date(),
               legends: {
                 create: this.mapLegends(rankedData.legends),
