@@ -42,6 +42,7 @@ model Player {
   // Relations
   stats PlayerStats?
   ranked PlayerRanked?
+  discordLink DiscordLink?
 
   // Fuzzy search for name and aliases
   @@index([name])
@@ -305,4 +306,14 @@ model Clan {
   clanLifetimeXp Int
   members ClanMember[]
   lastUpdated DateTime @default(now())
+}
+
+// Model for linking discord accounts to brawlhalla id
+model DiscordLink {
+  discordId String @id
+  brawlhallaId Int @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 }
