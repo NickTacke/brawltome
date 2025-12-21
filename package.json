@@ -89,7 +89,7 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-jsx-a11y": "6.10.1",
-    "eslint-plugin-react": "7.35.0",
+    "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.0.1",
     "husky": "^9.1.7",
     "jsonc-eslint-parser": "^2.1.0",
