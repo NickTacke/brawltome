@@ -67,7 +67,11 @@ export class RefreshProcessor extends WorkerHost {
 
   async process(job: Job<{ id: number }>) {
     const { id } = job.data;
-    this.logger.log(`Processing ${job.name} for player ${id}`);
+    this.logger.log(
+      `Processing ${job.name} for ${
+        job.name === 'refresh-clan' ? 'clan' : 'player'
+      } ${id}`
+    );
 
     switch (job.name) {
       case 'refresh-ranked':
@@ -75,6 +79,9 @@ export class RefreshProcessor extends WorkerHost {
         break;
       case 'refresh-stats':
         await this.processRefreshStats(id);
+        break;
+      case 'refresh-clan':
+        await this.processRefreshClan(id);
         break;
       default:
         throw new UnrecoverableError(`Unknown job name: ${job.name}`);
@@ -329,6 +336,102 @@ export class RefreshProcessor extends WorkerHost {
         },
       });
     });
+  }
+
+  private async processRefreshClan(id: number) {
+    const clanData = await this.bhApiClient.getClan(id);
+
+    // Get all member brawlhallaIds
+    const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
+
+    // Find best ranked legend for each member (for avatar)
+    const bestLegends = await this.prisma.playerRankedLegend.findMany({
+      where: { brawlhallaId: { in: memberIds } },
+      orderBy: { rating: 'desc' },
+      distinct: ['brawlhallaId'],
+      select: { brawlhallaId: true, legendId: true },
+    });
+
+    // Get legendNameKeys for those legendIds
+    const legendIds = bestLegends.map((bl) => bl.legendId);
+    const legends = await this.prisma.legend.findMany({
+      where: { legendId: { in: legendIds } },
+      select: { legendId: true, legendNameKey: true },
+    });
+
+    const legendKeyMap = new Map(
+      legends.map((l) => [l.legendId, l.legendNameKey])
+    );
+    const playerLegendMap = new Map<number, string>();
+
+    for (const bl of bestLegends) {
+      const legendNameKey = legendKeyMap.get(bl.legendId);
+      if (legendNameKey) {
+        playerLegendMap.set(bl.brawlhallaId, legendNameKey);
+      }
+    }
+
+    // Fallback: highest-XP stats legend for members without a ranked-1v1 legend
+    const missingRankedIds = memberIds.filter(
+      (pid) => !playerLegendMap.has(pid)
+    );
+    if (missingRankedIds.length > 0) {
+      const statsFallback = await this.prisma.playerStatsLegend.findMany({
+        where: { brawlhallaId: { in: missingRankedIds } },
+        orderBy: { xp: 'desc' },
+        distinct: ['brawlhallaId'],
+        select: { brawlhallaId: true, legendNameKey: true },
+      });
+      for (const row of statsFallback) {
+        if (row.legendNameKey) {
+          playerLegendMap.set(row.brawlhallaId, row.legendNameKey);
+        }
+      }
+    }
+
+    // Upsert clan data
+    await this.prisma.clan.upsert({
+      where: { clanId: id },
+      create: {
+        clanId: clanData.clan_id,
+        clanName: clanData.clan_name,
+        clanCreateDate: new Date(clanData.clan_create_date * 1000),
+        clanXp: clanData.clan_xp,
+        clanLifetimeXp: clanData.clan_lifetime_xp,
+        lastUpdated: new Date(),
+        members: {
+          create: clanData.clan.map((m) => ({
+            brawlhallaId: m.brawlhalla_id,
+            name: m.name,
+            rank: m.rank,
+            joinDate: new Date(m.join_date * 1000),
+            xp: m.xp,
+            legendNameKey: playerLegendMap.get(m.brawlhalla_id) || null,
+          })),
+        },
+      },
+      update: {
+        clanName: clanData.clan_name,
+        clanXp: clanData.clan_xp,
+        clanLifetimeXp: clanData.clan_lifetime_xp,
+        lastUpdated: new Date(),
+        members: {
+          deleteMany: {},
+          create: clanData.clan.map((m) => ({
+            brawlhallaId: m.brawlhalla_id,
+            name: m.name,
+            rank: m.rank,
+            joinDate: new Date(m.join_date * 1000),
+            xp: m.xp,
+            legendNameKey: playerLegendMap.get(m.brawlhalla_id) || null,
+          })),
+        },
+      },
+    });
+
+    this.logger.log(
+      `Refreshed clan ${id} with ${clanData.clan.length} members`
+    );
   }
 
   // -- Helper Methods --
