@@ -26,6 +26,9 @@
     },
     {
       "path": "./apps/worker"
+    },
+    {
+      "path": "./apps/discord-bot"
     }
   ]
 }
