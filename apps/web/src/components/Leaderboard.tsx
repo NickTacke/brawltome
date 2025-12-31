@@ -63,9 +63,7 @@ export function Leaderboard() {
   const [sortBy, setSortBy] = useState('rating');
 
   const basePath =
-    bracket === '1v1'
-      ? `/player/leaderboard/${page}`
-      : `/leaderboard/2v2/${page}`;
+    bracket === '1v1' ? `/leaderboard/1v1/${page}` : `/leaderboard/2v2/${page}`;
 
   const { data, isLoading, error } = useSWR(
     `${basePath}?region=${region}&sort=${sortBy}&limit=${PAGE_SIZE}`,

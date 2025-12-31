@@ -1,11 +1,112 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '@brawltome/database';
 
 type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
 
 @Injectable()
-export class LeaderboardService {
+export class LeaderboardService implements OnModuleInit {
+  private readonly logger = new Logger(LeaderboardService.name);
+  private legendCache: Map<number, string> = new Map();
+  private legendIdToKeyCache: Map<number, string> = new Map();
+
   constructor(private prisma: PrismaService) {}
+
+  async onModuleInit() {
+    await this.refreshLegendCache();
+  }
+
+  private async refreshLegendCache() {
+    try {
+      const legends = await this.prisma.legend.findMany({
+        select: { legendId: true, legendNameKey: true, bioName: true },
+      });
+      this.legendCache = new Map(legends.map((l) => [l.legendId, l.bioName]));
+      this.legendIdToKeyCache = new Map(
+        legends.map((l) => [l.legendId, l.legendNameKey])
+      );
+      this.logger.log(`Loaded ${this.legendCache.size} legends into cache`);
+    } catch (error) {
+      this.logger.error('Failed to load legend cache', error);
+    }
+  }
+
+  async get1v1Leaderboard(
+    page: number,
+    region?: string,
+    sort: LeaderboardSort = 'rating',
+    limit?: number
+  ) {
+    const MAX_RANKINGS_PAGES = 200;
+    const RANKINGS_PAGE_SIZE = 50;
+    const MAX_RANKINGS_ENTRIES = MAX_RANKINGS_PAGES * RANKINGS_PAGE_SIZE;
+
+    const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
+    const requestedPage = Math.max(page || 1, 1);
+
+    const where = region && region !== 'all' ? { region } : {};
+
+    const safeSort: LeaderboardSort = [
+      'rating',
+      'wins',
+      'games',
+      'peakRating',
+    ].includes(sort)
+      ? sort
+      : 'rating';
+
+    const orderBy = { [safeSort]: 'desc' };
+
+    const maxPagesForTake = Math.max(
+      1,
+      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake)
+    );
+    const prelimPage = Math.min(requestedPage, maxPagesForTake);
+
+    const total = await this.prisma.player.count({ where });
+    const cappedTotal = Math.min(total, MAX_RANKINGS_ENTRIES);
+    const totalPages = Math.max(
+      1,
+      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake)
+    );
+    const safePage = Math.min(prelimPage, totalPages);
+    const skip = (safePage - 1) * safeTake;
+
+    const players = await this.prisma.player.findMany({
+      where,
+      orderBy,
+      take: safeTake,
+      skip,
+      select: {
+        brawlhallaId: true,
+        name: true,
+        region: true,
+        rating: true,
+        peakRating: true,
+        tier: true,
+        wins: true,
+        games: true,
+        bestLegend: true,
+      },
+    });
+
+    // Enrich with Legend Names from Cache
+    const enrichedPlayers = players.map((p) => ({
+      ...p,
+      bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
+      bestLegendNameKey: p.bestLegend
+        ? this.legendIdToKeyCache.get(p.bestLegend)
+        : null,
+    }));
+
+    return {
+      data: enrichedPlayers,
+      meta: {
+        page: safePage,
+        total: cappedTotal,
+        totalPages,
+      },
+    };
+  }
 
   async get2v2Leaderboard(
     page: number,

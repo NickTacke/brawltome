@@ -23,15 +23,26 @@ import {
 const RANKED_TTL = 1000 * 60 * 60; // 1 hour
 const STATS_TTL = 12 * 1000 * 60 * 60; // 12 hours
 
+// Type for the full player include used by discovery
+type PlayerWithRelations = Awaited<
+  ReturnType<PlayerService['fetchPlayerWithRelations']>
+>;
+
 @Injectable()
 export class PlayerService implements OnModuleInit {
   private readonly logger = new Logger(PlayerService.name);
   private legendCache: Map<number, string> = new Map();
   private legendKeyCache: Map<string, string> = new Map();
-  private legendIdToKeyCache: Map<number, string> = new Map();
   private legendIdToWeaponsCache: Map<
     number,
     { weaponOne: string; weaponTwo: string }
+  > = new Map();
+
+  // Track in-flight discovery requests to prevent race conditions
+  // When multiple requests come in for the same unknown player, they share one API call
+  private inFlightDiscoveries: Map<
+    number,
+    Promise<PlayerWithRelations | null>
   > = new Map();
 
   constructor(
@@ -58,9 +69,6 @@ export class PlayerService implements OnModuleInit {
       this.legendCache = new Map(legends.map((l) => [l.legendId, l.bioName]));
       this.legendKeyCache = new Map(
         legends.map((l) => [l.legendNameKey, l.bioName])
-      );
-      this.legendIdToKeyCache = new Map(
-        legends.map((l) => [l.legendId, l.legendNameKey])
       );
       this.legendIdToWeaponsCache = new Map(
         legends.map((l) => [
@@ -269,7 +277,32 @@ export class PlayerService implements OnModuleInit {
     };
   }
 
-  private async discoverPlayer(id: number) {
+  private async discoverPlayer(
+    id: number
+  ): Promise<PlayerWithRelations | null> {
+    // Check if there's already an in-flight discovery for this player
+    // This prevents duplicate API calls when multiple requests come in simultaneously
+    const existingDiscovery = this.inFlightDiscoveries.get(id);
+    if (existingDiscovery) {
+      this.logger.debug(`Joining existing discovery for player ${id}`);
+      return existingDiscovery;
+    }
+
+    // Create the discovery promise and track it
+    const discoveryPromise = this.executeDiscovery(id);
+    this.inFlightDiscoveries.set(id, discoveryPromise);
+
+    try {
+      return await discoveryPromise;
+    } finally {
+      // Clean up the tracking map once discovery completes (success or failure)
+      this.inFlightDiscoveries.delete(id);
+    }
+  }
+
+  private async executeDiscovery(
+    id: number
+  ): Promise<PlayerWithRelations | null> {
     // Check tokens first
     const tokens = await this.bhApiClient.getRemainingTokens();
     if (tokens < DISCOVERY_MIN_TOKENS) {
@@ -374,103 +407,38 @@ export class PlayerService implements OnModuleInit {
       }
 
       // Return the newly created player
-      return this.prisma.player.findUnique({
-        where: { brawlhallaId: id },
-        include: {
-          aliases: {
-            select: {
-              key: true,
-              value: true,
-            },
-          },
-          stats: {
-            include: {
-              legends: true,
-              clan: true,
-              weaponStats: true,
-            },
-          },
-          ranked: {
-            include: {
-              legends: true,
-              teams: true,
-            },
-          },
-        },
-      });
+      return this.fetchPlayerWithRelations(id);
     } catch (error) {
       this.logger.warn(`Failed to discover player ${id}: ${error}`);
       return null;
     }
   }
 
-  async getLeaderboard(
-    page: number,
-    region?: string,
-    sort: 'rating' | 'wins' | 'games' | 'peakRating' = 'rating',
-    limit?: number
-  ) {
-    const MAX_RANKINGS_PAGES = 200; // How many BHAPI pages the janitor keeps fresh
-    const RANKINGS_PAGE_SIZE = 50; // BHAPI rankings page size
-    const MAX_RANKINGS_ENTRIES = MAX_RANKINGS_PAGES * RANKINGS_PAGE_SIZE;
-
-    const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
-    const requestedPage = Math.max(page || 1, 1);
-
-    const where = region && region !== 'all' ? { region } : {};
-
-    const orderBy = { [sort]: 'desc' };
-
-    const maxPagesForTake = Math.max(
-      1,
-      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake)
-    );
-    const prelimPage = Math.min(requestedPage, maxPagesForTake);
-
-    const total = await this.prisma.player.count({ where });
-    const cappedTotal = Math.min(total, MAX_RANKINGS_ENTRIES);
-    const totalPages = Math.max(
-      1,
-      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake)
-    );
-    const safePage = Math.min(prelimPage, totalPages);
-    const skip = (safePage - 1) * safeTake;
-
-    const players = await this.prisma.player.findMany({
-      where,
-      orderBy,
-      take: safeTake,
-      skip,
-      select: {
-        brawlhallaId: true,
-        name: true,
-        region: true,
-        rating: true,
-        peakRating: true,
-        tier: true,
-        wins: true,
-        games: true,
-        bestLegend: true,
+  private fetchPlayerWithRelations(id: number) {
+    return this.prisma.player.findUnique({
+      where: { brawlhallaId: id },
+      include: {
+        aliases: {
+          select: {
+            key: true,
+            value: true,
+          },
+        },
+        stats: {
+          include: {
+            legends: true,
+            clan: true,
+            weaponStats: true,
+          },
+        },
+        ranked: {
+          include: {
+            legends: true,
+            teams: true,
+          },
+        },
       },
     });
-
-    // Enrich with Legend Names from Cache
-    const enrichedPlayers = players.map((p) => ({
-      ...p,
-      bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
-      bestLegendNameKey: p.bestLegend
-        ? this.legendIdToKeyCache.get(p.bestLegend)
-        : null,
-    }));
-
-    return {
-      data: enrichedPlayers,
-      meta: {
-        page: safePage,
-        total: cappedTotal,
-        totalPages,
-      },
-    };
   }
 
   private async addJob(name: string, data: { id: number }, priority: number) {
