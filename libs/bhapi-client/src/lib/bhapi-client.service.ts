@@ -36,7 +36,7 @@ export class BhApiClientService {
 
       // Traffic settings
       minTime: 150,
-      maxConcurrent: 5,
+      maxConcurrent: 1,
 
       // Economy settings
       reservoir: 180,
