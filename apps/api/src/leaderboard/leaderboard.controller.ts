@@ -21,7 +21,7 @@ export class LeaderboardController {
     @Query('sort') sort?: LeaderboardSort,
     @Query('limit') @Optional() limit?: string
   ) {
-    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    const parsedLimit = limit ? parseInt(limit, 10) || undefined : undefined;
     return this.leaderboardService.get1v1Leaderboard(
       page,
       region,
@@ -37,7 +37,7 @@ export class LeaderboardController {
     @Query('sort') sort?: LeaderboardSort,
     @Query('limit') @Optional() limit?: string
   ) {
-    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    const parsedLimit = limit ? parseInt(limit, 10) || undefined : undefined;
     return this.leaderboardService.get2v2Leaderboard(
       page,
       region,
