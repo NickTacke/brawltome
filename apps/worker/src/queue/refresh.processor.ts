@@ -42,6 +42,8 @@ export class RefreshProcessor extends WorkerHost {
               ? 'Blasters'
               : l.weaponOne === 'Katar'
               ? 'Katars'
+              : l.weaponOne === 'RocketLance'
+              ? 'Lance'
               : l.weaponOne,
           weaponTwo:
             l.weaponTwo === 'Fists'
@@ -50,6 +52,8 @@ export class RefreshProcessor extends WorkerHost {
               ? 'Blasters'
               : l.weaponTwo === 'Katar'
               ? 'Katars'
+              : l.weaponTwo === 'RocketLance'
+              ? 'Lance'
               : l.weaponTwo,
         },
       ])
