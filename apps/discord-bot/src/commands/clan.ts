@@ -2,14 +2,25 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   StringSelectMenuInteraction,
+  ButtonInteraction,
   Message,
   InteractionResponse,
 } from 'discord.js';
 import * as api from '../api/client.js';
 import { buildClanEmbed, buildErrorEmbed } from '../utils/embeds.js';
-import { buildClanSelectMenu } from '../utils/components.js';
-import { pollForFreshData } from '../utils/refresh.js';
+import {
+  buildClanSelectMenu,
+  buildClanPaginationButtons,
+} from '../utils/components.js';
+import { pollForFreshData, setActiveTask } from '../utils/refresh.js';
 import type { Command } from './index.js';
+
+// Cache clan results for pagination (expires after 10 minutes)
+const clanCache = new Map<
+  string,
+  { clan: api.ClanResponse; timestamp: number }
+>();
+const CLAN_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 export const clanCommand: Command = {
   data: new SlashCommandBuilder()
@@ -63,24 +74,48 @@ export const clanCommand: Command = {
       const clan = await api.getClan(clanId);
       const embed = buildClanEmbed(clan);
 
-      // Build response with optional select menu
-      const responseOptions: {
-        embeds: ReturnType<typeof buildClanEmbed>[];
-        components?: ReturnType<typeof buildClanSelectMenu>[];
-      } = { embeds: [embed] };
+      // Cache the clan for pagination
+      clanCache.set(interaction.id, {
+        clan,
+        timestamp: Date.now(),
+      });
+      cleanupCache();
+
+      // Build response components
+      const components: any[] = [];
+
+      // Add pagination buttons if there are many members
+      if (clan.members.length > 5) {
+        components.push(
+          buildClanPaginationButtons(interaction.id, 0, clan.members.length),
+        );
+      }
 
       // Add select menu if there are multiple search results
       if (searchResults.length > 1) {
-        responseOptions.components = [
-          buildClanSelectMenu(searchResults, clanId),
-        ];
+        components.push(
+          buildClanSelectMenu(searchResults, clanId, interaction.id),
+        );
       }
 
-      const reply = await interaction.editReply(responseOptions);
+      const reply = await interaction.editReply({
+        embeds: [embed],
+        components,
+      });
 
-      // If data is refreshing, start polling
-      if (clan.isRefreshing && reply instanceof Message) {
-        void pollForFreshData(reply, clanId, 'clan', searchResults);
+      if (reply instanceof Message) {
+        setActiveTask(reply.id, clanId);
+
+        // If data is refreshing, start polling
+        if (clan.isRefreshing) {
+          void pollForFreshData(
+            reply,
+            clanId,
+            'clan',
+            searchResults,
+            interaction.id,
+          );
+        }
       }
     } catch (error) {
       console.error('[Clan Command] Error:', error);
@@ -130,6 +165,7 @@ export async function handleClanSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
   const clanId = parseInt(interaction.values[0], 10);
+  const interactionId = interaction.customId.split(':')[1];
 
   await interaction.deferUpdate();
 
@@ -137,25 +173,44 @@ export async function handleClanSelect(
     const clan = await api.getClan(clanId);
     const embed = buildClanEmbed(clan);
 
+    // Cache the clan for pagination
+    if (interactionId) {
+      clanCache.set(interactionId, {
+        clan,
+        timestamp: Date.now(),
+      });
+      cleanupCache();
+    }
+
     // Get cached search results to preserve the select menu
     const message = interaction.message;
     const components = message.components;
+    setActiveTask(message.id, clanId);
+
+    const responseComponents: any[] = [];
+
+    // Add pagination buttons if there are many members
+    if (clan.members.length > 5 && interactionId) {
+      responseComponents.push(
+        buildClanPaginationButtons(interactionId, 0, clan.members.length),
+      );
+    }
 
     // Update the select menu to show the new selection
     if (components.length > 0) {
       const clans = getClansFromMessage(message, clanId);
-      const selectMenu = buildClanSelectMenu(clans, clanId);
+      const selectMenu = buildClanSelectMenu(clans, clanId, interactionId);
+      responseComponents.push(selectMenu);
+    }
 
-      const reply = await interaction.editReply({
-        embeds: [embed],
-        components: [selectMenu],
-      });
+    const reply = await interaction.editReply({
+      embeds: [embed],
+      components: responseComponents,
+    });
 
-      if (clan.isRefreshing && reply instanceof Message) {
-        void pollForFreshData(reply, clanId, 'clan', clans);
-      }
-    } else {
-      await interaction.editReply({ embeds: [embed] });
+    if (clan.isRefreshing && reply instanceof Message) {
+      const clans = getClansFromMessage(message, clanId);
+      void pollForFreshData(reply, clanId, 'clan', clans, interactionId);
     }
   } catch (error) {
     console.error('[Clan Select] Error:', error);
@@ -168,6 +223,56 @@ export async function handleClanSelect(
       ],
       components: [],
     });
+  }
+}
+
+/**
+ * Handle clan member pagination button interaction
+ */
+export async function handleClanPage(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const [, interactionId, pageStr] = interaction.customId.split(':');
+  const page = parseInt(pageStr, 10);
+
+  const cached = clanCache.get(interactionId);
+  if (!cached || Date.now() - cached.timestamp > CLAN_CACHE_TTL) {
+    await interaction.reply({
+      content: 'This interaction has expired. Please run the command again.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const { clan } = cached;
+  const embed = buildClanEmbed(clan, page);
+
+  // Update components (pagination buttons and preserved select menu)
+  const components = interaction.message.components.map((row) => {
+    const actionRow = row.toJSON();
+    if ('components' in actionRow && actionRow.components[0]?.type === 2) {
+      // Button (Pagination)
+      return buildClanPaginationButtons(
+        interactionId,
+        page,
+        clan.members.length,
+      );
+    }
+    return row;
+  });
+
+  await interaction.update({
+    embeds: [embed],
+    components: components as any[],
+  });
+}
+
+function cleanupCache() {
+  const now = Date.now();
+  for (const [key, value] of clanCache.entries()) {
+    if (now - value.timestamp > CLAN_CACHE_TTL) {
+      clanCache.delete(key);
+    }
   }
 }
 
