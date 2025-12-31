@@ -8,7 +8,7 @@ import {
 import * as api from '../api/client.js';
 import { buildPlayerEmbed, buildErrorEmbed } from '../utils/embeds.js';
 import { buildPlayerSelectMenu } from '../utils/components.js';
-import { pollForFreshData } from '../utils/refresh.js';
+import { pollForFreshData, setActiveTask } from '../utils/refresh.js';
 import type { Command } from './index.js';
 
 // Cache search results for select menu interactions (expires after 5 minutes)
@@ -79,7 +79,7 @@ export const playerCommand: Command = {
       // Add select menu if there are multiple search results
       if (searchResults.length > 1) {
         responseOptions.components = [
-          buildPlayerSelectMenu(searchResults, playerId),
+          buildPlayerSelectMenu(searchResults, playerId, interaction.id),
         ];
 
         // Cache the search results for select menu interactions
@@ -95,9 +95,19 @@ export const playerCommand: Command = {
 
       const reply = await interaction.editReply(responseOptions);
 
-      // If data is refreshing, start polling
-      if (player.isRefreshing && reply instanceof Message) {
-        void pollForFreshData(reply, playerId, 'player', searchResults);
+      if (reply instanceof Message) {
+        setActiveTask(reply.id, playerId);
+
+        // If data is refreshing, start polling
+        if (player.isRefreshing) {
+          void pollForFreshData(
+            reply,
+            playerId,
+            'player',
+            searchResults,
+            interaction.id,
+          );
+        }
       }
     } catch (error) {
       console.error('[Player Command] Error:', error);
@@ -147,6 +157,7 @@ export async function handlePlayerSelect(
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
   const playerId = parseInt(interaction.values[0], 10);
+  const interactionId = interaction.customId.split(':')[1];
 
   await interaction.deferUpdate();
 
@@ -154,15 +165,41 @@ export async function handlePlayerSelect(
     const player = await api.getPlayer(playerId);
     const embed = buildPlayerEmbed(player);
 
-    // Get cached search results to preserve the select menu
+    let searchResults: api.SearchResponse['players'] | undefined;
+
+    // Try to get from cache first
+    if (interactionId) {
+      const cached = searchCache.get(interactionId);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        searchResults = cached.players;
+      }
+    }
+
+    // Fallback to parsing message if not in cache or expired
     const message = interaction.message;
-    const components = message.components;
+    if (!searchResults) {
+      searchResults = getPlayersFromMessage(message, playerId);
+
+      // Repopulate cache if we had an interaction ID
+      if (interactionId && searchResults.length > 0) {
+        searchCache.set(interactionId, {
+          players: searchResults,
+          timestamp: Date.now(),
+        });
+
+        // Clean up old cache entries
+        cleanupCache();
+      }
+    }
+
+    setActiveTask(message.id, playerId);
 
     // Update the select menu to show the new selection
-    if (components.length > 0) {
+    if (searchResults.length > 1) {
       const selectMenu = buildPlayerSelectMenu(
-        getPlayersFromMessage(message, playerId),
+        searchResults,
         playerId,
+        interactionId,
       );
 
       const reply = await interaction.editReply({
@@ -175,11 +212,15 @@ export async function handlePlayerSelect(
           reply,
           playerId,
           'player',
-          getPlayersFromMessage(message, playerId),
+          searchResults,
+          interactionId,
         );
       }
     } else {
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({
+        embeds: [embed],
+        components: [],
+      });
     }
   } catch (error) {
     console.error('[Player Select] Error:', error);
