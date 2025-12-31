@@ -8,13 +8,13 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "start:dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "deploy-commands": "tsx src/deploy-commands.ts",
     "sync-emojis": "tsx src/sync-emojis.ts"
   },
   "dependencies": {
-    "discord.js": "^14.16.3",
-    "dotenv": "^16.4.7"
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

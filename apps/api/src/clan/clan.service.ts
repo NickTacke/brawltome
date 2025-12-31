@@ -19,7 +19,6 @@ export class ClanService {
   ) {}
 
   async getClan(id: number) {
-    // Fetch Clan from database
     let clan = await this.prisma.clan.findUnique({
       where: { clanId: id },
       include: {
@@ -30,12 +29,10 @@ export class ClanService {
     const now = Date.now();
     const isStale = clan ? now - clan.lastUpdated.getTime() > CLAN_TTL : true;
 
-    // If clan doesn't exist, we need to discover it (blocking)
     if (!clan) {
       clan = await this.discoverClan(id);
       if (!clan) return null;
     } else if (isStale) {
-      // Clan exists but is stale - queue background refresh and return stale data
       void this.queueClanRefresh(id);
     }
 
@@ -46,8 +43,6 @@ export class ClanService {
       };
     }
 
-    // Enrich clan members with overall 1v1 Elo (Player.rating) and peak rating.
-    // Some members may not exist in the Player table yet; those will return null.
     const memberIds = clan.members.map((m) => m.brawlhallaId);
     const players = await this.prisma.player.findMany({
       where: { brawlhallaId: { in: memberIds } },
@@ -64,8 +59,6 @@ export class ClanService {
       ])
     );
 
-    // Fallback legend avatar: if member.legendNameKey is missing (no ranked 1v1 legend),
-    // use the highest-XP stats legend (if available).
     const missingLegendKeyIds = clan.members
       .filter((m) => !m.legendNameKey)
       .map((m) => m.brawlhallaId);
@@ -98,12 +91,7 @@ export class ClanService {
     };
   }
 
-  /**
-   * Discover a clan that doesn't exist in the database yet.
-   * This is a blocking operation that calls the external API.
-   */
   private async discoverClan(id: number) {
-    // Check tokens first to avoid hitting rate limits
     const tokens = await this.bhApiClient.getRemainingTokens();
     if (tokens < DISCOVERY_MIN_TOKENS) {
       this.logger.warn(
@@ -119,15 +107,10 @@ export class ClanService {
     return this.fetchAndSaveClan(id);
   }
 
-  /**
-   * Queue a background job to refresh clan data.
-   * Fire-and-forget - errors are logged but not thrown.
-   */
   private async queueClanRefresh(id: number) {
     const jobId = `refresh-clan-${id}`;
 
     try {
-      // Check if job already exists
       const existingJob = await this.refreshQueue.getJob(jobId);
       if (existingJob) {
         const state = await existingJob.getState();
@@ -135,7 +118,6 @@ export class ClanService {
           await existingJob.remove();
           this.logger.debug(`Removed failed clan refresh job for ${id}`);
         } else {
-          // Job already queued or in progress
           return;
         }
       }
@@ -145,7 +127,7 @@ export class ClanService {
         { id },
         {
           jobId,
-          priority: 50, // Medium priority
+          priority: 50,
           removeOnComplete: true,
           removeOnFail: true,
         }
@@ -156,16 +138,11 @@ export class ClanService {
     }
   }
 
-  /**
-   * Fetch clan data from the API and save to database.
-   * Called by both discovery (blocking) and background refresh (worker).
-   */
   async fetchAndSaveClan(id: number) {
     try {
       this.logger.log(`Fetching clan ${id} from API...`);
       const clanData = await this.bhApiClient.getClan(id);
 
-      // Get all brawlhallaIds
       const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
 
       const bestLegends = await this.prisma.playerRankedLegend.findMany({
@@ -182,7 +159,6 @@ export class ClanService {
         },
       });
 
-      // Now get the legendNameKeys for these legendIds
       const legendIds = bestLegends.map((bl) => bl.legendId);
       const legends = await this.prisma.legend.findMany({
         where: { legendId: { in: legendIds } },
@@ -201,7 +177,6 @@ export class ClanService {
         }
       }
 
-      // Fallback: highest-XP stats legend for members without a ranked-1v1 legend
       const missingRankedIds = memberIds.filter(
         (pid) => !playerLegendMap.has(pid)
       );
@@ -219,7 +194,6 @@ export class ClanService {
         }
       }
 
-      // Save to DB
       const clan = await this.prisma.clan.upsert({
         where: { clanId: id },
         create: {

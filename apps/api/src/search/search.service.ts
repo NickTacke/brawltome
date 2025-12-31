@@ -29,12 +29,9 @@ export class SearchService implements OnModuleInit {
     }
   }
 
-  // Local Search
   async searchLocal(query: string) {
-    // Sanitize the query (preserve '|') and normalize pipe spacing for better matching against stored names
     const sanitized = sanitizeSearchQuery(query);
 
-    // Return empty results if query is too short
     if (sanitized.length < 2) return { players: [], clans: [] };
 
     this.logger.debug(`Local search query="${sanitized}"`);
@@ -61,7 +58,6 @@ export class SearchService implements OnModuleInit {
             },
           ],
         },
-        // Pull more candidates, then filter by prefix rules in-memory.
         take: 50,
         orderBy: [{ rating: 'desc' }, { viewCount: 'desc' }],
         select: {
@@ -106,7 +102,6 @@ export class SearchService implements OnModuleInit {
           clanId: true,
           clanName: true,
           clanXp: true,
-          // Count members if possible, or just return basic info
           _count: {
             select: { members: true },
           },
@@ -114,7 +109,6 @@ export class SearchService implements OnModuleInit {
       }),
     ]);
 
-    // Enforce prefix-only matching (with optional post-'|' base-name matching) and attach alias match metadata.
     const filteredPlayers = players
       .map((p) => {
         const nameMatch = matchesNameOrBasePrefix(p.name, sanitized);
@@ -138,7 +132,6 @@ export class SearchService implements OnModuleInit {
       .filter((p): p is NonNullable<typeof p> => p !== null)
       .slice(0, 8);
 
-    // Enrich with Legend Names
     const enrichedPlayers = filteredPlayers.map((p) => {
       const rankedBestLegendId =
         typeof p.bestLegend === 'number' && p.bestLegend > 0 ? p.bestLegend : 0;
@@ -157,7 +150,6 @@ export class SearchService implements OnModuleInit {
           ? this.legendCache.get(legendIdForAvatar) ?? null
           : null;
 
-      // Don't leak nested stats payload to the search endpoint response
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { stats, ...rest } = p;
       return {
