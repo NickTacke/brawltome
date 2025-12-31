@@ -14,11 +14,23 @@ const TIER_COLORS: Record<string, number> = {
   Unranked: Colors.DarkGrey,
 };
 
+/**
+ * Selects an embed color corresponding to the player's tier.
+ *
+ * @param tier - Tier string (e.g., "Gold IV", "Platinum", or undefined/null for unranked)
+ * @returns The numeric color value associated with the tier, or DarkGrey if the tier is unknown
+ */
 function getTierColor(tier: string): number {
   const baseTier = tier?.split(' ')[0] || 'Unranked';
   return TIER_COLORS[baseTier] || Colors.DarkGrey;
 }
 
+/**
+ * Format a duration given in seconds as a compact playtime string.
+ *
+ * @param seconds - Duration in seconds
+ * @returns A string like `"<Nh"` when at least one hour, otherwise `"<Nm"` for minutes
+ */
 function formatPlaytime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   if (hours > 0) {
@@ -27,24 +39,51 @@ function formatPlaytime(seconds: number): string {
   return `${Math.floor(seconds / 60)}m`;
 }
 
+/**
+ * Calculate the win-rate percentage and return it as a whole-number string with a trailing percent sign.
+ *
+ * @param wins - Number of wins
+ * @param games - Total number of games played
+ * @returns The win rate rounded to the nearest whole percent with a trailing `%`, or `"0%"` when `games` is 0
+ */
 function formatWinRate(wins: number, games: number): string {
   if (games === 0) return '0%';
   return `${((wins / games) * 100).toFixed(0)}%`;
 }
 
+/**
+ * Format a number using compact suffixes ("K" for thousands, "M" for millions).
+ *
+ * @returns The input formatted as a string with one decimal when suffixed (e.g., `1.2K`, `3.4M`), or the integer as a string when less than 1000.
+ */
 function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return num.toString();
 }
 
+/**
+ * Produce the public avatar image URL for a legend key.
+ *
+ * @param legendNameKey - The legend's identifier (e.g., "Bodvar" or a key-like name); may be undefined
+ * @returns The absolute avatar image URL for the legend, or `null` if `legendNameKey` is not provided
+ */
 function getLegendAvatarUrl(legendNameKey: string | undefined): string | null {
   if (!legendNameKey) return null;
   const key = legendNameKey.toLowerCase().replace(/\s+/g, '_');
   return `https://brawltome.com/images/legends/avatars/${key}.png`;
 }
 
-// Build player embed
+/**
+ * Constructs a Discord EmbedBuilder presenting a player's profile, key stats, top legends, weapons, and 2v2 teams.
+ *
+ * The embed includes title, tier-based color and emoji, profile URL, optional thumbnail from the player's top XP legend,
+ * a description with tier/rating/peak and win-loss summary, optional clan link, inline "Stats" block, "Most Played" legends,
+ * "Weapons" usage, and "2v2 Teams" performance. Footer contains the player's region, refresh state, and site tag.
+ *
+ * @param player - The PlayerResponse object from the API used to populate the embed
+ * @returns The populated EmbedBuilder for the given player
+ */
 export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   const tierEmoji = getBannerEmoji(player.tier);
 
@@ -198,7 +237,14 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   return embed;
 }
 
-// Build clan embed
+/**
+ * Create a Discord embed presenting clan details and top members.
+ *
+ * Includes member count, formatted clan XP, creation date, up to six top members by XP (each with a rank icon, optional legend emoji, and optional Elo), a footer that reflects refresh state, and a timestamp.
+ *
+ * @param clan - ClanResponse object containing clan metadata and member list
+ * @returns An EmbedBuilder configured with the clan's title, color, URL, thumbnail, description, optional "Top Members" field, footer, and timestamp
+ */
 export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle(clan.clanName)
@@ -257,7 +303,13 @@ export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
   return embed;
 }
 
-// Build error embed
+/**
+ * Create an error-styled Discord embed with a red color, cross prefix, and standard footer.
+ *
+ * @param title - Short title for the error embed (will be prefixed with a cross emoji)
+ * @param description - Detailed message displayed in the embed body
+ * @returns An EmbedBuilder configured as an error embed
+ */
 export function buildErrorEmbed(
   title: string,
   description: string,
@@ -273,7 +325,14 @@ export function buildErrorEmbed(
     .setTimestamp();
 }
 
-// Build search results embed
+/**
+ * Builds a Discord embed presenting search results for players and clans.
+ *
+ * @param query - The search query used to generate results
+ * @param players - Matching player records to display; up to 5 entries are shown
+ * @param clans - Matching clan records to display; up to 5 entries are shown
+ * @returns An EmbedBuilder containing listed players and clans, or a "No results found." description when both lists are empty
+ */
 export function buildSearchEmbed(
   query: string,
   players: Array<{

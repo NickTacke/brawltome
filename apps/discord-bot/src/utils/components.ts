@@ -23,12 +23,23 @@ interface ClanOption {
 // Emoji cache reference (will be populated by emojis.ts)
 let emojiCache: Map<string, { id: string; name: string }> | null = null;
 
+/**
+ * Populate the module-level emoji cache used for resolving emoji by key.
+ *
+ * @param cache - Map where keys are emoji lookup keys (e.g., `avatar_<legend_name>`) and values contain the emoji `id` and `name`
+ */
 export function setEmojiCache(
   cache: Map<string, { id: string; name: string }>,
 ): void {
   emojiCache = cache;
 }
 
+/**
+ * Resolve a cached emoji for a legend name key to a Discord component-compatible emoji object.
+ *
+ * @param legendNameKey - Legend name key used to look up the emoji in the cache; spaces and case are normalized (e.g., "Foo Bar" → "avatar_foo_bar").
+ * @returns A `ComponentEmojiResolvable` object containing `id` and `name` if the emoji is found, `undefined` otherwise.
+ */
 function getEmojiForSelect(
   legendNameKey: string,
 ): ComponentEmojiResolvable | undefined {
@@ -44,7 +55,16 @@ function getEmojiForSelect(
 }
 
 /**
- * Build a select menu for switching between player search results
+ * Creates an ActionRow containing a player selection menu for switching between search results.
+ *
+ * The menu is populated with up to 25 players. Each option's label is the player's name and its description is
+ * either "rating • tier" when both are available, the tier when present, or "Unranked" otherwise. If a player's
+ * `bestLegendNameKey` resolves to a cached emoji, that emoji is attached to the option. The option whose
+ * `brawlhallaId` matches `selectedId` is marked as the default selection.
+ *
+ * @param players - Player options used to build the menu (only the first 25 are included)
+ * @param selectedId - The `brawlhallaId` of the player to mark as selected
+ * @returns An ActionRowBuilder containing a StringSelectMenu populated with the provided players
  */
 export function buildPlayerSelectMenu(
   players: PlayerOption[],
@@ -85,7 +105,11 @@ export function buildPlayerSelectMenu(
 }
 
 /**
- * Build a select menu for switching between clan search results
+ * Create a select menu populated with clan options for switching between clan search results.
+ *
+ * @param clans - Array of clan entries to display in the menu
+ * @param selectedId - Clan ID to mark as the currently selected option
+ * @returns An ActionRowBuilder containing a StringSelectMenuBuilder with one option per clan (up to 25). Each option's value is the clan's ID as a string; the option matching `selectedId` is marked as default and each option shows the clan's member count and a castle emoji.
  */
 export function buildClanSelectMenu(
   clans: ClanOption[],
@@ -108,6 +132,13 @@ export function buildClanSelectMenu(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 }
 
+/**
+ * Shortens a string to fit within a maximum length, appending an ellipsis when truncated.
+ *
+ * @param str - The input string to truncate
+ * @param maxLength - The maximum allowed length of the returned string (including the trailing `...` when truncation occurs)
+ * @returns The original string if it is no longer than `maxLength`, otherwise a shortened string ending with `...` with total length equal to `maxLength`
+ */
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength - 3) + '...';

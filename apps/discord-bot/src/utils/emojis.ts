@@ -10,7 +10,10 @@ let restClient: REST | null = null;
 let appClientId: string | null = null;
 
 /**
- * Initialize and load application emojis from Discord
+ * Initialize emoji utilities with a Discord REST client and application client ID, then preload application emojis.
+ *
+ * @param rest - Discord REST client used to fetch the application's emojis
+ * @param clientId - Application (bot) client ID whose emojis should be loaded
  */
 export async function initEmojis(rest: REST, clientId: string): Promise<void> {
   restClient = rest;
@@ -19,7 +22,12 @@ export async function initEmojis(rest: REST, clientId: string): Promise<void> {
 }
 
 /**
- * Load/reload emojis from Discord
+ * Loads or refreshes the application's custom emojis from Discord into the module cache.
+ *
+ * Requires initEmojis to have been called; if the module is not initialized this returns an empty Map.
+ * On failure to fetch emojis from Discord this returns an empty Map and leaves the cache empty.
+ *
+ * @returns A Map keyed by emoji name containing the loaded `DiscordEmoji` objects, or an empty Map if none were loaded.
  */
 export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
   if (!restClient || !appClientId) {
@@ -43,8 +51,11 @@ export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
 }
 
 /**
- * Get an emoji string by exact name
- * Returns <:name:id> format or fallback
+ * Retrieve a Discord emoji string for the exact emoji name.
+ *
+ * @param name - The exact emoji name to look up in the cache
+ * @param fallback - Value returned when the emoji is not found or the cache is uninitialized
+ * @returns The emoji in `<:name:id>` format if found, `fallback` otherwise
  */
 export function getEmoji(name: string, fallback = ''): string {
   if (!emojiCache) return fallback;
@@ -58,15 +69,19 @@ export function getEmoji(name: string, fallback = ''): string {
 }
 
 /**
- * Get the logo emoji
+ * Retrieve the 'logo' emoji from the emoji cache or a fallback.
+ *
+ * @returns The emoji string for 'logo' if present in the cache, otherwise '🎮'
  */
 export function getLogo(): string {
   return getEmoji('logo', '🎮');
 }
 
 /**
- * Get a tier banner emoji
- * @param tier - Tier name like "Diamond", "Gold", "Platinum 2", etc.
+ * Selects the banner emoji that corresponds to a rank tier.
+ *
+ * @param tier - Rank name (e.g., "Diamond", "Gold", "Platinum 2"); the first word is used to determine the base tier
+ * @returns The banner emoji for the given tier (custom Discord emoji like `<:name:id>` if available, otherwise a tier-specific Unicode fallback)
  */
 export function getBannerEmoji(tier: string): string {
   const baseTier = tier?.split(' ')[0]?.toLowerCase() || 'unranked';
@@ -74,8 +89,10 @@ export function getBannerEmoji(tier: string): string {
 }
 
 /**
- * Get a legend avatar emoji by legend name key
- * @param legendNameKey - Legend name key like "ada", "bodvar", "queen_nai"
+ * Get the avatar emoji for a legend using its name key.
+ *
+ * @param legendNameKey - Legend name or key (case-insensitive; spaces allowed, e.g., "Ada", "queen nai")
+ * @returns The custom avatar emoji string `<:name:id>` if available, otherwise the generic user emoji `👤`
  */
 export function getAvatarEmoji(legendNameKey: string): string {
   const key = legendNameKey?.toLowerCase().replace(/\s+/g, '_') || '';
@@ -83,8 +100,10 @@ export function getAvatarEmoji(legendNameKey: string): string {
 }
 
 /**
- * Get a weapon emoji by weapon name
- * @param weapon - Weapon name like "Sword", "Bow", "Grapple Hammer"
+ * Selects the custom weapon emoji for a given weapon name.
+ *
+ * @param weapon - Weapon name (case-insensitive; spaces are allowed and are converted to underscores)
+ * @returns The emoji string for the weapon (e.g., `<:name:id>`), or `⚔️` if no matching custom emoji is found
  */
 export function getWeaponEmoji(weapon: string): string {
   const key = weapon?.toLowerCase().replace(/\s+/g, '_') || '';
@@ -92,7 +111,10 @@ export function getWeaponEmoji(weapon: string): string {
 }
 
 /**
- * Fallback emojis for tiers when custom emojis aren't available
+ * Selects a fallback emoji for a rank tier when a custom emoji is unavailable.
+ *
+ * @param tier - Tier identifier (e.g., "valhallan", "diamond", "gold", "silver", "bronze", "tin", "unranked")
+ * @returns The emoji string for the given tier; returns `'➖'` if the tier is not recognized
  */
 function getTierFallback(tier: string): string {
   const fallbacks: Record<string, string> = {
@@ -109,28 +131,36 @@ function getTierFallback(tier: string): string {
 }
 
 /**
- * Check if emojis have been loaded
+ * Determine whether the emoji cache has been initialized and contains at least one entry.
+ *
+ * @returns `true` if the emoji cache has been initialized and contains at least one emoji, `false` otherwise.
  */
 export function emojisLoaded(): boolean {
   return emojiCache !== null && emojiCache.size > 0;
 }
 
 /**
- * Get count of loaded emojis
+ * Get the number of emojis currently stored in the cache.
+ *
+ * @returns The number of cached emojis, or 0 if the cache is not initialized.
  */
 export function getEmojiCount(): number {
   return emojiCache?.size || 0;
 }
 
 /**
- * Clear the emoji cache (useful for reloading)
+ * Clears the in-memory emoji cache.
+ *
+ * After calling this, emoji data will be treated as not loaded and must be reinitialized before use.
  */
 export function clearEmojiCache(): void {
   emojiCache = null;
 }
 
 /**
- * Get the raw emoji cache for use in components
+ * Retrieve the current emoji cache map.
+ *
+ * @returns The emoji map keyed by name, or `null` if the cache is not initialized.
  */
 export function getEmojiCache(): Map<string, DiscordEmoji> | null {
   return emojiCache;

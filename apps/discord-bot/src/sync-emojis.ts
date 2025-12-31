@@ -48,6 +48,11 @@ interface LocalEmoji {
   path: string;
 }
 
+/**
+ * Fetches the application's current emojis from Discord.
+ *
+ * @returns An array of `DiscordEmoji` objects representing the application's emojis; an empty array if none are present.
+ */
 async function getExistingEmojis(): Promise<DiscordEmoji[]> {
   const emojis = (await rest.get(
     Routes.applicationEmojis(DISCORD_CLIENT_ID!),
@@ -55,11 +60,23 @@ async function getExistingEmojis(): Promise<DiscordEmoji[]> {
   return emojis.items || [];
 }
 
+/**
+ * Delete an application emoji from Discord and log the deletion.
+ *
+ * @param emojiId - The Discord emoji ID to delete
+ * @param name - Human-readable emoji name shown in the deletion log
+ */
 async function deleteEmoji(emojiId: string, name: string): Promise<void> {
   await rest.delete(Routes.applicationEmoji(DISCORD_CLIENT_ID!, emojiId));
   console.log(`  ❌ Deleted: ${name}`);
 }
 
+/**
+ * Creates a new application emoji in Discord with the specified name and image.
+ *
+ * @param name - The emoji name as it should appear in Discord.
+ * @param imageData - Image encoded as a data URI (for example, `data:image/png;base64,...`).
+ */
 async function createEmoji(name: string, imageData: string): Promise<void> {
   await rest.post(Routes.applicationEmojis(DISCORD_CLIENT_ID!), {
     body: {
@@ -70,6 +87,12 @@ async function createEmoji(name: string, imageData: string): Promise<void> {
   console.log(`  ✅ Created: ${name}`);
 }
 
+/**
+ * Produce a base64 data URI for an image file.
+ *
+ * @param filePath - Filesystem path to the image file. Supported extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`; other extensions will be treated as PNG.
+ * @returns A data URI containing the image encoded in base64 with an appropriate MIME type (e.g., `data:image/png;base64,...`).
+ */
 function getImageDataUri(filePath: string): string {
   const ext = extname(filePath).toLowerCase();
   const mimeTypes: Record<string, string> = {
@@ -86,6 +109,12 @@ function getImageDataUri(filePath: string): string {
   return `data:${mimeType};base64,${base64}`;
 }
 
+/**
+ * Normalize a string into a lowercase, underscore-delimited identifier suitable for emoji names.
+ *
+ * @param name - The input string to normalize
+ * @returns The input converted to lowercase, non-alphanumeric characters replaced with underscores, consecutive underscores collapsed into a single underscore, and any leading or trailing underscores removed
+ */
 function sanitizeName(name: string): string {
   return name
     .toLowerCase()
@@ -94,6 +123,16 @@ function sanitizeName(name: string): string {
     .replace(/^_|_$/g, '');
 }
 
+/**
+ * Builds a list of local emoji definitions by scanning the web app's image directories.
+ *
+ * Scans the configured WEB_IMAGES_DIR for a logo (logo.png), banner images (banners/),
+ * legend avatars (legends/avatars/), and weapon images (weapons/). Filenames are
+ * sanitized and prefixed with `banner_`, `avatar_`, or `weapon_` as appropriate.
+ * Exits the process with an error if WEB_IMAGES_DIR does not exist.
+ *
+ * @returns An array of LocalEmoji objects, each containing `name` (sanitized key) and `path` (filesystem path to the image)
+ */
 function getLocalEmojis(): LocalEmoji[] {
   const emojis: LocalEmoji[] = [];
 
@@ -156,6 +195,11 @@ function getLocalEmojis(): LocalEmoji[] {
   return emojis;
 }
 
+/**
+ * Synchronizes local web images with the Discord application's emojis.
+ *
+ * Deletes application emojis that are not present locally and creates emojis for local images that are missing on the application, logging progress and per-item errors without aborting the overall process. Images that exceed Discord's size limit are reported as "Image too large".
+ */
 async function syncEmojis(): Promise<void> {
   console.log('🔄 Syncing emojis to Discord application...\n');
 

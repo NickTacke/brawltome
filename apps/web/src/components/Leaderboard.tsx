@@ -55,6 +55,13 @@ const SORT_OPTIONS = [
   { id: 'games', label: 'Games' },
 ];
 
+/**
+ * Render the leaderboard UI with bracket, region, and sort controls, and a paginated table of player or team entries.
+ *
+ * Displays loading skeletons while fetching data, shows an error card on fetch failure, and an empty-state message when no entries exist. Changing bracket, region, or sort resets to page 1. The component caps displayed pages at MAX_LEADERBOARD_PAGES and updates content based on the current page, bracket (1v1 or 2v2), region, and sort selection.
+ *
+ * @returns The leaderboard JSX element containing controls, a responsive table of entries, and pagination controls
+ */
 export function Leaderboard() {
   const [bracket, setBracket] =
     useState<(typeof BRACKETS)[number]['id']>('1v1');

@@ -124,7 +124,11 @@ export const clanCommand: Command = {
 };
 
 /**
- * Handle clan select menu interaction
+ * Update the original select-menu message to show details for the selected clan.
+ *
+ * Fetches the clan corresponding to the user's selection, replaces the message embed with the clan's embed, preserves and updates the select menu to reflect the new selection, and starts background polling for fresh data if the clan is marked as refreshing.
+ *
+ * @param interaction - The select-menu interaction containing the chosen clan id and the message to update
  */
 export async function handleClanSelect(
   interaction: StringSelectMenuInteraction,
@@ -172,7 +176,17 @@ export async function handleClanSelect(
 }
 
 /**
- * Extract clan options from the existing message's select menu
+ * Extract available clan options from a message's select menu.
+ *
+ * Parses the first action row's string-select component and maps each option to
+ * an object shaped like entries in `api.SearchResponse['clans']`. If no suitable
+ * select menu or options are present, returns an empty array. If an unexpected
+ * error occurs while parsing, returns a single-item fallback array containing
+ * an "Unknown" clan using `selectedId`.
+ *
+ * @param message - The message or interaction response containing components to read
+ * @param selectedId - Clan ID to use in the fallback entry if parsing fails with an exception
+ * @returns An array of clan-like objects with `clanId`, `name`, `xp` (`'0'`), and `memberCount` — empty when no select/options are found, or a single fallback entry on error
  */
 function getClansFromMessage(
   message: Message<boolean> | InteractionResponse<boolean>,

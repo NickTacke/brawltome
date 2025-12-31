@@ -141,7 +141,14 @@ export const playerCommand: Command = {
 };
 
 /**
- * Handle player select menu interaction
+ * Update the interaction response when a player is selected from the player select menu.
+ *
+ * Defers the update, fetches the selected player's data, and edits the original reply with a player embed.
+ * If the original message contains the player select menu, the menu is rebuilt to preserve options and reflect the new selection.
+ * If the fetched player is in a refreshing state, starts polling the message for fresh data.
+ * On failure, replaces the reply with a generic error embed and clears components.
+ *
+ * @param interaction - The StringSelectMenuInteraction triggered by selecting a player option
  */
 export async function handlePlayerSelect(
   interaction: StringSelectMenuInteraction,
@@ -196,7 +203,11 @@ export async function handlePlayerSelect(
 }
 
 /**
- * Extract player options from the existing message's select menu
+ * Retrieve player entries represented by a message's StringSelect menu so the same options can be preserved.
+ *
+ * @param message - The message or interaction response that contains the select menu component
+ * @param selectedId - The selected player ID to use as a fallback if the menu options cannot be parsed
+ * @returns An array of player-like objects derived from the select menu options. If parsing fails, returns a single minimal entry with `brawlhallaId` equal to `selectedId`
  */
 function getPlayersFromMessage(
   message: Message<boolean> | InteractionResponse<boolean>,
@@ -261,6 +272,11 @@ function getPlayersFromMessage(
   }
 }
 
+/**
+ * Purges expired search results from the in-memory cache.
+ *
+ * Removes any entries from `searchCache` whose stored timestamp is older than `CACHE_TTL`.
+ */
 function cleanupCache() {
   const now = Date.now();
   for (const [key, value] of searchCache.entries()) {

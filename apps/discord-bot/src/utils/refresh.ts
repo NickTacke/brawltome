@@ -6,6 +6,12 @@ import { buildPlayerSelectMenu, buildClanSelectMenu } from './components.js';
 const POLL_INTERVAL_MS = 5000; // 5 seconds
 const MAX_POLL_ATTEMPTS = 3;
 
+/**
+ * Pauses execution for the specified duration.
+ *
+ * @param ms - The delay duration in milliseconds
+ * @returns A promise that resolves to `void` after the delay
+ */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -17,9 +23,14 @@ interface RefreshableResponse {
 }
 
 /**
- * Polls the API until the data is no longer refreshing, then edits the message.
- * Gives up after MAX_POLL_ATTEMPTS tries.
- * Preserves select menu if search results are provided.
+ * Polls the API until the specified player or clan data is no longer refreshing and updates the Discord message with the resulting embed.
+ *
+ * If multiple search results are provided, preserves a select menu component when updating the message. Stops retrying after MAX_POLL_ATTEMPTS.
+ *
+ * @param id - The numeric identifier of the player or clan to poll
+ * @param type - Either `'player'` or `'clan'`, indicating which resource to poll
+ * @param searchResults - Optional search results used to build and preserve a select menu when more than one result exists
+ * @param attempt - Current polling attempt count (used internally for retry limiting)
  */
 export async function pollForFreshData(
   message: Message,

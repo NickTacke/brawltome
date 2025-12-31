@@ -23,6 +23,11 @@ const clientId: string = DISCORD_CLIENT_ID;
 
 const rest = new REST().setToken(token);
 
+/**
+ * Deploys the configured slash commands to Discord, using a guild-specific deployment when DISCORD_GUILD_ID is set and a global deployment otherwise.
+ *
+ * Exits the process with status 1 if deployment fails.
+ */
 async function deployCommands() {
   try {
     console.log(`Deploying ${commandsData.length} slash commands...`);
