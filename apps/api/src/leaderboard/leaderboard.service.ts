@@ -89,7 +89,6 @@ export class LeaderboardService implements OnModuleInit {
       },
     });
 
-    // Enrich with Legend Names from Cache
     const enrichedPlayers = players.map((p) => ({
       ...p,
       bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
@@ -114,8 +113,8 @@ export class LeaderboardService implements OnModuleInit {
     sort: LeaderboardSort = 'rating',
     limit?: number
   ) {
-    const MAX_RANKINGS_PAGES = 200; // How many BHAPI pages the janitor keeps fresh
-    const RANKINGS_PAGE_SIZE = 50; // BHAPI rankings page size
+    const MAX_RANKINGS_PAGES = 200;
+    const RANKINGS_PAGE_SIZE = 50;
     const MAX_RANKINGS_ENTRIES = MAX_RANKINGS_PAGES * RANKINGS_PAGE_SIZE;
 
     const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
@@ -135,7 +134,6 @@ export class LeaderboardService implements OnModuleInit {
 
     const orderBy = [
       { [safeSort]: 'desc' as const },
-      // Tie-breakers for stable ordering across pages/refreshes
       { rating: 'desc' as const },
       { peakRating: 'desc' as const },
       { wins: 'desc' as const },
@@ -191,7 +189,6 @@ export class LeaderboardService implements OnModuleInit {
     const idToName = new Map(players.map((p) => [p.brawlhallaId, p.name]));
     const enrichedTeams = teams.map((t, i) => ({
       ...t,
-      // IMPORTANT: rank is computed from our DB ordering (region+sort+page), not the API ladder rank
       rank: skip + i + 1,
       playerOneName: idToName.get(t.brawlhallaIdOne) ?? null,
       playerTwoName: idToName.get(t.brawlhallaIdTwo) ?? null,
