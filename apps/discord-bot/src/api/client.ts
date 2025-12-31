@@ -1,6 +1,5 @@
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 
-// Types for API responses
 export interface PlayerResponse {
   brawlhallaId: number;
   name: string;

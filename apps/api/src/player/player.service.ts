@@ -83,7 +83,6 @@ export class PlayerService implements OnModuleInit {
   }
 
   async getPlayer(id: number) {
-    // Fetch Player from database
     let player = await this.prisma.player.findUnique({
       where: { brawlhallaId: id },
       include: {
@@ -109,13 +108,12 @@ export class PlayerService implements OnModuleInit {
       },
     });
 
-    // If not found, try to discover from API
     if (!player) {
       player = await this.discoverPlayer(id);
       if (!player) return null;
     }
 
-    void this.incrementViewCount(id); // Fire and forget
+    void this.incrementViewCount(id);
 
     const now = Date.now();
     const rankedAge = player.ranked
@@ -125,7 +123,6 @@ export class PlayerService implements OnModuleInit {
       ? now - player.stats.lastUpdated.getTime()
       : Infinity;
 
-    // Queue jobs if necessary
     if (rankedAge > RANKED_TTL) {
       try {
         const priority = this.calculatePriority(
@@ -151,7 +148,6 @@ export class PlayerService implements OnModuleInit {
       }
     }
 
-    // Enrich legends with bioName
     if (player.stats?.legends) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (player.stats.legends as any[]) = player.stats.legends.map((l) => ({
@@ -172,7 +168,6 @@ export class PlayerService implements OnModuleInit {
       }));
     }
 
-    // Join stats legends with ranked legends (convenience view for frontend)
     if (player.stats?.legends) {
       const rankedByLegendId = new Map<
         number,
@@ -205,7 +200,6 @@ export class PlayerService implements OnModuleInit {
       }));
     }
 
-    // Derived stats (persisted with fallback computation)
     if (player.stats) {
       const legends = (player.stats.legends || []) as Array<{
         legendId: number;
@@ -224,7 +218,6 @@ export class PlayerService implements OnModuleInit {
           : legends.reduce((sum, l) => sum + (l.matchTime || 0), 0);
       const weaponAgg = createWeaponAggregator();
 
-      // Prefer persisted rows, but if missing/stale, compute from legend breakdown using cached weapon mapping
       if (player.stats.weaponStats && player.stats.weaponStats.length > 0) {
         for (const w of player.stats.weaponStats as Array<{
           weapon: string;
@@ -280,22 +273,18 @@ export class PlayerService implements OnModuleInit {
   private async discoverPlayer(
     id: number
   ): Promise<PlayerWithRelations | null> {
-    // Check if there's already an in-flight discovery for this player
-    // This prevents duplicate API calls when multiple requests come in simultaneously
     const existingDiscovery = this.inFlightDiscoveries.get(id);
     if (existingDiscovery) {
       this.logger.debug(`Joining existing discovery for player ${id}`);
       return existingDiscovery;
     }
 
-    // Create the discovery promise and track it
     const discoveryPromise = this.executeDiscovery(id);
     this.inFlightDiscoveries.set(id, discoveryPromise);
 
     try {
       return await discoveryPromise;
     } finally {
-      // Clean up the tracking map once discovery completes (success or failure)
       this.inFlightDiscoveries.delete(id);
     }
   }
@@ -303,7 +292,6 @@ export class PlayerService implements OnModuleInit {
   private async executeDiscovery(
     id: number
   ): Promise<PlayerWithRelations | null> {
-    // Check tokens first
     const tokens = await this.bhApiClient.getRemainingTokens();
     if (tokens < DISCOVERY_MIN_TOKENS) {
       this.logger.warn(
@@ -318,7 +306,6 @@ export class PlayerService implements OnModuleInit {
     this.logger.log(`Discovering player ${id} from API`);
 
     try {
-      // Priority: Stats first (for name/existence), then Ranked
       let name = '';
       let region = 'UNKNOWN';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -328,17 +315,14 @@ export class PlayerService implements OnModuleInit {
         const statsData = await this.bhApiClient.getPlayerStats(id);
         name = statsData.name || '';
       } catch (e) {
-        // Stats might fail for various reasons (404 etc), but it's our primary source for "existence"
         this.logger.warn(`Failed to fetch stats for ${id}: ${e}`);
       }
 
-      // If we didn't find a name in stats, we can't create the player reliably
       if (!name) {
         this.logger.warn(`Could not find name for player ${id} in stats.`);
         return null;
       }
 
-      // Try fetching ranked data to enrich
       try {
         rankedData = await this.bhApiClient.getPlayerRanked(id);
         region = rankedData.region || 'UNKNOWN';
@@ -348,7 +332,6 @@ export class PlayerService implements OnModuleInit {
         );
       }
 
-      // Save to DB
       await this.prisma.$transaction(async (tx) => {
         await tx.player.upsert({
           where: { brawlhallaId: id },
@@ -400,13 +383,11 @@ export class PlayerService implements OnModuleInit {
         }
       });
 
-      // Queue full refreshes to ensure we have consistent data
       await this.refreshQueue.add('refresh-stats', { id });
       if (rankedData.legends) {
         await this.refreshQueue.add('refresh-ranked', { id });
       }
 
-      // Return the newly created player
       return this.fetchPlayerWithRelations(id);
     } catch (error) {
       this.logger.warn(`Failed to discover player ${id}: ${error}`);
