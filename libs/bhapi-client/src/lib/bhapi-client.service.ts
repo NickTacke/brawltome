@@ -75,13 +75,6 @@ export class BhApiClientService {
           `Rate limit 429 hit! Backing off for ${waitTime / 1000}s`
         );
 
-        // Reset reservoir to 0 to stop workers from starving
-        try {
-          await this.limiter.updateSettings({ reservoir: 0 });
-        } catch (err) {
-          this.logger.error('Failed to update limiter settings', err);
-        }
-
         // Return the wait time, Bottleneck will handle the delay
         return waitTime;
       }
