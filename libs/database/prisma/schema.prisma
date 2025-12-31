@@ -317,3 +317,10 @@ model DiscordLink {
 
   player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
 }
+
+// Blacklist for hiding players from leaderboards and search
+model Blacklist {
+  brawlhallaId Int      @id
+  reason       String?
+  createdAt    DateTime @default(now())
+}

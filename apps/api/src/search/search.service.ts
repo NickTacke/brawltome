@@ -7,11 +7,15 @@ export class SearchService implements OnModuleInit {
   private readonly logger = new Logger(SearchService.name);
   private legendCache: Map<number, string> = new Map();
   private legendIdToKeyCache: Map<number, string> = new Map();
+  private blacklistedIds: Set<number> = new Set();
 
   constructor(private prisma: PrismaService) {}
 
   async onModuleInit() {
-    await this.refreshLegendCache();
+    await Promise.all([
+      this.refreshLegendCache(),
+      this.refreshBlacklistCache(),
+    ]);
   }
 
   async refreshLegendCache() {
@@ -29,6 +33,18 @@ export class SearchService implements OnModuleInit {
     }
   }
 
+  private async refreshBlacklistCache() {
+    try {
+      const blacklist = await this.prisma.blacklist.findMany({
+        select: { brawlhallaId: true },
+      });
+      this.blacklistedIds = new Set(blacklist.map((b) => b.brawlhallaId));
+      this.logger.log(`Loaded ${this.blacklistedIds.size} blacklisted IDs`);
+    } catch (error) {
+      this.logger.error('Failed to load blacklist cache', error);
+    }
+  }
+
   async searchLocal(query: string) {
     const sanitized = sanitizeSearchQuery(query);
 
@@ -36,26 +52,36 @@ export class SearchService implements OnModuleInit {
 
     this.logger.debug(`Local search query="${sanitized}"`);
 
+    const blacklistFilter =
+      this.blacklistedIds.size > 0
+        ? { brawlhallaId: { notIn: Array.from(this.blacklistedIds) } }
+        : {};
+
     const [players, clans] = await Promise.all([
       this.prisma.player.findMany({
         where: {
-          OR: [
+          AND: [
             {
-              name: {
-                contains: sanitized,
-                mode: 'insensitive',
-              },
-            },
-            {
-              aliases: {
-                some: {
-                  key: {
+              OR: [
+                {
+                  name: {
                     contains: sanitized,
                     mode: 'insensitive',
                   },
                 },
-              },
+                {
+                  aliases: {
+                    some: {
+                      key: {
+                        contains: sanitized,
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+              ],
             },
+            blacklistFilter,
           ],
         },
         take: 50,
