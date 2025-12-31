@@ -37,6 +37,7 @@ export class PlayerService implements OnModuleInit {
     number,
     { weaponOne: string; weaponTwo: string }
   > = new Map();
+  private blacklistedIds: Set<number> = new Set();
 
   // Track in-flight discovery requests to prevent race conditions
   // When multiple requests come in for the same unknown player, they share one API call
@@ -52,7 +53,10 @@ export class PlayerService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.refreshLegendCache();
+    await Promise.all([
+      this.refreshLegendCache(),
+      this.refreshBlacklistCache(),
+    ]);
   }
 
   async refreshLegendCache() {
@@ -82,7 +86,24 @@ export class PlayerService implements OnModuleInit {
     }
   }
 
+  private async refreshBlacklistCache() {
+    try {
+      const blacklist = await this.prisma.blacklist.findMany({
+        select: { brawlhallaId: true },
+      });
+      this.blacklistedIds = new Set(blacklist.map((b) => b.brawlhallaId));
+      this.logger.log(`Loaded ${this.blacklistedIds.size} blacklisted IDs`);
+    } catch (error) {
+      this.logger.error('Failed to load blacklist cache', error);
+    }
+  }
+
   async getPlayer(id: number) {
+    // Check if player is blacklisted
+    if (this.blacklistedIds.has(id)) {
+      return null;
+    }
+
     let player = await this.prisma.player.findUnique({
       where: { brawlhallaId: id },
       include: {
@@ -273,6 +294,11 @@ export class PlayerService implements OnModuleInit {
   private async discoverPlayer(
     id: number
   ): Promise<PlayerWithRelations | null> {
+    // Don't discover blacklisted players
+    if (this.blacklistedIds.has(id)) {
+      return null;
+    }
+
     const existingDiscovery = this.inFlightDiscoveries.get(id);
     if (existingDiscovery) {
       this.logger.debug(`Joining existing discovery for player ${id}`);
