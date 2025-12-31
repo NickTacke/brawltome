@@ -71,7 +71,7 @@ Look up a Brawlhalla player by name or ID.
 **Examples:**
 
 - `/player xJcoolJ` - Search by name
-- `/player 5895920` - Look up by exact Brawlhalla ID
+- `/player 73041583` - Look up by exact Brawlhalla ID
 
 **Shows:**
 
@@ -87,7 +87,7 @@ Look up a Brawlhalla clan by name or ID.
 **Examples:**
 
 - `/clan Mariejois` - Search by name
-- `/clan 1` - Look up by exact clan ID
+- `/clan 2482556` - Look up by exact clan ID
 
 **Shows:**
 
