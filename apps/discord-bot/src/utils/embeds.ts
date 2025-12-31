@@ -126,8 +126,8 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
     const weaponsText = topWeapons
       .map((weapon) => {
         const emoji = getWeaponEmoji(weapon.weapon);
-        const pct = Math.round(weapon.share * 100);
-        return `${emoji} **${weapon.weapon}** ${pct}%`;
+        const playtime = formatPlaytime(weapon.timeHeld);
+        return `${emoji} **${weapon.weapon}** ${playtime}`;
       })
       .join('\n');
 
@@ -186,46 +186,62 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   return embed;
 }
 
-export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
+export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
+  const ITEMS_PER_PAGE = 5;
   const embed = new EmbedBuilder()
     .setTitle(clan.clanName)
-    .setColor(Colors.Blue)
+    .setColor(0x35228a)
     .setURL(`https://brawltome.com/clan/${clan.clanId}`)
     .setThumbnail('https://brawltome.com/images/logo.png');
 
   const xpValue = parseInt(clan.clanXp) || 0;
-  embed.setDescription(
-    [
-      `**${clan.members.length}** members • **${formatNumber(xpValue)}** XP`,
-      `Created <t:${Math.floor(
+  const totalPages = Math.ceil(clan.members.length / ITEMS_PER_PAGE);
+
+  embed.addFields({
+    name: '📋 Clan Info',
+    value: [
+      `👥 **Members**: ${clan.members.length}`,
+      `✨ **Total XP**: ${formatNumber(xpValue)}`,
+      `📅 **Created**: <t:${Math.floor(
         new Date(clan.clanCreateDate).getTime() / 1000,
       )}:D>`,
     ].join('\n'),
-  );
+    inline: false,
+  });
 
   if (clan.members.length > 0) {
     const sortedMembers = [...clan.members].sort((a, b) => b.xp - a.xp);
-    const topMembers = sortedMembers.slice(0, 6);
+    const start = page * ITEMS_PER_PAGE;
+    const pageMembers = sortedMembers.slice(start, start + ITEMS_PER_PAGE);
 
-    const membersText = topMembers
+    const membersText = pageMembers
       .map((member, i) => {
+        const rank = start + i + 1;
         const rankIcon =
           member.rank === 'Leader'
             ? '👑'
             : member.rank === 'Officer'
             ? '⭐'
-            : `${i + 1}.`;
+            : `\`${rank}.\``;
+
         const legendEmoji = member.legendNameKey
           ? getAvatarEmoji(member.legendNameKey)
           : '';
-        const elo = member.elo ? `(${member.elo})` : '';
-        return `${rankIcon} ${legendEmoji} **${member.name}** ${elo}`;
+
+        const memberLink = `[${truncate(
+          member.name,
+          20,
+        )}](https://brawltome.com/player/${member.brawlhallaId})`;
+        const elo = member.elo ? ` \`(${member.elo})\`` : '';
+        const memberXp = ` • \`${formatNumber(member.xp)} XP\``;
+
+        return `${rankIcon} ${legendEmoji} **${memberLink}**${elo}${memberXp}`;
       })
       .join('\n');
 
     embed.addFields({
-      name: '🏆 Top Members',
-      value: membersText,
+      name: `🏆 Members (Page ${page + 1}/${totalPages})`,
+      value: membersText || 'No members on this page.',
       inline: false,
     });
   }
@@ -240,6 +256,11 @@ export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
   embed.setTimestamp();
 
   return embed;
+}
+
+function truncate(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  return str.slice(0, maxLength - 3) + '...';
 }
 
 export function buildErrorEmbed(

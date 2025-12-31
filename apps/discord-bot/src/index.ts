@@ -10,7 +10,7 @@ import {
 } from 'discord.js';
 import { commands } from './commands/index.js';
 import { handlePlayerSelect } from './commands/player.js';
-import { handleClanSelect } from './commands/clan.js';
+import { handleClanSelect, handleClanPage } from './commands/clan.js';
 import { initEmojis, getEmojiCount, getEmojiCache } from './utils/emojis.js';
 import { setEmojiCache } from './utils/components.js';
 
@@ -78,7 +78,9 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
 
   if (interaction.isStringSelectMenu()) {
     try {
-      switch (interaction.customId) {
+      const [customId] = interaction.customId.split(':');
+
+      switch (customId) {
         case 'player_select':
           await handlePlayerSelect(interaction);
           break;
@@ -93,6 +95,20 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         `Error handling select menu ${interaction.customId}:`,
         error,
       );
+    }
+  }
+
+  if (interaction.isButton()) {
+    try {
+      const [customId] = interaction.customId.split(':');
+
+      switch (customId) {
+        case 'clan_page':
+          await handleClanPage(interaction);
+          break;
+      }
+    } catch (error) {
+      console.error(`Error handling button ${interaction.customId}:`, error);
     }
   }
 });
