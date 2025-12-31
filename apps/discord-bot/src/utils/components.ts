@@ -3,6 +3,8 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   ComponentEmojiResolvable,
+  ButtonBuilder,
+  ButtonStyle,
 } from 'discord.js';
 
 interface PlayerOption {
@@ -49,9 +51,14 @@ function getEmojiForSelect(
 export function buildPlayerSelectMenu(
   players: PlayerOption[],
   selectedId: number,
+  interactionId?: string,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
+  const customId = interactionId
+    ? `player_select:${interactionId}`
+    : 'player_select';
+
   const select = new StringSelectMenuBuilder()
-    .setCustomId('player_select')
+    .setCustomId(customId)
     .setPlaceholder('Switch player...')
     .addOptions(
       players.slice(0, 25).map((p) => {
@@ -90,9 +97,14 @@ export function buildPlayerSelectMenu(
 export function buildClanSelectMenu(
   clans: ClanOption[],
   selectedId: number,
+  interactionId?: string,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
+  const customId = interactionId
+    ? `clan_select:${interactionId}`
+    : 'clan_select';
+
   const select = new StringSelectMenuBuilder()
-    .setCustomId('clan_select')
+    .setCustomId(customId)
     .setPlaceholder('Switch clan...')
     .addOptions(
       clans.slice(0, 25).map((c) =>
@@ -106,6 +118,35 @@ export function buildClanSelectMenu(
     );
 
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+}
+
+/**
+ * Build buttons for clan member pagination
+ */
+export function buildClanPaginationButtons(
+  interactionId: string,
+  currentPage: number,
+  totalMembers: number,
+): ActionRowBuilder<ButtonBuilder> {
+  const ITEMS_PER_PAGE = 5;
+  const totalPages = Math.ceil(totalMembers / ITEMS_PER_PAGE);
+
+  const prevButton = new ButtonBuilder()
+    .setCustomId(`clan_page:${interactionId}:${currentPage - 1}`)
+    .setLabel('Previous')
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(currentPage <= 0);
+
+  const nextButton = new ButtonBuilder()
+    .setCustomId(`clan_page:${interactionId}:${currentPage + 1}`)
+    .setLabel('Next')
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(currentPage >= totalPages - 1);
+
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    prevButton,
+    nextButton,
+  );
 }
 
 function truncate(str: string, maxLength: number): string {
