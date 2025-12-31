@@ -1,6 +1,12 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
+import { DISCOVERY_MIN_TOKENS } from '@brawltome/shared-utils';
+
+// TTL for clan data before it's considered stale
+const CLAN_TTL = 1000 * 60 * 60; // 1 hour
 
 @Injectable()
 export class ClanService {
@@ -8,7 +14,8 @@ export class ClanService {
 
   constructor(
     private prisma: PrismaService,
-    private bhApiClient: BhApiClientService
+    private bhApiClient: BhApiClientService,
+    @InjectQueue('refresh-queue') private refreshQueue: Queue
   ) {}
 
   async getClan(id: number) {
@@ -21,26 +28,23 @@ export class ClanService {
     });
 
     const now = Date.now();
-    const MAX_AGE = 1000 * 60 * 60; // 1 hour
+    const isStale = clan ? now - clan.lastUpdated.getTime() > CLAN_TTL : true;
 
-    // If not found or stale, refresh
-    if (!clan || now - clan.lastUpdated.getTime() > MAX_AGE) {
-      try {
-        clan = await this.fetchAndSaveClan(id);
-      } catch (error) {
-        // If API fails but we have stale data, return stale data
-        if (clan) {
-          this.logger.warn(
-            `Failed to refresh clan ${id}, returning stale data`,
-            error
-          );
-        } else {
-          throw error;
-        }
-      }
+    // If clan doesn't exist, we need to discover it (blocking)
+    if (!clan) {
+      clan = await this.discoverClan(id);
+      if (!clan) return null;
+    } else if (isStale) {
+      // Clan exists but is stale - queue background refresh and return stale data
+      void this.queueClanRefresh(id);
     }
 
-    if (!clan?.members?.length) return clan;
+    if (!clan?.members?.length) {
+      return {
+        ...clan,
+        isRefreshing: isStale,
+      };
+    }
 
     // Enrich clan members with overall 1v1 Elo (Player.rating) and peak rating.
     // Some members may not exist in the Player table yet; those will return null.
@@ -80,6 +84,7 @@ export class ClanService {
 
     return {
       ...clan,
+      isRefreshing: isStale,
       members: clan.members.map((m) => {
         const ranked = ratingById.get(m.brawlhallaId);
         return {
@@ -93,7 +98,69 @@ export class ClanService {
     };
   }
 
-  private async fetchAndSaveClan(id: number) {
+  /**
+   * Discover a clan that doesn't exist in the database yet.
+   * This is a blocking operation that calls the external API.
+   */
+  private async discoverClan(id: number) {
+    // Check tokens first to avoid hitting rate limits
+    const tokens = await this.bhApiClient.getRemainingTokens();
+    if (tokens < DISCOVERY_MIN_TOKENS) {
+      this.logger.warn(
+        `Clan discovery blocked for ${id} due to low tokens (${tokens})`
+      );
+      throw new HttpException(
+        'Server busy. Cannot fetch new clan data right now.',
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+
+    this.logger.log(`Discovering clan ${id} from API`);
+    return this.fetchAndSaveClan(id);
+  }
+
+  /**
+   * Queue a background job to refresh clan data.
+   * Fire-and-forget - errors are logged but not thrown.
+   */
+  private async queueClanRefresh(id: number) {
+    const jobId = `refresh-clan-${id}`;
+
+    try {
+      // Check if job already exists
+      const existingJob = await this.refreshQueue.getJob(jobId);
+      if (existingJob) {
+        const state = await existingJob.getState();
+        if (state === 'failed') {
+          await existingJob.remove();
+          this.logger.debug(`Removed failed clan refresh job for ${id}`);
+        } else {
+          // Job already queued or in progress
+          return;
+        }
+      }
+
+      await this.refreshQueue.add(
+        'refresh-clan',
+        { id },
+        {
+          jobId,
+          priority: 50, // Medium priority
+          removeOnComplete: true,
+          removeOnFail: true,
+        }
+      );
+      this.logger.debug(`Queued clan refresh for ${id}`);
+    } catch (error) {
+      this.logger.warn(`Failed to queue clan refresh for ${id}`, error);
+    }
+  }
+
+  /**
+   * Fetch clan data from the API and save to database.
+   * Called by both discovery (blocking) and background refresh (worker).
+   */
+  async fetchAndSaveClan(id: number) {
     try {
       this.logger.log(`Fetching clan ${id} from API...`);
       const clanData = await this.bhApiClient.getClan(id);
