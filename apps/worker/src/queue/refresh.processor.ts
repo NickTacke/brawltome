@@ -17,7 +17,6 @@ import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
 export class RefreshProcessor extends WorkerHost {
   private readonly logger = new Logger(RefreshProcessor.name);
 
-  // Cache logic
   private legendWeaponsCache = new Map<
     number,
     { weaponOne: string; weaponTwo: string }
@@ -26,20 +25,16 @@ export class RefreshProcessor extends WorkerHost {
   private async getLegendWeaponsMap(): Promise<
     Map<number, { weaponOne: string; weaponTwo: string }>
   > {
-    // Return cache if the data was already loaded
     if (this.legendWeaponsCache.size > 0) return this.legendWeaponsCache;
 
-    // Fetch legends from database
     const legends = await this.prisma.legend.findMany({
       select: { legendId: true, weaponOne: true, weaponTwo: true },
     });
 
-    // Update cache
     this.legendWeaponsCache = new Map(
       legends.map((l) => [
         l.legendId,
         {
-          // Convert Fists and Pistol to Gauntlets and Blasters for database consistency
           weaponOne:
             l.weaponOne === 'Fists'
               ? 'Gauntlets'
@@ -92,14 +87,10 @@ export class RefreshProcessor extends WorkerHost {
     }
   }
 
-  // -- Private Methods --
-
   private async processRefreshRanked(id: number) {
     const data = await this.bhApiClient.getPlayerRanked(id);
 
-    // Ranked upsert
     await this.prisma.$transaction(async (tx) => {
-      // Check if the player already exists
       const existing = await tx.player.findUnique({
         where: { brawlhallaId: id },
         select: {
@@ -110,7 +101,6 @@ export class RefreshProcessor extends WorkerHost {
         },
       });
 
-      // Check if the player name should be updated
       const newName = data.name;
       const shouldUpdateName = newName && newName.trim().length > 0;
       const aliasUpdate =
@@ -137,10 +127,6 @@ export class RefreshProcessor extends WorkerHost {
             }
           : {};
 
-      // TODO: Tier override logic (Valhallan downgrade prevention)
-      // Need some sort of "seen on leaderboard" timestamp to prevent downgrade
-
-      // Update the Player table
       await tx.player.update({
         where: { brawlhallaId: id },
         data: {
@@ -154,7 +140,6 @@ export class RefreshProcessor extends WorkerHost {
         },
       });
 
-      // Upsert the PlayerRanked table
       await tx.playerRanked.upsert({
         where: { brawlhallaId: id },
         update: {
@@ -186,17 +171,14 @@ export class RefreshProcessor extends WorkerHost {
     const data = await this.bhApiClient.getPlayerStats(id);
     const legendIdToWeapons = await this.getLegendWeaponsMap();
 
-    // Prepare all data in memory first
     const statsLegends: PlayerStatsLegendDTO[] = data.legends || [];
     const totalPlaytime = statsLegends.reduce(
       (sum, l) => sum + (l.matchtime || 0),
       0
     );
 
-    // Weapon aggregation derived from per-legend stats
     const weaponAgg = createWeaponAggregator();
 
-    // For each legend, look up weapons and add to aggregator
     for (const l of statsLegends) {
       const weapons = legendIdToWeapons.get(l.legend_id);
       if (!weapons) continue;
@@ -215,7 +197,6 @@ export class RefreshProcessor extends WorkerHost {
       );
     }
 
-    // Filter out zero-valued rows and map to database rows
     const weaponStatsRows = Array.from(weaponAgg.values())
       .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
       .map((w) => ({
@@ -225,16 +206,12 @@ export class RefreshProcessor extends WorkerHost {
         KOs: w.KOs,
       }));
 
-    // Stats upsert
     await this.prisma.$transaction(async (tx) => {
-      // Check if player name is better than existing name
-      // Fixes name for players that haven't played ranked 1v1 yet
       if (data.name && data.name.trim().length > 0) {
         const existing = await tx.player.findUnique({
           where: { brawlhallaId: id },
           select: { name: true },
         });
-        // If current name is empty or missing, update it
         if (existing && (!existing.name || existing.name.trim().length === 0)) {
           await tx.player.update({
             where: { brawlhallaId: id },
@@ -243,14 +220,12 @@ export class RefreshProcessor extends WorkerHost {
         }
       }
 
-      // If clan data is missing, clean up existing clan records
       if (!data.clan) {
         await tx.playerClan.deleteMany({
           where: { brawlhallaId: id },
         });
       }
 
-      // Upsert player stats
       await tx.playerStats.upsert({
         where: { brawlhallaId: id },
         update: {
@@ -345,10 +320,8 @@ export class RefreshProcessor extends WorkerHost {
   private async processRefreshClan(id: number) {
     const clanData = await this.bhApiClient.getClan(id);
 
-    // Get all member brawlhallaIds
     const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
 
-    // Find best ranked legend for each member (for avatar)
     const bestLegends = await this.prisma.playerRankedLegend.findMany({
       where: { brawlhallaId: { in: memberIds } },
       orderBy: { rating: 'desc' },
@@ -356,7 +329,6 @@ export class RefreshProcessor extends WorkerHost {
       select: { brawlhallaId: true, legendId: true },
     });
 
-    // Get legendNameKeys for those legendIds
     const legendIds = bestLegends.map((bl) => bl.legendId);
     const legends = await this.prisma.legend.findMany({
       where: { legendId: { in: legendIds } },
@@ -375,7 +347,6 @@ export class RefreshProcessor extends WorkerHost {
       }
     }
 
-    // Fallback: highest-XP stats legend for members without a ranked-1v1 legend
     const missingRankedIds = memberIds.filter(
       (pid) => !playerLegendMap.has(pid)
     );
@@ -393,7 +364,6 @@ export class RefreshProcessor extends WorkerHost {
       }
     }
 
-    // Upsert clan data
     await this.prisma.clan.upsert({
       where: { clanId: id },
       create: {
@@ -438,8 +408,6 @@ export class RefreshProcessor extends WorkerHost {
     );
   }
 
-  // -- Helper Methods --
-
   private mapLegends(legends: PlayerRankedLegendDTO[]) {
     if (!legends) return [];
     return legends.map((legend) => ({
@@ -456,7 +424,6 @@ export class RefreshProcessor extends WorkerHost {
   private mapTeams(teams: PlayerRankedTeamDTO[]) {
     if (!teams) return [];
 
-    // Deduplicate teams based on ID pairs
     const uniqueTeams = new Map<string, PlayerRankedTeamDTO>();
     for (const team of teams) {
       const key = `${team.brawlhalla_id_one}-${team.brawlhalla_id_two}`;

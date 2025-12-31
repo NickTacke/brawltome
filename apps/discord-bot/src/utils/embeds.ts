@@ -2,7 +2,6 @@ import { EmbedBuilder, Colors } from 'discord.js';
 import type { PlayerResponse, ClanResponse } from '../api/client.js';
 import { getBannerEmoji, getAvatarEmoji, getWeaponEmoji } from './emojis.js';
 
-// Tier color mapping
 const TIER_COLORS: Record<string, number> = {
   Valhallan: 0xffd700,
   Diamond: 0x35228a,
@@ -44,11 +43,9 @@ function getLegendAvatarUrl(legendNameKey: string | undefined): string | null {
   return `https://brawltome.com/images/legends/avatars/${key}.png`;
 }
 
-// Build player embed
 export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   const tierEmoji = getBannerEmoji(player.tier);
 
-  // Get highest XP legend for avatar
   const topXpLegend = player.stats?.legendsEnriched
     ?.slice()
     .sort((a, b) => b.xp - a.xp)[0];
@@ -58,13 +55,11 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
     .setColor(getTierColor(player.tier))
     .setURL(`https://brawltome.com/player/${player.brawlhallaId}`);
 
-  // Thumbnail: highest XP legend
   if (topXpLegend) {
     const avatarUrl = getLegendAvatarUrl(topXpLegend.legendNameKey);
     if (avatarUrl) embed.setThumbnail(avatarUrl);
   }
 
-  // Description with key stats
   const descLines = [
     `${tierEmoji} **${player.tier || 'Unranked'}** • **${
       player.rating || 0
@@ -86,7 +81,6 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
 
   embed.setDescription(descLines.join('\n'));
 
-  // General stats (inline)
   if (player.stats) {
     embed.addFields({
       name: '📊 Stats',
@@ -99,7 +93,6 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
     });
   }
 
-  // Top legends by XP (top 3)
   if (
     player.stats?.legendsEnriched &&
     player.stats.legendsEnriched.length > 0
@@ -124,7 +117,6 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
     });
   }
 
-  // Top weapons (top 3 by time held)
   if (player.stats?.weaponStats && player.stats.weaponStats.length > 0) {
     const topWeapons = player.stats.weaponStats
       .slice()
@@ -146,7 +138,6 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
     });
   }
 
-  // 2v2 teams (top 3)
   if (player.ranked?.teams && player.ranked.teams.length > 0) {
     const topTeams = player.ranked.teams
       .slice()
@@ -158,13 +149,11 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
         const tierBadge = getBannerEmoji(team.tier);
         const wr = formatWinRate(team.wins, team.games);
 
-        // Get teammate info - find which ID is not the current player
         const teammateId =
           team.brawlhallaIdOne === player.brawlhallaId
             ? team.brawlhallaIdTwo
             : team.brawlhallaIdOne;
 
-        // Parse teammate name from team name (format: "Name1+Name2")
         const names = team.teamName.split('+');
         const teammateName =
           names.find((n) => n.toLowerCase() !== player.name.toLowerCase()) ||
@@ -185,7 +174,6 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
     });
   }
 
-  // Footer
   embed.setFooter({
     text: `${player.region}${
       player.isRefreshing ? ' • 🔄 Refreshing...' : ''
@@ -198,7 +186,6 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   return embed;
 }
 
-// Build clan embed
 export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle(clan.clanName)
@@ -206,7 +193,6 @@ export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
     .setURL(`https://brawltome.com/clan/${clan.clanId}`)
     .setThumbnail('https://brawltome.com/images/logo.png');
 
-  // Description with clan stats
   const xpValue = parseInt(clan.clanXp) || 0;
   embed.setDescription(
     [
@@ -217,7 +203,6 @@ export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
     ].join('\n'),
   );
 
-  // Top members by XP
   if (clan.members.length > 0) {
     const sortedMembers = [...clan.members].sort((a, b) => b.xp - a.xp);
     const topMembers = sortedMembers.slice(0, 6);
@@ -257,7 +242,6 @@ export function buildClanEmbed(clan: ClanResponse): EmbedBuilder {
   return embed;
 }
 
-// Build error embed
 export function buildErrorEmbed(
   title: string,
   description: string,
@@ -273,7 +257,6 @@ export function buildErrorEmbed(
     .setTimestamp();
 }
 
-// Build search results embed
 export function buildSearchEmbed(
   query: string,
   players: Array<{
