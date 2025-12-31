@@ -16,6 +16,7 @@
     "dev:discord-bot": "nx run discord-bot:dev",
     "seed:api": "nx run api:seed",
     "seed:legends": "nx run api:seed-legends",
+    "sync-emojis:discord-bot": "nx run discord-bot:sync-emojis",
     "commitlint": "commitlint",
     "prisma:validate": "prisma validate --schema libs/database/prisma/schema.prisma"
   },
