@@ -45,12 +45,16 @@ export class RefreshProcessor extends WorkerHost {
               ? 'Gauntlets'
               : l.weaponOne === 'Pistol'
               ? 'Blasters'
+              : l.weaponOne === 'Katar'
+              ? 'Katars'
               : l.weaponOne,
           weaponTwo:
             l.weaponTwo === 'Fists'
               ? 'Gauntlets'
               : l.weaponTwo === 'Pistol'
               ? 'Blasters'
+              : l.weaponTwo === 'Katar'
+              ? 'Katars'
               : l.weaponTwo,
         },
       ])
