@@ -9,9 +9,15 @@ import {
   RankingsResponseMap,
   Region,
 } from '@brawltome/shared-types';
+import { PRIORITY_BACKGROUND } from '@brawltome/shared-utils';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
+
+export interface BhApiRequestOptions {
+  /** Bottleneck priority (lower = higher priority). Defaults to PRIORITY_BACKGROUND. */
+  priority?: number;
+}
 
 @Injectable()
 export class BhApiClientService implements OnModuleDestroy {
@@ -127,15 +133,23 @@ export class BhApiClientService implements OnModuleDestroy {
     return reservoir || 0;
   }
 
-  async getPlayerStats(brawlhallaId: number): Promise<PlayerStatsDTO> {
-    return this.limiter.schedule(() =>
-      this.performRequest(`/player/${brawlhallaId}/stats`)
+  async getPlayerStats(
+    brawlhallaId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<PlayerStatsDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/player/${brawlhallaId}/stats`)
     );
   }
 
-  async getPlayerRanked(brawlhallaId: number): Promise<PlayerRankedDTO> {
-    return this.limiter.schedule(() =>
-      this.performRequest(`/player/${brawlhallaId}/ranked`)
+  async getPlayerRanked(
+    brawlhallaId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<PlayerRankedDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/player/${brawlhallaId}/ranked`)
     );
   }
 
@@ -143,26 +157,42 @@ export class BhApiClientService implements OnModuleDestroy {
     bracket: K,
     region: Region,
     page: number,
-    name: string | null = null
+    name: string | null = null,
+    options: BhApiRequestOptions = {}
   ): Promise<RankingsResponseMap[K]> {
     const params = name ? { name } : {};
-    return this.limiter.schedule(() =>
-      this.performRequest(`/rankings/${bracket}/${region}/${page}`, params)
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () =>
+        this.performRequest(`/rankings/${bracket}/${region}/${page}`, params)
     );
   }
 
-  async getAllLegends(): Promise<LegendDTO[]> {
-    return this.limiter.schedule(() => this.performRequest(`/legend/all`));
-  }
-
-  async getLegend(legendId: number): Promise<LegendDTO> {
-    return this.limiter.schedule(() =>
-      this.performRequest(`/legend/${legendId}`)
+  async getAllLegends(options: BhApiRequestOptions = {}): Promise<LegendDTO[]> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/legend/all`)
     );
   }
 
-  async getClan(clanId: number): Promise<ClanDTO> {
-    return this.limiter.schedule(() => this.performRequest(`/clan/${clanId}`));
+  async getLegend(
+    legendId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<LegendDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/legend/${legendId}`)
+    );
+  }
+
+  async getClan(
+    clanId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<ClanDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/clan/${clanId}`)
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
