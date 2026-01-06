@@ -10,6 +10,7 @@ import {
 import {
   createWeaponAggregator,
   DISCOVERY_MIN_TOKENS,
+  PRIORITY_REALTIME,
   parseDamage,
 } from '@brawltome/shared-utils';
 
@@ -279,7 +280,9 @@ export class PlayerService {
       let rankedData: any = {};
 
       try {
-        const statsData = await this.bhApiClient.getPlayerStats(id);
+        const statsData = await this.bhApiClient.getPlayerStats(id, {
+          priority: PRIORITY_REALTIME,
+        });
         name = statsData.name || '';
       } catch (e) {
         this.logger.warn(`Failed to fetch stats for ${id}: ${e}`);
@@ -291,7 +294,9 @@ export class PlayerService {
       }
 
       try {
-        rankedData = await this.bhApiClient.getPlayerRanked(id);
+        rankedData = await this.bhApiClient.getPlayerRanked(id, {
+          priority: PRIORITY_REALTIME,
+        });
         region = rankedData.region || 'UNKNOWN';
       } catch (e) {
         this.logger.warn(
@@ -427,7 +432,7 @@ export class PlayerService {
         data: { viewCount: { increment: 1 }, lastViewedAt: new Date() },
       });
     } catch (error) {
-      /* I don't really care about analytics errors to be honest */
+      this.logger.debug(`Failed to increment view count for ${id}: ${error}`);
     }
   }
 

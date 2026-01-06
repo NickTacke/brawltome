@@ -3,7 +3,10 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
-import { DISCOVERY_MIN_TOKENS } from '@brawltome/shared-utils';
+import {
+  DISCOVERY_MIN_TOKENS,
+  PRIORITY_REALTIME,
+} from '@brawltome/shared-utils';
 
 // TTL for clan data before it's considered stale
 const CLAN_TTL = 1000 * 60 * 60; // 1 hour
@@ -141,7 +144,9 @@ export class ClanService {
   async fetchAndSaveClan(id: number) {
     try {
       this.logger.log(`Fetching clan ${id} from API...`);
-      const clanData = await this.bhApiClient.getClan(id);
+      const clanData = await this.bhApiClient.getClan(id, {
+        priority: PRIORITY_REALTIME,
+      });
 
       const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
 
