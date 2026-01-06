@@ -1,13 +1,7 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { PrismaService } from '@brawltome/database';
+import { PrismaService, GameDataCacheService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import {
   PlayerRankedLegendDTO,
@@ -19,28 +13,18 @@ import {
   parseDamage,
 } from '@brawltome/shared-utils';
 
-// Thresholds
 const RANKED_TTL = 1000 * 60 * 60; // 1 hour
 const STATS_TTL = 12 * 1000 * 60 * 60; // 12 hours
 
-// Type for the full player include used by discovery
 type PlayerWithRelations = Awaited<
   ReturnType<PlayerService['fetchPlayerWithRelations']>
 >;
 
 @Injectable()
-export class PlayerService implements OnModuleInit {
+export class PlayerService {
   private readonly logger = new Logger(PlayerService.name);
-  private legendCache: Map<number, string> = new Map();
-  private legendKeyCache: Map<string, string> = new Map();
-  private legendIdToWeaponsCache: Map<
-    number,
-    { weaponOne: string; weaponTwo: string }
-  > = new Map();
-  private blacklistedIds: Set<number> = new Set();
 
   // Track in-flight discovery requests to prevent race conditions
-  // When multiple requests come in for the same unknown player, they share one API call
   private inFlightDiscoveries: Map<
     number,
     Promise<PlayerWithRelations | null>
@@ -48,59 +32,13 @@ export class PlayerService implements OnModuleInit {
 
   constructor(
     private prisma: PrismaService,
+    private gameDataCache: GameDataCacheService,
     @InjectQueue('refresh-queue') private refreshQueue: Queue,
     private bhApiClient: BhApiClientService
   ) {}
 
-  async onModuleInit() {
-    await Promise.all([
-      this.refreshLegendCache(),
-      this.refreshBlacklistCache(),
-    ]);
-  }
-
-  async refreshLegendCache() {
-    try {
-      const legends = await this.prisma.legend.findMany({
-        select: {
-          legendId: true,
-          legendNameKey: true,
-          bioName: true,
-          weaponOne: true,
-          weaponTwo: true,
-        },
-      });
-      this.legendCache = new Map(legends.map((l) => [l.legendId, l.bioName]));
-      this.legendKeyCache = new Map(
-        legends.map((l) => [l.legendNameKey, l.bioName])
-      );
-      this.legendIdToWeaponsCache = new Map(
-        legends.map((l) => [
-          l.legendId,
-          { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo },
-        ])
-      );
-      this.logger.log(`Loaded ${this.legendCache.size} legends into cache`);
-    } catch (error) {
-      this.logger.error('Failed to load legend cache', error);
-    }
-  }
-
-  private async refreshBlacklistCache() {
-    try {
-      const blacklist = await this.prisma.blacklist.findMany({
-        select: { brawlhallaId: true },
-      });
-      this.blacklistedIds = new Set(blacklist.map((b) => b.brawlhallaId));
-      this.logger.log(`Loaded ${this.blacklistedIds.size} blacklisted IDs`);
-    } catch (error) {
-      this.logger.error('Failed to load blacklist cache', error);
-    }
-  }
-
   async getPlayer(id: number) {
-    // Check if player is blacklisted
-    if (this.blacklistedIds.has(id)) {
+    if (this.gameDataCache.isBlacklisted(id)) {
       return null;
     }
 
@@ -173,9 +111,11 @@ export class PlayerService implements OnModuleInit {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (player.stats.legends as any[]) = player.stats.legends.map((l) => ({
         ...l,
-        bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey,
-        weaponOne: this.legendIdToWeaponsCache.get(l.legendId)?.weaponOne,
-        weaponTwo: this.legendIdToWeaponsCache.get(l.legendId)?.weaponTwo,
+        bioName:
+          this.gameDataCache.getBioNameByKey(l.legendNameKey) ||
+          l.legendNameKey,
+        weaponOne: this.gameDataCache.getWeaponsById(l.legendId)?.weaponOne,
+        weaponTwo: this.gameDataCache.getWeaponsById(l.legendId)?.weaponTwo,
       }));
     }
 
@@ -183,9 +123,11 @@ export class PlayerService implements OnModuleInit {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (player.ranked.legends as any[]) = player.ranked.legends.map((l) => ({
         ...l,
-        bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey,
-        weaponOne: this.legendIdToWeaponsCache.get(l.legendId)?.weaponOne,
-        weaponTwo: this.legendIdToWeaponsCache.get(l.legendId)?.weaponTwo,
+        bioName:
+          this.gameDataCache.getBioNameByKey(l.legendNameKey) ||
+          l.legendNameKey,
+        weaponOne: this.gameDataCache.getWeaponsById(l.legendId)?.weaponOne,
+        weaponTwo: this.gameDataCache.getWeaponsById(l.legendId)?.weaponTwo,
       }));
     }
 
@@ -250,7 +192,7 @@ export class PlayerService implements OnModuleInit {
         }
       } else {
         for (const l of legends) {
-          const weapons = this.legendIdToWeaponsCache.get(l.legendId);
+          const weapons = this.gameDataCache.getWeaponsById(l.legendId);
           if (!weapons) continue;
           weaponAgg.add(
             weapons.weaponOne,
@@ -294,8 +236,7 @@ export class PlayerService implements OnModuleInit {
   private async discoverPlayer(
     id: number
   ): Promise<PlayerWithRelations | null> {
-    // Don't discover blacklisted players
-    if (this.blacklistedIds.has(id)) {
+    if (this.gameDataCache.isBlacklisted(id)) {
       return null;
     }
 

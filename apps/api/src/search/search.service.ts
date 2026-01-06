@@ -1,49 +1,15 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '@brawltome/database';
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService, GameDataCacheService } from '@brawltome/database';
 import { matchesNameOrBasePrefix, sanitizeSearchQuery } from './search.utils';
 
 @Injectable()
-export class SearchService implements OnModuleInit {
+export class SearchService {
   private readonly logger = new Logger(SearchService.name);
-  private legendCache: Map<number, string> = new Map();
-  private legendIdToKeyCache: Map<number, string> = new Map();
-  private blacklistedIds: Set<number> = new Set();
 
-  constructor(private prisma: PrismaService) {}
-
-  async onModuleInit() {
-    await Promise.all([
-      this.refreshLegendCache(),
-      this.refreshBlacklistCache(),
-    ]);
-  }
-
-  async refreshLegendCache() {
-    try {
-      const legends = await this.prisma.legend.findMany({
-        select: { legendId: true, legendNameKey: true, bioName: true },
-      });
-      this.legendCache = new Map(legends.map((l) => [l.legendId, l.bioName]));
-      this.legendIdToKeyCache = new Map(
-        legends.map((l) => [l.legendId, l.legendNameKey])
-      );
-      this.logger.log(`Loaded ${this.legendCache.size} legends into cache`);
-    } catch (error) {
-      this.logger.error('Failed to load legend cache', error);
-    }
-  }
-
-  private async refreshBlacklistCache() {
-    try {
-      const blacklist = await this.prisma.blacklist.findMany({
-        select: { brawlhallaId: true },
-      });
-      this.blacklistedIds = new Set(blacklist.map((b) => b.brawlhallaId));
-      this.logger.log(`Loaded ${this.blacklistedIds.size} blacklisted IDs`);
-    } catch (error) {
-      this.logger.error('Failed to load blacklist cache', error);
-    }
-  }
+  constructor(
+    private prisma: PrismaService,
+    private gameDataCache: GameDataCacheService
+  ) {}
 
   async searchLocal(query: string) {
     const sanitized = sanitizeSearchQuery(query);
@@ -52,9 +18,10 @@ export class SearchService implements OnModuleInit {
 
     this.logger.debug(`Local search query="${sanitized}"`);
 
+    const blacklistedIds = this.gameDataCache.getBlacklistedIds();
     const blacklistFilter =
-      this.blacklistedIds.size > 0
-        ? { brawlhallaId: { notIn: Array.from(this.blacklistedIds) } }
+      blacklistedIds.size > 0
+        ? { brawlhallaId: { notIn: Array.from(blacklistedIds) } }
         : {};
 
     const [players, clans] = await Promise.all([
@@ -167,13 +134,13 @@ export class SearchService implements OnModuleInit {
       const legendIdForAvatar = rankedBestLegendId || fallbackLegendId || 0;
       const legendNameKeyForAvatar =
         rankedBestLegendId && rankedBestLegendId > 0
-          ? this.legendIdToKeyCache.get(rankedBestLegendId) ??
+          ? this.gameDataCache.getNameKeyById(rankedBestLegendId) ??
             statsBestLegend?.legendNameKey ??
             null
           : statsBestLegend?.legendNameKey ?? null;
       const legendNameForAvatar =
         legendIdForAvatar && legendIdForAvatar > 0
-          ? this.legendCache.get(legendIdForAvatar) ?? null
+          ? this.gameDataCache.getBioNameById(legendIdForAvatar) ?? null
           : null;
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
