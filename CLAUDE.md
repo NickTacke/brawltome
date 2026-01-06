@@ -85,6 +85,7 @@ docker compose up -d  # PostgreSQL + Redis
 The Prisma schema is located at `libs/database/prisma/schema.prisma`.
 
 **Core models:**
+
 - `Player` - Core player data with rating, tier, games, wins
 - `PlayerStats` / `PlayerStatsLegend` - General stats per legend
 - `PlayerRanked` / `PlayerRankedLegend` / `PlayerRankedTeam` - Ranked mode data
@@ -95,6 +96,7 @@ The Prisma schema is located at `libs/database/prisma/schema.prisma`.
 - `Blacklist` - Player filtering/hiding from leaderboards
 
 **Important patterns:**
+
 - All relations use `onDelete: Cascade`
 - `brawlhallaId` is the primary key for player-related models
 - Composite keys used for join tables (e.g., `@@id([brawlhallaId, legendId])`)
@@ -103,6 +105,7 @@ The Prisma schema is located at `libs/database/prisma/schema.prisma`.
 ## Code Conventions
 
 ### TypeScript
+
 - Strict mode enabled
 - Use single quotes for strings (Prettier config)
 - Path aliases for cross-library imports
@@ -110,15 +113,13 @@ The Prisma schema is located at `libs/database/prisma/schema.prisma`.
 - React functional components with hooks for frontend
 
 ### NestJS Services Pattern
+
 ```typescript
 @Injectable()
 export class ExampleService implements OnModuleInit {
   private readonly logger = new Logger(ExampleService.name);
 
-  constructor(
-    private prisma: PrismaService,
-    @InjectQueue('queue-name') private queue: Queue,
-  ) {}
+  constructor(private prisma: PrismaService, @InjectQueue('queue-name') private queue: Queue) {}
 
   async onModuleInit() {
     // Initialize caches, etc.
@@ -127,7 +128,9 @@ export class ExampleService implements OnModuleInit {
 ```
 
 ### Commit Messages
+
 Uses conventional commits (enforced by commitlint):
+
 ```
 feat: add new feature
 fix: correct a bug
@@ -138,6 +141,7 @@ chore: maintenance tasks
 ```
 
 ### File Naming
+
 - Services: `*.service.ts`
 - Controllers: `*.controller.ts`
 - Modules: `*.module.ts`
@@ -155,6 +159,7 @@ pnpm test -- --watch  # Watch mode (if needed)
 ```
 
 Test files are co-located with source:
+
 - `apps/api/src/search/search.utils.spec.ts`
 - `libs/shared-utils/src/weapon-aggregation.spec.ts`
 - `libs/bhapi-client/src/lib/bhapi-client.service.spec.ts`
@@ -175,6 +180,7 @@ GitHub Actions runs on push to `master` and all PRs:
 ## Environment Variables
 
 ### API (`apps/api/.env`)
+
 ```
 DATABASE_URL=postgresql://...
 BRAWLHALLA_API_KEY=your-api-key
@@ -182,6 +188,7 @@ REDIS_URL=redis://localhost:6379
 ```
 
 ### Worker (`apps/worker/.env`)
+
 ```
 DATABASE_URL=postgresql://...
 BRAWLHALLA_API_KEY=your-api-key
@@ -189,11 +196,13 @@ REDIS_URL=redis://localhost:6379
 ```
 
 ### Web (`apps/web/.env.local`)
+
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
 ### Discord Bot (`apps/discord-bot/.env`)
+
 ```
 DISCORD_TOKEN=your-bot-token
 DISCORD_CLIENT_ID=your-client-id
@@ -203,21 +212,25 @@ API_URL=http://localhost:3000
 ## Key Architectural Patterns
 
 ### Data Refresh Strategy
+
 - Player data has TTLs (ranked: 1 hour, stats: 12 hours)
 - Stale data triggers background refresh via BullMQ queue
 - Priority calculated based on view count and data age
 
 ### Rate Limiting
+
 - Brawlhalla API has rate limits
 - Discovery of new players blocked when tokens low
 - Uses shared utility: `@brawltome/shared-utils`
 
 ### Caching
+
 - In-memory caches for legends, weapons, blacklist
 - Caches refreshed on module initialization
 - Redis for job queue persistence
 
 ### Module Boundaries
+
 - Nx enforces module boundaries via ESLint
 - Apps can depend on libs, not other apps
 - Libs should be self-contained
@@ -225,23 +238,27 @@ API_URL=http://localhost:3000
 ## Common Tasks for AI Assistants
 
 ### Adding a New API Endpoint
+
 1. Add route in `apps/api/src/[module]/[module].controller.ts`
 2. Add business logic in `apps/api/src/[module]/[module].service.ts`
 3. Add types to `libs/shared-types/src/` if needed
 4. Run `pnpm lint && pnpm typecheck` to verify
 
 ### Adding a New Database Field
+
 1. Update `libs/database/prisma/schema.prisma`
 2. Run `npx prisma migrate dev --name description --schema libs/database/prisma/schema.prisma`
 3. Regenerate Prisma client
 4. Update relevant services and DTOs
 
 ### Adding a New Discord Command
+
 1. Add command definition in `apps/discord-bot/src/`
 2. Register command with `pnpm sync-emojis:discord-bot`
 3. Handle command in bot event handlers
 
 ### Adding a New Shared Library
+
 1. Use `nx g @nx/js:lib libs/new-lib`
 2. Add path alias to `tsconfig.base.json`
 3. Export from `libs/new-lib/src/index.ts`
@@ -249,6 +266,7 @@ API_URL=http://localhost:3000
 ## Troubleshooting
 
 ### Prisma Issues
+
 ```bash
 # Regenerate client
 npx prisma generate --schema libs/database/prisma/schema.prisma
@@ -258,12 +276,14 @@ npx prisma migrate reset --schema libs/database/prisma/schema.prisma
 ```
 
 ### Build Cache Issues
+
 ```bash
 # Clear Nx cache
 npx nx reset
 ```
 
 ### Type Errors After Changes
+
 ```bash
 # Full rebuild
 pnpm build
