@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ClanDTO,
@@ -14,14 +14,44 @@ import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
 
 @Injectable()
-export class BhApiClientService {
+export class BhApiClientService implements OnModuleDestroy {
   public limiter!: Bottleneck;
   private http: AxiosInstance;
   private readonly logger = new Logger(BhApiClientService.name);
+  private redisClient: Redis;
+  private connection: Bottleneck.IORedisConnection;
 
   constructor(private config: ConfigService) {
-    const connection = new Bottleneck.IORedisConnection({
-      client: new Redis(this.config.getOrThrow<string>('REDIS_URL')),
+    this.redisClient = new Redis(this.config.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: null, // Required for Bottleneck
+      enableReadyCheck: false,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 100, 3000);
+        this.logger.warn(
+          `Redis reconnecting... attempt ${times}, delay ${delay}ms`
+        );
+        return delay;
+      },
+    });
+
+    this.redisClient.on('error', (err) => {
+      this.logger.error('Redis client error:', err.message);
+    });
+
+    this.redisClient.on('connect', () => {
+      this.logger.log('Redis client connected');
+    });
+
+    this.redisClient.on('reconnecting', () => {
+      this.logger.warn('Redis client reconnecting...');
+    });
+
+    this.connection = new Bottleneck.IORedisConnection({
+      client: this.redisClient,
+    });
+
+    this.connection.on('error', (err) => {
+      this.logger.error('Bottleneck Redis connection error:', err.message);
     });
 
     const apiKey = this.config.getOrThrow<string>('BRAWLHALLA_API_KEY');
@@ -29,7 +59,7 @@ export class BhApiClientService {
     this.limiter = new Bottleneck({
       id: 'bhapi-limiter',
       datastore: 'ioredis',
-      connection,
+      connection: this.connection,
       clearDatastore: false,
 
       // Traffic settings
@@ -57,11 +87,6 @@ export class BhApiClientService {
       if (status === 429) {
         const retryHeader = error.response?.headers['retry-after'];
         const retryAfter = retryHeader ? parseInt(retryHeader, 10) : 900;
-
-        // TODO: remove this after testing
-        this.logger.warn('Headers:', error.response?.headers);
-        this.logger.warn('Response:', error.response?.data);
-
         const waitTime = (retryAfter + 1) * 1000;
 
         this.logger.warn(
@@ -162,5 +187,11 @@ export class BhApiClientService {
   ) {
     const response = await this.http.get(endpoint, { params });
     return response.data;
+  }
+
+  async onModuleDestroy() {
+    this.logger.log('Shutting down BhApiClientService...');
+    await this.limiter.disconnect();
+    await this.redisClient.quit();
   }
 }
