@@ -440,6 +440,9 @@ importers:
 
   libs/shared-utils:
     dependencies:
+      '@brawltome/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
