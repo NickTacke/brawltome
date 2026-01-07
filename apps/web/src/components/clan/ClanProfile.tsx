@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
@@ -51,13 +51,25 @@ interface ClanProfileProps {
 }
 
 export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
+  const [isMounted, setIsMounted] = useState(false);
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'peakRating'>(
     'default'
   );
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const isLoading = !clan;
+
+  const formatNum = (n: number | string | undefined | null) => {
+    const val = typeof n === 'string' ? parseInt(n, 10) : n;
+    const num = val && !isNaN(val as number) ? val : 0;
+    if (!isMounted) return String(num);
+    return num.toLocaleString();
+  };
 
   const formatJoinedDate = (value: string | Date) => {
     const d = new Date(value);
@@ -186,7 +198,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
               {isLoading ? (
                 <Skeleton className="h-4 w-32" />
               ) : (
-                <span>
+                <span suppressHydrationWarning>
                   Created {new Date(clan.clanCreateDate).toLocaleDateString()}
                 </span>
               )}
@@ -222,7 +234,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                 <Skeleton className="h-8 w-24" />
               ) : (
                 <div className="text-2xl font-bold">
-                  {clan.clanXp ? parseInt(clan.clanXp).toLocaleString() : '0'}
+                  {formatNum(clan.clanXp)}
                 </div>
               )}
             </CardContent>
@@ -239,7 +251,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                 <Skeleton className="h-8 w-12" />
               ) : (
                 <div className="text-2xl font-bold">
-                  {clan.members?.length || 0}
+                  {formatNum(clan.members?.length)}
                 </div>
               )}
             </CardContent>
@@ -257,9 +269,11 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
               ) : (
                 <div className="text-2xl font-bold">
                   {clan.members?.length > 0
-                    ? Math.round(
-                        parseInt(clan.clanXp || '0') / clan.members.length
-                      ).toLocaleString()
+                    ? formatNum(
+                        Math.round(
+                          parseInt(clan.clanXp || '0') / clan.members.length
+                        )
+                      )
                     : '0'}
                 </div>
               )}
@@ -441,7 +455,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                           <Link href={href} className="block w-full h-full p-4">
                             <div className="flex flex-col items-end leading-tight">
                               <span className="font-bold">
-                                {member.xp.toLocaleString()}
+                                {formatNum(member.xp)}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 {contribution.toFixed(1)}%
