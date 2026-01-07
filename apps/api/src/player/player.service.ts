@@ -4,14 +4,12 @@ import { Queue } from 'bullmq';
 import { PrismaService, GameDataCacheService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import {
-  PlayerRankedLegendDTO,
-  PlayerRankedTeamDTO,
-} from '@brawltome/shared-types';
-import {
   createWeaponAggregator,
   DISCOVERY_MIN_TOKENS,
   PRIORITY_REALTIME,
   parseDamage,
+  mapRankedLegends,
+  mapTeams,
 } from '@brawltome/shared-utils';
 
 const RANKED_TTL = 1000 * 60 * 60; // 1 hour
@@ -360,21 +358,21 @@ export class PlayerService {
               lastUpdated: new Date(),
               legends: {
                 deleteMany: {},
-                create: this.mapLegends(rankedData.legends),
+                create: mapRankedLegends(rankedData.legends),
               },
               teams: {
                 deleteMany: {},
-                create: this.mapTeams(rankedData['2v2']),
+                create: mapTeams(rankedData['2v2']),
               },
             },
             create: {
               brawlhallaId: id,
               lastUpdated: new Date(),
               legends: {
-                create: this.mapLegends(rankedData.legends),
+                create: mapRankedLegends(rankedData.legends),
               },
               teams: {
-                create: this.mapTeams(rankedData['2v2']),
+                create: mapTeams(rankedData['2v2']),
               },
             },
           });
@@ -472,45 +470,5 @@ export class PlayerService {
     if (ageMs > 1000 * 60 * 60 * 24) priority -= 20; // If data is really old, boost priority
     if (type === 'stats') priority += 10; // Stats are less important than ranked
     return Math.max(1, Math.min(100, priority));
-  }
-
-  // Helper methods for mapping
-  private mapLegends(legends: PlayerRankedLegendDTO[]) {
-    if (!legends) return [];
-    return legends.map((legend) => ({
-      legendId: legend.legend_id,
-      legendNameKey: legend.legend_name_key,
-      rating: legend.rating,
-      peakRating: legend.peak_rating,
-      tier: legend.tier,
-      wins: legend.wins,
-      games: legend.games,
-    }));
-  }
-
-  private mapTeams(teams: PlayerRankedTeamDTO[]) {
-    if (!teams) return [];
-
-    // Deduplicate teams based on ID pairs
-    const uniqueTeams = new Map<string, PlayerRankedTeamDTO>();
-    for (const team of teams) {
-      const key = `${team.brawlhalla_id_one}-${team.brawlhalla_id_two}`;
-      if (!uniqueTeams.has(key)) {
-        uniqueTeams.set(key, team);
-      }
-    }
-
-    return Array.from(uniqueTeams.values()).map((team) => {
-      return {
-        brawlhallaIdOne: team.brawlhalla_id_one,
-        brawlhallaIdTwo: team.brawlhalla_id_two,
-        teamName: team.teamname,
-        rating: team.rating,
-        peakRating: team.peak_rating,
-        tier: team.tier,
-        wins: team.wins,
-        games: team.games,
-      };
-    });
   }
 }
