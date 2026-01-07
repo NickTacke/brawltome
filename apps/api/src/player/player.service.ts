@@ -26,10 +26,14 @@ export class PlayerService {
   private readonly logger = new Logger(PlayerService.name);
 
   // Track in-flight discovery requests to prevent race conditions
+  // Each entry includes a timestamp to enable TTL-based cleanup
   private inFlightDiscoveries: Map<
     number,
-    Promise<PlayerWithRelations | null>
+    { promise: Promise<PlayerWithRelations | null>; startedAt: number }
   > = new Map();
+
+  // Discovery timeout - cleanup entries older than this
+  private static readonly DISCOVERY_TIMEOUT_MS = 30_000; // 30 seconds
 
   constructor(
     private prisma: PrismaService,
@@ -241,19 +245,41 @@ export class PlayerService {
       return null;
     }
 
+    // Cleanup stale entries to prevent memory leaks
+    this.cleanupStaleDiscoveries();
+
     const existingDiscovery = this.inFlightDiscoveries.get(id);
     if (existingDiscovery) {
       this.logger.debug(`Joining existing discovery for player ${id}`);
-      return existingDiscovery;
+      return existingDiscovery.promise;
     }
 
     const discoveryPromise = this.executeDiscovery(id);
-    this.inFlightDiscoveries.set(id, discoveryPromise);
+    this.inFlightDiscoveries.set(id, {
+      promise: discoveryPromise,
+      startedAt: Date.now(),
+    });
 
     try {
       return await discoveryPromise;
     } finally {
       this.inFlightDiscoveries.delete(id);
+    }
+  }
+
+  /**
+   * Remove discovery entries that have been running longer than the timeout.
+   * This prevents memory leaks from promises that never resolve.
+   */
+  private cleanupStaleDiscoveries(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.inFlightDiscoveries) {
+      if (now - entry.startedAt > PlayerService.DISCOVERY_TIMEOUT_MS) {
+        this.logger.warn(
+          `Removing stale discovery for player ${id} (exceeded ${PlayerService.DISCOVERY_TIMEOUT_MS}ms)`
+        );
+        this.inFlightDiscoveries.delete(id);
+      }
     }
   }
 
