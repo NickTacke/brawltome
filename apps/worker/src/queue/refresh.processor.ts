@@ -2,14 +2,15 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, UnrecoverableError } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { BhApiClientService } from '@brawltome/bhapi-client';
-import { PrismaService } from '@brawltome/database';
-
+import { PrismaService, ClanLegendResolverService } from '@brawltome/database';
+import { PlayerStatsLegendDTO } from '@brawltome/shared-types';
 import {
-  PlayerRankedLegendDTO,
-  PlayerRankedTeamDTO,
-  PlayerStatsLegendDTO,
-} from '@brawltome/shared-types';
-import { createWeaponAggregator, parseDamage } from '@brawltome/shared-utils';
+  createWeaponAggregator,
+  parseDamage,
+  mapRankedLegends,
+  mapTeams,
+  mapStatsLegends,
+} from '@brawltome/shared-utils';
 
 @Processor('refresh-queue', {
   concurrency: 10,
@@ -67,7 +68,8 @@ export class RefreshProcessor extends WorkerHost {
 
   constructor(
     private bhApiClient: BhApiClientService,
-    private prisma: PrismaService
+    private prisma: PrismaService,
+    private clanLegendResolver: ClanLegendResolverService
   ) {
     super();
   }
@@ -153,21 +155,21 @@ export class RefreshProcessor extends WorkerHost {
         update: {
           legends: {
             deleteMany: {},
-            create: this.mapLegends(data.legends),
+            create: mapRankedLegends(data.legends),
           },
           teams: {
             deleteMany: {},
-            create: this.mapTeams(data['2v2']),
+            create: mapTeams(data['2v2']),
           },
           lastUpdated: new Date(),
         },
         create: {
           brawlhallaId: id,
           legends: {
-            create: this.mapLegends(data.legends),
+            create: mapRankedLegends(data.legends),
           },
           teams: {
-            create: this.mapTeams(data['2v2']),
+            create: mapTeams(data['2v2']),
           },
           lastUpdated: new Date(),
         },
@@ -255,7 +257,7 @@ export class RefreshProcessor extends WorkerHost {
           koSnowball: data.kosnowball,
           legends: {
             deleteMany: {},
-            create: this.mapStatsLegends(statsLegends),
+            create: mapStatsLegends(statsLegends),
           },
           weaponStats: {
             deleteMany: {},
@@ -303,7 +305,7 @@ export class RefreshProcessor extends WorkerHost {
           koSidekick: data.kosidekick,
           koSnowball: data.kosnowball,
           legends: {
-            create: this.mapStatsLegends(statsLegends),
+            create: mapStatsLegends(statsLegends),
           },
           weaponStats: {
             create: weaponStatsRows,
@@ -329,48 +331,9 @@ export class RefreshProcessor extends WorkerHost {
     const clanData = await this.bhApiClient.getClan(id);
 
     const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
-
-    const bestLegends = await this.prisma.playerRankedLegend.findMany({
-      where: { brawlhallaId: { in: memberIds } },
-      orderBy: { rating: 'desc' },
-      distinct: ['brawlhallaId'],
-      select: { brawlhallaId: true, legendId: true },
-    });
-
-    const legendIds = bestLegends.map((bl) => bl.legendId);
-    const legends = await this.prisma.legend.findMany({
-      where: { legendId: { in: legendIds } },
-      select: { legendId: true, legendNameKey: true },
-    });
-
-    const legendKeyMap = new Map(
-      legends.map((l) => [l.legendId, l.legendNameKey])
+    const playerLegendMap = await this.clanLegendResolver.resolveBestLegends(
+      memberIds
     );
-    const playerLegendMap = new Map<number, string>();
-
-    for (const bl of bestLegends) {
-      const legendNameKey = legendKeyMap.get(bl.legendId);
-      if (legendNameKey) {
-        playerLegendMap.set(bl.brawlhallaId, legendNameKey);
-      }
-    }
-
-    const missingRankedIds = memberIds.filter(
-      (pid) => !playerLegendMap.has(pid)
-    );
-    if (missingRankedIds.length > 0) {
-      const statsFallback = await this.prisma.playerStatsLegend.findMany({
-        where: { brawlhallaId: { in: missingRankedIds } },
-        orderBy: { xp: 'desc' },
-        distinct: ['brawlhallaId'],
-        select: { brawlhallaId: true, legendNameKey: true },
-      });
-      for (const row of statsFallback) {
-        if (row.legendNameKey) {
-          playerLegendMap.set(row.brawlhallaId, row.legendNameKey);
-        }
-      }
-    }
 
     await this.prisma.clan.upsert({
       where: { clanId: id },
@@ -414,77 +377,5 @@ export class RefreshProcessor extends WorkerHost {
     this.logger.log(
       `Refreshed clan ${id} with ${clanData.clan.length} members`
     );
-  }
-
-  private mapLegends(legends: PlayerRankedLegendDTO[]) {
-    if (!legends) return [];
-    return legends.map((legend) => ({
-      legendId: legend.legend_id,
-      legendNameKey: legend.legend_name_key,
-      rating: legend.rating,
-      peakRating: legend.peak_rating,
-      tier: legend.tier,
-      wins: legend.wins,
-      games: legend.games,
-    }));
-  }
-
-  private mapTeams(teams: PlayerRankedTeamDTO[]) {
-    if (!teams) return [];
-
-    const uniqueTeams = new Map<string, PlayerRankedTeamDTO>();
-    for (const team of teams) {
-      const key = `${team.brawlhalla_id_one}-${team.brawlhalla_id_two}`;
-      if (!uniqueTeams.has(key)) {
-        uniqueTeams.set(key, team);
-      }
-    }
-
-    return Array.from(uniqueTeams.values()).map((team) => {
-      return {
-        brawlhallaIdOne: team.brawlhalla_id_one,
-        brawlhallaIdTwo: team.brawlhalla_id_two,
-        teamName: team.teamname,
-        rating: team.rating,
-        peakRating: team.peak_rating,
-        tier: team.tier,
-        wins: team.wins,
-        games: team.games,
-      };
-    });
-  }
-
-  private mapStatsLegends(legends: PlayerStatsLegendDTO[]) {
-    if (!legends) return [];
-    return legends
-      .filter((legend) => legend.legend_id !== 0)
-      .map((legend) => ({
-        legendId: legend.legend_id,
-        legendNameKey: legend.legend_name_key,
-        xp: legend.xp,
-        level: legend.level,
-        xpPercentage: legend.xp_percentage,
-        games: legend.games,
-        wins: legend.wins,
-        matchTime: legend.matchtime,
-        KOs: legend.kos,
-        teamKOs: legend.teamkos,
-        suicides: legend.suicides,
-        falls: legend.falls,
-        damageDealt: legend.damagedealt,
-        damageTaken: legend.damagetaken,
-        damageWeaponOne: legend.damageweaponone,
-        damageWeaponTwo: legend.damageweapontwo,
-        timeHeldWeaponOne: legend.timeheldweaponone,
-        timeHeldWeaponTwo: legend.timeheldweapontwo,
-        KOWeaponOne: legend.koweaponone,
-        KOWeaponTwo: legend.koweapontwo,
-        KOUnarmed: legend.kounarmed,
-        KOThrownItem: legend.kothrownitem,
-        KOGadgets: legend.kogadgets,
-        damageUnarmed: legend.damageunarmed,
-        damageThrownItem: legend.damagethrownitem,
-        damageGadgets: legend.damagegadgets,
-      }));
   }
 }
