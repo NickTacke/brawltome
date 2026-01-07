@@ -2,21 +2,17 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
 import { DatabaseModule } from '@brawltome/database';
+import {
+  REFRESH_QUEUE_NAME,
+  DEFAULT_JOB_OPTIONS,
+} from '@brawltome/shared-utils';
 import { RefreshProcessor } from './refresh.processor';
 
 @Module({
   imports: [
     BullModule.registerQueue({
-      name: 'refresh-queue',
-      defaultJobOptions: {
-        removeOnComplete: 100,
-        removeOnFail: 500,
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      },
+      name: REFRESH_QUEUE_NAME,
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
     }),
     BhApiClientModule,
     DatabaseModule,
