@@ -77,7 +77,32 @@ export class PlayerService implements OnModuleInit {
       this.legendIdToWeaponsCache = new Map(
         legends.map((l) => [
           l.legendId,
-          { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo },
+          {
+            weaponOne:
+              l.weaponOne === 'Fists'
+                ? 'Gauntlets'
+                : l.weaponOne === 'Pistol'
+                ? 'Blasters'
+                : l.weaponOne === 'Katar'
+                ? 'Katars'
+                : l.weaponOne === 'RocketLance'
+                ? 'Lance'
+                : l.weaponOne === 'Chakram'
+                ? 'Chakrams'
+                : l.weaponOne,
+            weaponTwo:
+              l.weaponTwo === 'Fists'
+                ? 'Gauntlets'
+                : l.weaponTwo === 'Pistol'
+                ? 'Blasters'
+                : l.weaponTwo === 'Katar'
+                ? 'Katars'
+                : l.weaponTwo === 'RocketLance'
+                ? 'Lance'
+                : l.weaponTwo === 'Chakram'
+                ? 'Chakrams'
+                : l.weaponTwo,
+          },
         ])
       );
       this.logger.log(`Loaded ${this.legendCache.size} legends into cache`);
