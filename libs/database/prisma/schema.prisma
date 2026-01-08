@@ -47,8 +47,20 @@ model Player {
   // Fuzzy search for name and aliases
   @@index([name])
 
-  // Sort by rating descending
+  // Global leaderboard sorts (no region filter)
   @@index([rating(sort: Desc)])
+  @@index([peakRating(sort: Desc)])
+  @@index([wins(sort: Desc)])
+  @@index([games(sort: Desc)])
+
+  // Regional leaderboard (region filter + sort)
+  @@index([region, rating(sort: Desc)])
+  @@index([region, peakRating(sort: Desc)])
+  @@index([region, wins(sort: Desc)])
+  @@index([region, games(sort: Desc)])
+
+  // Search results secondary sort
+  @@index([viewCount(sort: Desc)])
 }
 
 model PlayerAlias {
@@ -59,6 +71,9 @@ model PlayerAlias {
 
   player Player @relation(fields: [brawlhallaId], references: [brawlhallaId], onDelete: Cascade)
   @@id([brawlhallaId, key])
+
+  // Search by alias key (case-insensitive contains)
+  @@index([key])
 }
 
 model PlayerStatsLegend {

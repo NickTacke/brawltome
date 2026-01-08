@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RefreshProcessor } from './refresh.processor';
 import { BhApiClientService } from '@brawltome/bhapi-client';
-import { PrismaService } from '@brawltome/database';
+import { PrismaService, ClanLegendResolverService } from '@brawltome/database';
 import { Job } from 'bullmq';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -56,6 +56,7 @@ describe('RefreshProcessor', () => {
   let apiClient: any;
   let prisma: any;
   let txMock: any;
+  let clanLegendResolver: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -99,11 +100,17 @@ describe('RefreshProcessor', () => {
       }),
     };
 
+    // 5. Mock Clan Legend Resolver Service
+    clanLegendResolver = {
+      resolveBestLegends: vi.fn().mockResolvedValue(new Map()),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RefreshProcessor,
         { provide: BhApiClientService, useValue: apiClient },
         { provide: PrismaService, useValue: prisma },
+        { provide: ClanLegendResolverService, useValue: clanLegendResolver },
       ],
     }).compile();
 

@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 
 import { DatabaseModule } from '@brawltome/database';
 import { BhApiClientModule } from '@brawltome/bhapi-client';
+import { createBullConnection } from '@brawltome/shared-utils';
 import { QueueModule } from '../queue/queue.module';
 
 import { AppController } from './app.controller';
@@ -21,11 +22,8 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        connection: {
-          url: configService.getOrThrow<string>('REDIS_URL'),
-        },
-      }),
+      useFactory: async (configService: ConfigService) =>
+        createBullConnection(configService.getOrThrow<string>('REDIS_URL')),
       inject: [ConfigService],
     }),
     DatabaseModule,

@@ -6,8 +6,17 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS so the web app (running on a different port) can call this API
+  const frontendUrl = process.env.FRONTEND_URL;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction && !frontendUrl) {
+    throw new Error(
+      'FRONTEND_URL environment variable must be set in production'
+    );
+  }
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: frontendUrl || 'http://localhost:3000',
   });
 
   const port = process.env.PORT || 8080;
