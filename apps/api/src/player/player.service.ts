@@ -1,53 +1,41 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { PrismaService } from '@brawltome/database';
+import { PrismaService, GameDataCacheService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
-import {
-  PlayerRankedLegendDTO,
-  PlayerRankedTeamDTO,
-} from '@brawltome/shared-types';
 import {
   createWeaponAggregator,
   DISCOVERY_MIN_TOKENS,
+  PRIORITY_REALTIME,
   parseDamage,
+  mapRankedLegends,
+  mapTeams,
 } from '@brawltome/shared-utils';
 
-// Thresholds
 const RANKED_TTL = 1000 * 60 * 60; // 1 hour
 const STATS_TTL = 12 * 1000 * 60 * 60; // 12 hours
 
-// Type for the full player include used by discovery
 type PlayerWithRelations = Awaited<
   ReturnType<PlayerService['fetchPlayerWithRelations']>
 >;
 
 @Injectable()
-export class PlayerService implements OnModuleInit {
+export class PlayerService {
   private readonly logger = new Logger(PlayerService.name);
-  private legendCache: Map<number, string> = new Map();
-  private legendKeyCache: Map<string, string> = new Map();
-  private legendIdToWeaponsCache: Map<
-    number,
-    { weaponOne: string; weaponTwo: string }
-  > = new Map();
-  private blacklistedIds: Set<number> = new Set();
 
   // Track in-flight discovery requests to prevent race conditions
-  // When multiple requests come in for the same unknown player, they share one API call
+  // Each entry includes a timestamp to enable TTL-based cleanup
   private inFlightDiscoveries: Map<
     number,
-    Promise<PlayerWithRelations | null>
+    { promise: Promise<PlayerWithRelations | null>; startedAt: number }
   > = new Map();
+
+  // Discovery timeout - cleanup entries older than this
+  private static readonly DISCOVERY_TIMEOUT_MS = 30_000; // 30 seconds
 
   constructor(
     private prisma: PrismaService,
+    private gameDataCache: GameDataCacheService,
     @InjectQueue('refresh-queue') private refreshQueue: Queue,
     private bhApiClient: BhApiClientService
   ) {}
@@ -124,8 +112,7 @@ export class PlayerService implements OnModuleInit {
   }
 
   async getPlayer(id: number) {
-    // Check if player is blacklisted
-    if (this.blacklistedIds.has(id)) {
+    if (this.gameDataCache.isBlacklisted(id)) {
       return null;
     }
 
@@ -198,9 +185,11 @@ export class PlayerService implements OnModuleInit {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (player.stats.legends as any[]) = player.stats.legends.map((l) => ({
         ...l,
-        bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey,
-        weaponOne: this.legendIdToWeaponsCache.get(l.legendId)?.weaponOne,
-        weaponTwo: this.legendIdToWeaponsCache.get(l.legendId)?.weaponTwo,
+        bioName:
+          this.gameDataCache.getBioNameByKey(l.legendNameKey) ||
+          l.legendNameKey,
+        weaponOne: this.gameDataCache.getWeaponsById(l.legendId)?.weaponOne,
+        weaponTwo: this.gameDataCache.getWeaponsById(l.legendId)?.weaponTwo,
       }));
     }
 
@@ -208,9 +197,11 @@ export class PlayerService implements OnModuleInit {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (player.ranked.legends as any[]) = player.ranked.legends.map((l) => ({
         ...l,
-        bioName: this.legendKeyCache.get(l.legendNameKey) || l.legendNameKey,
-        weaponOne: this.legendIdToWeaponsCache.get(l.legendId)?.weaponOne,
-        weaponTwo: this.legendIdToWeaponsCache.get(l.legendId)?.weaponTwo,
+        bioName:
+          this.gameDataCache.getBioNameByKey(l.legendNameKey) ||
+          l.legendNameKey,
+        weaponOne: this.gameDataCache.getWeaponsById(l.legendId)?.weaponOne,
+        weaponTwo: this.gameDataCache.getWeaponsById(l.legendId)?.weaponTwo,
       }));
     }
 
@@ -275,7 +266,7 @@ export class PlayerService implements OnModuleInit {
         }
       } else {
         for (const l of legends) {
-          const weapons = this.legendIdToWeaponsCache.get(l.legendId);
+          const weapons = this.gameDataCache.getWeaponsById(l.legendId);
           if (!weapons) continue;
           weaponAgg.add(
             weapons.weaponOne,
@@ -319,24 +310,45 @@ export class PlayerService implements OnModuleInit {
   private async discoverPlayer(
     id: number
   ): Promise<PlayerWithRelations | null> {
-    // Don't discover blacklisted players
-    if (this.blacklistedIds.has(id)) {
+    if (this.gameDataCache.isBlacklisted(id)) {
       return null;
     }
+
+    // Cleanup stale entries to prevent memory leaks
+    this.cleanupStaleDiscoveries();
 
     const existingDiscovery = this.inFlightDiscoveries.get(id);
     if (existingDiscovery) {
       this.logger.debug(`Joining existing discovery for player ${id}`);
-      return existingDiscovery;
+      return existingDiscovery.promise;
     }
 
     const discoveryPromise = this.executeDiscovery(id);
-    this.inFlightDiscoveries.set(id, discoveryPromise);
+    this.inFlightDiscoveries.set(id, {
+      promise: discoveryPromise,
+      startedAt: Date.now(),
+    });
 
     try {
       return await discoveryPromise;
     } finally {
       this.inFlightDiscoveries.delete(id);
+    }
+  }
+
+  /**
+   * Remove discovery entries that have been running longer than the timeout.
+   * This prevents memory leaks from promises that never resolve.
+   */
+  private cleanupStaleDiscoveries(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.inFlightDiscoveries) {
+      if (now - entry.startedAt > PlayerService.DISCOVERY_TIMEOUT_MS) {
+        this.logger.warn(
+          `Removing stale discovery for player ${id} (exceeded ${PlayerService.DISCOVERY_TIMEOUT_MS}ms)`
+        );
+        this.inFlightDiscoveries.delete(id);
+      }
     }
   }
 
@@ -363,7 +375,9 @@ export class PlayerService implements OnModuleInit {
       let rankedData: any = {};
 
       try {
-        const statsData = await this.bhApiClient.getPlayerStats(id);
+        const statsData = await this.bhApiClient.getPlayerStats(id, {
+          priority: PRIORITY_REALTIME,
+        });
         name = statsData.name || '';
       } catch (e) {
         this.logger.warn(`Failed to fetch stats for ${id}: ${e}`);
@@ -375,7 +389,9 @@ export class PlayerService implements OnModuleInit {
       }
 
       try {
-        rankedData = await this.bhApiClient.getPlayerRanked(id);
+        rankedData = await this.bhApiClient.getPlayerRanked(id, {
+          priority: PRIORITY_REALTIME,
+        });
         region = rankedData.region || 'UNKNOWN';
       } catch (e) {
         this.logger.warn(
@@ -413,21 +429,21 @@ export class PlayerService implements OnModuleInit {
               lastUpdated: new Date(),
               legends: {
                 deleteMany: {},
-                create: this.mapLegends(rankedData.legends),
+                create: mapRankedLegends(rankedData.legends),
               },
               teams: {
                 deleteMany: {},
-                create: this.mapTeams(rankedData['2v2']),
+                create: mapTeams(rankedData['2v2']),
               },
             },
             create: {
               brawlhallaId: id,
               lastUpdated: new Date(),
               legends: {
-                create: this.mapLegends(rankedData.legends),
+                create: mapRankedLegends(rankedData.legends),
               },
               teams: {
-                create: this.mapTeams(rankedData['2v2']),
+                create: mapTeams(rankedData['2v2']),
               },
             },
           });
@@ -511,7 +527,7 @@ export class PlayerService implements OnModuleInit {
         data: { viewCount: { increment: 1 }, lastViewedAt: new Date() },
       });
     } catch (error) {
-      /* I don't really care about analytics errors to be honest */
+      this.logger.debug(`Failed to increment view count for ${id}: ${error}`);
     }
   }
 
@@ -525,45 +541,5 @@ export class PlayerService implements OnModuleInit {
     if (ageMs > 1000 * 60 * 60 * 24) priority -= 20; // If data is really old, boost priority
     if (type === 'stats') priority += 10; // Stats are less important than ranked
     return Math.max(1, Math.min(100, priority));
-  }
-
-  // Helper methods for mapping
-  private mapLegends(legends: PlayerRankedLegendDTO[]) {
-    if (!legends) return [];
-    return legends.map((legend) => ({
-      legendId: legend.legend_id,
-      legendNameKey: legend.legend_name_key,
-      rating: legend.rating,
-      peakRating: legend.peak_rating,
-      tier: legend.tier,
-      wins: legend.wins,
-      games: legend.games,
-    }));
-  }
-
-  private mapTeams(teams: PlayerRankedTeamDTO[]) {
-    if (!teams) return [];
-
-    // Deduplicate teams based on ID pairs
-    const uniqueTeams = new Map<string, PlayerRankedTeamDTO>();
-    for (const team of teams) {
-      const key = `${team.brawlhalla_id_one}-${team.brawlhalla_id_two}`;
-      if (!uniqueTeams.has(key)) {
-        uniqueTeams.set(key, team);
-      }
-    }
-
-    return Array.from(uniqueTeams.values()).map((team) => {
-      return {
-        brawlhallaIdOne: team.brawlhalla_id_one,
-        brawlhallaIdTwo: team.brawlhalla_id_two,
-        teamName: team.teamname,
-        rating: team.rating,
-        peakRating: team.peak_rating,
-        tier: team.tier,
-        wins: team.wins,
-        games: team.games,
-      };
-    });
   }
 }

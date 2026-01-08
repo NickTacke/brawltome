@@ -1,50 +1,14 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '@brawltome/database';
+import { Injectable } from '@nestjs/common';
+import { PrismaService, GameDataCacheService } from '@brawltome/database';
 
 type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
 
 @Injectable()
-export class LeaderboardService implements OnModuleInit {
-  private readonly logger = new Logger(LeaderboardService.name);
-  private legendCache: Map<number, string> = new Map();
-  private legendIdToKeyCache: Map<number, string> = new Map();
-  private blacklistedIds: Set<number> = new Set();
-
-  constructor(private prisma: PrismaService) {}
-
-  async onModuleInit() {
-    await Promise.all([
-      this.refreshLegendCache(),
-      this.refreshBlacklistCache(),
-    ]);
-  }
-
-  private async refreshLegendCache() {
-    try {
-      const legends = await this.prisma.legend.findMany({
-        select: { legendId: true, legendNameKey: true, bioName: true },
-      });
-      this.legendCache = new Map(legends.map((l) => [l.legendId, l.bioName]));
-      this.legendIdToKeyCache = new Map(
-        legends.map((l) => [l.legendId, l.legendNameKey])
-      );
-      this.logger.log(`Loaded ${this.legendCache.size} legends into cache`);
-    } catch (error) {
-      this.logger.error('Failed to load legend cache', error);
-    }
-  }
-
-  private async refreshBlacklistCache() {
-    try {
-      const blacklist = await this.prisma.blacklist.findMany({
-        select: { brawlhallaId: true },
-      });
-      this.blacklistedIds = new Set(blacklist.map((b) => b.brawlhallaId));
-      this.logger.log(`Loaded ${this.blacklistedIds.size} blacklisted IDs`);
-    } catch (error) {
-      this.logger.error('Failed to load blacklist cache', error);
-    }
-  }
+export class LeaderboardService {
+  constructor(
+    private prisma: PrismaService,
+    private gameDataCache: GameDataCacheService
+  ) {}
 
   async get1v1Leaderboard(
     page: number,
@@ -59,9 +23,10 @@ export class LeaderboardService implements OnModuleInit {
     const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
     const requestedPage = Math.max(page || 1, 1);
 
+    const blacklistedIds = this.gameDataCache.getBlacklistedIds();
     const blacklistFilter =
-      this.blacklistedIds.size > 0
-        ? { brawlhallaId: { notIn: Array.from(this.blacklistedIds) } }
+      blacklistedIds.size > 0
+        ? { brawlhallaId: { notIn: Array.from(blacklistedIds) } }
         : {};
 
     const where = {
@@ -115,9 +80,11 @@ export class LeaderboardService implements OnModuleInit {
 
     const enrichedPlayers = players.map((p) => ({
       ...p,
-      bestLegendName: p.bestLegend ? this.legendCache.get(p.bestLegend) : null,
+      bestLegendName: p.bestLegend
+        ? this.gameDataCache.getBioNameById(p.bestLegend)
+        : null,
       bestLegendNameKey: p.bestLegend
-        ? this.legendIdToKeyCache.get(p.bestLegend)
+        ? this.gameDataCache.getNameKeyById(p.bestLegend)
         : null,
     }));
 
@@ -144,9 +111,10 @@ export class LeaderboardService implements OnModuleInit {
     const safeTake = Math.min(Math.max(limit ?? 20, 1), 100);
     const requestedPage = Math.max(page || 1, 1);
 
-    const blacklistArray = Array.from(this.blacklistedIds);
+    const blacklistedIds = this.gameDataCache.getBlacklistedIds();
+    const blacklistArray = Array.from(blacklistedIds);
     const blacklistFilter =
-      this.blacklistedIds.size > 0
+      blacklistedIds.size > 0
         ? {
             AND: [
               { brawlhallaIdOne: { notIn: blacklistArray } },

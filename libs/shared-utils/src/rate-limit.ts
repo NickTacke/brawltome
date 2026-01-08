@@ -8,5 +8,9 @@ export const SEARCH_API_MIN_TOKENS = 50;
 export const REFRESH_STATS_MIN_TOKENS = 40;
 export const REFRESH_RANKED_MIN_TOKENS = 20;
 
-// Janitor should only run during “idle” periods
+// Janitor should only run during "idle" periods
 export const JANITOR_IDLE_MIN_TOKENS = 100;
+
+// Request priority for Bottleneck (lower = higher priority)
+export const PRIORITY_REALTIME = 1; // User-facing requests (discovery, direct lookups)
+export const PRIORITY_BACKGROUND = 9; // Background jobs (refresh, janitor)
