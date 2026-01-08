@@ -388,6 +388,9 @@ importers:
       '@brawltome/shared-types':
         specifier: workspace:*
         version: link:../shared-types
+      '@brawltome/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.9(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -437,6 +440,9 @@ importers:
 
   libs/shared-utils:
     dependencies:
+      '@brawltome/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
       tslib:
         specifier: ^2.3.0
         version: 2.8.1

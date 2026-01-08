@@ -401,7 +401,12 @@ export class JanitorService {
           priority: 100,
         }
       )
-      .catch(() => null); // Ignore dupe job errors
+      .catch((error) => {
+        // Only suppress duplicate job errors, log others
+        if (!error?.message?.includes('already exists')) {
+          this.logger.warn(`Failed to queue stats refresh for ${id}: ${error}`);
+        }
+      });
   }
 
   // --- Infrastructure helpers ---
@@ -508,10 +513,12 @@ export class JanitorService {
 
     // Heartbeat to keep the lock alive while working
     let active = true;
-    const interval = setInterval(() => renew(), CONFIG.LOCK.HEARTBEAT);
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const renew = async () => {
-      if (!active) return;
+      if (!active) {
+        throw new Error('Lock was lost, aborting operation');
+      }
       try {
         const result = await this.redis.eval(
           this.SCRIPTS.RENEW,
@@ -522,18 +529,37 @@ export class JanitorService {
         );
         if (result !== 1) {
           active = false;
-          this.logger.debug('Lock lost, skipping');
+          // Clear interval immediately when lock is lost
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+          this.logger.warn('Lock lost during operation, aborting');
+          throw new Error('Lock was lost, aborting operation');
         }
       } catch (error) {
+        if (error instanceof Error && error.message.includes('Lock was lost')) {
+          throw error;
+        }
         this.logger.warn('Lock renewal failed, continuing...', error);
       }
     };
+
+    // Start heartbeat interval
+    interval = setInterval(() => {
+      renew().catch((err) => {
+        this.logger.debug(`Heartbeat renew failed: ${err.message}`);
+      });
+    }, CONFIG.LOCK.HEARTBEAT);
 
     try {
       await callback(renew);
     } finally {
       active = false;
-      clearInterval(interval);
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
       // Release lock
       await this.redis
         .eval(this.SCRIPTS.RELEASE, 1, CONFIG.LOCK.KEY, lockValue)

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ClanDTO,
@@ -9,19 +9,55 @@ import {
   RankingsResponseMap,
   Region,
 } from '@brawltome/shared-types';
+import { PRIORITY_BACKGROUND } from '@brawltome/shared-utils';
 import Bottleneck from 'bottleneck';
 import Redis from 'ioredis';
 import axios, { AxiosInstance } from 'axios';
 
+export interface BhApiRequestOptions {
+  /** Bottleneck priority (lower = higher priority). Defaults to PRIORITY_BACKGROUND. */
+  priority?: number;
+}
+
 @Injectable()
-export class BhApiClientService {
+export class BhApiClientService implements OnModuleDestroy {
   public limiter!: Bottleneck;
   private http: AxiosInstance;
   private readonly logger = new Logger(BhApiClientService.name);
+  private redisClient: Redis;
+  private connection: Bottleneck.IORedisConnection;
 
   constructor(private config: ConfigService) {
-    const connection = new Bottleneck.IORedisConnection({
-      client: new Redis(this.config.getOrThrow<string>('REDIS_URL')),
+    this.redisClient = new Redis(this.config.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: null, // Required for Bottleneck
+      enableReadyCheck: false,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 100, 3000);
+        this.logger.warn(
+          `Redis reconnecting... attempt ${times}, delay ${delay}ms`
+        );
+        return delay;
+      },
+    });
+
+    this.redisClient.on('error', (err) => {
+      this.logger.error('Redis client error:', err.message);
+    });
+
+    this.redisClient.on('connect', () => {
+      this.logger.log('Redis client connected');
+    });
+
+    this.redisClient.on('reconnecting', () => {
+      this.logger.warn('Redis client reconnecting...');
+    });
+
+    this.connection = new Bottleneck.IORedisConnection({
+      client: this.redisClient,
+    });
+
+    this.connection.on('error', (err) => {
+      this.logger.error('Bottleneck Redis connection error:', err.message);
     });
 
     const apiKey = this.config.getOrThrow<string>('BRAWLHALLA_API_KEY');
@@ -29,7 +65,7 @@ export class BhApiClientService {
     this.limiter = new Bottleneck({
       id: 'bhapi-limiter',
       datastore: 'ioredis',
-      connection,
+      connection: this.connection,
       clearDatastore: false,
 
       // Traffic settings
@@ -57,11 +93,6 @@ export class BhApiClientService {
       if (status === 429) {
         const retryHeader = error.response?.headers['retry-after'];
         const retryAfter = retryHeader ? parseInt(retryHeader, 10) : 900;
-
-        // TODO: remove this after testing
-        this.logger.warn('Headers:', error.response?.headers);
-        this.logger.warn('Response:', error.response?.data);
-
         const waitTime = (retryAfter + 1) * 1000;
 
         this.logger.warn(
@@ -102,15 +133,23 @@ export class BhApiClientService {
     return reservoir || 0;
   }
 
-  async getPlayerStats(brawlhallaId: number): Promise<PlayerStatsDTO> {
-    return this.limiter.schedule(() =>
-      this.performRequest(`/player/${brawlhallaId}/stats`)
+  async getPlayerStats(
+    brawlhallaId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<PlayerStatsDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/player/${brawlhallaId}/stats`)
     );
   }
 
-  async getPlayerRanked(brawlhallaId: number): Promise<PlayerRankedDTO> {
-    return this.limiter.schedule(() =>
-      this.performRequest(`/player/${brawlhallaId}/ranked`)
+  async getPlayerRanked(
+    brawlhallaId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<PlayerRankedDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/player/${brawlhallaId}/ranked`)
     );
   }
 
@@ -118,26 +157,42 @@ export class BhApiClientService {
     bracket: K,
     region: Region,
     page: number,
-    name: string | null = null
+    name: string | null = null,
+    options: BhApiRequestOptions = {}
   ): Promise<RankingsResponseMap[K]> {
     const params = name ? { name } : {};
-    return this.limiter.schedule(() =>
-      this.performRequest(`/rankings/${bracket}/${region}/${page}`, params)
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () =>
+        this.performRequest(`/rankings/${bracket}/${region}/${page}`, params)
     );
   }
 
-  async getAllLegends(): Promise<LegendDTO[]> {
-    return this.limiter.schedule(() => this.performRequest(`/legend/all`));
-  }
-
-  async getLegend(legendId: number): Promise<LegendDTO> {
-    return this.limiter.schedule(() =>
-      this.performRequest(`/legend/${legendId}`)
+  async getAllLegends(options: BhApiRequestOptions = {}): Promise<LegendDTO[]> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/legend/all`)
     );
   }
 
-  async getClan(clanId: number): Promise<ClanDTO> {
-    return this.limiter.schedule(() => this.performRequest(`/clan/${clanId}`));
+  async getLegend(
+    legendId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<LegendDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/legend/${legendId}`)
+    );
+  }
+
+  async getClan(
+    clanId: number,
+    options: BhApiRequestOptions = {}
+  ): Promise<ClanDTO> {
+    return this.limiter.schedule(
+      { priority: options.priority ?? PRIORITY_BACKGROUND },
+      () => this.performRequest(`/clan/${clanId}`)
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,5 +217,11 @@ export class BhApiClientService {
   ) {
     const response = await this.http.get(endpoint, { params });
     return response.data;
+  }
+
+  async onModuleDestroy() {
+    this.logger.log('Shutting down BhApiClientService...');
+    await this.limiter.disconnect();
+    await this.redisClient.quit();
   }
 }

@@ -1,9 +1,12 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { PrismaService } from '@brawltome/database';
+import { PrismaService, ClanLegendResolverService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
-import { DISCOVERY_MIN_TOKENS } from '@brawltome/shared-utils';
+import {
+  DISCOVERY_MIN_TOKENS,
+  PRIORITY_REALTIME,
+} from '@brawltome/shared-utils';
 
 // TTL for clan data before it's considered stale
 const CLAN_TTL = 1000 * 60 * 60; // 1 hour
@@ -15,6 +18,7 @@ export class ClanService {
   constructor(
     private prisma: PrismaService,
     private bhApiClient: BhApiClientService,
+    private clanLegendResolver: ClanLegendResolverService,
     @InjectQueue('refresh-queue') private refreshQueue: Queue
   ) {}
 
@@ -141,58 +145,14 @@ export class ClanService {
   async fetchAndSaveClan(id: number) {
     try {
       this.logger.log(`Fetching clan ${id} from API...`);
-      const clanData = await this.bhApiClient.getClan(id);
+      const clanData = await this.bhApiClient.getClan(id, {
+        priority: PRIORITY_REALTIME,
+      });
 
       const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
-
-      const bestLegends = await this.prisma.playerRankedLegend.findMany({
-        where: {
-          brawlhallaId: { in: memberIds },
-        },
-        orderBy: {
-          rating: 'desc',
-        },
-        distinct: ['brawlhallaId'],
-        select: {
-          brawlhallaId: true,
-          legendId: true,
-        },
-      });
-
-      const legendIds = bestLegends.map((bl) => bl.legendId);
-      const legends = await this.prisma.legend.findMany({
-        where: { legendId: { in: legendIds } },
-        select: { legendId: true, legendNameKey: true },
-      });
-
-      const legendKeyMap = new Map(
-        legends.map((l) => [l.legendId, l.legendNameKey])
+      const playerLegendMap = await this.clanLegendResolver.resolveBestLegends(
+        memberIds
       );
-      const playerLegendMap = new Map();
-
-      for (const bl of bestLegends) {
-        const legendNameKey = legendKeyMap.get(bl.legendId);
-        if (legendNameKey) {
-          playerLegendMap.set(bl.brawlhallaId, legendNameKey);
-        }
-      }
-
-      const missingRankedIds = memberIds.filter(
-        (pid) => !playerLegendMap.has(pid)
-      );
-      if (missingRankedIds.length > 0) {
-        const statsFallback = await this.prisma.playerStatsLegend.findMany({
-          where: { brawlhallaId: { in: missingRankedIds } },
-          orderBy: { xp: 'desc' },
-          distinct: ['brawlhallaId'],
-          select: { brawlhallaId: true, legendNameKey: true },
-        });
-        for (const row of statsFallback) {
-          if (row.legendNameKey) {
-            playerLegendMap.set(row.brawlhallaId, row.legendNameKey);
-          }
-        }
-      }
 
       const clan = await this.prisma.clan.upsert({
         where: { clanId: id },
