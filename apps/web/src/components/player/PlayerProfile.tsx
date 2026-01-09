@@ -69,26 +69,47 @@ const toCamelCase = (str: string): string => {
     .replace(/^([A-Z])/, (chr) => chr.toLowerCase());
 };
 
-const WEAPON_ALIAS_MAP: Record<string, string> = {
-  Pistol: "Blasters",
-  Fists: "Gauntlets",
-  Katar: "Katars",
-  RocketLance: "Lance",
-  "Rocket Lance": "Lance",
-  "Battle Boots": "Boots",
-};
-
-const getWeaponDisplay = (weapon: string) => {
-  // TODO : Remove when I fix the refresh processor
-  return weapon;
+const getWeaponIcon = (weapon: string) => {
+  // Brawlhalla weapons mapped to image folder names
+  const map: Record<string, string> = {
+    unarmed: 'Unarmed',
+    Axe: 'Axe',
+    Boots: 'Boots',
+    Blasters: 'Blasters',
+    Bow: 'Bow',
+    Cannon: 'Cannon',
+    Gauntlets: 'Gauntlets',
+    Greatsword: 'Greatsword',
+    Hammer: 'Hammer',
+    Katars: 'Katars',
+    Orb: 'Orb',
+    'Rocket Lance': 'Lance',
+    Lance: 'Lance',
+    Scythe: 'Scythe',
+    Spear: 'Spear',
+    Sword: 'Sword',
+    Pistol: 'Blasters',
+    Fists: 'Gauntlets',
+    Katar: 'Katars',
+    RocketLance: 'Lance',
+    Cannonballs: 'Cannonballs',
+    Chakram: 'Chakrams',
+    Gadgets: 'Gadgets',
+  };
+  return `/images/weapons/${map[weapon] || toCamelCase(weapon)}.png`;
 }
 
-export const getWeaponIcon = (weapon: string): string => {
-  const canonicalName = WEAPON_ALIAS_MAP[weapon] ?? weapon;
-  const fileName = toCamelCase(canonicalName);
-
-  return `/images/weapons/${fileName}.png`;
-};
+const getWeaponDisplay = (weapon: string) => {
+  const map: Record<string, string> = {
+    Fists: 'Gauntlets',
+    Pistol: 'Blasters',
+    Katar: 'Katars',
+    RocketLance: 'Lance',
+    Chakram: 'Chakrams',
+    ThrownItem: 'Throwables',
+  };
+  return map[weapon] || weapon;
+}
 
 const getGloryFromWins = (wins: number): number => {
   if (wins <= 150) return 20 * wins;
