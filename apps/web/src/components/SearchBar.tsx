@@ -40,6 +40,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     memberCount: number;
   }
 
+  const [isMounted, setIsMounted] = useState(false);
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
   const [clanResults, setClanResults] = useState<ClanResult[]>([]);
   const [showClans, setShowClans] = useState(false);
@@ -47,6 +48,17 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const formatNum = (n: number | string | undefined | null) => {
+    const val = typeof n === 'string' ? parseInt(n, 10) : n;
+    const num = val && !isNaN(val as number) ? val : 0;
+    if (!isMounted) return String(num);
+    return num.toLocaleString();
+  };
 
   const handleResultNavigate = (e: React.MouseEvent) => {
     // Let the browser handle new-tab / new-window gestures.
@@ -260,8 +272,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             </div>
                           </div>
                           <div className="text-xs font-mono text-muted-foreground">
-                            {c.xp ? parseInt(c.xp, 10).toLocaleString() : '0'}{' '}
-                            XP
+                            {formatNum(c.xp)} XP
                           </div>
                         </Link>
                       ))}
