@@ -18,9 +18,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@brawltome/shared-utils": ["../../libs/shared-utils/src/index.ts"],
-      "@brawltome/ui": ["../../libs/ui/src/index.ts"]
+      "@/*": ["./src/*"]
     },
     "outDir": "dist",
     "rootDir": "src",
