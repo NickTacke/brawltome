@@ -182,6 +182,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     refreshInterval: (data) => (data?.isRefreshing ? 2000 : 0),
   });
 
+  const weaponStats = useMemo(
+    () =>
+      aggregateRichWeaponStats(
+        (player?.stats?.legendsEnriched || []) as LegendWeaponData[]
+      ),
+    [player?.stats?.legendsEnriched]
+  );
+
   if (!player) {
     return (
       <div className="max-w-6xl mx-auto p-6">
@@ -273,14 +281,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const playtimeSeconds =
     player?.stats?.playtimeSeconds ?? player?.stats?.matchTimeTotal ?? 0;
-
-  const weaponStats = useMemo(
-    () =>
-      aggregateRichWeaponStats(
-        (player?.stats?.legendsEnriched || []) as LegendWeaponData[]
-      ),
-    [player?.stats?.legendsEnriched]
-  );
 
   const displayedWeapons = showAllWeapons
     ? weaponStats
