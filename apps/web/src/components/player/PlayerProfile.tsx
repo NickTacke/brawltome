@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { fetcher } from '@/lib/api';
@@ -25,6 +25,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@brawltome/ui';
+import {
+  aggregateRichWeaponStats,
+  LegendWeaponData,
+} from '@brawltome/shared-utils';
 
 interface PlayerProfileProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -199,31 +203,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (player.stats?.legendsEnriched || player.stats?.legends || []) as any[];
 
-  // Rich weapon aggregation
-  interface WeaponAgg {
-    weapon: string;
-    label?: string;
-    games: number;
-    wins: number;
-    xp: number;
-    totalLevel: number;
-    legendCount: number;
-    timeHeld: number;
-    KOs: number;
-    damage: number;
-    share?: number;
-    usageRate?: number;
-    ranked: {
-      games: number;
-      wins: number;
-      ratings: number[];
-      peakRatings: number[];
-      mostPlayed: { name: string; games: number; key: string };
-      highestElo: { name: string; elo: number; key: string };
-      highestPeak: { name: string; elo: number; key: string };
-    };
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allLegends = [...legendsSource].sort((a: any, b: any) => b.xp - a.xp);
 
@@ -295,111 +274,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const playtimeSeconds =
     player?.stats?.playtimeSeconds ?? player?.stats?.matchTimeTotal ?? 0;
 
-  const weaponStatsMap = new Map<string, WeaponAgg>();
-
-  if (player?.stats?.legendsEnriched) {
-    player.stats.legendsEnriched.forEach((l: Record<string, any>) => {
-      const weapons = [
-        {
-          name: l.weaponOne as string,
-          time: l.timeHeldWeaponOne as number,
-          kos: l.KOWeaponOne as number,
-          dmg: l.damageWeaponOne as string,
-        },
-        {
-          name: l.weaponTwo as string,
-          time: l.timeHeldWeaponTwo as number,
-          kos: l.KOWeaponTwo as number,
-          dmg: l.damageWeaponTwo as string,
-        },
-      ];
-
-      weapons.forEach((w) => {
-        if (!w.name) return;
-        const current = weaponStatsMap.get(w.name) || {
-          weapon: w.name,
-          games: 0,
-          wins: 0,
-          xp: 0,
-          totalLevel: 0,
-          legendCount: 0,
-          timeHeld: 0,
-          KOs: 0,
-          damage: 0,
-          ranked: {
-            games: 0,
-            wins: 0,
-            ratings: [],
-            peakRatings: [],
-            mostPlayed: { name: '', games: 0, key: '' },
-            highestElo: { name: '', elo: 0, key: '' },
-            highestPeak: { name: '', elo: 0, key: '' },
-          },
-        };
-
-        current.games += parseNum(l.games);
-        current.wins += parseNum(l.wins);
-        current.xp += parseNum(l.xp);
-        current.totalLevel += parseNum(l.level);
-        current.legendCount += 1;
-        current.timeHeld += parseNum(w.time);
-        current.KOs += parseNum(w.kos);
-        current.damage += parseNum(w.dmg);
-
-        // Track most played legend for this weapon
-        if (parseNum(l.games) > current.ranked.mostPlayed.games) {
-          current.ranked.mostPlayed = {
-            name: (l.bioName || l.legendNameKey) as string,
-            games: parseNum(l.games),
-            key: l.legendNameKey as string,
-          };
-        }
-
-        if (l.ranked) {
-          current.ranked.games += parseNum(l.ranked.games);
-          current.ranked.wins += parseNum(l.ranked.wins);
-          current.ranked.ratings.push(parseNum(l.ranked.rating));
-          current.ranked.peakRatings.push(parseNum(l.ranked.peakRating));
-
-          if (parseNum(l.ranked.rating) > current.ranked.highestElo.elo) {
-            current.ranked.highestElo = {
-              name: (l.bioName || l.legendNameKey) as string,
-              elo: parseNum(l.ranked.rating),
-              key: l.legendNameKey as string,
-            };
-          }
-          if (parseNum(l.ranked.peakRating) > current.ranked.highestPeak.elo) {
-            current.ranked.highestPeak = {
-              name: (l.bioName || l.legendNameKey) as string,
-              elo: parseNum(l.ranked.peakRating),
-              key: l.legendNameKey as string,
-            };
-          }
-        }
-
-        weaponStatsMap.set(w.name, current);
-      });
-    });
-  }
-
-  const totalTimeHeld = Array.from(weaponStatsMap.values()).reduce(
-    (sum, w) => sum + w.timeHeld,
-    0
+  const weaponStats = useMemo(
+    () =>
+      aggregateRichWeaponStats(
+        (player?.stats?.legendsEnriched || []) as LegendWeaponData[]
+      ),
+    [player?.stats?.legendsEnriched]
   );
-  const totalGamesAcrossWeapons = Array.from(weaponStatsMap.values()).reduce(
-    (sum, w) => sum + w.games,
-    0
-  );
-
-  const weaponStats = Array.from(weaponStatsMap.values())
-    .map((w) => ({
-      ...w,
-      share: totalTimeHeld > 0 ? w.timeHeld / totalTimeHeld : 0,
-      usageRate:
-        totalGamesAcrossWeapons > 0 ? w.games / totalGamesAcrossWeapons : 0,
-    }))
-    .filter((w) => w.timeHeld > 0 || w.damage > 0 || w.KOs > 0)
-    .sort((a, b) => b.timeHeld - a.timeHeld);
 
   const displayedWeapons = showAllWeapons
     ? weaponStats
@@ -1188,7 +1069,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         </div>
                                       )}
                                       {w.ranked.highestPeak.key && (
-                                        <div className="flex items-center gap-2 p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                        <div className="flex items-center gap-2 p-1.5 mb-2 rounded bg-background/20 hover:bg-background/30 transition-colors">
                                           <Avatar className="h-6 w-6 rounded-sm">
                                             <AvatarImage
                                               src={`/images/legends/avatars/${w.ranked.highestPeak.key}.png`}
