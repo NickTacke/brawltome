@@ -161,28 +161,6 @@ const WinLossBar = ({
   );
 };
 
-const StatItem = ({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) => {
-  const displayValue =
-    typeof value === 'number' && isNaN(value) ? '---' : String(value);
-
-  return (
-    <div className="space-y-1">
-      <div className="text-[10px] font-bold text-muted-foreground opacity-60">
-        {label}
-      </div>
-      <div className="font-mono font-bold text-foreground text-sm leading-none">
-        {displayValue}
-      </div>
-    </div>
-  );
-};
-
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [showAllLegends, setShowAllLegends] = useState(false);
@@ -860,7 +838,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
               const winrate = w.games > 0 ? (w.wins / w.games) * 100 : 0;
               const dps = w.timeHeld > 0 ? parseNum(w.damage) / w.timeHeld : 0;
               const avgKos = w.games > 0 ? w.KOs / w.games : 0;
-              const avgDmg = w.games > 0 ? parseNum(w.damage) / w.games : 0;
 
               const avgElo =
                 w.ranked.ratings.length > 0
@@ -1365,20 +1342,10 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                         // Calculated stats
                         const dpsDealt =
                           matchTime > 0 ? legendDmgDealt / matchTime : 0;
-                        const dpsTaken =
-                          matchTime > 0 ? legendDmgTaken / matchTime : 0;
                         const avgKOsPerGame =
                           legendGames > 0 ? legendKOs / legendGames : 0;
                         const avgFallsPerGame =
                           legendGames > 0 ? legendFalls / legendGames : 0;
-                        const avgDmgPerGame =
-                          legendGames > 0 ? legendDmgDealt / legendGames : 0;
-                        const timeToKill =
-                          legendKOs > 0 ? matchTime / legendKOs : 0;
-                        const timeToFall =
-                          legendFalls > 0 ? matchTime / legendFalls : 0;
-                        const avgGameLength =
-                          legendGames > 0 ? matchTime / legendGames : 0;
 
                         // Additional calculated stats
                         const kdRatio =
