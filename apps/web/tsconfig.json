@@ -18,7 +18,9 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@brawltome/shared-utils": ["../../libs/shared-utils/src/index.ts"],
+      "@brawltome/ui": ["../../libs/ui/src/index.ts"]
     },
     "outDir": "dist",
     "rootDir": "src",
@@ -47,6 +49,9 @@
     "eslint.config.mjs"
   ],
   "references": [
+    {
+      "path": "../../libs/shared-utils"
+    },
     {
       "path": "../../libs/ui"
     }
