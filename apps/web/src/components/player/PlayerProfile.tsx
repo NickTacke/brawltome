@@ -62,46 +62,27 @@ const getRankBanner = (tier?: string | null) => {
   return '/images/banners/Unranked.png';
 };
 
-const getWeaponIcon = (weapon: string) => {
-  // Brawlhalla weapons mapped to image folder names
-  const map: Record<string, string> = {
-    unarmed: 'Unarmed',
-    Axe: 'Axe',
-    'Battle Boots': 'Boots',
-    Blasters: 'Blasters',
-    Bow: 'Bow',
-    Cannon: 'Cannon',
-    Gauntlets: 'Gauntlets',
-    Greatsword: 'Greatsword',
-    Hammer: 'Hammer',
-    Katars: 'Katars',
-    Orb: 'Orb',
-    'Rocket Lance': 'Lance',
-    Lance: 'Lance',
-    Scythe: 'Scythe',
-    Spear: 'Spear',
-    Sword: 'Sword',
-    Pistol: 'Blasters',
-    Fists: 'Gauntlets',
-    Katar: 'Katars',
-    RocketLance: 'Lance',
-    Cannonballs: 'Cannonballs',
-    Chakrams: 'Chakrams',
-    Gadgets: 'Gadgets',
-  };
-  return `/images/weapons/${map[weapon] || weapon.toLowerCase()}.png`;
+const toCamelCase = (str: string): string => {
+  return str
+    .toLowerCase()
+    .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
+    .replace(/^([A-Z])/, (chr) => chr.toLowerCase());
 };
 
-const getWeaponDisplay = (weapon: string) => {
-  const map: Record<string, string> = {
-    Fists: 'Gauntlets',
-    Pistol: 'Blasters',
-    Katar: 'Katars',
-    RocketLance: 'Lance',
-    Chakram: 'Chakrams',
-    ThrownItem: 'Throwables',
-  };
-  return map[weapon] || weapon;
+const WEAPON_ALIAS_MAP: Record<string, string> = {
+  Pistol: "Blasters",
+  Fists: "Gauntlets",
+  Katar: "Katars",
+  RocketLance: "Lance",
+  "Rocket Lance": "Lance",
+  "Battle Boots": "Boots",
+};
+
+export const getWeaponIcon = (weapon: string): string => {
+  const canonicalName = WEAPON_ALIAS_MAP[weapon] ?? weapon;
+  const fileName = toCamelCase(canonicalName);
+
+  return `/images/weapons/${fileName}.png`;
 };
 
 const getGloryFromWins = (wins: number): number => {
