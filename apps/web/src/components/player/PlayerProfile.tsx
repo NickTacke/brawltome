@@ -72,7 +72,7 @@ const toCamelCase = (str: string): string => {
 const getWeaponIcon = (weapon: string) => {
   // Brawlhalla weapons mapped to image folder names
   const map: Record<string, string> = {
-    unarmed: 'Unarmed',
+    Unarmed: 'Unarmed',
     Axe: 'Axe',
     Boots: 'Boots',
     Blasters: 'Blasters',
