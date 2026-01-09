@@ -86,7 +86,7 @@ const getWeaponIcon = (weapon: string) => {
     Katar: 'Katars',
     RocketLance: 'Lance',
     Cannonballs: 'Cannonballs',
-    Chakrams: 'Chakram',
+    Chakrams: 'Chakrams',
     Gadgets: 'Gadgets',
   };
   return `/images/weapons/${map[weapon] || weapon.toLowerCase()}.png`;
