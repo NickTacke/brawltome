@@ -32,19 +32,30 @@ interface PlayerProfileProps {
   id: string;
 }
 
-const RANK_BANNERS: Record<string, string> = {
-  Diamond: '/images/banners/Diamond.png',
-  Platinum: '/images/banners/Platinum.png',
-  Gold: '/images/banners/Gold.png',
-  Silver: '/images/banners/Silver.png',
-  Bronze: '/images/banners/Bronze.png',
-  Tin: '/images/banners/Tin.png',
-  Valhallan: '/images/banners/Valhallan.png',
-};
+const TIERS_WITH_SUBDIVISIONS = ['Tin', 'Bronze', 'Silver', 'Gold', 'Platinum'];
 
 const getRankBanner = (tier?: string | null) => {
-  const baseTier = (tier ?? '').split(' ')[0];
-  return RANK_BANNERS[baseTier] || '/images/banners/Unranked.png';
+  if (!tier) return '/images/banners/Unranked.png';
+
+  const parts = tier.split(' ');
+  const baseTier = parts[0];
+  const subdivision = parts[1];
+
+  // Diamond and Valhallan have no subdivisions
+  if (baseTier === 'Diamond') return '/images/banners/Diamond.png';
+  if (baseTier === 'Valhallan') return '/images/banners/Valhallan.png';
+
+  // For tiers with subdivisions, use the full tier name (encode space for CSS url())
+  if (TIERS_WITH_SUBDIVISIONS.includes(baseTier) && subdivision !== undefined) {
+    return `/images/banners/${baseTier}%20${subdivision}.png`;
+  }
+
+  // Fallback to base tier or unranked
+  if (TIERS_WITH_SUBDIVISIONS.includes(baseTier)) {
+    return `/images/banners/${baseTier}.png`;
+  }
+
+  return '/images/banners/Unranked.png';
 };
 
 const getWeaponIcon = (weapon: string) => {
@@ -275,6 +286,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       ? String(hoursRounded)
       : hoursRounded.toFixed(1);
     return `${hoursStr}h`;
+  };
+
+  const formatCompact = (n: number): string => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 100_000) return `${(n / 1_000).toFixed(0)}K`;
+    if (n >= 10_000) return `${(n / 1_000).toFixed(1)}K`;
+    return formatNum(n);
   };
 
   const parseNum = (v: unknown) => {
@@ -871,232 +889,358 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 >
                   <div className="p-4 space-y-3">
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 relative shrink-0">
+                      <div className="h-12 w-12 relative shrink-0">
                         <img
                           src={getWeaponIcon(w.weapon)}
                           alt={w.weapon}
-                          className="object-contain w-full h-full opacity-90"
+                          className="object-contain w-full h-full"
                         />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2">
-                          <h3 className="font-bold text-foreground truncate text-sm">
-                            {w.label || getWeaponDisplay(w.weapon)}
-                          </h3>
-                          <span className="text-[10px] font-mono text-muted-foreground shrink-0 mt-0.5">
-                            {(w.share * 100).toFixed(0)}%
-                          </span>
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-foreground truncate text-sm">
+                              {w.label || getWeaponDisplay(w.weapon)}
+                            </h3>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground font-mono flex items-center gap-1.5">
+                              <span>{formatNum(w.games)} games</span>
+                              <span className="opacity-30">•</span>
+                              <span
+                                className={
+                                  winrate >= 50
+                                    ? 'text-green-500 font-bold'
+                                    : ''
+                                }
+                              >
+                                {winrate.toFixed(1)}% WR
+                              </span>
+                            </div>
+                          </div>
+                          {/* Playtime & Percentage - Prominent */}
+                          <div className="flex items-baseline gap-2 shrink-0">
+                            <span className="text-lg font-black text-foreground leading-none">
+                              {formatHours(w.timeHeld)}
+                            </span>
+                            <span className="text-sm font-bold text-primary">
+                              {(w.share * 100).toFixed(0)}%
+                            </span>
+                          </div>
                         </div>
-                        <div className="mt-1 text-[10px] text-muted-foreground font-mono flex items-center gap-1.5 truncate">
-                          <span>{formatHours(w.timeHeld)} held</span>
-                          <span className="opacity-30">•</span>
-                          <span>{formatNum(w.KOs)} KOs</span>
-                          <span className="opacity-30">•</span>
-                          <span>{formatNum(w.damage)} dmg</span>
+                        <div className="mt-[-4px] flex items-center gap-3">
+                          <Progress
+                            value={w.share * 100}
+                            className="h-1.5 flex-1"
+                          />
+                          <div className="text-[10px] text-muted-foreground font-mono shrink-0">
+                            {formatNum(w.KOs)} KOs • {formatCompact(w.damage)}{' '}
+                            dmg
+                          </div>
                         </div>
-                        <Progress value={w.share * 100} className="h-1 mt-2" />
                       </div>
                     </div>
 
-                    {isExpanded && (
-                      <div className="pt-6 space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
-                        {/* Banner Section */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                          <div className="space-y-4">
-                            <div>
-                              <div className="text-[10px] font-bold text-muted-foreground mb-1 opacity-70">
-                                Games
-                              </div>
-                              <div className="flex items-baseline gap-2">
-                                <span className="text-4xl font-black text-foreground tracking-tighter">
-                                  {formatNum(w.games)}
-                                </span>
-                                <span className="text-xs font-bold text-muted-foreground">
-                                  Games
-                                </span>
-                              </div>
-                            </div>
+                    {isExpanded &&
+                      (() => {
+                        const rankedWinrate =
+                          w.ranked.games > 0
+                            ? (w.ranked.wins / w.ranked.games) * 100
+                            : 0;
+                        const dmgPerKO =
+                          w.KOs > 0 ? Math.round(w.damage / w.KOs) : 0;
+                        const avgDmgPerGame =
+                          w.games > 0 ? Math.round(w.damage / w.games) : 0;
+                        const avgLegendLevel =
+                          w.legendCount > 0
+                            ? Math.round(w.totalLevel / w.legendCount)
+                            : 0;
+                        const avgLegendXp =
+                          w.legendCount > 0
+                            ? Math.round(w.xp / w.legendCount)
+                            : 0;
 
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-end text-[10px] font-mono">
-                                <span className="text-green-500 font-bold">
-                                  {formatNum(w.wins)}W ({winrate.toFixed(2)}%)
-                                </span>
-                                <span className="text-red-500 font-bold">
-                                  {formatNum(w.games - w.wins)}L (
-                                  {(100 - winrate).toFixed(2)}%)
-                                </span>
+                        return (
+                          <div className="pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            {/* Two Column Layout */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-0">
+                              {/* Left: Overall Stats */}
+                              <div className="space-y-3 md:pr-4 md:border-r md:border-border/30">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                  Overall Stats
+                                </div>
+
+                                {/* Games & Winrate */}
+                                <div className="space-y-1.5">
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-black text-foreground">
+                                      {formatNum(w.games)}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      games
+                                    </span>
+                                    <span className="text-muted-foreground/30 mx-1">
+                                      •
+                                    </span>
+                                    <span className="text-sm font-mono text-muted-foreground">
+                                      {formatHours(w.timeHeld)}
+                                    </span>
+                                  </div>
+                                  <WinLossBar
+                                    percent={winrate}
+                                    className="h-2"
+                                  />
+                                  <div className="flex justify-between text-[10px] font-bold">
+                                    <span className="text-foreground">
+                                      {formatNum(w.wins)}W{' '}
+                                      <span className="font-normal text-muted-foreground">
+                                        ({winrate.toFixed(1)}%)
+                                      </span>
+                                    </span>
+                                    <span className="text-foreground">
+                                      {formatNum(w.games - w.wins)}L{' '}
+                                      <span className="font-normal text-muted-foreground">
+                                        ({(100 - winrate).toFixed(1)}%)
+                                      </span>
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Combat Stats */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div className="text-[9px] text-muted-foreground uppercase">
+                                        KOs
+                                      </div>
+                                      <div className="text-[10px] font-bold text-foreground/70">
+                                        {avgKos.toFixed(1)}/game
+                                      </div>
+                                    </div>
+                                    <div className="text-lg font-black text-green-500">
+                                      {formatNum(w.KOs)}
+                                    </div>
+                                  </div>
+                                  <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div className="text-[9px] text-muted-foreground uppercase">
+                                        Damage
+                                      </div>
+                                      <div className="text-[10px] font-bold text-foreground/70">
+                                        {dps.toFixed(1)} DPS
+                                      </div>
+                                    </div>
+                                    <div className="text-lg font-black text-foreground">
+                                      {formatCompact(w.damage)}
+                                    </div>
+                                    <div className="text-[9px] text-muted-foreground">
+                                      {formatNum(avgDmgPerGame)}/game
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Stats Row 1 */}
+                                <div className="grid grid-cols-4 gap-1 text-center">
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {(w.share * 100).toFixed(0)}%
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Time %
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {(w.usageRate * 100).toFixed(0)}%
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Usage
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {formatNum(dmgPerKO)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Dmg/KO
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {w.legendCount}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Legends
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Stats Row 2 - Level & XP */}
+                                <div className="grid grid-cols-4 gap-1 text-center">
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {formatNum(w.totalLevel)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Level
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {avgLegendLevel}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Avg Lvl
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {formatCompact(w.xp)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      XP
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {formatCompact(avgLegendXp)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Avg XP
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                              <WinLossBar
-                                percent={winrate}
-                                className="h-2 shadow-inner"
-                              />
+
+                              {/* Right: Ranked Season */}
+                              <div className="space-y-3 md:pl-4">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                  Ranked Season
+                                </div>
+
+                                {w.ranked.games > 0 ? (
+                                  <div className="space-y-3 mt-3">
+                                    {/* Games & Winrate */}
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-black text-foreground">
+                                          {formatNum(w.ranked.games)}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          ranked games
+                                        </span>
+                                      </div>
+                                      <WinLossBar
+                                        percent={rankedWinrate}
+                                        className="h-2"
+                                      />
+                                      <div className="flex justify-between text-[10px] font-bold">
+                                        <span className="text-foreground">
+                                          {formatNum(w.ranked.wins)}W{' '}
+                                          <span className="font-normal text-muted-foreground">
+                                            ({rankedWinrate.toFixed(1)}%)
+                                          </span>
+                                        </span>
+                                        <span className="text-foreground">
+                                          {formatNum(
+                                            w.ranked.games - w.ranked.wins
+                                          )}
+                                          L{' '}
+                                          <span className="font-normal text-muted-foreground">
+                                            ({(100 - rankedWinrate).toFixed(1)}
+                                            %)
+                                          </span>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Elo Stats */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 text-center hover:bg-background/50 transition-colors">
+                                        <div className="text-lg font-black text-foreground">
+                                          {Math.round(avgElo)}
+                                        </div>
+                                        <div className="text-[8px] text-muted-foreground uppercase">
+                                          Avg Elo
+                                        </div>
+                                      </div>
+                                      <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 text-center hover:bg-background/50 transition-colors">
+                                        <div className="text-lg font-black text-foreground">
+                                          {Math.round(avgPeak)}
+                                        </div>
+                                        <div className="text-[8px] text-muted-foreground uppercase">
+                                          Avg Peak
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Legend Stats */}
+                                    <div className="space-y-1.5">
+                                      {w.ranked.mostPlayed.key && (
+                                        <div className="flex items-center gap-2 p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                          <Avatar className="h-6 w-6 rounded-sm">
+                                            <AvatarImage
+                                              src={`/images/legends/avatars/${w.ranked.mostPlayed.key}.png`}
+                                            />
+                                          </Avatar>
+                                          <div className="flex-1 min-w-0 flex justify-between items-center">
+                                            <span className="text-[10px] text-muted-foreground">
+                                              Most Played
+                                            </span>
+                                            <span className="text-xs font-bold text-foreground">
+                                              {w.ranked.mostPlayed.games} games
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+                                      {w.ranked.highestElo.key && (
+                                        <div className="flex items-center gap-2 p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                          <Avatar className="h-6 w-6 rounded-sm">
+                                            <AvatarImage
+                                              src={`/images/legends/avatars/${w.ranked.highestElo.key}.png`}
+                                            />
+                                          </Avatar>
+                                          <div className="flex-1 min-w-0 flex justify-between items-center">
+                                            <span className="text-[10px] text-muted-foreground">
+                                              Highest Elo
+                                            </span>
+                                            <span className="text-xs font-bold text-foreground">
+                                              {w.ranked.highestElo.elo}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+                                      {w.ranked.highestPeak.key && (
+                                        <div className="flex items-center gap-2 p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                          <Avatar className="h-6 w-6 rounded-sm">
+                                            <AvatarImage
+                                              src={`/images/legends/avatars/${w.ranked.highestPeak.key}.png`}
+                                            />
+                                          </Avatar>
+                                          <div className="flex-1 min-w-0 flex justify-between items-center">
+                                            <span className="text-[10px] text-muted-foreground">
+                                              Highest Peak
+                                            </span>
+                                            <span className="text-xs font-bold text-foreground">
+                                              {w.ranked.highestPeak.elo}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                                    <div className="text-sm text-muted-foreground">
+                                      No ranked games this season
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            <StatItem
-                              label="Weapon level"
-                              value={formatNum(w.totalLevel)}
-                            />
-                            <StatItem
-                              label="Avg. legend level"
-                              value={
-                                w.legendCount > 0
-                                  ? Math.round(w.totalLevel / w.legendCount)
-                                  : 0
-                              }
-                            />
-                            <StatItem
-                              label="Weapon XP"
-                              value={formatNum(w.xp)}
-                            />
-                            <StatItem
-                              label="Avg. legend XP"
-                              value={formatNum(
-                                w.legendCount > 0
-                                  ? Math.round(w.xp / w.legendCount)
-                                  : 0
-                              )}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Main Stats Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-y-6 gap-x-4">
-                          <StatItem
-                            label="Time held"
-                            value={formatHours(w.timeHeld)}
-                          />
-                          <StatItem
-                            label="Time held (%)"
-                            value={`${(w.share * 100).toFixed(2)}%`}
-                          />
-                          <StatItem
-                            label="Usage rate"
-                            value={`${(w.usageRate * 100).toFixed(2)}%`}
-                          />
-                          <StatItem label="KOs" value={formatNum(w.KOs)} />
-                          <StatItem
-                            label="Avg. KOs/game"
-                            value={avgKos.toFixed(2)}
-                          />
-                          <StatItem
-                            label="Damage Dealt"
-                            value={formatNum(w.damage)}
-                          />
-                          <StatItem
-                            label="DPS"
-                            value={`${dps.toFixed(2)} dmg/s`}
-                          />
-                          <StatItem
-                            label="Avg. dmg/game"
-                            value={avgDmg.toFixed(2)}
-                          />
-                        </div>
-
-                        {/* Ranked Season */}
-                        <div className="pt-6 space-y-6">
-                          <h4 className="text-sm font-black text-foreground/80 uppercase tracking-wider">
-                            Ranked Season Performance
-                          </h4>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-y-6 gap-x-4">
-                            <StatItem
-                              label="Games"
-                              value={formatNum(w.ranked.games)}
-                            />
-                            <StatItem
-                              label="Wins"
-                              value={formatNum(w.ranked.wins)}
-                            />
-                            <StatItem
-                              label="Losses"
-                              value={formatNum(w.ranked.games - w.ranked.wins)}
-                            />
-                            <StatItem
-                              label="Winrate"
-                              value={
-                                w.ranked.games > 0
-                                  ? `${(
-                                      (w.ranked.wins / w.ranked.games) *
-                                      100
-                                    ).toFixed(2)}%`
-                                  : '0%'
-                              }
-                            />
-                            <StatItem
-                              label="Avg Elo"
-                              value={Math.round(avgElo)}
-                            />
-
-                            <div className="col-span-1 space-y-1">
-                              <div className="text-[10px] font-bold text-muted-foreground opacity-60">
-                                Most played
-                              </div>
-                              {w.ranked.mostPlayed.key ? (
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-5 w-5 rounded-sm">
-                                    <AvatarImage
-                                      src={`/images/legends/avatars/${w.ranked.mostPlayed.key}.png`}
-                                    />
-                                  </Avatar>
-                                  <span className="text-xs font-bold truncate">
-                                    {w.ranked.mostPlayed.games} games
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-xs">---</span>
-                              )}
-                            </div>
-
-                            <div className="col-span-1 space-y-1">
-                              <div className="text-[10px] font-bold text-muted-foreground opacity-60">
-                                Highest Elo
-                              </div>
-                              {w.ranked.highestElo.key ? (
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-5 w-5 rounded-sm">
-                                    <AvatarImage
-                                      src={`/images/legends/avatars/${w.ranked.highestElo.key}.png`}
-                                    />
-                                  </Avatar>
-                                  <span className="text-xs font-bold truncate">
-                                    {w.ranked.highestElo.elo} elo
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-xs">---</span>
-                              )}
-                            </div>
-
-                            <div className="col-span-1 space-y-1">
-                              <div className="text-[10px] font-bold text-muted-foreground opacity-60">
-                                Highest peak Elo
-                              </div>
-                              {w.ranked.highestPeak.key ? (
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-5 w-5 rounded-sm">
-                                    <AvatarImage
-                                      src={`/images/legends/avatars/${w.ranked.highestPeak.key}.png`}
-                                    />
-                                  </Avatar>
-                                  <span className="text-xs font-bold truncate">
-                                    {w.ranked.highestPeak.elo} elo
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-xs">---</span>
-                              )}
-                            </div>
-
-                            <StatItem
-                              label="Avg peak Elo"
-                              value={Math.round(avgPeak)}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                        );
+                      })()}
                   </div>
                 </div>
               );
@@ -1168,27 +1312,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start gap-2">
-                          <h3 className="font-bold capitalize truncate text-sm">
-                            {legend.bioName || legend.legendNameKey}
-                          </h3>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px] font-mono px-1.5 h-5"
-                            >
-                              Lvl {legend.level}
-                            </Badge>
-                            {legend.ranked && !isExpanded && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] font-mono text-muted-foreground whitespace-nowrap px-1.5 h-5"
-                              >
-                                {legend.ranked.tier} • {legend.ranked.rating}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
+                        <h3 className="font-bold capitalize truncate text-sm">
+                          {legend.bioName || legend.legendNameKey}
+                        </h3>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-mono">
                           <span>{formatNum(legend.xp)} XP</span>
                           <span className="opacity-30">•</span>
@@ -1203,172 +1329,500 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                           <span>{formatHours(parseNum(legend.matchTime))}</span>
                         </div>
                       </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="pt-6 space-y-8 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-6 gap-x-4">
-                          <StatItem label="KOs" value={formatNum(legend.KOs)} />
-                          <StatItem
-                            label="Falls / Suicides"
-                            value={`${formatNum(legend.falls)} / ${formatNum(
-                              legend.suicides
-                            )}`}
-                          />
-                          <StatItem
-                            label="Damage Dealt"
-                            value={formatNum(legend.damageDealt)}
-                          />
-                          <StatItem
-                            label="Damage Taken"
-                            value={formatNum(legend.damageTaken)}
-                          />
-                        </div>
-
-                        <div className="space-y-4">
-                          <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                            Weapon Mastery
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {[
-                              {
-                                name: legend.weaponOne,
-                                time: legend.timeHeldWeaponOne,
-                                kos: legend.KOWeaponOne,
-                                dmg: legend.damageWeaponOne,
-                              },
-                              {
-                                name: legend.weaponTwo,
-                                time: legend.timeHeldWeaponTwo,
-                                kos: legend.KOWeaponTwo,
-                                dmg: legend.damageWeaponTwo,
-                              },
-                              {
-                                name: 'Unarmed',
-                                time: Math.max(
-                                  0,
-                                  parseNum(legend.matchTime) -
-                                    parseNum(legend.timeHeldWeaponOne) -
-                                    parseNum(legend.timeHeldWeaponTwo)
-                                ),
-                                kos: legend.KOUnarmed,
-                                dmg: legend.damageUnarmed,
-                              },
-                            ].map((w, idx) => {
-                              if (!w.name && idx < 2) return null;
-                              const weaponName = w.name || 'Unknown';
-                              const kos = parseNum(w.kos);
-                              const dmg = parseNum(w.dmg);
-
-                              if (idx >= 2 && kos === 0 && dmg === 0)
-                                return null;
-
-                              return (
-                                <div
-                                  key={idx}
-                                  className="flex items-center gap-3 p-3 rounded-lg bg-background/30 hover:bg-background/50 transition-colors"
-                                >
-                                  <div className="h-8 w-8 relative shrink-0">
-                                    <img
-                                      src={getWeaponIcon(weaponName)}
-                                      alt={weaponName}
-                                      className="object-contain w-full h-full opacity-80"
-                                    />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-bold text-foreground text-[10px] truncate mb-0.5">
-                                      {getWeaponDisplay(weaponName)}
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground font-mono flex items-center gap-2">
-                                      {w.time !== null && (
-                                        <span>
-                                          {formatHours(parseNum(w.time))}
-                                        </span>
-                                      )}
-                                      <span className="text-foreground/80">
-                                        {formatNum(kos)} KOs
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {legend.ranked && (
-                          <div className="pt-6 space-y-6 flex flex-col">
-                            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                              Ranked Season
-                            </h4>
-                            <div className="flex items-center gap-8">
-                              <div className="h-24 w-16 relative shrink-0 flex items-center justify-center">
-                                <img
-                                  src={getRankBanner(legend.ranked.tier)}
-                                  alt=""
-                                  className="w-full h-full object-contain pointer-events-none drop-shadow-lg"
-                                />
-                              </div>
-                              <div className="flex items-baseline gap-4">
-                                <span className="text-5xl sm:text-7xl font-black text-foreground tracking-tighter">
-                                  {legend.ranked.rating}
-                                </span>
-                                <span className="text-3xl sm:text-5xl font-bold text-muted-foreground/30 tracking-tight">
-                                  / {legend.ranked.peakRating}
-                                </span>
-                                <span className="text-base sm:text-2xl font-medium text-muted-foreground">
-                                  ELO
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="pt-6">
-                              <div className="flex justify-between items-end mb-2">
-                                <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">
-                                  Win Rate
-                                </div>
-                                <div
-                                  className={`text-xl sm:text-2xl font-black ${
-                                    legend.ranked.games > 0 &&
-                                    (legend.ranked.wins / legend.ranked.games) *
-                                      100 >=
-                                      50
-                                      ? 'text-green-500'
-                                      : 'text-foreground'
-                                  }`}
-                                >
-                                  {legend.ranked.games > 0
-                                    ? (
-                                        (legend.ranked.wins /
-                                          legend.ranked.games) *
-                                        100
-                                      ).toFixed(1)
-                                    : '0.0'}
-                                  %
-                                </div>
-                              </div>
-                              <WinLossBar
-                                percent={
-                                  legend.ranked.games > 0
-                                    ? (legend.ranked.wins /
-                                        legend.ranked.games) *
-                                      100
-                                    : 0
-                                }
-                                className="h-4"
-                              />
-                              <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
-                                <span>{legend.ranked.wins} Wins</span>
-                                <span>
-                                  {legend.ranked.games - legend.ranked.wins}{' '}
-                                  Losses
-                                </span>
-                              </div>
-                            </div>
-                          </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs font-mono px-2 py-1 h-7"
+                        >
+                          Lvl {legend.level}
+                        </Badge>
+                        {legend.ranked && !isExpanded && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7"
+                          >
+                            {legend.ranked.tier} • {legend.ranked.rating}
+                          </Badge>
                         )}
                       </div>
-                    )}
+                    </div>
+
+                    {isExpanded &&
+                      (() => {
+                        const matchTime = parseNum(legend.matchTime);
+                        const legendGames = parseNum(legend.games);
+                        const legendWins = parseNum(legend.wins);
+                        const legendKOs = parseNum(legend.KOs);
+                        const legendFalls = parseNum(legend.falls);
+                        const legendSuicides = parseNum(legend.suicides);
+                        const legendDmgDealt = parseNum(legend.damageDealt);
+                        const legendDmgTaken = parseNum(legend.damageTaken);
+                        const legendWinrate =
+                          legendGames > 0
+                            ? (legendWins / legendGames) * 100
+                            : 0;
+
+                        // Calculated stats
+                        const dpsDealt =
+                          matchTime > 0 ? legendDmgDealt / matchTime : 0;
+                        const dpsTaken =
+                          matchTime > 0 ? legendDmgTaken / matchTime : 0;
+                        const avgKOsPerGame =
+                          legendGames > 0 ? legendKOs / legendGames : 0;
+                        const avgFallsPerGame =
+                          legendGames > 0 ? legendFalls / legendGames : 0;
+                        const avgDmgPerGame =
+                          legendGames > 0 ? legendDmgDealt / legendGames : 0;
+                        const timeToKill =
+                          legendKOs > 0 ? matchTime / legendKOs : 0;
+                        const timeToFall =
+                          legendFalls > 0 ? matchTime / legendFalls : 0;
+                        const avgGameLength =
+                          legendGames > 0 ? matchTime / legendGames : 0;
+
+                        // Additional calculated stats
+                        const kdRatio =
+                          legendFalls > 0 ? legendKOs / legendFalls : legendKOs;
+                        const dmgRatio =
+                          legendDmgDealt + legendDmgTaken > 0
+                            ? (legendDmgDealt /
+                                (legendDmgDealt + legendDmgTaken)) *
+                              100
+                            : 50;
+
+                        // Weapon stats for distribution section
+                        const weaponOneTime = parseNum(
+                          legend.timeHeldWeaponOne
+                        );
+                        const weaponTwoTime = parseNum(
+                          legend.timeHeldWeaponTwo
+                        );
+                        const unarmedTime = Math.max(
+                          0,
+                          matchTime - weaponOneTime - weaponTwoTime
+                        );
+                        const totalWeaponTime =
+                          weaponOneTime + weaponTwoTime + unarmedTime;
+
+                        const weaponOneKOs = parseNum(legend.KOWeaponOne);
+                        const weaponTwoKOs = parseNum(legend.KOWeaponTwo);
+                        const unarmedKOs = parseNum(legend.KOUnarmed);
+                        const totalWeaponKOs =
+                          weaponOneKOs + weaponTwoKOs + unarmedKOs;
+
+                        const weaponOneDmg = parseNum(legend.damageWeaponOne);
+                        const weaponTwoDmg = parseNum(legend.damageWeaponTwo);
+                        const unarmedDmg = parseNum(legend.damageUnarmed);
+                        const totalWeaponDmg =
+                          weaponOneDmg + weaponTwoDmg + unarmedDmg;
+
+                        const weaponDistribution = [
+                          {
+                            name: legend.weaponOne,
+                            kos: weaponOneKOs,
+                            dmg: weaponOneDmg,
+                            time: weaponOneTime,
+                          },
+                          {
+                            name: legend.weaponTwo,
+                            kos: weaponTwoKOs,
+                            dmg: weaponTwoDmg,
+                            time: weaponTwoTime,
+                          },
+                          {
+                            name: 'Unarmed',
+                            kos: unarmedKOs,
+                            dmg: unarmedDmg,
+                            time: unarmedTime,
+                          },
+                        ].filter(
+                          (w) =>
+                            w.name && (w.kos > 0 || w.dmg > 0 || w.time > 0)
+                        );
+
+                        return (
+                          <div className="pt-4 animate-in fade-in slide-in-from-top-2 duration-300 relative z-10 space-y-4">
+                            {/* Two Column Layout with Divider */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-0">
+                              {/* Left Column: Overall Stats */}
+                              <div className="space-y-3 md:pr-4 md:border-r md:border-border/30">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                  Overall Stats
+                                </div>
+
+                                {/* Games & Winrate */}
+                                <div className="space-y-1.5">
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-black text-foreground">
+                                      {formatNum(legendGames)}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      games
+                                    </span>
+                                    <span className="text-muted-foreground/30 mx-1">
+                                      •
+                                    </span>
+                                    <span className="text-sm font-mono text-muted-foreground">
+                                      {formatHours(matchTime)}
+                                    </span>
+                                  </div>
+                                  <WinLossBar
+                                    percent={legendWinrate}
+                                    className="h-2"
+                                  />
+                                  <div className="flex justify-between text-[10px] font-bold">
+                                    <span className="text-foreground">
+                                      {formatNum(legendWins)}W{' '}
+                                      <span className="font-normal text-muted-foreground">
+                                        ({legendWinrate.toFixed(1)}%)
+                                      </span>
+                                    </span>
+                                    <span className="text-foreground">
+                                      {formatNum(legendGames - legendWins)}L{' '}
+                                      <span className="font-normal text-muted-foreground">
+                                        ({(100 - legendWinrate).toFixed(1)}%)
+                                      </span>
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Combat Stats Grid */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div className="text-[9px] text-muted-foreground uppercase">
+                                        KOs / Falls
+                                      </div>
+                                      <div className="text-[10px] font-bold text-foreground/70">
+                                        {kdRatio.toFixed(2)} K/D
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div>
+                                        <div className="text-lg font-black text-green-500">
+                                          {formatNum(legendKOs)}
+                                        </div>
+                                        <div className="text-[8px] text-muted-foreground">
+                                          KOs
+                                        </div>
+                                      </div>
+                                      <span className="text-muted-foreground/30 text-lg">
+                                        /
+                                      </span>
+                                      <div>
+                                        <div className="text-lg font-black text-red-500/70">
+                                          {formatNum(legendFalls)}
+                                        </div>
+                                        <div className="text-[8px] text-muted-foreground">
+                                          falls
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {legendSuicides > 0 && (
+                                      <div className="text-[9px] text-muted-foreground mt-1">
+                                        {formatNum(legendSuicides)} suicides
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div className="text-[9px] text-muted-foreground uppercase">
+                                        Damage
+                                      </div>
+                                      <div className="text-[10px] font-bold text-foreground/70">
+                                        {dmgRatio.toFixed(0)}% dealt
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div>
+                                        <div className="text-lg font-black text-green-500">
+                                          {formatCompact(legendDmgDealt)}
+                                        </div>
+                                        <div className="text-[8px] text-muted-foreground">
+                                          dealt
+                                        </div>
+                                      </div>
+                                      <span className="text-muted-foreground/30 text-lg">
+                                        /
+                                      </span>
+                                      <div>
+                                        <div className="text-lg font-black text-red-500/70">
+                                          {formatCompact(legendDmgTaken)}
+                                        </div>
+                                        <div className="text-[8px] text-muted-foreground">
+                                          taken
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Averages */}
+                                <div className="grid grid-cols-4 gap-1 text-center">
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {avgKOsPerGame.toFixed(1)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      KOs/game
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {avgFallsPerGame.toFixed(1)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Falls/game
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {legendKOs > 0
+                                        ? formatNum(
+                                            Math.round(
+                                              legendDmgDealt / legendKOs
+                                            )
+                                          )
+                                        : '—'}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      Dmg/KO
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                                    <div className="text-sm font-black text-foreground">
+                                      {dpsDealt.toFixed(1)}
+                                    </div>
+                                    <div className="text-[8px] text-muted-foreground">
+                                      DPS
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Column: Ranked Season */}
+                              <div className="space-y-3 md:pl-4">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                  Ranked Season
+                                </div>
+
+                                {legend.ranked ? (
+                                  (() => {
+                                    const rankedWinrate =
+                                      legend.ranked.games > 0
+                                        ? (legend.ranked.wins /
+                                            legend.ranked.games) *
+                                          100
+                                        : 0;
+                                    return (
+                                      <div className="space-y-3 mt-7">
+                                        <div className="flex gap-3">
+                                          {/* Rank Banner */}
+                                          <div className="w-16 sm:w-18 shrink-0 mb-5">
+                                            <img
+                                              src={getRankBanner(
+                                                legend.ranked.tier
+                                              )}
+                                              alt={legend.ranked.tier}
+                                              className="w-full h-auto object-contain drop-shadow-lg"
+                                            />
+                                          </div>
+
+                                          {/* Rating Stats */}
+                                          <div className="flex-1 min-w-0 space-y-1">
+                                            <div className="text-[10px] sm:text-xs font-bold text-muted-foreground">
+                                              {legend.ranked.tier}
+                                            </div>
+                                            <div className="flex items-baseline gap-1 flex-wrap">
+                                              <span className="text-2xl sm:text-3xl font-black text-foreground tracking-tight leading-none">
+                                                {legend.ranked.rating}
+                                              </span>
+                                              <span className="text-xl sm:text-2xl font-bold text-muted-foreground/30 leading-none">
+                                                /
+                                              </span>
+                                              <span className="text-xl sm:text-2xl font-bold text-muted-foreground/50 leading-none">
+                                                {legend.ranked.peakRating}
+                                              </span>
+                                              <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-wider ml-0.5">
+                                                Peak
+                                              </span>
+                                            </div>
+                                            <WinLossBar
+                                              percent={rankedWinrate}
+                                              className="h-2"
+                                            />
+                                            <div className="flex justify-between text-[10px] font-bold">
+                                              <span className="text-foreground">
+                                                {legend.ranked.wins}W{' '}
+                                                <span className="font-normal text-muted-foreground">
+                                                  ({rankedWinrate.toFixed(1)}%)
+                                                </span>
+                                              </span>
+                                              <span className="text-foreground">
+                                                {legend.ranked.games -
+                                                  legend.ranked.wins}
+                                                L{' '}
+                                                <span className="font-normal text-muted-foreground">
+                                                  (
+                                                  {(
+                                                    100 - rankedWinrate
+                                                  ).toFixed(1)}
+                                                  %)
+                                                </span>
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Ranked Stats Row */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 text-center hover:bg-background/50 transition-colors">
+                                            <div className="text-lg font-black text-foreground">
+                                              {formatNum(legend.ranked.games)}
+                                            </div>
+                                            <div className="text-[8px] text-muted-foreground uppercase">
+                                              Games
+                                            </div>
+                                          </div>
+                                          <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 text-center hover:bg-background/50 transition-colors">
+                                            <div className="text-lg font-black text-foreground">
+                                              {calculateEloReset(
+                                                legend.ranked.rating
+                                              )}
+                                            </div>
+                                            <div className="text-[8px] text-muted-foreground uppercase">
+                                              Elo Reset
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                                    <div className="w-16 sm:w-20 opacity-30 mb-3">
+                                      <img
+                                        src="/images/banners/Unranked.png"
+                                        alt="Unranked"
+                                        className="w-full h-auto object-contain"
+                                      />
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      No ranked games this season
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground/50 mt-1">
+                                      Play ranked to see stats here
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Weapon Distribution Section */}
+                            {weaponDistribution.length > 0 && (
+                              <div className="pt-4 border-t border-border/30">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                                  Weapon Distribution
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  {weaponDistribution.map((w, idx) => {
+                                    const kosPercent =
+                                      totalWeaponKOs > 0
+                                        ? (w.kos / totalWeaponKOs) * 100
+                                        : 0;
+                                    const dmgPercent =
+                                      totalWeaponDmg > 0
+                                        ? (w.dmg / totalWeaponDmg) * 100
+                                        : 0;
+                                    const timePercent =
+                                      totalWeaponTime > 0
+                                        ? (w.time / totalWeaponTime) * 100
+                                        : 0;
+                                    const weaponDps =
+                                      w.time > 0 ? w.dmg / w.time : 0;
+                                    const weaponTimeToKill =
+                                      w.kos > 0 ? w.time / w.kos : 0;
+
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="p-3 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors"
+                                      >
+                                        {/* Header */}
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <img
+                                            src={getWeaponIcon(w.name)}
+                                            alt={w.name}
+                                            className="h-6 w-6 object-contain"
+                                          />
+                                          <span className="text-xs font-bold text-foreground uppercase">
+                                            {getWeaponDisplay(w.name)}
+                                          </span>
+                                        </div>
+
+                                        {/* Stats */}
+                                        <div className="space-y-2 text-[11px]">
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">
+                                              KOs
+                                            </span>
+                                            <span className="font-bold text-foreground">
+                                              {formatNum(w.kos)}{' '}
+                                              <span className="text-muted-foreground font-normal">
+                                                ({kosPercent.toFixed(1)}%)
+                                              </span>
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">
+                                              Damage
+                                            </span>
+                                            <span className="font-bold text-foreground">
+                                              {formatCompact(w.dmg)}{' '}
+                                              <span className="text-muted-foreground font-normal">
+                                                ({dmgPercent.toFixed(1)}%)
+                                              </span>
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">
+                                              Time held
+                                            </span>
+                                            <span className="font-bold text-foreground">
+                                              {formatHours(w.time)}{' '}
+                                              <span className="text-muted-foreground font-normal">
+                                                ({timePercent.toFixed(1)}%)
+                                              </span>
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between pt-1 border-t border-border/20">
+                                            <span className="text-muted-foreground">
+                                              DPS
+                                            </span>
+                                            <span className="font-bold text-foreground">
+                                              {weaponDps.toFixed(1)}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">
+                                              Time to KO
+                                            </span>
+                                            <span className="font-bold text-foreground">
+                                              {weaponTimeToKill.toFixed(1)}s
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                   </div>
                 </div>
               );
