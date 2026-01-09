@@ -26,6 +26,9 @@ export class BhApiClientService implements OnModuleDestroy {
   private readonly logger = new Logger(BhApiClientService.name);
   private redisClient: Redis;
   private connection: Bottleneck.IORedisConnection;
+  private lastBottleneckErrorTime = 0;
+  private bottleneckErrorCount = 0;
+  private readonly BOTTLENECK_ERROR_DEBOUNCE_MS = 5000;
 
   constructor(private config: ConfigService) {
     this.redisClient = new Redis(this.config.getOrThrow<string>('REDIS_URL'), {
@@ -46,6 +49,9 @@ export class BhApiClientService implements OnModuleDestroy {
 
     this.redisClient.on('connect', () => {
       this.logger.log('Redis client connected');
+      // Reset error tracking on successful connection
+      this.bottleneckErrorCount = 0;
+      this.lastBottleneckErrorTime = 0;
     });
 
     this.redisClient.on('reconnecting', () => {
@@ -79,7 +85,31 @@ export class BhApiClientService implements OnModuleDestroy {
     });
 
     this.limiter.on('error', (error) => {
-      this.logger.error('Bottleneck error', error);
+      const now = Date.now();
+      const isRedisConnectionError =
+        error.message?.includes('UNKNOWN_CLIENT') ||
+        error.message?.includes('READONLY') ||
+        error.message?.includes('LOADING') ||
+        error.code === 'ECONNRESET' ||
+        error.code === 'ECONNREFUSED';
+
+      if (isRedisConnectionError) {
+        this.bottleneckErrorCount++;
+        // Only log once every DEBOUNCE_MS during connection issues
+        if (
+          now - this.lastBottleneckErrorTime >
+          this.BOTTLENECK_ERROR_DEBOUNCE_MS
+        ) {
+          this.logger.warn(
+            `Bottleneck Redis connection issue (${this.bottleneckErrorCount} errors since last log): ${error.message}`
+          );
+          this.lastBottleneckErrorTime = now;
+          this.bottleneckErrorCount = 0;
+        }
+      } else {
+        // Non-connection errors are always logged
+        this.logger.error('Bottleneck error', error);
+      }
     });
 
     this.limiter.on('depleted', () =>

@@ -313,6 +313,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@brawltome/shared-utils':
+        specifier: workspace:*
+        version: link:../../libs/shared-utils
       '@brawltome/ui':
         specifier: workspace:*
         version: link:../../libs/ui
