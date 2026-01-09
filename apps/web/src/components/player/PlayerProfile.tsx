@@ -66,7 +66,7 @@ const getWeaponIcon = (weapon: string) => {
     Scythe: 'Scythe',
     Spear: 'Spear',
     Sword: 'Sword',
-    Pistol: 'Pistol',
+    Pistol: 'Blasters',
     Fists: 'Gauntlets',
     Katar: 'Katars',
     RocketLance: 'Lance',
@@ -87,6 +87,40 @@ const getWeaponDisplay = (weapon: string) => {
     ThrownItem: 'Throwables',
   };
   return map[weapon] || weapon;
+};
+
+const getGloryFromWins = (wins: number): number => {
+  if (wins <= 150) return 20 * wins;
+  return Math.floor(10 * (45 * Math.pow(Math.log10(wins * 2), 2)) + 245);
+};
+
+const getGloryFromBestRating = (bestRating: number): number => {
+  if (bestRating < 1200) return 250;
+  if (bestRating < 1286) {
+    return Math.floor(10 * (25 + 0.872093023 * (86 - (1286 - bestRating))));
+  }
+  if (bestRating < 1390) {
+    return Math.floor(10 * (100 + 0.721153846 * (104 - (1390 - bestRating))));
+  }
+  if (bestRating < 1680) {
+    return Math.floor(10 * (187 + 0.389655172 * (290 - (1680 - bestRating))));
+  }
+  if (bestRating < 2000) {
+    return Math.floor(10 * (300 + 0.428125 * (320 - (2000 - bestRating))));
+  }
+  if (bestRating < 2300) {
+    return Math.floor(10 * (437 + 0.143333333 * (300 - (2300 - bestRating))));
+  }
+  return Math.floor(10 * (480 + 0.05 * (400 - (2700 - bestRating))));
+};
+
+const calculateGlory = (wins: number, peakRating: number): number => {
+  return getGloryFromWins(wins) + getGloryFromBestRating(peakRating);
+};
+
+const calculateEloReset = (rating: number): number => {
+  if (rating < 1400) return rating;
+  return Math.floor(1400 + (rating - 1400) / (3 - (3000 - rating) / 800));
 };
 
 const WinLossBar = ({
@@ -204,7 +238,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allLegends = [...legendsSource].sort((a: any, b: any) => b.xp - a.xp);
 
-  const displayedLegends = showAllLegends ? allLegends : allLegends.slice(0, 6);
+  const displayedLegends = showAllLegends ? allLegends : allLegends.slice(0, 5);
 
   const legendsRef = useRef<HTMLDivElement>(null);
   const weaponsRef = useRef<HTMLDivElement>(null);
@@ -373,7 +407,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const displayedWeapons = showAllWeapons
     ? weaponStats
-    : weaponStats.slice(0, 3);
+    : weaponStats.slice(0, 5);
 
   const teamsTotals = rankedTeams.reduce(
     (acc, team) => {
@@ -471,12 +505,18 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                         Aliases ({aliases.length})
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
+                    <DropdownMenuContent
+                      align="start"
+                      className="max-h-[198px] overflow-y-auto pb-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent"
+                    >
                       {aliases.map((alias: string, idx: number) => (
                         <DropdownMenuItem key={`${alias}-${idx}`}>
                           {fixEncoding(alias)}
                         </DropdownMenuItem>
                       ))}
+                      {aliases.length > 5 && (
+                        <div className="sticky bottom-0 h-5 bg-gradient-to-t from-popover to-transparent pointer-events-none -mt-5" />
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
@@ -510,16 +550,16 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Card: Ranked Performance */}
-        <Card className="bg-linear-to-br from-card to-background border-border relative overflow-hidden">
-          <CardHeader>
+        <Card className="bg-linear-to-br from-card to-background border-border">
+          <CardHeader className="pb-4">
             <div className="flex justify-between items-center">
-              <CardTitle className="text-xl font-bold flex items-center gap-2">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
                 🏆 Ranked Performance
               </CardTitle>
               {player.ranked?.lastUpdated && (
                 <Badge
                   variant="outline"
-                  className="text-xs font-mono text-muted-foreground gap-1.5 hover:bg-muted/50 transition-colors"
+                  className="text-xs font-mono text-muted-foreground gap-1.5"
                 >
                   <Clock className="w-3 h-3" />
                   <span className="hidden sm:inline">Updated </span>
@@ -528,65 +568,115 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
               )}
             </div>
           </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center justify-start">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-8">
-                    <div className="h-24 w-16 relative shrink-0 flex items-center justify-center">
-                      <img
-                        src={getRankBanner(player.tier)}
-                        alt=""
-                        className="w-full h-full object-contain pointer-events-none drop-shadow-lg"
-                      />
-                    </div>
-                    <div className="flex items-baseline gap-4 flex-wrap">
-                      <span className="text-5xl sm:text-7xl font-black text-foreground tracking-tighter leading-none">
-                        {player.rating}
-                      </span>
-                      <span className="text-3xl sm:text-5xl font-bold text-muted-foreground/50 tracking-tight leading-none">
-                        / {player.peakRating}
-                      </span>
-                      <span className="text-base sm:text-2xl font-medium text-muted-foreground">
-                        ELO
-                      </span>
-                    </div>
-                  </div>
-                </div>
+
+          <CardContent className="space-y-8 pt-6">
+            <div className="flex gap-4 sm:gap-6">
+              {/* Rank Banner */}
+              <div className="w-16 sm:w-20 shrink-0">
+                <img
+                  src={getRankBanner(player.tier)}
+                  alt={player.tier || 'Unranked'}
+                  className="w-full h-auto object-contain drop-shadow-lg"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-y-6 gap-x-12 pt-4">
-                <div className="col-span-2">
-                  <div className="flex justify-between items-end mb-2">
-                    <div className="text-muted-foreground text-sm font-medium uppercase tracking-wide">
-                      Win Rate
-                    </div>
-                    <div
-                      className={`text-xl sm:text-2xl font-black ${
-                        winrate >= 50 ? 'text-green-500' : 'text-foreground'
-                      }`}
-                    >
-                      {winrate.toFixed(1)}%
-                    </div>
-                  </div>
-                  <WinLossBar percent={winrate} className="h-4" />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
-                    <span>{player.wins} Wins</span>
-                    <span>{player.games - player.wins} Losses</span>
-                  </div>
+              {/* Stats */}
+              <div className="flex-1 min-w-0 space-y-2">
+                {/* Tier */}
+                <div className="text-sm sm:text-base font-bold text-muted-foreground">
+                  {player.tier || 'Unranked'}
                 </div>
-                {player.ranked?.regionRank > 0 && (
-                  <div>
-                    <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
-                      Region Rank
-                    </div>
-                    <div className="text-xl sm:text-2xl text-foreground font-bold mt-1">
-                      #{player.ranked.regionRank}
-                    </div>
-                  </div>
-                )}
+
+                {/* ELO */}
+                <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
+                  <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight leading-none">
+                    {player.rating}
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-bold text-muted-foreground/30 leading-none">
+                    /
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-bold text-muted-foreground/50 leading-none">
+                    {player.peakRating}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-muted-foreground/50 uppercase tracking-wider ml-1">
+                    Peak
+                  </span>
+                </div>
+
+                {/* Win Rate Bar */}
+                <WinLossBar percent={winrate} className="h-2.5 sm:h-3" />
+
+                {/* Win/Loss Stats */}
+                <div className="flex justify-between text-sm font-bold">
+                  <span className="text-foreground">
+                    {player.wins}W{' '}
+                    <span className="font-normal text-muted-foreground">
+                      ({winrate.toFixed(2)}%)
+                    </span>
+                  </span>
+                  <span className="text-foreground">
+                    {player.games - player.wins}L{' '}
+                    <span className="font-normal text-muted-foreground">
+                      ({(100 - winrate).toFixed(2)}%)
+                    </span>
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Season Rewards */}
+            {(() => {
+              // Calculate total wins from 1v1 and all 2v2 teams
+              const totalWins =
+                (player.wins || 0) +
+                rankedTeams.reduce(
+                  (sum: number, team: { wins?: number }) =>
+                    sum + (team.wins || 0),
+                  0
+                );
+
+              // Find best rating across 1v1, 2v2 teams, and legends
+              const ratings = [
+                player.peakRating || 0,
+                ...rankedTeams.map(
+                  (team: { peakRating?: number }) => team.peakRating || 0
+                ),
+                ...allLegends.map(
+                  (legend: { ranked?: { peakRating?: number } }) =>
+                    legend.ranked?.peakRating || 0
+                ),
+              ];
+              const bestRating = Math.max(...ratings, 0);
+
+              return (
+                <div className="grid grid-cols-3 gap-3 pt-5 border-t border-border/50 text-center">
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      Ranked Games
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-foreground">
+                      {formatNum(player.games)}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      Total Glory
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-foreground">
+                      {formatNum(calculateGlory(totalWins, bestRating))}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                      Elo Reset
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-foreground">
+                      {calculateEloReset(player.rating)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
@@ -1013,7 +1103,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             })}
           </Card>
 
-          {weaponStats.length > 3 && (
+          {weaponStats.length > 5 && (
             <div className="flex justify-center mt-6">
               <Button
                 variant="outline"
@@ -1285,7 +1375,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             })}
           </Card>
 
-          {allLegends.length > 6 && (
+          {allLegends.length > 5 && (
             <div className="flex justify-center mt-6">
               <Button
                 variant="outline"
@@ -1376,7 +1466,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 <Link
                   key={`${team.brawlhallaIdOne}-${team.brawlhallaIdTwo}`}
                   href={teammateHref}
-                  className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-36 relative overflow-visible mt-4"
+                  className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-36 relative mt-4 min-w-0"
                 >
                   {/* Rank Banner on Left - Bleeding Out */}
                   <div className="absolute -top-0.5 left-2 sm:left-4 w-16 sm:w-24 h-[120%] z-20 pointer-events-none filter drop-shadow-xl">
@@ -1390,9 +1480,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                   <div className="w-20 sm:w-32 shrink-0" />
 
                   {/* Content */}
-                  <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between">
+                  <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between min-w-0 overflow-hidden">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-4">
-                      <div className="min-w-0 w-full">
+                      <div className="min-w-0 flex-1 overflow-hidden">
                         <h3 className="font-bold text-foreground text-lg leading-tight group-hover:text-primary transition-colors truncate">
                           {teammateName}
                         </h3>
@@ -1403,7 +1493,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                         </div>
                       </div>
 
-                      <div className="flex justify-start w-full sm:w-auto sm:block sm:text-right mt-2 sm:mt-0">
+                      <div className="flex justify-start sm:justify-end shrink-0 mt-2 sm:mt-0">
                         <div className="text-left sm:text-right shrink-0 flex items-baseline justify-start sm:justify-end gap-2 sm:block sm:gap-0">
                           <div className="text-xl sm:text-2xl font-black text-chart-3 leading-none whitespace-nowrap">
                             {team.rating}
