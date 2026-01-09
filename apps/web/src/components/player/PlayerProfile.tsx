@@ -78,6 +78,11 @@ const WEAPON_ALIAS_MAP: Record<string, string> = {
   "Battle Boots": "Boots",
 };
 
+const getWeaponDisplay = (weapon: string) => {
+  // TODO : Remove when I fix the refresh processor
+  return weapon;
+}
+
 export const getWeaponIcon = (weapon: string): string => {
   const canonicalName = WEAPON_ALIAS_MAP[weapon] ?? weapon;
   const fileName = toCamelCase(canonicalName);
