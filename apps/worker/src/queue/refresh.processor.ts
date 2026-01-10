@@ -10,6 +10,7 @@ import {
   mapRankedLegends,
   mapTeams,
   mapStatsLegends,
+  VALHALLAN_GRACE_PERIOD,
 } from '@brawltome/shared-utils';
 
 @Processor('refresh-queue', {
@@ -107,6 +108,7 @@ export class RefreshProcessor extends WorkerHost {
           name: true,
           brawlhallaId: true,
           tier: true,
+          valhallanConfirmedAt: true,
           lastUpdated: true,
         },
       });
@@ -137,13 +139,22 @@ export class RefreshProcessor extends WorkerHost {
             }
           : {};
 
+      // Don't overwrite Valhallan if recently confirmed by janitor (within 2 hours)
+      const keepValhallan =
+        existing?.tier === 'Valhallan' &&
+        existing.valhallanConfirmedAt &&
+        Date.now() - existing.valhallanConfirmedAt.getTime() <
+          VALHALLAN_GRACE_PERIOD;
+
+      const effectiveTier = keepValhallan ? 'Valhallan' : data.tier;
+
       await tx.player.update({
         where: { brawlhallaId: id },
         data: {
           ...(shouldUpdateName ? { name: newName } : {}),
           rating: data.rating,
           peakRating: data.peak_rating,
-          tier: data.tier,
+          tier: effectiveTier,
           games: data.games,
           wins: data.wins,
           ...aliasUpdate,
