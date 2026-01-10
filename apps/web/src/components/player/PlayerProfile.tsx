@@ -97,7 +97,7 @@ const getWeaponIcon = (weapon: string) => {
     Gadgets: 'Gadgets',
   };
   return `/images/weapons/${map[weapon] || toCamelCase(weapon)}.png`;
-}
+};
 
 const getWeaponDisplay = (weapon: string) => {
   const map: Record<string, string> = {
@@ -109,7 +109,7 @@ const getWeaponDisplay = (weapon: string) => {
     ThrownItem: 'Throwables',
   };
   return map[weapon] || weapon;
-}
+};
 
 const getGloryFromWins = (wins: number): number => {
   if (wins <= 150) return 20 * wins;
