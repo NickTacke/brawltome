@@ -231,6 +231,7 @@ export class JanitorService {
         bestLegendGames: p.best_legend_games,
         bestLegendWins: p.best_legend_wins,
         lastUpdated: now,
+        ...(p.tier === 'Valhallan' ? { valhallanConfirmedAt: now } : {}),
       };
 
       return this.prisma.player.upsert({
