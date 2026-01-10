@@ -3,6 +3,21 @@ export const parseDamage = (value: string | null | undefined): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/**
+ * Normalizes weapon names from Brawlhalla API to consistent display names.
+ * The API uses internal names that differ from what players see in-game.
+ */
+export const normalizeWeaponName = (weapon: string): string => {
+  const normalizations: Record<string, string> = {
+    Fists: 'Gauntlets',
+    Pistol: 'Blasters',
+    Katar: 'Katars',
+    RocketLance: 'Lance',
+    Chakram: 'Chakrams',
+  };
+  return normalizations[weapon] || weapon;
+};
+
 export type WeaponAgg = {
   weapon: string;
   timeHeld: number;

@@ -71,6 +71,7 @@ const toCamelCase = (str: string): string => {
 
 const getWeaponIcon = (weapon: string) => {
   // Brawlhalla weapons mapped to image folder names
+  // Note: API names are normalized at the source (GameDataCacheService)
   const map: Record<string, string> = {
     Unarmed: 'Unarmed',
     Axe: 'Axe',
@@ -88,28 +89,21 @@ const getWeaponIcon = (weapon: string) => {
     Scythe: 'Scythe',
     Spear: 'Spear',
     Sword: 'Sword',
-    Pistol: 'Blasters',
-    Fists: 'Gauntlets',
-    Katar: 'Katars',
-    RocketLance: 'Lance',
+    Chakrams: 'Chakrams',
     Cannonballs: 'Cannonballs',
-    Chakram: 'Chakrams',
     Gadgets: 'Gadgets',
   };
   return `/images/weapons/${map[weapon] || toCamelCase(weapon)}.png`;
-}
+};
 
 const getWeaponDisplay = (weapon: string) => {
+  // Note: Most API names are normalized at the source (GameDataCacheService)
+  // Only ThrownItem needs display mapping as it's not a legend weapon
   const map: Record<string, string> = {
-    Fists: 'Gauntlets',
-    Pistol: 'Blasters',
-    Katar: 'Katars',
-    RocketLance: 'Lance',
-    Chakram: 'Chakrams',
     ThrownItem: 'Throwables',
   };
   return map[weapon] || weapon;
-}
+};
 
 const getGloryFromWins = (wins: number): number => {
   if (wins <= 150) return 20 * wins;
