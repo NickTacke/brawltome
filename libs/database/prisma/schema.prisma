@@ -24,6 +24,7 @@ model Player {
   rating Int @default(0)
   peakRating Int? @default(0)
   tier String?
+  valhallanConfirmedAt DateTime? // Timestamp when janitor last confirmed Valhallan status
   games Int @default(0)
   wins Int @default(0)
 
