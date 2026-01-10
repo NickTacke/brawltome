@@ -10,6 +10,7 @@ import {
   mapRankedLegends,
   mapTeams,
   mapStatsLegends,
+  VALHALLAN_GRACE_PERIOD,
 } from '@brawltome/shared-utils';
 
 @Processor('refresh-queue', {
@@ -139,7 +140,6 @@ export class RefreshProcessor extends WorkerHost {
           : {};
 
       // Don't overwrite Valhallan if recently confirmed by janitor (within 2 hours)
-      const VALHALLAN_GRACE_PERIOD = 2 * 60 * 60 * 1000; // 2 hours in ms
       const keepValhallan =
         existing?.tier === 'Valhallan' &&
         existing.valhallanConfirmedAt &&
