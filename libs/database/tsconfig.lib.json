@@ -19,5 +19,9 @@
     "src/generated/prisma/**/*.js",
     "src/generated/prisma/**/*.d.ts"
   ],
-  "references": []
+  "references": [
+    {
+      "path": "../shared-utils/tsconfig.lib.json"
+    }
+  ]
 }

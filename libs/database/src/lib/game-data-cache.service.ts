@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from './prisma.service.js';
+import { normalizeWeaponName } from '@brawltome/shared-utils';
 
 @Injectable()
 export class GameDataCacheService implements OnModuleInit {
@@ -44,7 +45,10 @@ export class GameDataCacheService implements OnModuleInit {
       this.legendIdToWeapons = new Map(
         legends.map((l) => [
           l.legendId,
-          { weaponOne: l.weaponOne, weaponTwo: l.weaponTwo },
+          {
+            weaponOne: normalizeWeaponName(l.weaponOne),
+            weaponTwo: normalizeWeaponName(l.weaponTwo),
+          },
         ])
       );
 
