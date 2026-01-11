@@ -9,6 +9,7 @@ import {
 import { LeaderboardService } from './leaderboard.service';
 
 type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
+type SortOrder = 'asc' | 'desc';
 
 @Controller('leaderboard')
 export class LeaderboardController {
@@ -19,6 +20,7 @@ export class LeaderboardController {
     @Param('page', ParseIntPipe) page: number,
     @Query('region') region?: string,
     @Query('sort') sort?: LeaderboardSort,
+    @Query('order') order?: SortOrder,
     @Query('limit') @Optional() limit?: string,
   ) {
     const parsedLimit = limit ? parseInt(limit, 10) || undefined : undefined;
@@ -26,6 +28,7 @@ export class LeaderboardController {
       page,
       region,
       sort,
+      order,
       parsedLimit,
     );
   }
@@ -35,6 +38,7 @@ export class LeaderboardController {
     @Param('page', ParseIntPipe) page: number,
     @Query('region') region?: string,
     @Query('sort') sort?: LeaderboardSort,
+    @Query('order') order?: SortOrder,
     @Query('limit') @Optional() limit?: string,
   ) {
     const parsedLimit = limit ? parseInt(limit, 10) || undefined : undefined;
@@ -42,6 +46,7 @@ export class LeaderboardController {
       page,
       region,
       sort,
+      order,
       parsedLimit,
     );
   }
