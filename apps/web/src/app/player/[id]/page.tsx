@@ -3,6 +3,7 @@ import { PlayerProfile } from '@/components/player/PlayerProfile';
 import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
 import type { Metadata } from 'next';
+import { cache } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,13 +11,16 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+// Cache the player fetcher to avoid duplicate requests within the same render
+const getPlayer = cache(async (id: string) => fetcher(`/player/${id}`));
+
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
 
   try {
-    const player = await fetcher(`/player/${id}`);
+    const player = await getPlayer(id);
 
     if (!player) {
       return { title: 'Player Not Found' };
@@ -49,7 +53,11 @@ export async function generateMetadata({
         description,
       },
     };
-  } catch {
+  } catch (err: unknown) {
+    const error = err as Error & { cause?: string };
+    if (error.cause === 'Too Many Requests') {
+      return { title: 'Server Busy' };
+    }
     return { title: 'Player Not Found' };
   }
 }
@@ -60,7 +68,7 @@ export default async function Page({ params }: PageProps) {
 
   let initialData;
   try {
-    initialData = await fetcher(`/player/${id}`);
+    initialData = await getPlayer(id);
   } catch (err: unknown) {
     const error = err as Error & { cause?: string };
     if (error.cause === 'Too Many Requests') {

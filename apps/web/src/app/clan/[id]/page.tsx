@@ -3,6 +3,7 @@ import { ClanProfile } from '@/components/clan/ClanProfile';
 import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
 import type { Metadata } from 'next';
+import { cache } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,13 +11,16 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+// Cache the clan fetcher to avoid duplicate requests within the same render
+const getClan = cache(async (id: string) => fetcher(`/clan/${id}`));
+
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
 
   try {
-    const clan = await fetcher(`/clan/${id}`);
+    const clan = await getClan(id);
 
     if (!clan) {
       return { title: 'Clan Not Found' };
@@ -41,7 +45,11 @@ export async function generateMetadata({
         description,
       },
     };
-  } catch {
+  } catch (err: unknown) {
+    const error = err as Error & { cause?: string };
+    if (error.cause === 'Too Many Requests') {
+      return { title: 'Server Busy' };
+    }
     return { title: 'Clan Not Found' };
   }
 }
@@ -51,10 +59,9 @@ export default async function Page({ params }: PageProps) {
 
   let initialData;
   try {
-    initialData = await fetcher(`/clan/${id}`);
+    initialData = await getClan(id);
   } catch (err: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const error = err as any;
+    const error = err as Error & { cause?: string };
     if (error.cause === 'Too Many Requests') {
       return (
         <main className="min-h-screen bg-background py-10 flex items-center justify-center">
