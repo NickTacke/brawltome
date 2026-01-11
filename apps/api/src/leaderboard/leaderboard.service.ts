@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, GameDataCacheService } from '@brawltome/database';
-
-type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
-type SortOrder = 'asc' | 'desc';
+import { LeaderboardSort, SortOrder } from '@brawltome/shared-types';
 
 @Injectable()
 export class LeaderboardService {
