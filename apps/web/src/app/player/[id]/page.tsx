@@ -44,19 +44,28 @@ export async function generateMetadata({
                 url: `/images/legends/avatars/${encodedLegendName}.png`,
                 width: 200,
                 height: 200,
+                alt: `${topLegend.legend_name_key} avatar`,
               },
             ]
-          : ['/og-image.png'],
+          : [
+              {
+                url: '/og-image.png',
+                alt: 'BrawlTome',
+              },
+            ],
       },
       twitter: {
         card: 'summary',
         title: `${player.name} | BrawlTome`,
         description,
+        images: legendName
+          ? [`/images/legends/avatars/${encodedLegendName}.png`]
+          : ['/og-image.png'],
       },
     };
   } catch (err: unknown) {
-    const error = err as Error & { cause?: string };
-    if (error.cause === 'Too Many Requests') {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
       return { title: 'Server Busy' };
     }
     return { title: 'Player Not Found' };
@@ -71,8 +80,8 @@ export default async function Page({ params }: PageProps) {
   try {
     initialData = await getPlayer(id);
   } catch (err: unknown) {
-    const error = err as Error & { cause?: string };
-    if (error.cause === 'Too Many Requests') {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
       return (
         <main className="min-h-screen bg-background py-10 flex items-center justify-center">
           <Card className="p-8 text-center max-w-md">
