@@ -374,12 +374,20 @@ export function Leaderboard() {
                           globalRank,
                         )}`}
                       >
-                        <Link href={href} className="block w-full h-full p-4">
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          className="block w-full h-full p-4"
+                        >
                           #{globalRank}
                         </Link>
                       </TableCell>
                       <TableCell className="p-0">
-                        <Link href={href} className="block w-full h-full p-4">
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          className="block w-full h-full p-4"
+                        >
                           <div className="flex items-center gap-3">
                             {/* Best Legend Avatar */}
                             {p.bestLegendName && (
@@ -415,7 +423,11 @@ export function Leaderboard() {
                         </Link>
                       </TableCell>
                       <TableCell className="p-0 text-center">
-                        <Link href={href} className="block w-full h-full p-4">
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          className="block w-full h-full p-4"
+                        >
                           <div className="flex flex-col items-center">
                             <span className="font-black text-foreground text-lg tracking-tight">
                               {p.rating}
@@ -427,7 +439,11 @@ export function Leaderboard() {
                         </Link>
                       </TableCell>
                       <TableCell className="p-0 text-center">
-                        <Link href={href} className="block w-full h-full p-4">
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          className="block w-full h-full p-4"
+                        >
                           <div
                             className={`font-bold ${
                               winrate >= 60
@@ -442,12 +458,20 @@ export function Leaderboard() {
                         </Link>
                       </TableCell>
                       <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
-                        <Link href={href} className="block w-full h-full p-4">
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          className="block w-full h-full p-4"
+                        >
                           {p.wins}
                         </Link>
                       </TableCell>
                       <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
-                        <Link href={href} className="block w-full h-full p-4">
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          className="block w-full h-full p-4"
+                        >
                           {p.games}
                         </Link>
                       </TableCell>
@@ -474,6 +498,7 @@ export function Leaderboard() {
                           <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal wrap-break-word leading-tight">
                             <Link
                               href={`/player/${t.brawlhallaIdOne}`}
+                              prefetch={false}
                               className="hover:text-primary"
                             >
                               {fixEncoding(t.playerOneName || 'Unknown')}
@@ -481,6 +506,7 @@ export function Leaderboard() {
                             <span className="opacity-50"> + </span>
                             <Link
                               href={`/player/${t.brawlhallaIdTwo}`}
+                              prefetch={false}
                               className="hover:text-primary"
                             >
                               {fixEncoding(t.playerTwoName || 'Unknown')}
