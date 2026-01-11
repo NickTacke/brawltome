@@ -10,6 +10,7 @@ import {
   mapRankedLegends,
   mapTeams,
   mapStatsLegends,
+  normalizeWeaponName,
   VALHALLAN_GRACE_PERIOD,
 } from '@brawltome/shared-utils';
 
@@ -37,30 +38,8 @@ export class RefreshProcessor extends WorkerHost {
       legends.map((l) => [
         l.legendId,
         {
-          weaponOne:
-            l.weaponOne === 'Fists'
-              ? 'Gauntlets'
-              : l.weaponOne === 'Pistol'
-                ? 'Blasters'
-                : l.weaponOne === 'Katar'
-                  ? 'Katars'
-                  : l.weaponOne === 'RocketLance'
-                    ? 'Lance'
-                    : l.weaponOne === 'Chakram'
-                      ? 'Chakrams'
-                      : l.weaponOne,
-          weaponTwo:
-            l.weaponTwo === 'Fists'
-              ? 'Gauntlets'
-              : l.weaponTwo === 'Pistol'
-                ? 'Blasters'
-                : l.weaponTwo === 'Katar'
-                  ? 'Katars'
-                  : l.weaponTwo === 'RocketLance'
-                    ? 'Lance'
-                    : l.weaponTwo === 'Chakram'
-                      ? 'Chakrams'
-                      : l.weaponTwo,
+          weaponOne: normalizeWeaponName(l.weaponOne),
+          weaponTwo: normalizeWeaponName(l.weaponTwo),
         },
       ]),
     );
