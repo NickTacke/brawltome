@@ -19,14 +19,14 @@ async function bootstrap() {
     const allLegends = await bhApiClient.getAllLegends();
 
     logger.log(
-      `Found ${allLegends.length} legends. Starting detailed fetch...`
+      `Found ${allLegends.length} legends. Starting detailed fetch...`,
     );
 
     // 2. Iterate and fetch details for each
     for (const summary of allLegends) {
       try {
         logger.log(
-          `Fetching details for ${summary.bio_name} (ID: ${summary.legend_id})...`
+          `Fetching details for ${summary.bio_name} (ID: ${summary.legend_id})...`,
         );
         const details = await bhApiClient.getLegend(summary.legend_id);
 

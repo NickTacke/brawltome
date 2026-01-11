@@ -150,14 +150,14 @@ describe('RefreshProcessor', () => {
             tier: 'Gold 1',
             rating: 1500,
           }),
-        })
+        }),
       );
 
       // Assert: Ranked Upsert
       expect(txMock.playerRanked.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { brawlhallaId: 123 },
-        })
+        }),
       );
     });
 
@@ -184,7 +184,7 @@ describe('RefreshProcessor', () => {
               }),
             },
           }),
-        })
+        }),
       );
     });
   });
@@ -223,7 +223,7 @@ describe('RefreshProcessor', () => {
               ]),
             }),
           }),
-        })
+        }),
       );
     });
 

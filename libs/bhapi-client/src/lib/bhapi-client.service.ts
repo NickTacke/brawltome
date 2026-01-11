@@ -37,7 +37,7 @@ export class BhApiClientService implements OnModuleDestroy {
       retryStrategy: (times) => {
         const delay = Math.min(times * 100, 3000);
         this.logger.warn(
-          `Redis reconnecting... attempt ${times}, delay ${delay}ms`
+          `Redis reconnecting... attempt ${times}, delay ${delay}ms`,
         );
         return delay;
       },
@@ -101,7 +101,7 @@ export class BhApiClientService implements OnModuleDestroy {
           this.BOTTLENECK_ERROR_DEBOUNCE_MS
         ) {
           this.logger.warn(
-            `Bottleneck Redis connection issue (${this.bottleneckErrorCount} errors since last log): ${error.message}`
+            `Bottleneck Redis connection issue (${this.bottleneckErrorCount} errors since last log): ${error.message}`,
           );
           this.lastBottleneckErrorTime = now;
           this.bottleneckErrorCount = 0;
@@ -113,7 +113,7 @@ export class BhApiClientService implements OnModuleDestroy {
     });
 
     this.limiter.on('depleted', () =>
-      this.logger.warn('API quota depleted. Pausing...')
+      this.logger.warn('API quota depleted. Pausing...'),
     );
 
     this.limiter.on('failed', async (error, jobInfo) => {
@@ -126,7 +126,7 @@ export class BhApiClientService implements OnModuleDestroy {
         const waitTime = (retryAfter + 1) * 1000;
 
         this.logger.warn(
-          `Rate limit 429 hit! Backing off for ${waitTime / 1000}s`
+          `Rate limit 429 hit! Backing off for ${waitTime / 1000}s`,
         );
 
         return waitTime;
@@ -141,7 +141,7 @@ export class BhApiClientService implements OnModuleDestroy {
           this.logger.error(
             `API Error [${status}] on ${endpoint}: ${
               error.message
-            } - ${JSON.stringify(error.response?.data || {})}`
+            } - ${JSON.stringify(error.response?.data || {})}`,
           );
           return 1000;
         }
@@ -165,21 +165,21 @@ export class BhApiClientService implements OnModuleDestroy {
 
   async getPlayerStats(
     brawlhallaId: number,
-    options: BhApiRequestOptions = {}
+    options: BhApiRequestOptions = {},
   ): Promise<PlayerStatsDTO> {
     return this.limiter.schedule(
       { priority: options.priority ?? PRIORITY_BACKGROUND },
-      () => this.performRequest(`/player/${brawlhallaId}/stats`)
+      () => this.performRequest(`/player/${brawlhallaId}/stats`),
     );
   }
 
   async getPlayerRanked(
     brawlhallaId: number,
-    options: BhApiRequestOptions = {}
+    options: BhApiRequestOptions = {},
   ): Promise<PlayerRankedDTO> {
     return this.limiter.schedule(
       { priority: options.priority ?? PRIORITY_BACKGROUND },
-      () => this.performRequest(`/player/${brawlhallaId}/ranked`)
+      () => this.performRequest(`/player/${brawlhallaId}/ranked`),
     );
   }
 
@@ -188,40 +188,40 @@ export class BhApiClientService implements OnModuleDestroy {
     region: Region,
     page: number,
     name: string | null = null,
-    options: BhApiRequestOptions = {}
+    options: BhApiRequestOptions = {},
   ): Promise<RankingsResponseMap[K]> {
     const params = name ? { name } : {};
     return this.limiter.schedule(
       { priority: options.priority ?? PRIORITY_BACKGROUND },
       () =>
-        this.performRequest(`/rankings/${bracket}/${region}/${page}`, params)
+        this.performRequest(`/rankings/${bracket}/${region}/${page}`, params),
     );
   }
 
   async getAllLegends(options: BhApiRequestOptions = {}): Promise<LegendDTO[]> {
     return this.limiter.schedule(
       { priority: options.priority ?? PRIORITY_BACKGROUND },
-      () => this.performRequest(`/legend/all`)
+      () => this.performRequest(`/legend/all`),
     );
   }
 
   async getLegend(
     legendId: number,
-    options: BhApiRequestOptions = {}
+    options: BhApiRequestOptions = {},
   ): Promise<LegendDTO> {
     return this.limiter.schedule(
       { priority: options.priority ?? PRIORITY_BACKGROUND },
-      () => this.performRequest(`/legend/${legendId}`)
+      () => this.performRequest(`/legend/${legendId}`),
     );
   }
 
   async getClan(
     clanId: number,
-    options: BhApiRequestOptions = {}
+    options: BhApiRequestOptions = {},
   ): Promise<ClanDTO> {
     return this.limiter.schedule(
       { priority: options.priority ?? PRIORITY_BACKGROUND },
-      () => this.performRequest(`/clan/${clanId}`)
+      () => this.performRequest(`/clan/${clanId}`),
     );
   }
 
@@ -234,7 +234,7 @@ export class BhApiClientService implements OnModuleDestroy {
         dataStr = dataStr.substring(0, 500) + '...';
       }
       this.logger.error(
-        `API Error [${status}] on ${endpoint}: ${error.message} - ${dataStr}`
+        `API Error [${status}] on ${endpoint}: ${error.message} - ${dataStr}`,
       );
     } else {
       this.logger.error(`Unknown error on ${endpoint}: ${error.message}`);
@@ -243,7 +243,7 @@ export class BhApiClientService implements OnModuleDestroy {
 
   private async performRequest(
     endpoint: string,
-    params: Record<string, unknown> = {}
+    params: Record<string, unknown> = {},
   ) {
     const response = await this.http.get(endpoint, { params });
     return response.data;

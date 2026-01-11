@@ -19,14 +19,14 @@ export class LeaderboardController {
     @Param('page', ParseIntPipe) page: number,
     @Query('region') region?: string,
     @Query('sort') sort?: LeaderboardSort,
-    @Query('limit') @Optional() limit?: string
+    @Query('limit') @Optional() limit?: string,
   ) {
     const parsedLimit = limit ? parseInt(limit, 10) || undefined : undefined;
     return this.leaderboardService.get1v1Leaderboard(
       page,
       region,
       sort,
-      parsedLimit
+      parsedLimit,
     );
   }
 
@@ -35,14 +35,14 @@ export class LeaderboardController {
     @Param('page', ParseIntPipe) page: number,
     @Query('region') region?: string,
     @Query('sort') sort?: LeaderboardSort,
-    @Query('limit') @Optional() limit?: string
+    @Query('limit') @Optional() limit?: string,
   ) {
     const parsedLimit = limit ? parseInt(limit, 10) || undefined : undefined;
     return this.leaderboardService.get2v2Leaderboard(
       page,
       region,
       sort,
-      parsedLimit
+      parsedLimit,
     );
   }
 }

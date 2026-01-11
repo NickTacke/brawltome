@@ -58,8 +58,8 @@ export const statusCommand: Command = {
         results.every((r) => r.status === 'Online')
           ? Colors.Green
           : results.some((r) => r.status === 'Online')
-          ? Colors.Orange
-          : Colors.Red,
+            ? Colors.Orange
+            : Colors.Red,
       )
       .setTimestamp()
       .setFooter({ text: 'BrawlTome Status Check' });
