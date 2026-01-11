@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
   Card,
@@ -28,7 +29,7 @@ import {
   SelectValue,
 } from '@brawltome/ui';
 import {
-  ChevronLeft,
+  ArrowLeft,
   Users,
   Trophy,
   Calendar,
@@ -51,11 +52,12 @@ interface ClanProfileProps {
 }
 
 export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'peakRating'>(
-    'default'
+    'default',
   );
 
   useEffect(() => {
@@ -117,7 +119,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       (m: any) =>
         !searchTerm ||
         m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.brawlhallaId.toString().includes(searchTerm)
+        m.brawlhallaId.toString().includes(searchTerm),
     ) || [];
 
   // Sort AFTER filtering, BEFORE pagination
@@ -160,20 +162,27 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   const totalPages = Math.ceil(sortedMembers.length / PAGE_SIZE);
   const paginatedMembers = sortedMembers.slice(
     (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
+    page * PAGE_SIZE,
   );
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Top Navbar */}
       <div className="flex justify-between items-center">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+        <Button
+          variant="ghost"
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push('/');
+            }
+          }}
+          className="text-sm"
         >
-          <ChevronLeft className="w-5 h-5" />
-          Back to Search
-        </Link>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
         <ModeToggle />
       </div>
 
@@ -271,8 +280,8 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                   {clan.members?.length > 0
                     ? formatNum(
                         Math.round(
-                          parseInt(clan.clanXp || '0') / clan.members.length
-                        )
+                          parseInt(clan.clanXp || '0') / clan.members.length,
+                        ),
                       )
                     : '0'}
                 </div>

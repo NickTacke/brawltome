@@ -37,7 +37,7 @@ export class PlayerService {
     private prisma: PrismaService,
     private gameDataCache: GameDataCacheService,
     @InjectQueue('refresh-queue') private refreshQueue: Queue,
-    private bhApiClient: BhApiClientService
+    private bhApiClient: BhApiClientService,
   ) {}
 
   async getPlayer(id: number) {
@@ -90,7 +90,7 @@ export class PlayerService {
         const priority = this.calculatePriority(
           player.viewCount,
           rankedAge,
-          'ranked'
+          'ranked',
         );
         await this.addJob('refresh-ranked', { id }, priority);
       } catch (error) {
@@ -102,7 +102,7 @@ export class PlayerService {
         const priority = this.calculatePriority(
           player.viewCount,
           statsAge,
-          'stats'
+          'stats',
         );
         await this.addJob('refresh-stats', { id }, priority);
       } catch (error) {
@@ -201,13 +201,13 @@ export class PlayerService {
             weapons.weaponOne,
             l.timeHeldWeaponOne || 0,
             parseDamage(l.damageWeaponOne),
-            l.KOWeaponOne || 0
+            l.KOWeaponOne || 0,
           );
           weaponAgg.add(
             weapons.weaponTwo,
             l.timeHeldWeaponTwo || 0,
             parseDamage(l.damageWeaponTwo),
-            l.KOWeaponTwo || 0
+            l.KOWeaponTwo || 0,
           );
         }
       }
@@ -237,7 +237,7 @@ export class PlayerService {
   }
 
   private async discoverPlayer(
-    id: number
+    id: number,
   ): Promise<PlayerWithRelations | null> {
     if (this.gameDataCache.isBlacklisted(id)) {
       return null;
@@ -274,7 +274,7 @@ export class PlayerService {
     for (const [id, entry] of this.inFlightDiscoveries) {
       if (now - entry.startedAt > PlayerService.DISCOVERY_TIMEOUT_MS) {
         this.logger.warn(
-          `Removing stale discovery for player ${id} (exceeded ${PlayerService.DISCOVERY_TIMEOUT_MS}ms)`
+          `Removing stale discovery for player ${id} (exceeded ${PlayerService.DISCOVERY_TIMEOUT_MS}ms)`,
         );
         this.inFlightDiscoveries.delete(id);
       }
@@ -282,16 +282,16 @@ export class PlayerService {
   }
 
   private async executeDiscovery(
-    id: number
+    id: number,
   ): Promise<PlayerWithRelations | null> {
     const tokens = await this.bhApiClient.getRemainingTokens();
     if (tokens < DISCOVERY_MIN_TOKENS) {
       this.logger.warn(
-        `Discovery blocked for ${id} due to low tokens (${tokens})`
+        `Discovery blocked for ${id} due to low tokens (${tokens})`,
       );
       throw new HttpException(
         'Server busy. Cannot fetch new player data right now.',
-        HttpStatus.TOO_MANY_REQUESTS
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
@@ -324,7 +324,7 @@ export class PlayerService {
         region = rankedData.region || 'UNKNOWN';
       } catch (e) {
         this.logger.warn(
-          `Failed to fetch ranked data for ${id}, using default values. ${e}`
+          `Failed to fetch ranked data for ${id}, using default values. ${e}`,
         );
       }
 
@@ -440,7 +440,7 @@ export class PlayerService {
         removeOnFail: true, // Auto-remove on fail to prevent "stuck" jobs if our manual check misses something
       });
       this.logger.debug(
-        `Queued ${name} for ${data.id} with priority ${priority}`
+        `Queued ${name} for ${data.id} with priority ${priority}`,
       );
     } catch (error: any) {
       if (!error.message?.includes('already exists')) {
@@ -464,7 +464,7 @@ export class PlayerService {
   private calculatePriority(
     viewCount: number,
     ageMs: number,
-    type: 'ranked' | 'stats'
+    type: 'ranked' | 'stats',
   ): number {
     let priority = Math.max(1, 100 - Math.floor(Math.sqrt(viewCount))); // Base priority based on view count
     if (ageMs > 1000 * 60 * 60 * 24) priority -= 20; // If data is really old, boost priority

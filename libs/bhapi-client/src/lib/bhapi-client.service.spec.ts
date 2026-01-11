@@ -198,7 +198,7 @@ describe('BhApiClientService (Rate Limiter Integration)', () => {
 
     // Fire 5 requests
     const promises = Array.from({ length: 5 }, (_, i) =>
-      service.getPlayerRanked(1234567890 + i)
+      service.getPlayerRanked(1234567890 + i),
     );
 
     await Promise.all(promises);
