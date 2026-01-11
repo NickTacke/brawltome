@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: 'BrawlTome',
     description: 'Your ultimate source for Brawlhalla stats',
     images: ['/og-image.png'],
