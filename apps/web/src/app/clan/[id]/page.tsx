@@ -46,8 +46,8 @@ export async function generateMetadata({
       },
     };
   } catch (err: unknown) {
-    const error = err as Error & { cause?: string };
-    if (error.cause === 'Too Many Requests') {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
       return { title: 'Server Busy' };
     }
     return { title: 'Clan Not Found' };
@@ -61,8 +61,8 @@ export default async function Page({ params }: PageProps) {
   try {
     initialData = await getClan(id);
   } catch (err: unknown) {
-    const error = err as Error & { cause?: string };
-    if (error.cause === 'Too Many Requests') {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
       return (
         <main className="min-h-screen bg-background py-10 flex items-center justify-center">
           <Card className="p-8 text-center max-w-md">
