@@ -30,13 +30,13 @@ export async function generateMetadata({
     const statsLegends = player.stats?.legends || [];
     const mostPlayedLegend = statsLegends.reduce(
       (
-        max: { games?: number; legend_name_key?: string } | null,
-        legend: { games?: number; legend_name_key?: string },
+        max: { games?: number; legendNameKey?: string } | null,
+        legend: { games?: number; legendNameKey?: string },
       ) => (!max || (legend.games || 0) > (max.games || 0) ? legend : max),
       null,
     );
 
-    const legendName = mostPlayedLegend?.legend_name_key?.toLowerCase() || '';
+    const legendName = mostPlayedLegend?.legendNameKey?.toLowerCase() || '';
     const encodedLegendName = encodeURIComponent(legendName);
 
     // Format playtime
@@ -50,13 +50,14 @@ export async function generateMetadata({
     // Format win rate
     const games = player.games || 0;
     const wins = player.wins || 0;
+    const losses = games - wins;
     const winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : '0';
 
     // Build description
     const description = [
       `Playtime: ${playtimeStr}`,
       `Elo: ${player.rating || 0}/${player.peakRating || 0} (peak)`,
-      `Games: ${wins}/${games} (WR: ${winRate}%)`,
+      `Games: ${wins}W / ${losses}L (WR: ${winRate}%)`,
     ].join('\n');
 
     return {
@@ -72,7 +73,7 @@ export async function generateMetadata({
                 url: `/images/legends/avatars/${encodedLegendName}.png`,
                 width: 200,
                 height: 200,
-                alt: `${mostPlayedLegend?.legend_name_key} avatar`,
+                alt: `${mostPlayedLegend?.legendNameKey} avatar`,
               },
             ]
           : [
