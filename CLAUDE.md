@@ -119,7 +119,10 @@ The Prisma schema is located at `libs/database/prisma/schema.prisma`.
 export class ExampleService implements OnModuleInit {
   private readonly logger = new Logger(ExampleService.name);
 
-  constructor(private prisma: PrismaService, @InjectQueue('queue-name') private queue: Queue) {}
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue('queue-name') private queue: Queue,
+  ) {}
 
   async onModuleInit() {
     // Initialize caches, etc.

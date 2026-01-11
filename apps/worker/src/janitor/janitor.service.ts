@@ -67,7 +67,7 @@ export class JanitorService {
     private bhApiClient: BhApiClientService,
     private prisma: PrismaService,
     @InjectQueue('refresh-queue') private refreshQueue: Queue,
-    @Inject(REDIS_CLIENT) private redis: Redis
+    @Inject(REDIS_CLIENT) private redis: Redis,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -78,7 +78,7 @@ export class JanitorService {
       const tokens = await this.bhApiClient.getRemainingTokens();
       if (tokens < JANITOR_IDLE_MIN_TOKENS) {
         this.logger.log(
-          `Not enough tokens to perform maintenance, skipping...`
+          `Not enough tokens to perform maintenance, skipping...`,
         );
         return;
       }
@@ -130,7 +130,7 @@ export class JanitorService {
 
     try {
       this.logger.log(
-        `Syncing ${bracket} ${scope} for region ${region} page ${page}`
+        `Syncing ${bracket} ${scope} for region ${region} page ${page}`,
       );
 
       if (bracket === '1v1') {
@@ -151,7 +151,7 @@ export class JanitorService {
     } catch (error) {
       this.logger.error(
         `Error syncing ${bracket} ${scope} for region ${region} page ${page}:`,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
       );
     }
   }
@@ -313,13 +313,13 @@ export class JanitorService {
       const qCounts = await this.refreshQueue.getJobCounts(
         'waiting',
         'delayed',
-        'active'
+        'active',
       );
       const backlog = qCounts.waiting + qCounts.delayed + qCounts.active;
 
       if (backlog > CONFIG.TICKS.CLAN_MAX_BACKLOG) {
         this.logger.log(
-          `Clan backfill skipped, backlog ${backlog} exceeds limit ${CONFIG.TICKS.CLAN_MAX_BACKLOG}`
+          `Clan backfill skipped, backlog ${backlog} exceeds limit ${CONFIG.TICKS.CLAN_MAX_BACKLOG}`,
         );
         return;
       }
@@ -352,13 +352,13 @@ export class JanitorService {
 
       // Filter out members that already have stats
       const candidates = members.filter(
-        (m) => !existingIds.has(m.brawlhallaId)
+        (m) => !existingIds.has(m.brawlhallaId),
       );
 
       let queued = 0;
       for (const member of candidates.slice(
         0,
-        CONFIG.TICKS.CLAN_ENQUEUE_LIMIT
+        CONFIG.TICKS.CLAN_ENQUEUE_LIMIT,
       )) {
         await this.ensurePlayerAndQueue(member.brawlhallaId, member.name);
         queued++;
@@ -400,7 +400,7 @@ export class JanitorService {
           removeOnComplete: true,
           removeOnFail: true,
           priority: 100,
-        }
+        },
       )
       .catch((error) => {
         // Only suppress duplicate job errors, log others
@@ -417,7 +417,7 @@ export class JanitorService {
    */
   private async getNextCursor(
     bracket: Bracket,
-    scope: Scope
+    scope: Scope,
   ): Promise<{ region: Region; page: number }> {
     if (scope === 'global-hot') {
       const key =
@@ -440,7 +440,7 @@ export class JanitorService {
         page: await this.incrementCursor(
           key,
           CONFIG.PAGES.COLD_START,
-          CONFIG.PAGES.MAX
+          CONFIG.PAGES.MAX,
         ),
       };
     }
@@ -476,7 +476,7 @@ export class JanitorService {
   private async incrementCursor(
     key: string,
     min: number,
-    max: number
+    max: number,
   ): Promise<number> {
     const raw = await this.redis.get(key);
     let current = raw ? parseInt(raw, 10) : min;
@@ -496,7 +496,7 @@ export class JanitorService {
    * Wrapper for distributed lock using Redis.
    */
   private async runWithLock(
-    callback: (renewer: () => Promise<void>) => Promise<void>
+    callback: (renewer: () => Promise<void>) => Promise<void>,
   ) {
     const lockValue = randomUUID();
     const acquired = await this.redis.set(
@@ -504,7 +504,7 @@ export class JanitorService {
       lockValue,
       'PX',
       CONFIG.LOCK.TTL,
-      'NX'
+      'NX',
     );
 
     if (acquired !== 'OK') {
@@ -526,7 +526,7 @@ export class JanitorService {
           1,
           CONFIG.LOCK.KEY,
           lockValue,
-          String(CONFIG.LOCK.TTL)
+          String(CONFIG.LOCK.TTL),
         );
         if (result !== 1) {
           active = false;

@@ -67,13 +67,13 @@ export function Leaderboard() {
 
   const { data, isLoading, error } = useSWR(
     `${basePath}?region=${region}&sort=${sortBy}&limit=${PAGE_SIZE}`,
-    fetcher
+    fetcher,
   );
 
   const entries = data?.data || [];
   const totalPages = Math.min(
     data?.meta?.totalPages || 1,
-    MAX_LEADERBOARD_PAGES
+    MAX_LEADERBOARD_PAGES,
   );
 
   if (error) {
@@ -249,7 +249,7 @@ export function Leaderboard() {
                     >
                       <TableCell
                         className={`p-0 text-center ${getRankStyle(
-                          globalRank
+                          globalRank,
                         )}`}
                       >
                         <Link href={href} className="block w-full h-full p-4">
@@ -311,8 +311,8 @@ export function Leaderboard() {
                               winrate >= 60
                                 ? 'text-green-500'
                                 : winrate >= 50
-                                ? 'text-primary'
-                                : 'text-muted-foreground'
+                                  ? 'text-primary'
+                                  : 'text-muted-foreground'
                             }`}
                           >
                             {winrate.toFixed(1)}%
@@ -391,8 +391,8 @@ export function Leaderboard() {
                             winrate >= 60
                               ? 'text-green-500'
                               : winrate >= 50
-                              ? 'text-primary'
-                              : 'text-muted-foreground'
+                                ? 'text-primary'
+                                : 'text-muted-foreground'
                           }`}
                         >
                           {winrate.toFixed(1)}%

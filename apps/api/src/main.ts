@@ -11,7 +11,7 @@ async function bootstrap() {
 
   if (isProduction && !frontendUrl) {
     throw new Error(
-      'FRONTEND_URL environment variable must be set in production'
+      'FRONTEND_URL environment variable must be set in production',
     );
   }
 

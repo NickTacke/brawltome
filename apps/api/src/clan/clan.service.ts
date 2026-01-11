@@ -19,7 +19,7 @@ export class ClanService {
     private prisma: PrismaService,
     private bhApiClient: BhApiClientService,
     private clanLegendResolver: ClanLegendResolverService,
-    @InjectQueue('refresh-queue') private refreshQueue: Queue
+    @InjectQueue('refresh-queue') private refreshQueue: Queue,
   ) {}
 
   async getClan(id: number) {
@@ -60,7 +60,7 @@ export class ClanService {
           elo: p.rating && p.rating > 0 ? p.rating : null,
           peakElo: p.peakRating && p.peakRating > 0 ? p.peakRating : null,
         },
-      ])
+      ]),
     );
 
     const missingLegendKeyIds = clan.members
@@ -76,7 +76,7 @@ export class ClanService {
           })
         : [];
     const statsLegendKeyById = new Map(
-      statsBestLegends.map((l) => [l.brawlhallaId, l.legendNameKey])
+      statsBestLegends.map((l) => [l.brawlhallaId, l.legendNameKey]),
     );
 
     return {
@@ -99,11 +99,11 @@ export class ClanService {
     const tokens = await this.bhApiClient.getRemainingTokens();
     if (tokens < DISCOVERY_MIN_TOKENS) {
       this.logger.warn(
-        `Clan discovery blocked for ${id} due to low tokens (${tokens})`
+        `Clan discovery blocked for ${id} due to low tokens (${tokens})`,
       );
       throw new HttpException(
         'Server busy. Cannot fetch new clan data right now.',
-        HttpStatus.TOO_MANY_REQUESTS
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
@@ -134,7 +134,7 @@ export class ClanService {
           priority: 50,
           removeOnComplete: true,
           removeOnFail: true,
-        }
+        },
       );
       this.logger.debug(`Queued clan refresh for ${id}`);
     } catch (error) {
@@ -150,9 +150,8 @@ export class ClanService {
       });
 
       const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
-      const playerLegendMap = await this.clanLegendResolver.resolveBestLegends(
-        memberIds
-      );
+      const playerLegendMap =
+        await this.clanLegendResolver.resolveBestLegends(memberIds);
 
       const clan = await this.prisma.clan.upsert({
         where: { clanId: id },
@@ -204,7 +203,7 @@ export class ClanService {
       }
       throw new HttpException(
         'Failed to fetch clan',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
