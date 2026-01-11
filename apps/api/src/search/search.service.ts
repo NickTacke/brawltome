@@ -156,8 +156,10 @@ export class SearchService {
       players: enrichedPlayers,
       clans: clans
         .sort((a, b) => {
-          const xpA = BigInt(a.clanXp);
-          const xpB = BigInt(b.clanXp);
+          const xpA =
+            typeof a.clanXp === 'bigint' ? a.clanXp : BigInt(a.clanXp ?? 0);
+          const xpB =
+            typeof b.clanXp === 'bigint' ? b.clanXp : BigInt(b.clanXp ?? 0);
           return xpA > xpB ? -1 : xpA < xpB ? 1 : 0;
         })
         .map((c) => ({
