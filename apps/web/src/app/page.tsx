@@ -89,6 +89,39 @@ export default function Home() {
         <Leaderboard />
       </div>
 
+      {/* Footer */}
+      <footer className="w-full max-w-3xl mx-auto px-4 pb-8 mt-12">
+        <div className="border-t border-border pt-6">
+          <p className="text-center text-xs text-muted-foreground/60 leading-relaxed">
+            Visual assets courtesy of{' '}
+            <Link
+              href="https://www.bluemammoth.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-muted-foreground/80 transition-colors underline"
+            >
+              Blue Mammoth Games
+            </Link>
+            .
+            <br />
+            BrawlTome is neither associated nor endorsed by Blue Mammoth Games
+            and doesn&apos;t reflect the views or opinions of Blue Mammoth Games
+            or anyone officially involved in developing Brawlhalla.
+            <br />
+            Brawlhalla and Blue Mammoth Games are trademarks of{' '}
+            <Link
+              href="https://www.bluemammoth.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-muted-foreground/80 transition-colors underline"
+            >
+              Blue Mammoth Games
+            </Link>
+            .
+          </p>
+        </div>
+      </footer>
+
       <div className="fixed bottom-4 right-4 z-50">
         <ServerStatus />
       </div>
