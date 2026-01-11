@@ -26,10 +26,38 @@ export async function generateMetadata({
       return { title: 'Player Not Found' };
     }
 
-    const topLegend = player.legends?.[0];
-    const legendName = topLegend?.legend_name_key?.toLowerCase() || '';
+    // Find most played legend by games
+    const statsLegends = player.stats?.legends || [];
+    const mostPlayedLegend = statsLegends.reduce(
+      (
+        max: { games?: number; legend_name_key?: string } | null,
+        legend: { games?: number; legend_name_key?: string },
+      ) => (!max || (legend.games || 0) > (max.games || 0) ? legend : max),
+      null,
+    );
+
+    const legendName = mostPlayedLegend?.legend_name_key?.toLowerCase() || '';
     const encodedLegendName = encodeURIComponent(legendName);
-    const description = `${player.tier} (${player.rating} ELO)${topLegend ? ` - Top legend: ${topLegend.legend_name_key}` : ''}`;
+
+    // Format playtime
+    const playtimeSeconds =
+      player.stats?.playtimeSeconds ?? player.stats?.matchTimeTotal ?? 0;
+    const hours = Math.round((playtimeSeconds / 3600) * 10) / 10;
+    const playtimeStr = Number.isInteger(hours)
+      ? `${hours}h`
+      : `${hours.toFixed(1)}h`;
+
+    // Format win rate
+    const games = player.games || 0;
+    const wins = player.wins || 0;
+    const winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : '0';
+
+    // Build description
+    const description = [
+      `Playtime: ${playtimeStr}`,
+      `Elo: ${player.rating || 0}/${player.peakRating || 0} (peak)`,
+      `Games: ${wins}/${games} (WR: ${winRate}%)`,
+    ].join('\n');
 
     return {
       title: player.name,
@@ -44,7 +72,7 @@ export async function generateMetadata({
                 url: `/images/legends/avatars/${encodedLegendName}.png`,
                 width: 200,
                 height: 200,
-                alt: `${topLegend.legend_name_key} avatar`,
+                alt: `${mostPlayedLegend?.legend_name_key} avatar`,
               },
             ]
           : [
