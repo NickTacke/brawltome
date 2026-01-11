@@ -402,6 +402,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                     <span className="text-muted-foreground">Clan:</span>
                     <Link
                       href={`/clan/${player.stats.clan.clanId}`}
+                      prefetch={false}
                       className="text-primary font-bold hover:underline"
                     >
                       {fixEncoding(player.stats.clan.clanName)}
@@ -1765,6 +1766,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 <Link
                   key={`${team.brawlhallaIdOne}-${team.brawlhallaIdTwo}`}
                   href={teammateHref}
+                  prefetch={false}
                   className="group flex items-stretch rounded-xl bg-card border border-border hover:border-primary transition-colors cursor-pointer min-h-36 relative mt-4 min-w-0"
                 >
                   {/* Rank Banner on Left - Bleeding Out */}
