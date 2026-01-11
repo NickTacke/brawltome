@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
 import type { Metadata } from 'next';
 import { cache } from 'react';
+import { fixEncoding } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,11 +61,13 @@ export async function generateMetadata({
       `Games: ${wins}W / ${losses}L (WR: ${winRate}%)`,
     ].join('\n');
 
+    const playerName = fixEncoding(player.name);
+
     return {
-      title: player.name,
+      title: playerName,
       description,
       openGraph: {
-        title: `${player.name} | BrawlTome`,
+        title: `${playerName} | BrawlTome`,
         description,
         url: `https://brawltome.app/player/${id}`,
         images: legendName
@@ -85,7 +88,7 @@ export async function generateMetadata({
       },
       twitter: {
         card: 'summary',
-        title: `${player.name} | BrawlTome`,
+        title: `${playerName} | BrawlTome`,
         description,
         images: legendName
           ? [`/images/legends/avatars/${encodedLegendName}.png`]
