@@ -49,7 +49,7 @@ export class GameDataCacheService implements OnModuleInit {
             weaponOne: normalizeWeaponName(l.weaponOne),
             weaponTwo: normalizeWeaponName(l.weaponTwo),
           },
-        ])
+        ]),
       );
 
       this.logger.log(`Loaded ${legends.length} legends into cache`);
