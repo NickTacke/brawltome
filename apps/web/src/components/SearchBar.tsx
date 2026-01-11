@@ -204,6 +204,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         <Link
                           key={`p-${p.brawlhallaId}`}
                           href={`/player/${p.brawlhallaId}`}
+                          prefetch={false}
                           onClick={handleResultNavigate}
                           className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                         >
@@ -320,6 +321,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         <Link
                           key={`c-${c.clanId}`}
                           href={`/clan/${c.clanId}`}
+                          prefetch={false}
                           onClick={handleResultNavigate}
                           className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
                         >
