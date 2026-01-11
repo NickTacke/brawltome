@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ModeToggle } from '@/components/mode-toggle';
 import { SearchBar } from '@/components/SearchBar';
 import { ServerStatus } from '@/components/ServerStatus';
 import { Leaderboard } from '@/components/Leaderboard';
+import { Skeleton } from '@brawltome/ui';
 
 export default function Home() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -86,8 +87,50 @@ export default function Home() {
           isSearchFocused ? 'blur-xs opacity-50 pointer-events-none' : ''
         }`}
       >
-        <Leaderboard />
+        <Suspense
+          fallback={
+            <div className="w-full space-y-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-96 w-full" />
+            </div>
+          }
+        >
+          <Leaderboard />
+        </Suspense>
       </div>
+
+      {/* Footer */}
+      <footer className="w-full max-w-3xl mx-auto px-4 pb-8 mt-12">
+        <div className="border-t border-border pt-6">
+          <p className="text-center text-xs text-muted-foreground/60 leading-relaxed">
+            Visual assets courtesy of{' '}
+            <Link
+              href="https://www.bluemammoth.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-muted-foreground/80 transition-colors underline"
+            >
+              Blue Mammoth Games
+            </Link>
+            .
+            <br />
+            BrawlTome is neither associated nor endorsed by Blue Mammoth Games
+            and doesn&apos;t reflect the views or opinions of Blue Mammoth Games
+            or anyone officially involved in developing Brawlhalla.
+            <br />
+            Brawlhalla and Blue Mammoth Games are trademarks of{' '}
+            <Link
+              href="https://www.bluemammoth.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-muted-foreground/80 transition-colors underline"
+            >
+              Blue Mammoth Games
+            </Link>
+            .
+          </p>
+        </div>
+      </footer>
 
       <div className="fixed bottom-4 right-4 z-50">
         <ServerStatus />

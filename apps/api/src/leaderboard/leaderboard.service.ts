@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, GameDataCacheService } from '@brawltome/database';
-
-type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
+import { LeaderboardSort, SortOrder } from '@brawltome/shared-types';
 
 @Injectable()
 export class LeaderboardService {
@@ -14,6 +13,7 @@ export class LeaderboardService {
     page: number,
     region?: string,
     sort: LeaderboardSort = 'rating',
+    order?: SortOrder,
     limit?: number,
   ) {
     const MAX_RANKINGS_PAGES = 200;
@@ -29,11 +29,6 @@ export class LeaderboardService {
         ? { brawlhallaId: { notIn: Array.from(blacklistedIds) } }
         : {};
 
-    const where = {
-      ...(region && region !== 'all' ? { region } : {}),
-      ...blacklistFilter,
-    };
-
     const safeSort: LeaderboardSort = [
       'rating',
       'wins',
@@ -43,7 +38,17 @@ export class LeaderboardService {
       ? sort
       : 'rating';
 
-    const orderBy = { [safeSort]: 'desc' };
+    const safeOrder: SortOrder = ['asc', 'desc'].includes(order as string)
+      ? (order as SortOrder)
+      : 'desc';
+
+    const where = {
+      ...(region && region !== 'all' ? { region } : {}),
+      ...blacklistFilter,
+      rating: { gt: 0 }, // Always filter out 0 elo players
+    };
+
+    const orderBy = { [safeSort]: safeOrder };
 
     const maxPagesForTake = Math.max(
       1,
@@ -102,6 +107,7 @@ export class LeaderboardService {
     page: number,
     region?: string,
     sort: LeaderboardSort = 'rating',
+    order?: SortOrder,
     limit?: number,
   ) {
     const MAX_RANKINGS_PAGES = 200;
@@ -123,11 +129,6 @@ export class LeaderboardService {
           }
         : {};
 
-    const where = {
-      ...(region && region !== 'all' ? { region } : {}),
-      ...blacklistFilter,
-    };
-
     const safeSort: LeaderboardSort = [
       'rating',
       'wins',
@@ -138,8 +139,18 @@ export class LeaderboardService {
       ? sort
       : 'rating';
 
+    const safeOrder: SortOrder = ['asc', 'desc'].includes(order as string)
+      ? (order as SortOrder)
+      : 'desc';
+
+    const where = {
+      ...(region && region !== 'all' ? { region } : {}),
+      ...blacklistFilter,
+      rating: { gt: 0 }, // Always filter out 0 elo teams
+    };
+
     const orderBy = [
-      { [safeSort]: 'desc' as const },
+      { [safeSort]: safeOrder },
       { rating: 'desc' as const },
       { peakRating: 'desc' as const },
       { wins: 'desc' as const },

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetcher } from '@/lib/api';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
@@ -17,7 +18,7 @@ import {
   Button,
   Progress,
 } from '@brawltome/ui';
-import { ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, ArrowLeft } from 'lucide-react';
 import { ModeToggle } from '@/components/mode-toggle';
 import {
   DropdownMenu,
@@ -173,6 +174,7 @@ const WinLossBar = ({
 };
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [showAllLegends, setShowAllLegends] = useState(false);
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null);
@@ -316,25 +318,20 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Top Navbar */}
       <div className="flex justify-between items-center">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+        <Button
+          variant="ghost"
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push('/');
+            }
+          }}
+          className="text-sm"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-          Back to Search
-        </Link>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
         <ModeToggle />
       </div>
 
