@@ -56,7 +56,7 @@ export async function generateMetadata({
     // Build description
     const description = [
       `Playtime: ${playtimeStr}`,
-      `Elo: ${player.rating || 0}/${player.peakRating || 0} (peak)`,
+      `Elo: ${player.rating || 0} / ${player.peakRating || 0} (peak)`,
       `Games: ${wins}W / ${losses}L (WR: ${winRate}%)`,
     ].join('\n');
 
