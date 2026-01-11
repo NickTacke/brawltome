@@ -28,6 +28,7 @@ export async function generateMetadata({
 
     const topLegend = player.legends?.[0];
     const legendName = topLegend?.legend_name_key?.toLowerCase() || '';
+    const encodedLegendName = encodeURIComponent(legendName);
     const description = `${player.tier} (${player.rating} ELO)${topLegend ? ` - Top legend: ${topLegend.legend_name_key}` : ''}`;
 
     return {
@@ -40,7 +41,7 @@ export async function generateMetadata({
         images: legendName
           ? [
               {
-                url: `/images/legends/avatars/${legendName}.png`,
+                url: `/images/legends/avatars/${encodedLegendName}.png`,
                 width: 200,
                 height: 200,
               },
