@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: 'BrawlTome',
     description: 'Your ultimate source for Brawlhalla stats',
     images: [
-      { url: '/og-image.png', width: 1200, height: 630, alt: 'BrawlTome' },
+      { url: '/og-image.png', width: 500, height: 500, alt: 'BrawlTome' },
     ],
   },
   twitter: {
