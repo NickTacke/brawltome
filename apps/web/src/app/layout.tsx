@@ -50,6 +50,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'BrawlTome',
   },
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)', color: '#1e2530' },
+  ],
 };
 
 export default function RootLayout({
