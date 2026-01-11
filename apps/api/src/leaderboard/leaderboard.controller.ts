@@ -7,9 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { LeaderboardService } from './leaderboard.service';
-
-type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
-type SortOrder = 'asc' | 'desc';
+import { LeaderboardSort, SortOrder } from '@brawltome/shared-types';
 
 @Controller('leaderboard')
 export class LeaderboardController {
