@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { fetcher } from '@/lib/api';
 import { fixEncoding } from '@/lib/utils';
 import {
@@ -48,25 +49,139 @@ const BRACKETS = [
   { id: '2v2', label: '2v2' },
 ] as const;
 
-const SORT_OPTIONS = [
-  { id: 'rating', label: 'Elo' },
-  { id: 'peakRating', label: 'Peak Elo' },
-  { id: 'wins', label: 'Wins' },
-  { id: 'games', label: 'Games' },
-];
+interface SortableHeaderProps {
+  label: string;
+  sortKey: string;
+  currentSort: string;
+  currentOrder: 'asc' | 'desc';
+  onSort: (key: string) => void;
+  className?: string;
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentOrder,
+  onSort,
+  className,
+}: SortableHeaderProps) {
+  const isActive = currentSort === sortKey;
+
+  return (
+    <TableHead className={className}>
+      <button
+        onClick={() => onSort(sortKey)}
+        className="flex items-center gap-2 w-full hover:text-primary transition-colors font-bold"
+        aria-label={`Sort by ${label} ${isActive ? (currentOrder === 'asc' ? 'ascending' : 'descending') : ''}`}
+      >
+        {label}
+        {isActive ? (
+          currentOrder === 'asc' ? (
+            <ArrowUp className="h-4 w-4" />
+          ) : (
+            <ArrowDown className="h-4 w-4" />
+          )
+        ) : (
+          <ArrowUpDown className="h-4 w-4 opacity-30" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
+
+interface PaginationControlsProps {
+  page: number;
+  totalPages: number;
+  isLoading: boolean;
+  onPageChange: (page: number) => void;
+  compact?: boolean;
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  isLoading,
+  onPageChange,
+  compact = false,
+}: PaginationControlsProps) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size={compact ? 'sm' : 'sm'}
+        disabled={page === 1 || isLoading}
+        onClick={() => onPageChange(Math.max(1, page - 1))}
+      >
+        {compact ? '←' : '← Prev'}
+      </Button>
+      <div className="flex items-center gap-2">
+        {!compact && (
+          <span className="text-sm text-muted-foreground font-mono">Page</span>
+        )}
+        <Input
+          key={page}
+          defaultValue={page}
+          className="h-8 w-16 text-center font-mono"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const val = parseInt(e.currentTarget.value.trim(), 10);
+              if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                onPageChange(val);
+              } else {
+                onPageChange(1);
+                e.currentTarget.value = '1';
+              }
+            }
+          }}
+        />
+        <span className="text-sm text-muted-foreground font-mono">
+          {compact ? `/${totalPages}` : `of ${totalPages || '?'}`}
+        </span>
+      </div>
+      <Button
+        variant="outline"
+        size={compact ? 'sm' : 'sm'}
+        disabled={page >= totalPages || isLoading}
+        onClick={() => onPageChange(page + 1)}
+      >
+        {compact ? '→' : 'Next →'}
+      </Button>
+    </div>
+  );
+}
 
 export function Leaderboard() {
-  const [bracket, setBracket] =
-    useState<(typeof BRACKETS)[number]['id']>('1v1');
-  const [page, setPage] = useState(1);
-  const [region, setRegion] = useState('all');
-  const [sortBy, setSortBy] = useState('rating');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Read state from URL parameters
+  const bracket = (searchParams.get('bracket') ||
+    '1v1') as (typeof BRACKETS)[number]['id'];
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const region = searchParams.get('region') || 'all';
+  const sortBy = searchParams.get('sort') || 'rating';
+  const sortOrder = (searchParams.get('order') || 'desc') as 'asc' | 'desc';
+
+  // Helper to update URL parameters
+  const updateQueryParams = (updates: Record<string, string | number>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, String(value));
+      } else {
+        params.delete(key);
+      }
+    });
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const basePath =
     bracket === '1v1' ? `/leaderboard/1v1/${page}` : `/leaderboard/2v2/${page}`;
 
   const { data, isLoading, error } = useSWR(
-    `${basePath}?region=${region}&sort=${sortBy}&limit=${PAGE_SIZE}`,
+    `${basePath}?region=${region}&sort=${sortBy}&order=${sortOrder}&limit=${PAGE_SIZE}`,
     fetcher,
   );
 
@@ -85,18 +200,22 @@ export function Leaderboard() {
   }
 
   const handleRegionChange = (newRegion: string) => {
-    setRegion(newRegion);
-    setPage(1); // Reset to page 1 on filter change
+    updateQueryParams({ region: newRegion, page: 1 });
   };
 
   const handleBracketChange = (newBracket: string) => {
-    setBracket(newBracket as (typeof BRACKETS)[number]['id']);
-    setPage(1); // Reset to page 1 on filter change
+    updateQueryParams({ bracket: newBracket, page: 1 });
   };
 
-  const handleSortChange = (newSort: string) => {
-    setSortBy(newSort);
-    setPage(1); // Reset to page 1 on filter change
+  const handleHeaderSort = (key: string) => {
+    // If clicking same column, toggle order
+    if (key === sortBy) {
+      const newOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+      updateQueryParams({ order: newOrder, page: 1 });
+    } else {
+      // New column, default to desc
+      updateQueryParams({ sort: key, order: 'desc', page: 1 });
+    }
   };
 
   const getRankStyle = (rank: number) => {
@@ -138,29 +257,6 @@ export function Leaderboard() {
             </Select>
           </div>
 
-          {/* Sort Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground font-bold uppercase">
-              Sort:
-            </span>
-            <Select value={sortBy} onValueChange={handleSortChange}>
-              <SelectTrigger className="w-[140px] font-bold">
-                <SelectValue placeholder="Sort By" />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((o) => (
-                  <SelectItem
-                    key={o.id}
-                    value={o.id}
-                    className="cursor-pointer"
-                  >
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Region Filter */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground font-bold uppercase">
@@ -183,6 +279,15 @@ export function Leaderboard() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Top Pagination */}
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            isLoading={isLoading}
+            onPageChange={(newPage) => updateQueryParams({ page: newPage })}
+            compact={true}
+          />
         </div>
       </div>
 
@@ -195,14 +300,31 @@ export function Leaderboard() {
               <TableHead className="font-bold">
                 {bracket === '1v1' ? 'Player' : 'Team'}
               </TableHead>
-              <TableHead className="text-center font-bold">Rating</TableHead>
+              <SortableHeader
+                label="Rating"
+                sortKey="rating"
+                currentSort={sortBy}
+                currentOrder={sortOrder}
+                onSort={handleHeaderSort}
+                className="text-center"
+              />
               <TableHead className="text-center font-bold">Win Rate</TableHead>
-              <TableHead className="text-center hidden sm:table-cell font-bold">
-                Wins
-              </TableHead>
-              <TableHead className="text-center hidden sm:table-cell font-bold">
-                Games
-              </TableHead>
+              <SortableHeader
+                label="Wins"
+                sortKey="wins"
+                currentSort={sortBy}
+                currentOrder={sortOrder}
+                onSort={handleHeaderSort}
+                className="text-center hidden sm:table-cell"
+              />
+              <SortableHeader
+                label="Games"
+                sortKey="games"
+                currentSort={sortBy}
+                currentOrder={sortOrder}
+                onSort={handleHeaderSort}
+                className="text-center hidden sm:table-cell"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -425,46 +547,15 @@ export function Leaderboard() {
         </Table>
       </div>
 
-      {/* Pagination */}
-      <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page === 1 || isLoading}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-        >
-          ← Prev
-        </Button>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground font-mono">Page</span>
-          <Input
-            key={page}
-            defaultValue={page}
-            className="h-8 w-16 text-center font-mono"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const val = parseInt(e.currentTarget.value.trim(), 10);
-                if (!isNaN(val) && val >= 1 && val <= totalPages) {
-                  setPage(val);
-                } else {
-                  setPage(1);
-                  e.currentTarget.value = '1';
-                }
-              }
-            }}
-          />
-          <span className="text-sm text-muted-foreground font-mono">
-            of {totalPages || '?'}
-          </span>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page >= totalPages || isLoading}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          Next →
-        </Button>
+      {/* Bottom Pagination */}
+      <div className="p-4 border-t border-border flex justify-center items-center bg-muted/20">
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          isLoading={isLoading}
+          onPageChange={(newPage) => updateQueryParams({ page: newPage })}
+          compact={false}
+        />
       </div>
     </Card>
   );
