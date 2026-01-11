@@ -241,7 +241,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             </div>
                           </div>
                           <div className="text-sm font-mono text-primary">
-                            {p.rating || '0'}
+                            {p.rating ?? 0}
                           </div>
                         </Link>
                       ))}
