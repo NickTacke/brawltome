@@ -109,7 +109,7 @@ function PaginationControls({
     <div className="flex items-center gap-2">
       <Button
         variant="outline"
-        size={compact ? 'sm' : 'sm'}
+        size="sm"
         disabled={page === 1 || isLoading}
         onClick={() => onPageChange(Math.max(1, page - 1))}
       >
@@ -141,7 +141,7 @@ function PaginationControls({
       </div>
       <Button
         variant="outline"
-        size={compact ? 'sm' : 'sm'}
+        size="sm"
         disabled={page >= totalPages || isLoading}
         onClick={() => onPageChange(page + 1)}
       >
