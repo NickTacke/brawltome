@@ -171,7 +171,13 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       <div className="flex justify-between items-center">
         <Button
           variant="ghost"
-          onClick={() => router.back()}
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push('/');
+            }
+          }}
           className="text-sm"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
