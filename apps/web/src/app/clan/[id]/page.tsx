@@ -2,11 +2,48 @@ import { fetcher } from '@/lib/api';
 import { ClanProfile } from '@/components/clan/ClanProfile';
 import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
+import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  try {
+    const clan = await fetcher(`/clan/${id}`);
+
+    if (!clan) {
+      return { title: 'Clan Not Found' };
+    }
+
+    const memberCount = clan.clan?.length || 0;
+    const xp = parseInt(clan.clan_xp || '0', 10).toLocaleString();
+    const description = `${memberCount} members - Clan XP: ${xp}`;
+
+    return {
+      title: clan.clan_name,
+      description,
+      openGraph: {
+        title: `${clan.clan_name} | BrawlTome`,
+        description,
+        url: `https://brawltome.app/clan/${id}`,
+        images: ['/og-image.png'],
+      },
+      twitter: {
+        card: 'summary',
+        title: `${clan.clan_name} | BrawlTome`,
+        description,
+      },
+    };
+  } catch {
+    return { title: 'Clan Not Found' };
+  }
 }
 
 export default async function Page({ params }: PageProps) {

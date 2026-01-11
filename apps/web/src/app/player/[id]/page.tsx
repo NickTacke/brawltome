@@ -2,11 +2,56 @@ import { fetcher } from '@/lib/api';
 import { PlayerProfile } from '@/components/player/PlayerProfile';
 import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
+import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  try {
+    const player = await fetcher(`/player/${id}`);
+
+    if (!player) {
+      return { title: 'Player Not Found' };
+    }
+
+    const topLegend = player.legends?.[0];
+    const legendName = topLegend?.legend_name_key?.toLowerCase() || '';
+    const description = `${player.tier} (${player.rating} ELO)${topLegend ? ` - Top legend: ${topLegend.legend_name_key}` : ''}`;
+
+    return {
+      title: player.name,
+      description,
+      openGraph: {
+        title: `${player.name} | BrawlTome`,
+        description,
+        url: `https://brawltome.app/player/${id}`,
+        images: legendName
+          ? [
+              {
+                url: `/images/legends/avatars/${legendName}.png`,
+                width: 200,
+                height: 200,
+              },
+            ]
+          : ['/og-image.png'],
+      },
+      twitter: {
+        card: 'summary',
+        title: `${player.name} | BrawlTome`,
+        description,
+      },
+    };
+  } catch {
+    return { title: 'Player Not Found' };
+  }
 }
 
 export default async function Page({ params }: PageProps) {
