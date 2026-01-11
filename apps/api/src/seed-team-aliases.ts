@@ -31,7 +31,7 @@ async function bootstrap() {
   let insertedAliases = 0;
 
   logger.log(
-    `Starting seed-team-aliases (batchSize=${BATCH_SIZE}, dryRun=${DRY_RUN})`
+    `Starting seed-team-aliases (batchSize=${BATCH_SIZE}, dryRun=${DRY_RUN})`,
   );
 
   try {
@@ -130,7 +130,7 @@ async function bootstrap() {
             nameLower: (p.name || '').toLowerCase(),
             aliasKeysLower: new Set(p.aliases.map((a) => a.key.toLowerCase())),
           },
-        ])
+        ]),
       );
 
       const createData: { brawlhallaId: number; key: string; value: string }[] =
@@ -152,7 +152,7 @@ async function bootstrap() {
       if (createData.length > 0) {
         if (DRY_RUN) {
           logger.log(
-            `DRY_RUN batch: would insert ${createData.length} aliases (candidates=${candidateMap.size}, teams=${teams.length})`
+            `DRY_RUN batch: would insert ${createData.length} aliases (candidates=${candidateMap.size}, teams=${teams.length})`,
           );
         } else {
           const res = await prisma.playerAlias.createMany({
@@ -161,12 +161,12 @@ async function bootstrap() {
           });
           insertedAliases += res.count;
           logger.log(
-            `Inserted ${res.count}/${createData.length} aliases (candidates=${candidateMap.size}, teams=${teams.length})`
+            `Inserted ${res.count}/${createData.length} aliases (candidates=${candidateMap.size}, teams=${teams.length})`,
           );
         }
       } else {
         logger.log(
-          `No inserts needed (candidates=${candidateMap.size}, teams=${teams.length})`
+          `No inserts needed (candidates=${candidateMap.size}, teams=${teams.length})`,
         );
       }
 
@@ -179,7 +179,7 @@ async function bootstrap() {
     }
 
     logger.log(
-      `Done. scannedTeams=${scannedTeams} parseFailures=${parseFailures} candidateAliases=${candidateAliases} insertedAliases=${insertedAliases} missingPlayers=${missingPlayers}`
+      `Done. scannedTeams=${scannedTeams} parseFailures=${parseFailures} candidateAliases=${candidateAliases} insertedAliases=${insertedAliases} missingPlayers=${missingPlayers}`,
     );
   } catch (error) {
     logger.error('Error during seed-team-aliases', error);
