@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Player, PrismaService } from '@brawltome/database';
 import { BhApiClientService } from '@brawltome/bhapi-client';
 import { PlayerDTO, Ranked2v2TeamDTO } from '@brawltome/shared-types';
 
 @Injectable()
 export class AppService {
+  private readonly logger = new Logger(AppService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly bhApiClient: BhApiClientService,
