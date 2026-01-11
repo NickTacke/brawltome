@@ -221,8 +221,8 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
           member.rank === 'Leader'
             ? '👑'
             : member.rank === 'Officer'
-            ? '⭐'
-            : `\`${rank}.\``;
+              ? '⭐'
+              : `\`${rank}.\``;
 
         const legendEmoji = member.legendNameKey
           ? getAvatarEmoji(member.legendNameKey)
