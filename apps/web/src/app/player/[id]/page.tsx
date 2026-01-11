@@ -2,11 +2,74 @@ import { fetcher } from '@/lib/api';
 import { PlayerProfile } from '@/components/player/PlayerProfile';
 import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
+import type { Metadata } from 'next';
+import { cache } from 'react';
 
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+// Cache the player fetcher to avoid duplicate requests within the same render
+const getPlayer = cache(async (id: string) => fetcher(`/player/${id}`));
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  try {
+    const player = await getPlayer(id);
+
+    if (!player) {
+      return { title: 'Player Not Found' };
+    }
+
+    const topLegend = player.legends?.[0];
+    const legendName = topLegend?.legend_name_key?.toLowerCase() || '';
+    const encodedLegendName = encodeURIComponent(legendName);
+    const description = `${player.tier} (${player.rating} ELO)${topLegend ? ` - Top legend: ${topLegend.legend_name_key}` : ''}`;
+
+    return {
+      title: player.name,
+      description,
+      openGraph: {
+        title: `${player.name} | BrawlTome`,
+        description,
+        url: `https://brawltome.app/player/${id}`,
+        images: legendName
+          ? [
+              {
+                url: `/images/legends/avatars/${encodedLegendName}.png`,
+                width: 200,
+                height: 200,
+                alt: `${topLegend.legend_name_key} avatar`,
+              },
+            ]
+          : [
+              {
+                url: '/og-image.png',
+                alt: 'BrawlTome',
+              },
+            ],
+      },
+      twitter: {
+        card: 'summary',
+        title: `${player.name} | BrawlTome`,
+        description,
+        images: legendName
+          ? [`/images/legends/avatars/${encodedLegendName}.png`]
+          : ['/og-image.png'],
+      },
+    };
+  } catch (err: unknown) {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
+      return { title: 'Server Busy' };
+    }
+    return { title: 'Player Not Found' };
+  }
 }
 
 export default async function Page({ params }: PageProps) {
@@ -15,10 +78,10 @@ export default async function Page({ params }: PageProps) {
 
   let initialData;
   try {
-    initialData = await fetcher(`/player/${id}`);
+    initialData = await getPlayer(id);
   } catch (err: unknown) {
-    const error = err as Error & { cause?: string };
-    if (error.cause === 'Too Many Requests') {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
       return (
         <main className="min-h-screen bg-background py-10 flex items-center justify-center">
           <Card className="p-8 text-center max-w-md">
