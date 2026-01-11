@@ -34,13 +34,13 @@ export class GameDataCacheService implements OnModuleInit {
       });
 
       this.legendIdToBioName = new Map(
-        legends.map((l) => [l.legendId, l.bioName])
+        legends.map((l) => [l.legendId, l.bioName]),
       );
       this.legendNameKeyToBioName = new Map(
-        legends.map((l) => [l.legendNameKey, l.bioName])
+        legends.map((l) => [l.legendNameKey, l.bioName]),
       );
       this.legendIdToNameKey = new Map(
-        legends.map((l) => [l.legendId, l.legendNameKey])
+        legends.map((l) => [l.legendId, l.legendNameKey]),
       );
       this.legendIdToWeapons = new Map(
         legends.map((l) => [
@@ -87,7 +87,7 @@ export class GameDataCacheService implements OnModuleInit {
   }
 
   getWeaponsById(
-    legendId: number
+    legendId: number,
   ): { weaponOne: string; weaponTwo: string } | undefined {
     return this.legendIdToWeapons.get(legendId);
   }

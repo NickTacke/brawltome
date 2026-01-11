@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetcher } from '@/lib/api';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
@@ -17,7 +18,7 @@ import {
   Button,
   Progress,
 } from '@brawltome/ui';
-import { ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, ArrowLeft } from 'lucide-react';
 import { ModeToggle } from '@/components/mode-toggle';
 import {
   DropdownMenu,
@@ -167,6 +168,7 @@ const WinLossBar = ({
 };
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [showAllLegends, setShowAllLegends] = useState(false);
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null);
@@ -186,9 +188,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const weaponStats = useMemo(
     () =>
       aggregateRichWeaponStats(
-        (player?.stats?.legendsEnriched || []) as LegendWeaponData[]
+        (player?.stats?.legendsEnriched || []) as LegendWeaponData[],
       ),
-    [player?.stats?.legendsEnriched]
+    [player?.stats?.legendsEnriched],
   );
 
   if (!player) {
@@ -239,7 +241,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const rankedTeams = [...rankedTeamsSource].sort(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (a: any, b: any) => b.rating - a.rating
+    (a: any, b: any) => b.rating - a.rating,
   );
 
   const winrate = player.games > 0 ? (player.wins / player.games) * 100 : 0;
@@ -293,7 +295,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       acc.wins += parseNum(team?.wins);
       return acc;
     },
-    { games: 0, wins: 0 }
+    { games: 0, wins: 0 },
   );
   const teamsWinrate =
     teamsTotals.games > 0 ? (teamsTotals.wins / teamsTotals.games) * 100 : 0;
@@ -301,7 +303,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((a: any) => a?.value)
     .filter(
-      (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
+      (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0,
     )
     .filter((v: string) => v.trim() !== player?.name)
     .sort((a: string, b: string) => a.localeCompare(b));
@@ -310,25 +312,20 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Top Navbar */}
       <div className="flex justify-between items-center">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+        <Button
+          variant="ghost"
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push('/');
+            }
+          }}
+          className="text-sm"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-          Back to Search
-        </Link>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
         <ModeToggle />
       </div>
 
@@ -510,18 +507,18 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 rankedTeams.reduce(
                   (sum: number, team: { wins?: number }) =>
                     sum + (team.wins || 0),
-                  0
+                  0,
                 );
 
               // Find best rating across 1v1, 2v2 teams, and legends
               const ratings = [
                 player.peakRating || 0,
                 ...rankedTeams.map(
-                  (team: { peakRating?: number }) => team.peakRating || 0
+                  (team: { peakRating?: number }) => team.peakRating || 0,
                 ),
                 ...allLegends.map(
                   (legend: { ranked?: { peakRating?: number } }) =>
-                    legend.ranked?.peakRating || 0
+                    legend.ranked?.peakRating || 0,
                 ),
               ];
               const bestRating = Math.max(...ratings, 0);
@@ -725,14 +722,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 w.ranked.ratings.length > 0
                   ? w.ranked.ratings.reduce(
                       (a: number, b: number) => a + b,
-                      0
+                      0,
                     ) / w.ranked.ratings.length
                   : 0;
               const avgPeak =
                 w.ranked.peakRatings.length > 0
                   ? w.ranked.peakRatings.reduce(
                       (a: number, b: number) => a + b,
-                      0
+                      0,
                     ) / w.ranked.peakRatings.length
                   : 0;
 
@@ -1002,7 +999,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         </span>
                                         <span className="text-foreground">
                                           {formatNum(
-                                            w.ranked.games - w.ranked.wins
+                                            w.ranked.games - w.ranked.wins,
                                           )}
                                           L{' '}
                                           <span className="font-normal text-muted-foreground">
@@ -1241,14 +1238,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
                         // Weapon stats for distribution section
                         const weaponOneTime = parseNum(
-                          legend.timeHeldWeaponOne
+                          legend.timeHeldWeaponOne,
                         );
                         const weaponTwoTime = parseNum(
-                          legend.timeHeldWeaponTwo
+                          legend.timeHeldWeaponTwo,
                         );
                         const unarmedTime = Math.max(
                           0,
-                          matchTime - weaponOneTime - weaponTwoTime
+                          matchTime - weaponOneTime - weaponTwoTime,
                         );
                         const totalWeaponTime =
                           weaponOneTime + weaponTwoTime + unarmedTime;
@@ -1286,7 +1283,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                           },
                         ].filter(
                           (w) =>
-                            w.name && (w.kos > 0 || w.dmg > 0 || w.time > 0)
+                            w.name && (w.kos > 0 || w.dmg > 0 || w.time > 0),
                         );
 
                         return (
@@ -1430,8 +1427,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                       {legendKOs > 0
                                         ? formatNum(
                                             Math.round(
-                                              legendDmgDealt / legendKOs
-                                            )
+                                              legendDmgDealt / legendKOs,
+                                            ),
                                           )
                                         : '—'}
                                     </div>
@@ -1472,7 +1469,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                           <div className="w-16 sm:w-18 shrink-0 mb-5">
                                             <img
                                               src={getRankBanner(
-                                                legend.ranked.tier
+                                                legend.ranked.tier,
                                               )}
                                               alt={legend.ranked.tier}
                                               className="w-full h-auto object-contain drop-shadow-lg"
@@ -1538,7 +1535,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                           <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 text-center hover:bg-background/50 transition-colors">
                                             <div className="text-lg font-black text-foreground">
                                               {calculateEloReset(
-                                                legend.ranked.rating
+                                                legend.ranked.rating,
                                               )}
                                             </div>
                                             <div className="text-[8px] text-muted-foreground uppercase">

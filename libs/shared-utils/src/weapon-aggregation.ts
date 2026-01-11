@@ -32,7 +32,7 @@ export const createWeaponAggregator = () => {
       weapon: string | undefined,
       timeHeld: number,
       damage: number,
-      kos: number
+      kos: number,
     ) => {
       const key = (weapon || '').trim();
       if (!key) return;
@@ -128,7 +128,7 @@ const createEmptyRichWeaponAgg = (weaponName: string): RichWeaponAgg => ({
 });
 
 export function aggregateRichWeaponStats(
-  legends: LegendWeaponData[]
+  legends: LegendWeaponData[],
 ): RichWeaponAgg[] {
   const weaponStatsMap = new Map<string, RichWeaponAgg>();
 
