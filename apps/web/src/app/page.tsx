@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ModeToggle } from '@/components/mode-toggle';
 import { SearchBar } from '@/components/SearchBar';
 import { ServerStatus } from '@/components/ServerStatus';
 import { Leaderboard } from '@/components/Leaderboard';
+import { Skeleton } from '@brawltome/ui';
 
 export default function Home() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -86,7 +87,16 @@ export default function Home() {
           isSearchFocused ? 'blur-xs opacity-50 pointer-events-none' : ''
         }`}
       >
-        <Leaderboard />
+        <Suspense
+          fallback={
+            <div className="w-full space-y-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-96 w-full" />
+            </div>
+          }
+        >
+          <Leaderboard />
+        </Suspense>
       </div>
 
       {/* Footer */}
