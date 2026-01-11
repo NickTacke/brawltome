@@ -26,7 +26,7 @@ export async function generateMetadata({
       return { title: 'Clan Not Found' };
     }
 
-    const memberCount = clan.clan?.length || 0;
+    const memberCount = clan.members?.length || 0;
     const xp = parseInt(clan.clan_xp || '0', 10).toLocaleString();
     const description = `${memberCount} members - Clan XP: ${xp}`;
 
