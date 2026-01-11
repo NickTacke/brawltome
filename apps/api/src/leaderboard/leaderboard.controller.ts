@@ -7,7 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { LeaderboardService } from './leaderboard.service';
-import { LeaderboardSort, SortOrder } from '@brawltome/shared-types';
+import type { LeaderboardSort, SortOrder } from '@brawltome/shared-types';
 
 @Controller('leaderboard')
 export class LeaderboardController {
