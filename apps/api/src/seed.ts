@@ -18,8 +18,8 @@ async function bootstrap() {
 
   logger.log(
     `Starting seeding pages ${START_PAGE}..${MAX_PAGES} for regions: ${REGIONS.join(
-      ', '
-    )}`
+      ', ',
+    )}`,
   );
 
   for (const region of REGIONS) {
@@ -39,12 +39,12 @@ async function bootstrap() {
         const players = await bhApiClient.getRankings<typeof BRACKET>(
           BRACKET,
           region,
-          page
+          page,
         );
 
         if (!players || players.length === 0) {
           logger.log(
-            `No players found in ${region} page ${page}; moving to next region`
+            `No players found in ${region} page ${page}; moving to next region`,
           );
           break;
         }
@@ -56,7 +56,7 @@ async function bootstrap() {
           select: { brawlhallaId: true, name: true },
         });
         const existingMap = new Map(
-          existingPlayers.map((p) => [p.brawlhallaId, p])
+          existingPlayers.map((p) => [p.brawlhallaId, p]),
         );
 
         const operations = players.map((p) => {
@@ -121,12 +121,12 @@ async function bootstrap() {
         logger.log(
           `Indexed ${region} page ${page} (rank ${1 + (page - 1) * 50}-${
             page * 50
-          })`
+          })`,
         );
       } catch (error) {
         logger.error(
           `Error fetching rankings for ${region} page ${page}`,
-          error
+          error,
         );
         await new Promise((r) => setTimeout(r, 2000));
         page--; // Retry the same page

@@ -67,7 +67,7 @@ export interface MappedStatsLegend {
  * Maps API ranked legend data to database format
  */
 export function mapRankedLegends(
-  legends: PlayerRankedLegendDTO[] | undefined | null
+  legends: PlayerRankedLegendDTO[] | undefined | null,
 ): MappedRankedLegend[] {
   if (!legends) return [];
   return legends.map((legend) => ({
@@ -85,7 +85,7 @@ export function mapRankedLegends(
  * Maps API team data to database format, deduplicating by ID pairs
  */
 export function mapTeams(
-  teams: PlayerRankedTeamDTO[] | undefined | null
+  teams: PlayerRankedTeamDTO[] | undefined | null,
 ): MappedTeam[] {
   if (!teams) return [];
 
@@ -114,7 +114,7 @@ export function mapTeams(
  * Maps API stats legend data to database format, filtering out invalid entries
  */
 export function mapStatsLegends(
-  legends: PlayerStatsLegendDTO[] | undefined | null
+  legends: PlayerStatsLegendDTO[] | undefined | null,
 ): MappedStatsLegend[] {
   if (!legends) return [];
   return legends

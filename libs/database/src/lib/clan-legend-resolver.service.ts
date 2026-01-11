@@ -37,7 +37,7 @@ export class ClanLegendResolverService {
     });
 
     const legendKeyMap = new Map(
-      legends.map((l) => [l.legendId, l.legendNameKey])
+      legends.map((l) => [l.legendId, l.legendNameKey]),
     );
 
     // Build the result map from ranked data
@@ -51,7 +51,7 @@ export class ClanLegendResolverService {
 
     // Fallback to stats XP for members without ranked data
     const missingRankedIds = memberIds.filter(
-      (pid) => !playerLegendMap.has(pid)
+      (pid) => !playerLegendMap.has(pid),
     );
 
     if (missingRankedIds.length > 0) {

@@ -41,7 +41,7 @@ export class RefreshProcessor extends WorkerHost {
           weaponOne: normalizeWeaponName(l.weaponOne),
           weaponTwo: normalizeWeaponName(l.weaponTwo),
         },
-      ])
+      ]),
     );
     return this.legendWeaponsCache;
   }
@@ -49,7 +49,7 @@ export class RefreshProcessor extends WorkerHost {
   constructor(
     private bhApiClient: BhApiClientService,
     private prisma: PrismaService,
-    private clanLegendResolver: ClanLegendResolverService
+    private clanLegendResolver: ClanLegendResolverService,
   ) {
     super();
   }
@@ -59,7 +59,7 @@ export class RefreshProcessor extends WorkerHost {
     this.logger.log(
       `Processing ${job.name} for ${
         job.name === 'refresh-clan' ? 'clan' : 'player'
-      } ${id}`
+      } ${id}`,
     );
 
     switch (job.name) {
@@ -174,7 +174,7 @@ export class RefreshProcessor extends WorkerHost {
     const statsLegends: PlayerStatsLegendDTO[] = data.legends || [];
     const totalPlaytime = statsLegends.reduce(
       (sum, l) => sum + (l.matchtime || 0),
-      0
+      0,
     );
 
     const weaponAgg = createWeaponAggregator();
@@ -187,13 +187,13 @@ export class RefreshProcessor extends WorkerHost {
         weapons.weaponOne,
         l.timeheldweaponone || 0,
         parseDamage(l.damageweaponone),
-        l.koweaponone || 0
+        l.koweaponone || 0,
       );
       weaponAgg.add(
         weapons.weaponTwo,
         l.timeheldweapontwo || 0,
         parseDamage(l.damageweapontwo),
-        l.koweapontwo || 0
+        l.koweapontwo || 0,
       );
     }
 
@@ -321,9 +321,8 @@ export class RefreshProcessor extends WorkerHost {
     const clanData = await this.bhApiClient.getClan(id);
 
     const memberIds = clanData.clan.map((m) => m.brawlhalla_id);
-    const playerLegendMap = await this.clanLegendResolver.resolveBestLegends(
-      memberIds
-    );
+    const playerLegendMap =
+      await this.clanLegendResolver.resolveBestLegends(memberIds);
 
     await this.prisma.clan.upsert({
       where: { clanId: id },
@@ -365,7 +364,7 @@ export class RefreshProcessor extends WorkerHost {
     });
 
     this.logger.log(
-      `Refreshed clan ${id} with ${clanData.clan.length} members`
+      `Refreshed clan ${id} with ${clanData.clan.length} members`,
     );
   }
 }

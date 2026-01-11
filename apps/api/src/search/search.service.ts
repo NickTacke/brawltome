@@ -8,7 +8,7 @@ export class SearchService {
 
   constructor(
     private prisma: PrismaService,
-    private gameDataCache: GameDataCacheService
+    private gameDataCache: GameDataCacheService,
   ) {}
 
   async searchLocal(query: string) {
@@ -51,7 +51,7 @@ export class SearchService {
             blacklistFilter,
           ],
         },
-        take: 50,
+        take: 100,
         orderBy: [{ rating: 'desc' }, { viewCount: 'desc' }],
         select: {
           brawlhallaId: true,
@@ -110,7 +110,7 @@ export class SearchService {
         }
 
         const matchedAlias = p.aliases?.find((a) =>
-          matchesNameOrBasePrefix(a.value, sanitized)
+          matchesNameOrBasePrefix(a.value, sanitized),
         );
         if (matchedAlias) {
           return {
@@ -123,7 +123,7 @@ export class SearchService {
         return null;
       })
       .filter((p): p is NonNullable<typeof p> => p !== null)
-      .slice(0, 8);
+      .slice(0, 40);
 
     const enrichedPlayers = filteredPlayers.map((p) => {
       const rankedBestLegendId =
@@ -134,13 +134,13 @@ export class SearchService {
       const legendIdForAvatar = rankedBestLegendId || fallbackLegendId || 0;
       const legendNameKeyForAvatar =
         rankedBestLegendId && rankedBestLegendId > 0
-          ? this.gameDataCache.getNameKeyById(rankedBestLegendId) ??
+          ? (this.gameDataCache.getNameKeyById(rankedBestLegendId) ??
             statsBestLegend?.legendNameKey ??
-            null
-          : statsBestLegend?.legendNameKey ?? null;
+            null)
+          : (statsBestLegend?.legendNameKey ?? null);
       const legendNameForAvatar =
         legendIdForAvatar && legendIdForAvatar > 0
-          ? this.gameDataCache.getBioNameById(legendIdForAvatar) ?? null
+          ? (this.gameDataCache.getBioNameById(legendIdForAvatar) ?? null)
           : null;
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -154,12 +154,20 @@ export class SearchService {
 
     return {
       players: enrichedPlayers,
-      clans: clans.map((c) => ({
-        clanId: c.clanId,
-        name: c.clanName,
-        xp: c.clanXp,
-        memberCount: c._count.members,
-      })),
+      clans: clans
+        .sort((a, b) => {
+          const xpA =
+            typeof a.clanXp === 'bigint' ? a.clanXp : BigInt(a.clanXp ?? 0);
+          const xpB =
+            typeof b.clanXp === 'bigint' ? b.clanXp : BigInt(b.clanXp ?? 0);
+          return xpA > xpB ? -1 : xpA < xpB ? 1 : 0;
+        })
+        .map((c) => ({
+          clanId: c.clanId,
+          name: c.clanName,
+          xp: c.clanXp,
+          memberCount: c._count.members,
+        })),
     };
   }
 }
