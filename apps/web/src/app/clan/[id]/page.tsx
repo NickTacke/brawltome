@@ -2,6 +2,8 @@ import { fetcher } from '@/lib/api';
 import { ClanProfile } from '@/components/clan/ClanProfile';
 import { notFound } from 'next/navigation';
 import { Card } from '@brawltome/ui';
+import type { Metadata } from 'next';
+import { cache } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,16 +11,58 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+// Cache the clan fetcher to avoid duplicate requests within the same render
+const getClan = cache(async (id: string) => fetcher(`/clan/${id}`));
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  try {
+    const clan = await getClan(id);
+
+    if (!clan) {
+      return { title: 'Clan Not Found' };
+    }
+
+    const memberCount = clan.members?.length || 0;
+    const xp = parseInt(clan.clan_xp || '0', 10).toLocaleString();
+    const description = `${memberCount} members - Clan XP: ${xp}`;
+
+    return {
+      title: clan.clan_name,
+      description,
+      openGraph: {
+        title: `${clan.clan_name} | BrawlTome`,
+        description,
+        url: `https://brawltome.app/clan/${id}`,
+        images: ['/og-image.png'],
+      },
+      twitter: {
+        card: 'summary',
+        title: `${clan.clan_name} | BrawlTome`,
+        description,
+      },
+    };
+  } catch (err: unknown) {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
+      return { title: 'Server Busy' };
+    }
+    return { title: 'Clan Not Found' };
+  }
+}
+
 export default async function Page({ params }: PageProps) {
   const { id } = await params;
 
   let initialData;
   try {
-    initialData = await fetcher(`/clan/${id}`);
+    initialData = await getClan(id);
   } catch (err: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const error = err as any;
-    if (error.cause === 'Too Many Requests') {
+    const error = err as Error & { status?: number };
+    if (error.status === 429) {
       return (
         <main className="min-h-screen bg-background py-10 flex items-center justify-center">
           <Card className="p-8 text-center max-w-md">
