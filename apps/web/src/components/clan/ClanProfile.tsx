@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fixEncoding, timeAgo } from '@/lib/utils';
 import {
   Card,
@@ -28,7 +29,7 @@ import {
   SelectValue,
 } from '@brawltome/ui';
 import {
-  ChevronLeft,
+  ArrowLeft,
   Users,
   Trophy,
   Calendar,
@@ -51,6 +52,7 @@ interface ClanProfileProps {
 }
 
 export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,13 +169,14 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Top Navbar */}
       <div className="flex justify-between items-center">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="text-sm"
         >
-          <ChevronLeft className="w-5 h-5" />
-          Back to Search
-        </Link>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
         <ModeToggle />
       </div>
 
