@@ -7,14 +7,14 @@ type LeaderboardSort = 'rating' | 'wins' | 'games' | 'peakRating' | 'rank';
 export class LeaderboardService {
   constructor(
     private prisma: PrismaService,
-    private gameDataCache: GameDataCacheService
+    private gameDataCache: GameDataCacheService,
   ) {}
 
   async get1v1Leaderboard(
     page: number,
     region?: string,
     sort: LeaderboardSort = 'rating',
-    limit?: number
+    limit?: number,
   ) {
     const MAX_RANKINGS_PAGES = 200;
     const RANKINGS_PAGE_SIZE = 50;
@@ -47,7 +47,7 @@ export class LeaderboardService {
 
     const maxPagesForTake = Math.max(
       1,
-      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake)
+      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake),
     );
     const prelimPage = Math.min(requestedPage, maxPagesForTake);
 
@@ -55,7 +55,7 @@ export class LeaderboardService {
     const cappedTotal = Math.min(total, MAX_RANKINGS_ENTRIES);
     const totalPages = Math.max(
       1,
-      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake)
+      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake),
     );
     const safePage = Math.min(prelimPage, totalPages);
     const skip = (safePage - 1) * safeTake;
@@ -102,7 +102,7 @@ export class LeaderboardService {
     page: number,
     region?: string,
     sort: LeaderboardSort = 'rating',
-    limit?: number
+    limit?: number,
   ) {
     const MAX_RANKINGS_PAGES = 200;
     const RANKINGS_PAGE_SIZE = 50;
@@ -150,7 +150,7 @@ export class LeaderboardService {
 
     const maxPagesForTake = Math.max(
       1,
-      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake)
+      Math.ceil(MAX_RANKINGS_ENTRIES / safeTake),
     );
     const prelimPage = Math.min(requestedPage, maxPagesForTake);
 
@@ -158,7 +158,7 @@ export class LeaderboardService {
     const cappedTotal = Math.min(total, MAX_RANKINGS_ENTRIES);
     const totalPages = Math.max(
       1,
-      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake)
+      Math.min(Math.ceil(cappedTotal / safeTake), maxPagesForTake),
     );
     const safePage = Math.min(prelimPage, totalPages);
     const skip = (safePage - 1) * safeTake;
@@ -184,7 +184,7 @@ export class LeaderboardService {
     });
 
     const ids = Array.from(
-      new Set(teams.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))
+      new Set(teams.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo])),
     );
 
     const players = await this.prisma.player.findMany({

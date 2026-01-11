@@ -18,7 +18,7 @@ export const getPostTagPortion = (name: string): string => {
 
 export const matchesNameOrBasePrefix = (
   target: string,
-  query: string
+  query: string,
 ): boolean => {
   const q = normalizeForPrefixMatch(query);
   if (!q) return false;

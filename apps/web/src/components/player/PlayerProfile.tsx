@@ -192,9 +192,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const weaponStats = useMemo(
     () =>
       aggregateRichWeaponStats(
-        (player?.stats?.legendsEnriched || []) as LegendWeaponData[]
+        (player?.stats?.legendsEnriched || []) as LegendWeaponData[],
       ),
-    [player?.stats?.legendsEnriched]
+    [player?.stats?.legendsEnriched],
   );
 
   if (!player) {
@@ -245,7 +245,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const rankedTeams = [...rankedTeamsSource].sort(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (a: any, b: any) => b.rating - a.rating
+    (a: any, b: any) => b.rating - a.rating,
   );
 
   const winrate = player.games > 0 ? (player.wins / player.games) * 100 : 0;
@@ -299,7 +299,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       acc.wins += parseNum(team?.wins);
       return acc;
     },
-    { games: 0, wins: 0 }
+    { games: 0, wins: 0 },
   );
   const teamsWinrate =
     teamsTotals.games > 0 ? (teamsTotals.wins / teamsTotals.games) * 100 : 0;
@@ -307,7 +307,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((a: any) => a?.value)
     .filter(
-      (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
+      (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0,
     )
     .filter((v: string) => v.trim() !== player?.name)
     .sort((a: string, b: string) => a.localeCompare(b));
@@ -516,18 +516,18 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 rankedTeams.reduce(
                   (sum: number, team: { wins?: number }) =>
                     sum + (team.wins || 0),
-                  0
+                  0,
                 );
 
               // Find best rating across 1v1, 2v2 teams, and legends
               const ratings = [
                 player.peakRating || 0,
                 ...rankedTeams.map(
-                  (team: { peakRating?: number }) => team.peakRating || 0
+                  (team: { peakRating?: number }) => team.peakRating || 0,
                 ),
                 ...allLegends.map(
                   (legend: { ranked?: { peakRating?: number } }) =>
-                    legend.ranked?.peakRating || 0
+                    legend.ranked?.peakRating || 0,
                 ),
               ];
               const bestRating = Math.max(...ratings, 0);
@@ -731,14 +731,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                 w.ranked.ratings.length > 0
                   ? w.ranked.ratings.reduce(
                       (a: number, b: number) => a + b,
-                      0
+                      0,
                     ) / w.ranked.ratings.length
                   : 0;
               const avgPeak =
                 w.ranked.peakRatings.length > 0
                   ? w.ranked.peakRatings.reduce(
                       (a: number, b: number) => a + b,
-                      0
+                      0,
                     ) / w.ranked.peakRatings.length
                   : 0;
 
@@ -1008,7 +1008,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         </span>
                                         <span className="text-foreground">
                                           {formatNum(
-                                            w.ranked.games - w.ranked.wins
+                                            w.ranked.games - w.ranked.wins,
                                           )}
                                           L{' '}
                                           <span className="font-normal text-muted-foreground">
@@ -1247,14 +1247,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
                         // Weapon stats for distribution section
                         const weaponOneTime = parseNum(
-                          legend.timeHeldWeaponOne
+                          legend.timeHeldWeaponOne,
                         );
                         const weaponTwoTime = parseNum(
-                          legend.timeHeldWeaponTwo
+                          legend.timeHeldWeaponTwo,
                         );
                         const unarmedTime = Math.max(
                           0,
-                          matchTime - weaponOneTime - weaponTwoTime
+                          matchTime - weaponOneTime - weaponTwoTime,
                         );
                         const totalWeaponTime =
                           weaponOneTime + weaponTwoTime + unarmedTime;
@@ -1292,7 +1292,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                           },
                         ].filter(
                           (w) =>
-                            w.name && (w.kos > 0 || w.dmg > 0 || w.time > 0)
+                            w.name && (w.kos > 0 || w.dmg > 0 || w.time > 0),
                         );
 
                         return (
@@ -1436,8 +1436,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                       {legendKOs > 0
                                         ? formatNum(
                                             Math.round(
-                                              legendDmgDealt / legendKOs
-                                            )
+                                              legendDmgDealt / legendKOs,
+                                            ),
                                           )
                                         : '—'}
                                     </div>
@@ -1478,7 +1478,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                           <div className="w-16 sm:w-18 shrink-0 mb-5">
                                             <img
                                               src={getRankBanner(
-                                                legend.ranked.tier
+                                                legend.ranked.tier,
                                               )}
                                               alt={legend.ranked.tier}
                                               className="w-full h-auto object-contain drop-shadow-lg"
@@ -1544,7 +1544,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                           <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 text-center hover:bg-background/50 transition-colors">
                                             <div className="text-lg font-black text-foreground">
                                               {calculateEloReset(
-                                                legend.ranked.rating
+                                                legend.ranked.rating,
                                               )}
                                             </div>
                                             <div className="text-[8px] text-muted-foreground uppercase">

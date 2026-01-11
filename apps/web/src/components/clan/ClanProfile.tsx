@@ -55,7 +55,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'peakRating'>(
-    'default'
+    'default',
   );
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       (m: any) =>
         !searchTerm ||
         m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.brawlhallaId.toString().includes(searchTerm)
+        m.brawlhallaId.toString().includes(searchTerm),
     ) || [];
 
   // Sort AFTER filtering, BEFORE pagination
@@ -160,7 +160,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   const totalPages = Math.ceil(sortedMembers.length / PAGE_SIZE);
   const paginatedMembers = sortedMembers.slice(
     (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
+    page * PAGE_SIZE,
   );
 
   return (
@@ -271,8 +271,8 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                   {clan.members?.length > 0
                     ? formatNum(
                         Math.round(
-                          parseInt(clan.clanXp || '0') / clan.members.length
-                        )
+                          parseInt(clan.clanXp || '0') / clan.members.length,
+                        ),
                       )
                     : '0'}
                 </div>
