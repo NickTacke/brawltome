@@ -414,14 +414,22 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                         className="border-border hover:bg-muted/50 transition-colors h-16 group"
                       >
                         <TableCell className="p-0">
-                          <Link href={href} className="block w-full h-full p-4">
+                          <Link
+                            href={href}
+                            prefetch={false}
+                            className="block w-full h-full p-4"
+                          >
                             <div className="flex items-center justify-center">
                               {getRankIcon(member.rank)}
                             </div>
                           </Link>
                         </TableCell>
                         <TableCell className="p-0">
-                          <Link href={href} className="block w-full h-full p-4">
+                          <Link
+                            href={href}
+                            prefetch={false}
+                            className="block w-full h-full p-4"
+                          >
                             <div className="flex items-center gap-3">
                               <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                                 <AvatarImage
@@ -445,7 +453,11 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                           </Link>
                         </TableCell>
                         <TableCell className="p-0 text-right font-mono">
-                          <Link href={href} className="block w-full h-full p-4">
+                          <Link
+                            href={href}
+                            prefetch={false}
+                            className="block w-full h-full p-4"
+                          >
                             {elo === null ? (
                               <span className="text-muted-foreground">—</span>
                             ) : (
@@ -461,7 +473,11 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                           </Link>
                         </TableCell>
                         <TableCell className="p-0 text-right font-mono">
-                          <Link href={href} className="block w-full h-full p-4">
+                          <Link
+                            href={href}
+                            prefetch={false}
+                            className="block w-full h-full p-4"
+                          >
                             <div className="flex flex-col items-end leading-tight">
                               <span className="font-bold">
                                 {formatNum(member.xp)}
@@ -473,7 +489,11 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                           </Link>
                         </TableCell>
                         <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
-                          <Link href={href} className="block w-full h-full p-4">
+                          <Link
+                            href={href}
+                            prefetch={false}
+                            className="block w-full h-full p-4"
+                          >
                             {formatJoinedDate(member.joinDate)}
                           </Link>
                         </TableCell>
