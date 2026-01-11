@@ -85,7 +85,6 @@ const getWeaponIcon = (weapon: string) => {
     Hammer: 'Hammer',
     Katars: 'Katars',
     Orb: 'Orb',
-    'Rocket Lance': 'Lance',
     Lance: 'Lance',
     Scythe: 'Scythe',
     Spear: 'Spear',
