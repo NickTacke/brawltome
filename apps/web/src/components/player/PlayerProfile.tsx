@@ -149,7 +149,7 @@ const WinLossBar = ({
   const clamped = Math.max(0, Math.min(100, percent || 0));
   return (
     <div
-      className={`relative w-full overflow-hidden rounded-full bg-red-500/30 ${
+      className={`relative w-full overflow-hidden rounded-full bg-danger-muted ${
         className || ''
       }`}
       role="progressbar"
@@ -159,7 +159,7 @@ const WinLossBar = ({
       aria-label={`Win rate ${clamped.toFixed(1)}%`}
     >
       <div
-        className="h-full bg-green-500 transition-all"
+        className="h-full bg-success transition-all"
         style={{ width: `${clamped}%` }}
       />
     </div>
@@ -763,9 +763,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                               <span className="opacity-30">•</span>
                               <span
                                 className={
-                                  winrate >= 50
-                                    ? 'text-green-500 font-bold'
-                                    : ''
+                                  winrate >= 50 ? 'text-success font-bold' : ''
                                 }
                               >
                                 {winrate.toFixed(1)}% WR
@@ -872,7 +870,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         {avgKos.toFixed(1)}/game
                                       </div>
                                     </div>
-                                    <div className="text-lg font-black text-green-500">
+                                    <div className="text-lg font-black text-success">
                                       {formatNum(w.KOs)}
                                     </div>
                                   </div>
@@ -1175,9 +1173,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                           <span>{formatNum(legend.xp)} XP</span>
                           <span className="opacity-30">•</span>
                           <span
-                            className={
-                              wr > 50 ? 'text-green-500 font-bold' : ''
-                            }
+                            className={wr > 50 ? 'text-success font-bold' : ''}
                           >
                             {wr.toFixed(0)}% WR
                           </span>
@@ -1346,7 +1342,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <div>
-                                        <div className="text-lg font-black text-green-500">
+                                        <div className="text-lg font-black text-success">
                                           {formatNum(legendKOs)}
                                         </div>
                                         <div className="text-[8px] text-muted-foreground">
@@ -1357,7 +1353,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         /
                                       </span>
                                       <div>
-                                        <div className="text-lg font-black text-red-500/70">
+                                        <div className="text-lg font-black text-danger">
                                           {formatNum(legendFalls)}
                                         </div>
                                         <div className="text-[8px] text-muted-foreground">
@@ -1382,7 +1378,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <div>
-                                        <div className="text-lg font-black text-green-500">
+                                        <div className="text-lg font-black text-success">
                                           {formatCompact(legendDmgDealt)}
                                         </div>
                                         <div className="text-[8px] text-muted-foreground">
@@ -1393,7 +1389,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                                         /
                                       </span>
                                       <div>
-                                        <div className="text-lg font-black text-red-500/70">
+                                        <div className="text-lg font-black text-danger">
                                           {formatCompact(legendDmgTaken)}
                                         </div>
                                         <div className="text-[8px] text-muted-foreground">
@@ -1830,7 +1826,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                         <span
                           className={`font-mono font-bold ${
                             team.games > 0 && team.wins / team.games > 0.5
-                              ? 'text-green-500'
+                              ? 'text-success'
                               : 'text-foreground'
                           }`}
                         >
