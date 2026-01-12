@@ -90,7 +90,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       case 'officer':
         return <Shield className="w-4 h-4 text-blue-400 fill-current" />;
       case 'member':
-        return <User className="w-4 h-4 text-emerald-400" />;
+        return <User className="w-4 h-4 text-success" />;
       case 'recruit':
         return <UserPlus className="w-4 h-4 text-muted-foreground/50" />;
       default:
