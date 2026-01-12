@@ -28,7 +28,7 @@ export function ServerStatus() {
   }
 
   const { tokens } = data;
-  let statusColor = 'bg-emerald-500';
+  let statusColor = 'bg-success';
   let statusText = 'Operational';
 
   if (tokens < 20) {

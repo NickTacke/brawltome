@@ -447,7 +447,7 @@ export function Leaderboard() {
                           <div
                             className={`font-bold ${
                               winrate >= 60
-                                ? 'text-green-500'
+                                ? 'text-success'
                                 : winrate >= 50
                                   ? 'text-primary'
                                   : 'text-muted-foreground'
@@ -537,7 +537,7 @@ export function Leaderboard() {
                         <div
                           className={`font-bold ${
                             winrate >= 60
-                              ? 'text-green-500'
+                              ? 'text-success'
                               : winrate >= 50
                                 ? 'text-primary'
                                 : 'text-muted-foreground'
