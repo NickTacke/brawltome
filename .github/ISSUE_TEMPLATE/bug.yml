@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ['bug']
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which part of BrawlTome has the issue?
+      options:
+        - Web (Frontend)
+        - API (Backend)
+        - Worker (Background Jobs)
+        - Discord Bot
+        - Database / Prisma
+        - Shared Libraries
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear description of the bug
+      placeholder: What happened? What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: Relevant error messages, console output, or screenshots
+      placeholder: Paste logs or drag/drop images here
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Node version, OS, browser (if applicable)
+      placeholder: |
+        - Node: v22.x
+        - OS: macOS 15
+        - Browser: Chrome 130
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this hasn't been reported
+          required: true
+        - label: I can reproduce this issue consistently
+          required: false
