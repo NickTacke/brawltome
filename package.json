@@ -84,7 +84,7 @@
     "@swc/cli": "~0.7.9",
     "@swc/core": "~1.15.8",
     "@swc/helpers": "~0.5.11",
-    "@types/node": "^20.17.10",
+    "@types/node": "^25.0.9",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitest/coverage-v8": "^2.1.9",
