@@ -104,10 +104,10 @@
     "@brawltome/shared-utils": "workspace:*",
     "@brawltome/shared-types": "workspace:*",
     "@nestjs/bullmq": "^11.0.4",
-    "@nestjs/common": "^11.0.0",
+    "@nestjs/common": "^11.1.12",
     "@nestjs/config": "^4.0.2",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/core": "^11.1.12",
+    "@nestjs/platform-express": "^11.1.12",
     "@nestjs/schedule": "^6.1.0",
     "@prisma/client": "^7.2.0",
     "bullmq": "^5.65.1",
@@ -116,6 +116,6 @@
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@nestjs/testing": "^11.0.0"
+    "@nestjs/testing": "^11.1.12"
   }
 }
