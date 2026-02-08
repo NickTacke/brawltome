@@ -18,8 +18,8 @@
   "dependencies": {
     "@brawltome/shared-types": "workspace:*",
     "@brawltome/shared-utils": "workspace:*",
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/config": "^4.0.2",
+    "@nestjs/common": "^11.1.13",
+    "@nestjs/config": "^4.0.3",
     "axios": "^1.13.2",
     "bottleneck": "^2.19.5",
     "ioredis": "^5.8.2",
