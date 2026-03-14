@@ -1,7 +1,7 @@
 import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
 import { clan, clanMember, player, playerAlias, playerRankedTeam } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
-import { desc, eq, isNull, lt, sql } from 'drizzle-orm'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Redis } from 'ioredis'
 import type { Queue } from '../queue/queue'
 import { JANITOR_MIN_TOKENS } from './constants'
@@ -48,7 +48,7 @@ export function startJanitor(deps: JanitorDeps) {
   let lockValue = ''
   let heartbeatTimer: Timer | null = null
 
-  const interval = setInterval(async () => {
+  async function runTick() {
     const acquired = await acquireLock(deps.redis)
     if (!acquired) {
       console.log('[janitor] skipped: could not acquire lock')
@@ -108,10 +108,24 @@ export function startJanitor(deps: JanitorDeps) {
       }
       await releaseLock(deps.redis, lockValue)
     }
-  }, 60_000)
+  }
+
+  let timer: Timer | null = null
+  let stopped = false
+
+  function schedule() {
+    if (stopped) return
+    timer = setTimeout(async () => {
+      await runTick()
+      schedule()
+    }, 60_000)
+  }
+
+  schedule()
 
   return async () => {
-    clearInterval(interval)
+    stopped = true
+    if (timer) clearTimeout(timer)
     if (heartbeatTimer) clearInterval(heartbeatTimer)
     if (lockValue) await releaseLock(deps.redis, lockValue)
   }
@@ -207,62 +221,69 @@ async function savePlayers(
     best_legend_wins: number
   }>,
 ) {
+  // Track aliases for name changes (requires existing data lookup)
+  const ids = rankings.map((r) => r.brawlhalla_id)
+  const existing = await deps.db.query.player.findMany({
+    where: inArray(player.brawlhallaId, ids),
+    columns: { brawlhallaId: true, name: true },
+  })
+  const nameMap = new Map(existing.map((p) => [p.brawlhallaId, p.name]))
+
+  const aliases: (typeof playerAlias.$inferInsert)[] = []
   for (const r of rankings) {
+    const oldName = nameMap.get(r.brawlhalla_id)
+    if (oldName && oldName !== r.name) {
+      aliases.push({ brawlhallaId: r.brawlhalla_id, key: oldName.toLowerCase(), value: oldName })
+    }
+  }
+  if (aliases.length > 0) {
+    await deps.db.insert(playerAlias).values(aliases).onConflictDoNothing()
+  }
+
+  // Batch upsert all players
+  const now = new Date()
+  const rows = rankings.map((r) => ({
+    brawlhallaId: r.brawlhalla_id,
+    name: r.name ?? '',
+    region: r.region ?? null,
+    rating: r.rating ?? 0,
+    peakRating: r.peak_rating ?? 0,
+    tier: r.tier ?? null,
+    rankedGames: r.games ?? 0,
+    rankedWins: r.wins ?? 0,
+    bestLegend: r.best_legend ?? 0,
+    bestLegendGames: r.best_legend_games ?? 0,
+    bestLegendWins: r.best_legend_wins ?? 0,
+  }))
+
+  for (const row of rows) {
     try {
-      const existing = await deps.db.query.player.findFirst({
-        where: eq(player.brawlhallaId, r.brawlhalla_id),
-        columns: { name: true, tier: true },
-      })
-
-      if (existing && existing.name !== r.name) {
-        await deps.db
-          .insert(playerAlias)
-          .values({
-            brawlhallaId: r.brawlhalla_id,
-            key: existing.name.toLowerCase(),
-            value: existing.name,
-          })
-          .onConflictDoNothing()
-      }
-
-      const isValhallan = r.tier === 'Valhallan'
-      const now = new Date()
-
-      const shared = {
-        name: r.name ?? '',
-        region: r.region ?? null,
-        rating: r.rating ?? 0,
-        peakRating: r.peak_rating ?? 0,
-        tier: r.tier ?? null,
-        rankedGames: r.games ?? 0,
-        rankedWins: r.wins ?? 0,
-        bestLegend: r.best_legend ?? 0,
-        bestLegendGames: r.best_legend_games ?? 0,
-        bestLegendWins: r.best_legend_wins ?? 0,
-      }
-
-      const insertValues: Record<string, unknown> = {
-        brawlhallaId: r.brawlhalla_id,
-        ...shared,
-      }
-      const updateValues: Record<string, unknown> = {
-        ...shared,
-        lastUpdated: now,
-      }
-      if (isValhallan) {
-        insertValues.valhallanConfirmedAt = now
-        updateValues.valhallanConfirmedAt = now
-      }
-
+      const isValhallan = row.tier === 'Valhallan'
       await deps.db
         .insert(player)
-        .values(insertValues as typeof player.$inferInsert)
+        .values({
+          ...row,
+          ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
+        } as typeof player.$inferInsert)
         .onConflictDoUpdate({
           target: player.brawlhallaId,
-          set: updateValues,
+          set: {
+            name: row.name,
+            region: row.region,
+            rating: row.rating,
+            peakRating: row.peakRating,
+            tier: row.tier,
+            rankedGames: row.rankedGames,
+            rankedWins: row.rankedWins,
+            bestLegend: row.bestLegend,
+            bestLegendGames: row.bestLegendGames,
+            bestLegendWins: row.bestLegendWins,
+            lastUpdated: now,
+            ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
+          },
         })
     } catch (err) {
-      console.error(`[janitor] failed to save player ${r.brawlhalla_id}:`, err)
+      console.error(`[janitor] failed to save player ${row.brawlhallaId}:`, err)
     }
   }
 }
