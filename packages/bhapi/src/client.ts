@@ -5,7 +5,8 @@ import type {
   BhApiLegendFull,
   BhApiPlayerRanked,
   BhApiPlayerStats,
-  BhApiRanking,
+  BhApiRanking1v1,
+  BhApiRanking2v2,
   BhApiSearchResult,
   Bracket,
   Region,
@@ -36,8 +37,12 @@ export class BhApiClient {
     return this.call(`/search?steamid=${steamId}`)
   }
 
-  async getRankings(bracket: Bracket, region: Region, page: number): Promise<BhApiRanking[]> {
-    return (await this.call<BhApiRanking[]>(`/rankings/${bracket}/${region}/${page}`)) ?? []
+  async getRankings1v1(region: Region, page: number): Promise<BhApiRanking1v1[]> {
+    return (await this.call<BhApiRanking1v1[]>(`/rankings/1v1/${region}/${page}`)) ?? []
+  }
+
+  async getRankings2v2(region: Region, page: number): Promise<BhApiRanking2v2[]> {
+    return (await this.call<BhApiRanking2v2[]>(`/rankings/2v2/${region}/${page}`)) ?? []
   }
 
   async getPlayerStats(id: number): Promise<BhApiPlayerStats | null> {
