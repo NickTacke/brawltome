@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Skeleton } from '@brawltome/ui'
+import { useEffect, useState } from 'react'
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
@@ -25,7 +25,10 @@ export function ServerStatus() {
     }
     poll()
     const id = setInterval(poll, 10_000)
-    return () => { cancelled = true; clearInterval(id) }
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [])
 
   if (error) {

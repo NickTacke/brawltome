@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @source '../../../packages/ui/src';
 
@@ -153,16 +153,11 @@
     /* Soft neutral shadows */
     --shadow-2xs: 0 1px 2px 0px hsl(220 15% 20% / 0.04);
     --shadow-xs: 0 1px 2px 0px hsl(220 15% 20% / 0.05);
-    --shadow-sm:
-      0 1px 3px 0px hsl(220 15% 20% / 0.06), 0 1px 2px -1px hsl(220 15% 20% / 0.05);
-    --shadow:
-      0 1px 3px 0px hsl(220 15% 20% / 0.06), 0 1px 2px -1px hsl(220 15% 20% / 0.06);
-    --shadow-md:
-      0 2px 4px 0px hsl(220 15% 20% / 0.06), 0 2px 4px -1px hsl(220 15% 20% / 0.05);
-    --shadow-lg:
-      0 2px 6px 0px hsl(220 15% 20% / 0.07), 0 4px 8px -1px hsl(220 15% 20% / 0.06);
-    --shadow-xl:
-      0 4px 8px 0px hsl(220 15% 20% / 0.07), 0 8px 16px -2px hsl(220 15% 20% / 0.06);
+    --shadow-sm: 0 1px 3px 0px hsl(220 15% 20% / 0.06), 0 1px 2px -1px hsl(220 15% 20% / 0.05);
+    --shadow: 0 1px 3px 0px hsl(220 15% 20% / 0.06), 0 1px 2px -1px hsl(220 15% 20% / 0.06);
+    --shadow-md: 0 2px 4px 0px hsl(220 15% 20% / 0.06), 0 2px 4px -1px hsl(220 15% 20% / 0.05);
+    --shadow-lg: 0 2px 6px 0px hsl(220 15% 20% / 0.07), 0 4px 8px -1px hsl(220 15% 20% / 0.06);
+    --shadow-xl: 0 4px 8px 0px hsl(220 15% 20% / 0.07), 0 8px 16px -2px hsl(220 15% 20% / 0.06);
     --shadow-2xl: 0 8px 24px 0px hsl(220 15% 20% / 0.14);
     --tracking-normal: 0em;
     --spacing: 0.25rem;
@@ -216,16 +211,11 @@
     --shadow-color: oklch(0 0 0);
     --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-sm:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow-md:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-xl:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
+    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
   }
 }

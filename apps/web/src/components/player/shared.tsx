@@ -1,6 +1,6 @@
 'use client'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: dynamic API response
 export type PlayerData = any
 
 export const getRankBanner = (tier?: string | null) => {
@@ -21,7 +21,7 @@ export const getWeaponIcon = (weapon: string) => `/images/weapons/${weapon}.png`
 
 export const getGloryFromWins = (wins: number): number => {
   if (wins <= 150) return 20 * wins
-  return Math.floor(10 * (45 * Math.pow(Math.log10(wins * 2), 2)) + 245)
+  return Math.floor(10 * (45 * Math.log10(wins * 2) ** 2) + 245)
 }
 
 export const getGloryFromBestRating = (bestRating: number): number => {
@@ -56,7 +56,7 @@ export const formatCompact = (n: number | bigint): string => {
 }
 
 export const parseNum = (v: unknown) => {
-  const n = typeof v === 'number' ? v : parseInt(String(v ?? '0'), 10)
+  const n = typeof v === 'number' ? v : Number.parseInt(String(v ?? '0'), 10)
   return Number.isFinite(n) ? n : 0
 }
 
@@ -70,7 +70,7 @@ export const getVirtualLevel = (xp: number) => {
 }
 
 export const getXpForLevel = (lv: number) => {
-  return 127.62 * Math.pow(lv, 2) - 2164.2 * lv + 14553
+  return 127.62 * lv ** 2 - 2164.2 * lv + 14553
 }
 
 export const WinLossBar = ({ percent, className }: { percent: number; className?: string }) => {
@@ -79,6 +79,7 @@ export const WinLossBar = ({ percent, className }: { percent: number; className?
     <div
       className={`relative w-full overflow-hidden rounded-full bg-danger-muted ${className || ''}`}
       role="progressbar"
+      tabIndex={0}
       aria-valuenow={clamped}
       aria-valuemin={0}
       aria-valuemax={100}

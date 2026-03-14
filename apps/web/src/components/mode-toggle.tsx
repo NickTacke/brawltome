@@ -1,8 +1,8 @@
 'use client'
 
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@brawltome/ui'
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@brawltome/ui'
 
 export function ModeToggle() {
   const { setTheme } = useTheme()

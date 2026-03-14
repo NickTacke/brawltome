@@ -68,7 +68,7 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   const ttl = TIERED_TTL[tier as keyof typeof TIERED_TTL] ?? TIERED_TTL.cold
   let isRefreshing = false
 
-  const rankedStale = !p.rankedLastUpdated || (now.getTime() - p.rankedLastUpdated.getTime()) > ttl.ranked
+  const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
   if (rankedStale) {
     const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
     if (canDedup) {
@@ -77,7 +77,7 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     }
   }
 
-  const statsStale = !p.statsLastUpdated || (now.getTime() - p.statsLastUpdated.getTime()) > ttl.stats
+  const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
   if (statsStale) {
     const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
     if (canDedup) {
@@ -93,7 +93,7 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   })
 
   // Enrich stats legends with weapon names from game data cache
-  const enrichedStatsLegends = (p.statsLegends || []).map((l: typeof p.statsLegends[number]) => {
+  const enrichedStatsLegends = (p.statsLegends || []).map((l: (typeof p.statsLegends)[number]) => {
     const legendData = getLegendById(l.legendId)
     return {
       ...l,
