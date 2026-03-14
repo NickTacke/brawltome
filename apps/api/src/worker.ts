@@ -2,6 +2,7 @@ import { BhApiClient } from '@brawltome/bhapi'
 import { db } from '@brawltome/database'
 import Redis from 'ioredis'
 import { createQueue } from './queue/queue'
+import { initGameData } from './services/game-data.service'
 import { startJanitor } from './services/janitor.service'
 import { processRefreshClan, processRefreshRanked, processRefreshStats } from './services/refresh.service'
 
@@ -42,6 +43,7 @@ const clanQueue = createQueue<{ clanId: number }>(
 )
 
 console.log('Worker starting...')
+await initGameData(db, bhapi)
 Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(console.error)
 
 const stopJanitor = startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue })
