@@ -49,16 +49,15 @@ export function startJanitor(deps: JanitorDeps) {
   let heartbeatTimer: Timer | null = null
 
   const interval = setInterval(async () => {
-    tick++
-    console.log(`[janitor] tick ${tick} starting...`)
-
     const acquired = await acquireLock(deps.redis)
     if (!acquired) {
-      console.log(`[janitor] tick ${tick} skipped: could not acquire lock`)
+      console.log('[janitor] skipped: could not acquire lock')
       return
     }
 
+    tick++
     lockValue = acquired
+    console.log(`[janitor] tick ${tick} starting...`)
     heartbeatTimer = setInterval(() => renewLock(deps.redis, lockValue), HEARTBEAT_INTERVAL_MS)
 
     try {
@@ -234,20 +233,25 @@ async function savePlayers(
         bestLegendWins: r.best_legend_wins ?? 0,
       }
 
+      const insertValues: Record<string, unknown> = {
+        brawlhallaId: r.brawlhalla_id,
+        ...shared,
+      }
+      const updateValues: Record<string, unknown> = {
+        ...shared,
+        lastUpdated: now,
+      }
+      if (isValhallan) {
+        insertValues.valhallanConfirmedAt = now
+        updateValues.valhallanConfirmedAt = now
+      }
+
       await deps.db
         .insert(player)
-        .values({
-          brawlhallaId: r.brawlhalla_id,
-          ...shared,
-          ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
-        })
+        .values(insertValues as typeof player.$inferInsert)
         .onConflictDoUpdate({
           target: player.brawlhallaId,
-          set: {
-            ...shared,
-            lastUpdated: now,
-            ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
-          },
+          set: updateValues,
         })
     } catch (err) {
       console.error(`[janitor] failed to save player ${r.brawlhalla_id}:`, err)
