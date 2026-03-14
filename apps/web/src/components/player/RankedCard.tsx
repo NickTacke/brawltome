@@ -51,7 +51,7 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-8 pt-6">
+      <CardContent className="space-y-8">
         <div className="flex gap-4 sm:gap-6">
           {/* Rank Banner */}
           <div className="w-16 sm:w-20 shrink-0">
