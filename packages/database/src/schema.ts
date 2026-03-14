@@ -215,35 +215,10 @@ export const playerRankedTeam = pgTable(
     region: varchar('region', { length: 16 }),
     globalRank: integer('global_rank'),
   },
-  (t) => [primaryKey({ columns: [t.brawlhallaId, t.brawlhallaIdOne, t.brawlhallaIdTwo] })],
-)
-
-// ============================================================
-// 2v2 Leaderboard Team
-// ============================================================
-
-export const ranked2v2Team = pgTable(
-  'ranked_2v2_team',
-  {
-    region: varchar('region', { length: 16 }).notNull(),
-    brawlhallaIdOne: integer('brawlhalla_id_one').notNull(),
-    brawlhallaIdTwo: integer('brawlhalla_id_two').notNull(),
-    rank: integer('rank').notNull(),
-    teamName: varchar('team_name', { length: 256 }).notNull(),
-    rating: integer('rating').notNull(),
-    peakRating: integer('peak_rating').notNull(),
-    tier: varchar('tier', { length: 64 }).notNull(),
-    wins: integer('wins').notNull(),
-    games: integer('games').notNull(),
-    lastUpdated: timestamp('last_updated').defaultNow().notNull(),
-  },
   (t) => [
-    primaryKey({ columns: [t.region, t.brawlhallaIdOne, t.brawlhallaIdTwo] }),
-    index('idx_2v2_region_rating').on(t.region, t.rating),
-    index('idx_2v2_region_peak').on(t.region, t.peakRating),
-    index('idx_2v2_region_wins').on(t.region, t.wins),
-    index('idx_2v2_region_games').on(t.region, t.games),
-    index('idx_2v2_region_rank').on(t.region, t.rank),
+    primaryKey({ columns: [t.brawlhallaId, t.brawlhallaIdOne, t.brawlhallaIdTwo] }),
+    index('idx_ranked_team_rating').on(t.rating),
+    index('idx_ranked_team_region_rating').on(t.region, t.rating),
   ],
 )
 
