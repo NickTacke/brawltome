@@ -14,6 +14,17 @@ FROM base AS build
 COPY --from=install /app/node_modules node_modules
 COPY . .
 
-FROM base AS runtime
+FROM base AS api
 COPY --from=build /app .
 USER bun
+CMD ["bun", "run", "apps/api/src/serve.ts"]
+
+FROM base AS worker
+COPY --from=build /app .
+USER bun
+CMD ["bun", "run", "apps/api/src/worker.ts"]
+
+FROM base AS discord-bot
+COPY --from=build /app .
+USER bun
+CMD ["bun", "run", "apps/discord-bot/src/index.ts"]
