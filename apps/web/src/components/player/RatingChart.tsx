@@ -94,13 +94,14 @@ export function RatingChart({ data }: RatingChartProps) {
                 y={t.rating}
                 stroke={t.color}
                 strokeDasharray="6 4"
-                strokeOpacity={0.3}
+                strokeOpacity={0.4}
                 label={{
-                  value: t.label,
-                  position: 'right',
+                  value: `${t.label} (${t.rating})`,
+                  position: 'insideTopLeft',
                   fill: t.color,
-                  fontSize: 10,
-                  opacity: 0.6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  opacity: 0.8,
                 }}
               />
             ))}
