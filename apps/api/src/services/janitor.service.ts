@@ -171,8 +171,8 @@ async function sync1v1Page(
     return
   }
 
-  console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
   await savePlayers(deps, rankings)
+  console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
   await deps.redis.set(cursorKey, String(nextPage))
@@ -195,8 +195,8 @@ async function sync2v2Page(
     return
   }
 
-  console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
   await saveTeams(deps, rankings)
+  console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
   await deps.redis.set(cursorKey, String(nextPage))
