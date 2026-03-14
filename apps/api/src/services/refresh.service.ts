@@ -13,7 +13,6 @@ import {
 } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
 import { desc, eq } from 'drizzle-orm'
-import { VALHALLAN_GRACE_PERIOD_MS } from './constants'
 
 interface RefreshDeps {
   db: Database
@@ -29,7 +28,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
   await db.transaction(async (tx) => {
     const existing = await tx.query.player.findFirst({
       where: eq(player.brawlhallaId, brawlhallaId),
-      columns: { name: true, tier: true, valhallanConfirmedAt: true },
+      columns: { name: true },
     })
 
     // Track name change as alias
@@ -44,17 +43,6 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
         .onConflictDoNothing()
     }
 
-    // Valhallan grace period
-    let tier = data.tier
-    if (
-      existing?.tier === 'Valhallan' &&
-      data.tier !== 'Valhallan' &&
-      existing.valhallanConfirmedAt &&
-      Date.now() - existing.valhallanConfirmedAt.getTime() < VALHALLAN_GRACE_PERIOD_MS
-    ) {
-      tier = 'Valhallan'
-    }
-
     // Update player ranked fields
     await tx
       .update(player)
@@ -63,7 +51,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
         region: data.region,
         rating: data.rating,
         peakRating: data.peak_rating,
-        tier,
+        tier: data.tier,
         rankedGames: data.games,
         rankedWins: data.wins,
         rankedLastUpdated: new Date(),

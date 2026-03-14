@@ -30,7 +30,6 @@ export const player = pgTable(
     rating: integer('rating').default(0).notNull(),
     peakRating: integer('peak_rating').default(0),
     tier: varchar('tier', { length: 64 }),
-    valhallanConfirmedAt: timestamp('valhallan_confirmed_at'),
     rankedGames: integer('ranked_games').default(0).notNull(),
     rankedWins: integer('ranked_wins').default(0).notNull(),
     rankedLastUpdated: timestamp('ranked_last_updated'),
