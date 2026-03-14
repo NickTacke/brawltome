@@ -6,13 +6,13 @@ import { startJanitor } from './services/janitor.service'
 import { processRefreshClan, processRefreshRanked, processRefreshStats } from './services/refresh.service'
 
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379'
-const redis = new Redis(redisUrl)
-const janitorRedis = new Redis(redisUrl) // separate connection to avoid XREADGROUP blocking contention
+// Each blocking consumer needs its own connection to avoid XREADGROUP serialization
+const newRedis = () => new Redis(redisUrl)
 const bhapi = new BhApiClient({ apiKey: process.env.BRAWLHALLA_API_KEY ?? '' })
 const deps = { db, bhapi }
 
 const rankedQueue = createQueue<{ brawlhallaId: number }>(
-  redis,
+  newRedis(),
   'refresh-ranked',
   async (data) => {
     console.log(`[queue] refresh-ranked: ${data.brawlhallaId}`)
@@ -22,7 +22,7 @@ const rankedQueue = createQueue<{ brawlhallaId: number }>(
 )
 
 const statsQueue = createQueue<{ brawlhallaId: number }>(
-  redis,
+  newRedis(),
   'refresh-stats',
   async (data) => {
     console.log(`[queue] refresh-stats: ${data.brawlhallaId}`)
@@ -32,7 +32,7 @@ const statsQueue = createQueue<{ brawlhallaId: number }>(
 )
 
 const clanQueue = createQueue<{ clanId: number }>(
-  redis,
+  newRedis(),
   'refresh-clan',
   async (data) => {
     console.log(`[queue] refresh-clan: ${data.clanId}`)
@@ -44,7 +44,7 @@ const clanQueue = createQueue<{ clanId: number }>(
 console.log('Worker starting...')
 Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(console.error)
 
-const stopJanitor = startJanitor({ db, bhapi, redis: janitorRedis, rankedQueue, statsQueue, clanQueue })
+const stopJanitor = startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue })
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
