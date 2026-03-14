@@ -351,7 +351,7 @@ async function backfillClans(deps: JanitorDeps) {
 // ---- VALHALLAN CONFIRMATION ----
 
 async function confirmValhallans(deps: JanitorDeps) {
-  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
 
   const valhallans = await deps.db
     .select({ brawlhallaId: player.brawlhallaId })
