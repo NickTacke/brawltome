@@ -1,4 +1,4 @@
-import { blacklist, player, ranked2v2Team } from '@brawltome/database'
+import { blacklist, player, playerRankedTeam } from '@brawltome/database'
 import { and, asc, desc, gt, inArray, not, sql } from 'drizzle-orm'
 import type { Context } from '../trpc/context'
 
@@ -79,25 +79,40 @@ async function get2v2Leaderboard(
   const blacklistSet = new Set(blacklistedIds.map((b) => b.brawlhallaId))
 
   const sortColumn = {
-    rating: ranked2v2Team.rating,
-    peakRating: ranked2v2Team.peakRating,
-    wins: ranked2v2Team.wins,
-    games: ranked2v2Team.games,
+    rating: playerRankedTeam.rating,
+    peakRating: playerRankedTeam.peakRating,
+    wins: playerRankedTeam.wins,
+    games: playerRankedTeam.games,
   }[opts.sort]
 
   const orderFn = opts.order === 'asc' ? asc : desc
-  const regionFilter = opts.region !== 'all' ? sql`${ranked2v2Team.region} = ${opts.region}` : undefined
+  const regionFilter = opts.region !== 'all' ? sql`${playerRankedTeam.region} = ${opts.region}` : undefined
 
+  // Deduplicate teams by canonicalizing ID pair (min, max)
+  // Use a subquery to pick the best row per unique team pair
   const results = await ctx.db
     .select()
-    .from(ranked2v2Team)
-    .where(and(regionFilter))
+    .from(playerRankedTeam)
+    .where(and(gt(playerRankedTeam.rating, 0), regionFilter))
     .orderBy(orderFn(sortColumn))
-    .limit(opts.pageSize)
+    .limit(opts.pageSize * 2) // Fetch extra to account for dedup
     .offset(opts.offset)
 
-  // Filter blacklisted teams
-  const filtered = results.filter((t) => !blacklistSet.has(t.brawlhallaIdOne) && !blacklistSet.has(t.brawlhallaIdTwo))
+  // Deduplicate in application: canonicalize (min, max) pair
+  const seen = new Set<string>()
+  const deduped = results.filter((t) => {
+    const min = Math.min(t.brawlhallaIdOne, t.brawlhallaIdTwo)
+    const max = Math.max(t.brawlhallaIdOne, t.brawlhallaIdTwo)
+    const key = `${min}:${max}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  // Filter blacklisted and take page size
+  const filtered = deduped
+    .filter((t) => !blacklistSet.has(t.brawlhallaIdOne) && !blacklistSet.has(t.brawlhallaIdTwo))
+    .slice(0, opts.pageSize)
 
   // Enrich with player names
   const playerIds = [...new Set(filtered.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))]
