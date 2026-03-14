@@ -24,7 +24,7 @@ export class TokenBucket {
     return this.tokens
   }
 
-  async acquire(): Promise<number> {
+  async acquire(label?: string): Promise<number> {
     this.refill()
 
     if (this.tokens >= 1) {
@@ -35,6 +35,10 @@ export class TokenBucket {
     const timeSinceRefill = Date.now() - this.lastRefill
     const timeUntilRefill = this.intervalMs - timeSinceRefill
     const waitMs = Math.max(0, timeUntilRefill)
+
+    if (label) {
+      console.log(`[rate-limit] ${label} waiting ${waitMs}ms (tokens: ${this.tokens}, interval: ${this.intervalMs}ms)`)
+    }
 
     await Bun.sleep(waitMs)
     this.refill()
