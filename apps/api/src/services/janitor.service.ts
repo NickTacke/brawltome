@@ -10,8 +10,6 @@ const REGIONS: Region[] = ['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me
 const HOT_PAGES = 10
 const MAX_COLD_PAGE = 200
 const COLD_TICK_INTERVAL = 10
-const CLAN_BACKFILL_LIMIT = 2
-const CLAN_BACKFILL_MAX_QUEUE = 50
 const LOCK_KEY = 'janitor:lock'
 const LOCK_TTL_SEC = 300
 const HEARTBEAT_INTERVAL_MS = 30_000
@@ -90,9 +88,6 @@ export function startJanitor(deps: JanitorDeps) {
       const region = REGIONS[regionIndex]
       await time(`1v1 ${region}`, () => sync1v1Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`))
       await time(`2v2 ${region}`, () => sync2v2Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`))
-
-      // Clan backfill
-      await time('clan backfill', () => backfillClans(deps))
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
       console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
@@ -332,37 +327,5 @@ async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
     }
   } catch (err) {
     console.error('[janitor] failed to batch save teams:', err)
-  }
-}
-
-// ---- CLAN BACKFILL ----
-
-async function backfillClans(deps: JanitorDeps) {
-  const queueDepth = await deps.statsQueue.depth()
-  if (queueDepth > CLAN_BACKFILL_MAX_QUEUE) return
-
-  const recentClans = await deps.db.query.clan.findMany({
-    orderBy: [desc(clan.lastUpdated)],
-    limit: 20,
-    with: { members: true },
-  })
-
-  let enqueued = 0
-  for (const c of recentClans) {
-    if (enqueued >= CLAN_BACKFILL_LIMIT) break
-
-    for (const member of c.members) {
-      if (enqueued >= CLAN_BACKFILL_LIMIT) break
-
-      const p = await deps.db.query.player.findFirst({
-        where: eq(player.brawlhallaId, member.brawlhallaId),
-        columns: { statsLastUpdated: true },
-      })
-
-      if (!p || !p.statsLastUpdated) {
-        await deps.statsQueue.enqueue({ brawlhallaId: member.brawlhallaId })
-        enqueued++
-      }
-    }
   }
 }
