@@ -166,53 +166,57 @@ async function savePlayers(
   }>,
 ) {
   for (const r of rankings) {
-    const existing = await deps.db.query.player.findFirst({
-      where: eq(player.brawlhallaId, r.brawlhalla_id),
-      columns: { name: true, tier: true },
-    })
+    try {
+      const existing = await deps.db.query.player.findFirst({
+        where: eq(player.brawlhallaId, r.brawlhalla_id),
+        columns: { name: true, tier: true },
+      })
 
-    if (existing && existing.name !== r.name) {
+      if (existing && existing.name !== r.name) {
+        await deps.db
+          .insert(playerAlias)
+          .values({
+            brawlhallaId: r.brawlhalla_id,
+            key: existing.name.toLowerCase(),
+            value: existing.name,
+          })
+          .onConflictDoNothing()
+      }
+
+      const isValhallan = r.tier === 'Valhallan'
+      const now = new Date()
+
+      const shared = {
+        name: r.name ?? '',
+        region: r.region ?? null,
+        rating: r.rating ?? 0,
+        peakRating: r.peak_rating ?? 0,
+        tier: r.tier ?? null,
+        rankedGames: r.games ?? 0,
+        rankedWins: r.wins ?? 0,
+        bestLegend: r.best_legend ?? 0,
+        bestLegendGames: r.best_legend_games ?? 0,
+        bestLegendWins: r.best_legend_wins ?? 0,
+      }
+
       await deps.db
-        .insert(playerAlias)
+        .insert(player)
         .values({
           brawlhallaId: r.brawlhalla_id,
-          key: existing.name.toLowerCase(),
-          value: existing.name,
-        })
-        .onConflictDoNothing()
-    }
-
-    const isValhallan = r.tier === 'Valhallan'
-    const now = new Date()
-
-    const shared = {
-      name: r.name,
-      region: r.region,
-      rating: r.rating,
-      peakRating: r.peak_rating,
-      tier: r.tier,
-      rankedGames: r.games,
-      rankedWins: r.wins,
-      bestLegend: r.best_legend,
-      bestLegendGames: r.best_legend_games,
-      bestLegendWins: r.best_legend_wins,
-    }
-
-    await deps.db
-      .insert(player)
-      .values({
-        brawlhallaId: r.brawlhalla_id,
-        ...shared,
-        ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
-      })
-      .onConflictDoUpdate({
-        target: player.brawlhallaId,
-        set: {
           ...shared,
-          lastUpdated: now,
           ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
-        },
-      })
+        })
+        .onConflictDoUpdate({
+          target: player.brawlhallaId,
+          set: {
+            ...shared,
+            lastUpdated: now,
+            ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
+          },
+        })
+    } catch (err) {
+      console.error(`[janitor] failed to save player ${r.brawlhalla_id}:`, err)
+    }
   }
 }
 
