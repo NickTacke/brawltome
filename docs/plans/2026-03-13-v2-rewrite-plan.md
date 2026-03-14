@@ -2865,6 +2865,35 @@ Remove any remaining v1 files that weren't cleaned up in Phase 1:
 
 ---
 
+## Post-Merge: Clean Git History
+
+After the rewrite is complete and merged, remove bot/AI accounts (Claude, CodeRabbit, Vercel, Dependabot, GitHub Actions) from the contributor list by rewriting commit authorship:
+
+```bash
+# Install git-filter-repo (recommended over filter-branch)
+pip install git-filter-repo
+
+# Rewrite all commits to a single author
+git filter-repo --force --commit-callback '
+commit.author_name = b"Nick Tacke"
+commit.author_email = b"your@email.com"
+commit.committer_name = b"Nick Tacke"
+commit.committer_email = b"your@email.com"
+'
+
+# Force push (destructive — only do this once, after v2 is stable)
+git push --force
+```
+
+**Important:**
+
+- This rewrites ALL history — do it once, after the rewrite is stable
+- Anyone with local clones will need to re-clone
+- Back up the repo before running (or just ensure the remote is the backup)
+- Only needed if you care about the contributor list being clean
+
+---
+
 ## Known TODOs & Gaps
 
 These items are called out explicitly so they don't get missed:
