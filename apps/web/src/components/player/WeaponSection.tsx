@@ -75,7 +75,7 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
                       </div>
                     </div>
                     <div className="mt-[-4px] flex items-center gap-3">
-                      <Progress value={w.share * 100} className="h-1.5 flex-1" />
+                      <Progress value={w.share * 100} className="h-1.5 flex-1 bg-danger-muted" />
                       <div className="text-[10px] text-muted-foreground font-mono shrink-0">
                         {formatNum(w.KOs)} KOs &bull; {formatCompact(w.damage)} dmg
                       </div>
