@@ -7,7 +7,7 @@ export const leaderboardRouter = router({
     .input(
       z.object({
         bracket: z.enum(['1v1', '2v2']),
-        region: z.enum(['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me', 'sa', 'all']),
+        region: z.enum(['US-E', 'EU', 'SEA', 'BRZ', 'AUS', 'US-W', 'JPN', 'ME', 'SA', 'all']),
         page: z.number().int().min(1).max(200),
         pageSize: z.number().int().min(1).max(100).optional(),
         sort: z.enum(['rating', 'peakRating', 'wins', 'games']).optional(),

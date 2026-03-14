@@ -15,15 +15,15 @@ import {
 
 const REGIONS = [
   { id: 'all', label: 'Global' },
-  { id: 'us-e', label: 'US-E' },
-  { id: 'us-w', label: 'US-W' },
-  { id: 'eu', label: 'Europe' },
-  { id: 'sea', label: 'SEA' },
-  { id: 'aus', label: 'AUS' },
-  { id: 'brz', label: 'Brazil' },
-  { id: 'jpn', label: 'Japan' },
-  { id: 'me', label: 'Middle East' },
-  { id: 'sa', label: 'South Africa' },
+  { id: 'US-E', label: 'US-E' },
+  { id: 'US-W', label: 'US-W' },
+  { id: 'EU', label: 'Europe' },
+  { id: 'SEA', label: 'SEA' },
+  { id: 'AUS', label: 'AUS' },
+  { id: 'BRZ', label: 'Brazil' },
+  { id: 'JPN', label: 'Japan' },
+  { id: 'ME', label: 'Middle East' },
+  { id: 'SA', label: 'South Africa' },
 ]
 
 const BRACKETS = [
@@ -34,7 +34,7 @@ const BRACKETS = [
 const PAGE_SIZE = 20
 
 type BracketId = '1v1' | '2v2'
-type RegionId = 'all' | 'us-e' | 'eu' | 'sea' | 'brz' | 'aus' | 'us-w' | 'jpn' | 'me' | 'sa'
+type RegionId = 'all' | 'US-E' | 'EU' | 'SEA' | 'BRZ' | 'AUS' | 'US-W' | 'JPN' | 'ME' | 'SA'
 type SortField = 'rating' | 'peakRating' | 'wins' | 'games'
 type SortOrder = 'asc' | 'desc'
 
@@ -159,7 +159,7 @@ export function Leaderboard() {
             <span className="text-sm text-muted-foreground font-bold uppercase">Bracket:</span>
             <Select value={bracket} onValueChange={(v) => updateQueryParams({ bracket: v, page: 1 })}>
               <SelectTrigger className="w-[120px] font-bold"><SelectValue placeholder="Bracket" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover">
                 {BRACKETS.map((b) => <SelectItem key={b.id} value={b.id} className="cursor-pointer">{b.label}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -168,7 +168,7 @@ export function Leaderboard() {
             <span className="text-sm text-muted-foreground font-bold uppercase">Region:</span>
             <Select value={region} onValueChange={(v) => updateQueryParams({ region: v, page: 1 })}>
               <SelectTrigger className="w-[180px] font-bold"><SelectValue placeholder="Select Region" /></SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-popover">
                 {REGIONS.map((r) => <SelectItem key={r.id} value={r.id} className="cursor-pointer">{r.label}</SelectItem>)}
               </SelectContent>
             </Select>
