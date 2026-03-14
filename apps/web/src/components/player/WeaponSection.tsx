@@ -50,6 +50,7 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
           const share = totalTimeHeld > 0 ? (w.timeHeld ?? 0) / totalTimeHeld : 0
           const dps = w.timeHeld > 0 ? Number(w.damage) / w.timeHeld : 0
           const dmgPerKO = w.kos > 0 ? Math.round(Number(w.damage) / w.kos) : 0
+          const avgDmgPerSec = dps
 
           return (
             <div
@@ -101,89 +102,63 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
 
                 {isExpanded && (
                   <div className="pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    {/* Two Column Layout */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-0">
-                      {/* Left: Overall Stats */}
-                      <div className="space-y-3 md:pr-4 md:border-r md:border-border/30">
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                          Overall Stats
-                        </div>
+                    <div className="space-y-3">
+                      <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        Overall Stats
+                      </div>
 
-                        {/* Time held */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-2xl font-black text-foreground">
-                              {formatHours(w.timeHeld)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              time held
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Combat Stats */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
-                            <div className="flex justify-between items-start mb-1">
-                              <div className="text-[9px] text-muted-foreground uppercase">KOs</div>
-                            </div>
-                            <div className="text-lg font-black text-success">
-                              {formatNum(w.kos)}
+                      {/* Combat Stats */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="text-[9px] text-muted-foreground uppercase">KOs</div>
+                            <div className="text-[10px] font-bold text-foreground/70">
+                              {w.kos > 0 && w.timeHeld > 0 ? (w.kos / (w.timeHeld / 3600)).toFixed(1) : '0'}/hr
                             </div>
                           </div>
-                          <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
-                            <div className="flex justify-between items-start mb-1">
-                              <div className="text-[9px] text-muted-foreground uppercase">Damage</div>
-                              <div className="text-[10px] font-bold text-foreground/70">
-                                {dps.toFixed(1)} DPS
-                              </div>
-                            </div>
-                            <div className="text-lg font-black text-foreground">
-                              {formatCompact(w.damage)}
-                            </div>
+                          <div className="text-lg font-black text-success">
+                            {formatNum(w.kos)}
                           </div>
                         </div>
-
-                        {/* Stats Row */}
-                        <div className="grid grid-cols-4 gap-1 text-center">
-                          <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
-                            <div className="text-sm font-black text-foreground">
-                              {(share * 100).toFixed(0)}%
+                        <div className="p-2.5 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="text-[9px] text-muted-foreground uppercase">Damage</div>
+                            <div className="text-[10px] font-bold text-foreground/70">
+                              {avgDmgPerSec.toFixed(1)} DPS
                             </div>
-                            <div className="text-[8px] text-muted-foreground">Time %</div>
                           </div>
-                          <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
-                            <div className="text-sm font-black text-foreground">
-                              {dps.toFixed(1)}
-                            </div>
-                            <div className="text-[8px] text-muted-foreground">DPS</div>
-                          </div>
-                          <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
-                            <div className="text-sm font-black text-foreground">
-                              {formatNum(dmgPerKO)}
-                            </div>
-                            <div className="text-[8px] text-muted-foreground">Dmg/KO</div>
-                          </div>
-                          <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
-                            <div className="text-sm font-black text-foreground">
-                              {formatHours(w.timeHeld)}
-                            </div>
-                            <div className="text-[8px] text-muted-foreground">Time</div>
+                          <div className="text-lg font-black text-foreground">
+                            {formatCompact(w.damage)}
                           </div>
                         </div>
                       </div>
 
-                      {/* Right: No ranked data available in v2 */}
-                      <div className="space-y-3 md:pl-4">
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                          Ranked Season
-                        </div>
-                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                          <div className="text-sm text-muted-foreground">
-                            No ranked data per weapon
+                      {/* Stats Row */}
+                      <div className="grid grid-cols-4 gap-1 text-center">
+                        <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                          <div className="text-sm font-black text-foreground">
+                            {(share * 100).toFixed(0)}%
                           </div>
+                          <div className="text-[8px] text-muted-foreground">Time %</div>
+                        </div>
+                        <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                          <div className="text-sm font-black text-foreground">
+                            {dps.toFixed(1)}
+                          </div>
+                          <div className="text-[8px] text-muted-foreground">DPS</div>
+                        </div>
+                        <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                          <div className="text-sm font-black text-foreground">
+                            {formatNum(dmgPerKO)}
+                          </div>
+                          <div className="text-[8px] text-muted-foreground">Dmg/KO</div>
+                        </div>
+                        <div className="p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
+                          <div className="text-sm font-black text-foreground">
+                            {formatHours(w.timeHeld)}
+                          </div>
+                          <div className="text-[8px] text-muted-foreground">Time</div>
                         </div>
                       </div>
                     </div>
