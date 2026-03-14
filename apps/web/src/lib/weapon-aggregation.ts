@@ -80,10 +80,7 @@ const createEmptyRichWeaponAgg = (weaponName: string): RichWeaponAgg => ({
   },
 })
 
-export function aggregateRichWeaponStats(
-  legends: LegendInput[],
-  rankedLegends: RankedLegendInput[],
-): RichWeaponAgg[] {
+export function aggregateRichWeaponStats(legends: LegendInput[], rankedLegends: RankedLegendInput[]): RichWeaponAgg[] {
   const rankedMap = new Map(rankedLegends.map((r) => [r.legendId, r]))
   const weaponStatsMap = new Map<string, RichWeaponAgg>()
 

@@ -1,24 +1,31 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import { NavBar } from '@/components/NavBar'
 import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
-import { NavBar } from '@/components/NavBar'
-import { RatingChart } from './RatingChart'
-import { RankedCard } from './RankedCard'
-import { CombatCard } from './CombatCard'
-import { WeaponSection } from './WeaponSection'
-import { LegendSection } from './LegendSection'
-import { TeamSection } from './TeamSection'
-import { formatHours } from './shared'
 import {
-  Badge, Avatar, AvatarFallback, AvatarImage, Button,
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@brawltome/ui'
+import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
+import { CombatCard } from './CombatCard'
+import { LegendSection } from './LegendSection'
+import { RankedCard } from './RankedCard'
+import { RatingChart } from './RatingChart'
+import { TeamSection } from './TeamSection'
+import { WeaponSection } from './WeaponSection'
+import { formatHours } from './shared'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: tRPC inferred type
 type PlayerData = any
 
 interface PlayerProfileProps {
@@ -37,7 +44,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         const data = await trpc.player.byId.query({ id: Number(player.brawlhallaId) })
         if (data) setPlayer(data)
         if (!data?.isRefreshing) clearInterval(intervalId)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 2000)
     return () => clearInterval(intervalId)
   }, [player?.isRefreshing, player?.brawlhallaId])
@@ -50,9 +59,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     )
   }
 
-  const allLegends = [...(player.statsLegends || [])].sort(
-    (a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0),
-  )
+  const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
   const rankedTeams = [...(player.rankedTeams || [])].sort(
     (a: PlayerData, b: PlayerData) => (b.rating ?? 0) - (a.rating ?? 0),
   )
@@ -100,19 +107,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
               )}
               <span>&bull;</span>
               <div>
-                ID:{' '}
-                <span className="font-mono text-foreground">
-                  {player.brawlhallaId}
-                </span>
+                ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span>
               </div>
               {player.matchTimeTotal > 0 && (
                 <>
                   <span>&bull;</span>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Playtime:</span>
-                    <span className="font-mono text-foreground">
-                      {formatHours(player.matchTimeTotal)}
-                    </span>
+                    <span className="font-mono text-foreground">{formatHours(player.matchTimeTotal)}</span>
                   </div>
                 </>
               )}
@@ -130,9 +132,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
                       className="max-h-[198px] overflow-y-auto pb-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent"
                     >
                       {aliases.map((alias: string, idx: number) => (
-                        <DropdownMenuItem key={`${alias}-${idx}`}>
-                          {fixEncoding(alias)}
-                        </DropdownMenuItem>
+                        // biome-ignore lint/suspicious/noArrayIndexKey: aliases can contain duplicates
+                        <DropdownMenuItem key={`${alias}-${idx}`}>{fixEncoding(alias)}</DropdownMenuItem>
                       ))}
                       {aliases.length > 5 && (
                         <div className="sticky bottom-0 h-5 bg-gradient-to-t from-popover to-transparent pointer-events-none -mt-5" />
@@ -175,18 +176,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       </div>
 
       {/* Rating History Chart */}
-      {player.ratingHistory && player.ratingHistory.length > 0 && (
-        <RatingChart data={player.ratingHistory} />
-      )}
+      {player.ratingHistory && player.ratingHistory.length > 0 && <RatingChart data={player.ratingHistory} />}
 
       {/* Weapon Statistics */}
       <WeaponSection weaponStats={weaponStats} />
 
       {/* Legend Statistics */}
-      <LegendSection
-        allLegends={allLegends}
-        rankedLegends={player.rankedLegends || []}
-      />
+      <LegendSection allLegends={allLegends} rankedLegends={player.rankedLegends || []} />
 
       {/* 2v2 Teams */}
       <TeamSection player={player} rankedTeams={rankedTeams} id={id} />

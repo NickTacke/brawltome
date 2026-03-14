@@ -1,17 +1,17 @@
 import {
-  Client,
-  GatewayIntentBits,
-  Events,
-  Interaction,
-  ChatInputCommandInteraction,
-  REST,
   ActivityType,
+  type ChatInputCommandInteraction,
+  Client,
+  Events,
+  GatewayIntentBits,
+  type Interaction,
+  REST,
 } from 'discord.js'
+import { handleClanPage, handleClanSelect } from './commands/clan'
 import { commands } from './commands/index'
 import { handlePlayerSelect } from './commands/player'
-import { handleClanSelect, handleClanPage } from './commands/clan'
-import { initEmojis, getEmojiCount, getEmojiCache } from './utils/emojis'
 import { setEmojiCache } from './utils/components'
+import { getEmojiCache, getEmojiCount, initEmojis } from './utils/emojis'
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID
@@ -30,9 +30,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Serving ${readyClient.guilds.cache.size} guilds`)
 
   readyClient.user.setPresence({
-    activities: [
-      { name: 'https://brawltome.app', type: ActivityType.Watching },
-    ],
+    activities: [{ name: 'https://brawltome.app', type: ActivityType.Watching }],
     status: 'online',
   })
 
@@ -56,10 +54,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     try {
       await command.execute(interaction as ChatInputCommandInteraction)
     } catch (error) {
-      console.error(
-        `Error executing command ${interaction.commandName}:`,
-        error,
-      )
+      console.error(`Error executing command ${interaction.commandName}:`, error)
 
       const errorMessage = {
         content: 'There was an error executing this command.',
@@ -90,10 +85,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
           console.warn(`Unknown select menu: ${interaction.customId}`)
       }
     } catch (error) {
-      console.error(
-        `Error handling select menu ${interaction.customId}:`,
-        error,
-      )
+      console.error(`Error handling select menu ${interaction.customId}:`, error)
     }
   }
 

@@ -1,18 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import { formatNum, timeAgo } from '@/lib/utils'
-import {
-  Card, CardContent, CardHeader, CardTitle, Badge,
-} from '@brawltome/ui'
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Clock } from 'lucide-react'
-import {
-  type PlayerData,
-  parseNum,
-  getVirtualLevel,
-  getXpForLevel,
-  WinLossBar,
-} from './shared'
+import { useState } from 'react'
+import { type PlayerData, WinLossBar, getVirtualLevel, getXpForLevel, parseNum } from './shared'
 
 interface CombatCardProps {
   player: PlayerData
@@ -63,17 +55,12 @@ export function CombatCard({ player }: CombatCardProps) {
                   const floorLv = Math.floor(vLevel)
                   const xpAtFloor = getXpForLevel(floorLv)
                   const xpAtNext = getXpForLevel(floorLv + 1)
-                  const progress =
-                    xpAtNext > xpAtFloor
-                      ? ((totalXp - xpAtFloor) / (xpAtNext - xpAtFloor)) * 100
-                      : 0
+                  const progress = xpAtNext > xpAtFloor ? ((totalXp - xpAtFloor) / (xpAtNext - xpAtFloor)) * 100 : 0
 
                   if (isHoveringLevel) {
                     return (
                       <div className="animate-in fade-in zoom-in-95 duration-200">
-                        <div className="text-2xl sm:text-3xl font-black text-primary mt-1">
-                          {floorLv}
-                        </div>
+                        <div className="text-2xl sm:text-3xl font-black text-primary mt-1">{floorLv}</div>
                         <div className="text-xs text-primary/80 mt-1 font-medium">
                           {Math.floor(progress)}% to next level
                         </div>
@@ -83,9 +70,7 @@ export function CombatCard({ player }: CombatCardProps) {
 
                   return (
                     <div className="animate-in fade-in duration-200">
-                      <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
-                        {level}
-                      </div>
+                      <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{level}</div>
                       <div className="text-xs text-muted-foreground mt-1 underline decoration-dotted decoration-muted-foreground/50">
                         Max level reached
                       </div>
@@ -94,14 +79,9 @@ export function CombatCard({ player }: CombatCardProps) {
                 })()
               ) : (
                 <>
-                  <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
-                    {level}
-                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{level}</div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {player.xpPercentage
-                      ? Math.floor(player.xpPercentage * 100)
-                      : 0}
-                    % to next level
+                    {player.xpPercentage ? Math.floor(player.xpPercentage * 100) : 0}% to next level
                   </div>
                 </>
               )}
@@ -110,18 +90,14 @@ export function CombatCard({ player }: CombatCardProps) {
               <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
                 Total Games
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
-                {formatNum(totalGames)}
-              </div>
+              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{formatNum(totalGames)}</div>
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Overall Win Rate</span>
-              <span className="text-foreground font-bold">
-                {overallWinrate.toFixed(1)}%
-              </span>
+              <span className="text-foreground font-bold">{overallWinrate.toFixed(1)}%</span>
             </div>
             <WinLossBar percent={overallWinrate} className="h-3" />
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -133,8 +109,7 @@ export function CombatCard({ player }: CombatCardProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-lg font-bold text-foreground">
-                {formatNum(player.xp)}{' '}
-                <span className="text-xs text-muted-foreground font-normal">XP</span>
+                {formatNum(player.xp)} <span className="text-xs text-muted-foreground font-normal">XP</span>
               </div>
             </div>
           </div>

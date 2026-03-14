@@ -1,7 +1,17 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
-import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 interface RatingHistoryEntry {
   rating: number
@@ -25,7 +35,11 @@ const TIER_THRESHOLDS = [
   { rating: 720, label: 'Tin', color: '#78716c' },
 ]
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) {
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) {
   if (!active || !payload?.length) return null
 
   const entry = payload[0]?.payload as RatingHistoryEntry & { date: string }
@@ -46,9 +60,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
         <span className="text-muted-foreground">Peak:</span>
         <span className="font-bold text-foreground">{entry.peakRating}</span>
       </div>
-      {entry.tier && (
-        <div className="text-xs text-muted-foreground">{entry.tier}</div>
-      )}
+      {entry.tier && <div className="text-xs text-muted-foreground">{entry.tier}</div>}
       <div className="text-xs text-muted-foreground border-t border-border pt-1.5 mt-1.5">
         {entry.wins}W / {entry.games - entry.wins}L ({winrate}%) &bull; {entry.games} games
       </div>

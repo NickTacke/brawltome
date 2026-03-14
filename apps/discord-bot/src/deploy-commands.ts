@@ -27,10 +27,7 @@ async function deployCommands() {
 
     if (DISCORD_GUILD_ID) {
       console.log(`Deploying to guild: ${DISCORD_GUILD_ID}`)
-      await rest.put(
-        Routes.applicationGuildCommands(clientId, DISCORD_GUILD_ID),
-        { body: commandsData },
-      )
+      await rest.put(Routes.applicationGuildCommands(clientId, DISCORD_GUILD_ID), { body: commandsData })
       console.log('Successfully deployed guild commands!')
     } else {
       console.log('Deploying globally (may take up to 1 hour to propagate)')

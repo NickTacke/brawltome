@@ -1,16 +1,9 @@
-import {
-  SlashCommandBuilder,
-  ChatInputCommandInteraction,
-  EmbedBuilder,
-  Colors,
-} from 'discord.js'
+import { type ChatInputCommandInteraction, Colors, EmbedBuilder, SlashCommandBuilder } from 'discord.js'
 import { api } from '../lib/trpc'
 import type { Command } from './index'
 
 export const statusCommand: Command = {
-  data: new SlashCommandBuilder()
-    .setName('status')
-    .setDescription('Check relevant statuses of Brawlhalla services'),
+  data: new SlashCommandBuilder().setName('status').setDescription('Check relevant statuses of Brawlhalla services'),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply()
@@ -68,17 +61,15 @@ export const statusCommand: Command = {
       .setTimestamp()
       .setFooter({ text: 'BrawlTome Status Check' })
 
-    siteResults.forEach((res) => {
+    for (const res of siteResults) {
       const statusIcon = res.status === 'Online' ? '✅' : '❌'
       const latencyText = res.latency !== null ? `\`${res.latency}ms\`` : 'N/A'
       embed.addFields({
         name: `${statusIcon} ${res.name}`,
-        value: `Status: **${res.status}**\nPing: ${latencyText}${
-          res.code ? `\nCode: \`${res.code}\`` : ''
-        }`,
+        value: `Status: **${res.status}**\nPing: ${latencyText}${res.code ? `\nCode: \`${res.code}\`` : ''}`,
         inline: true,
       })
-    })
+    }
 
     if (apiHealth) {
       const statusIcon = apiHealth.status === 'healthy' ? '✅' : apiHealth.status === 'degraded' ? '⚠️' : '❌'

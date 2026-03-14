@@ -1,27 +1,21 @@
+import { TRPCClientError } from '@trpc/client'
 import {
-  SlashCommandBuilder,
-  ChatInputCommandInteraction,
-  StringSelectMenuInteraction,
-  ButtonInteraction,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type InteractionResponse,
   Message,
-  InteractionResponse,
+  SlashCommandBuilder,
+  type StringSelectMenuInteraction,
 } from 'discord.js'
 import { api } from '../lib/trpc'
 import type { ClanResponse, SearchResponse } from '../lib/types'
+import { buildClanPaginationButtons, buildClanSelectMenu } from '../utils/components'
 import { buildClanEmbed, buildErrorEmbed } from '../utils/embeds'
-import {
-  buildClanSelectMenu,
-  buildClanPaginationButtons,
-} from '../utils/components'
 import { pollForFreshData, setActiveTask } from '../utils/refresh'
 import type { Command } from './index'
-import { TRPCClientError } from '@trpc/client'
 
 // Cache clan results for pagination (expires after 10 minutes)
-const clanCache = new Map<
-  string,
-  { clan: ClanResponse; timestamp: number }
->()
+const clanCache = new Map<string, { clan: ClanResponse; timestamp: number }>()
 const CLAN_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 export const clanCommand: Command = {
@@ -29,10 +23,7 @@ export const clanCommand: Command = {
     .setName('clan')
     .setDescription('Look up a Brawlhalla clan')
     .addStringOption((option) =>
-      option
-        .setName('query')
-        .setDescription('Clan name or clan ID')
-        .setRequired(true),
+      option.setName('query').setDescription('Clan name or clan ID').setRequired(true),
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -42,8 +33,8 @@ export const clanCommand: Command = {
 
     try {
       // Check if query is a numeric ID
-      const numericId = parseInt(query, 10)
-      const isNumericId = !isNaN(numericId) && query === numericId.toString()
+      const numericId = Number.parseInt(query, 10)
+      const isNumericId = !Number.isNaN(numericId) && query === numericId.toString()
 
       let clanId: number
       let searchResults: SearchResponse['clans'] = []
@@ -97,13 +88,11 @@ export const clanCommand: Command = {
       cleanupCache()
 
       // Build response components
-      const components: any[] = []
+      const components: unknown[] = []
 
       // Add pagination buttons if there are many members
       if (clan.members.length > 5) {
-        components.push(
-          buildClanPaginationButtons(interaction.id, 0, clan.members.length),
-        )
+        components.push(buildClanPaginationButtons(interaction.id, 0, clan.members.length))
       }
 
       // Add select menu if there are multiple search results
@@ -113,9 +102,7 @@ export const clanCommand: Command = {
           clanName: c.clanName,
           memberCount: 0,
         }))
-        components.push(
-          buildClanSelectMenu(clanOptions, clanId, interaction.id),
-        )
+        components.push(buildClanSelectMenu(clanOptions, clanId, interaction.id))
       }
 
       const reply = await interaction.editReply({
@@ -128,13 +115,7 @@ export const clanCommand: Command = {
 
         // If data is refreshing, start polling
         if (clan.isRefreshing) {
-          void pollForFreshData(
-            reply,
-            clanId,
-            'clan',
-            searchResults,
-            interaction.id,
-          )
+          void pollForFreshData(reply, clanId, 'clan', searchResults, interaction.id)
         }
       }
     } catch (error) {
@@ -155,24 +136,14 @@ export const clanCommand: Command = {
 
         if (error.data?.httpStatus === 429) {
           await interaction.editReply({
-            embeds: [
-              buildErrorEmbed(
-                'Rate Limited',
-                'The API is currently busy. Please try again in a few minutes.',
-              ),
-            ],
+            embeds: [buildErrorEmbed('Rate Limited', 'The API is currently busy. Please try again in a few minutes.')],
           })
           return
         }
       }
 
       await interaction.editReply({
-        embeds: [
-          buildErrorEmbed(
-            'Error',
-            'Something went wrong while fetching clan data. Please try again later.',
-          ),
-        ],
+        embeds: [buildErrorEmbed('Error', 'Something went wrong while fetching clan data. Please try again later.')],
       })
     }
   },
@@ -181,10 +152,8 @@ export const clanCommand: Command = {
 /**
  * Handle clan select menu interaction
  */
-export async function handleClanSelect(
-  interaction: StringSelectMenuInteraction,
-): Promise<void> {
-  const clanId = parseInt(interaction.values[0], 10)
+export async function handleClanSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+  const clanId = Number.parseInt(interaction.values[0], 10)
   const interactionId = interaction.customId.split(':')[1]
 
   await interaction.deferUpdate()
@@ -194,12 +163,7 @@ export async function handleClanSelect(
 
     if (!clan) {
       await interaction.editReply({
-        embeds: [
-          buildErrorEmbed(
-            'Clan Not Found',
-            'Could not find that clan.',
-          ),
-        ],
+        embeds: [buildErrorEmbed('Clan Not Found', 'Could not find that clan.')],
         components: [],
       })
       return
@@ -221,13 +185,11 @@ export async function handleClanSelect(
     const components = message.components
     setActiveTask(message.id, clanId)
 
-    const responseComponents: any[] = []
+    const responseComponents: unknown[] = []
 
     // Add pagination buttons if there are many members
     if (clan.members.length > 5 && interactionId) {
-      responseComponents.push(
-        buildClanPaginationButtons(interactionId, 0, clan.members.length),
-      )
+      responseComponents.push(buildClanPaginationButtons(interactionId, 0, clan.members.length))
     }
 
     // Update the select menu to show the new selection
@@ -249,12 +211,7 @@ export async function handleClanSelect(
   } catch (error) {
     console.error('[Clan Select] Error:', error)
     await interaction.editReply({
-      embeds: [
-        buildErrorEmbed(
-          'Error',
-          'Something went wrong while fetching clan data.',
-        ),
-      ],
+      embeds: [buildErrorEmbed('Error', 'Something went wrong while fetching clan data.')],
       components: [],
     })
   }
@@ -263,11 +220,9 @@ export async function handleClanSelect(
 /**
  * Handle clan member pagination button interaction
  */
-export async function handleClanPage(
-  interaction: ButtonInteraction,
-): Promise<void> {
+export async function handleClanPage(interaction: ButtonInteraction): Promise<void> {
   const [, interactionId, pageStr] = interaction.customId.split(':')
-  const page = parseInt(pageStr, 10)
+  const page = Number.parseInt(pageStr, 10)
 
   const cached = clanCache.get(interactionId)
   if (!cached || Date.now() - cached.timestamp > CLAN_CACHE_TTL) {
@@ -286,17 +241,14 @@ export async function handleClanPage(
     const actionRow = row.toJSON()
     if ('components' in actionRow && actionRow.components[0]?.type === 2) {
       // Button (Pagination)
-      return buildClanPaginationButtons(
-        interactionId,
-        page,
-        clan.members.length,
-      )
+      return buildClanPaginationButtons(interactionId, page, clan.members.length)
     }
     return row
   })
 
   await interaction.update({
     embeds: [embed],
+    // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
     components: components as any[],
   })
 }
@@ -339,9 +291,9 @@ function getClansFromMessage(
         : []
 
     return options.map((opt) => ({
-      clanId: parseInt(opt.value, 10),
+      clanId: Number.parseInt(opt.value, 10),
       clanName: opt.label,
-      memberCount: parseInt(opt.description?.split(' ')[0] || '0', 10),
+      memberCount: Number.parseInt(opt.description?.split(' ')[0] || '0', 10),
     }))
   } catch {
     return [{ clanId: selectedId, clanName: 'Unknown', memberCount: 0 }]

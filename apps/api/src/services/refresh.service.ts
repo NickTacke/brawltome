@@ -54,9 +54,10 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
     // The ranked API doesn't know about Valhallan — only the rankings API does.
     // The janitor updates valhallanConfirmedAt when it sees the player on rankings.
     const VALHALLAN_GRACE_MS = 3 * 60 * 60 * 1000
-    const isValhallanGraced = existing?.tier?.startsWith('Valhallan')
-      && existing.valhallanConfirmedAt
-      && (Date.now() - existing.valhallanConfirmedAt.getTime()) < VALHALLAN_GRACE_MS
+    const isValhallanGraced =
+      existing?.tier?.startsWith('Valhallan') &&
+      existing.valhallanConfirmedAt &&
+      Date.now() - existing.valhallanConfirmedAt.getTime() < VALHALLAN_GRACE_MS
     const tier = isValhallanGraced ? existing.tier : data.tier
 
     // Update player ranked fields
@@ -102,7 +103,12 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
     })
     const teamGraceMap = new Map(
       existingTeams
-        .filter((t) => t.tier?.startsWith('Valhallan') && t.valhallanConfirmedAt && (Date.now() - t.valhallanConfirmedAt.getTime()) < VALHALLAN_GRACE_MS)
+        .filter(
+          (t) =>
+            t.tier?.startsWith('Valhallan') &&
+            t.valhallanConfirmedAt &&
+            Date.now() - t.valhallanConfirmedAt.getTime() < VALHALLAN_GRACE_MS,
+        )
         .map((t) => [`${t.brawlhallaIdOne}:${t.brawlhallaIdTwo}`, t]),
     )
 

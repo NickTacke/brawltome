@@ -1,20 +1,37 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import { NavBar } from '@/components/NavBar'
+import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
-  Card, CardContent, CardHeader, CardTitle, Button,
-  Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
-  Avatar, AvatarImage, AvatarFallback, Input, Badge,
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@brawltome/ui'
-import { Users, Trophy, Calendar, Crown, Shield, User, UserPlus, Search, TrendingUp, Clock } from 'lucide-react'
+import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
+import Link from 'next/link'
+import { useState } from 'react'
 
 const PAGE_SIZE = 25
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: dynamic API response
 type ClanData = any
 
 interface ClanProfileProps {
@@ -24,21 +41,31 @@ interface ClanProfileProps {
 
 const getRankIcon = (rank: string) => {
   switch (rank.toLowerCase()) {
-    case 'leader': return <Crown className="w-5 h-5 text-yellow-500" />
-    case 'officer': return <Shield className="w-4 h-4 text-blue-400 fill-current" />
-    case 'member': return <User className="w-4 h-4 text-success" />
-    case 'recruit': return <UserPlus className="w-4 h-4 text-muted-foreground/50" />
-    default: return <User className="w-4 h-4 text-muted-foreground" />
+    case 'leader':
+      return <Crown className="w-5 h-5 text-yellow-500" />
+    case 'officer':
+      return <Shield className="w-4 h-4 text-blue-400 fill-current" />
+    case 'member':
+      return <User className="w-4 h-4 text-success" />
+    case 'recruit':
+      return <UserPlus className="w-4 h-4 text-muted-foreground/50" />
+    default:
+      return <User className="w-4 h-4 text-muted-foreground" />
   }
 }
 
 const getRankValue = (rank: string) => {
   switch (rank.toLowerCase()) {
-    case 'leader': return 4
-    case 'officer': return 3
-    case 'member': return 2
-    case 'recruit': return 1
-    default: return 0
+    case 'leader':
+      return 4
+    case 'officer':
+      return 3
+    case 'member':
+      return 2
+    case 'recruit':
+      return 1
+    default:
+      return 0
   }
 }
 
@@ -51,8 +78,11 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
 
   const members = clan.members || []
 
-  const filteredMembers = members.filter((m: ClanData) =>
-    !searchTerm || m.name.toLowerCase().includes(searchTerm.toLowerCase()) || String(m.brawlhallaId).includes(searchTerm)
+  const filteredMembers = members.filter(
+    (m: ClanData) =>
+      !searchTerm ||
+      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(m.brawlhallaId).includes(searchTerm),
   )
 
   const sortedMembers = [...filteredMembers].sort((a: ClanData, b: ClanData) => {
@@ -76,9 +106,13 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       {/* Header */}
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">{fixEncoding(clan.clanName)}</h1>
+          <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">
+            {fixEncoding(clan.clanName)}
+          </h1>
           <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
-            <div className="flex items-center gap-2"><span className="font-mono">ID: {id}</span></div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono">ID: {id}</span>
+            </div>
             <span>•</span>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -88,7 +122,8 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
               <>
                 <span>•</span>
                 <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
-                  <Clock className="w-3 h-3" />Updated {timeAgo(clan.lastUpdated)}
+                  <Clock className="w-3 h-3" />
+                  Updated {timeAgo(clan.lastUpdated)}
                 </Badge>
               </>
             )}
@@ -101,14 +136,18 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total XP</CardTitle>
               <Trophy className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent><div className="text-2xl font-bold">{formatNum(clan.clanXp)}</div></CardContent>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNum(clan.clanXp)}</div>
+            </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent><div className="text-2xl font-bold">{formatNum(members.length)}</div></CardContent>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNum(members.length)}</div>
+            </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -116,7 +155,9 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{members.length > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / members.length)) : '0'}</div>
+              <div className="text-2xl font-bold">
+                {members.length > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / members.length)) : '0'}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -125,21 +166,43 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
       {/* Members */}
       <Card className="bg-card/50 backdrop-blur-xs border-border">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2"><span className="text-yellow-500">&#127942;</span> Clan Members</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <span className="text-yellow-500">&#127942;</span> Clan Members
+          </CardTitle>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
-              <Select value={sortBy} onValueChange={(v) => { setSortBy(v as typeof sortBy); setPage(1) }}>
-                <SelectTrigger className="w-[140px] font-bold h-9"><SelectValue placeholder="Sort By" /></SelectTrigger>
+              <Select
+                value={sortBy}
+                onValueChange={(v) => {
+                  setSortBy(v as typeof sortBy)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className="w-[140px] font-bold h-9">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default" className="cursor-pointer">Clan Rank</SelectItem>
-                  <SelectItem value="xp" className="cursor-pointer">XP</SelectItem>
+                  <SelectItem value="default" className="cursor-pointer">
+                    Clan Rank
+                  </SelectItem>
+                  <SelectItem value="xp" className="cursor-pointer">
+                    XP
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="relative w-64">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search members..." className="pl-8 h-9" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }} />
+              <Input
+                placeholder="Search members..."
+                className="pl-8 h-9"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  setPage(1)
+                }}
+              />
             </div>
           </div>
         </CardHeader>
@@ -159,7 +222,10 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                 const contribution = (member.xp / totalClanXp) * 100
                 const href = `/player/${member.brawlhallaId}`
                 return (
-                  <TableRow key={member.brawlhallaId} className="border-border hover:bg-muted/50 transition-colors h-16 group">
+                  <TableRow
+                    key={member.brawlhallaId}
+                    className="border-border hover:bg-muted/50 transition-colors h-16 group"
+                  >
                     <TableCell className="p-0">
                       <Link href={href} prefetch={false} className="block w-full h-full p-4">
                         <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
@@ -167,7 +233,9 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                     </TableCell>
                     <TableCell className="p-0">
                       <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                        <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">{fixEncoding(member.name)}</span>
+                        <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
+                          {fixEncoding(member.name)}
+                        </span>
                       </Link>
                     </TableCell>
                     <TableCell className="p-0 text-right font-mono">
@@ -179,7 +247,9 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                       </Link>
                     </TableCell>
                     <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
-                      <Link href={href} prefetch={false} className="block w-full h-full p-4">{formatJoinedDate(member.joinDate)}</Link>
+                      <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                        {formatJoinedDate(member.joinDate)}
+                      </Link>
                     </TableCell>
                   </TableRow>
                 )
@@ -189,13 +259,32 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
         </CardContent>
         {totalPages > 1 && (
           <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
-            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Prev</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Prev
+            </Button>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground font-mono">Page</span>
-              <Input key={page} defaultValue={page} className="h-8 w-16 text-center font-mono" onKeyDown={(e) => { if (e.key === 'Enter') { const val = Number.parseInt(e.currentTarget.value); if (!Number.isNaN(val) && val >= 1 && val <= totalPages) setPage(val) } }} />
+              <Input
+                key={page}
+                defaultValue={page}
+                className="h-8 w-16 text-center font-mono"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const val = Number.parseInt(e.currentTarget.value)
+                    if (!Number.isNaN(val) && val >= 1 && val <= totalPages) setPage(val)
+                  }
+                }}
+              />
               <span className="text-sm text-muted-foreground font-mono">of {totalPages}</span>
             </div>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next →</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              Next →
+            </Button>
           </div>
         )}
       </Card>

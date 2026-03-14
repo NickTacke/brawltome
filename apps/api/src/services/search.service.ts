@@ -47,12 +47,10 @@ export async function searchLocal(ctx: Context, rawQuery: string) {
     })
   }
 
-  const players = [...playersByName, ...playersByAlias]
-    .slice(0, 40)
-    .map((p) => ({
-      ...p,
-      bestLegendNameKey: getLegendById(p.bestLegend)?.legendNameKey ?? null,
-    }))
+  const players = [...playersByName, ...playersByAlias].slice(0, 40).map((p) => ({
+    ...p,
+    bestLegendNameKey: getLegendById(p.bestLegend)?.legendNameKey ?? null,
+  }))
 
   // Search clans
   const clans = await ctx.db.query.clan.findMany({

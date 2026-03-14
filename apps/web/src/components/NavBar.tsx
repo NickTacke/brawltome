@@ -1,9 +1,9 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, Home } from 'lucide-react'
 import { Button } from '@brawltome/ui'
+import { ArrowLeft, Home } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ModeToggle } from './mode-toggle'
 
 interface NavBarProps {

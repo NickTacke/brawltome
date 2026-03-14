@@ -1,23 +1,20 @@
+import { TRPCClientError } from '@trpc/client'
 import {
-  SlashCommandBuilder,
-  ChatInputCommandInteraction,
-  StringSelectMenuInteraction,
+  type ChatInputCommandInteraction,
+  type InteractionResponse,
   Message,
-  InteractionResponse,
+  SlashCommandBuilder,
+  type StringSelectMenuInteraction,
 } from 'discord.js'
 import { api } from '../lib/trpc'
 import type { SearchResponse } from '../lib/types'
-import { buildPlayerEmbed, buildErrorEmbed } from '../utils/embeds'
 import { buildPlayerSelectMenu } from '../utils/components'
+import { buildErrorEmbed, buildPlayerEmbed } from '../utils/embeds'
 import { pollForFreshData, setActiveTask } from '../utils/refresh'
 import type { Command } from './index'
-import { TRPCClientError } from '@trpc/client'
 
 // Cache search results for select menu interactions (expires after 5 minutes)
-const searchCache = new Map<
-  string,
-  { players: SearchResponse['players']; timestamp: number }
->()
+const searchCache = new Map<string, { players: SearchResponse['players']; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 export const playerCommand: Command = {
@@ -25,10 +22,7 @@ export const playerCommand: Command = {
     .setName('player')
     .setDescription('Look up a Brawlhalla player')
     .addStringOption((option) =>
-      option
-        .setName('query')
-        .setDescription('Player name or Brawlhalla ID')
-        .setRequired(true),
+      option.setName('query').setDescription('Player name or Brawlhalla ID').setRequired(true),
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -38,8 +32,8 @@ export const playerCommand: Command = {
 
     try {
       // Check if query is a numeric ID
-      const numericId = parseInt(query, 10)
-      const isNumericId = !isNaN(numericId) && query === numericId.toString()
+      const numericId = Number.parseInt(query, 10)
+      const isNumericId = !Number.isNaN(numericId) && query === numericId.toString()
 
       let playerId: number
       let searchResults: SearchResponse['players'] = []
@@ -93,9 +87,7 @@ export const playerCommand: Command = {
 
       // Add select menu if there are multiple search results
       if (searchResults.length > 1) {
-        responseOptions.components = [
-          buildPlayerSelectMenu(searchResults, playerId, interaction.id),
-        ]
+        responseOptions.components = [buildPlayerSelectMenu(searchResults, playerId, interaction.id)]
 
         // Cache the search results for select menu interactions
         const cacheKey = interaction.id
@@ -115,13 +107,7 @@ export const playerCommand: Command = {
 
         // If data is refreshing, start polling
         if (player.isRefreshing) {
-          void pollForFreshData(
-            reply,
-            playerId,
-            'player',
-            searchResults,
-            interaction.id,
-          )
+          void pollForFreshData(reply, playerId, 'player', searchResults, interaction.id)
         }
       }
     } catch (error) {
@@ -142,24 +128,14 @@ export const playerCommand: Command = {
 
         if (error.data?.httpStatus === 429) {
           await interaction.editReply({
-            embeds: [
-              buildErrorEmbed(
-                'Rate Limited',
-                'The API is currently busy. Please try again in a few minutes.',
-              ),
-            ],
+            embeds: [buildErrorEmbed('Rate Limited', 'The API is currently busy. Please try again in a few minutes.')],
           })
           return
         }
       }
 
       await interaction.editReply({
-        embeds: [
-          buildErrorEmbed(
-            'Error',
-            'Something went wrong while fetching player data. Please try again later.',
-          ),
-        ],
+        embeds: [buildErrorEmbed('Error', 'Something went wrong while fetching player data. Please try again later.')],
       })
     }
   },
@@ -168,10 +144,8 @@ export const playerCommand: Command = {
 /**
  * Handle player select menu interaction
  */
-export async function handlePlayerSelect(
-  interaction: StringSelectMenuInteraction,
-): Promise<void> {
-  const playerId = parseInt(interaction.values[0], 10)
+export async function handlePlayerSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+  const playerId = Number.parseInt(interaction.values[0], 10)
   const interactionId = interaction.customId.split(':')[1]
 
   await interaction.deferUpdate()
@@ -181,12 +155,7 @@ export async function handlePlayerSelect(
 
     if (!player) {
       await interaction.editReply({
-        embeds: [
-          buildErrorEmbed(
-            'Player Not Found',
-            'Could not find that player.',
-          ),
-        ],
+        embeds: [buildErrorEmbed('Player Not Found', 'Could not find that player.')],
         components: [],
       })
       return
@@ -225,11 +194,7 @@ export async function handlePlayerSelect(
 
     // Update the select menu to show the new selection
     if (searchResults.length > 1) {
-      const selectMenu = buildPlayerSelectMenu(
-        searchResults,
-        playerId,
-        interactionId,
-      )
+      const selectMenu = buildPlayerSelectMenu(searchResults, playerId, interactionId)
 
       const reply = await interaction.editReply({
         embeds: [embed],
@@ -237,13 +202,7 @@ export async function handlePlayerSelect(
       })
 
       if (player.isRefreshing && reply instanceof Message) {
-        void pollForFreshData(
-          reply,
-          playerId,
-          'player',
-          searchResults,
-          interactionId,
-        )
+        void pollForFreshData(reply, playerId, 'player', searchResults, interactionId)
       }
     } else {
       await interaction.editReply({
@@ -254,12 +213,7 @@ export async function handlePlayerSelect(
   } catch (error) {
     console.error('[Player Select] Error:', error)
     await interaction.editReply({
-      embeds: [
-        buildErrorEmbed(
-          'Error',
-          'Something went wrong while fetching player data.',
-        ),
-      ],
+      embeds: [buildErrorEmbed('Error', 'Something went wrong while fetching player data.')],
       components: [],
     })
   }
@@ -287,16 +241,13 @@ function getPlayersFromMessage(
       emoji?: { name?: string }
     }
 
-    const options: SelectOption[] =
-      'data' in select
-        ? (select.data as { options?: SelectOption[] }).options || []
-        : []
+    const options: SelectOption[] = 'data' in select ? (select.data as { options?: SelectOption[] }).options || [] : []
 
     return options.map((opt) => {
       // Parse description: "1847 • Platinum 3" or just take as-is
       const desc = opt.description || ''
       const parts = desc.split(' • ')
-      const rating = parseInt(parts[0], 10) || 0
+      const rating = Number.parseInt(parts[0], 10) || 0
       const tier = parts[1] || parts[0] || 'Unranked'
 
       // Extract legend name from emoji (e.g., "avatar_bodvar" -> "bodvar")
@@ -306,7 +257,7 @@ function getPlayersFromMessage(
       }
 
       return {
-        brawlhallaId: parseInt(opt.value, 10),
+        brawlhallaId: Number.parseInt(opt.value, 10),
         name: opt.label,
         region: '' as string | null,
         rating,
