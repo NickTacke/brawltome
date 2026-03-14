@@ -43,16 +43,27 @@ cd brawltome
 bun install
 ```
 
-Create `.env` files in `apps/api/` and `apps/web/`:
+Start local postgres and redis:
+
+```bash
+docker compose up -d
+```
+
+Create `.env` files:
 
 ```bash
 # apps/api/.env
-DATABASE_URL=postgresql://...
+DATABASE_URL=postgres://brawltome:brawltome@localhost:5432/brawltome
 REDIS_URL=redis://localhost:6379
 BRAWLHALLA_API_KEY=your-key
 
 # apps/web/.env
 NEXT_PUBLIC_API_URL=http://localhost:3000
+
+# apps/discord-bot/.env
+API_URL=http://localhost:3000
+DISCORD_TOKEN=your-token
+DISCORD_CLIENT_ID=your-client-id
 ```
 
 ### Development
