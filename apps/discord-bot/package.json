@@ -1,24 +1,20 @@
 {
   "name": "@brawltome/discord-bot",
-  "version": "0.0.1",
-  "description": "Discord bot for Brawlhalla player and clan stats",
-  "author": "@NickTacke",
   "private": true,
-  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
-    "deploy-commands": "tsx src/deploy-commands.ts",
-    "sync-emojis": "tsx src/sync-emojis.ts"
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "deploy-commands": "bun run src/deploy-commands.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "discord.js": "^14.22.1",
-    "dotenv": "^17.2.3"
+    "@trpc/client": "^11.0.0",
+    "discord.js": "^14.22.0",
+    "superjson": "^2.2.2"
   },
   "devDependencies": {
-    "@types/node": "^20.17.10",
-    "tsx": "^4.21.0",
-    "typescript": "^5.7.3"
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
   }
 }

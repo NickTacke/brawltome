@@ -1,0 +1,1 @@
+ALTER TABLE "player_ranked_team" ADD COLUMN "valhallan_confirmed_at" timestamp;

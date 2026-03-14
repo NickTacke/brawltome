@@ -1,94 +1,95 @@
 <p align="center">
-  <img src="apps/web/public/images/logo.png" alt="BrawlTome logo" width="320" />
+  <img src="apps/web/public/images/logo.png" alt="BrawlTome" width="400" />
 </p>
 
-BrawlTome is a comprehensive Brawlhalla tracking application built with a modern monorepo architecture. It provides player statistics, rankings, and detailed insights into Brawlhalla gameplay.
+<p align="center">Brawlhalla player tracking — stats, rankings, clans, and rating history.</p>
 
-## 🏗 Project Structure
+## Tech Stack
 
-This project is organized as an [Nx](https://nx.dev) monorepo:
+- **Runtime**: [Bun](https://bun.sh/)
+- **Backend**: [Hono](https://hono.dev/) + [tRPC](https://trpc.io/)
+- **Frontend**: [Next.js 16](https://nextjs.org/) (App Router, RSC)
+- **Database**: PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/)
+- **Queue**: Redis Streams (Bun-native)
+- **Discord**: [discord.js](https://discord.js.org/) v14
+- **Styling**: Tailwind CSS + Shadcn UI
+- **Linting**: [Biome](https://biomejs.dev/)
 
-- **apps/api**: NestJS backend application handling data synchronization, caching, and serving the REST API.
-- **apps/web**: Next.js frontend application providing the user interface.
-- **libs/bhapi-client**: A dedicated client library for interacting with the Brawlhalla API.
-- **libs/database**: Prisma ORM setup and database utilities.
-- **libs/shared-types**: Shared TypeScript interfaces and DTOs used across frontend and backend.
-- **libs/ui**: Shared UI components (built with Shadcn UI/Radix UI).
+## Structure
 
-## 🛠 Tech Stack
+```
+apps/
+  api/           # Hono + tRPC server (API + worker entrypoints)
+  web/           # Next.js frontend
+  discord-bot/   # Discord bot
+packages/
+  database/      # Drizzle schema, migrations, client
+  bhapi/         # Brawlhalla API client + rate limiter
+  ui/            # Shared UI components
+```
 
-- **Framework**: [NestJS](https://nestjs.com/) (Backend), [Next.js](https://nextjs.org/) (Frontend)
-- **Language**: TypeScript
-- **Database**: PostgreSQL with [Prisma](https://www.prisma.io/)
-- **Styling**: Tailwind CSS
-- **Tools**: Nx, ESLint, Prettier
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18+)
+- [Bun](https://bun.sh/) v1.2+
 - PostgreSQL
-- Redis (for queue management)
-- Brawlhalla API Key (Get one at [dev.brawlhalla.com](https://dev.brawlhalla.com/))
+- Redis
+- Brawlhalla API key ([dev.brawlhalla.com](https://dev.brawlhalla.com/))
 
-### Installation
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/NickTacke/brawltome
-   cd brawltome
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   pnpm install
-   ```
-
-3. Start local dependencies (optional but recommended):
-
-   ```bash
-   docker compose up -d
-   ```
-
-4. Environment Setup:
-   Copy the example env files and fill in required values:
-   - `apps/api/.env.example` → `apps/api/.env`
-   - `apps/worker/.env.example` → `apps/worker/.env`
-   - `apps/web/.env.example` → `apps/web/.env.local`
-
-### Running the Application
-
-Start the development servers:
+### Setup
 
 ```bash
-# Start the API
-pnpm dev:api
-
-# Start the Worker
-pnpm dev:worker
-
-# Start the Web App
-pnpm dev:web
+git clone https://github.com/NickTacke/brawltome
+cd brawltome
+bun install
 ```
 
-### Seeding Data
-
-Populate the database with initial static data (Legends, etc.):
+Start local postgres and redis:
 
 ```bash
-pnpm seed:legends
+docker compose up -d
 ```
 
-## 📜 Scripts
+Create `.env` files:
 
-- `pnpm seed:api`: Run general API seeder.
-- `pnpm seed:legends`: Seed static Legend data from the Brawlhalla API.
-- `pnpm lint`: Lint all projects.
-- `pnpm typecheck`: Typecheck all projects.
-- `pnpm build`: Build all projects.
-- `pnpm format`: Format all projects.
-- `pnpm format:check`: Verify formatting for all projects.
-- `npx nx graph`: Visualize the project dependency graph.
+```bash
+# apps/api/.env
+DATABASE_URL=postgres://brawltome:brawltome@localhost:5432/brawltome
+REDIS_URL=redis://localhost:6379
+BRAWLHALLA_API_KEY=your-key
+
+# apps/web/.env
+NEXT_PUBLIC_API_URL=http://localhost:3000
+
+# apps/discord-bot/.env
+API_URL=http://localhost:3000
+DISCORD_TOKEN=your-token
+DISCORD_CLIENT_ID=your-client-id
+```
+
+### Development
+
+```bash
+bun run dev:api          # API server
+bun run dev:worker       # Background worker
+bun run dev:web          # Frontend
+bun run dev:discord-bot  # Discord bot
+```
+
+### Database
+
+```bash
+bun run db:generate      # Generate migration from schema changes
+bun run db:migrate       # Run migrations
+bun run db:push          # Push schema directly (dev only)
+```
+
+### Commands
+
+```bash
+bun test                 # Run all tests
+bun run typecheck        # Type-check all packages
+bun run lint             # Lint (Biome)
+bun run format           # Format (Biome)
+```

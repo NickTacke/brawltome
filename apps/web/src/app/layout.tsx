@@ -1,26 +1,14 @@
-import './global.css';
-import { ThemeProvider } from '@/components/theme-provider';
-import { ComingSoon } from '@/components/ComingSoon';
-import { ModeToggle } from '@/components/mode-toggle';
-import type { Metadata } from 'next';
-
-const IS_MAINTENANCE = true;
+import './globals.css'
+import { ThemeProvider } from '@/components/theme-provider'
+import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: {
     default: 'BrawlTome',
     template: '%s | BrawlTome',
   },
-  description:
-    'Your ultimate source for Brawlhalla stats, rankings, and player tracking',
-  keywords: [
-    'Brawlhalla',
-    'stats',
-    'rankings',
-    'player tracker',
-    'clan',
-    'legends',
-  ],
+  description: 'Your ultimate source for Brawlhalla stats, rankings, and player tracking',
+  keywords: ['Brawlhalla', 'stats', 'rankings', 'player tracker', 'clan', 'legends'],
   authors: [{ name: 'BrawlTome' }],
   metadataBase: new URL('https://brawltome.app'),
   openGraph: {
@@ -30,9 +18,7 @@ export const metadata: Metadata = {
     siteName: 'BrawlTome',
     title: 'BrawlTome',
     description: 'Your ultimate source for Brawlhalla stats',
-    images: [
-      { url: '/og-image.png', width: 500, height: 500, alt: 'BrawlTome' },
-    ],
+    images: [{ url: '/og-image.png', width: 500, height: 500, alt: 'BrawlTome' }],
   },
   twitter: {
     card: 'summary',
@@ -54,36 +40,16 @@ export const metadata: Metadata = {
     { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
     { media: '(prefers-color-scheme: dark)', color: '#1e2530' },
   ],
-};
+}
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <div className="bg-background text-foreground min-h-screen">
-            {IS_MAINTENANCE ? (
-              <main className="min-h-screen flex flex-col items-center justify-center p-4 relative">
-                <div className="absolute top-4 right-4 z-100">
-                  <ModeToggle />
-                </div>
-                <ComingSoon />
-              </main>
-            ) : (
-              children
-            )}
-          </div>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <div className="bg-background text-foreground min-h-screen">{children}</div>
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }
