@@ -3,8 +3,8 @@ export interface BhApiSearchResult {
   name: string
 }
 
-export interface BhApiRanking {
-  rank: string
+export interface BhApiRanking1v1 {
+  rank: number
   name: string
   brawlhalla_id: number
   best_legend: number
@@ -14,6 +14,19 @@ export interface BhApiRanking {
   tier: string
   games: number
   wins: number
+  region: string
+  peak_rating: number
+}
+
+export interface BhApiRanking2v2 {
+  rank: number
+  teamname: string
+  brawlhalla_id_one: number
+  brawlhalla_id_two: number
+  rating: number
+  tier: string
+  wins: number
+  games: number
   region: string
   peak_rating: number
 }

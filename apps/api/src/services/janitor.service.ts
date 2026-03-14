@@ -1,5 +1,5 @@
-import type { BhApiClient, Region } from '@brawltome/bhapi'
-import { clan, clanMember, player, playerAlias } from '@brawltome/database'
+import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
+import { clan, clanMember, player, playerAlias, playerRankedTeam } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
 import { desc, eq, isNull, lt, sql } from 'drizzle-orm'
 import type { Redis } from 'ioredis'
@@ -63,20 +63,20 @@ export function startJanitor(deps: JanitorDeps) {
       }
 
       // Hot pages every tick
-      await syncRankingPages(deps, '1v1', 'all', 1, HOT_PAGES, 'cursor:hot:1v1')
-      await syncRankingPages(deps, '2v2', 'all', 1, HOT_PAGES, 'cursor:hot:2v2')
+      await sync1v1Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:1v1')
+      await sync2v2Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:2v2')
 
       // Cold pages every N ticks
       if (tick % COLD_TICK_INTERVAL === 0) {
-        await syncRankingPages(deps, '1v1', 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1')
-        await syncRankingPages(deps, '2v2', 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2')
+        await sync1v1Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1')
+        await sync2v2Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2')
       }
 
       // Regional: rotate 1 region per tick
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
-      await syncRankingPages(deps, '1v1', region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`)
-      await syncRankingPages(deps, '2v2', region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`)
+      await sync1v1Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`)
+      await sync2v2Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`)
 
       // Clan backfill
       await backfillClans(deps)
@@ -123,20 +123,22 @@ async function releaseLock(redis: Redis, value: string) {
 
 // ---- RANKING SYNC ----
 
-async function syncRankingPages(
+async function advanceCursor(redis: Redis, cursorKey: string, startPage: number, maxPage: number): Promise<number> {
+  const cursor = await redis.get(cursorKey)
+  return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
+}
+
+async function sync1v1Page(
   deps: JanitorDeps,
-  bracket: '1v1' | '2v2',
   region: Region | 'all',
   startPage: number,
   maxPage: number,
   cursorKey: string,
 ) {
-  const cursor = await deps.redis.get(cursorKey)
-  const page = cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
-
+  const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) return
 
-  const rankings = await deps.bhapi.getRankings(bracket, region as Region, page)
+  const rankings = await deps.bhapi.getRankings1v1(region as Region, page)
 
   if (rankings.length === 0) {
     await deps.redis.set(cursorKey, String(startPage))
@@ -144,6 +146,29 @@ async function syncRankingPages(
   }
 
   await savePlayers(deps, rankings)
+
+  const nextPage = page + 1 > maxPage ? startPage : page + 1
+  await deps.redis.set(cursorKey, String(nextPage))
+}
+
+async function sync2v2Page(
+  deps: JanitorDeps,
+  region: Region | 'all',
+  startPage: number,
+  maxPage: number,
+  cursorKey: string,
+) {
+  const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
+  if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) return
+
+  const rankings = await deps.bhapi.getRankings2v2(region as Region, page)
+
+  if (rankings.length === 0) {
+    await deps.redis.set(cursorKey, String(startPage))
+    return
+  }
+
+  await saveTeams(deps, rankings)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
   await deps.redis.set(cursorKey, String(nextPage))
@@ -216,6 +241,62 @@ async function savePlayers(
         })
     } catch (err) {
       console.error(`[janitor] failed to save player ${r.brawlhalla_id}:`, err)
+    }
+  }
+}
+
+async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
+  for (const r of rankings) {
+    try {
+      // Ensure both players exist in the player table
+      for (const id of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
+        const namePart = r.teamname.split('+')
+        const name = id === r.brawlhalla_id_one ? (namePart[0]?.trim() ?? '') : (namePart[1]?.trim() ?? '')
+
+        await deps.db
+          .insert(player)
+          .values({
+            brawlhallaId: id,
+            name,
+            region: r.region ?? null,
+            rating: 0,
+          })
+          .onConflictDoNothing()
+      }
+
+      // Insert team for both players (each player owns their team rows)
+      for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
+        await deps.db
+          .insert(playerRankedTeam)
+          .values({
+            brawlhallaId: ownerId,
+            brawlhallaIdOne: r.brawlhalla_id_one,
+            brawlhallaIdTwo: r.brawlhalla_id_two,
+            teamName: r.teamname ?? '',
+            rating: r.rating ?? 0,
+            peakRating: r.peak_rating ?? 0,
+            tier: r.tier ?? '',
+            wins: r.wins ?? 0,
+            games: r.games ?? 0,
+            region: r.region ?? null,
+            globalRank: r.rank ?? null,
+          })
+          .onConflictDoUpdate({
+            target: [playerRankedTeam.brawlhallaId, playerRankedTeam.brawlhallaIdOne, playerRankedTeam.brawlhallaIdTwo],
+            set: {
+              teamName: r.teamname ?? '',
+              rating: r.rating ?? 0,
+              peakRating: r.peak_rating ?? 0,
+              tier: r.tier ?? '',
+              wins: r.wins ?? 0,
+              games: r.games ?? 0,
+              region: r.region ?? null,
+              globalRank: r.rank ?? null,
+            },
+          })
+      }
+    } catch (err) {
+      console.error(`[janitor] failed to save team ${r.brawlhalla_id_one}+${r.brawlhalla_id_two}:`, err)
     }
   }
 }
