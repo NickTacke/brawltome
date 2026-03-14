@@ -1,0 +1,28 @@
+{
+  "name": "@brawltome/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/serve.ts",
+    "./router": "./src/router/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run --hot src/serve.ts",
+    "dev:worker": "bun run --hot src/worker.ts",
+    "build": "bun build src/serve.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brawltome/database": "workspace:*",
+    "@brawltome/bhapi": "workspace:*",
+    "@trpc/server": "^11.0.0",
+    "@hono/trpc-server": "^0.3.0",
+    "hono": "^4.7.0",
+    "ioredis": "^5.8.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  }
+}
