@@ -17,6 +17,7 @@ import {
   QUEUE_DISCOVERY_CAP,
   TIERED_TTL,
 } from './constants'
+import { getLegendById } from './game-data.service'
 
 const discoveries = new Map<number, Promise<PlayerResult | null>>()
 
@@ -95,7 +96,18 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     limit: 365,
   })
 
-  return { ...p, ratingHistory: history, isRefreshing }
+  // Enrich stats legends with weapon names from game data cache
+  const enrichedStatsLegends = (p.statsLegends || []).map((l: typeof p.statsLegends[number]) => {
+    const legendData = getLegendById(l.legendId)
+    return {
+      ...l,
+      weaponOne: legendData?.weaponOne ?? null,
+      weaponTwo: legendData?.weaponTwo ?? null,
+      bioName: legendData?.bioName ?? null,
+    }
+  })
+
+  return { ...p, statsLegends: enrichedStatsLegends, ratingHistory: history, isRefreshing }
 }
 
 async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<PlayerResult | null> {
