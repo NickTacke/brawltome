@@ -1,13 +1,35 @@
-'use client';
+'use client'
 
-import useSWR from 'swr';
-import { fetcher } from '@/lib/api';
-import { Skeleton } from '@brawltome/ui';
+import { Skeleton } from '@brawltome/ui'
+import { useEffect, useState } from 'react'
+
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 export function ServerStatus() {
-  const { data, error } = useSWR('/status', fetcher, {
-    refreshInterval: 10000, // Check every 10s
-  });
+  const [status, setStatus] = useState<{ tokens: number } | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      try {
+        const res = await fetch(`${apiUrl}/trpc/status.health?input={}`)
+        const json = await res.json()
+        if (!cancelled) {
+          setStatus(json.result?.data?.json ?? json.result?.data)
+          setError(false)
+        }
+      } catch {
+        if (!cancelled) setError(true)
+      }
+    }
+    poll()
+    const id = setInterval(poll, 10_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [])
 
   if (error) {
     return (
@@ -15,43 +37,35 @@ export function ServerStatus() {
         <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
         <span className="text-xs font-medium text-destructive">Offline</span>
       </div>
-    );
+    )
   }
 
-  if (!data) {
+  if (!status) {
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-card/80 backdrop-blur-xs shadow-xs">
         <Skeleton className="h-2 w-2 rounded-full" />
         <Skeleton className="h-3 w-16" />
       </div>
-    );
+    )
   }
 
-  const { tokens } = data;
-  let statusColor = 'bg-success';
-  let statusText = 'Operational';
-
-  if (tokens < 20) {
-    statusColor = 'bg-destructive';
-    statusText = 'High Load';
-  } else if (tokens < 100) {
-    statusColor = 'bg-yellow-500';
-    statusText = 'Busy';
+  let statusColor = 'bg-success'
+  let statusText = 'Operational'
+  if (status.tokens < 20) {
+    statusColor = 'bg-destructive'
+    statusText = 'High Load'
+  } else if (status.tokens < 100) {
+    statusColor = 'bg-yellow-500'
+    statusText = 'Busy'
   }
 
   return (
     <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-border bg-card/80 backdrop-blur-xs shadow-xs hover:bg-card/90 transition-colors">
       <div className="relative flex h-2 w-2">
-        <span
-          className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor}`}
-        ></span>
-        <span
-          className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`}
-        ></span>
+        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor}`} />
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${statusColor}`} />
       </div>
-      <span className="text-xs font-medium text-muted-foreground">
-        {statusText}
-      </span>
+      <span className="text-xs font-medium text-muted-foreground">{statusText}</span>
     </div>
-  );
+  )
 }

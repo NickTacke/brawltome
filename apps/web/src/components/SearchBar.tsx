@@ -1,161 +1,109 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useDebounce } from 'use-debounce';
-import { Shield } from 'lucide-react';
-import { fetcher } from '@/lib/api';
-import { fixEncoding } from '@/lib/utils';
-import {
-  Input,
-  Card,
-  Avatar,
-  AvatarImage,
-  AvatarFallback,
-} from '@brawltome/ui';
+import { trpc } from '@/lib/trpc'
+import { fixEncoding, formatNum } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@brawltome/ui'
+import { Shield } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useDebounce } from 'use-debounce'
 
 interface SearchBarProps {
-  onFocus?: () => void;
-  onBlur?: () => void;
+  onFocus?: () => void
+  onBlur?: () => void
 }
 
 export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
-  const [query, setQuery] = useState('');
-  const [debouncedQuery] = useDebounce(query, 500);
-  interface PlayerResult {
-    brawlhallaId: number;
-    name: string;
-    region?: string;
-    rating?: number;
-    bestLegendName?: string;
-    bestLegendNameKey?: string;
-    matchedAlias?: string;
-  }
+  const [query, setQuery] = useState('')
+  const [debouncedQuery] = useDebounce(query, 500)
+  const [playerResults, setPlayerResults] = useState<
+    Array<{
+      brawlhallaId: number
+      name: string
+      region: string | null
+      rating: number
+      bestLegendNameKey?: string | null
+    }>
+  >([])
+  const [clanResults, setClanResults] = useState<
+    Array<{
+      clanId: number
+      clanName: string
+      clanXp: bigint
+    }>
+  >([])
+  const [showClans, setShowClans] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [visiblePlayerCount, setVisiblePlayerCount] = useState(5)
+  const router = useRouter()
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  interface ClanResult {
-    clanId: number;
-    name: string;
-    xp: string;
-    memberCount: number;
-  }
+  const handleResultNavigate = useCallback(() => {
+    if (onBlur) onBlur()
+    setQuery('')
+    setError(null)
+  }, [onBlur])
 
-  const [isMounted, setIsMounted] = useState(false);
-  const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
-  const [clanResults, setClanResults] = useState<ClanResult[]>([]);
-  const [showClans, setShowClans] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [visiblePlayerCount, setVisiblePlayerCount] = useState(5);
-  const INITIAL_VISIBLE_PLAYERS = 5;
-  const router = useRouter();
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  const formatNum = (n: number | string | undefined | null) => {
-    const val = typeof n === 'string' ? parseInt(n, 10) : n;
-    const num = val && !isNaN(val as number) ? val : 0;
-    if (!isMounted) return String(num);
-    return num.toLocaleString();
-  };
-
-  const handleResultNavigate = (e: React.MouseEvent) => {
-    // Let the browser handle new-tab / new-window gestures.
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
-      return;
-    }
-    if (onBlur) onBlur();
-    setQuery('');
-    setError(null);
-  };
-
-  // Handle click outside to clear query
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setQuery('');
-        setError(null);
-        // We don't clear results here to allow the fade-out animation to play
-        // The useDebounce effect will eventually clear them
-        if (onBlur) onBlur();
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setQuery('')
+        setError(null)
+        if (onBlur) onBlur()
       }
     }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onBlur])
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [onBlur]);
-
-  // Local Search
   useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    setVisiblePlayerCount(INITIAL_VISIBLE_PLAYERS);
-    if (!debouncedQuery || debouncedQuery.length < 3) {
-      setIsSearching(false);
-      setPlayerResults([]);
-      setClanResults([]);
-      return;
+    let cancelled = false
+    setError(null)
+    setVisiblePlayerCount(5)
+
+    if (!debouncedQuery || debouncedQuery.length < 2) {
+      setIsSearching(false)
+      setPlayerResults([])
+      setClanResults([])
+      return
     }
 
-    setIsSearching(true);
-    fetcher(`/search/local?q=${encodeURIComponent(debouncedQuery)}`)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then((data: any) => {
-        if (cancelled) return;
-        if (!data) {
-          setPlayerResults([]);
-          setClanResults([]);
-          setShowClans(false);
-          setIsSearching(false);
-          setError('No results found.');
-          return;
-        }
-        // Handle both old (array) and new (object) API responses
-        const players = Array.isArray(data) ? data : data.players || [];
-        const clans = Array.isArray(data) ? [] : data.clans || [];
-
-        setPlayerResults(players);
-        setClanResults(clans);
-        setShowClans(false);
-        setIsSearching(false);
-
-        if (players.length === 0 && clans.length === 0) {
-          setError('No results found.');
+    setIsSearching(true)
+    trpc.search.local
+      .query({ query: debouncedQuery })
+      .then((data) => {
+        if (cancelled) return
+        setPlayerResults(data.players)
+        setClanResults(data.clans)
+        setShowClans(false)
+        setIsSearching(false)
+        if (data.players.length === 0 && data.clans.length === 0) {
+          setError('No results found.')
         }
       })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setIsSearching(false);
-        const error = err as Error & { cause?: string };
-        if (error.cause === 'Too Many Requests') {
-          setError('Server busy (High Traffic). Please try again later.');
-        } else {
-          setError('Search failed.');
-        }
-      });
+      .catch(() => {
+        if (cancelled) return
+        setIsSearching(false)
+        setError('Search failed.')
+      })
+
     return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery]);
+      cancelled = true
+    }
+  }, [debouncedQuery])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      const isIdLike = /^\d{5,}$/.test(query);
+      const isIdLike = /^\d{5,}$/.test(query)
       if (isIdLike) {
-        router.push(`/player/${query}`);
-        if (onBlur) onBlur();
-        setQuery('');
+        router.push(`/player/${query}`)
+        if (onBlur) onBlur()
+        setQuery('')
       }
     }
-  };
+  }
 
   return (
     <div ref={containerRef} className="relative w-full max-w-lg mx-auto z-50">
@@ -165,15 +113,13 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
           value={query}
           onFocus={onFocus}
           onKeyDown={handleKeyDown}
-          // onBlur removed to prevent conflict with click-outside logic
           onChange={(e) => {
-            setQuery(e.target.value);
-            setError(null);
+            setQuery(e.target.value)
+            setError(null)
           }}
           placeholder="Search player or clan..."
           className="w-full h-14 bg-background/50 text-foreground text-lg rounded-xl border-border focus-visible:ring-primary backdrop-blur-xs pr-12"
         />
-
         {isSearching && (
           <div className="absolute right-4 top-1/2 -translate-y-1/2">
             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -183,8 +129,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
 
       <div
         className={`transition-all duration-300 ease-in-out ${
-          query.length >= 3 &&
-          (playerResults.length > 0 || clanResults.length > 0 || error)
+          query.length >= 2 && (playerResults.length > 0 || clanResults.length > 0 || error)
             ? 'opacity-100 translate-y-0'
             : 'opacity-0 -translate-y-2 pointer-events-none'
         }`}
@@ -192,9 +137,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         {(playerResults.length > 0 || clanResults.length > 0 || error) && (
           <Card className="absolute w-full mt-2 bg-card border-border overflow-hidden shadow-2xl z-50">
             {error ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">
-                {error}
-              </div>
+              <div className="p-4 text-center text-muted-foreground text-sm">{error}</div>
             ) : (
               <>
                 {playerResults.length > 0 && (
@@ -210,95 +153,35 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         >
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
-                              {p.bestLegendNameKey ? (
+                              {p.bestLegendNameKey && (
                                 <AvatarImage
                                   src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
-                                  alt={p.bestLegendName || p.bestLegendNameKey}
+                                  alt={p.bestLegendNameKey}
                                   className="object-cover object-top"
                                 />
-                              ) : null}
+                              )}
                               <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
-                                {(
-                                  p.bestLegendName ||
-                                  fixEncoding(p.name) ||
-                                  '?'
-                                )
-                                  .substring(0, 2)
-                                  .toUpperCase()}
+                                {fixEncoding(p.name).substring(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <div className="font-bold text-card-foreground">
-                                {fixEncoding(p.name)}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {p.region}
-                              </div>
-                              {p.matchedAlias && (
-                                <div className="text-xs text-muted-foreground">
-                                  Matched alias: {fixEncoding(p.matchedAlias)}
-                                </div>
-                              )}
+                              <div className="font-bold text-card-foreground">{fixEncoding(p.name)}</div>
+                              <div className="text-xs text-muted-foreground">{p.region}</div>
                             </div>
                           </div>
-                          <div className="text-sm font-mono text-primary">
-                            {p.rating ?? 0}
-                          </div>
+                          <div className="text-sm font-mono text-primary">{p.rating ?? 0}</div>
                         </Link>
                       ))}
-
-                      {visiblePlayerCount > INITIAL_VISIBLE_PLAYERS &&
-                        visiblePlayerCount < playerResults.length && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setVisiblePlayerCount((prev) =>
-                                Math.min(prev + 10, playerResults.length),
-                              )
-                            }
-                            className="w-full p-2 bg-muted/50 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors border-t border-border flex items-center justify-center gap-2"
-                          >
-                            Show{' '}
-                            {Math.min(
-                              10,
-                              playerResults.length - visiblePlayerCount,
-                            )}{' '}
-                            more{' '}
-                            {Math.min(
-                              10,
-                              playerResults.length - visiblePlayerCount,
-                            ) === 1
-                              ? 'player'
-                              : 'players'}
-                          </button>
-                        )}
                     </div>
-
-                    {visiblePlayerCount === INITIAL_VISIBLE_PLAYERS &&
-                      visiblePlayerCount < playerResults.length && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setVisiblePlayerCount((prev) =>
-                              Math.min(prev + 10, playerResults.length),
-                            )
-                          }
-                          className="w-full p-2 bg-muted/50 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors border-t border-border flex items-center justify-center gap-2"
-                        >
-                          Show{' '}
-                          {Math.min(
-                            10,
-                            playerResults.length - visiblePlayerCount,
-                          )}{' '}
-                          more{' '}
-                          {Math.min(
-                            10,
-                            playerResults.length - visiblePlayerCount,
-                          ) === 1
-                            ? 'player'
-                            : 'players'}
-                        </button>
-                      )}
+                    {visiblePlayerCount < playerResults.length && (
+                      <button
+                        type="button"
+                        onClick={() => setVisiblePlayerCount((prev) => Math.min(prev + 10, playerResults.length))}
+                        className="w-full p-2 bg-muted/50 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors border-t border-border flex items-center justify-center gap-2"
+                      >
+                        Show {Math.min(10, playerResults.length - visiblePlayerCount)} more
+                      </button>
+                    )}
                   </>
                 )}
 
@@ -311,11 +194,8 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                     >
                       {showClans
                         ? 'Hide Clans'
-                        : `Show ${clanResults.length} Clan${
-                            clanResults.length === 1 ? '' : 's'
-                          }`}
+                        : `Show ${clanResults.length} Clan${clanResults.length === 1 ? '' : 's'}`}
                     </button>
-
                     {showClans &&
                       clanResults.map((c) => (
                         <Link
@@ -329,18 +209,9 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             <div className="h-10 w-10 rounded-full border border-border bg-muted flex items-center justify-center">
                               <Shield className="h-6 w-6 text-muted-foreground fill-current" />
                             </div>
-                            <div>
-                              <div className="font-bold text-card-foreground">
-                                {fixEncoding(c.name)}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {c.memberCount} members
-                              </div>
-                            </div>
+                            <div className="font-bold text-card-foreground">{fixEncoding(c.clanName)}</div>
                           </div>
-                          <div className="text-xs font-mono text-muted-foreground">
-                            {formatNum(c.xp)} XP
-                          </div>
+                          <div className="text-xs font-mono text-muted-foreground">{formatNum(c.clanXp)} XP</div>
                         </Link>
                       ))}
                   </>
@@ -355,5 +226,5 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         )}
       </div>
     </div>
-  );
+  )
 }

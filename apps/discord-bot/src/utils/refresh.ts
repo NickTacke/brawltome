@@ -1,34 +1,30 @@
-import {
-  Message,
-  EmbedBuilder,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-} from 'discord.js';
-import * as api from '../api/client.js';
-import { buildPlayerEmbed, buildClanEmbed } from './embeds.js';
-import { buildPlayerSelectMenu, buildClanSelectMenu } from './components.js';
+import type { ActionRowBuilder, EmbedBuilder, Message, StringSelectMenuBuilder } from 'discord.js'
+import { api } from '../lib/trpc'
+import type { SearchResponse } from '../lib/types'
+import { buildClanSelectMenu, buildPlayerSelectMenu } from './components'
+import { buildClanEmbed, buildPlayerEmbed } from './embeds'
 
-const POLL_INTERVAL_MS = 5000; // 5 seconds
-const MAX_POLL_ATTEMPTS = 3;
+const POLL_INTERVAL_MS = 5000 // 5 seconds
+const MAX_POLL_ATTEMPTS = 3
 
 // Track the current target ID for each message to prevent old polls from overwriting new selections
-const activeTasks = new Map<string, number>();
+const activeTasks = new Map<string, number>()
 
 /**
  * Sets the active target ID for a message. Any polling for a different ID will stop.
  */
 export function setActiveTask(messageId: string, id: number): void {
-  activeTasks.set(messageId, id);
+  activeTasks.set(messageId, id)
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-type RefreshType = 'player' | 'clan';
+type RefreshType = 'player' | 'clan'
 
 interface RefreshableResponse {
-  isRefreshing: boolean;
+  isRefreshing: boolean
 }
 
 /**
@@ -40,107 +36,80 @@ export async function pollForFreshData(
   message: Message,
   id: number,
   type: RefreshType,
-  searchResults?: api.SearchResponse['players'] | api.SearchResponse['clans'],
+  searchResults?: SearchResponse['players'] | SearchResponse['clans'],
   interactionId?: string,
   attempt = 0,
 ): Promise<void> {
   // Check if this poll is still relevant
   if (activeTasks.get(message.id) !== id) {
-    console.log(
-      `[Refresh] Stopping poll for ${type} ${id} on message ${message.id} (no longer active)`,
-    );
-    return;
+    console.log(`[Refresh] Stopping poll for ${type} ${id} on message ${message.id} (no longer active)`)
+    return
   }
 
   if (attempt >= MAX_POLL_ATTEMPTS) {
-    console.log(
-      `[Refresh] Gave up polling for ${type} ${id} after ${MAX_POLL_ATTEMPTS} attempts`,
-    );
+    console.log(`[Refresh] Gave up polling for ${type} ${id} after ${MAX_POLL_ATTEMPTS} attempts`)
     if (activeTasks.get(message.id) === id) {
-      activeTasks.delete(message.id);
+      activeTasks.delete(message.id)
     }
-    return;
+    return
   }
 
-  console.log(
-    `[Refresh] Polling ${type} ${id} (attempt ${
-      attempt + 1
-    }/${MAX_POLL_ATTEMPTS})`,
-  );
+  console.log(`[Refresh] Polling ${type} ${id} (attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS})`)
 
-  await sleep(POLL_INTERVAL_MS);
+  await sleep(POLL_INTERVAL_MS)
 
   // Check again after sleep
   if (activeTasks.get(message.id) !== id) {
-    return;
+    return
   }
 
   try {
-    let response: RefreshableResponse;
-    let embed: EmbedBuilder;
-    let components: ActionRowBuilder<StringSelectMenuBuilder>[] | undefined;
+    let response: RefreshableResponse
+    let embed: EmbedBuilder
+    let components: ActionRowBuilder<StringSelectMenuBuilder>[] | undefined
 
     if (type === 'player') {
-      const player = await api.getPlayer(id);
-      response = player;
-      embed = buildPlayerEmbed(player);
+      const player = await api.player.byId.query({ id })
+      if (!player) return
+      response = player
+      embed = buildPlayerEmbed(player)
 
       // Preserve select menu if we have search results
       if (searchResults && searchResults.length > 1) {
-        components = [
-          buildPlayerSelectMenu(
-            searchResults as api.SearchResponse['players'],
-            id,
-            interactionId,
-          ),
-        ];
+        components = [buildPlayerSelectMenu(searchResults as SearchResponse['players'], id, interactionId)]
       }
     } else {
-      const clan = await api.getClan(id);
-      response = clan;
-      embed = buildClanEmbed(clan);
+      const clan = await api.clan.byId.query({ id })
+      if (!clan) return
+      response = clan
+      embed = buildClanEmbed(clan)
 
       // Preserve select menu if we have search results
       if (searchResults && searchResults.length > 1) {
-        components = [
-          buildClanSelectMenu(
-            searchResults as api.SearchResponse['clans'],
-            id,
-            interactionId,
-          ),
-        ];
+        components = [buildClanSelectMenu(searchResults as SearchResponse['clans'], id, interactionId)]
       }
     }
 
     // Final check before editing
     if (activeTasks.get(message.id) !== id) {
-      return;
+      return
     }
 
     if (!response.isRefreshing) {
-      console.log(
-        `[Refresh] ${type} ${id} data is now fresh, updating message`,
-      );
+      console.log(`[Refresh] ${type} ${id} data is now fresh, updating message`)
       await message.edit({
         embeds: [embed],
         components: components || [],
-      });
-      activeTasks.delete(message.id);
+      })
+      activeTasks.delete(message.id)
     } else {
       // Still refreshing, try again
-      await pollForFreshData(
-        message,
-        id,
-        type,
-        searchResults,
-        interactionId,
-        attempt + 1,
-      );
+      await pollForFreshData(message, id, type, searchResults, interactionId, attempt + 1)
     }
   } catch (error) {
-    console.error(`[Refresh] Error polling ${type} ${id}:`, error);
+    console.error(`[Refresh] Error polling ${type} ${id}:`, error)
     if (activeTasks.get(message.id) === id) {
-      activeTasks.delete(message.id);
+      activeTasks.delete(message.id)
     }
     // Don't edit the message on error, just give up
   }
