@@ -133,12 +133,15 @@ async function get2v2Leaderboard(
     nameMap = new Map(players.map((p) => [p.brawlhallaId, p.name]))
   }
 
-  const entries = filtered.map((t, i) => ({
-    ...t,
-    rank: opts.offset + i + 1,
-    playerOneName: nameMap.get(t.brawlhallaIdOne),
-    playerTwoName: nameMap.get(t.brawlhallaIdTwo),
-  }))
+  const entries = filtered.map((t, i) => {
+    const nameParts = (t.teamName ?? '').split('+')
+    return {
+      ...t,
+      rank: opts.offset + i + 1,
+      playerOneName: nameMap.get(t.brawlhallaIdOne) ?? nameParts[0]?.trim() ?? 'Unknown',
+      playerTwoName: nameMap.get(t.brawlhallaIdTwo) ?? nameParts[1]?.trim() ?? 'Unknown',
+    }
+  })
 
   return {
     entries,
