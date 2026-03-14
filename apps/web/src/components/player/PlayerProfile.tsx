@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
@@ -278,81 +278,107 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           <Card className="overflow-hidden border-border">
             {displayedWeapons.map((w: PlayerData) => {
               const share = totalTimeHeld > 0 ? (w.timeHeld ?? 0) / totalTimeHeld : 0
+              const formatCompact = (n: number | bigint): string => {
+                const num = typeof n === 'bigint' ? Number(n) : n
+                if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`
+                if (num >= 100_000) return `${(num / 1_000).toFixed(0)}K`
+                if (num >= 10_000) return `${(num / 1_000).toFixed(1)}K`
+                return formatNum(num)
+              }
               return (
-                <div key={w.weapon} className="p-4 border-b border-border last:border-0 hover:bg-accent/30 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 relative shrink-0">
-                      <img src={getWeaponIcon(w.weapon)} alt={w.weapon} className="object-contain w-full h-full" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="min-w-0">
-                          <h3 className="font-bold text-foreground truncate text-sm">{w.weapon}</h3>
-                          <div className="mt-0.5 text-[10px] text-muted-foreground font-mono flex items-center gap-1.5">
-                            <span>{formatNum(w.kos)} KOs</span>
-                            <span className="opacity-30">•</span>
-                            <span>{formatNum(w.damage)} dmg</span>
+                <div key={w.weapon} className="transition-all duration-200 hover:bg-accent/30">
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 relative shrink-0">
+                        <img src={getWeaponIcon(w.weapon)} alt={w.weapon} className="object-contain w-full h-full" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-foreground truncate text-sm">{w.weapon}</h3>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground font-mono flex items-center gap-1.5">
+                              <span>{formatNum(w.kos)} KOs</span>
+                              <span className="opacity-30">•</span>
+                              <span>{formatCompact(w.damage)} dmg</span>
+                            </div>
+                          </div>
+                          <div className="flex items-baseline gap-2 shrink-0">
+                            <span className="text-lg font-black text-foreground leading-none">{formatHours(w.timeHeld)}</span>
+                            <span className="text-sm font-bold text-primary">{(share * 100).toFixed(0)}%</span>
                           </div>
                         </div>
-                        <div className="flex items-baseline gap-2 shrink-0">
-                          <span className="text-lg font-black text-foreground leading-none">{formatHours(w.timeHeld)}</span>
-                          <span className="text-sm font-bold text-primary">{(share * 100).toFixed(0)}%</span>
+                        <div className="mt-[-4px] flex items-center gap-3">
+                          <Progress value={share * 100} className="h-1.5 flex-1" />
+                          <div className="text-[10px] text-muted-foreground font-mono shrink-0">
+                            {formatNum(w.kos)} KOs • {formatCompact(w.damage)} dmg
+                          </div>
                         </div>
                       </div>
-                      <Progress value={share * 100} className="h-1.5 mt-1" />
                     </div>
                   </div>
                 </div>
               )
             })}
-            {weaponStats.length > 5 && (
-              <button
-                type="button"
-                onClick={() => { if (showAllWeapons) weaponsRef.current?.scrollIntoView({ behavior: 'auto' }); setShowAllWeapons(!showAllWeapons) }}
-                className="w-full p-3 text-sm font-bold text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-2"
-              >
-                {showAllWeapons ? <><ChevronUp className="h-4 w-4" />Show less</> : <><ChevronDown className="h-4 w-4" />Show all {weaponStats.length} weapons</>}
-              </button>
-            )}
           </Card>
+          {weaponStats.length > 5 && (
+            <div className="flex justify-center mt-6">
+              <Button variant="outline" onClick={() => { if (showAllWeapons) weaponsRef.current?.scrollIntoView({ behavior: 'auto' }); setShowAllWeapons(!showAllWeapons) }} className="gap-2">
+                {showAllWeapons ? <>Show Less <ChevronUp className="h-4 w-4" /></> : <>Show All Weapons <ChevronDown className="h-4 w-4" /></>}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Top Legends */}
+      {/* Legends */}
       {allLegends.length > 0 && (
-        <div ref={legendsRef} className="space-y-4">
+        <div id="legends-section" ref={legendsRef} className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-foreground">Top Legends</h2>
-            <span className="text-sm text-muted-foreground font-mono">Total Legends: {allLegends.length}</span>
+            <h2 className="text-2xl font-bold text-foreground">Legend Statistics</h2>
+            <span className="text-sm text-muted-foreground font-mono">Played: {allLegends.length}</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayedLegends.map((l: PlayerData) => {
-              const legendWinrate = l.games > 0 ? (l.wins / l.games) * 100 : 0
+          <Card className="overflow-hidden border-border">
+            {displayedLegends.map((legend: PlayerData) => {
+              const wr = legend.games > 0 ? (legend.wins / legend.games) * 100 : 0
+              const rankedLegend = (player.rankedLegends || []).find((r: PlayerData) => r.legendId === legend.legendId)
               return (
-                <Card key={l.legendId} className="overflow-hidden border-border hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12 border border-border bg-muted rounded-md">
-                        <AvatarImage src={`/images/legends/avatars/${l.legendNameKey}.png`} alt={l.legendNameKey} className="object-cover object-top" />
-                        <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">{l.legendNameKey?.substring(0, 2)}</AvatarFallback>
+                <div key={legend.legendId} className="transition-all duration-200 hover:bg-accent/30">
+                  <div className="p-4 space-y-3 relative overflow-hidden">
+                    <div className="flex items-center gap-4 relative z-10">
+                      <Avatar className="w-12 h-12 rounded-lg shadow-sm shrink-0">
+                        <AvatarImage src={`/images/legends/avatars/${legend.legendNameKey}.png`} alt={legend.legendNameKey} className="object-cover object-top" loading="lazy" />
+                        <AvatarFallback className="bg-muted text-lg font-bold text-muted-foreground capitalize rounded-md">{legend.legendNameKey?.[0] || '?'}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-foreground capitalize truncate">{l.legendNameKey}</div>
-                        <div className="text-xs text-muted-foreground font-mono">Lv. {l.level} • {formatNum(l.games)} games</div>
+                        <h3 className="font-bold capitalize truncate text-sm">{legend.legendNameKey}</h3>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-mono">
+                          <span>{formatNum(legend.xp)} XP</span>
+                          <span className="opacity-30">•</span>
+                          <span className={wr > 50 ? 'text-success font-bold' : ''}>{wr.toFixed(0)}% WR</span>
+                          <span className="opacity-30">•</span>
+                          <span>{formatHours(legend.matchTime ?? 0)}</span>
+                        </div>
                       </div>
-                      <div className={`text-sm font-bold ${legendWinrate >= 50 ? 'text-success' : 'text-muted-foreground'}`}>
-                        {legendWinrate.toFixed(1)}%
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="secondary" className="text-xs font-mono px-2 py-1 h-7">Lvl {legend.level}</Badge>
+                        {rankedLegend && (
+                          <Badge variant="outline" className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7">
+                            {rankedLegend.tier} • {rankedLegend.rating}
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )
             })}
-          </div>
+          </Card>
           {allLegends.length > 5 && (
-            <Button variant="outline" className="w-full" onClick={() => { if (showAllLegends) legendsRef.current?.scrollIntoView({ behavior: 'auto' }); setShowAllLegends(!showAllLegends) }}>
-              {showAllLegends ? <><ChevronUp className="mr-2 h-4 w-4" />Show less</> : <><ChevronDown className="mr-2 h-4 w-4" />Show all {allLegends.length} legends</>}
-            </Button>
+            <div className="flex justify-center mt-6">
+              <Button variant="outline" onClick={() => { if (showAllLegends) legendsRef.current?.scrollIntoView({ behavior: 'auto' }); setShowAllLegends(!showAllLegends) }} className="gap-2">
+                {showAllLegends ? <>Show Less <ChevronUp className="h-4 w-4" /></> : <>Show All Legends <ChevronDown className="h-4 w-4" /></>}
+              </Button>
+            </div>
           )}
         </div>
       )}
