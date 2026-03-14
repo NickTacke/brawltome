@@ -44,12 +44,13 @@ Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(
 
 const stopJanitor = startJanitor({ db, bhapi, redis, rankedQueue, statsQueue, clanQueue })
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
   rankedQueue.stop()
   statsQueue.stop()
   clanQueue.stop()
-  stopJanitor()
+  await stopJanitor()
+  console.log('Lock released. Goodbye.')
   process.exit(0)
 })
 
