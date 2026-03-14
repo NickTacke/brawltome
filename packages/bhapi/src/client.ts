@@ -67,8 +67,8 @@ export class BhApiClient {
   }
 
   private async call<T>(endpoint: string): Promise<T | null> {
-    await this.burst.acquire('burst')
-    await this.sustained.acquire('sustained')
+    await this.burst.acquire()
+    await this.sustained.acquire()
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
