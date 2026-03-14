@@ -1,1 +1,43 @@
-console.log('Worker placeholder')
+import { BhApiClient } from '@brawltome/bhapi'
+import { db } from '@brawltome/database'
+import Redis from 'ioredis'
+import { createQueue } from './queue/queue'
+import { processRefreshClan, processRefreshRanked, processRefreshStats } from './services/refresh.service'
+
+const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
+const bhapi = new BhApiClient({ apiKey: process.env.BRAWLHALLA_API_KEY ?? '' })
+const deps = { db, bhapi }
+
+const rankedQueue = createQueue<{ brawlhallaId: number }>(
+  redis,
+  'refresh-ranked',
+  async (data) => processRefreshRanked(deps, data.brawlhallaId),
+  { concurrency: 5, retries: 3, backoffMs: 1000 },
+)
+
+const statsQueue = createQueue<{ brawlhallaId: number }>(
+  redis,
+  'refresh-stats',
+  async (data) => processRefreshStats(deps, data.brawlhallaId),
+  { concurrency: 3, retries: 3, backoffMs: 1000 },
+)
+
+const clanQueue = createQueue<{ clanId: number }>(
+  redis,
+  'refresh-clan',
+  async (data) => processRefreshClan(deps, data.clanId),
+  { concurrency: 2, retries: 3, backoffMs: 1000 },
+)
+
+console.log('Worker starting...')
+Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(console.error)
+
+process.on('SIGINT', () => {
+  console.log('Worker shutting down...')
+  rankedQueue.stop()
+  statsQueue.stop()
+  clanQueue.stop()
+  process.exit(0)
+})
+
+console.log('Worker running. Queues: refresh-ranked(5), refresh-stats(3), refresh-clan(2)')

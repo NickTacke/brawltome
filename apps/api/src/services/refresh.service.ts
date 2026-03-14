@@ -1,0 +1,278 @@
+import type { BhApiClient } from '@brawltome/bhapi'
+import {
+  clan,
+  clanMember,
+  player,
+  playerAlias,
+  playerClan,
+  playerRankedLegend,
+  playerRankedTeam,
+  playerStatsLegend,
+  playerWeaponStat,
+  ratingHistory,
+} from '@brawltome/database'
+import type { Database } from '@brawltome/database'
+import { desc, eq } from 'drizzle-orm'
+import { VALHALLAN_GRACE_PERIOD_MS } from './constants'
+
+interface RefreshDeps {
+  db: Database
+  bhapi: BhApiClient
+}
+
+// ---- REFRESH RANKED ----
+
+export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhallaId: number) {
+  const data = await bhapi.getPlayerRanked(brawlhallaId)
+  if (!data) return
+
+  await db.transaction(async (tx) => {
+    const existing = await tx.query.player.findFirst({
+      where: eq(player.brawlhallaId, brawlhallaId),
+      columns: { name: true, tier: true, valhallanConfirmedAt: true },
+    })
+
+    // Track name change as alias
+    if (existing && existing.name !== data.name) {
+      await tx
+        .insert(playerAlias)
+        .values({
+          brawlhallaId,
+          key: existing.name.toLowerCase(),
+          value: existing.name,
+        })
+        .onConflictDoNothing()
+    }
+
+    // Valhallan grace period
+    let tier = data.tier
+    if (
+      existing?.tier === 'Valhallan' &&
+      data.tier !== 'Valhallan' &&
+      existing.valhallanConfirmedAt &&
+      Date.now() - existing.valhallanConfirmedAt.getTime() < VALHALLAN_GRACE_PERIOD_MS
+    ) {
+      tier = 'Valhallan'
+    }
+
+    // Update player ranked fields
+    await tx
+      .update(player)
+      .set({
+        name: data.name,
+        region: data.region,
+        rating: data.rating,
+        peakRating: data.peak_rating,
+        tier,
+        rankedGames: data.games,
+        rankedWins: data.wins,
+        rankedLastUpdated: new Date(),
+        lastUpdated: new Date(),
+      })
+      .where(eq(player.brawlhallaId, brawlhallaId))
+
+    // Replace ranked legends
+    await tx.delete(playerRankedLegend).where(eq(playerRankedLegend.brawlhallaId, brawlhallaId))
+    if (data.legends.length > 0) {
+      await tx.insert(playerRankedLegend).values(
+        data.legends.map((l) => ({
+          brawlhallaId,
+          legendId: l.legend_id,
+          legendNameKey: l.legend_name_key,
+          rating: l.rating,
+          peakRating: l.peak_rating,
+          tier: l.tier,
+          wins: l.wins,
+          games: l.games,
+        })),
+      )
+    }
+
+    // Replace ranked teams
+    await tx.delete(playerRankedTeam).where(eq(playerRankedTeam.brawlhallaId, brawlhallaId))
+    if (data['2v2'].length > 0) {
+      await tx.insert(playerRankedTeam).values(
+        data['2v2'].map((t) => ({
+          brawlhallaId,
+          brawlhallaIdOne: t.brawlhalla_id_one,
+          brawlhallaIdTwo: t.brawlhalla_id_two,
+          teamName: t.teamname,
+          rating: t.rating,
+          peakRating: t.peak_rating,
+          tier: t.tier,
+          wins: t.wins,
+          games: t.games,
+          region: String(t.region),
+          globalRank: t.global_rank,
+        })),
+      )
+    }
+
+    // Snapshot rating history (only if changed)
+    const lastSnapshot = await tx.query.ratingHistory.findFirst({
+      where: eq(ratingHistory.brawlhallaId, brawlhallaId),
+      orderBy: [desc(ratingHistory.recordedAt)],
+    })
+
+    if (!lastSnapshot || lastSnapshot.rating !== data.rating || lastSnapshot.games !== data.games) {
+      await tx.insert(ratingHistory).values({
+        brawlhallaId,
+        rating: data.rating,
+        peakRating: data.peak_rating,
+        tier: data.tier,
+        games: data.games,
+        wins: data.wins,
+      })
+    }
+  })
+}
+
+// ---- REFRESH STATS ----
+
+export async function processRefreshStats({ db, bhapi }: RefreshDeps, brawlhallaId: number) {
+  const data = await bhapi.getPlayerStats(brawlhallaId)
+  if (!data) return
+
+  const parseDmg = (s: string): bigint => BigInt(s || '0')
+
+  const filteredLegends = data.legends.filter((l) => l.legend_id !== 0)
+  const matchTimeTotal = filteredLegends.reduce((sum, l) => sum + l.matchtime, 0)
+
+  await db.transaction(async (tx) => {
+    // Update player stats fields
+    await tx
+      .update(player)
+      .set({
+        name: data.name,
+        xp: data.xp,
+        level: data.level,
+        xpPercentage: data.xp_percentage,
+        totalGames: data.games,
+        totalWins: data.wins,
+        matchTimeTotal,
+        damageBomb: parseDmg(data.damagebomb),
+        damageMine: parseDmg(data.damagemine),
+        damageSpikeball: parseDmg(data.damagespikeball),
+        damageSidekick: parseDmg(data.damagesidekick),
+        hitSnowball: data.hitsnowball,
+        koBomb: data.kobomb,
+        koMine: data.komine,
+        koSpikeball: data.kospikeball,
+        koSidekick: data.kosidekick,
+        koSnowball: data.kosnowball,
+        statsLastUpdated: new Date(),
+        lastUpdated: new Date(),
+      })
+      .where(eq(player.brawlhallaId, brawlhallaId))
+
+    // Replace stats legends
+    await tx.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, brawlhallaId))
+    if (filteredLegends.length > 0) {
+      await tx.insert(playerStatsLegend).values(
+        filteredLegends.map((l) => ({
+          brawlhallaId,
+          legendId: l.legend_id,
+          legendNameKey: l.legend_name_key,
+          xp: l.xp,
+          level: l.level,
+          xpPercentage: l.xp_percentage,
+          games: l.games,
+          wins: l.wins,
+          matchTime: l.matchtime,
+          kos: l.kos,
+          teamKos: l.teamkos,
+          suicides: l.suicides,
+          falls: l.falls,
+          damageDealt: parseDmg(l.damagedealt),
+          damageTaken: parseDmg(l.damagetaken),
+          damageWeaponOne: parseDmg(l.damageweaponone),
+          damageWeaponTwo: parseDmg(l.damageweapontwo),
+          timeHeldWeaponOne: l.timeheldweaponone,
+          timeHeldWeaponTwo: l.timeheldweapontwo,
+          koWeaponOne: l.koweaponone,
+          koWeaponTwo: l.koweapontwo,
+          koUnarmed: l.kounarmed,
+          koThrownItem: l.kothrownitem,
+          koGadgets: l.kogadgets,
+          damageUnarmed: parseDmg(l.damageunarmed),
+          damageThrownItem: parseDmg(l.damagethrownitem),
+          damageGadgets: parseDmg(l.damagegadgets),
+        })),
+      )
+    }
+
+    // Replace weapon stats
+    // TODO: weapon aggregation requires game data cache (Phase 7)
+    await tx.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, brawlhallaId))
+
+    // Handle clan
+    if (data.clan) {
+      await tx
+        .insert(playerClan)
+        .values({
+          brawlhallaId,
+          clanName: data.clan.clan_name,
+          clanId: data.clan.clan_id,
+          clanXp: parseDmg(data.clan.clan_xp),
+          clanLifetimeXp: BigInt(data.clan.clan_lifetime_xp),
+          personalXp: data.clan.personal_xp,
+        })
+        .onConflictDoUpdate({
+          target: playerClan.brawlhallaId,
+          set: {
+            clanName: data.clan.clan_name,
+            clanId: data.clan.clan_id,
+            clanXp: parseDmg(data.clan.clan_xp),
+            clanLifetimeXp: BigInt(data.clan.clan_lifetime_xp),
+            personalXp: data.clan.personal_xp,
+          },
+        })
+    } else {
+      await tx.delete(playerClan).where(eq(playerClan.brawlhallaId, brawlhallaId))
+    }
+  })
+}
+
+// ---- REFRESH CLAN ----
+
+export async function processRefreshClan({ db, bhapi }: RefreshDeps, clanId: number) {
+  const data = await bhapi.getClan(clanId)
+  if (!data) return
+
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(clan)
+      .values({
+        clanId: data.clan_id,
+        clanName: data.clan_name,
+        clanCreateDate: new Date(data.clan_create_date * 1000),
+        clanXp: BigInt(data.clan_xp || '0'),
+        clanLifetimeXp: BigInt(data.clan_lifetime_xp),
+        lastUpdated: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: clan.clanId,
+        set: {
+          clanName: data.clan_name,
+          clanXp: BigInt(data.clan_xp || '0'),
+          clanLifetimeXp: BigInt(data.clan_lifetime_xp),
+          lastUpdated: new Date(),
+        },
+      })
+
+    // Replace members
+    await tx.delete(clanMember).where(eq(clanMember.clanId, data.clan_id))
+    if (data.clan.length > 0) {
+      await tx.insert(clanMember).values(
+        data.clan.map((m) => ({
+          clanId: data.clan_id,
+          brawlhallaId: m.brawlhalla_id,
+          name: m.name,
+          rank: m.rank,
+          joinDate: new Date(m.join_date * 1000),
+          xp: m.xp,
+        })),
+      )
+    }
+  })
+}
