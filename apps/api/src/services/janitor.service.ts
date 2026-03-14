@@ -94,9 +94,6 @@ export function startJanitor(deps: JanitorDeps) {
       // Clan backfill
       await time('clan backfill', () => backfillClans(deps))
 
-      // Valhallan confirmation
-      await time('valhallan', () => confirmValhallans(deps))
-
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
       console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
     } catch (err) {
@@ -256,91 +253,85 @@ async function savePlayers(
     bestLegendWins: r.best_legend_wins ?? 0,
   }))
 
-  for (const row of rows) {
-    try {
-      const isValhallan = row.tier === 'Valhallan'
+  try {
+    if (rows.length > 0) {
       await deps.db
         .insert(player)
-        .values({
-          ...row,
-          ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
-        } as typeof player.$inferInsert)
+        .values(rows as (typeof player.$inferInsert)[])
         .onConflictDoUpdate({
           target: player.brawlhallaId,
           set: {
-            name: row.name,
-            region: row.region,
-            rating: row.rating,
-            peakRating: row.peakRating,
-            tier: row.tier,
-            rankedGames: row.rankedGames,
-            rankedWins: row.rankedWins,
-            bestLegend: row.bestLegend,
-            bestLegendGames: row.bestLegendGames,
-            bestLegendWins: row.bestLegendWins,
+            name: sql`excluded.name`,
+            region: sql`excluded.region`,
+            rating: sql`excluded.rating`,
+            peakRating: sql`excluded.peak_rating`,
+            tier: sql`excluded.tier`,
+            rankedGames: sql`excluded.ranked_games`,
+            rankedWins: sql`excluded.ranked_wins`,
+            bestLegend: sql`excluded.best_legend`,
+            bestLegendGames: sql`excluded.best_legend_games`,
+            bestLegendWins: sql`excluded.best_legend_wins`,
             lastUpdated: now,
-            ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
           },
         })
-    } catch (err) {
-      console.error(`[janitor] failed to save player ${row.brawlhallaId}:`, err)
     }
+  } catch (err) {
+    console.error('[janitor] failed to batch save players:', err)
   }
 }
 
 async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
-  for (const r of rankings) {
-    try {
-      // Ensure both players exist in the player table
-      for (const id of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
-        const namePart = r.teamname.split('+')
-        const name = id === r.brawlhalla_id_one ? (namePart[0]?.trim() ?? '') : (namePart[1]?.trim() ?? '')
-
-        await deps.db
-          .insert(player)
-          .values({
-            brawlhallaId: id,
-            name,
-            region: r.region ?? null,
-            rating: 0,
-          })
-          .onConflictDoNothing()
-      }
-
-      // Insert team for both players (each player owns their team rows)
-      for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
-        await deps.db
-          .insert(playerRankedTeam)
-          .values({
-            brawlhallaId: ownerId,
-            brawlhallaIdOne: r.brawlhalla_id_one,
-            brawlhallaIdTwo: r.brawlhalla_id_two,
-            teamName: r.teamname ?? '',
-            rating: r.rating ?? 0,
-            peakRating: r.peak_rating ?? 0,
-            tier: r.tier ?? '',
-            wins: r.wins ?? 0,
-            games: r.games ?? 0,
-            region: r.region ?? null,
-            globalRank: r.rank ?? null,
-          })
-          .onConflictDoUpdate({
-            target: [playerRankedTeam.brawlhallaId, playerRankedTeam.brawlhallaIdOne, playerRankedTeam.brawlhallaIdTwo],
-            set: {
-              teamName: r.teamname ?? '',
-              rating: r.rating ?? 0,
-              peakRating: r.peak_rating ?? 0,
-              tier: r.tier ?? '',
-              wins: r.wins ?? 0,
-              games: r.games ?? 0,
-              region: r.region ?? null,
-              globalRank: r.rank ?? null,
-            },
-          })
-      }
-    } catch (err) {
-      console.error(`[janitor] failed to save team ${r.brawlhalla_id_one}+${r.brawlhalla_id_two}:`, err)
+  try {
+    // Batch create placeholder players for all team members
+    const playerRows: (typeof player.$inferInsert)[] = []
+    for (const r of rankings) {
+      const nameParts = (r.teamname ?? '').split('+')
+      playerRows.push(
+        { brawlhallaId: r.brawlhalla_id_one, name: nameParts[0]?.trim() ?? '', region: r.region ?? null, rating: 0 },
+        { brawlhallaId: r.brawlhalla_id_two, name: nameParts[1]?.trim() ?? '', region: r.region ?? null, rating: 0 },
+      )
     }
+    if (playerRows.length > 0) {
+      await deps.db.insert(player).values(playerRows).onConflictDoNothing()
+    }
+
+    // Batch upsert team rows (one per owner per team)
+    const teamRows: (typeof playerRankedTeam.$inferInsert)[] = []
+    for (const r of rankings) {
+      const shared = {
+        brawlhallaIdOne: r.brawlhalla_id_one,
+        brawlhallaIdTwo: r.brawlhalla_id_two,
+        teamName: r.teamname ?? '',
+        rating: r.rating ?? 0,
+        peakRating: r.peak_rating ?? 0,
+        tier: r.tier ?? '',
+        wins: r.wins ?? 0,
+        games: r.games ?? 0,
+        region: r.region ?? null,
+        globalRank: r.rank ?? null,
+      }
+      teamRows.push({ brawlhallaId: r.brawlhalla_id_one, ...shared }, { brawlhallaId: r.brawlhalla_id_two, ...shared })
+    }
+    if (teamRows.length > 0) {
+      await deps.db
+        .insert(playerRankedTeam)
+        .values(teamRows)
+        .onConflictDoUpdate({
+          target: [playerRankedTeam.brawlhallaId, playerRankedTeam.brawlhallaIdOne, playerRankedTeam.brawlhallaIdTwo],
+          set: {
+            teamName: sql`excluded.team_name`,
+            rating: sql`excluded.rating`,
+            peakRating: sql`excluded.peak_rating`,
+            tier: sql`excluded.tier`,
+            wins: sql`excluded.wins`,
+            games: sql`excluded.games`,
+            region: sql`excluded.region`,
+            globalRank: sql`excluded.global_rank`,
+          },
+        })
+    }
+  } catch (err) {
+    console.error('[janitor] failed to batch save teams:', err)
   }
 }
 
@@ -373,24 +364,5 @@ async function backfillClans(deps: JanitorDeps) {
         enqueued++
       }
     }
-  }
-}
-
-// ---- VALHALLAN CONFIRMATION ----
-
-async function confirmValhallans(deps: JanitorDeps) {
-  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
-
-  const valhallans = await deps.db
-    .select({ brawlhallaId: player.brawlhallaId })
-    .from(player)
-    .where(
-      sql`${player.tier} = 'Valhallan' AND (${player.valhallanConfirmedAt} IS NULL OR ${player.valhallanConfirmedAt} < ${twoDaysAgo})`,
-    )
-    .limit(5)
-
-  for (const v of valhallans) {
-    if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) break
-    await deps.rankedQueue.enqueue({ brawlhallaId: v.brawlhallaId })
   }
 }

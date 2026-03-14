@@ -15,6 +15,13 @@
       "when": 1773507958935,
       "tag": "0001_brainy_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773513496310,
+      "tag": "0002_silent_firelord",
+      "breakpoints": true
     }
   ]
 }

@@ -16,9 +16,6 @@ export const DEDUP_TTL_RANKED_SEC = 3600
 export const DEDUP_TTL_STATS_SEC = 43200
 export const DEDUP_TTL_CLAN_SEC = 3600
 
-// Valhallan
-export const VALHALLAN_GRACE_PERIOD_MS = 2 * 60 * 60 * 1000
-
 // Weapon name normalization
 export const WEAPON_NAME_MAP: Record<string, string> = {
   Fists: 'Gauntlets',
