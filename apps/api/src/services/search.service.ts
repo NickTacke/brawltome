@@ -1,6 +1,7 @@
 import { blacklist, clan, player, playerAlias } from '@brawltome/database'
 import { and, desc, eq, ilike, inArray, not, sql } from 'drizzle-orm'
 import type { Context } from '../trpc/context'
+import { getLegendById } from './game-data.service'
 
 function sanitizeQuery(query: string): string {
   return query
@@ -46,7 +47,12 @@ export async function searchLocal(ctx: Context, rawQuery: string) {
     })
   }
 
-  const players = [...playersByName, ...playersByAlias].slice(0, 40)
+  const players = [...playersByName, ...playersByAlias]
+    .slice(0, 40)
+    .map((p) => ({
+      ...p,
+      bestLegendNameKey: getLegendById(p.bestLegend)?.legendNameKey ?? null,
+    }))
 
   // Search clans
   const clans = await ctx.db.query.clan.findMany({
