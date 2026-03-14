@@ -13,6 +13,7 @@ import {
 } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
 import { desc, eq } from 'drizzle-orm'
+import { aggregateWeapons } from './game-data.service'
 
 interface RefreshDeps {
   db: Database
@@ -189,9 +190,30 @@ export async function processRefreshStats({ db, bhapi }: RefreshDeps, brawlhalla
       )
     }
 
-    // Replace weapon stats
-    // TODO: weapon aggregation requires game data cache (Phase 7)
+    // Replace weapon stats (aggregated across legends)
     await tx.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, brawlhallaId))
+    const weapons = aggregateWeapons(
+      filteredLegends.map((l) => ({
+        legendId: l.legend_id,
+        damageWeaponOne: parseDmg(l.damageweaponone),
+        damageWeaponTwo: parseDmg(l.damageweapontwo),
+        timeHeldWeaponOne: l.timeheldweaponone,
+        timeHeldWeaponTwo: l.timeheldweapontwo,
+        koWeaponOne: l.koweaponone,
+        koWeaponTwo: l.koweapontwo,
+      })),
+    )
+    if (weapons.length > 0) {
+      await tx.insert(playerWeaponStat).values(
+        weapons.map((w) => ({
+          brawlhallaId,
+          weapon: w.weapon,
+          timeHeld: w.timeHeld,
+          damage: w.damage,
+          kos: w.kos,
+        })),
+      )
+    }
 
     // Handle clan
     if (data.clan) {

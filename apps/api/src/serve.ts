@@ -6,10 +6,13 @@ import { cors } from 'hono/cors'
 import Redis from 'ioredis'
 import { createQueue } from './queue/queue'
 import { appRouter } from './router'
+import { initGameData } from './services/game-data.service'
 import type { Context } from './trpc/context'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const bhapi = new BhApiClient({ apiKey: process.env.BRAWLHALLA_API_KEY ?? '' })
+
+await initGameData(db, bhapi)
 
 // API only enqueues — concurrency 0 means no consumer loop
 const rankedQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-ranked', async () => {}, { concurrency: 0 })
