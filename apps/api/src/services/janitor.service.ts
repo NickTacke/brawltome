@@ -277,20 +277,27 @@ async function savePlayers(
 
 async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
   try {
-    // Batch create placeholder players for all team members
+    // Batch create placeholder players for all team members (deduplicated)
+    const seenPlayers = new Set<number>()
     const playerRows: (typeof player.$inferInsert)[] = []
     for (const r of rankings) {
       const nameParts = (r.teamname ?? '').split('+')
-      playerRows.push(
-        { brawlhallaId: r.brawlhalla_id_one, name: nameParts[0]?.trim() ?? '', region: r.region ?? null, rating: 0 },
-        { brawlhallaId: r.brawlhalla_id_two, name: nameParts[1]?.trim() ?? '', region: r.region ?? null, rating: 0 },
-      )
+      for (const [id, name] of [
+        [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
+        [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
+      ] as [number, string][]) {
+        if (!seenPlayers.has(id)) {
+          seenPlayers.add(id)
+          playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
+        }
+      }
     }
     if (playerRows.length > 0) {
       await deps.db.insert(player).values(playerRows).onConflictDoNothing()
     }
 
-    // Batch upsert team rows (one per owner per team)
+    // Batch upsert team rows (one per owner per team), deduplicated
+    const seen = new Set<string>()
     const teamRows: (typeof playerRankedTeam.$inferInsert)[] = []
     for (const r of rankings) {
       const shared = {
@@ -305,7 +312,13 @@ async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
         region: r.region ?? null,
         globalRank: r.rank ?? null,
       }
-      teamRows.push({ brawlhallaId: r.brawlhalla_id_one, ...shared }, { brawlhallaId: r.brawlhalla_id_two, ...shared })
+      for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
+        const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          teamRows.push({ brawlhallaId: ownerId, ...shared })
+        }
+      }
     }
     if (teamRows.length > 0) {
       await deps.db
