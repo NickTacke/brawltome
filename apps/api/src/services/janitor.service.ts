@@ -103,9 +103,10 @@ export function startJanitor(deps: JanitorDeps) {
     }
   }, 60_000)
 
-  return () => {
+  return async () => {
     clearInterval(interval)
     if (heartbeatTimer) clearInterval(heartbeatTimer)
+    if (lockValue) await releaseLock(deps.redis, lockValue)
   }
 }
 
