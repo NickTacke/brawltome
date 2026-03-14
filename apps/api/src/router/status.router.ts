@@ -8,6 +8,6 @@ export const statusRouter = router({
     if (tokens < 20) status = 'degraded'
     if (tokens === 0) status = 'down'
 
-    return { status }
+    return { status, tokens }
   }),
 })

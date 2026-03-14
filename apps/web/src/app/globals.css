@@ -1,0 +1,241 @@
+@import 'tailwindcss';
+
+@source '../../../packages/ui/src';
+
+@plugin 'tailwindcss-animate';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  /* Custom success/danger colors for wins/losses */
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-success-muted: hsl(var(--success-muted));
+  --color-danger: hsl(var(--danger));
+  --color-danger-foreground: hsl(var(--danger-foreground));
+  --color-danger-muted: hsl(var(--danger-muted));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@layer base {
+  :root {
+    /* Soft neutral background with subtle warmth */
+    --background: 220 15% 97%;
+    --foreground: 220 12% 18%;
+    /* Cards blend with background */
+    --card: 220 12% 98%;
+    --card-foreground: 220 12% 18%;
+    --popover: 220 10% 99%;
+    --popover-foreground: 220 12% 18%;
+    /* Blue primary - softer than original */
+    --primary: 212 75% 52%;
+    --primary-foreground: 0 0% 100%;
+    /* Neutral muted tones */
+    --secondary: 220 12% 93%;
+    --secondary-foreground: 220 10% 25%;
+    --muted: 220 10% 92%;
+    --muted-foreground: 220 8% 40%;
+    --accent: 220 10% 91%;
+    --accent-foreground: 220 12% 18%;
+    /* Softer destructive red */
+    --destructive: 0 60% 52%;
+    --destructive-foreground: 0 0% 100%;
+    /* More visible borders for better definition */
+    --border: 220 15% 75%;
+    --input: 220 12% 85%;
+    --ring: 212 75% 52%;
+    /* Chart colors */
+    --chart-1: 212 75% 52%;
+    --chart-2: 220 12% 25%;
+    --chart-3: 199 80% 50%;
+    --chart-4: 45 80% 50%;
+    --chart-5: 220 8% 48%;
+    /* Sidebar */
+    --sidebar: 220 12% 96%;
+    --sidebar-foreground: 220 10% 25%;
+    --sidebar-primary: 212 75% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 10% 91%;
+    --sidebar-accent-foreground: 220 12% 18%;
+    --sidebar-border: 220 15% 75%;
+    --sidebar-ring: 212 75% 52%;
+    /* Success/danger colors - vibrant but refined */
+    --success: 142 70% 38%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 142 45% 80%;
+    --danger: 0 75% 60%;
+    --danger-foreground: 0 0% 100%;
+    --danger-muted: 0 65% 55%;
+    --radius: 0.5rem;
+    --shadow-x: 0;
+    --shadow-y: 1px;
+    --shadow-blur: 3px;
+    --shadow-spread: 0px;
+    --shadow-opacity: 0.08;
+    --shadow-color: oklch(0.3 0.01 240);
+    /* Soft neutral shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(220 15% 20% / 0.04);
+    --shadow-xs: 0 1px 2px 0px hsl(220 15% 20% / 0.05);
+    --shadow-sm:
+      0 1px 3px 0px hsl(220 15% 20% / 0.06), 0 1px 2px -1px hsl(220 15% 20% / 0.05);
+    --shadow:
+      0 1px 3px 0px hsl(220 15% 20% / 0.06), 0 1px 2px -1px hsl(220 15% 20% / 0.06);
+    --shadow-md:
+      0 2px 4px 0px hsl(220 15% 20% / 0.06), 0 2px 4px -1px hsl(220 15% 20% / 0.05);
+    --shadow-lg:
+      0 2px 6px 0px hsl(220 15% 20% / 0.07), 0 4px 8px -1px hsl(220 15% 20% / 0.06);
+    --shadow-xl:
+      0 4px 8px 0px hsl(220 15% 20% / 0.07), 0 8px 16px -2px hsl(220 15% 20% / 0.06);
+    --shadow-2xl: 0 8px 24px 0px hsl(220 15% 20% / 0.14);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+  }
+
+  .dark {
+    --background: 224 19.4805% 15.098%;
+    --foreground: 210 19.6078% 80%;
+    --card: 224 19.4805% 15.098%;
+    --card-foreground: 207.2727 21.5686% 90%;
+    --popover: 223.3333 19.5652% 18.0392%;
+    --popover-foreground: 207.2727 21.5686% 90%;
+    --primary: 211.9565 90.1961% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 19.6078% 20%;
+    --secondary-foreground: 207.2727 21.5686% 90%;
+    --muted: 222 19.6078% 20%;
+    --muted-foreground: 213.3333 15.0838% 64.902%;
+    --accent: 222 19.6078% 20%;
+    --accent-foreground: 207.2727 21.5686% 90%;
+    --destructive: 0 62.0915% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 221.5385 20.3125% 25.098%;
+    --input: 221.5385 20.3125% 25.098%;
+    --ring: 211.9565 90.1961% 60%;
+    --chart-1: 211.9565 90.1961% 60%;
+    --chart-2: 210 19.6078% 80%;
+    --chart-3: 199.1209 89.2157% 60%;
+    --chart-4: 45.2018 93.3054% 46.8627%;
+    --chart-5: 213.3333 15.0838% 64.902%;
+    --sidebar: 226.1538 19.403% 13.1373%;
+    --sidebar-foreground: 210 19.6078% 80%;
+    --sidebar-primary: 211.9565 90.1961% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 223.3333 19.5652% 18.0392%;
+    --sidebar-accent-foreground: 207.2727 21.5686% 90%;
+    --sidebar-border: 222 19.6078% 20%;
+    --sidebar-ring: 211.9565 90.1961% 60%;
+    /* Success/danger colors for dark mode */
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 142 50% 25%;
+    --danger: 0 60% 60%;
+    --danger-foreground: 0 0% 100%;
+    --danger-muted: 0 60% 55%;
+    --shadow-x: 0;
+    --shadow-y: 1px;
+    --shadow-blur: 3px;
+    --shadow-spread: 0px;
+    --shadow-opacity: 0.1;
+    --shadow-color: oklch(0 0 0);
+    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-sm:
+      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow:
+      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-md:
+      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
+    --shadow-lg:
+      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+    --shadow-xl:
+      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
+    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body {
+    @apply bg-background text-foreground;
+  }
+}
