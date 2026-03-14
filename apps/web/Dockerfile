@@ -5,7 +5,7 @@ FROM base AS install
 COPY package.json bun.lock ./
 COPY apps/web/package.json apps/web/
 COPY packages/ui/package.json packages/ui/
-RUN bun install --frozen-lockfile
+RUN bun install
 
 FROM base AS build
 COPY --from=install /app/node_modules node_modules
