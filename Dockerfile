@@ -8,7 +8,7 @@ COPY apps/discord-bot/package.json apps/discord-bot/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/ui/package.json packages/ui/
-RUN bun install --frozen-lockfile --production
+RUN bun install
 
 FROM base AS build
 COPY --from=install /app/node_modules node_modules
