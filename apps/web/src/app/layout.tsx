@@ -4,7 +4,7 @@ import { ComingSoon } from '@/components/ComingSoon';
 import { ModeToggle } from '@/components/mode-toggle';
 import type { Metadata } from 'next';
 
-const IS_MAINTENANCE = false;
+const IS_MAINTENANCE = true;
 
 export const metadata: Metadata = {
   title: {
