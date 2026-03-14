@@ -17,7 +17,7 @@ import {
   QUEUE_DISCOVERY_CAP,
   TIERED_TTL,
 } from './constants'
-import { getLegendById } from './game-data.service'
+import { getLegendById, normalizeWeaponName } from './game-data.service'
 
 const discoveries = new Map<number, Promise<PlayerResult | null>>()
 
@@ -101,8 +101,8 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     const legendData = getLegendById(l.legendId)
     return {
       ...l,
-      weaponOne: legendData?.weaponOne ?? null,
-      weaponTwo: legendData?.weaponTwo ?? null,
+      weaponOne: legendData ? normalizeWeaponName(legendData.weaponOne) : null,
+      weaponTwo: legendData ? normalizeWeaponName(legendData.weaponTwo) : null,
       bioName: legendData?.bioName ?? null,
     }
   })
