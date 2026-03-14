@@ -266,6 +266,7 @@ async function savePlayers(
             bestLegend: sql`excluded.best_legend`,
             bestLegendGames: sql`excluded.best_legend_games`,
             bestLegendWins: sql`excluded.best_legend_wins`,
+            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player.valhallan_confirmed_at END`,
             lastUpdated: now,
           },
         })
@@ -335,6 +336,7 @@ async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
             games: sql`excluded.games`,
             region: sql`excluded.region`,
             globalRank: sql`excluded.global_rank`,
+            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
           },
         })
     }

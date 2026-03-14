@@ -57,6 +57,7 @@ export const player = pgTable(
     koSidekick: integer('ko_sidekick'),
     koSnowball: integer('ko_snowball'),
     statsLastUpdated: timestamp('stats_last_updated'),
+    valhallanConfirmedAt: timestamp('valhallan_confirmed_at'),
 
     // Metadata
     lastUpdated: timestamp('last_updated').defaultNow().notNull(),
@@ -213,6 +214,7 @@ export const playerRankedTeam = pgTable(
     games: integer('games').notNull(),
     region: varchar('region', { length: 16 }),
     globalRank: integer('global_rank'),
+    valhallanConfirmedAt: timestamp('valhallan_confirmed_at'),
   },
   (t) => [
     primaryKey({ columns: [t.brawlhallaId, t.brawlhallaIdOne, t.brawlhallaIdTwo] }),
