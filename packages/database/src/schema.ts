@@ -9,7 +9,6 @@ import {
   serial,
   text,
   timestamp,
-  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core'
 
@@ -317,7 +316,7 @@ export const discordLink = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (t) => [uniqueIndex('idx_discord_link_bhid').on(t.brawlhallaId)],
+  (t) => [index('idx_discord_link_bhid').on(t.brawlhallaId)],
 )
 
 // ============================================================
