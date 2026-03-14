@@ -49,21 +49,29 @@ export function startJanitor(deps: JanitorDeps) {
   let heartbeatTimer: Timer | null = null
 
   const interval = setInterval(async () => {
+    tick++
+    console.log(`[janitor] tick ${tick} starting...`)
+
     const acquired = await acquireLock(deps.redis)
-    if (!acquired) return
+    if (!acquired) {
+      console.log(`[janitor] tick ${tick} skipped: could not acquire lock`)
+      return
+    }
 
     lockValue = acquired
     heartbeatTimer = setInterval(() => renewLock(deps.redis, lockValue), HEARTBEAT_INTERVAL_MS)
-    tick++
 
     try {
-      if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) {
-        console.log(`[janitor] skipping tick ${tick}: only ${deps.bhapi.remainingTokens} tokens remaining`)
+      const tokens = deps.bhapi.remainingTokens
+      if (tokens < JANITOR_MIN_TOKENS) {
+        console.log(`[janitor] tick ${tick} skipped: only ${tokens} tokens remaining`)
         return
       }
 
       // Hot pages every tick
+      console.log('[janitor] syncing hot 1v1...')
       await sync1v1Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:1v1')
+      console.log('[janitor] syncing hot 2v2...')
       await sync2v2Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:2v2')
 
       // Cold pages every N ticks
@@ -145,6 +153,7 @@ async function sync1v1Page(
     return
   }
 
+  console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
   await savePlayers(deps, rankings)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -168,6 +177,7 @@ async function sync2v2Page(
     return
   }
 
+  console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
   await saveTeams(deps, rankings)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
