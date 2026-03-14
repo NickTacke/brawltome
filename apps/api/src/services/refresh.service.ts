@@ -44,6 +44,12 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
         .onConflictDoNothing()
     }
 
+    // Compute best legend from ranked legends
+    const bestLegend = data.legends.reduce(
+      (best, l) => (l.games > best.games ? { id: l.legend_id, games: l.games, wins: l.wins } : best),
+      { id: 0, games: 0, wins: 0 },
+    )
+
     // Update player ranked fields
     await tx
       .update(player)
@@ -55,6 +61,9 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
         tier: data.tier,
         rankedGames: data.games,
         rankedWins: data.wins,
+        bestLegend: bestLegend.id,
+        bestLegendGames: bestLegend.games,
+        bestLegendWins: bestLegend.wins,
         rankedLastUpdated: new Date(),
         lastUpdated: new Date(),
       })
