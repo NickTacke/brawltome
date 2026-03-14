@@ -12,21 +12,30 @@ const deps = { db, bhapi }
 const rankedQueue = createQueue<{ brawlhallaId: number }>(
   redis,
   'refresh-ranked',
-  async (data) => processRefreshRanked(deps, data.brawlhallaId),
+  async (data) => {
+    console.log(`[queue] refresh-ranked: ${data.brawlhallaId}`)
+    await processRefreshRanked(deps, data.brawlhallaId)
+  },
   { concurrency: 5, retries: 3, backoffMs: 1000 },
 )
 
 const statsQueue = createQueue<{ brawlhallaId: number }>(
   redis,
   'refresh-stats',
-  async (data) => processRefreshStats(deps, data.brawlhallaId),
+  async (data) => {
+    console.log(`[queue] refresh-stats: ${data.brawlhallaId}`)
+    await processRefreshStats(deps, data.brawlhallaId)
+  },
   { concurrency: 3, retries: 3, backoffMs: 1000 },
 )
 
 const clanQueue = createQueue<{ clanId: number }>(
   redis,
   'refresh-clan',
-  async (data) => processRefreshClan(deps, data.clanId),
+  async (data) => {
+    console.log(`[queue] refresh-clan: ${data.clanId}`)
+    await processRefreshClan(deps, data.clanId)
+  },
   { concurrency: 2, retries: 3, backoffMs: 1000 },
 )
 
