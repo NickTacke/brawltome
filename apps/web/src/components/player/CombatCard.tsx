@@ -28,7 +28,7 @@ export function CombatCard({ player }: CombatCardProps) {
 
   return (
     <Card className="bg-linear-to-br from-card to-background border-border">
-      <CardHeader>
+      <CardHeader className="pb-4">
         <div className="flex justify-between items-center">
           <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">
             &#128202; Combat Record
