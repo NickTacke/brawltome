@@ -130,7 +130,7 @@ export function CombatCard({ player }: CombatCardProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-6">
+          <div className="grid grid-cols-2 gap-4 pt-2">
             <div>
               <div className="text-lg font-bold text-foreground">
                 {formatNum(player.xp)}{' '}
