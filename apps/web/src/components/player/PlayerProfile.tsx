@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum } from '@/lib/utils'
+import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import { NavBar } from '@/components/NavBar'
 import { RatingChart } from './RatingChart'
 import { RankedCard } from './RankedCard'
@@ -55,7 +56,10 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const rankedTeams = [...(player.rankedTeams || [])].sort(
     (a: PlayerData, b: PlayerData) => (b.rating ?? 0) - (a.rating ?? 0),
   )
-  const weaponStats = player.weaponStats || []
+  const weaponStats = useMemo(
+    () => aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []),
+    [player.statsLegends, player.rankedLegends],
+  )
 
   const aliases: string[] = (player.aliases || [])
     .map((a: PlayerData) => a?.value)
