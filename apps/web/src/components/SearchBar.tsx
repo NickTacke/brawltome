@@ -9,6 +9,7 @@ import { fixEncoding, formatNum } from '@/lib/utils'
 import { trpc } from '@/lib/trpc'
 import { Input, Card, Avatar, AvatarImage, AvatarFallback } from '@brawltome/ui'
 
+
 interface SearchBarProps {
   onFocus?: () => void
   onBlur?: () => void
@@ -22,6 +23,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     name: string
     region: string | null
     rating: number
+    bestLegendNameKey?: string | null
   }>>([])
   const [clanResults, setClanResults] = useState<Array<{
     clanId: number
@@ -141,6 +143,9 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         >
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                              {p.bestLegendNameKey && (
+                                <AvatarImage src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} alt={p.bestLegendNameKey} className="object-cover object-top" />
+                              )}
                               <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
                                 {fixEncoding(p.name).substring(0, 2).toUpperCase()}
                               </AvatarFallback>

@@ -1,6 +1,7 @@
 import { blacklist, player, playerRankedTeam } from '@brawltome/database'
 import { and, asc, desc, gt, inArray, not, sql } from 'drizzle-orm'
 import type { Context } from '../trpc/context'
+import { getLegendById } from './game-data.service'
 
 const MAX_PAGES = 200
 const DEFAULT_PAGE_SIZE = 50
@@ -64,8 +65,13 @@ async function get1v1Leaderboard(
     .limit(opts.pageSize)
     .offset(opts.offset)
 
+  const entries = results.map((entry) => ({
+    ...entry,
+    bestLegendNameKey: getLegendById(entry.bestLegend)?.legendNameKey ?? null,
+  }))
+
   return {
-    entries: results,
+    entries,
     page: opts.page,
     pageSize: opts.pageSize,
   }

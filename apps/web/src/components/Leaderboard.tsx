@@ -10,6 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Button, Skeleton, Card, Badge, Input,
+  Avatar, AvatarImage, AvatarFallback,
 } from '@brawltome/ui'
 
 const REGIONS = [
@@ -216,11 +217,19 @@ export function Leaderboard() {
                       </TableCell>
                       <TableCell className="p-0">
                         <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">{fixEncoding(p.name)}</span>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
-                              {p.tier && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">{p.tier}</Badge>}
+                          <div className="flex items-center gap-3">
+                            {p.bestLegendNameKey && (
+                              <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+                                <AvatarImage src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} alt={p.bestLegendNameKey} className="object-cover object-top" loading="lazy" />
+                                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">{p.bestLegendNameKey.substring(0, 2)}</AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className="flex flex-col">
+                              <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">{fixEncoding(p.name)}</span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground font-mono">{p.region}</span>
+                                {p.tier && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border">{p.tier}</Badge>}
+                              </div>
                             </div>
                           </div>
                         </Link>
