@@ -57,8 +57,16 @@ export function startJanitor(deps: JanitorDeps) {
 
     tick++
     lockValue = acquired
+    const tickStart = performance.now()
     console.log(`[janitor] tick ${tick} starting...`)
     heartbeatTimer = setInterval(() => renewLock(deps.redis, lockValue), HEARTBEAT_INTERVAL_MS)
+
+    const time = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      const start = performance.now()
+      const result = await fn()
+      console.log(`[janitor] ${label} (${(performance.now() - start).toFixed(0)}ms)`)
+      return result
+    }
 
     try {
       const tokens = deps.bhapi.remainingTokens
@@ -68,30 +76,29 @@ export function startJanitor(deps: JanitorDeps) {
       }
 
       // Hot pages every tick
-      console.log('[janitor] syncing hot 1v1...')
-      await sync1v1Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:1v1')
-      console.log('[janitor] syncing hot 2v2...')
-      await sync2v2Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:2v2')
+      await time('hot 1v1', () => sync1v1Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
+      await time('hot 2v2', () => sync2v2Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
 
       // Cold pages every N ticks
       if (tick % COLD_TICK_INTERVAL === 0) {
-        await sync1v1Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1')
-        await sync2v2Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2')
+        await time('cold 1v1', () => sync1v1Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'))
+        await time('cold 2v2', () => sync2v2Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'))
       }
 
       // Regional: rotate 1 region per tick
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
-      await sync1v1Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`)
-      await sync2v2Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`)
+      await time(`1v1 ${region}`, () => sync1v1Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`))
+      await time(`2v2 ${region}`, () => sync2v2Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`))
 
       // Clan backfill
-      await backfillClans(deps)
+      await time('clan backfill', () => backfillClans(deps))
 
       // Valhallan confirmation
-      await confirmValhallans(deps)
+      await time('valhallan', () => confirmValhallans(deps))
 
-      console.log(`[janitor] tick ${tick} complete, ${deps.bhapi.remainingTokens} tokens remaining`)
+      const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
+      console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
     } catch (err) {
       console.error(`[janitor] tick ${tick} error:`, err)
     } finally {
