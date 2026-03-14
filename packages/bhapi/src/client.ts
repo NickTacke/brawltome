@@ -26,7 +26,8 @@ export class BhApiClient {
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.burst = new TokenBucket({ capacity: 10, refillRate: 10, intervalMs: 1000 })
-    this.sustained = new TokenBucket({ capacity: 180, refillRate: 180, intervalMs: 15 * 60 * 1000 })
+    // 180 tokens per 15 min = 1 token every 5 seconds
+    this.sustained = new TokenBucket({ capacity: 180, refillRate: 1, intervalMs: 5000 })
   }
 
   get remainingTokens(): number {
