@@ -29,7 +29,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
   await db.transaction(async (tx) => {
     const existing = await tx.query.player.findFirst({
       where: eq(player.brawlhallaId, brawlhallaId),
-      columns: { name: true },
+      columns: { name: true, tier: true, valhallanConfirmedAt: true },
     })
 
     // Track name change as alias
@@ -50,6 +50,15 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
       { id: 0, games: 0, wins: 0 },
     )
 
+    // Keep Valhallan tier if confirmed within grace period (3 hours).
+    // The ranked API doesn't know about Valhallan — only the rankings API does.
+    // The janitor updates valhallanConfirmedAt when it sees the player on rankings.
+    const VALHALLAN_GRACE_MS = 3 * 60 * 60 * 1000
+    const isValhallanGraced = existing?.tier?.startsWith('Valhallan')
+      && existing.valhallanConfirmedAt
+      && (Date.now() - existing.valhallanConfirmedAt.getTime()) < VALHALLAN_GRACE_MS
+    const tier = isValhallanGraced ? existing.tier : data.tier
+
     // Update player ranked fields
     await tx
       .update(player)
@@ -58,7 +67,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
         region: data.region,
         rating: data.rating,
         peakRating: data.peak_rating,
-        tier: data.tier,
+        tier,
         rankedGames: data.games,
         rankedWins: data.wins,
         bestLegend: bestLegend.id,
@@ -86,23 +95,37 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
       )
     }
 
-    // Replace ranked teams
+    // Replace ranked teams (preserve Valhallan grace period)
+    const existingTeams = await tx.query.playerRankedTeam.findMany({
+      where: eq(playerRankedTeam.brawlhallaId, brawlhallaId),
+      columns: { brawlhallaIdOne: true, brawlhallaIdTwo: true, tier: true, valhallanConfirmedAt: true },
+    })
+    const teamGraceMap = new Map(
+      existingTeams
+        .filter((t) => t.tier?.startsWith('Valhallan') && t.valhallanConfirmedAt && (Date.now() - t.valhallanConfirmedAt.getTime()) < VALHALLAN_GRACE_MS)
+        .map((t) => [`${t.brawlhallaIdOne}:${t.brawlhallaIdTwo}`, t]),
+    )
+
     await tx.delete(playerRankedTeam).where(eq(playerRankedTeam.brawlhallaId, brawlhallaId))
     if (data['2v2'].length > 0) {
       await tx.insert(playerRankedTeam).values(
-        data['2v2'].map((t) => ({
-          brawlhallaId,
-          brawlhallaIdOne: t.brawlhalla_id_one,
-          brawlhallaIdTwo: t.brawlhalla_id_two,
-          teamName: t.teamname,
-          rating: t.rating,
-          peakRating: t.peak_rating,
-          tier: t.tier,
-          wins: t.wins,
-          games: t.games,
-          region: String(t.region),
-          globalRank: t.global_rank,
-        })),
+        data['2v2'].map((t) => {
+          const graced = teamGraceMap.get(`${t.brawlhalla_id_one}:${t.brawlhalla_id_two}`)
+          return {
+            brawlhallaId,
+            brawlhallaIdOne: t.brawlhalla_id_one,
+            brawlhallaIdTwo: t.brawlhalla_id_two,
+            teamName: t.teamname,
+            rating: t.rating,
+            peakRating: t.peak_rating,
+            tier: graced ? graced.tier : t.tier,
+            wins: t.wins,
+            games: t.games,
+            region: String(t.region),
+            globalRank: t.global_rank,
+            valhallanConfirmedAt: graced?.valhallanConfirmedAt ?? null,
+          }
+        }),
       )
     }
 
