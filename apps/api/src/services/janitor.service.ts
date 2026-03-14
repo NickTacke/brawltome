@@ -183,38 +183,34 @@ async function savePlayers(
     }
 
     const isValhallan = r.tier === 'Valhallan'
+    const now = new Date()
+
+    const shared = {
+      name: r.name,
+      region: r.region,
+      rating: r.rating,
+      peakRating: r.peak_rating,
+      tier: r.tier,
+      rankedGames: r.games,
+      rankedWins: r.wins,
+      bestLegend: r.best_legend,
+      bestLegendGames: r.best_legend_games,
+      bestLegendWins: r.best_legend_wins,
+    }
 
     await deps.db
       .insert(player)
       .values({
         brawlhallaId: r.brawlhalla_id,
-        name: r.name,
-        region: r.region,
-        rating: r.rating,
-        peakRating: r.peak_rating,
-        tier: r.tier,
-        rankedGames: r.games,
-        rankedWins: r.wins,
-        bestLegend: r.best_legend,
-        bestLegendGames: r.best_legend_games,
-        bestLegendWins: r.best_legend_wins,
-        ...(isValhallan ? { valhallanConfirmedAt: new Date() } : {}),
+        ...shared,
+        ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
       })
       .onConflictDoUpdate({
         target: player.brawlhallaId,
         set: {
-          name: r.name,
-          region: r.region,
-          rating: r.rating,
-          peakRating: r.peak_rating,
-          tier: r.tier,
-          rankedGames: r.games,
-          rankedWins: r.wins,
-          bestLegend: r.best_legend,
-          bestLegendGames: r.best_legend_games,
-          bestLegendWins: r.best_legend_wins,
-          lastUpdated: new Date(),
-          ...(isValhallan ? { valhallanConfirmedAt: new Date() } : {}),
+          ...shared,
+          lastUpdated: now,
+          ...(isValhallan ? { valhallanConfirmedAt: now } : {}),
         },
       })
   }
