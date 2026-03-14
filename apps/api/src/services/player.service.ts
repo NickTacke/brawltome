@@ -68,25 +68,21 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   const ttl = TIERED_TTL[tier as keyof typeof TIERED_TTL] ?? TIERED_TTL.cold
   let isRefreshing = false
 
-  if (p.rankedLastUpdated) {
-    const rankedAge = now.getTime() - p.rankedLastUpdated.getTime()
-    if (rankedAge > ttl.ranked) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-      if (canDedup) {
-        await ctx.rankedQueue.enqueue({ brawlhallaId })
-        isRefreshing = true
-      }
+  const rankedStale = !p.rankedLastUpdated || (now.getTime() - p.rankedLastUpdated.getTime()) > ttl.ranked
+  if (rankedStale) {
+    const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+    if (canDedup) {
+      await ctx.rankedQueue.enqueue({ brawlhallaId })
+      isRefreshing = true
     }
   }
 
-  if (p.statsLastUpdated) {
-    const statsAge = now.getTime() - p.statsLastUpdated.getTime()
-    if (statsAge > ttl.stats) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-      if (canDedup) {
-        await ctx.statsQueue.enqueue({ brawlhallaId })
-        isRefreshing = true
-      }
+  const statsStale = !p.statsLastUpdated || (now.getTime() - p.statsLastUpdated.getTime()) > ttl.stats
+  if (statsStale) {
+    const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
+    if (canDedup) {
+      await ctx.statsQueue.enqueue({ brawlhallaId })
+      isRefreshing = true
     }
   }
 
