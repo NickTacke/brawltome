@@ -7,6 +7,14 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgres://localhost:5432/brawltome
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
