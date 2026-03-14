@@ -237,7 +237,7 @@ export const legend = pgTable(
     bioQuote: text('bio_quote'),
     bioQuoteAboutAttrib: varchar('bio_quote_about_attrib', { length: 256 }).notNull(),
     bioQuoteFrom: text('bio_quote_from'),
-    bioQuoteFromAttrib: varchar('bio_quote_from_attrib', { length: 256 }),
+    bioQuoteFromAttrib: text('bio_quote_from_attrib'),
     bioText: text('bio_text'),
     botName: varchar('bot_name', { length: 128 }),
     weaponOne: varchar('weapon_one', { length: 64 }).notNull(),
