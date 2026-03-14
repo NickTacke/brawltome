@@ -1,6 +1,8 @@
-# BrawlTome
+<p align="center">
+  <img src="apps/web/public/images/logo.png" alt="BrawlTome" width="400" />
+</p>
 
-Brawlhalla player tracking — stats, rankings, clans, and rating history.
+<p align="center">Brawlhalla player tracking — stats, rankings, clans, and rating history.</p>
 
 ## Tech Stack
 
