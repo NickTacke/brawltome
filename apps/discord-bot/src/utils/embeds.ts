@@ -1,6 +1,6 @@
-import { EmbedBuilder, Colors } from 'discord.js'
-import type { PlayerResponse, ClanResponse } from '../lib/types'
-import { getBannerEmoji, getAvatarEmoji, getWeaponEmoji } from './emojis'
+import { Colors, EmbedBuilder } from 'discord.js'
+import type { ClanResponse, PlayerResponse } from '../lib/types'
+import { getAvatarEmoji, getBannerEmoji, getWeaponEmoji } from './emojis'
 
 const TIER_COLORS: Record<string, number> = {
   Valhallan: 0xffd700,
@@ -47,9 +47,7 @@ function getLegendAvatarUrl(legendNameKey: string | undefined): string | null {
 export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   const tierEmoji = getBannerEmoji(player.tier)
 
-  const topXpLegend = player.statsLegends
-    ?.slice()
-    .sort((a, b) => b.xp - a.xp)[0]
+  const topXpLegend = player.statsLegends?.slice().sort((a, b) => b.xp - a.xp)[0]
 
   const embed = new EmbedBuilder()
     .setTitle(player.name)
@@ -62,9 +60,7 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   }
 
   const descLines = [
-    `${tierEmoji} **${player.tier || 'Unranked'}** • **${
-      player.rating || 0
-    }** / ${player.peakRating || 0} Elo`,
+    `${tierEmoji} **${player.tier || 'Unranked'}** • **${player.rating || 0}** / ${player.peakRating || 0} Elo`,
   ]
 
   if (player.rankedGames > 0) {
@@ -147,15 +143,10 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
         const tierBadge = getBannerEmoji(team.tier)
         const wr = formatWinRate(team.wins, team.games)
 
-        const teammateId =
-          team.brawlhallaIdOne === player.brawlhallaId
-            ? team.brawlhallaIdTwo
-            : team.brawlhallaIdOne
+        const teammateId = team.brawlhallaIdOne === player.brawlhallaId ? team.brawlhallaIdTwo : team.brawlhallaIdOne
 
         const names = team.teamName.split('+')
-        const teammateName =
-          names.find((n) => n.toLowerCase() !== player.name.toLowerCase()) ||
-          names[0]
+        const teammateName = names.find((n) => n.toLowerCase() !== player.name.toLowerCase()) || names[0]
 
         const teammateLink = `[${teammateName}](https://brawltome.com/player/${teammateId})`
 
@@ -173,9 +164,7 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   }
 
   embed.setFooter({
-    text: `${player.region ?? 'Unknown'}${
-      player.isRefreshing ? ' • 🔄 Refreshing...' : ''
-    } • brawltome.app`,
+    text: `${player.region ?? 'Unknown'}${player.isRefreshing ? ' • 🔄 Refreshing...' : ''} • brawltome.app`,
     iconURL: 'https://brawltome.com/images/logo.png',
   })
 
@@ -200,9 +189,7 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
     value: [
       `👥 **Members**: ${clan.members.length}`,
       `✨ **Total XP**: ${formatNumber(xpValue)}`,
-      `📅 **Created**: <t:${Math.floor(
-        new Date(clan.clanCreateDate).getTime() / 1000,
-      )}:D>`,
+      `📅 **Created**: <t:${Math.floor(new Date(clan.clanCreateDate).getTime() / 1000)}:D>`,
     ].join('\n'),
     inline: false,
   })
@@ -215,21 +202,11 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
     const membersText = pageMembers
       .map((member, i) => {
         const rank = start + i + 1
-        const rankIcon =
-          member.rank === 'Leader'
-            ? '👑'
-            : member.rank === 'Officer'
-              ? '⭐'
-              : `\`${rank}.\``
+        const rankIcon = member.rank === 'Leader' ? '👑' : member.rank === 'Officer' ? '⭐' : `\`${rank}.\``
 
-        const legendEmoji = member.legendNameKey
-          ? getAvatarEmoji(member.legendNameKey)
-          : ''
+        const legendEmoji = member.legendNameKey ? getAvatarEmoji(member.legendNameKey) : ''
 
-        const memberLink = `[${truncate(
-          member.name,
-          20,
-        )}](https://brawltome.com/player/${member.brawlhallaId})`
+        const memberLink = `[${truncate(member.name, 20)}](https://brawltome.com/player/${member.brawlhallaId})`
         const elo = member.rating ? ` \`(${member.rating})\`` : ''
         const memberXp = ` • \`${formatNumber(member.xp)} XP\``
 
@@ -245,9 +222,7 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
   }
 
   embed.setFooter({
-    text: clan.isRefreshing
-      ? '🔄 Refreshing... • brawltome.app'
-      : 'brawltome.app',
+    text: clan.isRefreshing ? '🔄 Refreshing... • brawltome.app' : 'brawltome.app',
     iconURL: 'https://brawltome.com/images/logo.png',
   })
 
@@ -258,13 +233,10 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
 
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str
-  return str.slice(0, maxLength - 3) + '...'
+  return `${str.slice(0, maxLength - 3)}...`
 }
 
-export function buildErrorEmbed(
-  title: string,
-  description: string,
-): EmbedBuilder {
+export function buildErrorEmbed(title: string, description: string): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle(`❌ ${title}`)
     .setDescription(description)
@@ -291,9 +263,7 @@ export function buildSearchEmbed(
     memberCount: number
   }>,
 ): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setTitle(`🔍 "${query}"`)
-    .setColor(Colors.Blurple)
+  const embed = new EmbedBuilder().setTitle(`🔍 "${query}"`).setColor(Colors.Blurple)
 
   if (players.length > 0) {
     const playersText = players

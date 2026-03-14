@@ -1,10 +1,10 @@
 import {
   ActionRowBuilder,
-  StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
-  ComponentEmojiResolvable,
   ButtonBuilder,
   ButtonStyle,
+  type ComponentEmojiResolvable,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
 } from 'discord.js'
 
 interface PlayerOption {
@@ -25,15 +25,11 @@ interface ClanOption {
 // Emoji cache reference (will be populated by emojis.ts)
 let emojiCache: Map<string, { id: string; name: string }> | null = null
 
-export function setEmojiCache(
-  cache: Map<string, { id: string; name: string }>,
-): void {
+export function setEmojiCache(cache: Map<string, { id: string; name: string }>): void {
   emojiCache = cache
 }
 
-function getEmojiForSelect(
-  legendNameKey: string,
-): ComponentEmojiResolvable | undefined {
+function getEmojiForSelect(legendNameKey: string): ComponentEmojiResolvable | undefined {
   if (!emojiCache) return undefined
 
   const key = `avatar_${legendNameKey?.toLowerCase().replace(/\s+/g, '_')}`
@@ -53,9 +49,7 @@ export function buildPlayerSelectMenu(
   selectedId: number,
   interactionId?: string,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
-  const customId = interactionId
-    ? `player_select:${interactionId}`
-    : 'player_select'
+  const customId = interactionId ? `player_select:${interactionId}` : 'player_select'
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(customId)
@@ -65,10 +59,7 @@ export function buildPlayerSelectMenu(
         // Build a clean description
         const ratingStr = p.rating && p.rating > 0 ? p.rating.toString() : null
         const tierStr = p.tier && p.tier !== 'Unranked' ? p.tier : null
-        const description =
-          ratingStr && tierStr
-            ? `${ratingStr} • ${tierStr}`
-            : tierStr || 'Unranked'
+        const description = ratingStr && tierStr ? `${ratingStr} • ${tierStr}` : tierStr || 'Unranked'
 
         const option = new StringSelectMenuOptionBuilder()
           .setLabel(truncate(p.name, 100))
@@ -99,9 +90,7 @@ export function buildClanSelectMenu(
   selectedId: number,
   interactionId?: string,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
-  const customId = interactionId
-    ? `clan_select:${interactionId}`
-    : 'clan_select'
+  const customId = interactionId ? `clan_select:${interactionId}` : 'clan_select'
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(customId)
@@ -143,13 +132,10 @@ export function buildClanPaginationButtons(
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(currentPage >= totalPages - 1)
 
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    prevButton,
-    nextButton,
-  )
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, nextButton)
 }
 
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str
-  return str.slice(0, maxLength - 3) + '...'
+  return `${str.slice(0, maxLength - 3)}...`
 }

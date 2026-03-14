@@ -1,14 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { Card, CardContent } from '@brawltome/ui'
-import {
-  type PlayerData,
-  getRankBanner,
-  parseNum,
-  WinLossBar,
-} from './shared'
+import Link from 'next/link'
+import { type PlayerData, WinLossBar, getRankBanner, parseNum } from './shared'
 
 interface TeamSectionProps {
   player: PlayerData
@@ -33,9 +28,7 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <h2 className="text-2xl font-bold text-foreground">2v2 Teams</h2>
-        <span className="text-sm text-muted-foreground font-mono">
-          Teams: {rankedTeams.length}
-        </span>
+        <span className="text-sm text-muted-foreground font-mono">Teams: {rankedTeams.length}</span>
       </div>
 
       <Card className="bg-linear-to-br from-card to-background border-border">
@@ -45,26 +38,20 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
               <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
                 Total Games
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
-                {formatNum(teamsTotals.games)}
-              </div>
+              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{formatNum(teamsTotals.games)}</div>
             </div>
             <div>
               <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
                 Total Wins
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
-                {formatNum(teamsTotals.wins)}
-              </div>
+              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{formatNum(teamsTotals.wins)}</div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-end">
                 <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
                   Overall Win Rate
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-foreground">
-                  {teamsWinrate.toFixed(1)}%
-                </div>
+                <div className="text-xl sm:text-2xl font-black text-foreground">{teamsWinrate.toFixed(1)}%</div>
               </div>
               <WinLossBar percent={teamsWinrate} className="h-3" />
             </div>
@@ -74,22 +61,16 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {rankedTeams.map((team: PlayerData) => {
-          const idNumber = parseInt(id, 10)
-          const teammateId =
-            team.brawlhallaIdOne === idNumber
-              ? team.brawlhallaIdTwo
-              : team.brawlhallaIdOne
+          const idNumber = Number.parseInt(id, 10)
+          const teammateId = team.brawlhallaIdOne === idNumber ? team.brawlhallaIdTwo : team.brawlhallaIdOne
           const teammateHref = `/player/${teammateId}`
           const bannerUrl = getRankBanner(team.tier)
 
           const teamNameParts = fixEncoding(team.teamName).split('+')
-          const teammateNameIndex =
-            team.brawlhallaIdOne === parseInt(id) ? 1 : 0
+          const teammateNameIndex = team.brawlhallaIdOne === Number.parseInt(id) ? 1 : 0
           const teammateName =
             teamNameParts[teammateNameIndex]?.trim() ||
-            teamNameParts
-              .find((part: string) => part.trim() !== fixEncoding(player.name))
-              ?.trim() ||
+            teamNameParts.find((part: string) => part.trim() !== fixEncoding(player.name))?.trim() ||
             fixEncoding(team.teamName)
 
           return (
@@ -145,12 +126,8 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
                       Wins / Games
                     </span>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-foreground font-mono font-bold">
-                        {team.wins}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        / {team.games}
-                      </span>
+                      <span className="text-foreground font-mono font-bold">{team.wins}</span>
+                      <span className="text-xs text-muted-foreground">/ {team.games}</span>
                     </div>
                   </div>
                   <div className="flex flex-col text-right">
@@ -159,15 +136,10 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
                     </span>
                     <span
                       className={`font-mono font-bold ${
-                        team.games > 0 && team.wins / team.games > 0.5
-                          ? 'text-success'
-                          : 'text-foreground'
+                        team.games > 0 && team.wins / team.games > 0.5 ? 'text-success' : 'text-foreground'
                       }`}
                     >
-                      {team.games > 0
-                        ? ((team.wins / team.games) * 100).toFixed(1)
-                        : 0}
-                      %
+                      {team.games > 0 ? ((team.wins / team.games) * 100).toFixed(1) : 0}%
                     </span>
                   </div>
                 </div>

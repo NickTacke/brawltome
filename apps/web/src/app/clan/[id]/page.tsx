@@ -1,9 +1,9 @@
-import { trpc } from '@/lib/trpc'
 import { ClanProfile } from '@/components/clan/ClanProfile'
-import { notFound } from 'next/navigation'
-import type { Metadata } from 'next'
-import { cache } from 'react'
+import { trpc } from '@/lib/trpc'
 import { fixEncoding } from '@/lib/utils'
+import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+import { cache } from 'react'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { trpc } from '@/lib/trpc'
+import { fixEncoding, formatNum } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@brawltome/ui'
+import { Shield } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDebounce } from 'use-debounce'
-import { Shield } from 'lucide-react'
-import { fixEncoding, formatNum } from '@/lib/utils'
-import { trpc } from '@/lib/trpc'
-import { Input, Card, Avatar, AvatarImage, AvatarFallback } from '@brawltome/ui'
-
 
 interface SearchBarProps {
   onFocus?: () => void
@@ -18,18 +17,22 @@ interface SearchBarProps {
 export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [debouncedQuery] = useDebounce(query, 500)
-  const [playerResults, setPlayerResults] = useState<Array<{
-    brawlhallaId: number
-    name: string
-    region: string | null
-    rating: number
-    bestLegendNameKey?: string | null
-  }>>([])
-  const [clanResults, setClanResults] = useState<Array<{
-    clanId: number
-    clanName: string
-    clanXp: bigint
-  }>>([])
+  const [playerResults, setPlayerResults] = useState<
+    Array<{
+      brawlhallaId: number
+      name: string
+      region: string | null
+      rating: number
+      bestLegendNameKey?: string | null
+    }>
+  >([])
+  const [clanResults, setClanResults] = useState<
+    Array<{
+      clanId: number
+      clanName: string
+      clanXp: bigint
+    }>
+  >([])
   const [showClans, setShowClans] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,7 +89,9 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         setError('Search failed.')
       })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [debouncedQuery])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -108,7 +113,10 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
           value={query}
           onFocus={onFocus}
           onKeyDown={handleKeyDown}
-          onChange={(e) => { setQuery(e.target.value); setError(null) }}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setError(null)
+          }}
           placeholder="Search player or clan..."
           className="w-full h-14 bg-background/50 text-foreground text-lg rounded-xl border-border focus-visible:ring-primary backdrop-blur-xs pr-12"
         />
@@ -119,11 +127,13 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         )}
       </div>
 
-      <div className={`transition-all duration-300 ease-in-out ${
-        query.length >= 2 && (playerResults.length > 0 || clanResults.length > 0 || error)
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 -translate-y-2 pointer-events-none'
-      }`}>
+      <div
+        className={`transition-all duration-300 ease-in-out ${
+          query.length >= 2 && (playerResults.length > 0 || clanResults.length > 0 || error)
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 -translate-y-2 pointer-events-none'
+        }`}
+      >
         {(playerResults.length > 0 || clanResults.length > 0 || error) && (
           <Card className="absolute w-full mt-2 bg-card border-border overflow-hidden shadow-2xl z-50">
             {error ? (
@@ -144,7 +154,11 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                               {p.bestLegendNameKey && (
-                                <AvatarImage src={`/images/legends/avatars/${p.bestLegendNameKey}.png`} alt={p.bestLegendNameKey} className="object-cover object-top" />
+                                <AvatarImage
+                                  src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
+                                  alt={p.bestLegendNameKey}
+                                  className="object-cover object-top"
+                                />
                               )}
                               <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
                                 {fixEncoding(p.name).substring(0, 2).toUpperCase()}
@@ -178,25 +192,28 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                       onClick={() => setShowClans(!showClans)}
                       className="w-full p-2 bg-muted/50 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors border-t border-border flex items-center justify-center gap-2"
                     >
-                      {showClans ? 'Hide Clans' : `Show ${clanResults.length} Clan${clanResults.length === 1 ? '' : 's'}`}
+                      {showClans
+                        ? 'Hide Clans'
+                        : `Show ${clanResults.length} Clan${clanResults.length === 1 ? '' : 's'}`}
                     </button>
-                    {showClans && clanResults.map((c) => (
-                      <Link
-                        key={`c-${c.clanId}`}
-                        href={`/clan/${c.clanId}`}
-                        prefetch={false}
-                        onClick={handleResultNavigate}
-                        className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full border border-border bg-muted flex items-center justify-center">
-                            <Shield className="h-6 w-6 text-muted-foreground fill-current" />
+                    {showClans &&
+                      clanResults.map((c) => (
+                        <Link
+                          key={`c-${c.clanId}`}
+                          href={`/clan/${c.clanId}`}
+                          prefetch={false}
+                          onClick={handleResultNavigate}
+                          className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full border border-border bg-muted flex items-center justify-center">
+                              <Shield className="h-6 w-6 text-muted-foreground fill-current" />
+                            </div>
+                            <div className="font-bold text-card-foreground">{fixEncoding(c.clanName)}</div>
                           </div>
-                          <div className="font-bold text-card-foreground">{fixEncoding(c.clanName)}</div>
-                        </div>
-                        <div className="text-xs font-mono text-muted-foreground">{formatNum(c.clanXp)} XP</div>
-                      </Link>
-                    ))}
+                          <div className="text-xs font-mono text-muted-foreground">{formatNum(c.clanXp)} XP</div>
+                        </Link>
+                      ))}
                   </>
                 )}
 

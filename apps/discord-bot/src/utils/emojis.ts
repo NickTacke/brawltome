@@ -1,4 +1,4 @@
-import { REST, Routes } from 'discord.js'
+import { type REST, Routes } from 'discord.js'
 
 interface DiscordEmoji {
   id: string
@@ -22,9 +22,7 @@ export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
   }
 
   try {
-    const response = (await restClient.get(
-      Routes.applicationEmojis(appClientId),
-    )) as { items: DiscordEmoji[] }
+    const response = (await restClient.get(Routes.applicationEmojis(appClientId))) as { items: DiscordEmoji[] }
 
     emojiCache = new Map(response.items.map((e) => [e.name, e]))
     console.log(`[Emojis] Loaded ${emojiCache.size} application emojis`)

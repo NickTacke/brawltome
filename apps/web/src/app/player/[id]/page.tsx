@@ -1,10 +1,10 @@
-import { trpc } from '@/lib/trpc'
 import { PlayerProfile } from '@/components/player/PlayerProfile'
-import { notFound } from 'next/navigation'
+import { trpc } from '@/lib/trpc'
+import { fixEncoding } from '@/lib/utils'
 import { Card } from '@brawltome/ui'
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { cache } from 'react'
-import { fixEncoding } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 

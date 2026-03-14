@@ -1,10 +1,6 @@
-import {
-  Collection,
-  SlashCommandBuilder,
-  ChatInputCommandInteraction,
-} from 'discord.js'
-import { playerCommand } from './player'
+import { type ChatInputCommandInteraction, Collection, type SlashCommandBuilder } from 'discord.js'
 import { clanCommand } from './clan'
+import { playerCommand } from './player'
 import { statusCommand } from './status'
 
 export interface Command {
