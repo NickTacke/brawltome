@@ -2,6 +2,7 @@ import { BhApiClient } from '@brawltome/bhapi'
 import { db } from '@brawltome/database'
 import Redis from 'ioredis'
 import { createQueue } from './queue/queue'
+import { startJanitor } from './services/janitor.service'
 import { processRefreshClan, processRefreshRanked, processRefreshStats } from './services/refresh.service'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
@@ -32,12 +33,15 @@ const clanQueue = createQueue<{ clanId: number }>(
 console.log('Worker starting...')
 Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(console.error)
 
+const stopJanitor = startJanitor({ db, bhapi, redis, rankedQueue, statsQueue, clanQueue })
+
 process.on('SIGINT', () => {
   console.log('Worker shutting down...')
   rankedQueue.stop()
   statsQueue.stop()
   clanQueue.stop()
+  stopJanitor()
   process.exit(0)
 })
 
-console.log('Worker running. Queues: refresh-ranked(5), refresh-stats(3), refresh-clan(2)')
+console.log('Worker running. Queues: refresh-ranked(5), refresh-stats(3), refresh-clan(2). Janitor active.')
