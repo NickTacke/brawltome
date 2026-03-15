@@ -67,7 +67,7 @@ async function get1v1Leaderboard(
 
   const entries = results.map((entry) => ({
     ...entry,
-    bestLegendNameKey: getLegendById(entry.bestLegend)?.legendNameKey ?? null,
+    bestLegendNameKey: getLegendById(entry.bestLegend ?? 0)?.legendNameKey ?? null,
   }))
 
   return {

@@ -58,7 +58,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
       existing?.tier?.startsWith('Valhallan') &&
       existing.valhallanConfirmedAt &&
       Date.now() - existing.valhallanConfirmedAt.getTime() < VALHALLAN_GRACE_MS
-    const tier = isValhallanGraced ? existing.tier : data.tier
+    const tier = isValhallanGraced ? existing?.tier : data.tier
 
     // Update player ranked fields
     await tx

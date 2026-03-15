@@ -2,8 +2,9 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "jsx": "preserve",
+    "declaration": false,
+    "declarationMap": false,
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"]
