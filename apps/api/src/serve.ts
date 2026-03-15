@@ -44,9 +44,11 @@ app.use(
   trpcServer({
     router: appRouter,
     createContext: (_opts, c) => {
-      const clientIp = c.req.header('cf-connecting-ip')
-        ?? c.req.header('x-forwarded-for')?.split(',')[0].trim()
-        ?? '0.0.0.0'
+      const clientIp =
+        c.req.header('x-client-ip') ??
+        c.req.header('cf-connecting-ip') ??
+        c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
+        '0.0.0.0'
       return { ...sharedCtx, clientIp } as unknown as Record<string, unknown>
     },
   }),
