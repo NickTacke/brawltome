@@ -129,18 +129,18 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
   if (queueDepth > QUEUE_DISCOVERY_CAP) return null
   if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
 
-  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
-  if (!discoveryLimit.allowed) {
-    throw new TRPCError({
-      code: 'TOO_MANY_REQUESTS',
-      message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
-    })
-  }
-
   const parseDmg = (s: string): bigint => BigInt(s || '0')
 
   const promise = (async () => {
     try {
+      const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+      if (!discoveryLimit.allowed) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
+        })
+      }
+
       const stats = await ctx.bhapi.getPlayerStats(brawlhallaId)
       if (!stats?.name) return null
 
