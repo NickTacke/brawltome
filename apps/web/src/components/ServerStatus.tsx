@@ -1,22 +1,20 @@
 'use client'
 
+import { trpc } from '@/lib/trpc'
 import { Skeleton } from '@brawltome/ui'
 import { useEffect, useState } from 'react'
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
-
 export function ServerStatus() {
-  const [status, setStatus] = useState<{ tokens: number } | null>(null)
+  const [status, setStatus] = useState<{ status: 'healthy' | 'degraded' | 'down'; tokens: number } | null>(null)
   const [error, setError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     async function poll() {
       try {
-        const res = await fetch(`${apiUrl}/trpc/status.health?input={}`)
-        const json = await res.json()
+        const data = await trpc.status.health.query()
         if (!cancelled) {
-          setStatus(json.result?.data?.json ?? json.result?.data)
+          setStatus(data)
           setError(false)
         }
       } catch {
@@ -49,15 +47,12 @@ export function ServerStatus() {
     )
   }
 
-  let statusColor = 'bg-success'
-  let statusText = 'Operational'
-  if (status.tokens < 20) {
-    statusColor = 'bg-destructive'
-    statusText = 'High Load'
-  } else if (status.tokens < 100) {
-    statusColor = 'bg-yellow-500'
-    statusText = 'Busy'
+  const statusMap = {
+    healthy: { color: 'bg-success', text: 'Operational' },
+    degraded: { color: 'bg-yellow-500', text: 'Busy' },
+    down: { color: 'bg-destructive', text: 'High Load' },
   }
+  const { color: statusColor, text: statusText } = statusMap[status.status]
 
   return (
     <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-border bg-card/80 backdrop-blur-xs shadow-xs hover:bg-card/90 transition-colors">
