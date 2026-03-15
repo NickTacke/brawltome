@@ -1,5 +1,5 @@
 import { ClanProfile } from '@/components/clan/ClanProfile'
-import { trpc } from '@/lib/trpc'
+import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
@@ -13,6 +13,7 @@ interface PageProps {
 
 const getClan = cache(async (id: number) => {
   try {
+    const trpc = await getServerTrpc()
     return await trpc.clan.byId.query({ id })
   } catch {
     return null
