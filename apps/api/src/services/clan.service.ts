@@ -1,9 +1,9 @@
 import { clan, clanMember, player } from '@brawltome/database'
 import { eq, inArray } from 'drizzle-orm'
 import { dedupKey, tryDedup } from '../queue/dedup'
-import { checkRateLimit } from './rate-limit.service'
 import type { Context } from '../trpc/context'
 import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC, DISCOVERY_MIN_TOKENS } from './constants'
+import { checkRateLimit } from './rate-limit.service'
 // biome-ignore lint/suspicious/noExplicitAny: circular type reference between getClan/discoverClan
 const clanDiscoveries = new Map<number, Promise<any>>()
 
