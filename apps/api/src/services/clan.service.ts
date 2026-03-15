@@ -1,6 +1,7 @@
 import { clan, clanMember, player } from '@brawltome/database'
 import { eq, inArray } from 'drizzle-orm'
 import { dedupKey, tryDedup } from '../queue/dedup'
+import { checkRateLimit } from './rate-limit.service'
 import type { Context } from '../trpc/context'
 import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC, DISCOVERY_MIN_TOKENS } from './constants'
 // biome-ignore lint/suspicious/noExplicitAny: circular type reference between getClan/discoverClan
@@ -20,10 +21,13 @@ export async function getClan(ctx: Context, clanId: number) {
   let isRefreshing = false
   const age = Date.now() - c.lastUpdated.getTime()
   if (age > CLAN_TTL_MS) {
-    const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-    if (canDedup) {
-      await ctx.clanQueue.enqueue({ clanId })
-      isRefreshing = true
+    const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+    if (refreshLimit.allowed) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
+      if (canDedup) {
+        await ctx.clanQueue.enqueue({ clanId })
+        isRefreshing = true
+      }
     }
   }
 
@@ -58,6 +62,9 @@ async function discoverClan(ctx: Context, clanId: number) {
   if (existing) return existing
 
   if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
+
+  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+  if (!discoveryLimit.allowed) return null
 
   const promise = (async () => {
     try {
