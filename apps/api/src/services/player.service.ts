@@ -19,6 +19,7 @@ import {
   TIERED_TTL,
 } from './constants'
 import { aggregateWeapons, getLegendById, normalizeWeaponName } from './game-data.service'
+import { checkRateLimit } from './rate-limit.service'
 
 const discoveries = new Map<number, Promise<PlayerResult | null>>()
 
@@ -75,21 +76,25 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   const ttl = TIERED_TTL.hot
   let isRefreshing = false
 
-  const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
-  if (rankedStale) {
-    const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-    if (canDedup) {
-      await ctx.rankedQueue.enqueue({ brawlhallaId })
-      isRefreshing = true
-    }
-  }
+  const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
 
-  const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
-  if (statsStale) {
-    const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-    if (canDedup) {
-      await ctx.statsQueue.enqueue({ brawlhallaId })
-      isRefreshing = true
+  if (refreshLimit.allowed) {
+    const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
+    if (rankedStale) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+      if (canDedup) {
+        await ctx.rankedQueue.enqueue({ brawlhallaId })
+        isRefreshing = true
+      }
+    }
+
+    const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
+    if (statsStale) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
+      if (canDedup) {
+        await ctx.statsQueue.enqueue({ brawlhallaId })
+        isRefreshing = true
+      }
     }
   }
 
@@ -120,6 +125,9 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
   const queueDepth = (await ctx.rankedQueue.depth()) + (await ctx.statsQueue.depth())
   if (queueDepth > QUEUE_DISCOVERY_CAP) return null
   if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
+
+  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+  if (!discoveryLimit.allowed) return null
 
   const parseDmg = (s: string): bigint => BigInt(s || '0')
 
