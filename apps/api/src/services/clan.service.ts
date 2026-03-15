@@ -64,16 +64,16 @@ async function discoverClan(ctx: Context, clanId: number) {
 
   if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
 
-  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
-  if (!discoveryLimit.allowed) {
-    throw new TRPCError({
-      code: 'TOO_MANY_REQUESTS',
-      message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
-    })
-  }
-
   const promise = (async () => {
     try {
+      const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+      if (!discoveryLimit.allowed) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
+        })
+      }
+
       const data = await ctx.bhapi.getClan(clanId)
       if (!data) return null
 
