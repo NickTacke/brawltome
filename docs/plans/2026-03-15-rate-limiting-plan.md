@@ -4,7 +4,7 @@
 
 **Goal:** Protect the 180-token/15min Brawlhalla API budget by fixing discovery double-work and adding per-IP rate limits on token-consuming actions.
 
-**Architecture:** Rate limit checks live in the service layer (not Hono middleware) because only the service knows whether a request triggers API token consumption. A new `rate-limit.ts` module provides Redis-backed sliding window counters. IP is extracted in the Hono layer and threaded through tRPC context.
+**Architecture:** Rate limit checks live in the service layer (not Hono middleware) because only the service knows whether a request triggers API token consumption. A new `rate-limit.service.ts` module provides Redis-backed sliding window counters; `RATE_LIMITS` constants live in `constants.ts`. IP is extracted in the Hono layer and threaded through tRPC context.
 
 **Tech Stack:** Hono, tRPC, ioredis, Bun test runner
 
@@ -13,7 +13,7 @@
 ### Task 1: Create rate-limit module with Redis sliding window counter
 
 **Files:**
-- Create: `apps/api/src/services/rate-limit.ts`
+- Create: `apps/api/src/services/rate-limit.service.ts`
 - Test: `tests/services/rate-limit.test.ts`
 
 **Step 1: Write the failing tests**
@@ -22,7 +22,8 @@ Create `tests/services/rate-limit.test.ts`:
 
 ```typescript
 import { describe, it, expect, beforeEach, mock } from 'bun:test'
-import { checkRateLimit, RATE_LIMITS } from '../../apps/api/src/services/rate-limit'
+import { checkRateLimit } from '../../apps/api/src/services/rate-limit.service'
+import { RATE_LIMITS } from '../../apps/api/src/services/constants'
 
 // Minimal Redis mock
 function createRedisMock(incrResult: number = 1) {
@@ -82,7 +83,7 @@ Expected: FAIL — module not found
 
 **Step 3: Write the implementation**
 
-Create `apps/api/src/services/rate-limit.ts`:
+Create `apps/api/src/services/rate-limit.service.ts`:
 
 ```typescript
 import type { Redis } from 'ioredis'
@@ -138,7 +139,7 @@ Expected: all 5 tests PASS
 **Step 5: Commit**
 
 ```bash
-git add apps/api/src/services/rate-limit.ts tests/services/rate-limit.test.ts
+git add apps/api/src/services/rate-limit.service.ts tests/services/rate-limit.test.ts
 git commit -m "feat: add Redis-backed per-IP rate limit module"
 ```
 
@@ -539,7 +540,7 @@ if (refreshLimit.allowed) {
 **New import** at top of `player.service.ts`:
 
 ```typescript
-import { checkRateLimit } from './rate-limit'
+import { checkRateLimit } from './rate-limit.service'
 ```
 
 **Step 3: Verify typecheck passes**
@@ -590,7 +591,7 @@ if (age > CLAN_TTL_MS) {
 **New import:**
 
 ```typescript
-import { checkRateLimit } from './rate-limit'
+import { checkRateLimit } from './rate-limit.service'
 ```
 
 **Step 3: Verify typecheck passes**
