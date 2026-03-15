@@ -88,7 +88,8 @@ export const clanCommand: Command = {
       cleanupCache()
 
       // Build response components
-      const components: unknown[] = []
+      // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
+      const components: any[] = []
 
       // Add pagination buttons if there are many members
       if (clan.members.length > 5) {
@@ -185,7 +186,8 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
     const components = message.components
     setActiveTask(message.id, clanId)
 
-    const responseComponents: unknown[] = []
+    // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
+    const responseComponents: any[] = []
 
     // Add pagination buttons if there are many members
     if (clan.members.length > 5 && interactionId) {
@@ -206,7 +208,7 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
 
     if (clan.isRefreshing && reply instanceof Message) {
       const clans = getClansFromMessage(message, clanId)
-      void pollForFreshData(reply, clanId, 'clan', clans, interactionId)
+      void pollForFreshData(reply, clanId, 'clan', clans as unknown as SearchResponse['clans'], interactionId)
     }
   } catch (error) {
     console.error('[Clan Select] Error:', error)
