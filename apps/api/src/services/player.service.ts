@@ -8,6 +8,7 @@ import {
   playerWeaponStat,
   ratingHistory,
 } from '@brawltome/database'
+import { TRPCError } from '@trpc/server'
 import { desc, eq, sql } from 'drizzle-orm'
 import { dedupKey, tryDedup } from '../queue/dedup'
 import type { Context } from '../trpc/context'
@@ -76,22 +77,24 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   const ttl = TIERED_TTL.hot
   let isRefreshing = false
 
-  const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-
-  if (refreshLimit.allowed) {
-    const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
-    if (rankedStale) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-      if (canDedup) {
+  const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
+  if (rankedStale) {
+    const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+    if (canDedup) {
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
         await ctx.rankedQueue.enqueue({ brawlhallaId })
         isRefreshing = true
       }
     }
+  }
 
-    const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
-    if (statsStale) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-      if (canDedup) {
+  const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
+  if (statsStale) {
+    const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
+    if (canDedup) {
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
         await ctx.statsQueue.enqueue({ brawlhallaId })
         isRefreshing = true
       }
@@ -127,7 +130,12 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
   if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
 
   const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
-  if (!discoveryLimit.allowed) return null
+  if (!discoveryLimit.allowed) {
+    throw new TRPCError({
+      code: 'TOO_MANY_REQUESTS',
+      message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
+    })
+  }
 
   const parseDmg = (s: string): bigint => BigInt(s || '0')
 
