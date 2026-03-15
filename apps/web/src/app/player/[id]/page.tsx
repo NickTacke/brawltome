@@ -1,5 +1,5 @@
 import { PlayerProfile } from '@/components/player/PlayerProfile'
-import { trpc } from '@/lib/trpc'
+import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
 import { Card } from '@brawltome/ui'
 import type { Metadata } from 'next'
@@ -14,6 +14,7 @@ interface PageProps {
 
 const getPlayer = cache(async (id: number) => {
   try {
+    const trpc = await getServerTrpc()
     return await trpc.player.byId.query({ id })
   } catch {
     return null
