@@ -4,13 +4,14 @@ WORKDIR /app
 FROM base AS install
 COPY package.json bun.lock ./
 COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
 COPY packages/ui/package.json packages/ui/
+COPY packages/database/package.json packages/database/
+COPY packages/bhapi/package.json packages/bhapi/
 RUN bun install
 
 FROM base AS build
 COPY --from=install /app/node_modules node_modules
-COPY --from=install /app/apps/web/node_modules apps/web/node_modules
-COPY --from=install /app/packages/ui/node_modules packages/ui/node_modules
 COPY apps/web/ apps/web/
 COPY packages/ui/ packages/ui/
 COPY apps/api/src/router/ apps/api/src/router/
@@ -29,7 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 WORKDIR /app/apps/web
 COPY --from=build /app/apps/web/.next .next
 COPY --from=build /app/apps/web/public public
-COPY --from=build /app/apps/web/node_modules node_modules
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/web/package.json .
 COPY --from=build /app/apps/web/next.config.ts .
