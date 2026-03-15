@@ -114,8 +114,17 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
 
     await tx.delete(playerRankedTeam).where(eq(playerRankedTeam.brawlhallaId, brawlhallaId))
     if (data['2v2'].length > 0) {
+      // Deduplicate teams by PK (brawlhallaId, brawlhallaIdOne, brawlhallaIdTwo)
+      const seen = new Set<string>()
+      const teams = data['2v2'].filter((t) => {
+        const key = `${t.brawlhalla_id_one}:${t.brawlhalla_id_two}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
       await tx.insert(playerRankedTeam).values(
-        data['2v2'].map((t) => {
+        teams.map((t) => {
           const graced = teamGraceMap.get(`${t.brawlhalla_id_one}:${t.brawlhalla_id_two}`)
           return {
             brawlhallaId,

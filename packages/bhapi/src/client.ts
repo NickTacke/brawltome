@@ -65,7 +65,7 @@ export class BhApiClient {
     return this.call(`/legend/${id}`)
   }
 
-  private async call<T>(endpoint: string): Promise<T | null> {
+  private async call<T>(endpoint: string, attempt = 0): Promise<T | null> {
     await this.burst.acquire()
     await this.sustained.acquire()
 
@@ -77,9 +77,12 @@ export class BhApiClient {
     if (res.status === 404) return null
 
     if (res.status === 429) {
+      if (attempt >= 3) {
+        throw new Error(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`)
+      }
       const retryAfter = Number.parseInt(res.headers.get('retry-after') ?? '5', 10)
       await Bun.sleep((retryAfter + 1) * 1000)
-      return this.call<T>(endpoint)
+      return this.call<T>(endpoint, attempt + 1)
     }
 
     if (!res.ok) {

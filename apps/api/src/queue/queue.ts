@@ -29,8 +29,9 @@ export function createQueue<T>(
   async function init() {
     try {
       await redis.xgroup('CREATE', stream, group, '0', 'MKSTREAM')
-    } catch {
-      // Group already exists
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!message.includes('BUSYGROUP')) throw err
     }
   }
 
@@ -40,26 +41,22 @@ export function createQueue<T>(
   }
 
   async function depth(): Promise<number> {
-    try {
-      const info = await redis.xinfo('GROUPS', stream)
-      if (!Array.isArray(info) || info.length === 0) return 0
+    const info = await redis.xinfo('GROUPS', stream)
+    if (!Array.isArray(info) || info.length === 0) return 0
 
-      // xinfo returns flat arrays: ['name', 'group', 'consumers', N, 'pending', N, 'lag', N, ...]
-      const groupInfo = info[0] as string[]
-      const lagIndex = groupInfo.indexOf('lag')
-      if (lagIndex !== -1 && lagIndex + 1 < groupInfo.length) {
-        return Number(groupInfo[lagIndex + 1])
-      }
-
-      const pendingIndex = groupInfo.indexOf('pending')
-      if (pendingIndex !== -1 && pendingIndex + 1 < groupInfo.length) {
-        return Number(groupInfo[pendingIndex + 1])
-      }
-
-      return 0
-    } catch {
-      return 0
+    // xinfo returns flat arrays: ['name', 'group', 'consumers', N, 'pending', N, 'lag', N, ...]
+    const groupInfo = info[0] as string[]
+    const lagIndex = groupInfo.indexOf('lag')
+    if (lagIndex !== -1 && lagIndex + 1 < groupInfo.length) {
+      return Number(groupInfo[lagIndex + 1])
     }
+
+    const pendingIndex = groupInfo.indexOf('pending')
+    if (pendingIndex !== -1 && pendingIndex + 1 < groupInfo.length) {
+      return Number(groupInfo[pendingIndex + 1])
+    }
+
+    return 0
   }
 
   async function start() {
@@ -115,8 +112,8 @@ export function createQueue<T>(
         const [id] = entry as [string, string, number, number]
         await redis.xclaim(stream, group, consumer, '30000', id)
       }
-    } catch {
-      // No pending messages or group doesn't exist yet
+    } catch (err) {
+      console.warn(`[queue:${name}] claimPending error:`, err)
     }
   }
 

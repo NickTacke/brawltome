@@ -11,8 +11,8 @@ const HOT_PAGES = 10
 const MAX_COLD_PAGE = 200
 const COLD_TICK_INTERVAL = 10
 const LOCK_KEY = 'janitor:lock'
-const LOCK_TTL_SEC = 30
-const HEARTBEAT_INTERVAL_MS = 30_000
+const LOCK_TTL_SEC = 60
+const HEARTBEAT_INTERVAL_MS = 20_000
 
 // Lua script: only renew lock if we still own it
 const RENEW_LOCK_SCRIPT = `

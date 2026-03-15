@@ -38,6 +38,12 @@ export class TokenBucket {
 
     await Bun.sleep(waitMs)
     this.refill()
+
+    // Re-check after sleep — another caller may have consumed tokens
+    if (this.tokens < 1) {
+      return waitMs + (await this.acquire())
+    }
+
     this.tokens -= 1
     return waitMs
   }

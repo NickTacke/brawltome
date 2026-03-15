@@ -6,10 +6,14 @@ import { initGameData } from './services/game-data.service'
 import { startJanitor } from './services/janitor.service'
 import { processRefreshClan, processRefreshRanked, processRefreshStats } from './services/refresh.service'
 
+if (!process.env.BRAWLHALLA_API_KEY) {
+  throw new Error('BRAWLHALLA_API_KEY environment variable is required')
+}
+
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379'
 // Each blocking consumer needs its own connection to avoid XREADGROUP serialization
 const newRedis = () => new Redis(redisUrl)
-const bhapi = new BhApiClient({ apiKey: process.env.BRAWLHALLA_API_KEY ?? '' })
+const bhapi = new BhApiClient({ apiKey: process.env.BRAWLHALLA_API_KEY })
 const deps = { db, bhapi }
 
 const rankedQueue = createQueue<{ brawlhallaId: number }>(
