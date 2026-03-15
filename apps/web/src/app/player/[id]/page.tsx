@@ -55,7 +55,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       url: `https://brawltome.app/player/${id}`,
       images: legendKey
-        ? [{ url: `/images/legends/avatars/${encodeURIComponent(legendKey)}.png`, width: 200, height: 200, alt: legendKey }]
+        ? [
+            {
+              url: `/images/legends/avatars/${encodeURIComponent(legendKey)}.png`,
+              width: 200,
+              height: 200,
+              alt: legendKey,
+            },
+          ]
         : [{ url: '/og-image.png', alt: 'BrawlTome' }],
     },
     twitter: {
