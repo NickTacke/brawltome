@@ -15,19 +15,21 @@ export async function getClan(ctx: Context, clanId: number) {
   })
 
   if (!c) {
+    if (ctx.isBot) return null
     return discoverClan(ctx, clanId)
   }
 
-  // Check staleness
   let isRefreshing = false
-  const age = Date.now() - c.lastUpdated.getTime()
-  if (age > CLAN_TTL_MS) {
-    const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-    if (canDedup) {
-      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-      if (refreshLimit.allowed) {
-        await ctx.clanQueue.enqueue({ clanId })
-        isRefreshing = true
+  if (!ctx.isBot) {
+    const age = Date.now() - c.lastUpdated.getTime()
+    if (age > CLAN_TTL_MS) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
+      if (canDedup) {
+        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+        if (refreshLimit.allowed) {
+          await ctx.clanQueue.enqueue({ clanId })
+          isRefreshing = true
+        }
       }
     }
   }

@@ -11,4 +11,5 @@ export interface Context {
   statsQueue: Queue<{ brawlhallaId: number }>
   clanQueue: Queue<{ clanId: number }>
   clientIp: string
+  isBot: boolean
 }
