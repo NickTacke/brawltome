@@ -9,6 +9,13 @@ export const trpc = createTRPCClient<AppRouter>({
     httpBatchLink({
       url: `${apiUrl}/trpc`,
       transformer: superjson,
+      async headers() {
+        if (typeof window !== 'undefined') return {}
+        const { headers } = await import('next/headers')
+        const h = await headers()
+        const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0].trim()
+        return ip ? { 'x-client-ip': ip } : {}
+      },
     }),
   ],
 })
