@@ -25,21 +25,22 @@ export class TokenBucket {
   }
 
   async acquire(): Promise<number> {
-    this.refill()
+    let totalWaitMs = 0
 
-    if (this.tokens >= 1) {
-      this.tokens -= 1
-      return 0
+    while (true) {
+      this.refill()
+      if (this.tokens >= 1) {
+        this.tokens -= 1
+        return totalWaitMs
+      }
+
+      const timeSinceRefill = Date.now() - this.lastRefill
+      const timeUntilRefill = this.intervalMs - timeSinceRefill
+      const waitMs = Math.max(0, timeUntilRefill)
+
+      await Bun.sleep(waitMs)
+      totalWaitMs += waitMs
     }
-
-    const timeSinceRefill = Date.now() - this.lastRefill
-    const timeUntilRefill = this.intervalMs - timeSinceRefill
-    const waitMs = Math.max(0, timeUntilRefill)
-
-    await Bun.sleep(waitMs)
-    this.refill()
-    this.tokens -= 1
-    return waitMs
   }
 
   private refill(): void {

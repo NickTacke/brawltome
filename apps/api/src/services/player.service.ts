@@ -21,7 +21,14 @@ import { getLegendById, normalizeWeaponName } from './game-data.service'
 
 const discoveries = new Map<number, Promise<PlayerResult | null>>()
 
-type PlayerResult = Awaited<ReturnType<typeof queryPlayer>> & {
+type QueryResult = NonNullable<Awaited<ReturnType<typeof queryPlayer>>>
+type EnrichedStatsLegend = QueryResult['statsLegends'][number] & {
+  weaponOne: string | null
+  weaponTwo: string | null
+  bioName: string | null
+}
+type PlayerResult = Omit<QueryResult, 'statsLegends'> & {
+  statsLegends: EnrichedStatsLegend[]
   ratingHistory: (typeof ratingHistory.$inferSelect)[]
   isRefreshing: boolean
 }

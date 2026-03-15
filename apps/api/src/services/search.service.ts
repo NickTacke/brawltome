@@ -47,7 +47,7 @@ export async function searchLocal(ctx: Context, rawQuery: string) {
 
   const players = [...playersByName, ...playersByAlias].slice(0, 40).map((p) => ({
     ...p,
-    bestLegendNameKey: getLegendById(p.bestLegend)?.legendNameKey ?? null,
+    bestLegendNameKey: p.bestLegend != null ? (getLegendById(p.bestLegend)?.legendNameKey ?? null) : null,
   }))
 
   // Search clans

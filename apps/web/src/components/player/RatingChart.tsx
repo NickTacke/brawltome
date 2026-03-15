@@ -39,10 +39,14 @@ function CustomTooltip({
   active,
   payload,
   label,
-}: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) {
+}: {
+  active?: boolean
+  payload?: Array<{ value: number; dataKey: string; payload: Record<string, unknown> }>
+  label?: string
+}) {
   if (!active || !payload?.length) return null
 
-  const entry = payload[0]?.payload as RatingHistoryEntry & { date: string }
+  const entry = payload[0]?.payload as unknown as RatingHistoryEntry & { date: string }
   if (!entry) return null
 
   const winrate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : '0'
