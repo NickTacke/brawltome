@@ -25,6 +25,7 @@ COPY tsconfig.json .
 RUN cd apps/web && bun run build
 
 FROM base AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/apps/web
 COPY --from=build /app/apps/web/.next .next
 COPY --from=build /app/apps/web/public public
