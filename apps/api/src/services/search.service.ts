@@ -17,21 +17,19 @@ export async function searchLocal(ctx: Context, rawQuery: string) {
   const blacklistedIds = await ctx.db.select({ brawlhallaId: blacklist.brawlhallaId }).from(blacklist)
   const blacklistSet = new Set(blacklistedIds.map((b) => b.brawlhallaId))
 
-  // Search players by name
   const playersByName = await ctx.db.query.player.findMany({
     where: and(
-      ilike(player.name, `%${query}%`),
+      sql`(${player.name} ILIKE ${`${query}%`} OR ${player.name} ILIKE ${`% | ${query}%`})`,
       blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...blacklistSet])) : undefined,
     ),
     orderBy: [desc(player.rating), desc(player.viewCount)],
     limit: 50,
   })
 
-  // Search players by alias
   const aliasMatches = await ctx.db
     .select({ brawlhallaId: playerAlias.brawlhallaId })
     .from(playerAlias)
-    .where(ilike(playerAlias.key, `%${query.toLowerCase()}%`))
+    .where(ilike(playerAlias.key, `${query.toLowerCase()}%`))
     .limit(50)
 
   const aliasIds = aliasMatches
@@ -54,7 +52,7 @@ export async function searchLocal(ctx: Context, rawQuery: string) {
 
   // Search clans
   const clans = await ctx.db.query.clan.findMany({
-    where: ilike(clan.clanName, `%${query}%`),
+    where: ilike(clan.clanName, `${query}%`),
     orderBy: [desc(clan.clanXp)],
     limit: 5,
   })
