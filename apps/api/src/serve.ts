@@ -7,7 +7,6 @@ import Redis from 'ioredis'
 import { createQueue } from './queue/queue'
 import { appRouter } from './router'
 import { initGameData } from './services/game-data.service'
-import type { Context } from './trpc/context'
 
 const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) {
@@ -24,7 +23,7 @@ const rankedQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-ranked
 const statsQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-stats', async () => {}, { concurrency: 0 })
 const clanQueue = createQueue<{ clanId: number }>(redis, 'refresh-clan', async () => {}, { concurrency: 0 })
 
-const ctx: Context = { db, bhapi, redis, rankedQueue, statsQueue, clanQueue }
+const sharedCtx = { db, bhapi, redis, rankedQueue, statsQueue, clanQueue }
 
 const app = new Hono()
 
@@ -44,7 +43,11 @@ app.use(
   '/trpc/*',
   trpcServer({
     router: appRouter,
-    createContext: (_opts, _c) => ctx as unknown as Record<string, unknown>,
+    createContext: (_opts, c) => {
+      const forwarded = c.req.header('x-forwarded-for')
+      const clientIp = forwarded ? forwarded.split(',')[0].trim() : '0.0.0.0'
+      return { ...sharedCtx, clientIp } as unknown as Record<string, unknown>
+    },
   }),
 )
 

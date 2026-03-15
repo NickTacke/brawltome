@@ -17,6 +17,14 @@ export const DEDUP_TTL_STATS_SEC = 43200
 export const DEDUP_TTL_CLAN_SEC = 3600
 export const CLAN_TTL_MS = 60 * 60 * 1000
 
+// Rate limits
+export const RATE_LIMITS = {
+  discovery: { max: 5, windowSec: 15 * 60 },
+  refresh: { max: 20, windowSec: 15 * 60 },
+} as const
+
+export type RateLimitAction = keyof typeof RATE_LIMITS
+
 // Weapon name normalization
 export const WEAPON_NAME_MAP: Record<string, string> = {
   Fists: 'Gauntlets',

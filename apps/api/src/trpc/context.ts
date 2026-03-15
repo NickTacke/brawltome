@@ -10,4 +10,5 @@ export interface Context {
   rankedQueue: Queue<{ brawlhallaId: number }>
   statsQueue: Queue<{ brawlhallaId: number }>
   clanQueue: Queue<{ clanId: number }>
+  clientIp: string
 }

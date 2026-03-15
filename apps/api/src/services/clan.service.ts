@@ -1,8 +1,10 @@
 import { clan, clanMember, player } from '@brawltome/database'
+import { TRPCError } from '@trpc/server'
 import { eq, inArray } from 'drizzle-orm'
 import { dedupKey, tryDedup } from '../queue/dedup'
 import type { Context } from '../trpc/context'
 import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC, DISCOVERY_MIN_TOKENS } from './constants'
+import { checkRateLimit } from './rate-limit.service'
 // biome-ignore lint/suspicious/noExplicitAny: circular type reference between getClan/discoverClan
 const clanDiscoveries = new Map<number, Promise<any>>()
 
@@ -22,8 +24,11 @@ export async function getClan(ctx: Context, clanId: number) {
   if (age > CLAN_TTL_MS) {
     const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
     if (canDedup) {
-      await ctx.clanQueue.enqueue({ clanId })
-      isRefreshing = true
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
+        await ctx.clanQueue.enqueue({ clanId })
+        isRefreshing = true
+      }
     }
   }
 
@@ -61,6 +66,14 @@ async function discoverClan(ctx: Context, clanId: number) {
 
   const promise = (async () => {
     try {
+      const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+      if (!discoveryLimit.allowed) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
+        })
+      }
+
       const data = await ctx.bhapi.getClan(clanId)
       if (!data) return null
 
