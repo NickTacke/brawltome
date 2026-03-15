@@ -1,51 +1,42 @@
 import { describe, expect, it, mock } from 'bun:test'
 import type { Redis } from 'ioredis'
-import { RATE_LIMITS, checkRateLimit } from '../../apps/api/src/services/rate-limit'
+import { RATE_LIMITS } from '../../apps/api/src/services/constants'
+import { checkRateLimit } from '../../apps/api/src/services/rate-limit.service'
 
-// Minimal Redis mock
-function createRedisMock(incrResult = 1) {
+// Minimal Redis mock — eval returns [count, ttl]
+function createRedisMock(count = 1, ttl = 900) {
   return {
-    incr: mock(() => Promise.resolve(incrResult)),
-    expire: mock(() => Promise.resolve(1)),
-    ttl: mock(() => Promise.resolve(-1)),
+    eval: mock(() => Promise.resolve([count, ttl])),
   }
 }
 
 describe('checkRateLimit', () => {
   it('allows requests under the limit', async () => {
-    const redis = createRedisMock(1)
+    const redis = createRedisMock(1, 900)
     const result = await checkRateLimit(redis as unknown as Redis, '1.2.3.4', 'discovery')
     expect(result.allowed).toBe(true)
     expect(result.current).toBe(1)
+    expect(result.retryAfter).toBe(0)
   })
 
-  it('sets TTL on first request (ttl === -1)', async () => {
-    const redis = createRedisMock(1)
-    redis.ttl = mock(() => Promise.resolve(-1))
-    await checkRateLimit(redis as unknown as Redis, '1.2.3.4', 'discovery')
-    expect(redis.expire).toHaveBeenCalledWith('ratelimit:discovery:1.2.3.4', RATE_LIMITS.discovery.windowSec)
-  })
-
-  it('does not reset TTL on subsequent requests (ttl > 0)', async () => {
-    const redis = createRedisMock(3)
-    redis.ttl = mock(() => Promise.resolve(500))
-    await checkRateLimit(redis as unknown as Redis, '1.2.3.4', 'discovery')
-    expect(redis.expire).not.toHaveBeenCalled()
-  })
-
-  it('blocks requests at the limit', async () => {
-    const redis = createRedisMock(RATE_LIMITS.discovery.max + 1)
-    redis.ttl = mock(() => Promise.resolve(500))
+  it('blocks requests over the limit', async () => {
+    const redis = createRedisMock(RATE_LIMITS.discovery.max + 1, 500)
     const result = await checkRateLimit(redis as unknown as Redis, '1.2.3.4', 'discovery')
     expect(result.allowed).toBe(false)
     expect(result.retryAfter).toBe(500)
   })
 
+  it('uses refresh action config', async () => {
+    const redis = createRedisMock(RATE_LIMITS.refresh.max, 800)
+    const result = await checkRateLimit(redis as unknown as Redis, '1.2.3.4', 'refresh')
+    expect(result.allowed).toBe(true)
+    expect(result.current).toBe(RATE_LIMITS.refresh.max)
+    expect(result.retryAfter).toBe(0)
+  })
+
   it('fails open on Redis error', async () => {
     const redis = {
-      incr: mock(() => Promise.reject(new Error('connection refused'))),
-      expire: mock(() => Promise.resolve(1)),
-      ttl: mock(() => Promise.resolve(-1)),
+      eval: mock(() => Promise.reject(new Error('connection refused'))),
     }
     const result = await checkRateLimit(redis as unknown as Redis, '1.2.3.4', 'discovery')
     expect(result.allowed).toBe(true)

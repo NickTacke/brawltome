@@ -1,11 +1,12 @@
 import type { Redis } from 'ioredis'
+import { RATE_LIMITS, type RateLimitAction } from './constants'
 
-export const RATE_LIMITS = {
-  discovery: { max: 5, windowSec: 15 * 60 },
-  refresh: { max: 20, windowSec: 15 * 60 },
-} as const
-
-export type RateLimitAction = keyof typeof RATE_LIMITS
+const LUA_INCR_WITH_EXPIRE = `
+  local c = redis.call('INCR', KEYS[1])
+  if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+  local t = redis.call('TTL', KEYS[1])
+  return {c, t}
+`
 
 interface RateLimitResult {
   allowed: boolean
@@ -18,15 +19,9 @@ export async function checkRateLimit(redis: Redis, ip: string, action: RateLimit
   const key = `ratelimit:${action}:${ip}`
 
   try {
-    const current = await redis.incr(key)
-
-    // Set TTL only on first increment (key was just created)
-    if (current === 1 || (await redis.ttl(key)) === -1) {
-      await redis.expire(key, windowSec)
-    }
+    const [current, ttl] = (await redis.eval(LUA_INCR_WITH_EXPIRE, 1, key, windowSec)) as [number, number]
 
     if (current > max) {
-      const ttl = await redis.ttl(key)
       console.warn(`[RATE_LIMIT] ip=${ip} action=${action} count=${current} limit=${max}`)
       return { allowed: false, current, retryAfter: ttl > 0 ? ttl : windowSec }
     }
