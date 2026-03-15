@@ -9,12 +9,13 @@ import { appRouter } from './router'
 import { initGameData } from './services/game-data.service'
 import type { Context } from './trpc/context'
 
-if (!process.env.BRAWLHALLA_API_KEY) {
+const apiKey = process.env.BRAWLHALLA_API_KEY
+if (!apiKey) {
   throw new Error('BRAWLHALLA_API_KEY environment variable is required')
 }
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
-const bhapi = new BhApiClient({ apiKey: process.env.BRAWLHALLA_API_KEY })
+const bhapi = new BhApiClient({ apiKey })
 
 await initGameData(db, bhapi)
 
@@ -38,7 +39,7 @@ app.use(
   '/trpc/*',
   trpcServer({
     router: appRouter,
-    createContext: () => ctx as unknown as Record<string, unknown>,
+    createContext: (_opts, _c) => ctx as unknown as Record<string, unknown>,
   }),
 )
 
