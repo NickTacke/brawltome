@@ -59,44 +59,46 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   const p = await queryPlayer(ctx, brawlhallaId)
 
   if (!p) {
+    if (ctx.isBot) return null
     return discoverPlayer(ctx, brawlhallaId)
   }
 
-  // Update view count and refresh tier
-  const now = new Date()
-  await ctx.db
-    .update(player)
-    .set({
-      viewCount: sql`${player.viewCount} + 1`,
-      lastViewedAt: now,
-      refreshTier: 'hot',
-    })
-    .where(eq(player.brawlhallaId, brawlhallaId))
-
-  // Use hot TTL since we just promoted the player — any viewed player should refresh aggressively
-  const ttl = TIERED_TTL.hot
+  // Bots get cached data only — no view count bump, no refresh triggers
   let isRefreshing = false
+  if (!ctx.isBot) {
+    const now = new Date()
+    await ctx.db
+      .update(player)
+      .set({
+        viewCount: sql`${player.viewCount} + 1`,
+        lastViewedAt: now,
+        refreshTier: 'hot',
+      })
+      .where(eq(player.brawlhallaId, brawlhallaId))
 
-  const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
-  if (rankedStale) {
-    const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-    if (canDedup) {
-      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-      if (refreshLimit.allowed) {
-        await ctx.rankedQueue.enqueue({ brawlhallaId })
-        isRefreshing = true
+    const ttl = TIERED_TTL.hot
+
+    const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
+    if (rankedStale) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+      if (canDedup) {
+        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+        if (refreshLimit.allowed) {
+          await ctx.rankedQueue.enqueue({ brawlhallaId })
+          isRefreshing = true
+        }
       }
     }
-  }
 
-  const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
-  if (statsStale) {
-    const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-    if (canDedup) {
-      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-      if (refreshLimit.allowed) {
-        await ctx.statsQueue.enqueue({ brawlhallaId })
-        isRefreshing = true
+    const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
+    if (statsStale) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
+      if (canDedup) {
+        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+        if (refreshLimit.allowed) {
+          await ctx.statsQueue.enqueue({ brawlhallaId })
+          isRefreshing = true
+        }
       }
     }
   }

@@ -9,13 +9,18 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 export async function getServerTrpc() {
   const h = await headers()
   const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0].trim()
+  const ua = h.get('user-agent') ?? ''
+
+  const outHeaders: Record<string, string> = {}
+  if (ip) outHeaders['x-client-ip'] = ip
+  if (ua) outHeaders['x-original-ua'] = ua
 
   return createTRPCClient<AppRouter>({
     links: [
       httpBatchLink({
         url: `${apiUrl}/trpc`,
         transformer: superjson,
-        headers: ip ? { 'x-client-ip': ip } : {},
+        headers: outHeaders,
       }),
     ],
   })

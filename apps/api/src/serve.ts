@@ -44,12 +44,17 @@ app.use(
   trpcServer({
     router: appRouter,
     createContext: (_opts, c) => {
-      const xClientIp = c.req.header('x-client-ip')
-      const cfIp = c.req.header('cf-connecting-ip')
-      const xff = c.req.header('x-forwarded-for')?.split(',')[0].trim()
-      const clientIp = xClientIp ?? cfIp ?? xff ?? '0.0.0.0'
-      console.log(`[ip-debug] x-client-ip=${xClientIp} cf-connecting-ip=${cfIp} xff=${xff} → ${clientIp}`)
-      return { ...sharedCtx, clientIp } as unknown as Record<string, unknown>
+      const clientIp =
+        c.req.header('x-client-ip') ??
+        c.req.header('cf-connecting-ip') ??
+        c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
+        '0.0.0.0'
+      const ua = c.req.header('x-original-ua') ?? c.req.header('user-agent') ?? ''
+      const isBot =
+        /bot|crawl|spider|slurp|facebookexternalhit|meta-webindexer|bingpreview|yandex|baidu|duckduckbot|twitterbot|linkedinbot|embedly|quora|pinterest|redditbot|applebot|semrush|ahrefs|mj12bot|dotbot|petalbot|bytespider/i.test(
+          ua,
+        )
+      return { ...sharedCtx, clientIp, isBot } as unknown as Record<string, unknown>
     },
   }),
 )
