@@ -63,9 +63,8 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     })
     .where(eq(player.brawlhallaId, brawlhallaId))
 
-  // Check staleness and queue refreshes
-  const tier = p.refreshTier ?? 'cold'
-  const ttl = TIERED_TTL[tier as keyof typeof TIERED_TTL] ?? TIERED_TTL.cold
+  // Use hot TTL since we just promoted the player — any viewed player should refresh aggressively
+  const ttl = TIERED_TTL.hot
   let isRefreshing = false
 
   const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
