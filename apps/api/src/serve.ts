@@ -28,10 +28,15 @@ const ctx: Context = { db, bhapi, redis, rankedQueue, statsQueue, clanQueue }
 
 const app = new Hono()
 
+const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3001')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0)
+
 app.use(
   '/*',
   cors({
-    origin: process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:3001'],
+    origin: corsOrigins,
   }),
 )
 
