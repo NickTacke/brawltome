@@ -44,11 +44,11 @@ app.use(
   trpcServer({
     router: appRouter,
     createContext: (_opts, c) => {
-      const clientIp =
-        c.req.header('x-client-ip') ??
-        c.req.header('cf-connecting-ip') ??
-        c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
-        '0.0.0.0'
+      const xClientIp = c.req.header('x-client-ip')
+      const cfIp = c.req.header('cf-connecting-ip')
+      const xff = c.req.header('x-forwarded-for')?.split(',')[0].trim()
+      const clientIp = xClientIp ?? cfIp ?? xff ?? '0.0.0.0'
+      console.log(`[ip-debug] x-client-ip=${xClientIp} cf-connecting-ip=${cfIp} xff=${xff} → ${clientIp}`)
       return { ...sharedCtx, clientIp } as unknown as Record<string, unknown>
     },
   }),

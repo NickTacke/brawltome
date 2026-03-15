@@ -8,8 +8,6 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 export async function getServerTrpc() {
   const h = await headers()
-  const allHeaders = Object.fromEntries(h.entries())
-  console.log('[ip-debug] Next.js incoming headers:', JSON.stringify(allHeaders, null, 2))
   const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0].trim()
 
   return createTRPCClient<AppRouter>({
