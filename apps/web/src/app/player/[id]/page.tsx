@@ -27,7 +27,25 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!player) return { title: 'Player Not Found' }
 
   const playerName = fixEncoding(player.name)
-  const description = `Rating: ${player.rating} / ${player.peakRating} (peak) | Games: ${player.rankedWins}W / ${(player.rankedGames ?? 0) - (player.rankedWins ?? 0)}L`
+  const playtimeHours = player.matchTimeTotal ? Math.round((player.matchTimeTotal / 3600) * 10) / 10 : 0
+  const playtimeStr = Number.isInteger(playtimeHours) ? `${playtimeHours}h` : `${playtimeHours.toFixed(1)}h`
+  const wins = player.rankedWins ?? 0
+  const games = player.rankedGames ?? 0
+  const losses = games - wins
+  const winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : '0'
+
+  const description = [
+    `Playtime: ${playtimeStr}`,
+    `Elo: ${player.rating} / ${player.peakRating} (peak)`,
+    `Games: ${wins}W / ${losses}L (WR: ${winRate}%)`,
+  ].join('\n')
+
+  const mostPlayed = (player.statsLegends || []).reduce(
+    (max: { games?: number; legendNameKey?: string } | null, l: { games?: number; legendNameKey?: string }) =>
+      !max || (l.games || 0) > (max.games || 0) ? l : max,
+    null,
+  )
+  const legendKey = mostPlayed?.legendNameKey?.toLowerCase() || ''
 
   return {
     title: playerName,
@@ -36,6 +54,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `${playerName} | BrawlTome`,
       description,
       url: `https://brawltome.app/player/${id}`,
+      images: legendKey
+        ? [{ url: `/images/legends/avatars/${encodeURIComponent(legendKey)}.png`, width: 200, height: 200, alt: legendKey }]
+        : [{ url: '/og-image.png', alt: 'BrawlTome' }],
+    },
+    twitter: {
+      card: 'summary',
+      title: `${playerName} | BrawlTome`,
+      description,
+      images: legendKey ? [`/images/legends/avatars/${encodeURIComponent(legendKey)}.png`] : ['/og-image.png'],
     },
   }
 }
