@@ -19,7 +19,7 @@ export const CLAN_TTL_MS = 60 * 60 * 1000
 
 // Rate limits
 export const RATE_LIMITS = {
-  discovery: { max: 5, windowSec: 15 * 60 },
+  discovery: { max: 20, windowSec: 15 * 60 },
   refresh: { max: 20, windowSec: 15 * 60 },
 } as const
 
