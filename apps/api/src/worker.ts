@@ -21,8 +21,10 @@ const rankedQueue = createQueue<{ brawlhallaId: number }>(
   newRedis(),
   'refresh-ranked',
   async (data) => {
-    console.log(`[queue] refresh-ranked: ${data.brawlhallaId}`)
+    const start = performance.now()
+    console.log(`[queue] refresh-ranked START: ${data.brawlhallaId}`)
     await processRefreshRanked(deps, data.brawlhallaId)
+    console.log(`[queue] refresh-ranked DONE: ${data.brawlhallaId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
   { concurrency: 5, retries: 3, backoffMs: 1000 },
 )
@@ -31,8 +33,10 @@ const statsQueue = createQueue<{ brawlhallaId: number }>(
   newRedis(),
   'refresh-stats',
   async (data) => {
-    console.log(`[queue] refresh-stats: ${data.brawlhallaId}`)
+    const start = performance.now()
+    console.log(`[queue] refresh-stats START: ${data.brawlhallaId}`)
     await processRefreshStats(deps, data.brawlhallaId)
+    console.log(`[queue] refresh-stats DONE: ${data.brawlhallaId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
   { concurrency: 3, retries: 3, backoffMs: 1000 },
 )
@@ -41,8 +45,10 @@ const clanQueue = createQueue<{ clanId: number }>(
   newRedis(),
   'refresh-clan',
   async (data) => {
-    console.log(`[queue] refresh-clan: ${data.clanId}`)
+    const start = performance.now()
+    console.log(`[queue] refresh-clan START: ${data.clanId}`)
     await processRefreshClan(deps, data.clanId)
+    console.log(`[queue] refresh-clan DONE: ${data.clanId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
   { concurrency: 2, retries: 3, backoffMs: 1000 },
 )
