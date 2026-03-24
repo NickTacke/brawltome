@@ -66,34 +66,50 @@ export class BhApiClient {
   }
 
   private async call<T>(endpoint: string, attempt = 0): Promise<T | null> {
-    await this.burst.acquire()
-    const waitMs = await this.sustained.acquire()
-    const remaining = this.sustained.remaining
     const path = endpoint.split('?')[0]
-    if (waitMs > 0) {
-      console.log(`[bhapi] ${path} (waited ${(waitMs / 1000).toFixed(1)}s, ${remaining} tokens left)`)
-    } else {
-      console.log(`[bhapi] ${path} (${remaining} tokens left)`)
+
+    const burstWait = await this.burst.acquire()
+    if (burstWait > 0) {
+      console.log(`[bhapi] ${path} burst wait: ${(burstWait / 1000).toFixed(1)}s`)
     }
+
+    const sustainedWait = await this.sustained.acquire()
+    if (sustainedWait > 0) {
+      console.log(`[bhapi] ${path} sustained wait: ${(sustainedWait / 1000).toFixed(1)}s`)
+    }
+
+    const remaining = this.sustained.remaining
+    console.log(`[bhapi] ${path} (${remaining} sustained left, ${this.burst.remaining} burst left)`)
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
 
+    const fetchStart = Date.now()
     const res = await fetch(url)
+    const fetchMs = Date.now() - fetchStart
 
-    if (res.status === 404) return null
+    if (res.status === 404) {
+      console.log(`[bhapi] ${path} -> 404 (${fetchMs}ms)`)
+      return null
+    }
 
     if (res.status === 429) {
+      const retryAfter = Number.parseInt(res.headers.get('retry-after') ?? '5', 10)
+      console.log(`[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`)
       if (attempt >= 3) {
         throw new Error(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`)
       }
-      const retryAfter = Number.parseInt(res.headers.get('retry-after') ?? '5', 10)
       await Bun.sleep((retryAfter + 1) * 1000)
       return this.call<T>(endpoint, attempt + 1)
     }
 
     if (!res.ok) {
+      console.log(`[bhapi] ${path} -> ${res.status} (${fetchMs}ms)`)
       throw new Error(`Brawlhalla API error: ${res.status} ${res.statusText} for ${endpoint}`)
+    }
+
+    if (fetchMs > 5000) {
+      console.log(`[bhapi] ${path} -> 200 SLOW (${fetchMs}ms)`)
     }
 
     return res.json() as Promise<T>
