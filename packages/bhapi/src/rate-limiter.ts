@@ -9,19 +9,21 @@ export class TokenBucket {
   private readonly capacity: number
   private readonly refillRate: number
   private readonly intervalMs: number
+  private readonly msPerToken: number
   private lastRefill: number
 
   constructor(opts: TokenBucketOptions) {
     this.capacity = opts.capacity
     this.refillRate = opts.refillRate
     this.intervalMs = opts.intervalMs
+    this.msPerToken = opts.intervalMs / opts.refillRate
     this.tokens = opts.capacity
     this.lastRefill = Date.now()
   }
 
   get remaining(): number {
     this.refill()
-    return this.tokens
+    return Math.floor(this.tokens)
   }
 
   drain(): void {
@@ -38,9 +40,8 @@ export class TokenBucket {
         return totalWaitMs
       }
 
-      const timeSinceRefill = Date.now() - this.lastRefill
-      const timeUntilRefill = this.intervalMs - timeSinceRefill
-      const waitMs = Math.max(0, timeUntilRefill)
+      // Wait for exactly 1 token to be available
+      const waitMs = Math.max(0, this.msPerToken - (Date.now() - this.lastRefill))
 
       await Bun.sleep(waitMs)
       totalWaitMs += waitMs
@@ -51,10 +52,10 @@ export class TokenBucket {
     const now = Date.now()
     const elapsed = now - this.lastRefill
 
-    if (elapsed >= this.intervalMs) {
-      const intervals = Math.floor(elapsed / this.intervalMs)
-      this.tokens = Math.min(this.capacity, this.tokens + intervals * this.refillRate)
-      this.lastRefill += intervals * this.intervalMs
+    if (elapsed > 0) {
+      const newTokens = elapsed / this.msPerToken
+      this.tokens = Math.min(this.capacity, this.tokens + newTokens)
+      this.lastRefill = now
     }
   }
 }
