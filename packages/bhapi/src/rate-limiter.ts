@@ -24,6 +24,10 @@ export class TokenBucket {
     return this.tokens
   }
 
+  drain(): void {
+    this.tokens = 0
+  }
+
   async acquire(): Promise<number> {
     let totalWaitMs = 0
 

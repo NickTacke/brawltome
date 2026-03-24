@@ -68,18 +68,21 @@ export class BhApiClient {
   private async call<T>(endpoint: string, attempt = 0): Promise<T | null> {
     const path = endpoint.split('?')[0]
 
-    const burstWait = await this.burst.acquire()
-    if (burstWait > 0) {
-      console.log(`[bhapi] ${path} burst wait: ${(burstWait / 1000).toFixed(1)}s`)
-    }
+    // Only acquire tokens on the first attempt — retries already paid
+    if (attempt === 0) {
+      const burstWait = await this.burst.acquire()
+      if (burstWait > 0) {
+        console.log(`[bhapi] ${path} burst wait: ${(burstWait / 1000).toFixed(1)}s`)
+      }
 
-    const sustainedWait = await this.sustained.acquire()
-    if (sustainedWait > 0) {
-      console.log(`[bhapi] ${path} sustained wait: ${(sustainedWait / 1000).toFixed(1)}s`)
+      const sustainedWait = await this.sustained.acquire()
+      if (sustainedWait > 0) {
+        console.log(`[bhapi] ${path} sustained wait: ${(sustainedWait / 1000).toFixed(1)}s`)
+      }
     }
 
     const remaining = this.sustained.remaining
-    console.log(`[bhapi] ${path} (${remaining} sustained left, ${this.burst.remaining} burst left)`)
+    console.log(`[bhapi] ${path} (${remaining} sustained left, ${this.burst.remaining} burst left${attempt > 0 ? `, retry ${attempt}` : ''})`)
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
@@ -96,6 +99,11 @@ export class BhApiClient {
     if (res.status === 429) {
       const retryAfter = Number.parseInt(res.headers.get('retry-after') ?? '5', 10)
       console.log(`[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`)
+
+      // Sync our bucket with reality — API says we're out
+      this.sustained.drain()
+      console.log(`[bhapi] drained sustained bucket to 0, sleeping ${retryAfter}s`)
+
       if (attempt >= 3) {
         throw new Error(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`)
       }
