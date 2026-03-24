@@ -67,7 +67,14 @@ export class BhApiClient {
 
   private async call<T>(endpoint: string, attempt = 0): Promise<T | null> {
     await this.burst.acquire()
-    await this.sustained.acquire()
+    const waitMs = await this.sustained.acquire()
+    const remaining = this.sustained.remaining
+    const path = endpoint.split('?')[0]
+    if (waitMs > 0) {
+      console.log(`[bhapi] ${path} (waited ${(waitMs / 1000).toFixed(1)}s, ${remaining} tokens left)`)
+    } else {
+      console.log(`[bhapi] ${path} (${remaining} tokens left)`)
+    }
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`

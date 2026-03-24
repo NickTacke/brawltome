@@ -129,7 +129,10 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
 
   const queueDepth = (await ctx.rankedQueue.depth()) + (await ctx.statsQueue.depth())
   if (queueDepth > QUEUE_DISCOVERY_CAP) return null
-  if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
+  if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) {
+    console.log(`[discover] skipped ${brawlhallaId}: only ${ctx.bhapi.remainingTokens} tokens remaining (need ${DISCOVERY_MIN_TOKENS})`)
+    return null
+  }
 
   const parseDmg = (s: string): bigint => BigInt(s || '0')
 
@@ -143,10 +146,12 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
         })
       }
 
+      console.log(`[discover] starting ${brawlhallaId} (${ctx.bhapi.remainingTokens} tokens left)`)
       const stats = await ctx.bhapi.getPlayerStats(brawlhallaId)
       if (!stats?.name) return null
 
       const ranked = await ctx.bhapi.getPlayerRanked(brawlhallaId)
+      console.log(`[discover] completed ${brawlhallaId} (${ctx.bhapi.remainingTokens} tokens left)`)
 
       const now = new Date()
       const filteredLegends = stats.legends.filter((l) => l.legend_id !== 0)
