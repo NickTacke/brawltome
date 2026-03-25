@@ -99,7 +99,7 @@ async function get2v2Leaderboard(
   const results = await ctx.db
     .select()
     .from(playerRankedTeam)
-    .where(and(gt(playerRankedTeam.rating, 0), regionFilter))
+    .where(and(gt(playerRankedTeam.rating, 0), gt(playerRankedTeam.games, 0), regionFilter))
     .orderBy(orderFn(sortColumn))
     .limit(opts.pageSize * 2) // Fetch extra to account for dedup
     .offset(opts.offset)
@@ -138,8 +138,8 @@ async function get2v2Leaderboard(
     return {
       ...t,
       rank: opts.offset + i + 1,
-      playerOneName: nameMap.get(t.brawlhallaIdOne) ?? nameParts[0]?.trim() ?? 'Unknown',
-      playerTwoName: nameMap.get(t.brawlhallaIdTwo) ?? nameParts[1]?.trim() ?? 'Unknown',
+      playerOneName: nameMap.get(t.brawlhallaIdOne) || nameParts[0]?.trim() || 'Unknown',
+      playerTwoName: nameMap.get(t.brawlhallaIdTwo) || nameParts[1]?.trim() || 'Unknown',
     }
   })
 
