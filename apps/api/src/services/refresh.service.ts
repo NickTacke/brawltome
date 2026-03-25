@@ -32,8 +32,8 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
       columns: { name: true, tier: true, valhallanConfirmedAt: true },
     })
 
-    // Track name change as alias
-    if (existing && existing.name !== data.name) {
+    // Track name change as alias (ranked API returns empty name for unranked players)
+    if (existing && data.name && existing.name !== data.name) {
       await tx
         .insert(playerAlias)
         .values({
@@ -60,11 +60,11 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
       Date.now() - existing.valhallanConfirmedAt.getTime() < VALHALLAN_GRACE_MS
     const tier = isValhallanGraced ? existing?.tier : data.tier
 
-    // Update player ranked fields
+    // Update player ranked fields (skip name if ranked API returned empty)
     await tx
       .update(player)
       .set({
-        name: data.name,
+        ...(data.name ? { name: data.name } : {}),
         region: data.region,
         rating: data.rating,
         peakRating: data.peak_rating,
