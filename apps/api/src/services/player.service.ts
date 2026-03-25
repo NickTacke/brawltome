@@ -132,7 +132,9 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
   const queueDepth = (await ctx.rankedQueue.depth()) + (await ctx.statsQueue.depth())
   if (queueDepth > QUEUE_DISCOVERY_CAP) return null
   if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) {
-    console.log(`[discover] skipped ${brawlhallaId}: only ${ctx.bhapi.remainingTokens} tokens remaining (need ${DISCOVERY_MIN_TOKENS})`)
+    console.log(
+      `[discover] skipped ${brawlhallaId}: only ${ctx.bhapi.remainingTokens} tokens remaining (need ${DISCOVERY_MIN_TOKENS})`,
+    )
     return null
   }
 

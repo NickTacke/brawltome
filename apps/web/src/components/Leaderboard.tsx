@@ -152,6 +152,7 @@ export function Leaderboard() {
   const [entries, setEntries] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [fetchedKey, setFetchedKey] = useState('')
 
   const updateQueryParams = useCallback(
     (updates: Record<string, string | number>) => {
@@ -175,6 +176,7 @@ export function Leaderboard() {
       .then((data) => {
         if (cancelled) return
         setEntries(data.entries)
+        setFetchedKey(`${bracket}:${region}:${page}:${sortBy}:${sortOrder}`)
         setIsLoading(false)
       })
       .catch((err) => {
@@ -192,6 +194,9 @@ export function Leaderboard() {
     if (key === sortBy) updateQueryParams({ order: sortOrder === 'desc' ? 'asc' : 'desc', page: 1 })
     else updateQueryParams({ sort: key, order: 'desc', page: 1 })
   }
+
+  const currentKey = `${bracket}:${region}:${page}:${sortBy}:${sortOrder}`
+  const showLoading = isLoading || fetchedKey !== currentKey
 
   const getRankStyle = (rank: number) => {
     if (rank === 1) return 'text-yellow-500 font-black text-xl'
@@ -247,7 +252,7 @@ export function Leaderboard() {
           </div>
           <PaginationControls
             page={page}
-            isLoading={isLoading}
+            isLoading={showLoading}
             onPageChange={(p) => updateQueryParams({ page: p })}
             compact
           />
@@ -288,7 +293,7 @@ export function Leaderboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {showLoading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton loading rows never reorder
                 <TableRow key={`skeleton-${i}`} className="border-border hover:bg-transparent">
@@ -470,7 +475,7 @@ export function Leaderboard() {
       </div>
 
       <div className="p-4 border-t border-border flex justify-center items-center bg-muted/20">
-        <PaginationControls page={page} isLoading={isLoading} onPageChange={(p) => updateQueryParams({ page: p })} />
+        <PaginationControls page={page} isLoading={showLoading} onPageChange={(p) => updateQueryParams({ page: p })} />
       </div>
     </Card>
   )

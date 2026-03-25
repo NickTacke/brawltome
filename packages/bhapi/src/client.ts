@@ -82,7 +82,9 @@ export class BhApiClient {
     }
 
     const remaining = this.sustained.remaining
-    console.log(`[bhapi] ${path} (${remaining} sustained left, ${this.burst.remaining} burst left${attempt > 0 ? `, retry ${attempt}` : ''})`)
+    console.log(
+      `[bhapi] ${path} (${remaining} sustained left, ${this.burst.remaining} burst left${attempt > 0 ? `, retry ${attempt}` : ''})`,
+    )
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
@@ -98,7 +100,9 @@ export class BhApiClient {
 
     if (res.status === 429) {
       const retryAfter = Number.parseInt(res.headers.get('retry-after') ?? '5', 10)
-      console.log(`[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`)
+      console.log(
+        `[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`,
+      )
 
       // Sync our buckets with reality — API says we're out
       this.burst.drain()
