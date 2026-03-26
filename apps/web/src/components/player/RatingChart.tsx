@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
+import { useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -25,6 +26,11 @@ interface RatingHistoryEntry {
 interface RatingChartProps {
   data: RatingHistoryEntry[]
 }
+
+const SEASONS = [
+  { label: 'Season 40', start: new Date('2026-03-25T14:00:00Z').getTime() },
+  { label: 'Season 39', start: 0 },
+]
 
 const TIER_THRESHOLDS = [
   { rating: 2000, label: 'Diamond', color: '#60a5fa' },
@@ -53,7 +59,7 @@ function CustomTooltip({
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-lg text-sm space-y-1.5">
-      <div className="font-bold text-foreground">{label}</div>
+      <div className="font-bold text-foreground">{entry.date}</div>
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-primary" />
         <span className="text-muted-foreground">Rating:</span>
@@ -73,13 +79,36 @@ function CustomTooltip({
 }
 
 export function RatingChart({ data }: RatingChartProps) {
-  const sorted = [...data]
+  const [selectedSeason, setSelectedSeason] = useState<string | null>(null)
+
+  const allSorted = [...data]
     .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
-    .map((entry) => ({
-      ...entry,
-      date: new Date(entry.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      timestamp: new Date(entry.recordedAt).getTime(),
-    }))
+    .map((entry) => {
+      const ts = new Date(entry.recordedAt)
+      return {
+        ...entry,
+        date: ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        timestamp: ts.getTime(),
+      }
+    })
+
+  // Determine which seasons have data
+  const availableSeasons = SEASONS.filter((season, i) => {
+    const nextSeason = SEASONS[i - 1]
+    const end = nextSeason ? nextSeason.start : Number.POSITIVE_INFINITY
+    return allSorted.some((d) => d.timestamp >= season.start && d.timestamp < end)
+  })
+
+  // Filter data by selected season
+  const sorted = selectedSeason
+    ? (() => {
+        const seasonIdx = SEASONS.findIndex((s) => s.label === selectedSeason)
+        const season = SEASONS[seasonIdx]
+        const nextSeason = SEASONS[seasonIdx - 1]
+        const end = nextSeason ? nextSeason.start : Number.POSITIVE_INFINITY
+        return allSorted.filter((d) => d.timestamp >= season.start && d.timestamp < end)
+      })()
+    : allSorted
 
   if (sorted.length < 2) return null
 
@@ -92,7 +121,32 @@ export function RatingChart({ data }: RatingChartProps) {
   return (
     <Card className="border-border">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-bold flex items-center gap-2">&#128200; Rating History</CardTitle>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">&#128200; Rating History</CardTitle>
+          {availableSeasons.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant={selectedSeason === null ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 text-xs font-mono px-2.5"
+                onClick={() => setSelectedSeason(null)}
+              >
+                All
+              </Button>
+              {availableSeasons.map((s) => (
+                <Button
+                  key={s.label}
+                  variant={selectedSeason === s.label ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-7 text-xs font-mono px-2.5"
+                  onClick={() => setSelectedSeason(s.label)}
+                >
+                  {s.label.replace('Season ', 'S')}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -121,11 +175,42 @@ export function RatingChart({ data }: RatingChartProps) {
                 }}
               />
             ))}
+            {SEASONS.filter(
+              (s) => s.start > 0 && s.start >= sorted[0].timestamp && s.start <= sorted[sorted.length - 1].timestamp,
+            ).map((s) => (
+              <ReferenceLine
+                key={s.label}
+                x={s.start}
+                stroke="hsl(var(--muted-foreground))"
+                strokeDasharray="4 4"
+                strokeOpacity={0.6}
+                label={{
+                  value: s.label,
+                  position: 'insideTopRight',
+                  fill: 'hsl(var(--muted-foreground))',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  opacity: 0.8,
+                }}
+              />
+            ))}
             <XAxis
-              dataKey="date"
+              dataKey="timestamp"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              ticks={(() => {
+                const seen = new Set<string>()
+                return sorted.filter((d) => {
+                  if (seen.has(d.date)) return false
+                  seen.add(d.date)
+                  return true
+                }).map((d) => d.timestamp)
+              })()}
+              tickFormatter={(ts: number) =>
+                new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              }
               tick={{ fontSize: 11 }}
               className="fill-muted-foreground"
-              interval="preserveStartEnd"
               tickLine={false}
               axisLine={false}
             />
