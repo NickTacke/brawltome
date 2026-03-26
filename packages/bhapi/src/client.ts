@@ -1,4 +1,14 @@
 import { TokenBucket } from './rate-limiter'
+
+export class RateLimitError extends Error {
+  constructor(
+    message: string,
+    public readonly retryAfterMs: number,
+  ) {
+    super(message)
+    this.name = 'RateLimitError'
+  }
+}
 import type {
   BhApiClan,
   BhApiLegend,
@@ -26,7 +36,7 @@ export class BhApiClient {
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.burst = new TokenBucket({ capacity: 8, refillRate: 8, intervalMs: 1000 })
-    this.sustained = new TokenBucket({ capacity: 180, refillRate: 180, intervalMs: 15 * 60 * 1000 })
+    this.sustained = new TokenBucket({ capacity: 80, refillRate: 80, intervalMs: 10 * 60 * 1000 })
   }
 
   get remainingTokens(): number {
@@ -104,15 +114,27 @@ export class BhApiClient {
         `[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`,
       )
 
-      // Sync our buckets with reality — API says we're out
-      this.burst.drain()
-      this.sustained.drain()
-      console.log(`[bhapi] drained both buckets to 0, sleeping ${retryAfter}s`)
+      // Pause both buckets — no tokens refill until pause expires
+      const pauseMs = (retryAfter + 1) * 1000
+      this.burst.pause(pauseMs)
+      this.sustained.pause(pauseMs)
+      console.log(`[bhapi] paused both buckets for ${retryAfter + 1}s`)
 
       if (attempt >= 3) {
-        throw new Error(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`)
+        throw new RateLimitError(
+          `Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`,
+          pauseMs,
+        )
       }
-      await Bun.sleep((retryAfter + 1) * 1000)
+      // For short retry-after (burst limit), wait and retry inline
+      // For long retry-after (sustained limit), throw so the job can be requeued
+      if (retryAfter > 30) {
+        throw new RateLimitError(
+          `Brawlhalla API rate limited (retry-after: ${retryAfter}s) for ${endpoint}`,
+          pauseMs,
+        )
+      }
+      await Bun.sleep(pauseMs)
       return this.call<T>(endpoint, attempt + 1)
     }
 
