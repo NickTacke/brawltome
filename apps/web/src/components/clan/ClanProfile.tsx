@@ -1,6 +1,7 @@
 'use client'
 
 import { NavBar } from '@/components/NavBar'
+import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
   Avatar,
@@ -27,7 +28,7 @@ import {
 } from '@brawltome/ui'
 import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const PAGE_SIZE = 25
 
@@ -69,12 +70,28 @@ const getRankValue = (rank: string) => {
   }
 }
 
-export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
+export function ClanProfile({ initialData, id }: ClanProfileProps) {
+  const [clan, setClan] = useState<ClanData>(initialData)
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
 
-  if (!clan) return <div className="max-w-6xl mx-auto p-6 text-muted-foreground">Clan not found.</div>
+  // Poll while refreshing
+  useEffect(() => {
+    if (!clan?.isRefreshing) return
+    const intervalId = setInterval(async () => {
+      try {
+        const data = await trpc.clan.byId.query({ id: Number(id) })
+        if (data) setClan(data)
+        if (!data?.isRefreshing) clearInterval(intervalId)
+      } catch {
+        /* ignore */
+      }
+    }, 2000)
+    return () => clearInterval(intervalId)
+  }, [clan?.isRefreshing, id])
+
+  if (!clan) return <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 text-muted-foreground">Clan not found.</div>
 
   const members = clan.members || []
 
@@ -100,7 +117,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
       <NavBar showBack />
 
       {/* Header */}
@@ -124,6 +141,15 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
                 <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
                   <Clock className="w-3 h-3" />
                   Updated {timeAgo(clan.lastUpdated)}
+                </Badge>
+              </>
+            )}
+            {clan.isRefreshing && (
+              <>
+                <span>•</span>
+                <Badge variant="secondary" className="gap-2 animate-pulse">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
+                  Syncing live data...
                 </Badge>
               </>
             )}

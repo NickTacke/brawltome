@@ -150,7 +150,10 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
       orderBy: [desc(ratingHistory.recordedAt)],
     })
 
-    if (!lastSnapshot || lastSnapshot.rating !== data.rating || lastSnapshot.games !== data.games) {
+    if (
+      data.rating > 0 &&
+      (!lastSnapshot || lastSnapshot.rating !== data.rating || lastSnapshot.games !== data.games)
+    ) {
       await tx.insert(ratingHistory).values({
         brawlhallaId,
         rating: data.rating,

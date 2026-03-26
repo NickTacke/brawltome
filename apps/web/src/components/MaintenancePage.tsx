@@ -73,9 +73,7 @@ export function MaintenancePage({ maintenanceEnd }: { maintenanceEnd?: string })
           />
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">
-          We&apos;ll be back soon
-        </h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">We&apos;ll be back soon</h1>
         <p className="text-lg text-muted-foreground mb-8">
           We&apos;re performing scheduled maintenance. Thanks for your patience.
         </p>
@@ -87,11 +85,7 @@ export function MaintenancePage({ maintenanceEnd }: { maintenanceEnd?: string })
         )}
 
         <div className="flex items-center gap-3">
-          <Link
-            href="https://discord.gg/ft5CJyjkkS"
-            target="_blank"
-            className="transition-transform hover:scale-105"
-          >
+          <Link href="https://discord.gg/ft5CJyjkkS" target="_blank" className="transition-transform hover:scale-105">
             <div className="flex items-center justify-center w-10 h-10 bg-[#5865F2] rounded-full transition-opacity hover:opacity-90">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
                 <title>Discord</title>
@@ -99,15 +93,14 @@ export function MaintenancePage({ maintenanceEnd }: { maintenanceEnd?: string })
               </svg>
             </div>
           </Link>
-          <Link
-            href="https://x.com/brawltome"
-            target="_blank"
-            className="transition-transform hover:scale-105"
-          >
+          <Link href="https://x.com/brawltome" target="_blank" className="transition-transform hover:scale-105">
             <div className="flex items-center justify-center w-10 h-10 bg-black rounded-full transition-opacity hover:opacity-90">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <title>X</title>
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="white" />
+                <path
+                  d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+                  fill="white"
+                />
               </svg>
             </div>
           </Link>
