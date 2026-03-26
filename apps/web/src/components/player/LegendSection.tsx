@@ -77,7 +77,22 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold capitalize truncate text-sm">{legend.legendNameKey}</h3>
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold capitalize truncate text-sm">{legend.legendNameKey}</h3>
+                      <div className="hidden sm:flex items-center gap-2 shrink-0">
+                        <Badge variant="secondary" className="text-xs font-mono px-2 py-1 h-7">
+                          Lvl {legend.level}
+                        </Badge>
+                        {rankedLegend && !isExpanded && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7"
+                          >
+                            {rankedLegend.tier} &bull; {rankedLegend.rating}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-mono">
                       <span>{formatNum(legend.xp)} XP</span>
                       <span className="opacity-30">&bull;</span>
@@ -85,19 +100,19 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
                       <span className="opacity-30">&bull;</span>
                       <span>{formatHours(parseNum(legend.matchTime))}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="secondary" className="text-xs font-mono px-2 py-1 h-7">
-                      Lvl {legend.level}
-                    </Badge>
-                    {rankedLegend && !isExpanded && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7"
-                      >
-                        {rankedLegend.tier} &bull; {rankedLegend.rating}
+                    <div className="mt-1.5 flex items-center gap-2 sm:hidden">
+                      <Badge variant="secondary" className="text-xs font-mono px-2 py-1 h-7">
+                        Lvl {legend.level}
                       </Badge>
-                    )}
+                      {rankedLegend && !isExpanded && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7"
+                        >
+                          {rankedLegend.tier} &bull; {rankedLegend.rating}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
 
