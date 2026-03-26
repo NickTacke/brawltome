@@ -14,7 +14,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center p-4 relative">
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+      <div className="flex justify-between sm:justify-end w-full sm:absolute sm:top-4 sm:right-4 sm:w-auto z-50 items-center gap-2">
+        <div className="flex items-center gap-2">
         <Link
           href="https://discord.gg/ft5CJyjkkS"
           target="_blank"
@@ -51,10 +52,11 @@ export default function Home() {
             </svg>
           </div>
         </Link>
+        </div>
         <ModeToggle />
       </div>
 
-      <div className="w-full max-w-4xl pt-6 pb-6 flex flex-col items-center text-center transition-all duration-300 relative z-50">
+      <div className="w-full max-w-4xl pt-2 pb-6 sm:pt-6 flex flex-col items-center text-center transition-all duration-300 relative z-50">
         <div className={`mb-6 transition-all duration-300 ${isSearchFocused ? 'blur-xs opacity-50' : ''}`}>
           <Image
             src="/images/logo.png"
