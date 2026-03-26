@@ -78,17 +78,14 @@ export class BhApiClient {
   private async call<T>(endpoint: string, attempt = 0): Promise<T | null> {
     const path = endpoint.split('?')[0]
 
-    // Only acquire tokens on the first attempt — retries already paid
-    if (attempt === 0) {
-      const burstWait = await this.burst.acquire()
-      if (burstWait > 0) {
-        console.log(`[bhapi] ${path} burst wait: ${(burstWait / 1000).toFixed(1)}s`)
-      }
+    const burstWait = await this.burst.acquire()
+    if (burstWait > 0) {
+      console.log(`[bhapi] ${path} burst wait: ${(burstWait / 1000).toFixed(1)}s`)
+    }
 
-      const sustainedWait = await this.sustained.acquire()
-      if (sustainedWait > 0) {
-        console.log(`[bhapi] ${path} sustained wait: ${(sustainedWait / 1000).toFixed(1)}s`)
-      }
+    const sustainedWait = await this.sustained.acquire()
+    if (sustainedWait > 0) {
+      console.log(`[bhapi] ${path} sustained wait: ${(sustainedWait / 1000).toFixed(1)}s`)
     }
 
     const remaining = this.sustained.remaining
@@ -123,12 +120,12 @@ export class BhApiClient {
       if (attempt >= 3) {
         throw new RateLimitError(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`, pauseMs)
       }
-      // For short retry-after (burst limit), wait and retry inline
-      // For long retry-after (sustained limit), throw so the job can be requeued
+      // Long retry-after (sustained limit): throw so the job can be requeued
       if (retryAfter > 30) {
         throw new RateLimitError(`Brawlhalla API rate limited (retry-after: ${retryAfter}s) for ${endpoint}`, pauseMs)
       }
-      await Bun.sleep(pauseMs)
+      // Short retry-after (burst limit): retry via acquire() which will block
+      // until pause expires and serialize callers through token acquisition
       return this.call<T>(endpoint, attempt + 1)
     }
 
