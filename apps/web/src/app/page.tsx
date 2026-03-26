@@ -27,11 +27,7 @@ export default function Home() {
             </svg>
           </div>
         </Link>
-        <Link
-          href="https://x.com/brawltome"
-          target="_blank"
-          className="group transition-transform hover:scale-105"
-        >
+        <Link href="https://x.com/brawltome" target="_blank" className="group transition-transform hover:scale-105">
           <div className="flex items-center justify-center w-10 h-10 bg-black rounded-full transition-opacity hover:opacity-90">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
               <title>X</title>
