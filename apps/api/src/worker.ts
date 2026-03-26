@@ -26,7 +26,7 @@ const rankedQueue = createQueue<{ brawlhallaId: number }>(
     await processRefreshRanked(deps, data.brawlhallaId)
     console.log(`[queue] refresh-ranked DONE: ${data.brawlhallaId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 5, retries: 3, backoffMs: 1000 },
+  { concurrency: 3, retries: 3, backoffMs: 1000 },
 )
 
 const statsQueue = createQueue<{ brawlhallaId: number }>(
@@ -38,7 +38,7 @@ const statsQueue = createQueue<{ brawlhallaId: number }>(
     await processRefreshStats(deps, data.brawlhallaId)
     console.log(`[queue] refresh-stats DONE: ${data.brawlhallaId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 3, retries: 3, backoffMs: 1000 },
+  { concurrency: 2, retries: 3, backoffMs: 1000 },
 )
 
 const clanQueue = createQueue<{ clanId: number }>(
@@ -50,7 +50,7 @@ const clanQueue = createQueue<{ clanId: number }>(
     await processRefreshClan(deps, data.clanId)
     console.log(`[queue] refresh-clan DONE: ${data.clanId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 2, retries: 3, backoffMs: 1000 },
+  { concurrency: 1, retries: 3, backoffMs: 1000 },
 )
 
 console.log('Worker starting...')
@@ -69,4 +69,4 @@ process.on('SIGINT', async () => {
   process.exit(0)
 })
 
-console.log('Worker running. Queues: refresh-ranked(5), refresh-stats(3), refresh-clan(2). Janitor active.')
+console.log('Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1). Janitor active.')
