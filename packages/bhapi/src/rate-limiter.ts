@@ -48,8 +48,12 @@ export class TokenBucket {
         await Bun.sleep(waitMs)
         totalWaitMs += waitMs
       }
-      this.lastRefill = Date.now()
-      this.tokens = 1 // Start with 1 token after pause
+      // Only the first caller to wake resets the bucket
+      if (this.pausedUntil > 0 && Date.now() >= this.pausedUntil) {
+        this.lastRefill = Date.now()
+        this.tokens = 1
+        this.pausedUntil = 0
+      }
     }
 
     while (true) {

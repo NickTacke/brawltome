@@ -1,7 +1,7 @@
 'use client'
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -110,6 +110,17 @@ export function RatingChart({ data }: RatingChartProps) {
       })()
     : allSorted
 
+  const uniqueTicks = useMemo(() => {
+    const seen = new Set<string>()
+    return sorted
+      .filter((d) => {
+        if (seen.has(d.date)) return false
+        seen.add(d.date)
+        return true
+      })
+      .map((d) => d.timestamp)
+  }, [sorted])
+
   if (sorted.length < 2) return null
 
   const allRatings = sorted.flatMap((d) => [d.rating, d.peakRating])
@@ -198,16 +209,7 @@ export function RatingChart({ data }: RatingChartProps) {
               dataKey="timestamp"
               type="number"
               domain={['dataMin', 'dataMax']}
-              ticks={(() => {
-                const seen = new Set<string>()
-                return sorted
-                  .filter((d) => {
-                    if (seen.has(d.date)) return false
-                    seen.add(d.date)
-                    return true
-                  })
-                  .map((d) => d.timestamp)
-              })()}
+              ticks={uniqueTicks}
               tickFormatter={(ts: number) =>
                 new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
               }
