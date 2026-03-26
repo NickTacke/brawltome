@@ -74,7 +74,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
 
-  if (!clan) return <div className="max-w-6xl mx-auto p-6 text-muted-foreground">Clan not found.</div>
+  if (!clan) return <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 text-muted-foreground">Clan not found.</div>
 
   const members = clan.members || []
 
@@ -100,7 +100,7 @@ export function ClanProfile({ initialData: clan, id }: ClanProfileProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
       <NavBar showBack />
 
       {/* Header */}
