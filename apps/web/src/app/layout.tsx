@@ -1,4 +1,5 @@
 import './globals.css'
+import { MaintenancePage } from '@/components/MaintenancePage'
 import { ThemeProvider } from '@/components/theme-provider'
 import type { Metadata } from 'next'
 
@@ -43,11 +44,16 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true'
+  const maintenanceEnd = process.env.MAINTENANCE_END
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="bg-background text-foreground min-h-screen">{children}</div>
+          <div className="bg-background text-foreground min-h-screen">
+            {isMaintenanceMode ? <MaintenancePage maintenanceEnd={maintenanceEnd} /> : children}
+          </div>
         </ThemeProvider>
       </body>
     </html>
