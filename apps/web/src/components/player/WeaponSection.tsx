@@ -2,7 +2,18 @@
 
 import { formatNum } from '@/lib/utils'
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
-import { Avatar, AvatarImage, Button, Card, Progress } from '@brawltome/ui'
+import {
+  Avatar,
+  AvatarImage,
+  Button,
+  Card,
+  Progress,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@brawltome/ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { WinLossBar, formatCompact, formatHours, getWeaponIcon } from './shared'
@@ -11,12 +22,42 @@ interface WeaponSectionProps {
   weaponStats: RichWeaponAgg[]
 }
 
+type WeaponSortKey = 'timePlayed' | 'games' | 'winrate' | 'damage' | 'kos'
+
+const WEAPON_SORT_OPTIONS: { value: WeaponSortKey; label: string }[] = [
+  { value: 'timePlayed', label: 'Time Played' },
+  { value: 'games', label: 'Games' },
+  { value: 'winrate', label: 'Win Rate' },
+  { value: 'damage', label: 'Damage' },
+  { value: 'kos', label: 'KOs' },
+]
+
 export function WeaponSection({ weaponStats }: WeaponSectionProps) {
   const [showAllWeapons, setShowAllWeapons] = useState(false)
   const [expandedWeapon, setExpandedWeapon] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<WeaponSortKey>('timePlayed')
   const weaponsRef = useRef<HTMLDivElement>(null)
 
-  const displayedWeapons = showAllWeapons ? weaponStats : weaponStats.slice(0, 5)
+  const sortedWeapons = [...weaponStats].sort((a, b) => {
+    switch (sortBy) {
+      case 'games':
+        return b.games - a.games
+      case 'winrate': {
+        const wrA = a.games > 0 ? a.wins / a.games : 0
+        const wrB = b.games > 0 ? b.wins / b.games : 0
+        return wrB - wrA
+      }
+      case 'damage':
+        return b.damage - a.damage
+      case 'kos':
+        return b.KOs - a.KOs
+      case 'timePlayed':
+      default:
+        return b.timeHeld - a.timeHeld
+    }
+  })
+
+  const displayedWeapons = showAllWeapons ? sortedWeapons : sortedWeapons.slice(0, 5)
 
   const handleToggleWeapons = () => {
     if (showAllWeapons) {
@@ -29,9 +70,23 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
 
   return (
     <div ref={weaponsRef} className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3">
         <h2 className="text-2xl font-bold text-foreground">Weapon Statistics</h2>
-        <span className="text-sm text-muted-foreground font-mono">Total Weapons: {weaponStats.length}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground font-mono">Weapons: {weaponStats.length}</span>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as WeaponSortKey)}>
+            <SelectTrigger className="w-[130px] font-bold h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {WEAPON_SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="cursor-pointer text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card className="overflow-hidden border-border">

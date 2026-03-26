@@ -1,7 +1,19 @@
 'use client'
 
 import { formatNum } from '@/lib/utils'
-import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card } from '@brawltome/ui'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Button,
+  Card,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@brawltome/ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import {
@@ -20,12 +32,54 @@ interface LegendSectionProps {
   rankedLegends: PlayerData[]
 }
 
+type LegendSortKey = 'xp' | 'winrate' | 'games' | 'playtime' | 'level' | 'elo' | 'peakElo'
+
+const LEGEND_SORT_OPTIONS: { value: LegendSortKey; label: string }[] = [
+  { value: 'xp', label: 'XP' },
+  { value: 'winrate', label: 'Win Rate' },
+  { value: 'games', label: 'Games' },
+  { value: 'playtime', label: 'Playtime' },
+  { value: 'level', label: 'Level' },
+  { value: 'elo', label: 'Elo' },
+  { value: 'peakElo', label: 'Peak Elo' },
+]
+
 export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps) {
   const [showAllLegends, setShowAllLegends] = useState(false)
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null)
+  const [sortBy, setSortBy] = useState<LegendSortKey>('xp')
   const legendsRef = useRef<HTMLDivElement>(null)
 
-  const displayedLegends = showAllLegends ? allLegends : allLegends.slice(0, 5)
+  const sortedLegends = [...allLegends].sort((a: PlayerData, b: PlayerData) => {
+    switch (sortBy) {
+      case 'winrate': {
+        const wrA = a.games > 0 ? a.wins / a.games : 0
+        const wrB = b.games > 0 ? b.wins / b.games : 0
+        return wrB - wrA
+      }
+      case 'games':
+        return (b.games ?? 0) - (a.games ?? 0)
+      case 'playtime':
+        return parseNum(b.matchTime) - parseNum(a.matchTime)
+      case 'level':
+        return (b.level ?? 0) - (a.level ?? 0)
+      case 'elo': {
+        const eloA = rankedLegends.find((r: PlayerData) => r.legendId === a.legendId)?.rating ?? 0
+        const eloB = rankedLegends.find((r: PlayerData) => r.legendId === b.legendId)?.rating ?? 0
+        return eloB - eloA
+      }
+      case 'peakElo': {
+        const peakA = rankedLegends.find((r: PlayerData) => r.legendId === a.legendId)?.peakRating ?? 0
+        const peakB = rankedLegends.find((r: PlayerData) => r.legendId === b.legendId)?.peakRating ?? 0
+        return peakB - peakA
+      }
+      case 'xp':
+      default:
+        return (b.xp ?? 0) - (a.xp ?? 0)
+    }
+  })
+
+  const displayedLegends = showAllLegends ? sortedLegends : sortedLegends.slice(0, 5)
 
   const handleToggleLegends = () => {
     if (showAllLegends) {
@@ -38,9 +92,23 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
 
   return (
     <div id="legends-section" ref={legendsRef} className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3">
         <h2 className="text-2xl font-bold text-foreground">Legend Statistics</h2>
-        <span className="text-sm text-muted-foreground font-mono">Played: {allLegends.length}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground font-mono">Played: {allLegends.length}</span>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as LegendSortKey)}>
+            <SelectTrigger className="w-[130px] font-bold h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LEGEND_SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="cursor-pointer text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card className="overflow-hidden border-border">
@@ -77,22 +145,7 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold capitalize truncate text-sm">{legend.legendNameKey}</h3>
-                      <div className="hidden sm:flex items-center gap-2 shrink-0">
-                        <Badge variant="secondary" className="text-xs font-mono px-2 py-1 h-7">
-                          Lvl {legend.level}
-                        </Badge>
-                        {rankedLegend && !isExpanded && (
-                          <Badge
-                            variant="outline"
-                            className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7"
-                          >
-                            {rankedLegend.tier} &bull; {rankedLegend.rating}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+                    <h3 className="font-bold capitalize truncate text-sm">{legend.legendNameKey}</h3>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-mono">
                       <span>{formatNum(legend.xp)} XP</span>
                       <span className="opacity-30">&bull;</span>
@@ -113,6 +166,19 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
                         </Badge>
                       )}
                     </div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="text-xs font-mono px-2 py-1 h-7">
+                      Lvl {legend.level}
+                    </Badge>
+                    {rankedLegend && !isExpanded && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-mono text-muted-foreground whitespace-nowrap px-2 py-1 h-7"
+                      >
+                        {rankedLegend.tier} &bull; {rankedLegend.rating}
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
