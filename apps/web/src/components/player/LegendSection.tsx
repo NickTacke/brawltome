@@ -73,7 +73,6 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
         const peakB = rankedLegends.find((r: PlayerData) => r.legendId === b.legendId)?.peakRating ?? 0
         return peakB - peakA
       }
-      case 'xp':
       default:
         return (b.xp ?? 0) - (a.xp ?? 0)
     }
