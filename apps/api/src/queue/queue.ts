@@ -1,3 +1,4 @@
+import { RateLimitError } from '@brawltome/bhapi'
 import type { Redis } from 'ioredis'
 
 export interface QueueOptions {
@@ -7,7 +8,7 @@ export interface QueueOptions {
 }
 
 export interface Queue<T> {
-  enqueue(data: T): Promise<boolean>
+  enqueue(data: T, priority?: boolean): Promise<boolean>
   start(): Promise<void>
   stop(): void
   depth(): Promise<number>
@@ -21,6 +22,7 @@ export function createQueue<T>(
 ): Queue<T> {
   const { concurrency = 5, retries = 3, backoffMs = 1000 } = opts
   const stream = `queue:${name}`
+  const priorityKey = `queue:${name}:priority`
   const group = `${name}-workers`
   const consumer = `${name}-${crypto.randomUUID().slice(0, 8)}`
   let running = 0
@@ -35,8 +37,12 @@ export function createQueue<T>(
     }
   }
 
-  async function enqueue(data: T): Promise<boolean> {
-    await redis.xadd(stream, '*', 'data', JSON.stringify(data))
+  async function enqueue(data: T, priority = false): Promise<boolean> {
+    if (priority) {
+      await redis.lpush(priorityKey, JSON.stringify(data))
+    } else {
+      await redis.xadd(stream, '*', 'data', JSON.stringify(data))
+    }
     return true
   }
 
@@ -68,6 +74,20 @@ export function createQueue<T>(
       if (running >= concurrency) {
         await Bun.sleep(50)
         continue
+      }
+
+      // Drain priority jobs first
+      try {
+        const priorityItem = await redis.rpop(priorityKey)
+        if (priorityItem) {
+          running++
+          processJob(null, JSON.parse(priorityItem) as T, retries).finally(() => {
+            running--
+          })
+          continue
+        }
+      } catch (err) {
+        if (!stopped) console.error(`[queue:${name}] priority read error:`, err)
       }
 
       try {
@@ -117,12 +137,27 @@ export function createQueue<T>(
     }
   }
 
-  async function processJob(id: string, data: T, attemptsLeft: number) {
-    try {
-      await handler(data)
+  async function ackAndDelete(id: string | null) {
+    if (id) {
       await redis.xack(stream, group, id)
       await redis.xdel(stream, id)
+    }
+  }
+
+  async function processJob(id: string | null, data: T, attemptsLeft: number) {
+    try {
+      await handler(data)
+      await ackAndDelete(id)
     } catch (err) {
+      // Rate limit errors: ACK the current job and re-enqueue for later
+      // Don't waste retry attempts — the API will be available after the pause
+      if (err instanceof RateLimitError) {
+        console.warn(`[queue:${name}] rate limited, re-enqueuing job for later`)
+        await ackAndDelete(id)
+        await enqueue(data)
+        return
+      }
+
       if (attemptsLeft > 1) {
         const delay = backoffMs * (retries - attemptsLeft + 1)
         await Bun.sleep(delay)
@@ -142,8 +177,7 @@ export function createQueue<T>(
         'timestamp',
         new Date().toISOString(),
       )
-      await redis.xack(stream, group, id)
-      await redis.xdel(stream, id)
+      await ackAndDelete(id)
       console.error(`[queue:${name}] job sent to DLQ:`, err)
     }
   }
