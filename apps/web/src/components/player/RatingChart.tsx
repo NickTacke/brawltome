@@ -200,11 +200,13 @@ export function RatingChart({ data }: RatingChartProps) {
               domain={['dataMin', 'dataMax']}
               ticks={(() => {
                 const seen = new Set<string>()
-                return sorted.filter((d) => {
-                  if (seen.has(d.date)) return false
-                  seen.add(d.date)
-                  return true
-                }).map((d) => d.timestamp)
+                return sorted
+                  .filter((d) => {
+                    if (seen.has(d.date)) return false
+                    seen.add(d.date)
+                    return true
+                  })
+                  .map((d) => d.timestamp)
               })()}
               tickFormatter={(ts: number) =>
                 new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })

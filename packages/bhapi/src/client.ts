@@ -121,18 +121,12 @@ export class BhApiClient {
       console.log(`[bhapi] paused both buckets for ${retryAfter + 1}s`)
 
       if (attempt >= 3) {
-        throw new RateLimitError(
-          `Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`,
-          pauseMs,
-        )
+        throw new RateLimitError(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`, pauseMs)
       }
       // For short retry-after (burst limit), wait and retry inline
       // For long retry-after (sustained limit), throw so the job can be requeued
       if (retryAfter > 30) {
-        throw new RateLimitError(
-          `Brawlhalla API rate limited (retry-after: ${retryAfter}s) for ${endpoint}`,
-          pauseMs,
-        )
+        throw new RateLimitError(`Brawlhalla API rate limited (retry-after: ${retryAfter}s) for ${endpoint}`, pauseMs)
       }
       await Bun.sleep(pauseMs)
       return this.call<T>(endpoint, attempt + 1)

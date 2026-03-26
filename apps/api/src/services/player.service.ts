@@ -1,16 +1,8 @@
-import {
-  blacklist,
-  player,
-  ratingHistory,
-} from '@brawltome/database'
+import { blacklist, player, ratingHistory } from '@brawltome/database'
 import { desc, eq, sql } from 'drizzle-orm'
 import { dedupKey, tryDedup } from '../queue/dedup'
 import type { Context } from '../trpc/context'
-import {
-  DEDUP_TTL_RANKED_SEC,
-  DEDUP_TTL_STATS_SEC,
-  TIERED_TTL,
-} from './constants'
+import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, TIERED_TTL } from './constants'
 import { getLegendById, normalizeWeaponName } from './game-data.service'
 import { checkRateLimit } from './rate-limit.service'
 
