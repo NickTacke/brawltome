@@ -111,11 +111,17 @@ export class BhApiClient {
         `[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`,
       )
 
-      // Pause both buckets — no tokens refill until pause expires
       const pauseMs = (retryAfter + 1) * 1000
-      this.burst.pause(pauseMs)
-      this.sustained.pause(pauseMs)
-      console.log(`[bhapi] paused both buckets for ${retryAfter + 1}s`)
+      if (retryAfter > 30) {
+        // Sustained limit: pause both buckets
+        this.burst.pause(pauseMs)
+        this.sustained.pause(pauseMs)
+        console.log(`[bhapi] paused both buckets for ${retryAfter + 1}s`)
+      } else {
+        // Burst limit: only pause burst bucket, sustained is fine
+        this.burst.pause(pauseMs)
+        console.log(`[bhapi] paused burst bucket for ${retryAfter + 1}s`)
+      }
 
       if (attempt >= 3) {
         throw new RateLimitError(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`, pauseMs)
