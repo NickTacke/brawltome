@@ -53,7 +53,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   if (!player) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
         <div className="text-muted-foreground">Player not found.</div>
       </div>
     )
@@ -75,7 +75,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     .sort((a: string, b: string) => a.localeCompare(b))
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
       {/* Top Navbar */}
       <NavBar showBack />
 
