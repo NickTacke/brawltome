@@ -51,7 +51,6 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
         return b.damage - a.damage
       case 'kos':
         return b.KOs - a.KOs
-      case 'timePlayed':
       default:
         return b.timeHeld - a.timeHeld
     }
