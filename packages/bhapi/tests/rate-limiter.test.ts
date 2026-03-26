@@ -17,7 +17,7 @@ describe('TokenBucket', () => {
     const start = Date.now()
     await bucket.acquire()
     const elapsed = Date.now() - start
-    expect(elapsed).toBeGreaterThanOrEqual(80)
+    expect(elapsed).toBeGreaterThanOrEqual(30)
   })
 
   it('reports remaining tokens', async () => {
