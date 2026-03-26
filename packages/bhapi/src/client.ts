@@ -36,7 +36,7 @@ export class BhApiClient {
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.burst = new TokenBucket({ capacity: 8, refillRate: 8, intervalMs: 1000 })
-    this.sustained = new TokenBucket({ capacity: 80, refillRate: 80, intervalMs: 10 * 60 * 1000 })
+    this.sustained = new TokenBucket({ capacity: 150, refillRate: 150, intervalMs: 15 * 60 * 1000 })
   }
 
   get remainingTokens(): number {
