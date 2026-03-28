@@ -1,5 +1,5 @@
-import { initTRPC, TRPCError } from '@trpc/server'
-import { timingSafeEqual } from 'crypto'
+import { timingSafeEqual } from 'node:crypto'
+import { TRPCError, initTRPC } from '@trpc/server'
 import superjson from 'superjson'
 import type { Context } from './context'
 

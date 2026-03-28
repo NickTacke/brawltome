@@ -1,7 +1,7 @@
 'use client'
 
-import { NavBar } from '@/components/NavBar'
 import { getPlayerAction } from '@/app/player/[id]/actions'
+import { NavBar } from '@/components/NavBar'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import {
