@@ -54,7 +54,8 @@ app.use(
         /bot|crawl|spider|slurp|facebookexternalhit|meta-webindexer|bingpreview|yandex|baidu|duckduckbot|twitterbot|linkedinbot|embedly|quora|pinterest|redditbot|applebot|semrush|ahrefs|mj12bot|dotbot|petalbot|bytespider/i.test(
           ua,
         )
-      return { ...sharedCtx, clientIp, isBot } as unknown as Record<string, unknown>
+      const internalSecret = c.req.header('x-internal-secret') ?? undefined
+      return { ...sharedCtx, clientIp, isBot, internalSecret } as unknown as Record<string, unknown>
     },
   }),
 )

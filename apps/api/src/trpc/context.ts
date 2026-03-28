@@ -12,4 +12,5 @@ export interface Context {
   clanQueue: Queue<{ clanId: number }>
   clientIp: string
   isBot: boolean
+  internalSecret: string | undefined
 }
