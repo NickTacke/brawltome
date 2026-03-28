@@ -58,29 +58,30 @@ export class RequestQueue {
   }
 
   private async waitForSlot(): Promise<void> {
-    // Wait for pause to expire
-    if (this.isPaused) {
+    // Wait for pause to expire (re-check in case pause was set during a prior sleep)
+    while (this.isPaused) {
       const pauseWait = this.pausedUntil - Date.now()
-      if (pauseWait > 0) {
-        await Bun.sleep(pauseWait)
-      }
+      if (pauseWait > 0) await Bun.sleep(pauseWait)
     }
 
     // Wait for burst spacing
     const sinceLast = Date.now() - this.lastRequestTime
     if (this.lastRequestTime > 0 && sinceLast < this.minSpacingMs) {
       await Bun.sleep(this.minSpacingMs - sinceLast)
+      // Re-check pause in case it was set during burst sleep
+      while (this.isPaused) {
+        const pauseWait = this.pausedUntil - Date.now()
+        if (pauseWait > 0) await Bun.sleep(pauseWait)
+      }
     }
 
-    // Wait for sustained window
-    this.pruneTimestamps()
-    if (this.timestamps.length >= this.sustainedLimit) {
+    // Wait for sustained window (loop to handle early wake from sleep jitter)
+    while (true) {
+      this.pruneTimestamps()
+      if (this.timestamps.length < this.sustainedLimit) break
       const oldest = this.timestamps[0]
       const sustainedWait = oldest + this.sustainedWindowMs - Date.now()
-      if (sustainedWait > 0) {
-        await Bun.sleep(sustainedWait)
-        this.pruneTimestamps()
-      }
+      if (sustainedWait > 0) await Bun.sleep(sustainedWait)
     }
   }
 

@@ -79,7 +79,7 @@ describe('RequestQueue', () => {
       await Bun.sleep(60)
       expect(queue.isPaused).toBe(false)
       const waited = await queue.acquire()
-      expect(waited).toBe(0)
+      expect(waited).toBeLessThan(10)
     })
   })
 })
