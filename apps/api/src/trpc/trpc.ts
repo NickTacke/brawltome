@@ -1,4 +1,5 @@
-import { initTRPC } from '@trpc/server'
+import { initTRPC, TRPCError } from '@trpc/server'
+import { timingSafeEqual } from 'crypto'
 import superjson from 'superjson'
 import type { Context } from './context'
 
@@ -6,5 +7,26 @@ const t = initTRPC.context<Context>().create({
   transformer: superjson,
 })
 
+export function createInternalMiddleware(expectedSecret: string) {
+  return t.middleware(({ ctx, next }) => {
+    if (!expectedSecret) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
+    }
+    const provided = (ctx as Record<string, unknown>).internalSecret as string | undefined
+    if (
+      !provided ||
+      provided.length !== expectedSecret.length ||
+      !timingSafeEqual(Buffer.from(provided), Buffer.from(expectedSecret))
+    ) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
+    }
+    return next({ ctx })
+  })
+}
+
+const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
+const internalMiddleware = createInternalMiddleware(internalSecret)
+
 export const router = t.router
 export const publicProcedure = t.procedure
+export const internalProcedure = t.procedure.use(internalMiddleware)
