@@ -20,7 +20,7 @@ export async function getClan(ctx: Context, clanId: number) {
   }
 
   let isRefreshing = false
-  if (!ctx.isBot) {
+  if (!ctx.isBot && !process.env.DISABLE_VIEW_REFRESH) {
     const age = Date.now() - c.lastUpdated.getTime()
     if (age > CLAN_TTL_MS) {
       const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
