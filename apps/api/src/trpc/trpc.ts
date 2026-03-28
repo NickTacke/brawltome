@@ -12,7 +12,7 @@ export function createInternalMiddleware(expectedSecret: string) {
     if (!expectedSecret) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
     }
-    const provided = (ctx as Record<string, unknown>).internalSecret as string | undefined
+    const provided = ctx.internalSecret
     if (
       !provided ||
       provided.length !== expectedSecret.length ||
