@@ -108,6 +108,9 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
 }
 
 async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<PlayerResult | null> {
+  const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
+  if (!globalLimit.allowed) return null
+
   const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
   if (!discoveryLimit.allowed) return null
 
@@ -123,7 +126,7 @@ async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<Playe
     .onConflictDoNothing()
 
   // Enqueue both ranked and stats refreshes with high priority
-  console.log(`[discover] enqueuing ${brawlhallaId} via priority queue`)
+  console.log(`[discover] enqueuing ${brawlhallaId} via priority queue (ip=${ctx.clientIp})`)
   await ctx.rankedQueue.enqueue({ brawlhallaId }, true)
   await ctx.statsQueue.enqueue({ brawlhallaId }, true)
 

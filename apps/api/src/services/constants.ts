@@ -21,6 +21,7 @@ export const CLAN_TTL_MS = 60 * 60 * 1000
 export const RATE_LIMITS = {
   discovery: { max: 20, windowSec: 15 * 60 },
   refresh: { max: 20, windowSec: 15 * 60 },
+  'discovery:global': { max: 30, windowSec: 15 * 60 },
 } as const
 
 export type RateLimitAction = keyof typeof RATE_LIMITS

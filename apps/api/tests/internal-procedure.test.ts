@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { initTRPC, TRPCError } from '@trpc/server'
+import { TRPCError, initTRPC } from '@trpc/server'
 import superjson from 'superjson'
 import { createInternalMiddleware } from '../src/trpc/trpc'
 

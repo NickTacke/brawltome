@@ -1,4 +1,4 @@
-import { TokenBucket } from './rate-limiter'
+import { RequestQueue } from './request-queue'
 
 export class RateLimitError extends Error {
   constructor(
@@ -30,17 +30,15 @@ export interface BhApiClientOptions {
 
 export class BhApiClient {
   private readonly apiKey: string
-  private readonly burst: TokenBucket
-  private readonly sustained: TokenBucket
+  private readonly queue: RequestQueue
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
-    this.burst = new TokenBucket({ capacity: 8, refillRate: 8, intervalMs: 1000 })
-    this.sustained = new TokenBucket({ capacity: 150, refillRate: 150, intervalMs: 15 * 60 * 1000 })
+    this.queue = new RequestQueue({ minSpacingMs: 100, sustainedLimit: 150, sustainedWindowMs: 15 * 60 * 1000 })
   }
 
   get remainingTokens(): number {
-    return this.sustained.remaining
+    return this.queue.remaining
   }
 
   async searchBySteamId(steamId: string): Promise<BhApiSearchResult | null> {
@@ -75,23 +73,16 @@ export class BhApiClient {
     return this.call(`/legend/${id}`)
   }
 
-  private async call<T>(endpoint: string, attempt = 0): Promise<T | null> {
+  private async call<T>(endpoint: string): Promise<T | null> {
     const path = endpoint.split('?')[0]
 
-    const burstWait = await this.burst.acquire()
-    if (burstWait > 0) {
-      console.log(`[bhapi] ${path} burst wait: ${(burstWait / 1000).toFixed(1)}s`)
+    const waitMs = await this.queue.acquire()
+    if (waitMs > 0) {
+      console.log(`[bhapi] ${path} queue wait: ${(waitMs / 1000).toFixed(1)}s`)
     }
 
-    const sustainedWait = await this.sustained.acquire()
-    if (sustainedWait > 0) {
-      console.log(`[bhapi] ${path} sustained wait: ${(sustainedWait / 1000).toFixed(1)}s`)
-    }
-
-    const remaining = this.sustained.remaining
-    console.log(
-      `[bhapi] ${path} (${remaining} sustained left, ${this.burst.remaining} burst left${attempt > 0 ? `, retry ${attempt}` : ''})`,
-    )
+    const remaining = this.queue.remaining
+    console.log(`[bhapi] ${path} (${remaining} sustained left)`)
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
@@ -107,32 +98,15 @@ export class BhApiClient {
 
     if (res.status === 429) {
       const retryAfter = Number.parseInt(res.headers.get('retry-after') ?? '5', 10)
-      console.log(
-        `[bhapi] ${path} -> 429 rate limited (${fetchMs}ms, retry-after: ${retryAfter}s, attempt ${attempt + 1})`,
+      console.warn(
+        `[bhapi] ${path} -> 429 UNEXPECTED (${fetchMs}ms, retry-after: ${retryAfter}s) — queue should have prevented this`,
       )
 
       const pauseMs = (retryAfter + 1) * 1000
-      if (retryAfter > 30) {
-        // Sustained limit: pause both buckets
-        this.burst.pause(pauseMs)
-        this.sustained.pause(pauseMs)
-        console.log(`[bhapi] paused both buckets for ${retryAfter + 1}s`)
-      } else {
-        // Burst limit: only pause burst bucket, sustained is fine
-        this.burst.pause(pauseMs)
-        console.log(`[bhapi] paused burst bucket for ${retryAfter + 1}s`)
-      }
+      this.queue.pause(pauseMs)
+      console.warn(`[bhapi] paused queue for ${retryAfter + 1}s`)
 
-      if (attempt >= 3) {
-        throw new RateLimitError(`Brawlhalla API rate limited after ${attempt + 1} attempts for ${endpoint}`, pauseMs)
-      }
-      // Long retry-after (sustained limit): throw so the job can be requeued
-      if (retryAfter > 30) {
-        throw new RateLimitError(`Brawlhalla API rate limited (retry-after: ${retryAfter}s) for ${endpoint}`, pauseMs)
-      }
-      // Short retry-after (burst limit): retry via acquire() which will block
-      // until pause expires and serialize callers through token acquisition
-      return this.call<T>(endpoint, attempt + 1)
+      throw new RateLimitError(`Brawlhalla API rate limited for ${endpoint}`, pauseMs)
     }
 
     if (!res.ok) {
