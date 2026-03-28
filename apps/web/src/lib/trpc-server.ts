@@ -5,6 +5,7 @@ import { headers } from 'next/headers'
 import superjson from 'superjson'
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
+const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
 
 export async function getServerTrpc() {
   const h = await headers()
@@ -14,6 +15,7 @@ export async function getServerTrpc() {
   const outHeaders: Record<string, string> = {}
   if (ip) outHeaders['x-client-ip'] = ip
   if (ua) outHeaders['x-original-ua'] = ua
+  if (internalSecret) outHeaders['x-internal-secret'] = internalSecret
 
   return createTRPCClient<AppRouter>({
     links: [
