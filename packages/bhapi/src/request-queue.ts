@@ -47,7 +47,8 @@ export class RequestQueue {
 
     while (this.pending.length > 0) {
       await this.waitForSlot()
-      const caller = this.pending.shift()!
+      const caller = this.pending.shift()
+      if (!caller) break
       const now = Date.now()
       this.lastRequestTime = now
       this.timestamps.push(now)
@@ -87,8 +88,8 @@ export class RequestQueue {
 
   private pruneTimestamps(): void {
     const cutoff = Date.now() - this.sustainedWindowMs
-    while (this.timestamps.length > 0 && this.timestamps[0] < cutoff) {
-      this.timestamps.shift()
-    }
+    let i = 0
+    while (i < this.timestamps.length && this.timestamps[i] < cutoff) i++
+    if (i > 0) this.timestamps.splice(0, i)
   }
 }
