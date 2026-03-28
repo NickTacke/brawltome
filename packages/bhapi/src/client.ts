@@ -34,7 +34,7 @@ export class BhApiClient {
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
-    this.queue = new RequestQueue({ minSpacingMs: 100, sustainedLimit: 150, sustainedWindowMs: 15 * 60 * 1000 })
+    this.queue = new RequestQueue({ minSpacingMs: 150, sustainedLimit: 150, sustainedWindowMs: 15 * 60 * 1000 })
   }
 
   get remainingTokens(): number {
