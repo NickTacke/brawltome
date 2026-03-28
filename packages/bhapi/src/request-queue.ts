@@ -15,6 +15,15 @@ export class RequestQueue {
   private readonly pending: Array<{ resolve: (waitMs: number) => void; enqueuedAt: number }> = []
 
   constructor(opts: RequestQueueOptions) {
+    if (!Number.isFinite(opts.minSpacingMs) || opts.minSpacingMs < 0) {
+      throw new RangeError('minSpacingMs must be a finite number >= 0')
+    }
+    if (!Number.isInteger(opts.sustainedLimit) || opts.sustainedLimit < 1) {
+      throw new RangeError('sustainedLimit must be an integer >= 1')
+    }
+    if (!Number.isFinite(opts.sustainedWindowMs) || opts.sustainedWindowMs < 1) {
+      throw new RangeError('sustainedWindowMs must be a finite number >= 1')
+    }
     this.minSpacingMs = opts.minSpacingMs
     this.sustainedLimit = opts.sustainedLimit
     this.sustainedWindowMs = opts.sustainedWindowMs
@@ -30,7 +39,8 @@ export class RequestQueue {
   }
 
   pause(durationMs: number): void {
-    this.pausedUntil = Date.now() + durationMs
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return
+    this.pausedUntil = Math.max(this.pausedUntil, Date.now() + durationMs)
   }
 
   async acquire(): Promise<number> {
