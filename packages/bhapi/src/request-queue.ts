@@ -78,6 +78,10 @@ export class RequestQueue {
 
     // Wait for sustained window (loop to handle early wake from sleep jitter)
     while (true) {
+      while (this.isPaused) {
+        const pauseWait = this.pausedUntil - Date.now()
+        if (pauseWait > 0) await Bun.sleep(pauseWait)
+      }
       this.pruneTimestamps()
       if (this.timestamps.length < this.sustainedLimit) break
       const oldest = this.timestamps[0]
