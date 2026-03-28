@@ -1,7 +1,7 @@
 'use client'
 
 import { NavBar } from '@/components/NavBar'
-import { trpc } from '@/lib/trpc'
+import { getClanAction } from '@/app/clan/[id]/actions'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
   Avatar,
@@ -81,7 +81,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     if (!clan?.isRefreshing) return
     const intervalId = setInterval(async () => {
       try {
-        const data = await trpc.clan.byId.query({ id: Number(id) })
+        const data = await getClanAction(Number(id))
         if (data) setClan(data)
         if (!data?.isRefreshing) clearInterval(intervalId)
       } catch {
