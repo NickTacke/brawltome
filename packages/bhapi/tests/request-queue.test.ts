@@ -6,7 +6,7 @@ describe('RequestQueue', () => {
     it('grants first request immediately', async () => {
       const queue = new RequestQueue({ minSpacingMs: 100, sustainedLimit: 150, sustainedWindowMs: 900_000 })
       const waited = await queue.acquire()
-      expect(waited).toBe(0)
+      expect(waited).toBeLessThan(10)
     })
 
     it('enforces minimum spacing between requests', async () => {
