@@ -1,12 +1,9 @@
-import { clan, clanMember, player } from '@brawltome/database'
-import { TRPCError } from '@trpc/server'
+import { clan, player } from '@brawltome/database'
 import { eq, inArray } from 'drizzle-orm'
 import { dedupKey, tryDedup } from '../queue/dedup'
 import type { Context } from '../trpc/context'
-import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC, DISCOVERY_MIN_TOKENS } from './constants'
+import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC } from './constants'
 import { checkRateLimit } from './rate-limit.service'
-// biome-ignore lint/suspicious/noExplicitAny: circular type reference between getClan/discoverClan
-const clanDiscoveries = new Map<number, Promise<any>>()
 
 export async function getClan(ctx: Context, clanId: number) {
   const c = await ctx.db.query.clan.findFirst({
@@ -61,66 +58,26 @@ export async function getClan(ctx: Context, clanId: number) {
 }
 
 async function discoverClan(ctx: Context, clanId: number) {
-  const existing = clanDiscoveries.get(clanId)
-  if (existing) return existing
+  const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
+  if (!globalLimit.allowed) return null
 
-  if (ctx.bhapi.remainingTokens < DISCOVERY_MIN_TOKENS) return null
+  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+  if (!discoveryLimit.allowed) return null
 
-  const promise = (async () => {
-    try {
-      const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
-      if (!discoveryLimit.allowed) {
-        throw new TRPCError({
-          code: 'TOO_MANY_REQUESTS',
-          message: `Rate limited. Retry after ${discoveryLimit.retryAfter} seconds.`,
-        })
-      }
+  const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
+  if (!canDedup) return null
 
-      const data = await ctx.bhapi.getClan(clanId)
-      if (!data) return null
+  console.log(`[discover] enqueuing clan ${clanId} via priority queue (ip=${ctx.clientIp})`)
+  await ctx.clanQueue.enqueue({ clanId }, true)
 
-      const now = new Date()
-
-      await ctx.db
-        .insert(clan)
-        .values({
-          clanId: data.clan_id,
-          clanName: data.clan_name,
-          clanCreateDate: new Date(data.clan_create_date * 1000),
-          clanXp: BigInt(data.clan_xp || '0'),
-          clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-          lastUpdated: now,
-        })
-        .onConflictDoNothing()
-
-      const members = data.clan.map((m) => ({
-        clanId: data.clan_id,
-        brawlhallaId: m.brawlhalla_id,
-        name: m.name,
-        rank: m.rank,
-        joinDate: new Date(m.join_date * 1000),
-        xp: m.xp,
-      }))
-
-      if (members.length > 0) {
-        await ctx.db.insert(clanMember).values(members).onConflictDoNothing()
-      }
-
-      return {
-        clanId: data.clan_id,
-        clanName: data.clan_name,
-        clanCreateDate: new Date(data.clan_create_date * 1000),
-        clanXp: BigInt(data.clan_xp || '0'),
-        clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-        lastUpdated: now,
-        members: members.map((m) => ({ ...m, rating: 0, peakRating: 0 })),
-        isRefreshing: false,
-      }
-    } finally {
-      clanDiscoveries.delete(clanId)
-    }
-  })()
-
-  clanDiscoveries.set(clanId, promise)
-  return promise
+  return {
+    clanId,
+    clanName: `Clan ${clanId}`,
+    clanCreateDate: new Date(),
+    clanXp: 0n,
+    clanLifetimeXp: 0n,
+    lastUpdated: new Date(),
+    members: [],
+    isRefreshing: true,
+  }
 }
