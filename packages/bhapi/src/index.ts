@@ -1,3 +1,3 @@
 export { BhApiClient, RateLimitError, type BhApiClientOptions } from './client'
-export { TokenBucket, type TokenBucketOptions } from './rate-limiter'
+export { RequestQueue, type RequestQueueOptions } from './request-queue'
 export * from './types'

@@ -1,7 +1,7 @@
 'use client'
 
-import { NavBar } from '@/components/NavBar'
 import { getClanAction } from '@/app/clan/[id]/actions'
+import { NavBar } from '@/components/NavBar'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
   Avatar,
