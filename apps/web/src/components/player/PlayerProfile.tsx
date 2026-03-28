@@ -1,7 +1,7 @@
 'use client'
 
 import { NavBar } from '@/components/NavBar'
-import { trpc } from '@/lib/trpc'
+import { getPlayerAction } from '@/app/player/[id]/actions'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import {
@@ -41,7 +41,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     if (!player?.isRefreshing) return
     const intervalId = setInterval(async () => {
       try {
-        const data = await trpc.player.byId.query({ id: Number(player.brawlhallaId) })
+        const data = await getPlayerAction(Number(player.brawlhallaId))
         if (data) setPlayer(data)
         if (!data?.isRefreshing) clearInterval(intervalId)
       } catch {
