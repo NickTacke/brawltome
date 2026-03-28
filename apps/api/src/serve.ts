@@ -1,4 +1,3 @@
-import { BhApiClient } from '@brawltome/bhapi'
 import { db } from '@brawltome/database'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
@@ -8,22 +7,16 @@ import { createQueue } from './queue/queue'
 import { appRouter } from './router'
 import { initGameData } from './services/game-data.service'
 
-const apiKey = process.env.BRAWLHALLA_API_KEY
-if (!apiKey) {
-  throw new Error('BRAWLHALLA_API_KEY environment variable is required')
-}
-
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
-const bhapi = new BhApiClient({ apiKey })
 
-await initGameData(db, bhapi)
+await initGameData(db)
 
 // API only enqueues — concurrency 0 means no consumer loop
 const rankedQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-ranked', async () => {}, { concurrency: 0 })
 const statsQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-stats', async () => {}, { concurrency: 0 })
 const clanQueue = createQueue<{ clanId: number }>(redis, 'refresh-clan', async () => {}, { concurrency: 0 })
 
-const sharedCtx = { db, bhapi, redis, rankedQueue, statsQueue, clanQueue }
+const sharedCtx = { db, redis, rankedQueue, statsQueue, clanQueue }
 
 const app = new Hono()
 

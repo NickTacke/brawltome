@@ -14,10 +14,14 @@ interface LegendData {
 let legendCache: Map<number, LegendData> = new Map()
 let legendByKey: Map<string, LegendData> = new Map()
 
-export async function initGameData(db: Database, bhapi: BhApiClient) {
+export async function initGameData(db: Database, bhapi?: BhApiClient) {
   const dbLegends = await db.query.legend.findMany()
 
   if (dbLegends.length === 0) {
+    if (!bhapi) {
+      console.warn('[game-data] no legends in DB and no bhapi client — skipping init')
+      return
+    }
     const apiLegends = await bhapi.getAllLegends()
     for (const l of apiLegends) {
       await db

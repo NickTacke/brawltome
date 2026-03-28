@@ -5,7 +5,7 @@ import { Skeleton } from '@brawltome/ui'
 import { useEffect, useState } from 'react'
 
 export function ServerStatus() {
-  const [status, setStatus] = useState<{ status: 'healthy' | 'degraded' | 'down'; tokens: number } | null>(null)
+  const [status, setStatus] = useState<{ status: 'healthy' } | null>(null)
   const [error, setError] = useState(false)
 
   useEffect(() => {
@@ -47,12 +47,8 @@ export function ServerStatus() {
     )
   }
 
-  const statusMap = {
-    healthy: { color: 'bg-success', text: 'Operational' },
-    degraded: { color: 'bg-yellow-500', text: 'Busy' },
-    down: { color: 'bg-destructive', text: 'High Load' },
-  }
-  const { color: statusColor, text: statusText } = statusMap[status.status]
+  const statusColor = 'bg-success'
+  const statusText = 'Operational'
 
   return (
     <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-border bg-card/80 backdrop-blur-xs shadow-xs hover:bg-card/90 transition-colors">
