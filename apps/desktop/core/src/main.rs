@@ -3,6 +3,9 @@
 #[cfg(target_os = "windows")]
 mod memory;
 
+#[cfg(target_os = "windows")]
+mod scanner;
+
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use tauri::{
