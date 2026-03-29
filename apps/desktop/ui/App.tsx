@@ -1,17 +1,25 @@
-import { useCursorForwarding } from './hooks/useCursorForwarding'
+import { useState } from 'react'
+import { OverlayPanel } from './components/OverlayPanel'
+import type { Opponent } from './types'
+
+const MOCK_OPPONENTS: Opponent[] = [
+  {
+    brawlhallaId: 2836298,
+    name: 'Sandstorm',
+    rating: 2487,
+    peakRating: 2512,
+    playtime: 4231.5,
+    tier: 'Diamond',
+    region: 'US-E',
+  },
+]
 
 export default function App() {
-  const { onMouseEnter, onMouseLeave } = useCursorForwarding()
+  const [opponents] = useState<Opponent[]>(MOCK_OPPONENTS)
 
   return (
-    <div className="flex h-screen items-center justify-end p-4">
-      <div
-        className="rounded-lg bg-zinc-900/90 p-4 text-white shadow-lg backdrop-blur"
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      >
-        <p className="text-sm">BrawlTome Overlay</p>
-      </div>
+    <div className="flex h-screen items-start justify-end p-4 pt-20">
+      <OverlayPanel opponents={opponents} visible={true} />
     </div>
   )
 }
