@@ -35,15 +35,26 @@ enum GameEvent {
 }
 
 fn mock_opponents() -> Vec<Opponent> {
-    vec![Opponent {
-        brawlhalla_id: 2836298,
-        name: "Sandstorm".into(),
-        rating: 2487,
-        peak_rating: 2512,
-        playtime: 4231.5,
-        tier: "Diamond".into(),
-        region: "US-E".into(),
-    }]
+    vec![
+        Opponent {
+            brawlhalla_id: 2836298,
+            name: "Sandstorm".into(),
+            rating: 2487,
+            peak_rating: 2512,
+            playtime: 4231.5,
+            tier: "Diamond".into(),
+            region: "US-E".into(),
+        },
+        Opponent {
+            brawlhalla_id: 1234567,
+            name: "Boomie".into(),
+            rating: 2341,
+            peak_rating: 2403,
+            playtime: 3150.0,
+            tier: "Diamond".into(),
+            region: "US-E".into(),
+        },
+    ]
 }
 
 fn main() {
