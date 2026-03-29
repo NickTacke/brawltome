@@ -6,6 +6,8 @@ export interface Opponent {
   playtime: number // hours
   tier: string
   region: string
+  legendKey: string
+  winRate: number // 0-100
 }
 
 export interface MatchFoundEvent {
