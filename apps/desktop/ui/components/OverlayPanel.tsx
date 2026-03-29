@@ -34,9 +34,7 @@ export function OverlayPanel({ opponents, visible }: OverlayPanelProps) {
         transform: show ? 'translateX(0)' : 'translateX(20px)',
       }}
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-        Opponents
-      </p>
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Opponents</p>
       {opponents.map((opponent) => (
         <OpponentCard key={opponent.brawlhallaId} opponent={opponent} />
       ))}

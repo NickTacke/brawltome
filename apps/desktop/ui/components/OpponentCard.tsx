@@ -1,6 +1,6 @@
-import type { Opponent } from '../types'
-import { useCursorForwarding } from '../hooks/useCursorForwarding'
 import { open } from '@tauri-apps/plugin-shell'
+import { useCursorForwarding } from '../hooks/useCursorForwarding'
+import type { Opponent } from '../types'
 
 interface OpponentCardProps {
   opponent: Opponent
@@ -9,9 +9,8 @@ interface OpponentCardProps {
 export function OpponentCard({ opponent }: OpponentCardProps) {
   const { onMouseEnter, onMouseLeave } = useCursorForwarding()
 
-  const playtimeDisplay = opponent.playtime >= 1000
-    ? `${(opponent.playtime / 1000).toFixed(1)}k hrs`
-    : `${Math.round(opponent.playtime)} hrs`
+  const playtimeDisplay =
+    opponent.playtime >= 1000 ? `${(opponent.playtime / 1000).toFixed(1)}k hrs` : `${Math.round(opponent.playtime)} hrs`
 
   return (
     <div
@@ -40,9 +39,7 @@ export function OpponentCard({ opponent }: OpponentCardProps) {
       </div>
 
       <div className="mt-1">
-        <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300">
-          {opponent.tier}
-        </span>
+        <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300">{opponent.tier}</span>
       </div>
 
       <button
