@@ -9,6 +9,9 @@ mod api_client;
 #[cfg(target_os = "windows")]
 mod scanner;
 
+#[cfg(target_os = "windows")]
+mod game_detection;
+
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use tauri::{

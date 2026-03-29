@@ -1,10 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 const DEFAULT_API_BASE: &str = "https://brawltome.app";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OpponentData {
     #[serde(rename = "brawlhallaId")]
     pub brawlhalla_id: u32,
