@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Default capability for BrawlTome overlay",
+  "windows": ["overlay"],
+  "permissions": [
+    "core:default",
+    "shell:default"
+  ]
+}
