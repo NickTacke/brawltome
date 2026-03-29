@@ -9,7 +9,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "overlay",
@@ -21,7 +20,8 @@
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "visible": false
+        "shadow": false,
+        "visible": true
       }
     ]
   },
