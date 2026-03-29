@@ -2,10 +2,11 @@
 
 use serde::Serialize;
 use tauri::{
+    Emitter,
     Manager,
+    image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    image::Image,
 };
 use tokio::time::{sleep, Duration};
 
@@ -83,6 +84,9 @@ fn main() {
                 )))?;
             }
 
+            // Click-through only works properly on Windows (with cursor forwarding)
+            // Disabled on macOS for development/testing
+            #[cfg(target_os = "windows")]
             window.set_ignore_cursor_events(true)?;
 
             // Build tray menu
@@ -96,10 +100,10 @@ fn main() {
 
             // Build tray icon
             let _tray = TrayIconBuilder::new()
-                .icon(Image::from_bytes(include_bytes!("../../icons/tray.png"))?)
+                .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
                 .menu(&menu)
                 .tooltip("BrawlTome Overlay")
-                .on_menu_event(move |app, event| {
+                .on_menu_event(move |app: &tauri::AppHandle, event| {
                     match event.id().as_ref() {
                         "toggle" => {
                             if let Some(w) = app.get_webview_window("overlay") {
