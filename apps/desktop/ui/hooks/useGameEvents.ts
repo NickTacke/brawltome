@@ -1,6 +1,9 @@
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { useEffect, useRef, useState } from 'react'
 import type { GameEvent, Opponent } from '../types'
+
+const appWindow = getCurrentWebviewWindow()
 
 const AUTO_HIDE_MS = 30_000
 
@@ -19,6 +22,7 @@ export function useGameEvents() {
       if (payload.event === 'match_found') {
         setOpponents(payload.opponents)
         setVisible(true)
+        appWindow.show()
 
         timerRef.current = setTimeout(() => {
           setVisible(false)
