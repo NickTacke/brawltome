@@ -22,4 +22,5 @@ body,
   background: transparent;
   overflow: hidden;
   pointer-events: none;
+  user-select: none;
 }

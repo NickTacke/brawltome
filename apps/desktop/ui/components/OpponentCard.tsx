@@ -11,8 +11,8 @@ function formatPlaytime(hours: number): string {
 }
 
 function winRateColor(rate: number): string {
-  if (rate >= 60) return 'hsl(var(--overlay-success))'
-  if (rate >= 50) return 'hsl(var(--overlay-muted-fg))'
+  if (rate >= 55) return 'hsl(var(--overlay-success))'
+  if (rate >= 45) return 'hsl(var(--overlay-muted-fg))'
   return 'hsl(var(--overlay-danger))'
 }
 
@@ -39,7 +39,7 @@ export function OpponentCard({ opponent }: OpponentCardProps) {
             <span className="text-[13px] font-bold text-[hsl(var(--overlay-card-fg))]">
               {opponent.name}
             </span>
-            <span className="rounded-full bg-[hsla(var(--overlay-muted-bg)/0.8)] px-1.5 py-px font-mono text-[9px] text-[hsl(var(--overlay-muted-fg))]">
+            <span className="rounded-full border border-[hsla(var(--overlay-border)/0.6)] bg-[hsla(var(--overlay-muted-bg)/0.8)] px-1.5 py-px font-mono text-[9px] font-medium text-[hsl(var(--overlay-fg))]">
               {opponent.region}
             </span>
           </div>
@@ -53,7 +53,7 @@ export function OpponentCard({ opponent }: OpponentCardProps) {
 
         <button
           type="button"
-          className="shrink-0 text-[13px] text-[hsl(var(--overlay-primary))] opacity-45 transition-opacity hover:opacity-90"
+          className="mr-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-[hsla(var(--overlay-border)/0.7)] text-[11px] text-white transition-colors hover:bg-[hsla(var(--overlay-muted-bg)/0.6)]"
           onClick={() => open(`https://brawltome.com/player/${opponent.brawlhallaId}`)}
         >
           ↗
@@ -64,7 +64,7 @@ export function OpponentCard({ opponent }: OpponentCardProps) {
       <div className="my-2 h-px bg-[hsla(var(--overlay-border)/0.5)]" />
 
       {/* Stats: elo / peak + WR bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-1">
         <div className="flex items-baseline">
           <span className="font-mono text-[18px] font-black tracking-tight text-[hsl(var(--overlay-card-fg))]">
             {opponent.rating}

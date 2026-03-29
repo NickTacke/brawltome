@@ -11,8 +11,8 @@ const MOCK_OPPONENTS: Opponent[] = [
     playtime: 917.3,
     tier: 'Platinum',
     region: 'EU',
-    legendKey: 'mordex',
-    winRate: 62,
+    legendKey: 'ulgrim',
+    winRate: 58.1,
   },
   {
     brawlhallaId: 8301816,
@@ -22,20 +22,20 @@ const MOCK_OPPONENTS: Opponent[] = [
     playtime: 1532.6,
     tier: 'Unranked',
     region: 'EU',
-    legendKey: 'bodvar',
-    winRate: 38,
+    legendKey: 'mordex',
+    winRate: 52.4,
   },
 ]
 
 export function useGameEvents() {
   const [opponents, setOpponents] = useState<Opponent[]>(MOCK_OPPONENTS)
-  const [matchType, setMatchType] = useState('Ranked 1v1')
+  const [matchType, setMatchType] = useState('Players')
 
   useEffect(() => {
     const unlisten = listen<GameEvent>('game-event', ({ payload }) => {
       if (payload.event === 'match_found') {
         setOpponents(payload.opponents)
-        setMatchType(payload.isRanked ? 'Ranked 1v1' : 'Custom')
+        setMatchType(payload.isRanked ? 'Players' : 'Custom')
       } else if (payload.event === 'match_ended') {
         setOpponents([])
       }
