@@ -1,16 +1,10 @@
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { invoke } from '@tauri-apps/api/core'
 import { useCallback } from 'react'
 
 export function useCursorForwarding() {
-  const appWindow = getCurrentWebviewWindow()
-
-  const onMouseEnter = useCallback(() => {
-    appWindow.setIgnoreCursorEvents(false)
-  }, [appWindow])
-
   const onMouseLeave = useCallback(() => {
-    appWindow.setIgnoreCursorEvents(true)
-  }, [appWindow])
+    invoke('set_clickthrough', { ignore: true })
+  }, [])
 
-  return { onMouseEnter, onMouseLeave }
+  return { onMouseLeave }
 }
