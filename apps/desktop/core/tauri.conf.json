@@ -9,6 +9,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "overlay",
@@ -27,6 +28,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": []
+    "icon": ["icons/icon.png"]
   }
 }
