@@ -1,40 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useCursorForwarding } from '../hooks/useCursorForwarding'
+import { useContentBounds } from '../hooks/useContentBounds'
 import type { Opponent } from '../types'
 import { OpponentCard } from './OpponentCard'
 
 interface OverlayPanelProps {
   opponents: Opponent[]
-  visible: boolean
+  matchType: string
 }
 
-export function OverlayPanel({ opponents, visible }: OverlayPanelProps) {
-  const [mounted, setMounted] = useState(false)
-  const [show, setShow] = useState(false)
+export function OverlayPanel({ opponents, matchType }: OverlayPanelProps) {
+  const panelRef = useContentBounds<HTMLDivElement>()
+  const { onMouseLeave } = useCursorForwarding()
 
-  useEffect(() => {
-    if (visible && opponents.length > 0) {
-      setMounted(true)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setShow(true))
-      })
-    } else {
-      setShow(false)
-      const timer = setTimeout(() => setMounted(false), 300)
-      return () => clearTimeout(timer)
-    }
-  }, [visible, opponents.length])
-
-  if (!mounted) return null
+  if (opponents.length === 0) return null
 
   return (
-    <div
-      className="flex flex-col gap-2 transition-all duration-300"
-      style={{
-        opacity: show ? 1 : 0,
-        transform: show ? 'translateX(0)' : 'translateX(20px)',
-      }}
-    >
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Opponents</p>
+    <div ref={panelRef} className="pointer-events-auto flex flex-col gap-1.5" onMouseLeave={onMouseLeave}>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[hsl(var(--overlay-muted-fg))]">
+        {matchType}
+      </p>
       {opponents.map((opponent) => (
         <OpponentCard key={opponent.brawlhallaId} opponent={opponent} />
       ))}
