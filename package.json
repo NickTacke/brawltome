@@ -6,6 +6,7 @@
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",
     "dev:worker": "bun run --filter @brawltome/api dev:worker",
+    "dev:desktop": "bun run --filter @brawltome/desktop dev",
     "dev:discord-bot": "bun run --filter @brawltome/discord-bot dev",
     "build": "bun run --filter '*' build",
     "test": "bun test",
