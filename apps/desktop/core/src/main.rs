@@ -1,7 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{
+    Manager,
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::TrayIconBuilder,
+    image::Image,
+};
 use tokio::time::{sleep, Duration};
 
 #[derive(Clone, Serialize)]
@@ -68,6 +73,39 @@ fn main() {
             }
 
             window.set_ignore_cursor_events(true)?;
+
+            // Build tray menu
+            let toggle = MenuItemBuilder::with_id("toggle", "Show/Hide").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .item(&toggle)
+                .separator()
+                .item(&quit)
+                .build()?;
+
+            // Build tray icon
+            let _tray = TrayIconBuilder::new()
+                .icon(Image::from_bytes(include_bytes!("../../icons/tray.png"))?)
+                .menu(&menu)
+                .tooltip("BrawlTome Overlay")
+                .on_menu_event(move |app, event| {
+                    match event.id().as_ref() {
+                        "toggle" => {
+                            if let Some(w) = app.get_webview_window("overlay") {
+                                if w.is_visible().unwrap_or(false) {
+                                    let _ = w.hide();
+                                } else {
+                                    let _ = w.show();
+                                }
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)?;
 
             // Spawn mock event loop
             let handle = app.handle().clone();
