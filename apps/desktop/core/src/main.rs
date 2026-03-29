@@ -4,6 +4,9 @@
 mod memory;
 
 #[cfg(target_os = "windows")]
+mod api_client;
+
+#[cfg(target_os = "windows")]
 mod scanner;
 
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
