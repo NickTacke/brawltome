@@ -1,43 +1,50 @@
 import { listen } from '@tauri-apps/api/event'
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { GameEvent, Opponent } from '../types'
 
-const AUTO_HIDE_MS = 30_000
+const MOCK_OPPONENTS: Opponent[] = [
+  {
+    brawlhallaId: 91913839,
+    name: 'brawltome.app',
+    rating: 1827,
+    peakRating: 1827,
+    playtime: 917.3,
+    tier: 'Platinum',
+    region: 'EU',
+    legendKey: 'mordex',
+    winRate: 62,
+  },
+  {
+    brawlhallaId: 8301816,
+    name: 'Straalman',
+    rating: 0,
+    peakRating: 0,
+    playtime: 1532.6,
+    tier: 'Unranked',
+    region: 'EU',
+    legendKey: 'bodvar',
+    winRate: 38,
+  },
+]
 
 export function useGameEvents() {
-  const [opponents, setOpponents] = useState<Opponent[]>([])
-  const [visible, setVisible] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const appWindow = getCurrentWebviewWindow()
+  const [opponents, setOpponents] = useState<Opponent[]>(MOCK_OPPONENTS)
+  const [matchType, setMatchType] = useState('Ranked 1v1')
 
   useEffect(() => {
     const unlisten = listen<GameEvent>('game-event', ({ payload }) => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current)
-        timerRef.current = null
-      }
-
       if (payload.event === 'match_found') {
         setOpponents(payload.opponents)
-        setVisible(true)
-        appWindow.show()
-
-        timerRef.current = setTimeout(() => {
-          setVisible(false)
-          appWindow.hide()
-        }, AUTO_HIDE_MS)
+        setMatchType(payload.isRanked ? 'Ranked 1v1' : 'Custom')
       } else if (payload.event === 'match_ended') {
-        setVisible(false)
-        appWindow.hide()
+        setOpponents([])
       }
     })
 
     return () => {
       unlisten.then((fn) => fn())
-      if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [appWindow])
+  }, [])
 
-  return { opponents, visible }
+  return { opponents, matchType }
 }
