@@ -67,6 +67,8 @@ fn update_content_bounds(
 }
 
 fn main() {
+    env_logger::init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![set_clickthrough, update_content_bounds])
