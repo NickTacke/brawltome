@@ -1,56 +1,95 @@
 import { open } from '@tauri-apps/plugin-shell'
-import { useCursorForwarding } from '../hooks/useCursorForwarding'
 import type { Opponent } from '../types'
+import { TierBadge } from './TierBadge'
 
 interface OpponentCardProps {
   opponent: Opponent
 }
 
-export function OpponentCard({ opponent }: OpponentCardProps) {
-  const { onMouseEnter, onMouseLeave } = useCursorForwarding()
+function formatPlaytime(hours: number): string {
+  return hours >= 1000 ? `${(hours / 1000).toFixed(1)}k hrs` : `${Math.round(hours)} hrs`
+}
 
-  const playtimeDisplay =
-    opponent.playtime >= 1000 ? `${(opponent.playtime / 1000).toFixed(1)}k hrs` : `${Math.round(opponent.playtime)} hrs`
+function winRateColor(rate: number): string {
+  if (rate >= 60) return 'hsl(var(--overlay-success))'
+  if (rate >= 50) return 'hsl(var(--overlay-muted-fg))'
+  return 'hsl(var(--overlay-danger))'
+}
+
+export function OpponentCard({ opponent }: OpponentCardProps) {
+  const color = winRateColor(opponent.winRate)
 
   return (
-    <div
-      className="rounded-lg bg-zinc-900/90 p-3 backdrop-blur"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-    >
+    <div className="w-[300px] rounded-lg border border-[hsla(var(--overlay-border)/0.7)] bg-[hsla(var(--overlay-bg)/0.82)] p-2.5 backdrop-blur-[12px]">
+      {/* Header: avatar + name/tier + link */}
+      <div className="flex items-center gap-2">
+        <div className="size-[34px] shrink-0 overflow-hidden rounded-[7px] border-2 border-[hsl(var(--overlay-border))] bg-[hsl(var(--overlay-muted-bg))]">
+          <img
+            src={`/legends/${opponent.legendKey}.png`}
+            alt={opponent.legendKey}
+            className="size-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-bold text-[hsl(var(--overlay-card-fg))]">
+              {opponent.name}
+            </span>
+            <span className="rounded-full bg-[hsla(var(--overlay-muted-bg)/0.8)] px-1.5 py-px font-mono text-[9px] text-[hsl(var(--overlay-muted-fg))]">
+              {opponent.region}
+            </span>
+          </div>
+          <div className="mt-px flex items-center gap-1.5">
+            <TierBadge tier={opponent.tier} />
+            <span className="text-[10px] text-[hsl(var(--overlay-muted-fg))]">
+              {formatPlaytime(opponent.playtime)}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="shrink-0 text-[13px] text-[hsl(var(--overlay-primary))] opacity-45 transition-opacity hover:opacity-90"
+          onClick={() => open(`https://brawltome.com/player/${opponent.brawlhallaId}`)}
+        >
+          ↗
+        </button>
+      </div>
+
+      {/* Separator */}
+      <div className="my-2 h-px bg-[hsla(var(--overlay-border)/0.5)]" />
+
+      {/* Stats: elo / peak + WR bar */}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-white">{opponent.name}</span>
-        <span className="text-xs text-zinc-400">{opponent.region}</span>
-      </div>
-
-      <div className="mt-2 flex gap-4">
-        <div>
-          <p className="text-xs text-zinc-400">Elo</p>
-          <p className="text-lg font-bold text-white">{opponent.rating}</p>
+        <div className="flex items-baseline">
+          <span className="font-mono text-[18px] font-black tracking-tight text-[hsl(var(--overlay-card-fg))]">
+            {opponent.rating}
+          </span>
+          <span className="mx-[5px] text-[12px] text-[hsl(213.3,15.1%,40%)]">/</span>
+          <span className="font-mono text-[12px] font-bold text-[hsl(213.3,15.1%,50%)]">
+            {opponent.peakRating}
+          </span>
         </div>
-        <div>
-          <p className="text-xs text-zinc-400">Peak</p>
-          <p className="text-lg font-bold text-zinc-300">{opponent.peakRating}</p>
-        </div>
-        <div>
-          <p className="text-xs text-zinc-400">Playtime</p>
-          <p className="text-lg font-bold text-white">{playtimeDisplay}</p>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] uppercase tracking-wide text-[hsl(213.3,15.1%,45%)]">
+            WR
+          </span>
+          <div className="h-[5px] w-[55px] overflow-hidden rounded-full bg-[hsla(var(--overlay-muted-bg)/0.8)]">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${opponent.winRate}%`, backgroundColor: color }}
+            />
+          </div>
+          <span className="font-mono text-[11px] font-semibold" style={{ color }}>
+            {opponent.winRate}%
+          </span>
         </div>
       </div>
-
-      <div className="mt-1">
-        <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300">{opponent.tier}</span>
-      </div>
-
-      <button
-        type="button"
-        className="mt-3 w-full rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-500"
-        onClick={() => {
-          open(`https://brawltome.com/player/${opponent.brawlhallaId}`)
-        }}
-      >
-        View Stats
-      </button>
     </div>
   )
 }
