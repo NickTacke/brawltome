@@ -201,6 +201,17 @@ fn main() {
                 })
                 .build(app)?;
 
+            // Start game detection (Windows only)
+            #[cfg(target_os = "windows")]
+            {
+                let handle = app.handle().clone();
+                let api_url = std::env::var("BRAWLTOME_API_URL")
+                    .unwrap_or_else(|_| "https://brawltome.app".into());
+                tauri::async_runtime::spawn(async move {
+                    game_detection::run(handle, api_url).await;
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
