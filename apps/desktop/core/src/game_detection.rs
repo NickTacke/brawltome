@@ -12,6 +12,12 @@ use crate::api_client::{ApiClient, OpponentData};
 use crate::memory;
 use crate::scanner;
 
+/// Newtype wrapper to make HANDLE Send-safe.
+/// Safe because only one async task owns the handle at a time.
+#[derive(Copy, Clone)]
+struct SendHandle(HANDLE);
+unsafe impl Send for SendHandle {}
+
 // ── Frontend event payloads ────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Clone)]
@@ -89,13 +95,15 @@ async fn run_cycle(
         }
     };
 
-    let handle = memory::open_process(pid).ok_or("Failed to open process (run as admin)")?;
-    let regions = memory::heap_regions(handle);
+    let raw_handle = memory::open_process(pid)
+        .ok_or("Failed to open process (run as admin)")?;
+    let handle = SendHandle(raw_handle);
+    let regions = memory::heap_regions(handle.0);
     log::info!("Attached to Brawlhalla (PID: {pid}), {} heap regions", regions.len());
 
     // ── Find BhID ──────────────────────────────────────────────────────────
     let my_bhid = loop {
-        match scanner::find_my_bhid(handle, &regions) {
+        match scanner::find_my_bhid(handle.0, &regions) {
             Some(bhid) => break bhid,
             None => {
                 log::debug!("Waiting for login...");
@@ -106,7 +114,7 @@ async fn run_cycle(
     log::info!("Found local BhID: {my_bhid}");
 
     // ── Find 04c address ───────────────────────────────────────────────────
-    let mut addr_04c: Option<usize> = scanner::find_04c_addr(handle, my_bhid, &regions);
+    let mut addr_04c: Option<usize> = scanner::find_04c_addr(handle.0, my_bhid, &regions);
     if addr_04c.is_some() {
         log::info!("Found connection state address");
     }
@@ -125,7 +133,7 @@ async fn run_cycle(
     loop {
         // ── Try to find 04c if we don't have it yet ────────────────────
         if addr_04c.is_none() {
-            addr_04c = scanner::find_04c_addr(handle, my_bhid, &regions);
+            addr_04c = scanner::find_04c_addr(handle.0, my_bhid, &regions);
             if addr_04c.is_some() {
                 log::info!("Found connection state address");
             }
@@ -133,7 +141,7 @@ async fn run_cycle(
 
         // ── Poll 04c ───────────────────────────────────────────────────
         if let Some(addr) = addr_04c {
-            match scanner::read_04c(handle, addr) {
+            match scanner::read_04c(handle.0, addr) {
                 Some(cur_04c) => {
                     if cur_04c != prev_04c {
                         prev_04c = cur_04c;
@@ -144,8 +152,7 @@ async fn run_cycle(
                     }
                 }
                 None => {
-                    // Lost process
-                    memory::close_handle(handle);
+                    memory::close_handle(handle.0);
                     return Err("Brawlhalla closed".into());
                 }
             }
@@ -162,7 +169,7 @@ async fn run_cycle(
                 scan_in_flight = true;
                 last_scan = tokio::time::Instant::now();
 
-                let current_players = scanner::get_players(handle, my_bhid, &regions, &stale_addrs);
+                let current_players = scanner::get_players(handle.0, my_bhid, &regions, &stale_addrs);
                 players = current_players;
 
                 // Transition from Scanning → Tracking on first results
@@ -241,14 +248,13 @@ fn handle_state_transition(
     players: &mut std::collections::HashMap<u32, scanner::PlayerInfo>,
     opened: &mut HashSet<u32>,
     stale_addrs: &mut HashSet<usize>,
-    handle: HANDLE,
+    handle: SendHandle,
     my_bhid: u32,
     regions: &[memory::MemoryRegion],
     app: &tauri::AppHandle,
 ) {
     if scanner::is_menu(cur_04c) {
         if *state != ScannerState::Idle {
-            // Emit match_ended if we were in a match
             if *state == ScannerState::Scanning
                 || *state == ScannerState::Tracking
                 || *state == ScannerState::Paused
@@ -258,15 +264,14 @@ fn handle_state_transition(
                     log::error!("Failed to emit match_ended: {e}");
                 }
             }
-            // Snapshot stale addresses for next scan
-            *stale_addrs = scanner::snapshot_stale(handle, my_bhid, regions);
+            *stale_addrs = scanner::snapshot_stale(handle.0, my_bhid, regions);
             *state = ScannerState::Idle;
             players.clear();
             opened.clear();
             log::info!("Menu");
         }
     } else if scanner::is_ignored(cur_04c) {
-        // Replay, etc. — ignore
+        // Replay, etc.
     } else if scanner::is_paused(cur_04c) {
         if *state == ScannerState::Scanning || *state == ScannerState::Tracking {
             *state = ScannerState::Paused;
