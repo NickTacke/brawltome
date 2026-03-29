@@ -5,7 +5,8 @@ import { cors } from 'hono/cors'
 import Redis from 'ioredis'
 import { createQueue } from './queue/queue'
 import { appRouter } from './router'
-import { initGameData } from './services/game-data.service'
+import { initGameData, getLegendById } from './services/game-data.service'
+import { getPlayer } from './services/player.service'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 
@@ -54,6 +55,49 @@ app.use(
 )
 
 app.get('/health', (c) => c.json({ status: 'healthy' }))
+
+app.get('/api/overlay/opponent/:bhid', async (c) => {
+  const bhid = Number(c.req.param('bhid'))
+  if (!Number.isInteger(bhid) || bhid <= 0) {
+    return c.json({ error: 'Invalid bhid' }, 400)
+  }
+
+  const ctx = {
+    ...sharedCtx,
+    clientIp: c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? '0.0.0.0',
+    isBot: false,
+    internalSecret: undefined,
+  } as unknown as Parameters<typeof getPlayer>[0]
+
+  const p = await getPlayer(ctx, bhid)
+  if (!p) {
+    return c.json({ error: 'Player not found' }, 404)
+  }
+
+  const legendKey = p.bestLegend
+    ? getLegendById(p.bestLegend)?.legendNameKey ?? ''
+    : ''
+
+  const winRate = p.rankedGames > 0
+    ? Math.round((p.rankedWins / p.rankedGames) * 1000) / 10
+    : 0
+
+  const playtime = p.matchTimeTotal
+    ? Math.round((p.matchTimeTotal / 3600) * 10) / 10
+    : 0
+
+  return c.json({
+    brawlhallaId: p.brawlhallaId,
+    name: p.name,
+    rating: p.rating,
+    peakRating: p.peakRating ?? 0,
+    playtime,
+    tier: p.tier ?? 'Unranked',
+    region: p.region ?? '',
+    legendKey,
+    winRate,
+  })
+})
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 
