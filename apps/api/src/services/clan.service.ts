@@ -4,6 +4,7 @@ import { dedupKey, tryDedup } from '../queue/dedup'
 import type { Context } from '../trpc/context'
 import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC } from './constants'
 import { checkRateLimit } from './rate-limit.service'
+import { verifyTurnstile } from './turnstile.service'
 
 export async function getClan(ctx: Context, clanId: number) {
   const c = await ctx.db.query.clan.findFirst({
@@ -58,6 +59,10 @@ export async function getClan(ctx: Context, clanId: number) {
 }
 
 async function discoverClan(ctx: Context, clanId: number) {
+  if (!ctx.turnstileToken) return null
+  const turnstileValid = await verifyTurnstile(ctx.turnstileToken, ctx.clientIp)
+  if (!turnstileValid) return null
+
   const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
   if (!globalLimit.allowed) return null
 
