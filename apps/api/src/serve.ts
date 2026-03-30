@@ -48,7 +48,7 @@ app.use(
           ua,
         )
       const internalSecret = c.req.header('x-internal-secret') ?? undefined
-      const turnstileToken = c.req.header('x-turnstile-token') ?? undefined
+      const turnstileToken = c.req.header('x-turnstile-token')?.trim() || undefined
       return { ...sharedCtx, clientIp, isBot, internalSecret, turnstileToken } as unknown as Record<string, unknown>
     },
   }),
