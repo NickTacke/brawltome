@@ -45,13 +45,22 @@ impl ApiClient {
 
     pub async fn fetch_opponent(&self, bhid: u32) -> Result<OpponentData, String> {
         let url = format!("{}/api/overlay/opponent/{}", self.base_url, bhid);
-        self.client
+        log::debug!("fetch_opponent: GET {}", url);
+        let resp = self.client
             .get(&url)
             .send()
             .await
-            .map_err(|e| format!("request failed: {e}"))?
-            .json::<OpponentData>()
-            .await
-            .map_err(|e| format!("parse failed: {e}"))
+            .map_err(|e| format!("request failed: {e}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("API returned status {}", status));
+        }
+
+        let body = resp.text().await.map_err(|e| format!("read body failed: {e}"))?;
+        log::debug!("fetch_opponent response: {}", &body[..body.len().min(500)]);
+
+        serde_json::from_str::<OpponentData>(&body)
+            .map_err(|e| format!("parse failed: {e} (body: {})", &body[..body.len().min(200)]))
     }
 }
