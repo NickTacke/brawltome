@@ -4,6 +4,7 @@ import { TierBadge } from './TierBadge'
 
 interface OpponentCardProps {
   opponent: Opponent
+  refreshing: boolean
 }
 
 function formatPlaytime(hours: number): string {
@@ -16,22 +17,26 @@ function winRateColor(rate: number): string {
   return 'hsl(var(--overlay-danger))'
 }
 
-export function OpponentCard({ opponent }: OpponentCardProps) {
+export function OpponentCard({ opponent, refreshing }: OpponentCardProps) {
   const color = winRateColor(opponent.winRate)
 
   return (
     <div className="w-[300px] rounded-lg border border-[hsla(var(--overlay-border)/0.7)] bg-[hsla(var(--overlay-bg)/0.82)] p-2.5 backdrop-blur-[12px]">
       {/* Header: avatar + name/tier + link */}
       <div className="flex items-center gap-2">
-        <div className="size-[34px] shrink-0 overflow-hidden rounded-[7px] border-2 border-[hsl(var(--overlay-border))] bg-[hsl(var(--overlay-muted-bg))]">
-          <img
-            src={`/legends/${opponent.legendKey}.png`}
-            alt={opponent.legendKey}
-            className="size-full object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none'
-            }}
-          />
+        <div className="flex size-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[7px] border-2 border-[hsl(var(--overlay-border))] bg-[hsl(var(--overlay-muted-bg))]">
+          {opponent.legendKey ? (
+            <img
+              src={`/legends/${opponent.legendKey}.png`}
+              alt={opponent.legendKey}
+              className="size-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+          ) : (
+            <span className="text-[14px] text-[hsl(var(--overlay-muted-fg))]">?</span>
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -50,6 +55,10 @@ export function OpponentCard({ opponent }: OpponentCardProps) {
             </span>
           </div>
         </div>
+
+        {refreshing && (
+          <div className="size-4 shrink-0 animate-spin rounded-full border-2 border-[hsl(var(--overlay-muted-fg))] border-t-transparent" />
+        )}
 
         <button
           type="button"
