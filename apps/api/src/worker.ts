@@ -57,7 +57,9 @@ console.log('Worker starting...')
 await initGameData(db, bhapi)
 Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(console.error)
 
-const stopJanitor = startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue })
+const stopJanitor = process.env.DISABLE_JANITOR
+  ? async () => {}
+  : startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue })
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')

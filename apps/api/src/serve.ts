@@ -1,11 +1,12 @@
-import { db } from '@brawltome/database'
+import { db, player } from '@brawltome/database'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
 import { createQueue } from './queue/queue'
 import { appRouter } from './router'
-import { initGameData } from './services/game-data.service'
+import { initGameData, getLegendById } from './services/game-data.service'
+import { getPlayer } from './services/player.service'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 
@@ -54,6 +55,75 @@ app.use(
 )
 
 app.get('/health', (c) => c.json({ status: 'healthy' }))
+
+app.get('/api/overlay/opponent/:bhid', async (c) => {
+  const bhid = Number(c.req.param('bhid'))
+  if (!Number.isInteger(bhid) || bhid <= 0) {
+    return c.json({ error: 'Invalid bhid' }, 400)
+  }
+
+  const ctx = {
+    ...sharedCtx,
+    clientIp: c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? '0.0.0.0',
+    isBot: false,
+    internalSecret: undefined,
+  } as unknown as Parameters<typeof getPlayer>[0]
+
+  let p = await getPlayer(ctx, bhid)
+  if (!p) {
+    // Auto-discover: create placeholder and enqueue refresh
+    await db
+      .insert(player)
+      .values({
+        brawlhallaId: bhid,
+        name: `Player ${bhid}`,
+        refreshTier: 'hot',
+        lastUpdated: new Date(),
+      })
+      .onConflictDoNothing()
+
+    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
+    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
+    console.log(`[overlay] discovering player ${bhid}`)
+
+    // Return minimal placeholder data
+    return c.json({
+      brawlhallaId: bhid,
+      name: `Player ${bhid}`,
+      rating: 0,
+      peakRating: 0,
+      playtime: 0,
+      tier: 'Unranked',
+      region: '',
+      legendKey: '',
+      winRate: 0,
+    })
+  }
+
+  const legendKey = p.bestLegend
+    ? getLegendById(p.bestLegend)?.legendNameKey ?? ''
+    : ''
+
+  const winRate = p.rankedGames > 0
+    ? Math.round((p.rankedWins / p.rankedGames) * 1000) / 10
+    : 0
+
+  const playtime = p.matchTimeTotal
+    ? Math.round((p.matchTimeTotal / 3600) * 10) / 10
+    : 0
+
+  return c.json({
+    brawlhallaId: p.brawlhallaId,
+    name: p.name,
+    rating: p.rating,
+    peakRating: p.peakRating ?? 0,
+    playtime,
+    tier: p.tier ?? 'Unranked',
+    region: p.region ?? '',
+    legendKey,
+    winRate,
+  })
+})
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 

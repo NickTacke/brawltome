@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --overlay-bg: 224 19.5% 15.1%;
+  --overlay-card-fg: 207.3 21.6% 90%;
+  --overlay-fg: 210 19.6% 80%;
+  --overlay-muted-fg: 213.3 15.1% 64.9%;
+  --overlay-border: 221.5 20.3% 25.1%;
+  --overlay-muted-bg: 222 19.6% 20%;
+  --overlay-primary: 212 90.2% 60%;
+  --overlay-success: 142 70% 45%;
+  --overlay-danger: 0 60% 60%;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes countdown {
+  from { width: 100%; }
+  to { width: 0%; }
+}
