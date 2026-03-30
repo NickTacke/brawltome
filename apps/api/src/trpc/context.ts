@@ -11,4 +11,5 @@ export interface Context {
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined
+  turnstileToken: string | undefined
 }
