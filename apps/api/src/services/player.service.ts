@@ -124,29 +124,25 @@ export async function refreshPlayer(
 
     const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
     if (rankedStale) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-      if (canDedup) {
-        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-        if (refreshLimit.allowed) {
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
+        const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+        if (canDedup) {
           await ctx.rankedQueue.enqueue({ brawlhallaId })
-          isRefreshing = true
         }
-      } else {
-        isRefreshing = true // Already queued by another request
+        isRefreshing = true
       }
     }
 
     const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
     if (statsStale) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-      if (canDedup) {
-        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-        if (refreshLimit.allowed) {
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
+        const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
+        if (canDedup) {
           await ctx.statsQueue.enqueue({ brawlhallaId })
-          isRefreshing = true
         }
-      } else {
-        isRefreshing = true // Already queued by another request
+        isRefreshing = true
       }
     }
   }
