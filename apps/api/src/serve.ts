@@ -3,8 +3,10 @@ import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
+import { dedupKey, tryDedup } from './queue/dedup'
 import { createQueue } from './queue/queue'
 import { appRouter } from './router'
+import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, TIERED_TTL } from './services/constants'
 import { initGameData, getLegendById } from './services/game-data.service'
 import { getPlayer } from './services/player.service'
 
@@ -100,11 +102,20 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     })
   }
 
-  // Enqueue refresh for players with stale/missing data
-  const isStale = !p.region || !p.matchTimeTotal
-  if (isStale) {
-    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
-    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
+  // Enqueue refresh for stale data (same TTL thresholds as web)
+  const now = Date.now()
+  const ttl = TIERED_TTL.hot
+
+  const rankedStale = !p.rankedLastUpdated || now - p.rankedLastUpdated.getTime() > ttl.ranked
+  if (rankedStale) {
+    const canDedup = await tryDedup(redis, dedupKey('ranked', bhid), DEDUP_TTL_RANKED_SEC)
+    if (canDedup) await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
+  }
+
+  const statsStale = !p.statsLastUpdated || now - p.statsLastUpdated.getTime() > ttl.stats
+  if (statsStale) {
+    const canDedup = await tryDedup(redis, dedupKey('stats', bhid), DEDUP_TTL_STATS_SEC)
+    if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
   }
 
   const legendKey = p.bestLegend
