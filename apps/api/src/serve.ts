@@ -100,6 +100,13 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     })
   }
 
+  // Enqueue refresh for players with stale/missing data
+  const isStale = !p.region || !p.matchTimeTotal
+  if (isStale) {
+    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
+    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
+  }
+
   const legendKey = p.bestLegend
     ? getLegendById(p.bestLegend)?.legendNameKey ?? ''
     : ''
