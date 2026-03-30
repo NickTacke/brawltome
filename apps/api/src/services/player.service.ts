@@ -131,6 +131,8 @@ export async function refreshPlayer(
           await ctx.rankedQueue.enqueue({ brawlhallaId })
           isRefreshing = true
         }
+      } else {
+        isRefreshing = true // Already queued by another request
       }
     }
 
@@ -143,6 +145,8 @@ export async function refreshPlayer(
           await ctx.statsQueue.enqueue({ brawlhallaId })
           isRefreshing = true
         }
+      } else {
+        isRefreshing = true // Already queued by another request
       }
     }
   }

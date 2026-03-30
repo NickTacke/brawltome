@@ -85,6 +85,8 @@ export async function refreshClan(
           await ctx.clanQueue.enqueue({ clanId })
           return { isRefreshing: true }
         }
+      } else {
+        return { isRefreshing: true } // Already queued by another request
       }
     }
   }

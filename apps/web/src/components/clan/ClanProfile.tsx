@@ -79,12 +79,14 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [refreshing, setRefreshing] = useState(false)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
+  const refreshBaseline = useRef<unknown>(null)
 
   const handleToken = useCallback(
     async (token: string) => {
       if (tokenHandled.current) return
       tokenHandled.current = true
       try {
+        refreshBaseline.current = clan?.lastUpdated ?? null
         const result = await refreshClanAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
         if (!clan) {
@@ -92,7 +94,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
           if (data) setClan(data)
         }
       } catch {
-        /* ignore */
+        tokenHandled.current = false // Allow retry on failure
       }
     },
     [id, clan],
@@ -106,8 +108,10 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
         const data = await getClanAction(Number(id))
         if (data) {
           setClan(data)
-          const isPlaceholder = data.clanName === `Clan ${id}` && (!data.members || data.members.length === 0)
-          if (!isPlaceholder) {
+          const discoveryDone = (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
+          const refreshDone =
+            refreshBaseline.current !== null && String(data.lastUpdated) !== String(refreshBaseline.current)
+          if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
           }
@@ -125,6 +129,13 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
       clearTimeout(timeout)
     }
   }, [refreshing, id])
+
+  // If refresh timed out and we still have no data, show error
+  useEffect(() => {
+    if (!refreshing && !clan && tokenHandled.current) {
+      setTurnstileError(true)
+    }
+  }, [refreshing, clan])
 
   const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
 
