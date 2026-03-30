@@ -2,6 +2,7 @@
 
 import { getClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
+import { Turnstile } from '@marsidev/react-turnstile'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
   Avatar,
@@ -70,6 +71,71 @@ const getRankValue = (rank: string) => {
   }
 }
 
+function DiscoverClanWithTurnstile({ id, onDiscovered }: { id: string; onDiscovered: (data: ClanData) => void }) {
+  const [status, setStatus] = useState<'verifying' | 'discovering' | 'failed'>('verifying')
+
+  const handleTurnstileSuccess = async (token: string) => {
+    setStatus('discovering')
+    try {
+      const data = await getClanAction(Number(id), token)
+      if (data) {
+        onDiscovered(data)
+      } else {
+        setStatus('failed')
+      }
+    } catch {
+      setStatus('failed')
+    }
+  }
+
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+      <NavBar showBack />
+      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+        {status === 'verifying' && (
+          <>
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p>Looking up clan...</p>
+            {siteKey && (
+              <Turnstile
+                siteKey={siteKey}
+                onSuccess={handleTurnstileSuccess}
+                onError={() => setStatus('failed')}
+                onExpire={() => setStatus('failed')}
+                options={{ size: 'invisible' }}
+              />
+            )}
+            {!siteKey && <AutoDiscoverClan id={id} onDiscovered={onDiscovered} onFailed={() => setStatus('failed')} />}
+          </>
+        )}
+        {status === 'discovering' && (
+          <>
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p>Discovering clan...</p>
+          </>
+        )}
+        {status === 'failed' && <p>Clan not found.</p>}
+      </div>
+    </div>
+  )
+}
+
+function AutoDiscoverClan({
+  id,
+  onDiscovered,
+  onFailed,
+}: { id: string; onDiscovered: (data: ClanData) => void; onFailed: () => void }) {
+  useEffect(() => {
+    getClanAction(Number(id)).then((data) => {
+      if (data) onDiscovered(data)
+      else onFailed()
+    }).catch(() => onFailed())
+  }, [id, onDiscovered, onFailed])
+  return null
+}
+
 export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [clan, setClan] = useState<ClanData>(initialData)
   const [page, setPage] = useState(1)
@@ -91,7 +157,9 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     return () => clearInterval(intervalId)
   }, [clan?.isRefreshing, id])
 
-  if (!clan) return <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 text-muted-foreground">Clan not found.</div>
+  if (!clan) {
+    return <DiscoverClanWithTurnstile id={id} onDiscovered={setClan} />
+  }
 
   const members = clan.members || []
 
