@@ -1,7 +1,7 @@
 'use client'
 
-import { getClanAction } from '@/app/clan/[id]/actions'
-import { DiscoverGate } from '@/components/DiscoverGate'
+import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
+import { TurnstileGate } from '@/components/TurnstileGate'
 import { NavBar } from '@/components/NavBar'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
@@ -29,7 +29,7 @@ import {
 } from '@brawltome/ui'
 import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const PAGE_SIZE = 25
 
@@ -76,24 +76,53 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleToken = useCallback(
+    async (token: string) => {
+      try {
+        const result = await refreshClanAction(Number(id), token)
+        if (result?.isRefreshing) setRefreshing(true)
+        if (!clan) {
+          const data = await getClanAction(Number(id))
+          if (data) setClan(data)
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [id, clan],
+  )
 
   // Poll while refreshing
   useEffect(() => {
-    if (!clan?.isRefreshing) return
+    if (!refreshing) return
     const intervalId = setInterval(async () => {
       try {
         const data = await getClanAction(Number(id))
         if (data) setClan(data)
-        if (!data?.isRefreshing) clearInterval(intervalId)
+        if (data && !data.isRefreshing) {
+          setRefreshing(false)
+          clearInterval(intervalId)
+        }
       } catch {
         /* ignore */
       }
     }, 2000)
     return () => clearInterval(intervalId)
-  }, [clan?.isRefreshing, id])
+  }, [refreshing, id])
 
   if (!clan) {
-    return <DiscoverGate id={id} label="clan" discoverAction={getClanAction} onDiscovered={setClan} />
+    return (
+      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+        <NavBar showBack />
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+          <p>Looking up clan...</p>
+          <TurnstileGate onToken={handleToken} />
+        </div>
+      </div>
+    )
   }
 
   const members = clan.members || []
@@ -121,6 +150,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
+      <TurnstileGate onToken={handleToken} />
       <NavBar showBack />
 
       {/* Header */}
