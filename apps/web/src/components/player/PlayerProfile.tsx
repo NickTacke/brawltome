@@ -1,6 +1,7 @@
 'use client'
 
 import { getPlayerAction } from '@/app/player/[id]/actions'
+import { DiscoverGate } from '@/components/DiscoverGate'
 import { NavBar } from '@/components/NavBar'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
@@ -29,12 +30,12 @@ import { formatHours } from './shared'
 type PlayerData = any
 
 interface PlayerProfileProps {
-  initialData: PlayerData
+  initialData: PlayerData | null
   id: string
 }
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
-  const [player, setPlayer] = useState<PlayerData>(initialData)
+  const [player, setPlayer] = useState<PlayerData | null>(initialData)
 
   // Poll while refreshing
   useEffect(() => {
@@ -52,11 +53,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   }, [player?.isRefreshing, player?.brawlhallaId])
 
   if (!player) {
-    return (
-      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
-        <div className="text-muted-foreground">Player not found.</div>
-      </div>
-    )
+    return <DiscoverGate id={id} label="player" discoverAction={getPlayerAction} onDiscovered={setPlayer} />
   }
 
   const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))

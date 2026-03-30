@@ -1,6 +1,7 @@
 'use client'
 
 import { getClanAction } from '@/app/clan/[id]/actions'
+import { DiscoverGate } from '@/components/DiscoverGate'
 import { NavBar } from '@/components/NavBar'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
@@ -36,7 +37,7 @@ const PAGE_SIZE = 25
 type ClanData = any
 
 interface ClanProfileProps {
-  initialData: ClanData
+  initialData: ClanData | null
   id: string
 }
 
@@ -71,7 +72,7 @@ const getRankValue = (rank: string) => {
 }
 
 export function ClanProfile({ initialData, id }: ClanProfileProps) {
-  const [clan, setClan] = useState<ClanData>(initialData)
+  const [clan, setClan] = useState<ClanData | null>(initialData)
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
@@ -91,7 +92,9 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     return () => clearInterval(intervalId)
   }, [clan?.isRefreshing, id])
 
-  if (!clan) return <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 text-muted-foreground">Clan not found.</div>
+  if (!clan) {
+    return <DiscoverGate id={id} label="clan" discoverAction={getClanAction} onDiscovered={setClan} />
+  }
 
   const members = clan.members || []
 

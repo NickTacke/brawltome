@@ -7,7 +7,7 @@ import superjson from 'superjson'
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
 
-export async function getServerTrpc() {
+export async function getServerTrpc(turnstileToken?: string) {
   const h = await headers()
   const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0].trim()
   const ua = h.get('user-agent') ?? ''
@@ -16,6 +16,7 @@ export async function getServerTrpc() {
   if (ip) outHeaders['x-client-ip'] = ip
   if (ua) outHeaders['x-original-ua'] = ua
   if (internalSecret) outHeaders['x-internal-secret'] = internalSecret
+  if (turnstileToken) outHeaders['x-turnstile-token'] = turnstileToken
 
   return createTRPCClient<AppRouter>({
     links: [

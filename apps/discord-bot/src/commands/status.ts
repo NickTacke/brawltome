@@ -75,7 +75,7 @@ export const statusCommand: Command = {
       const statusIcon = apiHealth.status === 'healthy' ? '✅' : apiHealth.status === 'degraded' ? '⚠️' : '❌'
       embed.addFields({
         name: `${statusIcon} API`,
-        value: `Status: **${apiHealth.status}**\nTokens: \`${apiHealth.tokens}\``,
+        value: `Status: **${apiHealth.status}**${'tokens' in apiHealth ? `\nTokens: \`${apiHealth.tokens}\`` : ''}`,
         inline: true,
       })
     }

@@ -2,7 +2,6 @@ import { ClanProfile } from '@/components/clan/ClanProfile'
 import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
 import { cache } from 'react'
 
 export const dynamic = 'force-dynamic'
@@ -43,8 +42,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function Page({ params }: PageProps) {
   const { id } = await params
   const initialData = await getClan(Number(id))
-
-  if (!initialData) notFound()
 
   return (
     <main className="min-h-screen bg-background py-6">
