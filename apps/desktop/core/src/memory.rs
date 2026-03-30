@@ -8,16 +8,100 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     TH32CS_SNAPPROCESS,
 };
 use windows_sys::Win32::System::Memory::{
-    VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_MAPPED, MEM_PRIVATE,
+    VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT,
     PAGE_GUARD, PAGE_NOACCESS,
 };
 use windows_sys::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
 };
 
+#[derive(Clone)]
 pub struct MemoryRegion {
     pub base: usize,
     pub size: usize,
+}
+
+/// Cached region set with auto-detected heap prefix filtering.
+/// Mirrors Python's RegionCache: after the first scan, only regions whose
+/// top-32-bit prefix matches the game heap are scanned.
+pub struct RegionCache {
+    pub regions: Vec<MemoryRegion>,
+    pub heap_prefix: Option<u32>,
+}
+
+impl RegionCache {
+    pub fn new(regions: Vec<MemoryRegion>) -> Self {
+        Self { regions, heap_prefix: None }
+    }
+
+    /// Return regions filtered to the heap prefix (if known).
+    pub fn heap_regions(&self) -> Vec<&MemoryRegion> {
+        match self.heap_prefix {
+            Some(prefix) => self.regions.iter()
+                .filter(|r| (r.base >> 32) as u32 == prefix)
+                .collect(),
+            None => self.regions.iter().collect(),
+        }
+    }
+
+    /// Stats: total bytes in heap-filtered regions, optionally with a size cap.
+    pub fn heap_stats(&self, max_region_size: Option<usize>) -> (usize, usize) {
+        let heap = self.heap_regions();
+        let total: usize = heap.iter().map(|r| r.size).sum();
+        let filtered: usize = match max_region_size {
+            Some(max) => heap.iter().filter(|r| r.size <= max).map(|r| r.size).sum(),
+            None => total,
+        };
+        (filtered, total)
+    }
+
+    /// Auto-detect heap prefix from a set of found addresses.
+    pub fn learn_prefix(&mut self, addrs: &[usize]) {
+        if self.heap_prefix.is_some() || addrs.is_empty() {
+            return;
+        }
+        let mut counts: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+        for &a in addrs {
+            *counts.entry((a >> 32) as u32).or_default() += 1;
+        }
+        if let Some((&prefix, _)) = counts.iter().max_by_key(|(_, &c)| c) {
+            let total: usize = self.regions.iter().map(|r| r.size).sum();
+            let heap_total: usize = self.regions.iter()
+                .filter(|r| (r.base >> 32) as u32 == prefix)
+                .map(|r| r.size)
+                .sum();
+            log::info!(
+                "Heap prefix detected: 0x{:08X} ({:.1} MB / {:.1} MB total)",
+                prefix, heap_total as f64 / 1048576.0, total as f64 / 1048576.0
+            );
+            self.heap_prefix = Some(prefix);
+        }
+    }
+}
+
+/// Scan only the heap-filtered regions for a pattern.
+pub fn scan_heap(
+    handle: HANDLE,
+    cache: &RegionCache,
+    pattern: &[u8],
+) -> Vec<usize> {
+    let regions: Vec<MemoryRegion> = cache.heap_regions().into_iter().cloned().collect();
+    scan_regions_with_buf(handle, &regions, pattern, &mut Vec::new())
+}
+
+/// Scan heap regions capped at a max region size (skips huge allocations).
+/// Game structures (IntMaps, player objects) live in small-to-medium regions.
+pub fn scan_heap_small(
+    handle: HANDLE,
+    cache: &RegionCache,
+    pattern: &[u8],
+    max_region_size: usize,
+) -> Vec<usize> {
+    let regions: Vec<MemoryRegion> = cache.heap_regions().into_iter()
+        .filter(|r| r.size <= max_region_size)
+        .cloned()
+        .collect();
+    scan_regions_with_buf(handle, &regions, pattern, &mut Vec::new())
 }
 
 /// Find a process ID by executable name (e.g., "Brawlhalla.exe").
@@ -88,7 +172,8 @@ pub fn read<T: Default + Copy>(handle: HANDLE, addr: usize) -> Option<T> {
     }
 }
 
-/// Collect committed heap regions from the target process.
+/// Collect committed readable regions from the target process.
+/// No Type filter (includes MEM_IMAGE like the Python memutil.py).
 pub fn heap_regions(handle: HANDLE) -> Vec<MemoryRegion> {
     let mut regions = Vec::new();
     let mut addr = 0usize;
@@ -107,24 +192,109 @@ pub fn heap_regions(handle: HANDLE) -> Vec<MemoryRegion> {
             break;
         }
 
+        let base = mbi.BaseAddress as usize;
+        let size = mbi.RegionSize;
+
+        // Match Python: MEM_COMMIT + readable protection, no Type filter
         if mbi.State == MEM_COMMIT
-            && (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_MAPPED)
+            && size < 100_000_000
             && (mbi.Protect & PAGE_GUARD) == 0
             && mbi.Protect != PAGE_NOACCESS
         {
-            regions.push(MemoryRegion {
-                base: mbi.BaseAddress as usize,
-                size: mbi.RegionSize,
-            });
+            regions.push(MemoryRegion { base, size });
         }
 
-        let next = mbi.BaseAddress as usize + mbi.RegionSize;
-        if next <= addr {
+        let next = base + size;
+        if next <= addr || next > 0x7FFFFFFFFFFF {
             break;
         }
         addr = next;
     }
     regions
+}
+
+/// Returns total bytes across all regions.
+pub fn region_stats(regions: &[MemoryRegion]) -> usize {
+    regions.iter().map(|r| r.size).sum()
+}
+
+/// Number of threads for parallel scanning.
+const SCAN_THREADS: usize = 8;
+
+/// Scan regions for a byte pattern using SIMD-accelerated memmem.
+/// Regions are distributed across threads by total byte count (not region count)
+/// so work is balanced even when region sizes vary wildly.
+pub fn scan_regions_with_buf(
+    handle: HANDLE,
+    regions: &[MemoryRegion],
+    pattern: &[u8],
+    _buf: &mut Vec<u8>,
+) -> Vec<usize> {
+    if regions.is_empty() {
+        return Vec::new();
+    }
+
+    let finder = memchr::memmem::Finder::new(pattern);
+    let handle_val = handle as usize;
+
+    // Distribute regions across threads by cumulative byte size
+    let total_bytes: usize = regions.iter().map(|r| r.size).sum();
+    let bytes_per_thread = (total_bytes / SCAN_THREADS).max(1);
+    let mut chunks: Vec<&[MemoryRegion]> = Vec::with_capacity(SCAN_THREADS);
+    let mut start = 0;
+    let mut running = 0usize;
+    for (i, r) in regions.iter().enumerate() {
+        running += r.size;
+        if running >= bytes_per_thread && chunks.len() < SCAN_THREADS - 1 {
+            chunks.push(&regions[start..=i]);
+            start = i + 1;
+            running = 0;
+        }
+    }
+    if start < regions.len() {
+        chunks.push(&regions[start..]);
+    }
+
+    let results: Vec<Vec<usize>> = std::thread::scope(|s| {
+        chunks.iter()
+            .map(|chunk| {
+                let finder = &finder;
+                s.spawn(move || {
+                    let handle = handle_val as HANDLE;
+                    let mut buf = Vec::new();
+                    let mut local = Vec::new();
+                    for r in *chunk {
+                        if r.size > buf.len() {
+                            buf.resize(r.size, 0);
+                        }
+                        let mut bytes_read = 0usize;
+                        let ok = unsafe {
+                            ReadProcessMemory(
+                                handle,
+                                r.base as *const _,
+                                buf.as_mut_ptr() as *mut _,
+                                r.size,
+                                &mut bytes_read,
+                            )
+                        };
+                        if ok == 0 {
+                            continue;
+                        }
+                        let data = &buf[..bytes_read];
+                        for idx in finder.find_iter(data) {
+                            local.push(r.base + idx);
+                        }
+                    }
+                    local
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect()
+    });
+
+    results.into_iter().flatten().collect()
 }
 
 /// Scan regions for a byte pattern, returning matching addresses.
@@ -133,29 +303,8 @@ pub fn scan_regions(
     regions: &[MemoryRegion],
     pattern: &[u8],
 ) -> Vec<usize> {
-    let mut results = Vec::new();
-    for r in regions {
-        let mut chunk = vec![0u8; r.size];
-        let mut bytes_read = 0usize;
-        let ok = unsafe {
-            ReadProcessMemory(
-                handle,
-                r.base as *const _,
-                chunk.as_mut_ptr() as *mut _,
-                r.size,
-                &mut bytes_read,
-            )
-        };
-        if ok == 0 {
-            continue;
-        }
-        for i in 0..=(bytes_read.saturating_sub(pattern.len())) {
-            if chunk[i..].starts_with(pattern) {
-                results.push(r.base + i);
-            }
-        }
-    }
-    results
+    let mut buf = Vec::new();
+    scan_regions_with_buf(handle, regions, pattern, &mut buf)
 }
 
 /// Read a Tamarin/Haxe string from process memory.
