@@ -29,7 +29,7 @@ import {
 } from '@brawltome/ui'
 import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const PAGE_SIZE = 25
 
@@ -77,9 +77,13 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
   const [refreshing, setRefreshing] = useState(false)
+  const [turnstileError, setTurnstileError] = useState(false)
+  const tokenHandled = useRef(false)
 
   const handleToken = useCallback(
     async (token: string) => {
+      if (tokenHandled.current) return
+      tokenHandled.current = true
       try {
         const result = await refreshClanAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
@@ -100,26 +104,43 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     const intervalId = setInterval(async () => {
       try {
         const data = await getClanAction(Number(id))
-        if (data) setClan(data)
-        if (data && !data.isRefreshing) {
-          setRefreshing(false)
-          clearInterval(intervalId)
+        if (data) {
+          setClan(data)
+          const isPlaceholder = data.clanName === `Clan ${id}` && (!data.members || data.members.length === 0)
+          if (!isPlaceholder) {
+            setRefreshing(false)
+            clearInterval(intervalId)
+          }
         }
       } catch {
         /* ignore */
       }
     }, 2000)
-    return () => clearInterval(intervalId)
+    const timeout = setTimeout(() => {
+      setRefreshing(false)
+      clearInterval(intervalId)
+    }, 30000)
+    return () => {
+      clearInterval(intervalId)
+      clearTimeout(timeout)
+    }
   }, [refreshing, id])
+
+  const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
 
   if (!clan) {
     return (
       <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
         <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-          <p>Looking up clan...</p>
-          <TurnstileGate onToken={handleToken} />
+          {!turnstileError && (
+            <>
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+              <p>Looking up clan...</p>
+            </>
+          )}
+          {turnstileError && <p>Clan not found.</p>}
+          {turnstile}
         </div>
       </div>
     )
@@ -150,7 +171,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
-      <TurnstileGate onToken={handleToken} />
+      {turnstile}
       <NavBar showBack />
 
       {/* Header */}
@@ -177,7 +198,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
                 </Badge>
               </>
             )}
-            {clan.isRefreshing && (
+            {refreshing && (
               <>
                 <span>•</span>
                 <Badge variant="secondary" className="gap-2 animate-pulse">

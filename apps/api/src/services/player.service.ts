@@ -16,7 +16,6 @@ type EnrichedStatsLegend = QueryResult['statsLegends'][number] & {
 type PlayerResult = Omit<QueryResult, 'statsLegends'> & {
   statsLegends: EnrichedStatsLegend[]
   ratingHistory: (typeof ratingHistory.$inferSelect)[]
-  isRefreshing: boolean
 }
 
 async function queryPlayer(ctx: Context, brawlhallaId: number) {
@@ -58,7 +57,7 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     }
   })
 
-  return { ...p, statsLegends: enrichedStatsLegends, ratingHistory: history, isRefreshing: false }
+  return { ...p, statsLegends: enrichedStatsLegends, ratingHistory: history }
 }
 
 export async function refreshPlayer(
@@ -96,7 +95,10 @@ export async function refreshPlayer(
       })
       .onConflictDoNothing()
 
-    console.log(`[discover] enqueuing ${brawlhallaId} via priority queue (ip=${ctx.clientIp})`)
+    const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+    if (!canDedup) return { isRefreshing: true }
+
+    console.log(`[discover] enqueuing ${brawlhallaId} via priority queue`)
     await ctx.rankedQueue.enqueue({ brawlhallaId }, true)
     await ctx.statsQueue.enqueue({ brawlhallaId }, true)
 
