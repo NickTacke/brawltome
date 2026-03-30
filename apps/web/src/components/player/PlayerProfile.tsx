@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@brawltome/ui'
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombatCard } from './CombatCard'
 import { LegendSection } from './LegendSection'
 import { RankedCard } from './RankedCard'
@@ -37,13 +37,16 @@ interface PlayerProfileProps {
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [player, setPlayer] = useState<PlayerData | null>(initialData)
   const [refreshing, setRefreshing] = useState(false)
+  const [turnstileError, setTurnstileError] = useState(false)
+  const tokenHandled = useRef(false)
 
   const handleToken = useCallback(
     async (token: string) => {
+      if (tokenHandled.current) return
+      tokenHandled.current = true
       try {
         const result = await refreshPlayerAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
-        // If discovery, do an immediate read to get placeholder
         if (!player) {
           const data = await getPlayerAction(Number(id))
           if (data) setPlayer(data)
@@ -61,16 +64,26 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     const intervalId = setInterval(async () => {
       try {
         const data = await getPlayerAction(Number(id))
-        if (data) setPlayer(data)
-        if (data && !data.isRefreshing) {
-          setRefreshing(false)
-          clearInterval(intervalId)
+        if (data) {
+          setPlayer(data)
+          const isPlaceholder = data.name === `Player ${id}` && data.rating === 0
+          if (!isPlaceholder) {
+            setRefreshing(false)
+            clearInterval(intervalId)
+          }
         }
       } catch {
         /* ignore */
       }
     }, 2000)
-    return () => clearInterval(intervalId)
+    const timeout = setTimeout(() => {
+      setRefreshing(false)
+      clearInterval(intervalId)
+    }, 30000)
+    return () => {
+      clearInterval(intervalId)
+      clearTimeout(timeout)
+    }
   }, [refreshing, id])
 
   const weaponStats = useMemo(
@@ -78,14 +91,21 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     [player],
   )
 
+  const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
+
   if (!player) {
     return (
       <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
         <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-          <p>Looking up player...</p>
-          <TurnstileGate onToken={handleToken} />
+          {!turnstileError && (
+            <>
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+              <p>Looking up player...</p>
+            </>
+          )}
+          {turnstileError && <p>Player not found.</p>}
+          {turnstile}
         </div>
       </div>
     )
@@ -104,7 +124,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
-      <TurnstileGate onToken={handleToken} />
+      {turnstile}
       {/* Top Navbar */}
       <NavBar showBack />
 
@@ -190,7 +210,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           </div>
         </div>
 
-        {player.isRefreshing && (
+        {refreshing && (
           <Badge variant="secondary" className="gap-2 animate-pulse">
             <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
             Syncing live data...

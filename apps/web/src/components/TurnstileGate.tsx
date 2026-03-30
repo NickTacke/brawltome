@@ -5,9 +5,10 @@ import { useEffect, useState } from 'react'
 
 interface TurnstileGateProps {
   onToken: (token: string) => void
+  onError?: () => void
 }
 
-export function TurnstileGate({ onToken }: TurnstileGateProps) {
+export function TurnstileGate({ onToken, onError }: TurnstileGateProps) {
   const [failed, setFailed] = useState(false)
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
@@ -24,8 +25,14 @@ export function TurnstileGate({ onToken }: TurnstileGateProps) {
     <Turnstile
       siteKey={siteKey}
       onSuccess={onToken}
-      onError={() => setFailed(true)}
-      onExpire={() => setFailed(true)}
+      onError={() => {
+        setFailed(true)
+        onError?.()
+      }}
+      onExpire={() => {
+        setFailed(true)
+        onError?.()
+      }}
       options={{ size: 'invisible' }}
     />
   )

@@ -37,7 +37,7 @@ export async function getClan(ctx: Context, clanId: number) {
     peakRating: playerMap.get(m.brawlhallaId)?.peakRating ?? 0,
   }))
 
-  return { ...c, members, isRefreshing: false }
+  return { ...c, members }
 }
 
 export async function refreshClan(
@@ -66,7 +66,7 @@ export async function refreshClan(
     const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
     if (!canDedup) return { isRefreshing: false }
 
-    console.log(`[discover] enqueuing clan ${clanId} via priority queue (ip=${ctx.clientIp})`)
+    console.log(`[discover] enqueuing clan ${clanId} via priority queue`)
     await ctx.clanQueue.enqueue({ clanId }, true)
 
     return { isRefreshing: true }
