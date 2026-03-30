@@ -52,6 +52,11 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     return () => clearInterval(intervalId)
   }, [player?.isRefreshing, player?.brawlhallaId])
 
+  const weaponStats = useMemo(
+    () => (player ? aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []) : []),
+    [player?.statsLegends, player?.rankedLegends],
+  )
+
   if (!player) {
     return <DiscoverGate id={id} label="player" discoverAction={getPlayerAction} onDiscovered={setPlayer} />
   }
@@ -59,10 +64,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
   const rankedTeams = [...(player.rankedTeams || [])].sort(
     (a: PlayerData, b: PlayerData) => (b.rating ?? 0) - (a.rating ?? 0),
-  )
-  const weaponStats = useMemo(
-    () => aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []),
-    [player.statsLegends, player.rankedLegends],
   )
 
   const aliases: string[] = (player.aliases || [])
