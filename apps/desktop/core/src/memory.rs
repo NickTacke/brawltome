@@ -27,11 +27,13 @@ pub struct MemoryRegion {
 pub struct RegionCache {
     pub regions: Vec<MemoryRegion>,
     pub heap_prefix: Option<u32>,
+    /// Separate prefix for player/atom data (may differ from BhID heap prefix).
+    pub atom_prefix: Option<u32>,
 }
 
 impl RegionCache {
     pub fn new(regions: Vec<MemoryRegion>) -> Self {
-        Self { regions, heap_prefix: None }
+        Self { regions, heap_prefix: None, atom_prefix: None }
     }
 
     /// Return regions filtered to the heap prefix (if known).
@@ -44,15 +46,45 @@ impl RegionCache {
         }
     }
 
-    /// Stats: total bytes in heap-filtered regions, optionally with a size cap.
-    pub fn heap_stats(&self, max_region_size: Option<usize>) -> (usize, usize) {
-        let heap = self.heap_regions();
-        let total: usize = heap.iter().map(|r| r.size).sum();
-        let filtered: usize = match max_region_size {
-            Some(max) => heap.iter().filter(|r| r.size <= max).map(|r| r.size).sum(),
-            None => total,
-        };
-        (filtered, total)
+    /// Return regions filtered to the atom prefix (if known), otherwise all regions.
+    pub fn atom_regions(&self) -> Vec<&MemoryRegion> {
+        match self.atom_prefix {
+            Some(prefix) => self.regions.iter()
+                .filter(|r| (r.base >> 32) as u32 == prefix)
+                .collect(),
+            None => self.regions.iter().collect(),
+        }
+    }
+
+    /// Return atom regions split into (small, large) by a size threshold.
+    /// Small regions are scanned first for faster player detection.
+    pub fn atom_regions_split(&self, threshold: usize) -> (Vec<MemoryRegion>, Vec<MemoryRegion>) {
+        let all = self.atom_regions();
+        let small: Vec<MemoryRegion> = all.iter().filter(|r| r.size < threshold).map(|r| (*r).clone()).collect();
+        let large: Vec<MemoryRegion> = all.iter().filter(|r| r.size >= threshold).map(|r| (*r).clone()).collect();
+        (small, large)
+    }
+
+    /// Learn atom prefix from scan results (separate from heap prefix).
+    pub fn learn_atom_prefix(&mut self, addrs: &[usize]) {
+        if self.atom_prefix.is_some() || addrs.is_empty() {
+            return;
+        }
+        let mut counts: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+        for &a in addrs {
+            *counts.entry((a >> 32) as u32).or_default() += 1;
+        }
+        if let Some((&prefix, _)) = counts.iter().max_by_key(|(_, &c)| c) {
+            let total: usize = self.regions.iter()
+                .filter(|r| (r.base >> 32) as u32 == prefix)
+                .map(|r| r.size)
+                .sum();
+            log::info!(
+                "Atom prefix detected: 0x{:08X} ({:.1} MB)",
+                prefix, total as f64 / 1048576.0
+            );
+            self.atom_prefix = Some(prefix);
+        }
     }
 
     /// Auto-detect heap prefix from a set of found addresses.
@@ -89,20 +121,16 @@ pub fn scan_heap(
     scan_regions_with_buf(handle, &regions, pattern, &mut Vec::new())
 }
 
-/// Scan heap regions capped at a max region size (skips huge allocations).
-/// Game structures (IntMaps, player objects) live in small-to-medium regions.
-pub fn scan_heap_small(
+/// Scan atom-filtered regions (uses atom_prefix if known, otherwise all regions).
+pub fn scan_atom_regions(
     handle: HANDLE,
     cache: &RegionCache,
     pattern: &[u8],
-    max_region_size: usize,
 ) -> Vec<usize> {
-    let regions: Vec<MemoryRegion> = cache.heap_regions().into_iter()
-        .filter(|r| r.size <= max_region_size)
-        .cloned()
-        .collect();
+    let regions: Vec<MemoryRegion> = cache.atom_regions().into_iter().cloned().collect();
     scan_regions_with_buf(handle, &regions, pattern, &mut Vec::new())
 }
+
 
 /// Find a process ID by executable name (e.g., "Brawlhalla.exe").
 pub fn find_process_id(name: &str) -> Option<u32> {
