@@ -41,17 +41,18 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     ? !initialData.rankedLastUpdated ||
       Date.now() - new Date(initialData.rankedLastUpdated).getTime() > TIERED_TTL.hot.ranked
     : false
+  const isDiscovery = !initialData
   const [refreshing, setRefreshing] = useState(isStale)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
-  const refreshBaseline = useRef<unknown>(null)
+  const refreshBaseline = useRef<unknown>(initialData?.statsLastUpdated ?? initialData?.rankedLastUpdated ?? null)
 
   const handleToken = useCallback(
     async (token: string) => {
       if (tokenHandled.current) return
       tokenHandled.current = true
       try {
-        refreshBaseline.current = player?.rankedLastUpdated ?? null
+        refreshBaseline.current = player?.statsLastUpdated ?? player?.rankedLastUpdated ?? null
         const result = await refreshPlayerAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
         if (!player) {
@@ -73,9 +74,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         const data = await getPlayerAction(Number(id))
         if (data) {
           setPlayer(data)
-          const discoveryDone = data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0
+          const currentTimestamp = data.statsLastUpdated ?? data.rankedLastUpdated ?? null
+          const discoveryDone = isDiscovery && (data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0)
           const refreshDone =
-            refreshBaseline.current !== null && String(data.rankedLastUpdated) !== String(refreshBaseline.current)
+            !isDiscovery &&
+            refreshBaseline.current !== null &&
+            currentTimestamp !== null &&
+            String(currentTimestamp) !== String(refreshBaseline.current)
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
@@ -93,7 +98,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       clearInterval(intervalId)
       clearTimeout(timeout)
     }
-  }, [refreshing, id])
+  }, [refreshing, id, isDiscovery])
 
   // If refresh timed out and we still have no data, show error
   useEffect(() => {

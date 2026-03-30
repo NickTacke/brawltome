@@ -77,11 +77,12 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
+  const isDiscovery = !initialData
   const isStale = initialData ? Date.now() - new Date(initialData.lastUpdated).getTime() > CLAN_TTL_MS : false
   const [refreshing, setRefreshing] = useState(isStale)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
-  const refreshBaseline = useRef<unknown>(null)
+  const refreshBaseline = useRef<unknown>(initialData?.lastUpdated ?? null)
 
   const handleToken = useCallback(
     async (token: string) => {
@@ -110,9 +111,11 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
         const data = await getClanAction(Number(id))
         if (data) {
           setClan(data)
-          const discoveryDone = (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
+          const discoveryDone = isDiscovery && (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
           const refreshDone =
-            refreshBaseline.current !== null && String(data.lastUpdated) !== String(refreshBaseline.current)
+            !isDiscovery &&
+            refreshBaseline.current !== null &&
+            String(data.lastUpdated) !== String(refreshBaseline.current)
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
@@ -130,7 +133,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
       clearInterval(intervalId)
       clearTimeout(timeout)
     }
-  }, [refreshing, id])
+  }, [refreshing, id, isDiscovery])
 
   // If refresh timed out and we still have no data, show error
   useEffect(() => {
