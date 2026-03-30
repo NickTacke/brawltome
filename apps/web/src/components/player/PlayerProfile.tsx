@@ -1,8 +1,8 @@
 'use client'
 
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
-import { TurnstileGate } from '@/components/TurnstileGate'
 import { NavBar } from '@/components/NavBar'
+import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import {
@@ -75,7 +75,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const weaponStats = useMemo(
     () => (player ? aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []) : []),
-    [player?.statsLegends, player?.rankedLegends],
+    [player],
   )
 
   if (!player) {

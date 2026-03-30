@@ -1,8 +1,8 @@
 'use client'
 
 import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
-import { TurnstileGate } from '@/components/TurnstileGate'
 import { NavBar } from '@/components/NavBar'
+import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
   Avatar,
