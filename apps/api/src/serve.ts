@@ -1,4 +1,4 @@
-import { db } from '@brawltome/database'
+import { db, player } from '@brawltome/database'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -69,9 +69,35 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     internalSecret: undefined,
   } as unknown as Parameters<typeof getPlayer>[0]
 
-  const p = await getPlayer(ctx, bhid)
+  let p = await getPlayer(ctx, bhid)
   if (!p) {
-    return c.json({ error: 'Player not found' }, 404)
+    // Auto-discover: create placeholder and enqueue refresh
+    await db
+      .insert(player)
+      .values({
+        brawlhallaId: bhid,
+        name: `Player ${bhid}`,
+        refreshTier: 'hot',
+        lastUpdated: new Date(),
+      })
+      .onConflictDoNothing()
+
+    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
+    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
+    console.log(`[overlay] discovering player ${bhid}`)
+
+    // Return minimal placeholder data
+    return c.json({
+      brawlhallaId: bhid,
+      name: `Player ${bhid}`,
+      rating: 0,
+      peakRating: 0,
+      playtime: 0,
+      tier: 'Unranked',
+      region: '',
+      legendKey: '',
+      winRate: 0,
+    })
   }
 
   const legendKey = p.bestLegend
