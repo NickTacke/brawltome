@@ -164,7 +164,7 @@ export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
   }
 
   embed.setFooter({
-    text: `${player.region ?? 'Unknown'}${player.isRefreshing ? ' • 🔄 Refreshing...' : ''} • brawltome.app`,
+    text: `${player.region ?? 'Unknown'} • brawltome.app`,
     iconURL: 'https://brawltome.com/images/logo.png',
   })
 
@@ -222,7 +222,7 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
   }
 
   embed.setFooter({
-    text: clan.isRefreshing ? '🔄 Refreshing... • brawltome.app' : 'brawltome.app',
+    text: 'brawltome.app',
     iconURL: 'https://brawltome.com/images/logo.png',
   })
 

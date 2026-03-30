@@ -4,6 +4,7 @@ import { dedupKey, tryDedup } from '../queue/dedup'
 import type { Context } from '../trpc/context'
 import { CLAN_TTL_MS, DEDUP_TTL_CLAN_SEC } from './constants'
 import { checkRateLimit } from './rate-limit.service'
+import { verifyTurnstile } from './turnstile.service'
 
 export async function getClan(ctx: Context, clanId: number) {
   const c = await ctx.db.query.clan.findFirst({
@@ -11,25 +12,7 @@ export async function getClan(ctx: Context, clanId: number) {
     with: { members: true },
   })
 
-  if (!c) {
-    if (ctx.isBot) return null
-    return discoverClan(ctx, clanId)
-  }
-
-  let isRefreshing = false
-  if (!ctx.isBot && !process.env.DISABLE_VIEW_REFRESH) {
-    const age = Date.now() - c.lastUpdated.getTime()
-    if (age > CLAN_TTL_MS) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-      if (canDedup) {
-        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-        if (refreshLimit.allowed) {
-          await ctx.clanQueue.enqueue({ clanId })
-          isRefreshing = true
-        }
-      }
-    }
-  }
+  if (!c) return null
 
   // Enrich members with player ratings
   const memberIds = c.members.map((m) => m.brawlhallaId)
@@ -54,30 +37,57 @@ export async function getClan(ctx: Context, clanId: number) {
     peakRating: playerMap.get(m.brawlhallaId)?.peakRating ?? 0,
   }))
 
-  return { ...c, members, isRefreshing }
+  return { ...c, members }
 }
 
-async function discoverClan(ctx: Context, clanId: number) {
-  const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
-  if (!globalLimit.allowed) return null
+export async function refreshClan(
+  ctx: Context,
+  clanId: number,
+  turnstileToken: string,
+): Promise<{ isRefreshing: boolean }> {
+  const turnstileValid = await verifyTurnstile(turnstileToken, ctx.clientIp)
+  if (!turnstileValid) return { isRefreshing: false }
 
-  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
-  if (!discoveryLimit.allowed) return null
+  const c = await ctx.db.query.clan.findFirst({
+    where: eq(clan.clanId, clanId),
+    with: { members: true },
+  })
 
-  const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-  if (!canDedup) return null
+  if (!c) {
+    // Discovery flow
+    if (ctx.isBot) return { isRefreshing: false }
 
-  console.log(`[discover] enqueuing clan ${clanId} via priority queue (ip=${ctx.clientIp})`)
-  await ctx.clanQueue.enqueue({ clanId }, true)
+    const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
+    if (!globalLimit.allowed) return { isRefreshing: false }
 
-  return {
-    clanId,
-    clanName: `Clan ${clanId}`,
-    clanCreateDate: new Date(),
-    clanXp: 0n,
-    clanLifetimeXp: 0n,
-    lastUpdated: new Date(),
-    members: [],
-    isRefreshing: true,
+    const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+    if (!discoveryLimit.allowed) return { isRefreshing: false }
+
+    const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
+    if (!canDedup) return { isRefreshing: true }
+
+    console.log(`[discover] enqueuing clan ${clanId} via priority queue`)
+    await ctx.clanQueue.enqueue({ clanId }, true)
+
+    return { isRefreshing: true }
   }
+
+  // Refresh flow for existing clan
+  if (ctx.isBot) return { isRefreshing: false }
+
+  if (!process.env.DISABLE_VIEW_REFRESH) {
+    const age = Date.now() - c.lastUpdated.getTime()
+    if (age > CLAN_TTL_MS) {
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
+        const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
+        if (canDedup) {
+          await ctx.clanQueue.enqueue({ clanId })
+        }
+        return { isRefreshing: true }
+      }
+    }
+  }
+
+  return { isRefreshing: false }
 }
