@@ -35,6 +35,11 @@ struct MatchEndedPayload {
     event: &'static str,
 }
 
+#[derive(Debug, Serialize, Clone)]
+struct ScanningPayload {
+    event: &'static str,
+}
+
 // ── Detection state ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -147,6 +152,7 @@ async fn run_cycle(
     let mut last_scan = tokio::time::Instant::now() - SCAN_INTERVAL_SCANNING;
     let mut last_addr_retry = tokio::time::Instant::now() - ADDR_RETRY_INTERVAL;
     let mut scan_in_flight = false;
+    let mut needs_region_refresh = false;
     let detection = Arc::new(Mutex::new(DetectionState::default()));
 
     loop {
@@ -173,20 +179,9 @@ async fn run_cycle(
                             &mut opponent_cache, &mut refetch_at, &mut stale_addrs,
                             handle, my_bhid, &cache, app,
                         );
-                        // Refresh regions when entering a match (game allocates new memory)
-                        if state == ScannerState::Scanning && prev_state == ScannerState::Idle {
-                            let new_regions = memory::heap_regions(handle.0);
-                            cache = memory::RegionCache::new(new_regions);
-                            // Re-learn prefix from fresh scan
-                            let bhid_bytes = my_bhid.to_le_bytes();
-                            let bhid_addrs = memory::scan_regions_with_buf(
-                                handle.0, &cache.regions, &bhid_bytes, &mut Vec::new()
-                            );
-                            cache.learn_prefix(&bhid_addrs);
-                            log::info!("Refreshed regions: {} regions, prefix=0x{:08X}, {:.1} MB heap",
-                                cache.regions.len(),
-                                cache.heap_prefix.unwrap_or(0),
-                                cache.heap_stats(None).0 as f64 / 1048576.0);
+                        // Signal region refresh needed when entering active game
+                        if state == ScannerState::Scanning {
+                            needs_region_refresh = true;
                         }
                         // Reset match_active when returning to idle
                         if state == ScannerState::Idle && prev_state != ScannerState::Idle {
@@ -209,9 +204,26 @@ async fn run_cycle(
                 last_scan = tokio::time::Instant::now();
 
                 let t = std::time::Instant::now();
-                let current_players = scanner::get_players(handle.0, my_bhid, &cache, &stale_addrs);
+                let current_players = scanner::get_players(handle.0, my_bhid, &mut cache, &stale_addrs);
                 log::debug!("get_players scan took {:.2}s, found {} players", t.elapsed().as_secs_f32(), current_players.len());
                 players = current_players;
+
+                // If scan found nothing and we need a region refresh, do it now
+                // (player data is in newly allocated regions after match load)
+                if players.is_empty() && needs_region_refresh {
+                    needs_region_refresh = false;
+                    let saved_atom_prefix = cache.atom_prefix;
+                    let new_regions = memory::heap_regions(handle.0);
+                    cache = memory::RegionCache::new(new_regions);
+                    cache.atom_prefix = saved_atom_prefix;
+                    log::info!("Refreshed regions: {} regions (players not found in cached regions)",
+                        cache.regions.len());
+                    // Immediately re-scan with fresh regions
+                    let t2 = std::time::Instant::now();
+                    let retry = scanner::get_players(handle.0, my_bhid, &mut cache, &stale_addrs);
+                    log::debug!("get_players retry took {:.2}s, found {} players", t2.elapsed().as_secs_f32(), retry.len());
+                    players = retry;
+                }
 
                 // Transition from Scanning → Tracking on first results
                 if !players.is_empty() && state == ScannerState::Scanning {
@@ -371,20 +383,23 @@ fn handle_state_transition(
         }
     } else if scanner::is_char_select(cur_04c) {
         if *state == ScannerState::Idle {
+            *state = ScannerState::Scanning;
             players.clear();
             opened.clear();
-            log::info!("Character select");
+            log::info!("Character select — pre-scanning to prime cache");
         }
     } else if scanner::is_active_game(cur_04c) {
         if *state == ScannerState::Paused {
             *state = ScannerState::Tracking;
             log::info!("Resumed");
-        } else if *state == ScannerState::Idle {
+        } else if *state == ScannerState::Idle || *state == ScannerState::Scanning {
+            if *state == ScannerState::Idle {
+                players.clear();
+                opened.clear();
+            }
             *state = ScannerState::Scanning;
-            players.clear();
-            opened.clear();
             log::info!("Match detected, scanning...");
-            scanner::dump_bhid_context(handle.0, my_bhid, cache);
+            let _ = app.emit("game-event", &ScanningPayload { event: "scanning" });
         }
     }
 }
