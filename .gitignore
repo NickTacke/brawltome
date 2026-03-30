@@ -23,5 +23,5 @@ Thumbs.db
 # Misc
 coverage/
 tmp/
-docs/plans/*
+docs/*
 .worktrees/
