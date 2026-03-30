@@ -5,6 +5,7 @@ import type { Context } from '../trpc/context'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, TIERED_TTL } from './constants'
 import { getLegendById, normalizeWeaponName } from './game-data.service'
 import { checkRateLimit } from './rate-limit.service'
+import { verifyTurnstile } from './turnstile.service'
 
 type QueryResult = NonNullable<Awaited<ReturnType<typeof queryPlayer>>>
 type EnrichedStatsLegend = QueryResult['statsLegends'][number] & {
@@ -108,6 +109,10 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
 }
 
 async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<PlayerResult | null> {
+  if (!ctx.turnstileToken) return null
+  const turnstileValid = await verifyTurnstile(ctx.turnstileToken, ctx.clientIp)
+  if (!turnstileValid) return null
+
   const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
   if (!globalLimit.allowed) return null
 
