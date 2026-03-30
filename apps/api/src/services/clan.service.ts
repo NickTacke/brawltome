@@ -64,7 +64,7 @@ export async function refreshClan(
     if (!discoveryLimit.allowed) return { isRefreshing: false }
 
     const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-    if (!canDedup) return { isRefreshing: false }
+    if (!canDedup) return { isRefreshing: true }
 
     console.log(`[discover] enqueuing clan ${clanId} via priority queue`)
     await ctx.clanQueue.enqueue({ clanId }, true)
