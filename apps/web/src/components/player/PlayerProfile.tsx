@@ -1,8 +1,8 @@
 'use client'
 
 import { getPlayerAction } from '@/app/player/[id]/actions'
+import { DiscoverGate } from '@/components/DiscoverGate'
 import { NavBar } from '@/components/NavBar'
-import { Turnstile } from '@marsidev/react-turnstile'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import {
@@ -30,77 +30,12 @@ import { formatHours } from './shared'
 type PlayerData = any
 
 interface PlayerProfileProps {
-  initialData: PlayerData
+  initialData: PlayerData | null
   id: string
 }
 
-function DiscoverWithTurnstile({ id, onDiscovered }: { id: string; onDiscovered: (data: PlayerData) => void }) {
-  const [status, setStatus] = useState<'verifying' | 'discovering' | 'failed'>('verifying')
-
-  const handleTurnstileSuccess = async (token: string) => {
-    setStatus('discovering')
-    try {
-      const data = await getPlayerAction(Number(id), token)
-      if (data) {
-        onDiscovered(data)
-      } else {
-        setStatus('failed')
-      }
-    } catch {
-      setStatus('failed')
-    }
-  }
-
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
-
-  return (
-    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
-      <NavBar showBack />
-      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-        {status === 'verifying' && (
-          <>
-            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p>Looking up player...</p>
-            {siteKey && (
-              <Turnstile
-                siteKey={siteKey}
-                onSuccess={handleTurnstileSuccess}
-                onError={() => setStatus('failed')}
-                onExpire={() => setStatus('failed')}
-                options={{ size: 'invisible' }}
-              />
-            )}
-            {!siteKey && <AutoDiscover id={id} onDiscovered={onDiscovered} onFailed={() => setStatus('failed')} />}
-          </>
-        )}
-        {status === 'discovering' && (
-          <>
-            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p>Discovering player...</p>
-          </>
-        )}
-        {status === 'failed' && <p>Player not found.</p>}
-      </div>
-    </div>
-  )
-}
-
-function AutoDiscover({
-  id,
-  onDiscovered,
-  onFailed,
-}: { id: string; onDiscovered: (data: PlayerData) => void; onFailed: () => void }) {
-  useEffect(() => {
-    getPlayerAction(Number(id)).then((data) => {
-      if (data) onDiscovered(data)
-      else onFailed()
-    }).catch(() => onFailed())
-  }, [id, onDiscovered, onFailed])
-  return null
-}
-
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
-  const [player, setPlayer] = useState<PlayerData>(initialData)
+  const [player, setPlayer] = useState<PlayerData | null>(initialData)
 
   // Poll while refreshing
   useEffect(() => {
@@ -118,7 +53,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   }, [player?.isRefreshing, player?.brawlhallaId])
 
   if (!player) {
-    return <DiscoverWithTurnstile id={id} onDiscovered={setPlayer} />
+    return <DiscoverGate id={id} label="player" discoverAction={getPlayerAction} onDiscovered={setPlayer} />
   }
 
   const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
