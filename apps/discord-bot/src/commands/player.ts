@@ -2,7 +2,7 @@ import { TRPCClientError } from '@trpc/client'
 import {
   type ChatInputCommandInteraction,
   type InteractionResponse,
-  Message,
+  type Message,
   SlashCommandBuilder,
   type StringSelectMenuInteraction,
 } from 'discord.js'
@@ -10,7 +10,6 @@ import { api } from '../lib/trpc'
 import type { SearchResponse } from '../lib/types'
 import { buildPlayerSelectMenu } from '../utils/components'
 import { buildErrorEmbed, buildPlayerEmbed } from '../utils/embeds'
-import { pollForFreshData, setActiveTask } from '../utils/refresh'
 import type { Command } from './index'
 
 // Cache search results for select menu interactions (expires after 5 minutes)
@@ -100,16 +99,7 @@ export const playerCommand: Command = {
         cleanupCache()
       }
 
-      const reply = await interaction.editReply(responseOptions)
-
-      if (reply instanceof Message) {
-        setActiveTask(reply.id, playerId)
-
-        // If data is refreshing, start polling
-        if (player.isRefreshing) {
-          void pollForFreshData(reply, playerId, 'player', searchResults, interaction.id)
-        }
-      }
+      await interaction.editReply(responseOptions)
     } catch (error) {
       console.error('[Player Command] Error:', error)
 
@@ -190,8 +180,6 @@ export async function handlePlayerSelect(interaction: StringSelectMenuInteractio
       }
     }
 
-    setActiveTask(message.id, playerId)
-
     // Update the select menu to show the new selection
     if (searchResults.length > 1) {
       const selectMenu = buildPlayerSelectMenu(searchResults, playerId, interactionId)
@@ -200,10 +188,6 @@ export async function handlePlayerSelect(interaction: StringSelectMenuInteractio
         embeds: [embed],
         components: [selectMenu],
       })
-
-      if (player.isRefreshing && reply instanceof Message) {
-        void pollForFreshData(reply, playerId, 'player', searchResults, interactionId)
-      }
     } else {
       await interaction.editReply({
         embeds: [embed],
