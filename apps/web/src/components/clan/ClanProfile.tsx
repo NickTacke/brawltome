@@ -115,7 +115,6 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
           const discoveryDone = isDiscovery && (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
           const refreshDone =
             !isDiscovery &&
-            refreshBaseline.current !== null &&
             currentTimestamp !== null &&
             currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {

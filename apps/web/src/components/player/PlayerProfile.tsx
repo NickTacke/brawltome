@@ -80,7 +80,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           const discoveryDone = isDiscovery && (data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0)
           const refreshDone =
             !isDiscovery &&
-            refreshBaseline.current !== null &&
             currentTimestamp !== null &&
             currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
