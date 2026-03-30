@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::memory;
+use crate::memory::RegionCache;
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -47,10 +48,11 @@ pub type PlayerMap = HashMap<u32, PlayerInfo>;
 /// Find the local player's BhID by scanning for the `\x00hID\x00` pattern.
 pub fn find_my_bhid(
     handle: windows_sys::Win32::Foundation::HANDLE,
-    regions: &[memory::MemoryRegion],
+    cache: &mut RegionCache,
 ) -> Option<u32> {
     let pattern: &[u8] = &[0x00, b'h', b'I', b'D', 0x00];
-    let addrs = memory::scan_regions(handle, regions, pattern);
+    let addrs = memory::scan_heap(handle, cache, pattern);
+    cache.learn_prefix(&addrs);
 
     for addr in addrs {
         if addr >= 24 {
@@ -68,16 +70,33 @@ pub fn find_my_bhid(
 pub fn find_04c_addr(
     handle: windows_sys::Win32::Foundation::HANDLE,
     my_bhid: u32,
-    regions: &[memory::MemoryRegion],
+    cache: &RegionCache,
 ) -> Option<usize> {
     let bhid_bytes = my_bhid.to_le_bytes();
-    let addrs = memory::scan_regions(handle, regions, &bhid_bytes);
+    let addrs = memory::scan_heap(handle, cache, &bhid_bytes);
 
-    for ba in addrs {
+    log::debug!("find_04c: {} BhID matches across heap regions", addrs.len());
+    for ba in &addrs {
         let candidate = ba + BHID_04C_OFFSET;
         if let Some(val) = memory::read::<u32>(handle, candidate) {
+            log::debug!("find_04c: addr=0x{:x} candidate=0x{:x} val={} valid={}", ba, candidate, val, VALID_STATES.contains(&val));
             if VALID_STATES.contains(&val) {
                 return Some(candidate);
+            }
+        }
+    }
+
+    // If heap-only scan failed, try all regions as fallback
+    if !addrs.is_empty() {
+        log::debug!("find_04c: no valid state in heap regions, trying all regions");
+        let all_addrs = memory::scan_regions_with_buf(handle, &cache.regions, &my_bhid.to_le_bytes(), &mut Vec::new());
+        for ba in &all_addrs {
+            let candidate = ba + BHID_04C_OFFSET;
+            if let Some(val) = memory::read::<u32>(handle, candidate) {
+                if VALID_STATES.contains(&val) {
+                    log::debug!("find_04c: found in non-heap region at 0x{:x} val={}", candidate, val);
+                    return Some(candidate);
+                }
             }
         }
     }
@@ -117,20 +136,76 @@ pub fn is_char_select(state: u32) -> bool {
     CHAR_SELECT_STATES.contains(&state)
 }
 
+/// Diagnostic: dump bytes around each BhID match to understand data layout.
+pub fn dump_bhid_context(
+    handle: windows_sys::Win32::Foundation::HANDLE,
+    my_bhid: u32,
+    cache: &RegionCache,
+) {
+    let bhid_bytes = my_bhid.to_le_bytes();
+    let addrs = memory::scan_heap(handle, cache, &bhid_bytes);
+    log::debug!("dump_bhid_context: {} raw BhID matches for {}", addrs.len(), my_bhid);
+
+    // Also try the atom encoding
+    let atom_u32 = ((my_bhid as u64).wrapping_shl(3) | 6) as u32;
+    let atom_bytes = atom_u32.to_le_bytes();
+    let atom_addrs = memory::scan_heap(handle, cache, &atom_bytes);
+    log::debug!("dump_bhid_context: {} atom (<<3|6) matches for 0x{:08X}", atom_addrs.len(), atom_u32);
+
+    // Try u64 atom
+    let atom_u64 = (my_bhid as u64).wrapping_shl(3) | 6;
+    let atom_u64_bytes = atom_u64.to_le_bytes();
+    let atom64_addrs = memory::scan_heap(handle, cache, &atom_u64_bytes);
+    log::debug!("dump_bhid_context: {} u64 atom matches for 0x{:016X}", atom64_addrs.len(), atom_u64);
+
+    // Dump context around first few BhID matches
+    for (idx, &addr) in addrs.iter().take(3).enumerate() {
+        let start = addr.saturating_sub(32);
+        let mut ctx = vec![0u8; 128];
+        if memory::read_memory(handle, start, &mut ctx) {
+            let hex: Vec<String> = ctx.iter().map(|b| format!("{:02x}", b)).collect();
+            let offset = addr - start;
+            log::debug!("BhID match #{} at 0x{:x} (offset {} in dump):\n  {}",
+                idx, addr, offset, hex.chunks(16)
+                    .enumerate()
+                    .map(|(i, c)| format!("{:04x}: {}", i*16, c.join(" ")))
+                    .collect::<Vec<_>>()
+                    .join("\n  "));
+        }
+    }
+}
+
+/// Max region size for player scanning (10 MB). Game structures live in
+/// small-to-medium heap regions; skipping huge allocations saves ~50%+ time.
+const PLAYER_SCAN_MAX_REGION: usize = 10 * 1024 * 1024;
+
 /// Extract all players from the process heap by scanning for IntMap atoms.
 pub fn get_players(
     handle: windows_sys::Win32::Foundation::HANDLE,
     my_bhid: u32,
-    regions: &[memory::MemoryRegion],
+    cache: &RegionCache,
     stale_addrs: &HashSet<usize>,
 ) -> PlayerMap {
     let atom_val = (my_bhid as u64).wrapping_shl(3) | 6;
     let atom_bytes = (atom_val as u32).to_le_bytes();
-    let addrs = memory::scan_regions(handle, regions, &atom_bytes);
+    let mut addrs = memory::scan_heap_small(handle, cache, &atom_bytes, PLAYER_SCAN_MAX_REGION);
+    if addrs.is_empty() {
+        // Fall back to full heap scan (still prefix-filtered)
+        addrs = memory::scan_heap(handle, cache, &atom_bytes);
+    }
+    if addrs.is_empty() {
+        // Last resort: scan ALL regions ignoring prefix
+        addrs = memory::scan_regions_with_buf(handle, &cache.regions, &atom_bytes, &mut Vec::new());
+        if !addrs.is_empty() {
+            log::info!("get_players: found {} matches outside heap prefix — prefix may be stale", addrs.len());
+            // Update prefix from these results
+        }
+    }
+    log::debug!("get_players: {} atom matches for 0x{:08X}", addrs.len(), atom_val as u32);
 
     let mut players = PlayerMap::new();
 
-    for addr in addrs {
+    for &addr in &addrs {
         if stale_addrs.contains(&addr) {
             continue;
         }
@@ -138,13 +213,15 @@ pub fn get_players(
         // Read the 512-entry IntMap table centered around the found atom.
         let table_base = match addr.checked_sub(256 * 16) {
             Some(b) => b,
-            None => continue,
+            None => { log::trace!("get_players: addr 0x{:x} too low for table", addr); continue; },
         };
         let mut td = vec![0u8; 512 * 16];
         if !memory::read_memory(handle, table_base, &mut td) {
+            log::trace!("get_players: failed to read table at 0x{:x}", table_base);
             continue;
         }
 
+        let mut atoms_found = 0u32;
         for i in 0..512 {
             let off = i * 16;
 
@@ -154,6 +231,7 @@ pub fn get_players(
             if (atom & 7) != 6 || pad != 0 || atom <= 6 {
                 continue;
             }
+            atoms_found += 1;
             let bhid = atom >> 3;
             if bhid == 0 || players.contains_key(&bhid) {
                 continue;
@@ -168,9 +246,10 @@ pub fn get_players(
                 continue;
             }
 
-            // Read 88-byte player object
-            let mut obj = [0u8; 88];
+            // Read 64-byte player object (matching Python: pm.read_bytes(ptr, 64))
+            let mut obj = [0u8; 64];
             if !memory::read_memory(handle, ptr, &mut obj) {
+                log::trace!("get_players: failed to read obj at 0x{:x} for bhid={}", ptr, bhid);
                 continue;
             }
 
@@ -178,6 +257,7 @@ pub fn get_players(
             let slot = u32::from_le_bytes([obj[60], obj[61], obj[62], obj[63]]);
 
             if id_check != bhid || slot == 0 {
+                log::debug!("get_players: bhid={} id_check={} slot={} (rejected)", bhid, id_check, slot);
                 continue;
             }
 
@@ -189,7 +269,7 @@ pub fn get_players(
                 String::new()
             };
 
-            // Name (nested pointer: +80 → +56 → string)
+            // Name (nested pointer: +80 -> +56 -> string)
             let name = if let Some(nested_raw) = memory::read::<u64>(handle, ptr + 80) {
                 let nested_ptr = (nested_raw & !7) as usize;
                 if nested_ptr != 0 {
@@ -206,6 +286,7 @@ pub fn get_players(
                 String::new()
             };
 
+            log::debug!("get_players: found bhid={} name='{}' slot={}", bhid, name, slot);
             players.insert(
                 bhid,
                 PlayerInfo {
@@ -217,6 +298,7 @@ pub fn get_players(
                 },
             );
         }
+        log::debug!("get_players: table at 0x{:x} had {} atoms, {} players so far", table_base, atoms_found, players.len());
     }
 
     // Team detection: 2v2 has 4 players
@@ -236,10 +318,10 @@ pub fn get_players(
 pub fn snapshot_stale(
     handle: windows_sys::Win32::Foundation::HANDLE,
     my_bhid: u32,
-    regions: &[memory::MemoryRegion],
+    cache: &RegionCache,
 ) -> HashSet<usize> {
     let atom_val = (my_bhid as u64).wrapping_shl(3) | 6;
     let atom_bytes = (atom_val as u32).to_le_bytes();
-    let addrs = memory::scan_regions(handle, regions, &atom_bytes);
+    let addrs = memory::scan_heap_small(handle, cache, &atom_bytes, PLAYER_SCAN_MAX_REGION);
     addrs.into_iter().collect()
 }
