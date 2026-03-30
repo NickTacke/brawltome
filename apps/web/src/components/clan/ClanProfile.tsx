@@ -1,8 +1,8 @@
 'use client'
 
-import { getClanAction } from '@/app/clan/[id]/actions'
-import { DiscoverGate } from '@/components/DiscoverGate'
+import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
+import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import {
   Avatar,
@@ -29,7 +29,7 @@ import {
 } from '@brawltome/ui'
 import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const PAGE_SIZE = 25
 
@@ -76,24 +76,85 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
+  const [refreshing, setRefreshing] = useState(false)
+  const [turnstileError, setTurnstileError] = useState(false)
+  const tokenHandled = useRef(false)
+  const refreshBaseline = useRef<unknown>(null)
+
+  const handleToken = useCallback(
+    async (token: string) => {
+      if (tokenHandled.current) return
+      tokenHandled.current = true
+      try {
+        refreshBaseline.current = clan?.lastUpdated ?? null
+        const result = await refreshClanAction(Number(id), token)
+        if (result?.isRefreshing) setRefreshing(true)
+        if (!clan) {
+          const data = await getClanAction(Number(id))
+          if (data) setClan(data)
+        }
+      } catch {
+        tokenHandled.current = false // Allow retry on failure
+      }
+    },
+    [id, clan],
+  )
 
   // Poll while refreshing
   useEffect(() => {
-    if (!clan?.isRefreshing) return
+    if (!refreshing) return
     const intervalId = setInterval(async () => {
       try {
         const data = await getClanAction(Number(id))
-        if (data) setClan(data)
-        if (!data?.isRefreshing) clearInterval(intervalId)
+        if (data) {
+          setClan(data)
+          const discoveryDone = (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
+          const refreshDone =
+            refreshBaseline.current !== null && String(data.lastUpdated) !== String(refreshBaseline.current)
+          if (discoveryDone || refreshDone) {
+            setRefreshing(false)
+            clearInterval(intervalId)
+          }
+        }
       } catch {
         /* ignore */
       }
     }, 2000)
-    return () => clearInterval(intervalId)
-  }, [clan?.isRefreshing, id])
+    const timeout = setTimeout(() => {
+      setRefreshing(false)
+      clearInterval(intervalId)
+    }, 30000)
+    return () => {
+      clearInterval(intervalId)
+      clearTimeout(timeout)
+    }
+  }, [refreshing, id])
+
+  // If refresh timed out and we still have no data, show error
+  useEffect(() => {
+    if (!refreshing && !clan && tokenHandled.current) {
+      setTurnstileError(true)
+    }
+  }, [refreshing, clan])
+
+  const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
 
   if (!clan) {
-    return <DiscoverGate id={id} label="clan" discoverAction={getClanAction} onDiscovered={setClan} />
+    return (
+      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+        <NavBar showBack />
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+          {!turnstileError && (
+            <>
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+              <p>Looking up clan...</p>
+            </>
+          )}
+          {turnstileError && <p>Clan not found.</p>}
+          {turnstile}
+        </div>
+      </div>
+    )
   }
 
   const members = clan.members || []
@@ -121,6 +182,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
+      {turnstile}
       <NavBar showBack />
 
       {/* Header */}
@@ -147,7 +209,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
                 </Badge>
               </>
             )}
-            {clan.isRefreshing && (
+            {refreshing && (
               <>
                 <span>•</span>
                 <Badge variant="secondary" className="gap-2 animate-pulse">
