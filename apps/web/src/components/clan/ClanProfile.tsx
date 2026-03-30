@@ -82,14 +82,14 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [refreshing, setRefreshing] = useState(isStale)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
-  const refreshBaseline = useRef<unknown>(initialData?.lastUpdated ?? null)
+  const refreshBaseline = useRef<number | null>(new Date(initialData?.lastUpdated ?? 0).getTime() || null)
 
   const handleToken = useCallback(
     async (token: string) => {
       if (tokenHandled.current) return
       tokenHandled.current = true
       try {
-        refreshBaseline.current = clan?.lastUpdated ?? null
+        refreshBaseline.current = new Date(clan?.lastUpdated ?? 0).getTime() || null
         const result = await refreshClanAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
         if (!clan) {
@@ -111,11 +111,13 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
         const data = await getClanAction(Number(id))
         if (data) {
           setClan(data)
+          const currentTimestamp = new Date(data.lastUpdated ?? 0).getTime() || null
           const discoveryDone = isDiscovery && (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
           const refreshDone =
             !isDiscovery &&
             refreshBaseline.current !== null &&
-            String(data.lastUpdated) !== String(refreshBaseline.current)
+            currentTimestamp !== null &&
+            currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
