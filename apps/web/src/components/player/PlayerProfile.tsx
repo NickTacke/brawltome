@@ -39,12 +39,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [refreshing, setRefreshing] = useState(false)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
+  const refreshBaseline = useRef<unknown>(null)
 
   const handleToken = useCallback(
     async (token: string) => {
       if (tokenHandled.current) return
       tokenHandled.current = true
       try {
+        refreshBaseline.current = player?.rankedLastUpdated ?? null
         const result = await refreshPlayerAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
         if (!player) {
@@ -52,7 +54,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           if (data) setPlayer(data)
         }
       } catch {
-        /* ignore — data still shows from initial load */
+        tokenHandled.current = false // Allow retry on failure
       }
     },
     [id, player],
@@ -66,8 +68,10 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         const data = await getPlayerAction(Number(id))
         if (data) {
           setPlayer(data)
-          const isPlaceholder = data.name === `Player ${id}` && data.rating === 0
-          if (!isPlaceholder) {
+          const discoveryDone = data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0
+          const refreshDone =
+            refreshBaseline.current !== null && String(data.rankedLastUpdated) !== String(refreshBaseline.current)
+          if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
           }
@@ -85,6 +89,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       clearTimeout(timeout)
     }
   }, [refreshing, id])
+
+  // If refresh timed out and we still have no data, show error
+  useEffect(() => {
+    if (!refreshing && !player && tokenHandled.current) {
+      setTurnstileError(true)
+    }
+  }, [refreshing, player])
 
   const weaponStats = useMemo(
     () => (player ? aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []) : []),
