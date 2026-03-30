@@ -5,6 +5,7 @@ import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
+import { TIERED_TTL } from '@brawltome/shared'
 import {
   Avatar,
   AvatarFallback,
@@ -36,7 +37,11 @@ interface PlayerProfileProps {
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [player, setPlayer] = useState<PlayerData | null>(initialData)
-  const [refreshing, setRefreshing] = useState(false)
+  const isStale = initialData
+    ? !initialData.rankedLastUpdated ||
+      Date.now() - new Date(initialData.rankedLastUpdated).getTime() > TIERED_TTL.hot.ranked
+    : false
+  const [refreshing, setRefreshing] = useState(isStale)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
   const refreshBaseline = useRef<unknown>(null)

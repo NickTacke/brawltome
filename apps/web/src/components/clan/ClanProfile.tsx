@@ -4,6 +4,7 @@ import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
+import { CLAN_TTL_MS } from '@brawltome/shared'
 import {
   Avatar,
   AvatarFallback,
@@ -76,7 +77,8 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'default' | 'xp'>('default')
-  const [refreshing, setRefreshing] = useState(false)
+  const isStale = initialData ? Date.now() - new Date(initialData.lastUpdated).getTime() > CLAN_TTL_MS : false
+  const [refreshing, setRefreshing] = useState(isStale)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
   const refreshBaseline = useRef<unknown>(null)
