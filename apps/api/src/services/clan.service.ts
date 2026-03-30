@@ -78,15 +78,13 @@ export async function refreshClan(
   if (!process.env.DISABLE_VIEW_REFRESH) {
     const age = Date.now() - c.lastUpdated.getTime()
     if (age > CLAN_TTL_MS) {
-      const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-      if (canDedup) {
-        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-        if (refreshLimit.allowed) {
+      const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+      if (refreshLimit.allowed) {
+        const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
+        if (canDedup) {
           await ctx.clanQueue.enqueue({ clanId })
-          return { isRefreshing: true }
         }
-      } else {
-        return { isRefreshing: true } // Already queued by another request
+        return { isRefreshing: true }
       }
     }
   }
