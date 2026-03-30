@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/shared": "workspace:*",
     "@brawltome/ui": "workspace:*",
     "@marsidev/react-turnstile": "^1.5.0",
     "@tanstack/react-query": "^5.62.0",
