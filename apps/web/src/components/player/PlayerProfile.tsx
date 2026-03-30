@@ -1,8 +1,8 @@
 'use client'
 
-import { getPlayerAction } from '@/app/player/[id]/actions'
-import { DiscoverGate } from '@/components/DiscoverGate'
+import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
+import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import {
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@brawltome/ui'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CombatCard } from './CombatCard'
 import { LegendSection } from './LegendSection'
 import { RankedCard } from './RankedCard'
@@ -36,29 +36,90 @@ interface PlayerProfileProps {
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [player, setPlayer] = useState<PlayerData | null>(initialData)
+  const [refreshing, setRefreshing] = useState(false)
+  const [turnstileError, setTurnstileError] = useState(false)
+  const tokenHandled = useRef(false)
+  const refreshBaseline = useRef<unknown>(null)
+
+  const handleToken = useCallback(
+    async (token: string) => {
+      if (tokenHandled.current) return
+      tokenHandled.current = true
+      try {
+        refreshBaseline.current = player?.rankedLastUpdated ?? null
+        const result = await refreshPlayerAction(Number(id), token)
+        if (result?.isRefreshing) setRefreshing(true)
+        if (!player) {
+          const data = await getPlayerAction(Number(id))
+          if (data) setPlayer(data)
+        }
+      } catch {
+        tokenHandled.current = false // Allow retry on failure
+      }
+    },
+    [id, player],
+  )
 
   // Poll while refreshing
   useEffect(() => {
-    if (!player?.isRefreshing) return
+    if (!refreshing) return
     const intervalId = setInterval(async () => {
       try {
-        const data = await getPlayerAction(Number(player.brawlhallaId))
-        if (data) setPlayer(data)
-        if (!data?.isRefreshing) clearInterval(intervalId)
+        const data = await getPlayerAction(Number(id))
+        if (data) {
+          setPlayer(data)
+          const discoveryDone = data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0
+          const refreshDone =
+            refreshBaseline.current !== null && String(data.rankedLastUpdated) !== String(refreshBaseline.current)
+          if (discoveryDone || refreshDone) {
+            setRefreshing(false)
+            clearInterval(intervalId)
+          }
+        }
       } catch {
         /* ignore */
       }
     }, 2000)
-    return () => clearInterval(intervalId)
-  }, [player?.isRefreshing, player?.brawlhallaId])
+    const timeout = setTimeout(() => {
+      setRefreshing(false)
+      clearInterval(intervalId)
+    }, 30000)
+    return () => {
+      clearInterval(intervalId)
+      clearTimeout(timeout)
+    }
+  }, [refreshing, id])
+
+  // If refresh timed out and we still have no data, show error
+  useEffect(() => {
+    if (!refreshing && !player && tokenHandled.current) {
+      setTurnstileError(true)
+    }
+  }, [refreshing, player])
 
   const weaponStats = useMemo(
     () => (player ? aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []) : []),
-    [player?.statsLegends, player?.rankedLegends],
+    [player],
   )
 
+  const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
+
   if (!player) {
-    return <DiscoverGate id={id} label="player" discoverAction={getPlayerAction} onDiscovered={setPlayer} />
+    return (
+      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+        <NavBar showBack />
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+          {!turnstileError && (
+            <>
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+              <p>Looking up player...</p>
+            </>
+          )}
+          {turnstileError && <p>Player not found.</p>}
+          {turnstile}
+        </div>
+      </div>
+    )
   }
 
   const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
@@ -74,6 +135,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
+      {turnstile}
       {/* Top Navbar */}
       <NavBar showBack />
 
@@ -159,7 +221,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           </div>
         </div>
 
-        {player.isRefreshing && (
+        {refreshing && (
           <Badge variant="secondary" className="gap-2 animate-pulse">
             <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
             Syncing live data...
