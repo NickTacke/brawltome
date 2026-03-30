@@ -3,7 +3,7 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type InteractionResponse,
-  Message,
+  type Message,
   SlashCommandBuilder,
   type StringSelectMenuInteraction,
 } from 'discord.js'
@@ -11,7 +11,6 @@ import { api } from '../lib/trpc'
 import type { ClanResponse, SearchResponse } from '../lib/types'
 import { buildClanPaginationButtons, buildClanSelectMenu } from '../utils/components'
 import { buildClanEmbed, buildErrorEmbed } from '../utils/embeds'
-import { pollForFreshData, setActiveTask } from '../utils/refresh'
 import type { Command } from './index'
 
 // Cache clan results for pagination (expires after 10 minutes)
@@ -110,15 +109,6 @@ export const clanCommand: Command = {
         embeds: [embed],
         components,
       })
-
-      if (reply instanceof Message) {
-        setActiveTask(reply.id, clanId)
-
-        // If data is refreshing, start polling
-        if (clan.isRefreshing) {
-          void pollForFreshData(reply, clanId, 'clan', searchResults, interaction.id)
-        }
-      }
     } catch (error) {
       console.error('[Clan Command] Error:', error)
 
@@ -184,8 +174,6 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
     // Get cached search results to preserve the select menu
     const message = interaction.message
     const components = message.components
-    setActiveTask(message.id, clanId)
-
     // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
     const responseComponents: any[] = []
 
@@ -205,11 +193,6 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
       embeds: [embed],
       components: responseComponents,
     })
-
-    if (clan.isRefreshing && reply instanceof Message) {
-      const clans = getClansFromMessage(message, clanId)
-      void pollForFreshData(reply, clanId, 'clan', clans as unknown as SearchResponse['clans'], interactionId)
-    }
   } catch (error) {
     console.error('[Clan Select] Error:', error)
     await interaction.editReply({
