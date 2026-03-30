@@ -7,6 +7,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/discord-bot/package.json apps/discord-bot/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
+COPY packages/shared/package.json packages/shared/
 COPY packages/ui/package.json packages/ui/
 RUN bun install
 

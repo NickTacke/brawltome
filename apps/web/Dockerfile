@@ -8,6 +8,7 @@ COPY apps/api/package.json apps/api/
 COPY packages/ui/package.json packages/ui/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
+COPY packages/shared/package.json packages/shared/
 RUN bun install
 
 FROM base AS build
@@ -22,6 +23,8 @@ COPY packages/database/src/ packages/database/src/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/src/ packages/bhapi/src/
 COPY packages/bhapi/package.json packages/bhapi/
+COPY packages/shared/src/ packages/shared/src/
+COPY packages/shared/package.json packages/shared/
 COPY tsconfig.json .
 RUN cd apps/web && bun run build
 
