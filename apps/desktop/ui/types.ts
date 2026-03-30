@@ -21,4 +21,8 @@ export interface MatchEndedEvent {
   event: 'match_ended'
 }
 
-export type GameEvent = MatchFoundEvent | MatchEndedEvent
+export interface ScanningEvent {
+  event: 'scanning'
+}
+
+export type GameEvent = MatchFoundEvent | MatchEndedEvent | ScanningEvent
