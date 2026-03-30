@@ -1,7 +1,7 @@
 'use client'
 
-import { getPlayerAction } from '@/app/player/[id]/actions'
-import { DiscoverGate } from '@/components/DiscoverGate'
+import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
+import { TurnstileGate } from '@/components/TurnstileGate'
 import { NavBar } from '@/components/NavBar'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@brawltome/ui'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CombatCard } from './CombatCard'
 import { LegendSection } from './LegendSection'
 import { RankedCard } from './RankedCard'
@@ -36,21 +36,42 @@ interface PlayerProfileProps {
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [player, setPlayer] = useState<PlayerData | null>(initialData)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleToken = useCallback(
+    async (token: string) => {
+      try {
+        const result = await refreshPlayerAction(Number(id), token)
+        if (result?.isRefreshing) setRefreshing(true)
+        // If discovery, do an immediate read to get placeholder
+        if (!player) {
+          const data = await getPlayerAction(Number(id))
+          if (data) setPlayer(data)
+        }
+      } catch {
+        /* ignore — data still shows from initial load */
+      }
+    },
+    [id, player],
+  )
 
   // Poll while refreshing
   useEffect(() => {
-    if (!player?.isRefreshing) return
+    if (!refreshing) return
     const intervalId = setInterval(async () => {
       try {
-        const data = await getPlayerAction(Number(player.brawlhallaId))
+        const data = await getPlayerAction(Number(id))
         if (data) setPlayer(data)
-        if (!data?.isRefreshing) clearInterval(intervalId)
+        if (data && !data.isRefreshing) {
+          setRefreshing(false)
+          clearInterval(intervalId)
+        }
       } catch {
         /* ignore */
       }
     }, 2000)
     return () => clearInterval(intervalId)
-  }, [player?.isRefreshing, player?.brawlhallaId])
+  }, [refreshing, id])
 
   const weaponStats = useMemo(
     () => (player ? aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []) : []),
@@ -58,7 +79,16 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   )
 
   if (!player) {
-    return <DiscoverGate id={id} label="player" discoverAction={getPlayerAction} onDiscovered={setPlayer} />
+    return (
+      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+        <NavBar showBack />
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+          <p>Looking up player...</p>
+          <TurnstileGate onToken={handleToken} />
+        </div>
+      </div>
+    )
   }
 
   const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
@@ -74,6 +104,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
+      <TurnstileGate onToken={handleToken} />
       {/* Top Navbar */}
       <NavBar showBack />
 
