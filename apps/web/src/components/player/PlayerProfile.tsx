@@ -45,14 +45,16 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [refreshing, setRefreshing] = useState(isStale)
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
-  const refreshBaseline = useRef<unknown>(initialData?.statsLastUpdated ?? initialData?.rankedLastUpdated ?? null)
+  const refreshBaseline = useRef<number | null>(
+    new Date(initialData?.statsLastUpdated ?? initialData?.rankedLastUpdated ?? 0).getTime() || null,
+  )
 
   const handleToken = useCallback(
     async (token: string) => {
       if (tokenHandled.current) return
       tokenHandled.current = true
       try {
-        refreshBaseline.current = player?.statsLastUpdated ?? player?.rankedLastUpdated ?? null
+        refreshBaseline.current = new Date(player?.statsLastUpdated ?? player?.rankedLastUpdated ?? 0).getTime() || null
         const result = await refreshPlayerAction(Number(id), token)
         if (result?.isRefreshing) setRefreshing(true)
         if (!player) {
@@ -74,13 +76,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         const data = await getPlayerAction(Number(id))
         if (data) {
           setPlayer(data)
-          const currentTimestamp = data.statsLastUpdated ?? data.rankedLastUpdated ?? null
+          const currentTimestamp = new Date(data.statsLastUpdated ?? data.rankedLastUpdated ?? 0).getTime() || null
           const discoveryDone = isDiscovery && (data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0)
           const refreshDone =
             !isDiscovery &&
             refreshBaseline.current !== null &&
             currentTimestamp !== null &&
-            String(currentTimestamp) !== String(refreshBaseline.current)
+            currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
