@@ -40,53 +40,7 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
   if (blocked) return null
 
   const p = await queryPlayer(ctx, brawlhallaId)
-
-  if (!p) {
-    if (ctx.isBot) return null
-    return discoverPlayer(ctx, brawlhallaId)
-  }
-
-  // Bots get cached data only — no view count bump, no refresh triggers
-  let isRefreshing = false
-  if (!ctx.isBot) {
-    const now = new Date()
-    await ctx.db
-      .update(player)
-      .set({
-        viewCount: sql`${player.viewCount} + 1`,
-        lastViewedAt: now,
-        refreshTier: 'hot',
-      })
-      .where(eq(player.brawlhallaId, brawlhallaId))
-
-    if (!process.env.DISABLE_VIEW_REFRESH) {
-      const ttl = TIERED_TTL.hot
-
-      const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
-      if (rankedStale) {
-        const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-        if (canDedup) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-          if (refreshLimit.allowed) {
-            await ctx.rankedQueue.enqueue({ brawlhallaId })
-            isRefreshing = true
-          }
-        }
-      }
-
-      const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
-      if (statsStale) {
-        const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-        if (canDedup) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
-          if (refreshLimit.allowed) {
-            await ctx.statsQueue.enqueue({ brawlhallaId })
-            isRefreshing = true
-          }
-        }
-      }
-    }
-  }
+  if (!p) return null
 
   const history = await ctx.db.query.ratingHistory.findMany({
     where: eq(ratingHistory.brawlhallaId, brawlhallaId),
@@ -94,7 +48,6 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     limit: 365,
   })
 
-  // Enrich stats legends with weapon names from game data cache
   const enrichedStatsLegends = (p.statsLegends || []).map((l: (typeof p.statsLegends)[number]) => {
     const legendData = getLegendById(l.legendId)
     return {
@@ -105,62 +58,92 @@ export async function getPlayer(ctx: Context, brawlhallaId: number): Promise<Pla
     }
   })
 
-  return { ...p, statsLegends: enrichedStatsLegends, ratingHistory: history, isRefreshing }
+  return { ...p, statsLegends: enrichedStatsLegends, ratingHistory: history, isRefreshing: false }
 }
 
-async function discoverPlayer(ctx: Context, brawlhallaId: number): Promise<PlayerResult | null> {
-  if (!ctx.turnstileToken) return null
-  const turnstileValid = await verifyTurnstile(ctx.turnstileToken, ctx.clientIp)
-  if (!turnstileValid) return null
+export async function refreshPlayer(
+  ctx: Context,
+  brawlhallaId: number,
+  turnstileToken: string,
+): Promise<{ isRefreshing: boolean }> {
+  const turnstileValid = await verifyTurnstile(turnstileToken, ctx.clientIp)
+  if (!turnstileValid) return { isRefreshing: false }
 
-  const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
-  if (!globalLimit.allowed) return null
+  const blocked = await ctx.db.query.blacklist.findFirst({
+    where: eq(blacklist.brawlhallaId, brawlhallaId),
+  })
+  if (blocked) return { isRefreshing: false }
 
-  const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
-  if (!discoveryLimit.allowed) return null
+  const p = await queryPlayer(ctx, brawlhallaId)
 
-  // Create a placeholder player row so subsequent requests see it as "refreshing"
+  if (!p) {
+    // Discovery flow
+    if (ctx.isBot) return { isRefreshing: false }
+
+    const globalLimit = await checkRateLimit(ctx.redis, 'global', 'discovery:global')
+    if (!globalLimit.allowed) return { isRefreshing: false }
+
+    const discoveryLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'discovery')
+    if (!discoveryLimit.allowed) return { isRefreshing: false }
+
+    await ctx.db
+      .insert(player)
+      .values({
+        brawlhallaId,
+        name: `Player ${brawlhallaId}`,
+        refreshTier: 'hot',
+        lastUpdated: new Date(),
+      })
+      .onConflictDoNothing()
+
+    console.log(`[discover] enqueuing ${brawlhallaId} via priority queue (ip=${ctx.clientIp})`)
+    await ctx.rankedQueue.enqueue({ brawlhallaId }, true)
+    await ctx.statsQueue.enqueue({ brawlhallaId }, true)
+
+    return { isRefreshing: true }
+  }
+
+  // Refresh flow for existing player
+  if (ctx.isBot) return { isRefreshing: false }
+
+  const now = new Date()
   await ctx.db
-    .insert(player)
-    .values({
-      brawlhallaId,
-      name: `Player ${brawlhallaId}`,
+    .update(player)
+    .set({
+      viewCount: sql`${player.viewCount} + 1`,
+      lastViewedAt: now,
       refreshTier: 'hot',
-      lastUpdated: new Date(),
     })
-    .onConflictDoNothing()
+    .where(eq(player.brawlhallaId, brawlhallaId))
 
-  // Enqueue both ranked and stats refreshes with high priority
-  console.log(`[discover] enqueuing ${brawlhallaId} via priority queue (ip=${ctx.clientIp})`)
-  await ctx.rankedQueue.enqueue({ brawlhallaId }, true)
-  await ctx.statsQueue.enqueue({ brawlhallaId }, true)
+  let isRefreshing = false
+  if (!process.env.DISABLE_VIEW_REFRESH) {
+    const ttl = TIERED_TTL.hot
 
-  // Return the placeholder — frontend will poll until data arrives
-  return {
-    brawlhallaId,
-    name: `Player ${brawlhallaId}`,
-    region: null,
-    rating: 0,
-    peakRating: 0,
-    tier: null,
-    rankedGames: 0,
-    rankedWins: 0,
-    bestLegend: 0,
-    bestLegendGames: 0,
-    bestLegendWins: 0,
-    xp: 0,
-    level: 0,
-    xpPercentage: 0,
-    totalGames: 0,
-    totalWins: 0,
-    matchTimeTotal: 0,
-    aliases: [],
-    statsLegends: [],
-    weaponStats: [],
-    clan: null,
-    rankedLegends: [],
-    rankedTeams: [],
-    ratingHistory: [],
-    isRefreshing: true,
-  } as unknown as PlayerResult
+    const rankedStale = !p.rankedLastUpdated || now.getTime() - p.rankedLastUpdated.getTime() > ttl.ranked
+    if (rankedStale) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
+      if (canDedup) {
+        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+        if (refreshLimit.allowed) {
+          await ctx.rankedQueue.enqueue({ brawlhallaId })
+          isRefreshing = true
+        }
+      }
+    }
+
+    const statsStale = !p.statsLastUpdated || now.getTime() - p.statsLastUpdated.getTime() > ttl.stats
+    if (statsStale) {
+      const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
+      if (canDedup) {
+        const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+        if (refreshLimit.allowed) {
+          await ctx.statsQueue.enqueue({ brawlhallaId })
+          isRefreshing = true
+        }
+      }
+    }
+  }
+
+  return { isRefreshing }
 }
