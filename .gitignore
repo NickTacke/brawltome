@@ -19,9 +19,15 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.claude
+.superpowers/
 
 # Misc
 coverage/
 tmp/
-docs/*
+docs/
 .worktrees/
+
+# Python (testing scripts for overlay)
+__pycache__/
+python-testing/
