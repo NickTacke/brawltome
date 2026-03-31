@@ -86,7 +86,6 @@ export const clanCommand: Command = {
       })
       cleanupCache()
 
-      // Build response components
       // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
       const components: any[] = []
 
@@ -140,9 +139,6 @@ export const clanCommand: Command = {
   },
 }
 
-/**
- * Handle clan select menu interaction
- */
 export async function handleClanSelect(interaction: StringSelectMenuInteraction): Promise<void> {
   const clanId = Number.parseInt(interaction.values[0], 10)
   const interactionId = interaction.customId.split(':')[1]
@@ -202,9 +198,6 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
   }
 }
 
-/**
- * Handle clan member pagination button interaction
- */
 export async function handleClanPage(interaction: ButtonInteraction): Promise<void> {
   const [, interactionId, pageStr] = interaction.customId.split(':')
   const page = Number.parseInt(pageStr, 10)
@@ -247,9 +240,6 @@ function cleanupCache() {
   }
 }
 
-/**
- * Extract clan options from the existing message's select menu
- */
 function getClansFromMessage(
   message: Message<boolean> | InteractionResponse<boolean>,
   selectedId: number,

@@ -41,9 +41,6 @@ function getEmojiForSelect(legendNameKey: string): ComponentEmojiResolvable | un
   return undefined
 }
 
-/**
- * Build a select menu for switching between player search results
- */
 export function buildPlayerSelectMenu(
   players: PlayerOption[],
   selectedId: number,
@@ -82,9 +79,6 @@ export function buildPlayerSelectMenu(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)
 }
 
-/**
- * Build a select menu for switching between clan search results
- */
 export function buildClanSelectMenu(
   clans: ClanOption[],
   selectedId: number,
@@ -109,9 +103,6 @@ export function buildClanSelectMenu(
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)
 }
 
-/**
- * Build buttons for clan member pagination
- */
 export function buildClanPaginationButtons(
   interactionId: string,
   currentPage: number,

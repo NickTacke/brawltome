@@ -4,8 +4,6 @@ use std::collections::HashSet;
 use crate::memory;
 use crate::memory::RegionCache;
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
 /// Offset from a found BhID address to the connection-state value.
 const BHID_04C_OFFSET: usize = 252;
 
@@ -29,8 +27,6 @@ pub const PAUSE_STATES: [u32; 1] = [CS_PAUSED];
 pub const CHAR_SELECT_STATES: [u32; 1] = [CS_CHAR_SELECT];
 pub const IGNORE_STATES: [u32; 3] = [CS_REPLAY, 2048, 8192];
 
-// ── Data types ─────────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone)]
 pub struct PlayerInfo {
     pub bhid: u32,
@@ -42,8 +38,6 @@ pub struct PlayerInfo {
 }
 
 pub type PlayerMap = HashMap<u32, PlayerInfo>;
-
-// ── Scanner functions ──────────────────────────────────────────────────────────
 
 /// Find the local player's BhID by scanning for the `\x00hID\x00` pattern.
 pub fn find_my_bhid(
@@ -103,8 +97,6 @@ pub fn is_menu(state: u32) -> bool { MENU_STATES.contains(&state) }
 pub fn is_paused(state: u32) -> bool { PAUSE_STATES.contains(&state) }
 pub fn is_ignored(state: u32) -> bool { IGNORE_STATES.contains(&state) }
 pub fn is_char_select(state: u32) -> bool { CHAR_SELECT_STATES.contains(&state) }
-
-// ── Player extraction ────────────────────────────────────────────────────────
 
 /// Extract all players by scanning for IntMap atom pattern.
 /// Uses atom prefix if known (learned on first scan), otherwise scans all regions.
