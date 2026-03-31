@@ -78,7 +78,6 @@ export const playerCommand: Command = {
 
       const embed = buildPlayerEmbed(player)
 
-      // Build response with optional select menu
       const responseOptions: {
         embeds: ReturnType<typeof buildPlayerEmbed>[]
         components?: ReturnType<typeof buildPlayerSelectMenu>[]
@@ -131,9 +130,6 @@ export const playerCommand: Command = {
   },
 }
 
-/**
- * Handle player select menu interaction
- */
 export async function handlePlayerSelect(interaction: StringSelectMenuInteraction): Promise<void> {
   const playerId = Number.parseInt(interaction.values[0], 10)
   const interactionId = interaction.customId.split(':')[1]
@@ -203,9 +199,6 @@ export async function handlePlayerSelect(interaction: StringSelectMenuInteractio
   }
 }
 
-/**
- * Extract player options from the existing message's select menu
- */
 function getPlayersFromMessage(
   message: Message<boolean> | InteractionResponse<boolean>,
   selectedId: number,

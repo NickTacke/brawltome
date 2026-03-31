@@ -18,8 +18,6 @@ use crate::scanner;
 struct SendHandle(HANDLE);
 unsafe impl Send for SendHandle {}
 
-// ── Frontend event payloads ────────────────────────────────────────────────────
-
 #[derive(Debug, Serialize, Clone)]
 struct MatchFoundPayload {
     event: &'static str,
@@ -39,8 +37,6 @@ struct MatchEndedPayload {
 struct ScanningPayload {
     event: &'static str,
 }
-
-// ── Detection state ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ScannerState {
@@ -64,8 +60,6 @@ impl Default for DetectionState {
     }
 }
 
-// ── Timing ─────────────────────────────────────────────────────────────────────
-
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SCAN_INTERVAL_SCANNING: Duration = Duration::from_secs(3);
 const SCAN_INTERVAL_TRACKING: Duration = Duration::from_secs(10);
@@ -74,7 +68,235 @@ const ADDR_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 /// Delay before re-fetching opponent data (gives API time to refresh stale data)
 const REFETCH_DELAY: Duration = Duration::from_secs(2);
 
-// ── Entry point ────────────────────────────────────────────────────────────────
+struct CycleState {
+    handle: SendHandle,
+    my_bhid: u32,
+    cache: memory::RegionCache,
+    addr_04c: Option<usize>,
+    state: ScannerState,
+    prev_04c: u32,
+    players: std::collections::HashMap<u32, scanner::PlayerInfo>,
+    opened: HashSet<u32>,
+    stale_addrs: HashSet<usize>,
+    opponent_cache: std::collections::HashMap<u32, OpponentData>,
+    refetch_at: Option<tokio::time::Instant>,
+    last_scan: tokio::time::Instant,
+    last_addr_retry: tokio::time::Instant,
+    scan_in_flight: bool,
+    needs_region_refresh: bool,
+    detection: Arc<Mutex<DetectionState>>,
+}
+
+impl CycleState {
+    fn new(handle: SendHandle, my_bhid: u32, cache: memory::RegionCache, addr_04c: Option<usize>) -> Self {
+        Self {
+            handle,
+            my_bhid,
+            cache,
+            addr_04c,
+            state: ScannerState::Idle,
+            prev_04c: 0,
+            players: std::collections::HashMap::new(),
+            opened: HashSet::new(),
+            stale_addrs: HashSet::new(),
+            opponent_cache: std::collections::HashMap::new(),
+            refetch_at: None,
+            last_scan: tokio::time::Instant::now() - SCAN_INTERVAL_SCANNING,
+            last_addr_retry: tokio::time::Instant::now() - ADDR_RETRY_INTERVAL,
+            scan_in_flight: false,
+            needs_region_refresh: false,
+            detection: Arc::new(Mutex::new(DetectionState::default())),
+        }
+    }
+
+    fn handle_state_transition(&mut self, cur_04c: u32, app: &tauri::AppHandle) {
+        if scanner::is_menu(cur_04c) {
+            if self.state != ScannerState::Idle {
+                if self.state == ScannerState::Scanning
+                    || self.state == ScannerState::Tracking
+                    || self.state == ScannerState::Paused
+                {
+                    let payload = MatchEndedPayload { event: "match_ended" };
+                    if let Err(e) = app.emit("game-event", &payload) {
+                        log::error!("Failed to emit match_ended: {e}");
+                    }
+                }
+                self.stale_addrs = scanner::snapshot_stale(self.handle.0, self.my_bhid, &self.cache);
+                self.state = ScannerState::Idle;
+                self.players.clear();
+                self.opened.clear();
+                self.opponent_cache.clear();
+                self.refetch_at = None;
+                log::info!("Menu");
+            }
+        } else if scanner::is_ignored(cur_04c) {
+            // Replay, etc.
+        } else if scanner::is_paused(cur_04c) {
+            if self.state == ScannerState::Scanning || self.state == ScannerState::Tracking {
+                self.state = ScannerState::Paused;
+                log::info!("Paused");
+            }
+        } else if scanner::is_char_select(cur_04c) {
+            if self.state == ScannerState::Idle {
+                self.state = ScannerState::Scanning;
+                self.players.clear();
+                self.opened.clear();
+                log::info!("Character select — pre-scanning to prime cache");
+            }
+        } else if scanner::is_active_game(cur_04c) {
+            if self.state == ScannerState::Paused {
+                self.state = ScannerState::Tracking;
+                log::info!("Resumed");
+            } else if self.state == ScannerState::Idle || self.state == ScannerState::Scanning {
+                if self.state == ScannerState::Idle {
+                    self.players.clear();
+                    self.opened.clear();
+                }
+                self.state = ScannerState::Scanning;
+                log::info!("Match detected, scanning...");
+                let _ = app.emit("game-event", &ScanningPayload { event: "scanning" });
+            }
+        }
+    }
+
+    async fn scan_and_track(&mut self, api: &Arc<ApiClient>, app: &tauri::AppHandle) {
+        if self.scan_in_flight || self.state != ScannerState::Scanning {
+            return;
+        }
+        if self.last_scan.elapsed() < SCAN_INTERVAL_SCANNING {
+            return;
+        }
+
+        self.scan_in_flight = true;
+        self.last_scan = tokio::time::Instant::now();
+
+        let t = std::time::Instant::now();
+        let current_players = scanner::get_players(self.handle.0, self.my_bhid, &mut self.cache, &self.stale_addrs);
+        log::debug!("get_players scan took {:.2}s, found {} players", t.elapsed().as_secs_f32(), current_players.len());
+        self.players = current_players;
+
+        if self.players.is_empty() && self.needs_region_refresh {
+            self.needs_region_refresh = false;
+            let saved_atom_prefix = self.cache.atom_prefix;
+            let new_regions = memory::heap_regions(self.handle.0);
+            self.cache = memory::RegionCache::new(new_regions);
+            self.cache.atom_prefix = saved_atom_prefix;
+            log::info!("Refreshed regions: {} regions (players not found in cached regions)",
+                self.cache.regions.len());
+            let t2 = std::time::Instant::now();
+            let retry = scanner::get_players(self.handle.0, self.my_bhid, &mut self.cache, &self.stale_addrs);
+            log::debug!("get_players retry took {:.2}s, found {} players", t2.elapsed().as_secs_f32(), retry.len());
+            self.players = retry;
+        }
+
+        if !self.players.is_empty() && self.state == ScannerState::Scanning {
+            self.state = ScannerState::Tracking;
+            log::info!("Tracking {} players", self.players.len());
+        }
+
+        if self.state == ScannerState::Tracking {
+            let opponents: Vec<_> = self.players.values()
+                .filter(|p| p.bhid != self.my_bhid && !p.is_teammate)
+                .cloned()
+                .collect();
+
+            if !opponents.is_empty() {
+                let new_opponents: Vec<_> = opponents.iter()
+                    .filter(|p| !self.opened.contains(&p.bhid))
+                    .collect();
+
+                let has_new = !new_opponents.is_empty();
+
+                if has_new {
+                    let mut fetches = Vec::new();
+                    for opp in &new_opponents {
+                        let api = Arc::clone(api);
+                        let bhid = opp.bhid;
+                        fetches.push(tokio::spawn(async move {
+                            api.fetch_opponent(bhid).await
+                        }));
+                    }
+
+                    for task in fetches {
+                        match task.await {
+                            Ok(Ok(data)) => { self.opponent_cache.insert(data.brawlhalla_id, data); }
+                            Ok(Err(e)) => log::warn!("Failed to fetch opponent: {e}"),
+                            Err(e) => log::warn!("Fetch task panicked: {e}"),
+                        }
+                    }
+
+                    for opp in new_opponents {
+                        self.opened.insert(opp.bhid);
+                    }
+
+                    self.refetch_at = Some(tokio::time::Instant::now() + REFETCH_DELAY);
+                }
+
+                let opponent_data: Vec<_> = opponents.iter()
+                    .filter_map(|p| self.opponent_cache.get(&p.bhid).cloned())
+                    .collect();
+
+                if !opponent_data.is_empty() {
+                    let mut st = self.detection.lock().await;
+                    st.match_active = true;
+                    st.local_player_id = self.my_bhid;
+
+                    let is_ranked = opponents.len() == 1;
+                    let payload = MatchFoundPayload {
+                        event: "match_found",
+                        opponents: opponent_data,
+                        is_ranked,
+                        local_player_id: self.my_bhid,
+                    };
+                    if let Err(e) = app.emit("game-event", &payload) {
+                        log::error!("Failed to emit match_found: {e}");
+                    }
+                }
+            }
+        }
+
+        self.scan_in_flight = false;
+    }
+
+    async fn refetch_and_emit(&mut self, api: &Arc<ApiClient>, app: &tauri::AppHandle) {
+        match self.refetch_at {
+            Some(at) if tokio::time::Instant::now() >= at => {}
+            _ => return,
+        }
+
+        self.refetch_at = None;
+        log::info!("Re-fetching opponent data after API refresh...");
+        let bhids: Vec<u32> = self.opponent_cache.keys().copied().collect();
+        let mut fetches = Vec::new();
+        for bhid in bhids {
+            let api = Arc::clone(api);
+            fetches.push(tokio::spawn(async move {
+                api.fetch_opponent(bhid).await
+            }));
+        }
+        for task in fetches {
+            match task.await {
+                Ok(Ok(data)) => { self.opponent_cache.insert(data.brawlhalla_id, data); }
+                Ok(Err(e)) => log::warn!("Re-fetch failed: {e}"),
+                Err(e) => log::warn!("Re-fetch task panicked: {e}"),
+            }
+        }
+
+        let opponent_data: Vec<_> = self.opponent_cache.values().cloned().collect();
+        if !opponent_data.is_empty() {
+            let is_ranked = opponent_data.len() == 1;
+            let payload = MatchFoundPayload {
+                event: "match_found",
+                opponents: opponent_data,
+                is_ranked,
+                local_player_id: self.my_bhid,
+            };
+            if let Err(e) = app.emit("game-event", &payload) {
+                log::error!("Failed to emit refreshed data: {e}");
+            }
+        }
+    }
+}
 
 pub async fn run(app: tauri::AppHandle, api_url: String) {
     let api = Arc::new(ApiClient::new(api_url));
@@ -88,11 +310,7 @@ pub async fn run(app: tauri::AppHandle, api_url: String) {
     }
 }
 
-async fn run_cycle(
-    app: &tauri::AppHandle,
-    api: Arc<ApiClient>,
-) -> Result<(), String> {
-    // ── Attach to process ──────────────────────────────────────────────────
+async fn attach_to_process() -> Result<(SendHandle, memory::RegionCache), String> {
     let pid = loop {
         match memory::find_process_id("Brawlhalla.exe") {
             Some(pid) => break pid,
@@ -114,12 +332,14 @@ async fn run_cycle(
         total as f64 / 1048576.0,
     );
 
-    let mut cache = memory::RegionCache::new(regions);
+    let cache = memory::RegionCache::new(regions);
+    Ok((handle, cache))
+}
 
-    // ── Find BhID ──────────────────────────────────────────────────────────
+async fn find_local_player(handle: SendHandle, cache: &mut memory::RegionCache) -> u32 {
     let my_bhid = loop {
         let t = std::time::Instant::now();
-        match scanner::find_my_bhid(handle.0, &mut cache) {
+        match scanner::find_my_bhid(handle.0, cache) {
             Some(bhid) => {
                 log::info!("find_my_bhid scan took {:.1}s", t.elapsed().as_secs_f32());
                 break bhid;
@@ -131,275 +351,62 @@ async fn run_cycle(
         }
     };
     log::info!("Found local BhID: {my_bhid}");
+    my_bhid
+}
 
-    // ── Find 04c address ───────────────────────────────────────────────────
+async fn run_cycle(
+    app: &tauri::AppHandle,
+    api: Arc<ApiClient>,
+) -> Result<(), String> {
+    let (handle, mut cache) = attach_to_process().await?;
+    let my_bhid = find_local_player(handle, &mut cache).await;
+
     let t = std::time::Instant::now();
-    let mut addr_04c: Option<usize> = scanner::find_04c_addr(handle.0, my_bhid, &cache);
+    let addr_04c = scanner::find_04c_addr(handle.0, my_bhid, &cache);
     log::info!("find_04c_addr scan took {:.1}s", t.elapsed().as_secs_f32());
     if addr_04c.is_some() {
         log::info!("Found connection state address");
     }
 
-    // ── State machine ──────────────────────────────────────────────────────
-    let mut state = ScannerState::Idle;
-    let mut prev_04c: u32 = 0;
-    let mut players: std::collections::HashMap<u32, scanner::PlayerInfo> = std::collections::HashMap::new();
-    let mut opened: HashSet<u32> = HashSet::new();
-    let mut stale_addrs: HashSet<usize> = HashSet::new();
-
-    let mut opponent_cache: std::collections::HashMap<u32, OpponentData> = std::collections::HashMap::new();
-    let mut refetch_at: Option<tokio::time::Instant> = None;
-    let mut last_scan = tokio::time::Instant::now() - SCAN_INTERVAL_SCANNING;
-    let mut last_addr_retry = tokio::time::Instant::now() - ADDR_RETRY_INTERVAL;
-    let mut scan_in_flight = false;
-    let mut needs_region_refresh = false;
-    let detection = Arc::new(Mutex::new(DetectionState::default()));
+    let mut cycle = CycleState::new(handle, my_bhid, cache, addr_04c);
 
     loop {
-        // ── Try to find 04c if we don't have it yet ────────────────────
-        if addr_04c.is_none() && last_addr_retry.elapsed() >= ADDR_RETRY_INTERVAL {
-            last_addr_retry = tokio::time::Instant::now();
+        if cycle.addr_04c.is_none() && cycle.last_addr_retry.elapsed() >= ADDR_RETRY_INTERVAL {
+            cycle.last_addr_retry = tokio::time::Instant::now();
             let t = std::time::Instant::now();
-            addr_04c = scanner::find_04c_addr(handle.0, my_bhid, &cache);
+            cycle.addr_04c = scanner::find_04c_addr(cycle.handle.0, cycle.my_bhid, &cycle.cache);
             log::debug!("find_04c scan took {:.1}s", t.elapsed().as_secs_f32());
-            if addr_04c.is_some() {
+            if cycle.addr_04c.is_some() {
                 log::info!("Found connection state address");
             }
         }
 
-        // ── Poll 04c ───────────────────────────────────────────────────
-        if let Some(addr) = addr_04c {
-            match scanner::read_04c(handle.0, addr) {
+        if let Some(addr) = cycle.addr_04c {
+            match scanner::read_04c(cycle.handle.0, addr) {
                 Some(cur_04c) => {
-                    if cur_04c != prev_04c {
-                        prev_04c = cur_04c;
-                        let prev_state = state;
-                        handle_state_transition(
-                            cur_04c, &mut state, &mut players, &mut opened,
-                            &mut opponent_cache, &mut refetch_at, &mut stale_addrs,
-                            handle, my_bhid, &cache, app,
-                        );
-                        // Signal region refresh needed when entering active game
-                        if state == ScannerState::Scanning {
-                            needs_region_refresh = true;
+                    if cur_04c != cycle.prev_04c {
+                        cycle.prev_04c = cur_04c;
+                        let prev_state = cycle.state;
+                        cycle.handle_state_transition(cur_04c, app);
+                        if cycle.state == ScannerState::Scanning {
+                            cycle.needs_region_refresh = true;
                         }
-                        // Reset match_active when returning to idle
-                        if state == ScannerState::Idle && prev_state != ScannerState::Idle {
-                            let mut st = detection.lock().await;
+                        if cycle.state == ScannerState::Idle && prev_state != ScannerState::Idle {
+                            let mut st = cycle.detection.lock().await;
                             st.match_active = false;
                         }
                     }
                 }
                 None => {
-                    memory::close_handle(handle.0);
+                    memory::close_handle(cycle.handle.0);
                     return Err("Brawlhalla closed".into());
                 }
             }
         }
 
-        // ── Run player scan if needed ──────────────────────────────────
-        if !scan_in_flight && state == ScannerState::Scanning {
-            if last_scan.elapsed() >= SCAN_INTERVAL_SCANNING {
-                scan_in_flight = true;
-                last_scan = tokio::time::Instant::now();
-
-                let t = std::time::Instant::now();
-                let current_players = scanner::get_players(handle.0, my_bhid, &mut cache, &stale_addrs);
-                log::debug!("get_players scan took {:.2}s, found {} players", t.elapsed().as_secs_f32(), current_players.len());
-                players = current_players;
-
-                // If scan found nothing and we need a region refresh, do it now
-                // (player data is in newly allocated regions after match load)
-                if players.is_empty() && needs_region_refresh {
-                    needs_region_refresh = false;
-                    let saved_atom_prefix = cache.atom_prefix;
-                    let new_regions = memory::heap_regions(handle.0);
-                    cache = memory::RegionCache::new(new_regions);
-                    cache.atom_prefix = saved_atom_prefix;
-                    log::info!("Refreshed regions: {} regions (players not found in cached regions)",
-                        cache.regions.len());
-                    // Immediately re-scan with fresh regions
-                    let t2 = std::time::Instant::now();
-                    let retry = scanner::get_players(handle.0, my_bhid, &mut cache, &stale_addrs);
-                    log::debug!("get_players retry took {:.2}s, found {} players", t2.elapsed().as_secs_f32(), retry.len());
-                    players = retry;
-                }
-
-                // Transition from Scanning → Tracking on first results
-                if !players.is_empty() && state == ScannerState::Scanning {
-                    state = ScannerState::Tracking;
-                    log::info!("Tracking {} players", players.len());
-                }
-
-                // Find opponents and fetch/refresh their data
-                if state == ScannerState::Tracking {
-                    let opponents: Vec<_> = players.values()
-                        .filter(|p| p.bhid != my_bhid && !p.is_teammate)
-                        .cloned()
-                        .collect();
-
-                    if !opponents.is_empty() {
-                        let new_opponents: Vec<_> = opponents.iter()
-                            .filter(|p| !opened.contains(&p.bhid))
-                            .collect();
-
-                        let has_new = !new_opponents.is_empty();
-
-                        // Fetch data for any new opponents
-                        if has_new {
-                            let mut fetches = Vec::new();
-                            for opp in &new_opponents {
-                                let api = Arc::clone(&api);
-                                let bhid = opp.bhid;
-                                fetches.push(tokio::spawn(async move {
-                                    api.fetch_opponent(bhid).await
-                                }));
-                            }
-
-                            for task in fetches {
-                                match task.await {
-                                    Ok(Ok(data)) => { opponent_cache.insert(data.brawlhalla_id, data); }
-                                    Ok(Err(e)) => log::warn!("Failed to fetch opponent: {e}"),
-                                    Err(e) => log::warn!("Fetch task panicked: {e}"),
-                                }
-                            }
-
-                            for opp in new_opponents {
-                                opened.insert(opp.bhid);
-                            }
-
-                            // Schedule a re-fetch so the API has time to refresh stale data
-                            refetch_at = Some(tokio::time::Instant::now() + REFETCH_DELAY);
-                        }
-
-                        // Emit current opponent data to frontend (always, so UI stays in sync)
-                        let opponent_data: Vec<_> = opponents.iter()
-                            .filter_map(|p| opponent_cache.get(&p.bhid).cloned())
-                            .collect();
-
-                        if !opponent_data.is_empty() {
-                            let mut st = detection.lock().await;
-                            st.match_active = true;
-                            st.local_player_id = my_bhid;
-
-                            let is_ranked = opponents.len() == 1;
-                            let payload = MatchFoundPayload {
-                                event: "match_found",
-                                opponents: opponent_data,
-                                is_ranked,
-                                local_player_id: my_bhid,
-                            };
-                            if let Err(e) = app.emit("game-event", &payload) {
-                                log::error!("Failed to emit match_found: {e}");
-                            }
-                        }
-                    }
-                }
-
-                scan_in_flight = false;
-            }
-        }
-
-        // Re-fetch all cached opponents to pick up refreshed data from the API
-        if let Some(at) = refetch_at {
-            if tokio::time::Instant::now() >= at {
-                refetch_at = None;
-                log::info!("Re-fetching opponent data after API refresh...");
-                let bhids: Vec<u32> = opponent_cache.keys().copied().collect();
-                let mut fetches = Vec::new();
-                for bhid in bhids {
-                    let api = Arc::clone(&api);
-                    fetches.push(tokio::spawn(async move {
-                        api.fetch_opponent(bhid).await
-                    }));
-                }
-                for task in fetches {
-                    match task.await {
-                        Ok(Ok(data)) => { opponent_cache.insert(data.brawlhalla_id, data); }
-                        Ok(Err(e)) => log::warn!("Re-fetch failed: {e}"),
-                        Err(e) => log::warn!("Re-fetch task panicked: {e}"),
-                    }
-                }
-
-                // Emit updated data
-                let opponent_data: Vec<_> = opponent_cache.values().cloned().collect();
-                if !opponent_data.is_empty() {
-                    let is_ranked = opponent_data.len() == 1;
-                    let payload = MatchFoundPayload {
-                        event: "match_found",
-                        opponents: opponent_data,
-                        is_ranked,
-                        local_player_id: my_bhid,
-                    };
-                    if let Err(e) = app.emit("game-event", &payload) {
-                        log::error!("Failed to emit refreshed data: {e}");
-                    }
-                }
-            }
-        }
+        cycle.scan_and_track(&api, app).await;
+        cycle.refetch_and_emit(&api, app).await;
 
         sleep(POLL_INTERVAL).await;
-    }
-}
-
-fn handle_state_transition(
-    cur_04c: u32,
-    state: &mut ScannerState,
-    players: &mut std::collections::HashMap<u32, scanner::PlayerInfo>,
-    opened: &mut HashSet<u32>,
-    opponent_cache: &mut std::collections::HashMap<u32, OpponentData>,
-    refetch_at: &mut Option<tokio::time::Instant>,
-    stale_addrs: &mut HashSet<usize>,
-    handle: SendHandle,
-    my_bhid: u32,
-    cache: &memory::RegionCache,
-    app: &tauri::AppHandle,
-) {
-    if scanner::is_menu(cur_04c) {
-        if *state != ScannerState::Idle {
-            if *state == ScannerState::Scanning
-                || *state == ScannerState::Tracking
-                || *state == ScannerState::Paused
-            {
-                let payload = MatchEndedPayload { event: "match_ended" };
-                if let Err(e) = app.emit("game-event", &payload) {
-                    log::error!("Failed to emit match_ended: {e}");
-                }
-            }
-            *stale_addrs = scanner::snapshot_stale(handle.0, my_bhid, cache);
-            *state = ScannerState::Idle;
-            players.clear();
-            opened.clear();
-            opponent_cache.clear();
-            *refetch_at = None;
-            log::info!("Menu");
-        }
-    } else if scanner::is_ignored(cur_04c) {
-        // Replay, etc.
-    } else if scanner::is_paused(cur_04c) {
-        if *state == ScannerState::Scanning || *state == ScannerState::Tracking {
-            *state = ScannerState::Paused;
-            log::info!("Paused");
-        }
-    } else if scanner::is_char_select(cur_04c) {
-        if *state == ScannerState::Idle {
-            *state = ScannerState::Scanning;
-            players.clear();
-            opened.clear();
-            log::info!("Character select — pre-scanning to prime cache");
-        }
-    } else if scanner::is_active_game(cur_04c) {
-        if *state == ScannerState::Paused {
-            *state = ScannerState::Tracking;
-            log::info!("Resumed");
-        } else if *state == ScannerState::Idle || *state == ScannerState::Scanning {
-            if *state == ScannerState::Idle {
-                players.clear();
-                opened.clear();
-            }
-            *state = ScannerState::Scanning;
-            log::info!("Match detected, scanning...");
-            let _ = app.emit("game-event", &ScanningPayload { event: "scanning" });
-        }
     }
 }
