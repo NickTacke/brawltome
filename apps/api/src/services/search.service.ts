@@ -6,7 +6,7 @@ import { getLegendById } from './game-data.service'
 function sanitizeQuery(query: string): string {
   return query
     .replace(/\s*\|\s*/g, ' | ')
-    .replace(/[^a-zA-Z0-9_\-\s|]/g, '')
+    .replace(/[%\\]/g, '')
     .trim()
 }
 
