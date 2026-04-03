@@ -10,14 +10,9 @@ import {
   ratingHistory,
 } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
-import { desc, eq } from 'drizzle-orm'
 import { aggregateWeapons } from '@brawltome/shared'
-import {
-  computeBestLegend,
-  isValhallanGraced,
-  shouldSnapshotRating,
-  VALHALLAN_GRACE_MS,
-} from '../player'
+import { desc, eq } from 'drizzle-orm'
+import { VALHALLAN_GRACE_MS, computeBestLegend, isValhallanGraced, shouldSnapshotRating } from '../player'
 
 interface RefreshDeps {
   db: Database
@@ -47,10 +42,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
 
     const bestLegend = computeBestLegend(data.legends)
 
-    const graced = isValhallanGraced(
-      existing?.tier ?? null,
-      existing?.valhallanConfirmedAt ?? null,
-    )
+    const graced = isValhallanGraced(existing?.tier ?? null, existing?.valhallanConfirmedAt ?? null)
     const tier = graced ? existing?.tier : data.tier
 
     await tx
@@ -93,9 +85,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
     })
     const teamGraceMap = new Map(
       existingTeams
-        .filter(
-          (t) => isValhallanGraced(t.tier ?? null, t.valhallanConfirmedAt ?? null),
-        )
+        .filter((t) => isValhallanGraced(t.tier ?? null, t.valhallanConfirmedAt ?? null))
         .map((t) => [`${t.brawlhallaIdOne}:${t.brawlhallaIdTwo}`, t]),
     )
 

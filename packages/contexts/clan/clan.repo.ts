@@ -25,31 +25,43 @@ export function createClanRepo(db: Database) {
     },
 
     async upsertClan(data: {
-      clan_id: number; clan_name: string; clan_create_date: number;
-      clan_xp: string; clan_lifetime_xp: string;
+      clan_id: number
+      clan_name: string
+      clan_create_date: number
+      clan_xp: string
+      clan_lifetime_xp: string
     }) {
-      await db.insert(clan).values({
-        clanId: data.clan_id,
-        clanName: data.clan_name,
-        clanCreateDate: new Date(data.clan_create_date * 1000),
-        clanXp: BigInt(data.clan_xp || '0'),
-        clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-        lastUpdated: new Date(),
-      }).onConflictDoUpdate({
-        target: clan.clanId,
-        set: {
+      await db
+        .insert(clan)
+        .values({
+          clanId: data.clan_id,
           clanName: data.clan_name,
+          clanCreateDate: new Date(data.clan_create_date * 1000),
           clanXp: BigInt(data.clan_xp || '0'),
           clanLifetimeXp: BigInt(data.clan_lifetime_xp),
           lastUpdated: new Date(),
-        },
-      })
+        })
+        .onConflictDoUpdate({
+          target: clan.clanId,
+          set: {
+            clanName: data.clan_name,
+            clanXp: BigInt(data.clan_xp || '0'),
+            clanLifetimeXp: BigInt(data.clan_lifetime_xp),
+            lastUpdated: new Date(),
+          },
+        })
     },
 
-    async replaceMembers(clanId: number, members: Array<{
-      brawlhalla_id: number; name: string; rank: string;
-      join_date: number; xp: number;
-    }>) {
+    async replaceMembers(
+      clanId: number,
+      members: Array<{
+        brawlhalla_id: number
+        name: string
+        rank: string
+        join_date: number
+        xp: number
+      }>,
+    ) {
       await db.delete(clanMember).where(eq(clanMember.clanId, clanId))
       if (members.length > 0) {
         await db.insert(clanMember).values(

@@ -1,6 +1,6 @@
-import type { Redis } from 'ioredis'
 import type { Queue } from '@brawltome/shared'
-import { checkRateLimit, tryDedup, dedupKey } from '@brawltome/shared'
+import { checkRateLimit, dedupKey, tryDedup } from '@brawltome/shared'
+import type { Redis } from 'ioredis'
 import { DEDUP_TTL_CLAN_SEC } from '../clan'
 
 interface DiscoverDeps {
@@ -9,10 +9,7 @@ interface DiscoverDeps {
   clientIp: string
 }
 
-export async function discoverClan(
-  deps: DiscoverDeps,
-  clanId: number,
-): Promise<{ isRefreshing: boolean }> {
+export async function discoverClan(deps: DiscoverDeps, clanId: number): Promise<{ isRefreshing: boolean }> {
   const { redis, clanQueue, clientIp } = deps
 
   const globalLimit = await checkRateLimit(redis, 'global', 'discovery:global')

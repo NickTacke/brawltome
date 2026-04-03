@@ -113,10 +113,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
           setClan(data)
           const currentTimestamp = new Date(data.lastUpdated ?? 0).getTime() || null
           const discoveryDone = isDiscovery && (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
-          const refreshDone =
-            !isDiscovery &&
-            currentTimestamp !== null &&
-            currentTimestamp !== refreshBaseline.current
+          const refreshDone = !isDiscovery && currentTimestamp !== null && currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)

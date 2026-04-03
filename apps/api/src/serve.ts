@@ -1,8 +1,8 @@
-import { db } from '@brawltome/database'
-import { createPlayerRepo, getPlayer, DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC } from '@brawltome/player'
 import { createClanRepo } from '@brawltome/clan'
+import { db } from '@brawltome/database'
+import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
 import { createRankingRepo } from '@brawltome/ranking'
-import { createQueue, initGameData, getLegendById, TIERED_TTL, tryDedup, dedupKey } from '@brawltome/shared'
+import { TIERED_TTL, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -67,7 +67,7 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     return c.json({ error: 'Invalid bhid' }, 400)
   }
 
-  let p = await getPlayer(playerRepo, bhid)
+  const p = await getPlayer(playerRepo, bhid)
   if (!p) {
     // Auto-discover: create placeholder and enqueue refresh
     await playerRepo.createPlaceholder(bhid)
@@ -106,17 +106,11 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
   }
 
-  const legendKey = p.bestLegend
-    ? getLegendById(p.bestLegend)?.legendNameKey ?? ''
-    : ''
+  const legendKey = p.bestLegend ? (getLegendById(p.bestLegend)?.legendNameKey ?? '') : ''
 
-  const winRate = p.rankedGames > 0
-    ? Math.round((p.rankedWins / p.rankedGames) * 1000) / 10
-    : 0
+  const winRate = p.rankedGames > 0 ? Math.round((p.rankedWins / p.rankedGames) * 1000) / 10 : 0
 
-  const playtime = p.matchTimeTotal
-    ? Math.round((p.matchTimeTotal / 3600) * 10) / 10
-    : 0
+  const playtime = p.matchTimeTotal ? Math.round((p.matchTimeTotal / 3600) * 10) / 10 : 0
 
   return c.json({
     brawlhallaId: p.brawlhallaId,

@@ -1,11 +1,8 @@
-import type { PlayerRepo } from '../player.repo'
-import { enrichStatsLegend, type PlayerResult } from '../player'
 import { getLegendById, normalizeWeaponName } from '@brawltome/shared'
+import { type PlayerResult, enrichStatsLegend } from '../player'
+import type { PlayerRepo } from '../player.repo'
 
-export async function getPlayer(
-  repo: PlayerRepo,
-  brawlhallaId: number,
-): Promise<PlayerResult | null> {
+export async function getPlayer(repo: PlayerRepo, brawlhallaId: number): Promise<PlayerResult | null> {
   const blocked = await repo.isBlacklisted(brawlhallaId)
   if (blocked) return null
 

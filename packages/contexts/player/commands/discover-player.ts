@@ -1,9 +1,9 @@
-import type { Redis } from 'ioredis'
-import type { Queue } from '@brawltome/shared'
-import { checkRateLimit, tryDedup, dedupKey } from '@brawltome/shared'
-import { createPlayerRepo } from '../player.repo'
-import { DEDUP_TTL_RANKED_SEC } from '../player'
 import type { Database } from '@brawltome/database'
+import type { Queue } from '@brawltome/shared'
+import { checkRateLimit, dedupKey, tryDedup } from '@brawltome/shared'
+import type { Redis } from 'ioredis'
+import { DEDUP_TTL_RANKED_SEC } from '../player'
+import { createPlayerRepo } from '../player.repo'
 
 interface DiscoverDeps {
   db: Database
@@ -13,10 +13,7 @@ interface DiscoverDeps {
   clientIp: string
 }
 
-export async function discoverPlayer(
-  deps: DiscoverDeps,
-  brawlhallaId: number,
-): Promise<{ isRefreshing: boolean }> {
+export async function discoverPlayer(deps: DiscoverDeps, brawlhallaId: number): Promise<{ isRefreshing: boolean }> {
   const { db, redis, rankedQueue, statsQueue, clientIp } = deps
 
   const globalLimit = await checkRateLimit(redis, 'global', 'discovery:global')

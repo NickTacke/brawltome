@@ -1,16 +1,16 @@
 import type { Database } from '@brawltome/database'
 import {
-  player,
   blacklist,
-  ratingHistory,
+  player,
   playerAlias,
+  playerClan,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
   playerWeaponStat,
-  playerClan,
+  ratingHistory,
 } from '@brawltome/database'
-import { eq, desc, sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 
 export function createPlayerRepo(db: Database) {
   return {
@@ -131,9 +131,7 @@ export function createPlayerRepo(db: Database) {
         games: number
       }>,
     ) {
-      await db
-        .delete(playerRankedLegend)
-        .where(eq(playerRankedLegend.brawlhallaId, brawlhallaId))
+      await db.delete(playerRankedLegend).where(eq(playerRankedLegend.brawlhallaId, brawlhallaId))
       if (legends.length > 0) {
         await db.insert(playerRankedLegend).values(
           legends.map((l) => ({
@@ -178,13 +176,9 @@ export function createPlayerRepo(db: Database) {
         valhallanConfirmedAt: Date | null
       }>,
     ) {
-      await db
-        .delete(playerRankedTeam)
-        .where(eq(playerRankedTeam.brawlhallaId, brawlhallaId))
+      await db.delete(playerRankedTeam).where(eq(playerRankedTeam.brawlhallaId, brawlhallaId))
       if (teams.length > 0) {
-        await db
-          .insert(playerRankedTeam)
-          .values(teams.map((t) => ({ brawlhallaId, ...t })))
+        await db.insert(playerRankedTeam).values(teams.map((t) => ({ brawlhallaId, ...t })))
       }
     },
 
@@ -238,13 +232,8 @@ export function createPlayerRepo(db: Database) {
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
-    async replaceStatsLegends(
-      brawlhallaId: number,
-      legends: Array<typeof playerStatsLegend.$inferInsert>,
-    ) {
-      await db
-        .delete(playerStatsLegend)
-        .where(eq(playerStatsLegend.brawlhallaId, brawlhallaId))
+    async replaceStatsLegends(brawlhallaId: number, legends: Array<typeof playerStatsLegend.$inferInsert>) {
+      await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, brawlhallaId))
       if (legends.length > 0) {
         await db.insert(playerStatsLegend).values(legends)
       }
@@ -259,13 +248,9 @@ export function createPlayerRepo(db: Database) {
         kos: number
       }>,
     ) {
-      await db
-        .delete(playerWeaponStat)
-        .where(eq(playerWeaponStat.brawlhallaId, brawlhallaId))
+      await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, brawlhallaId))
       if (weapons.length > 0) {
-        await db
-          .insert(playerWeaponStat)
-          .values(weapons.map((w) => ({ brawlhallaId, ...w })))
+        await db.insert(playerWeaponStat).values(weapons.map((w) => ({ brawlhallaId, ...w })))
       }
     },
 
@@ -301,9 +286,7 @@ export function createPlayerRepo(db: Database) {
             },
           })
       } else {
-        await db
-          .delete(playerClan)
-          .where(eq(playerClan.brawlhallaId, brawlhallaId))
+        await db.delete(playerClan).where(eq(playerClan.brawlhallaId, brawlhallaId))
       }
     },
 

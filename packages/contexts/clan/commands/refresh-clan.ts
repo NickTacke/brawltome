@@ -13,22 +13,25 @@ export async function processRefreshClan({ db, bhapi }: RefreshDeps, clanId: num
   if (!data) return
 
   await db.transaction(async (tx) => {
-    await tx.insert(clan).values({
-      clanId: data.clan_id,
-      clanName: data.clan_name,
-      clanCreateDate: new Date(data.clan_create_date * 1000),
-      clanXp: BigInt(data.clan_xp || '0'),
-      clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-      lastUpdated: new Date(),
-    }).onConflictDoUpdate({
-      target: clan.clanId,
-      set: {
+    await tx
+      .insert(clan)
+      .values({
+        clanId: data.clan_id,
         clanName: data.clan_name,
+        clanCreateDate: new Date(data.clan_create_date * 1000),
         clanXp: BigInt(data.clan_xp || '0'),
         clanLifetimeXp: BigInt(data.clan_lifetime_xp),
         lastUpdated: new Date(),
-      },
-    })
+      })
+      .onConflictDoUpdate({
+        target: clan.clanId,
+        set: {
+          clanName: data.clan_name,
+          clanXp: BigInt(data.clan_xp || '0'),
+          clanLifetimeXp: BigInt(data.clan_lifetime_xp),
+          lastUpdated: new Date(),
+        },
+      })
 
     await tx.delete(clanMember).where(eq(clanMember.clanId, data.clan_id))
     if (data.clan.length > 0) {

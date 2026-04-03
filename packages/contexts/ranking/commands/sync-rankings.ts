@@ -1,9 +1,9 @@
 import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
-import type { Redis } from 'ioredis'
 import type { Queue } from '@brawltome/shared'
-import { createRankingRepo, type RankingRepo } from '../ranking.repo'
+import type { Redis } from 'ioredis'
 import { JANITOR_MIN_TOKENS } from '../ranking'
+import { type RankingRepo, createRankingRepo } from '../ranking.repo'
 
 const REGIONS: Region[] = ['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me', 'sa']
 const HOT_PAGES = 10
@@ -84,8 +84,12 @@ export function startJanitor(deps: JanitorDeps) {
       // Regional: rotate 1 region per tick
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
-      await time(`1v1 ${region}`, () => sync1v1Page(deps, repo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`))
-      await time(`2v2 ${region}`, () => sync2v2Page(deps, repo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`))
+      await time(`1v1 ${region}`, () =>
+        sync1v1Page(deps, repo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`),
+      )
+      await time(`2v2 ${region}`, () =>
+        sync2v2Page(deps, repo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`),
+      )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
       console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
@@ -252,9 +256,17 @@ async function saveTeams(repo: RankingRepo, rankings: BhApiRanking2v2[]) {
 
     const seen = new Set<string>()
     const teamRows: Array<{
-      brawlhallaId: number; brawlhallaIdOne: number; brawlhallaIdTwo: number;
-      teamName: string; rating: number; peakRating: number; tier: string;
-      wins: number; games: number; region: string | null; globalRank: number | null;
+      brawlhallaId: number
+      brawlhallaIdOne: number
+      brawlhallaIdTwo: number
+      teamName: string
+      rating: number
+      peakRating: number
+      tier: string
+      wins: number
+      games: number
+      region: string | null
+      globalRank: number | null
     }> = []
     for (const r of rankings) {
       const shared = {

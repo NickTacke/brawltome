@@ -5,15 +5,20 @@ import { and, asc, desc, gt, ilike, inArray, not, sql } from 'drizzle-orm'
 export function createRankingRepo(db: Database) {
   return {
     getBlacklistedIds() {
-      return db.select({ brawlhallaId: blacklist.brawlhallaId }).from(blacklist)
-        .then(rows => new Set(rows.map(b => b.brawlhallaId)))
+      return db
+        .select({ brawlhallaId: blacklist.brawlhallaId })
+        .from(blacklist)
+        .then((rows) => new Set(rows.map((b) => b.brawlhallaId)))
     },
 
     // 1v1 leaderboard query from leaderboard.service.ts
     get1v1Leaderboard(opts: {
-      region: string; sort: 'rating' | 'peakRating' | 'wins' | 'games';
-      order: 'asc' | 'desc'; pageSize: number; offset: number;
-      blacklistSet: Set<number>;
+      region: string
+      sort: 'rating' | 'peakRating' | 'wins' | 'games'
+      order: 'asc' | 'desc'
+      pageSize: number
+      offset: number
+      blacklistSet: Set<number>
     }) {
       const sortColumn = {
         rating: player.rating,
@@ -41,8 +46,11 @@ export function createRankingRepo(db: Database) {
 
     // 2v2 leaderboard query from leaderboard.service.ts
     get2v2Leaderboard(opts: {
-      region: string; sort: 'rating' | 'peakRating' | 'wins' | 'games';
-      order: 'asc' | 'desc'; pageSize: number; offset: number;
+      region: string
+      sort: 'rating' | 'peakRating' | 'wins' | 'games'
+      order: 'asc' | 'desc'
+      pageSize: number
+      offset: number
     }) {
       const sortColumn = {
         rating: playerRankedTeam.rating,
@@ -69,7 +77,7 @@ export function createRankingRepo(db: Database) {
         .select({ brawlhallaId: player.brawlhallaId, name: player.name })
         .from(player)
         .where(inArray(player.brawlhallaId, playerIds))
-        .then(rows => new Map(rows.map(p => [p.brawlhallaId, p.name])))
+        .then((rows) => new Map(rows.map((p) => [p.brawlhallaId, p.name])))
     },
 
     // Search players by name - from search.service.ts
@@ -112,11 +120,21 @@ export function createRankingRepo(db: Database) {
     },
 
     // Janitor: batch upsert players from rankings
-    async batchUpsertPlayers(rankings: Array<{
-      brawlhalla_id: number; name: string; rating: number; peak_rating: number;
-      tier: string; games: number; wins: number; region: string;
-      best_legend: number; best_legend_games: number; best_legend_wins: number;
-    }>) {
+    async batchUpsertPlayers(
+      rankings: Array<{
+        brawlhalla_id: number
+        name: string
+        rating: number
+        peak_rating: number
+        tier: string
+        games: number
+        wins: number
+        region: string
+        best_legend: number
+        best_legend_games: number
+        best_legend_wins: number
+      }>,
+    ) {
       const now = new Date()
       const rows = rankings.map((r) => ({
         brawlhallaId: r.brawlhalla_id,
@@ -158,30 +176,52 @@ export function createRankingRepo(db: Database) {
 
     // Janitor: get existing player names for alias tracking
     getExistingPlayerNames(ids: number[]) {
-      return db.query.player.findMany({
-        where: inArray(player.brawlhallaId, ids),
-        columns: { brawlhallaId: true, name: true },
-      }).then(rows => new Map(rows.map(p => [p.brawlhallaId, p.name])))
+      return db.query.player
+        .findMany({
+          where: inArray(player.brawlhallaId, ids),
+          columns: { brawlhallaId: true, name: true },
+        })
+        .then((rows) => new Map(rows.map((p) => [p.brawlhallaId, p.name])))
     },
 
     // Janitor: batch insert aliases
     batchInsertAliases(aliases: Array<{ brawlhallaId: number; key: string; value: string }>) {
       if (aliases.length === 0) return Promise.resolve()
-      return db.insert(playerAlias).values(aliases).onConflictDoNothing().then(() => {})
+      return db
+        .insert(playerAlias)
+        .values(aliases)
+        .onConflictDoNothing()
+        .then(() => {})
     },
 
     // Janitor: batch upsert placeholder players for 2v2 team members
-    batchUpsertPlaceholderPlayers(rows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }>) {
+    batchUpsertPlaceholderPlayers(
+      rows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }>,
+    ) {
       if (rows.length === 0) return Promise.resolve()
-      return db.insert(player).values(rows as (typeof player.$inferInsert)[]).onConflictDoNothing().then(() => {})
+      return db
+        .insert(player)
+        .values(rows as (typeof player.$inferInsert)[])
+        .onConflictDoNothing()
+        .then(() => {})
     },
 
     // Janitor: batch upsert ranked teams
-    async batchUpsertTeams(teamRows: Array<{
-      brawlhallaId: number; brawlhallaIdOne: number; brawlhallaIdTwo: number;
-      teamName: string; rating: number; peakRating: number; tier: string;
-      wins: number; games: number; region: string | null; globalRank: number | null;
-    }>) {
+    async batchUpsertTeams(
+      teamRows: Array<{
+        brawlhallaId: number
+        brawlhallaIdOne: number
+        brawlhallaIdTwo: number
+        teamName: string
+        rating: number
+        peakRating: number
+        tier: string
+        wins: number
+        games: number
+        region: string | null
+        globalRank: number | null
+      }>,
+    ) {
       if (teamRows.length === 0) return
       await db
         .insert(playerRankedTeam)
