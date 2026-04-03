@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getLeaderboard } from '../services/leaderboard.service'
+import { getLeaderboard } from '@brawltome/ranking'
 import { publicProcedure, router } from '../trpc/trpc'
 
 export const leaderboardRouter = router({
@@ -15,6 +15,6 @@ export const leaderboardRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return getLeaderboard(ctx, input)
+      return getLeaderboard(ctx.rankingRepo, input)
     }),
 })

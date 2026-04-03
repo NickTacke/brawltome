@@ -11,7 +11,10 @@
       "name": "@brawltome/api",
       "dependencies": {
         "@brawltome/bhapi": "workspace:*",
+        "@brawltome/clan": "workspace:*",
         "@brawltome/database": "workspace:*",
+        "@brawltome/player": "workspace:*",
+        "@brawltome/ranking": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
         "@trpc/server": "^11.0.0",
@@ -90,6 +93,55 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/contexts/clan": {
+      "name": "@brawltome/clan",
+      "dependencies": {
+        "@brawltome/bhapi": "workspace:*",
+        "@brawltome/database": "workspace:*",
+        "@brawltome/shared": "workspace:*",
+        "drizzle-orm": "^0.39.0",
+        "ioredis": "^5.8.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/contexts/identity": {
+      "name": "@brawltome/identity",
+      "dependencies": {
+        "@brawltome/database": "workspace:*",
+        "drizzle-orm": "^0.39.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/contexts/player": {
+      "name": "@brawltome/player",
+      "dependencies": {
+        "@brawltome/bhapi": "workspace:*",
+        "@brawltome/database": "workspace:*",
+        "@brawltome/shared": "workspace:*",
+        "drizzle-orm": "^0.39.0",
+        "ioredis": "^5.8.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/contexts/ranking": {
+      "name": "@brawltome/ranking",
+      "dependencies": {
+        "@brawltome/bhapi": "workspace:*",
+        "@brawltome/database": "workspace:*",
+        "@brawltome/shared": "workspace:*",
+        "drizzle-orm": "^0.39.0",
+        "ioredis": "^5.8.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/database": {
       "name": "@brawltome/database",
       "dependencies": {
@@ -103,6 +155,12 @@
     },
     "packages/shared": {
       "name": "@brawltome/shared",
+      "dependencies": {
+        "@brawltome/bhapi": "workspace:*",
+        "@brawltome/database": "workspace:*",
+        "drizzle-orm": "^0.39.0",
+        "ioredis": "^5.8.0",
+      },
       "devDependencies": {
         "typescript": "^5.7.0",
       },
@@ -192,11 +250,19 @@
 
     "@brawltome/bhapi": ["@brawltome/bhapi@workspace:packages/bhapi"],
 
+    "@brawltome/clan": ["@brawltome/clan@workspace:packages/contexts/clan"],
+
     "@brawltome/database": ["@brawltome/database@workspace:packages/database"],
 
     "@brawltome/desktop": ["@brawltome/desktop@workspace:apps/desktop"],
 
     "@brawltome/discord-bot": ["@brawltome/discord-bot@workspace:apps/discord-bot"],
+
+    "@brawltome/identity": ["@brawltome/identity@workspace:packages/contexts/identity"],
+
+    "@brawltome/player": ["@brawltome/player@workspace:packages/contexts/player"],
+
+    "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/contexts/ranking"],
 
     "@brawltome/shared": ["@brawltome/shared@workspace:packages/shared"],
 
@@ -580,7 +646,7 @@
 
     "@types/babel__traverse": ["@types/babel__traverse@7.28.0", "", { "dependencies": { "@babel/types": "^7.28.2" } }, "sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q=="],
 
-    "@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
+    "@types/bun": ["@types/bun@1.3.11", "", { "dependencies": { "bun-types": "1.3.11" } }, "sha512-5vPne5QvtpjGpsGYXiFyycfpDF2ECyPcTSsFBMa0fraoxiQyMJ3SmuQIGhzPg2WJuWxVBoxWJ2kClYTcw/4fAg=="],
 
     "@types/d3-array": ["@types/d3-array@3.2.2", "", {}, "sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw=="],
 
@@ -892,9 +958,9 @@
 
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
-    "@brawltome/web/tailwindcss": ["tailwindcss@4.2.1", "", {}, "sha512-/tBrSQ36vCleJkAOsy9kbNTgaxvGbyOamC30PRePTQe/o1MFwEKHQk4Cn7BNGaPtjp+PuUrByJehM1hgxfq4sw=="],
-    
     "@brawltome/discord-bot/@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
+
+    "@brawltome/web/tailwindcss": ["tailwindcss@4.2.1", "", {}, "sha512-/tBrSQ36vCleJkAOsy9kbNTgaxvGbyOamC30PRePTQe/o1MFwEKHQk4Cn7BNGaPtjp+PuUrByJehM1hgxfq4sw=="],
 
     "@discordjs/rest/@discordjs/collection": ["@discordjs/collection@2.1.1", "", {}, "sha512-LiSusze9Tc7qF03sLCujF5iZp7K+vRNEDBZ86FT9aQAv3vxMLihUvKvpsCWiQ2DJq1tVckopKm1rxomgNUc9hg=="],
 

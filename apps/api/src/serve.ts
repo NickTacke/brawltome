@@ -1,25 +1,28 @@
-import { db, player } from '@brawltome/database'
+import { db } from '@brawltome/database'
+import { createPlayerRepo, getPlayer, DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC } from '@brawltome/player'
+import { createClanRepo } from '@brawltome/clan'
+import { createRankingRepo } from '@brawltome/ranking'
+import { createQueue, initGameData, getLegendById, TIERED_TTL, tryDedup, dedupKey } from '@brawltome/shared'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
-import { dedupKey, tryDedup } from './queue/dedup'
-import { createQueue } from './queue/queue'
 import { appRouter } from './router'
-import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, TIERED_TTL } from './services/constants'
-import { initGameData, getLegendById } from './services/game-data.service'
-import { getPlayer } from './services/player.service'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 
 await initGameData(db)
 
-// API only enqueues — concurrency 0 means no consumer loop
+// API only enqueues -- concurrency 0 means no consumer loop
 const rankedQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-ranked', async () => {}, { concurrency: 0 })
 const statsQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-stats', async () => {}, { concurrency: 0 })
 const clanQueue = createQueue<{ clanId: number }>(redis, 'refresh-clan', async () => {}, { concurrency: 0 })
 
-const sharedCtx = { db, redis, rankedQueue, statsQueue, clanQueue }
+const playerRepo = createPlayerRepo(db)
+const clanRepo = createClanRepo(db)
+const rankingRepo = createRankingRepo(db)
+
+const sharedCtx = { db, redis, rankedQueue, statsQueue, clanQueue, playerRepo, clanRepo, rankingRepo }
 
 const app = new Hono()
 
@@ -64,25 +67,10 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     return c.json({ error: 'Invalid bhid' }, 400)
   }
 
-  const ctx = {
-    ...sharedCtx,
-    clientIp: c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? '0.0.0.0',
-    isBot: false,
-    internalSecret: undefined,
-  } as unknown as Parameters<typeof getPlayer>[0]
-
-  let p = await getPlayer(ctx, bhid)
+  let p = await getPlayer(playerRepo, bhid)
   if (!p) {
     // Auto-discover: create placeholder and enqueue refresh
-    await db
-      .insert(player)
-      .values({
-        brawlhallaId: bhid,
-        name: `Player ${bhid}`,
-        refreshTier: 'hot',
-        lastUpdated: new Date(),
-      })
-      .onConflictDoNothing()
+    await playerRepo.createPlaceholder(bhid)
 
     await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
     await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
