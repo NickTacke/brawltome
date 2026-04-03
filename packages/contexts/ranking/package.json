@@ -1,0 +1,21 @@
+{
+  "name": "@brawltome/ranking",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brawltome/database": "workspace:*",
+    "@brawltome/shared": "workspace:*",
+    "@brawltome/bhapi": "workspace:*",
+    "drizzle-orm": "^0.39.0",
+    "ioredis": "^5.8.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
