@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { verifyTurnstile } from '../src/services/turnstile.service'
+import { verifyTurnstile } from '@brawltome/shared'
 
 describe('verifyTurnstile', () => {
   test('returns true for valid token', async () => {
