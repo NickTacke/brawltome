@@ -1,4 +1,6 @@
 export { getPlayer } from './queries/get-player'
+export { processRefreshRanked, processRefreshStats } from './commands/refresh-player'
+export { discoverPlayer } from './commands/discover-player'
 export { createPlayerRepo, type PlayerRepo } from './player.repo'
 export {
   DEDUP_TTL_RANKED_SEC,
