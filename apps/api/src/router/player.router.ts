@@ -1,6 +1,6 @@
+import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, discoverPlayer, getPlayer, isStale } from '@brawltome/player'
+import { TIERED_TTL, checkRateLimit, dedupKey, tryDedup, verifyTurnstile } from '@brawltome/shared'
 import { z } from 'zod'
-import { getPlayer, discoverPlayer, isStale, DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC } from '@brawltome/player'
-import { TIERED_TTL, verifyTurnstile, checkRateLimit, tryDedup, dedupKey } from '@brawltome/shared'
 import { internalProcedure, router } from '../trpc/trpc'
 
 export const playerRouter = router({
@@ -24,7 +24,13 @@ export const playerRouter = router({
         // Discovery flow
         if (ctx.isBot) return { isRefreshing: false }
         return discoverPlayer(
-          { db: ctx.db, redis: ctx.redis, rankedQueue: ctx.rankedQueue, statsQueue: ctx.statsQueue, clientIp: ctx.clientIp },
+          {
+            db: ctx.db,
+            redis: ctx.redis,
+            rankedQueue: ctx.rankedQueue,
+            statsQueue: ctx.statsQueue,
+            clientIp: ctx.clientIp,
+          },
           brawlhallaId,
         )
       }

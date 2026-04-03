@@ -1,6 +1,6 @@
+import { DEDUP_TTL_CLAN_SEC, discoverClan, getClan } from '@brawltome/clan'
+import { CLAN_TTL_MS, checkRateLimit, dedupKey, tryDedup, verifyTurnstile } from '@brawltome/shared'
 import { z } from 'zod'
-import { getClan, discoverClan, DEDUP_TTL_CLAN_SEC } from '@brawltome/clan'
-import { CLAN_TTL_MS, verifyTurnstile, checkRateLimit, tryDedup, dedupKey } from '@brawltome/shared'
 import { internalProcedure, router } from '../trpc/trpc'
 
 export const clanRouter = router({
@@ -19,10 +19,7 @@ export const clanRouter = router({
 
       if (!c) {
         if (ctx.isBot) return { isRefreshing: false }
-        return discoverClan(
-          { redis: ctx.redis, clanQueue: ctx.clanQueue, clientIp: ctx.clientIp },
-          clanId,
-        )
+        return discoverClan({ redis: ctx.redis, clanQueue: ctx.clanQueue, clientIp: ctx.clientIp }, clanId)
       }
 
       if (ctx.isBot) return { isRefreshing: false }

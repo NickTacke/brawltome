@@ -1,15 +1,15 @@
-import type { LegendData } from '@brawltome/shared'
-import type { InferSelectModel } from 'drizzle-orm'
 import type {
   player,
   playerAlias,
-  playerStatsLegend,
-  playerWeaponStat,
   playerClan,
   playerRankedLegend,
   playerRankedTeam,
+  playerStatsLegend,
+  playerWeaponStat,
   ratingHistory,
 } from '@brawltome/database'
+import type { LegendData } from '@brawltome/shared'
+import type { InferSelectModel } from 'drizzle-orm'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,15 +44,8 @@ export type PlayerResult = InferSelectModel<typeof player> & {
 // Pure functions (no I/O)
 // ---------------------------------------------------------------------------
 
-export function isValhallanGraced(
-  tier: string | null,
-  confirmedAt: Date | null,
-): boolean {
-  return !!(
-    tier?.startsWith('Valhallan') &&
-    confirmedAt &&
-    Date.now() - confirmedAt.getTime() < VALHALLAN_GRACE_MS
-  )
+export function isValhallanGraced(tier: string | null, confirmedAt: Date | null): boolean {
+  return !!(tier?.startsWith('Valhallan') && confirmedAt && Date.now() - confirmedAt.getTime() < VALHALLAN_GRACE_MS)
 }
 
 export function isStale(lastUpdated: Date | null, ttlMs: number): boolean {
@@ -73,14 +66,13 @@ export function enrichStatsLegend(
   }
 }
 
-export function computeBestLegend(
-  legends: Array<{ legend_id: number; games: number; wins: number }>,
-): { id: number; games: number; wins: number } {
+export function computeBestLegend(legends: Array<{ legend_id: number; games: number; wins: number }>): {
+  id: number
+  games: number
+  wins: number
+} {
   return legends.reduce(
-    (best, l) =>
-      l.games > best.games
-        ? { id: l.legend_id, games: l.games, wins: l.wins }
-        : best,
+    (best, l) => (l.games > best.games ? { id: l.legend_id, games: l.games, wins: l.wins } : best),
     { id: 0, games: 0, wins: 0 },
   )
 }
@@ -90,10 +82,5 @@ export function shouldSnapshotRating(
   lastSnapshot: { rating: number; games: number } | null,
   currentGames: number,
 ): boolean {
-  return (
-    rating > 0 &&
-    (!lastSnapshot ||
-      lastSnapshot.rating !== rating ||
-      lastSnapshot.games !== currentGames)
-  )
+  return rating > 0 && (!lastSnapshot || lastSnapshot.rating !== rating || lastSnapshot.games !== currentGames)
 }

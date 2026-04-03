@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { createQueue, dedupKey, tryDedup } from '@brawltome/shared'
 import Redis from 'ioredis'
-import { dedupKey, tryDedup, createQueue } from '@brawltome/shared'
 
 let redis: Redis
 

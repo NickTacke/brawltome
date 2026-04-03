@@ -1,6 +1,6 @@
+import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
 import type { PlayerRepo } from '@brawltome/player'
-import type { ClanRepo } from '@brawltome/clan'
 import type { RankingRepo } from '@brawltome/ranking'
 import type { Queue } from '@brawltome/shared'
 import type { Redis } from 'ioredis'

@@ -1,5 +1,5 @@
-import { z } from 'zod'
 import { getLeaderboard } from '@brawltome/ranking'
+import { z } from 'zod'
 import { publicProcedure, router } from '../trpc/trpc'
 
 export const leaderboardRouter = router({

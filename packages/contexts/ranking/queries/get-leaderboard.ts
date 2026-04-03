@@ -1,6 +1,6 @@
 import { getLegendById } from '@brawltome/shared'
+import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGES, MAX_PAGE_SIZE } from '../ranking'
 import type { RankingRepo } from '../ranking.repo'
-import { MAX_PAGES, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type LeaderboardInput } from '../ranking'
 
 export async function getLeaderboard(repo: RankingRepo, input: LeaderboardInput) {
   const page = Math.max(1, Math.min(input.page, MAX_PAGES))
@@ -18,7 +18,12 @@ export async function getLeaderboard(repo: RankingRepo, input: LeaderboardInput)
 
 async function get1v1Leaderboard(
   repo: RankingRepo,
-  opts: LeaderboardInput & { pageSize: number; sort: 'rating' | 'peakRating' | 'wins' | 'games'; order: 'asc' | 'desc'; offset: number },
+  opts: LeaderboardInput & {
+    pageSize: number
+    sort: 'rating' | 'peakRating' | 'wins' | 'games'
+    order: 'asc' | 'desc'
+    offset: number
+  },
 ) {
   const blacklistSet = await repo.getBlacklistedIds()
   const results = await repo.get1v1Leaderboard({
@@ -40,7 +45,12 @@ async function get1v1Leaderboard(
 
 async function get2v2Leaderboard(
   repo: RankingRepo,
-  opts: LeaderboardInput & { pageSize: number; sort: 'rating' | 'peakRating' | 'wins' | 'games'; order: 'asc' | 'desc'; offset: number },
+  opts: LeaderboardInput & {
+    pageSize: number
+    sort: 'rating' | 'peakRating' | 'wins' | 'games'
+    order: 'asc' | 'desc'
+    offset: number
+  },
 ) {
   const blacklistSet = await repo.getBlacklistedIds()
   const results = await repo.get2v2Leaderboard({

@@ -1,7 +1,7 @@
 import { BhApiClient } from '@brawltome/bhapi'
+import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
 import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
-import { processRefreshClan } from '@brawltome/clan'
 import { startJanitor } from '@brawltome/ranking'
 import { createQueue, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
