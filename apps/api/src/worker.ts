@@ -1,10 +1,10 @@
 import { BhApiClient } from '@brawltome/bhapi'
+import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
+import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
+import { startJanitor } from '@brawltome/ranking'
+import { createQueue, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
-import { createQueue } from './queue/queue'
-import { initGameData } from './services/game-data.service'
-import { startJanitor } from './services/janitor.service'
-import { processRefreshClan, processRefreshRanked, processRefreshStats } from './services/refresh.service'
 
 const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) {

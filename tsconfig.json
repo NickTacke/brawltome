@@ -14,7 +14,12 @@
       "@brawltome/database": ["./packages/database/src/index.ts"],
       "@brawltome/bhapi": ["./packages/bhapi/src/index.ts"],
       "@brawltome/ui": ["./packages/ui/src/index.ts"],
-      "@brawltome/ui/*": ["./packages/ui/src/*"]
+      "@brawltome/ui/*": ["./packages/ui/src/*"],
+      "@brawltome/shared": ["./packages/shared/src/index.ts"],
+      "@brawltome/player": ["./packages/contexts/player/index.ts"],
+      "@brawltome/clan": ["./packages/contexts/clan/index.ts"],
+      "@brawltome/ranking": ["./packages/contexts/ranking/index.ts"],
+      "@brawltome/identity": ["./packages/contexts/identity/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist"]

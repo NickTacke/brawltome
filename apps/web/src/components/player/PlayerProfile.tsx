@@ -5,7 +5,7 @@ import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
-import { TIERED_TTL } from '@brawltome/shared'
+import { TIERED_TTL } from '@brawltome/shared/constants'
 import {
   Avatar,
   AvatarFallback,
@@ -78,10 +78,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           setPlayer(data)
           const currentTimestamp = new Date(data.statsLastUpdated ?? data.rankedLastUpdated ?? 0).getTime() || null
           const discoveryDone = isDiscovery && (data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0)
-          const refreshDone =
-            !isDiscovery &&
-            currentTimestamp !== null &&
-            currentTimestamp !== refreshBaseline.current
+          const refreshDone = !isDiscovery && currentTimestamp !== null && currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)

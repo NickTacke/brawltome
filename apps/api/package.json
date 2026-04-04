@@ -14,7 +14,10 @@
   },
   "dependencies": {
     "@brawltome/bhapi": "workspace:*",
+    "@brawltome/clan": "workspace:*",
     "@brawltome/database": "workspace:*",
+    "@brawltome/player": "workspace:*",
+    "@brawltome/ranking": "workspace:*",
     "@brawltome/shared": "workspace:*",
     "@hono/trpc-server": "^0.3.0",
     "@trpc/server": "^11.0.0",

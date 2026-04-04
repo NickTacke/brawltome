@@ -99,6 +99,30 @@ export function RatingChart({ data }: RatingChartProps) {
     return allSorted.some((d) => d.timestamp >= season.start && d.timestamp < end)
   })
 
+  // Insert synthetic points at season boundaries so the curve drops
+  // vertically instead of smoothing through the reset
+  const withSeasonDrops = useMemo(() => {
+    const boundaries = new Set(SEASONS.filter((s) => s.start > 0).map((s) => s.start))
+    const result: typeof allSorted = []
+    for (let i = 0; i < allSorted.length; i++) {
+      const prev = result[result.length - 1]
+      const curr = allSorted[i]
+      if (prev) {
+        for (const boundary of boundaries) {
+          if (prev.timestamp < boundary && curr.timestamp >= boundary) {
+            // Point just before reset with pre-reset values
+            result.push({ ...prev, timestamp: boundary - 1 })
+            // Point at reset with post-reset values
+            result.push({ ...curr, timestamp: boundary })
+            break
+          }
+        }
+      }
+      result.push(curr)
+    }
+    return result
+  }, [allSorted])
+
   // Filter data by selected season
   const sorted = selectedSeason
     ? (() => {
@@ -106,9 +130,9 @@ export function RatingChart({ data }: RatingChartProps) {
         const season = SEASONS[seasonIdx]
         const nextSeason = SEASONS[seasonIdx - 1]
         const end = nextSeason ? nextSeason.start : Number.POSITIVE_INFINITY
-        return allSorted.filter((d) => d.timestamp >= season.start && d.timestamp < end)
+        return withSeasonDrops.filter((d) => d.timestamp >= season.start && d.timestamp < end)
       })()
-    : allSorted
+    : withSeasonDrops
 
   const uniqueTicks = useMemo(() => {
     const seen = new Set<string>()

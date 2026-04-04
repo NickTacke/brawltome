@@ -4,7 +4,7 @@ import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
-import { CLAN_TTL_MS } from '@brawltome/shared'
+import { CLAN_TTL_MS } from '@brawltome/shared/constants'
 import {
   Avatar,
   AvatarFallback,
@@ -113,10 +113,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
           setClan(data)
           const currentTimestamp = new Date(data.lastUpdated ?? 0).getTime() || null
           const discoveryDone = isDiscovery && (data.members?.length ?? 0) > 0 && data.clanName !== `Clan ${id}`
-          const refreshDone =
-            !isDiscovery &&
-            currentTimestamp !== null &&
-            currentTimestamp !== refreshBaseline.current
+          const refreshDone = !isDiscovery && currentTimestamp !== null && currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
