@@ -1,8 +1,11 @@
 'use client'
 
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
-import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
+import {
+  SidebarSectionsProvider,
+  type SidebarSection,
+} from '@/components/sidebar/SidebarSectionsProvider'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import { TIERED_TTL } from '@brawltome/shared/constants'
@@ -26,6 +29,16 @@ import { RatingChart } from './RatingChart'
 import { TeamSection } from './TeamSection'
 import { WeaponSection } from './WeaponSection'
 import { formatHours } from './shared'
+
+const playerSections: SidebarSection[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'ranked', label: 'Ranked' },
+  { id: 'combat', label: 'Combat' },
+  { id: 'rating-history', label: 'Rating History' },
+  { id: 'weapons', label: 'Weapons' },
+  { id: 'legends', label: 'Legends' },
+  { id: 'teams', label: 'Teams' },
+]
 
 // biome-ignore lint/suspicious/noExplicitAny: tRPC inferred type
 type PlayerData = any
@@ -114,8 +127,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   if (!player) {
     return (
-      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
-        <NavBar showBack />
+      <div>
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           {!turnstileError && (
             <>
@@ -142,15 +154,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     .sort((a: string, b: string) => a.localeCompare(b))
 
   return (
-    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
-      {turnstile}
-      {/* Top Navbar */}
-      <NavBar showBack />
+    <SidebarSectionsProvider sections={playerSections}>
+      <div className="space-y-8">
+        {turnstile}
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
-          {/* Best Legend Avatar */}
           {allLegends.length > 0 && (
             <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-card rounded-2xl shrink-0">
               <AvatarImage
@@ -237,23 +246,32 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         )}
       </div>
 
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RankedCard player={player} rankedTeams={rankedTeams} />
-        <CombatCard player={player} />
+        <div id="ranked">
+          <RankedCard player={player} rankedTeams={rankedTeams} />
+        </div>
+
+        <div id="combat">
+          <CombatCard player={player} />
+        </div>
+
+        {player.ratingHistory && player.ratingHistory.length > 0 && (
+          <div id="rating-history">
+            <RatingChart data={player.ratingHistory} />
+          </div>
+        )}
+
+        <div id="weapons">
+          <WeaponSection weaponStats={weaponStats} />
+        </div>
+
+        <div id="legends">
+          <LegendSection allLegends={allLegends} rankedLegends={player.rankedLegends || []} />
+        </div>
+
+        <div id="teams">
+          <TeamSection player={player} rankedTeams={rankedTeams} id={id} />
+        </div>
       </div>
-
-      {/* Rating History Chart */}
-      {player.ratingHistory && player.ratingHistory.length > 0 && <RatingChart data={player.ratingHistory} />}
-
-      {/* Weapon Statistics */}
-      <WeaponSection weaponStats={weaponStats} />
-
-      {/* Legend Statistics */}
-      <LegendSection allLegends={allLegends} rankedLegends={player.rankedLegends || []} />
-
-      {/* 2v2 Teams */}
-      <TeamSection player={player} rankedTeams={rankedTeams} id={id} />
-    </div>
+    </SidebarSectionsProvider>
   )
 }
