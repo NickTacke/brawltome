@@ -17,6 +17,10 @@ export async function getLeaderboard(
     return get2v2Leaderboard(deps, { ...input, page, pageSize, sort, order, offset })
   }
 
+  if (input.bracket === 'solo2v2') {
+    return getSolo2v2Leaderboard(deps, { ...input, page, pageSize, sort, order, offset })
+  }
+
   return get1v1Leaderboard(deps, { ...input, page, pageSize, sort, order, offset })
 }
 
@@ -90,6 +94,43 @@ async function get2v2Leaderboard(
       playerTwoName: nameMap.get(t.brawlhallaIdTwo) || nameParts[1]?.trim() || 'Unknown',
     }
   })
+
+  return { entries, page: opts.page, pageSize: opts.pageSize }
+}
+
+async function getSolo2v2Leaderboard(
+  deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo },
+  opts: LeaderboardInput & {
+    pageSize: number
+    sort: 'rating' | 'peakRating' | 'wins' | 'games'
+    order: 'asc' | 'desc'
+    offset: number
+  },
+) {
+  const blacklistSet = await deps.rankingRepo.getBlacklistedIds()
+  const results = await deps.playerRepo.getSolo2v2Leaderboard({
+    region: opts.region,
+    sort: opts.sort,
+    order: opts.order,
+    pageSize: opts.pageSize,
+    offset: opts.offset,
+    blacklistSet,
+  })
+
+  const playerIds = results.map((r) => r.brawlhallaId)
+  const nameMap = await deps.playerRepo.getPlayerNames(playerIds)
+
+  const entries = results.map((r, i) => ({
+    brawlhallaId: r.brawlhallaId,
+    name: nameMap.get(r.brawlhallaId) || 'Unknown',
+    rating: r.rating,
+    peakRating: r.peakRating,
+    tier: r.tier,
+    wins: r.wins,
+    games: r.games,
+    region: r.region,
+    rank: opts.offset + i + 1,
+  }))
 
   return { entries, page: opts.page, pageSize: opts.pageSize }
 }
