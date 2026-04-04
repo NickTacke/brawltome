@@ -6,7 +6,7 @@ import type { RankingRepo } from '../ranking.repo'
 function sanitizeQuery(query: string): string {
   return query
     .replace(/\s*\|\s*/g, ' | ')
-    .replace(/[%\\]/g, '')
+    .replace(/[%\\_]/g, '')
     .trim()
 }
 
