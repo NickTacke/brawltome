@@ -435,11 +435,19 @@ export function Leaderboard() {
                               </>
                             ) : (
                               <>
-                                <Link href={`/player/${t.brawlhallaIdOne}`} prefetch={false} className="hover:text-primary">
+                                <Link
+                                  href={`/player/${t.brawlhallaIdOne}`}
+                                  prefetch={false}
+                                  className="hover:text-primary"
+                                >
                                   {fixEncoding(t.playerOneName || 'Unknown')}
                                 </Link>
                                 <span className="opacity-50"> + </span>
-                                <Link href={`/player/${t.brawlhallaIdTwo}`} prefetch={false} className="hover:text-primary">
+                                <Link
+                                  href={`/player/${t.brawlhallaIdTwo}`}
+                                  prefetch={false}
+                                  className="hover:text-primary"
+                                >
                                   {fixEncoding(t.playerTwoName || 'Unknown')}
                                 </Link>
                               </>
