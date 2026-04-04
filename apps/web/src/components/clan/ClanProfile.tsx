@@ -1,7 +1,10 @@
 'use client'
 
 import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
-import { NavBar } from '@/components/NavBar'
+import {
+  SidebarSectionsProvider,
+  type SidebarSection,
+} from '@/components/sidebar/SidebarSectionsProvider'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import { CLAN_TTL_MS } from '@brawltome/shared/constants'
@@ -31,6 +34,11 @@ import {
 import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+const clanSections: SidebarSection[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'members', label: 'Members' },
+]
 
 const PAGE_SIZE = 25
 
@@ -145,7 +153,6 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   if (!clan) {
     return (
       <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
-        <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           {!turnstileError && (
             <>
@@ -184,81 +191,82 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
-      {turnstile}
-      <NavBar showBack />
+    <SidebarSectionsProvider sections={clanSections}>
+      <div className="space-y-8">
+        {turnstile}
 
-      {/* Header */}
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">
-            {fixEncoding(clan.clanName)}
-          </h1>
-          <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span className="font-mono">ID: {id}</span>
+        {/* Overview */}
+        <div id="overview" className="flex flex-col gap-6">
+          <div>
+            <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">
+              {fixEncoding(clan.clanName)}
+            </h1>
+            <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="font-mono">ID: {id}</span>
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>Created {new Date(clan.clanCreateDate).toLocaleDateString()}</span>
+              </div>
+              {clan.lastUpdated && (
+                <>
+                  <span>•</span>
+                  <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    Updated {timeAgo(clan.lastUpdated)}
+                  </Badge>
+                </>
+              )}
+              {refreshing && (
+                <>
+                  <span>•</span>
+                  <Badge variant="secondary" className="gap-2 animate-pulse">
+                    <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
+                    Syncing live data...
+                  </Badge>
+                </>
+              )}
             </div>
-            <span>•</span>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>Created {new Date(clan.clanCreateDate).toLocaleDateString()}</span>
-            </div>
-            {clan.lastUpdated && (
-              <>
-                <span>•</span>
-                <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
-                  <Clock className="w-3 h-3" />
-                  Updated {timeAgo(clan.lastUpdated)}
-                </Badge>
-              </>
-            )}
-            {refreshing && (
-              <>
-                <span>•</span>
-                <Badge variant="secondary" className="gap-2 animate-pulse">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
-                  Syncing live data...
-                </Badge>
-              </>
-            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total XP</CardTitle>
+                <Trophy className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatNum(clan.clanXp)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatNum(members.length)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Average XP</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {members.length > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / members.length)) : '0'}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total XP</CardTitle>
-              <Trophy className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatNum(clan.clanXp)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatNum(members.length)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Average XP</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {members.length > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / members.length)) : '0'}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Members */}
-      <Card className="bg-card/50 backdrop-blur-xs border-border">
+        {/* Members */}
+        <div id="members">
+        <Card className="bg-card/50 backdrop-blur-xs border-border">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2">
             <span className="text-yellow-500">&#127942;</span> Clan Members
@@ -381,7 +389,9 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
             </Button>
           </div>
         )}
-      </Card>
-    </div>
+        </Card>
+        </div>
+      </div>
+    </SidebarSectionsProvider>
   )
 }
