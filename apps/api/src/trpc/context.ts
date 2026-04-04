@@ -1,6 +1,9 @@
+import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
+import type { PlayerRepo } from '@brawltome/player'
+import type { RankingRepo } from '@brawltome/ranking'
+import type { Queue } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
-import type { Queue } from '../queue/queue'
 
 export interface Context {
   db: Database
@@ -8,6 +11,9 @@ export interface Context {
   rankedQueue: Queue<{ brawlhallaId: number }>
   statsQueue: Queue<{ brawlhallaId: number }>
   clanQueue: Queue<{ clanId: number }>
+  playerRepo: PlayerRepo
+  clanRepo: ClanRepo
+  rankingRepo: RankingRepo
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined

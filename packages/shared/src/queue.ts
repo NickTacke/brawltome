@@ -149,8 +149,6 @@ export function createQueue<T>(
       await handler(data)
       await ackAndDelete(id)
     } catch (err) {
-      // Rate limit errors: ACK the current job and re-enqueue for later
-      // Don't waste retry attempts — the API will be available after the pause
       if (err instanceof RateLimitError) {
         console.warn(`[queue:${name}] rate limited, re-enqueuing job for later`)
         await ackAndDelete(id)
@@ -164,7 +162,6 @@ export function createQueue<T>(
         return processJob(id, data, attemptsLeft - 1)
       }
 
-      // Dead letter
       await redis.xadd(
         'queue:dlq',
         '*',

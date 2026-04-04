@@ -1,10 +1,9 @@
 import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
-import { clan, clanMember, player, playerAlias, playerRankedTeam } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
-import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { type PlayerRepo, createPlayerRepo } from '@brawltome/player'
+import type { Queue } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
-import type { Queue } from '../queue/queue'
-import { JANITOR_MIN_TOKENS } from './constants'
+import { JANITOR_MIN_TOKENS } from '../ranking'
 
 const REGIONS: Region[] = ['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me', 'sa']
 const HOT_PAGES = 10
@@ -14,7 +13,6 @@ const LOCK_KEY = 'janitor:lock'
 const LOCK_TTL_SEC = 60
 const HEARTBEAT_INTERVAL_MS = 20_000
 
-// Lua script: only renew lock if we still own it
 const RENEW_LOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("expire", KEYS[1], ARGV[2])
@@ -23,7 +21,6 @@ else
 end
 `
 
-// Lua script: only release lock if we still own it
 const RELEASE_LOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("del", KEYS[1])
@@ -42,6 +39,7 @@ interface JanitorDeps {
 }
 
 export function startJanitor(deps: JanitorDeps) {
+  const playerRepo = createPlayerRepo(deps.db)
   let tick = 0
   let lockValue = ''
   let heartbeatTimer: Timer | null = null
@@ -74,20 +72,28 @@ export function startJanitor(deps: JanitorDeps) {
       }
 
       // Hot pages every tick
-      await time('hot 1v1', () => sync1v1Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
-      await time('hot 2v2', () => sync2v2Page(deps, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
+      await time('hot 1v1', () => sync1v1Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
+      await time('hot 2v2', () => sync2v2Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
 
       // Cold pages every N ticks
       if (tick % COLD_TICK_INTERVAL === 0) {
-        await time('cold 1v1', () => sync1v1Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'))
-        await time('cold 2v2', () => sync2v2Page(deps, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'))
+        await time('cold 1v1', () =>
+          sync1v1Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'),
+        )
+        await time('cold 2v2', () =>
+          sync2v2Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'),
+        )
       }
 
       // Regional: rotate 1 region per tick
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
-      await time(`1v1 ${region}`, () => sync1v1Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`))
-      await time(`2v2 ${region}`, () => sync2v2Page(deps, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`))
+      await time(`1v1 ${region}`, () =>
+        sync1v1Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`),
+      )
+      await time(`2v2 ${region}`, () =>
+        sync2v2Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`),
+      )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
       console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
@@ -123,8 +129,6 @@ export function startJanitor(deps: JanitorDeps) {
   }
 }
 
-// ---- LOCK MANAGEMENT ----
-
 async function acquireLock(redis: Redis): Promise<string | null> {
   const value = crypto.randomUUID()
   const result = await redis.set(LOCK_KEY, value, 'EX', LOCK_TTL_SEC, 'NX')
@@ -142,8 +146,6 @@ async function releaseLock(redis: Redis, value: string) {
   await redis.call('EVAL', RELEASE_LOCK_SCRIPT, '1', LOCK_KEY, value)
 }
 
-// ---- RANKING SYNC ----
-
 async function advanceCursor(redis: Redis, cursorKey: string, startPage: number, maxPage: number): Promise<number> {
   const cursor = await redis.get(cursorKey)
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
@@ -151,6 +153,7 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
 
 async function sync1v1Page(
   deps: JanitorDeps,
+  playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
@@ -166,7 +169,7 @@ async function sync1v1Page(
     return
   }
 
-  await savePlayers(deps, rankings)
+  await savePlayers(playerRepo, rankings)
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -175,6 +178,7 @@ async function sync1v1Page(
 
 async function sync2v2Page(
   deps: JanitorDeps,
+  playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
@@ -190,7 +194,7 @@ async function sync2v2Page(
     return
   }
 
-  await saveTeams(deps, rankings)
+  await saveTeams(playerRepo, rankings)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -198,7 +202,7 @@ async function sync2v2Page(
 }
 
 async function savePlayers(
-  deps: JanitorDeps,
+  repo: PlayerRepo,
   rankings: Array<{
     brawlhalla_id: number
     name: string
@@ -213,74 +217,29 @@ async function savePlayers(
     best_legend_wins: number
   }>,
 ) {
-  // Track aliases for name changes (requires existing data lookup)
   const ids = rankings.map((r) => r.brawlhalla_id)
-  const existing = await deps.db.query.player.findMany({
-    where: inArray(player.brawlhallaId, ids),
-    columns: { brawlhallaId: true, name: true },
-  })
-  const nameMap = new Map(existing.map((p) => [p.brawlhallaId, p.name]))
+  const nameMap = await repo.getExistingPlayerNames(ids)
 
-  const aliases: (typeof playerAlias.$inferInsert)[] = []
+  const aliases: Array<{ brawlhallaId: number; key: string; value: string }> = []
   for (const r of rankings) {
     const oldName = nameMap.get(r.brawlhalla_id)
     if (oldName && oldName !== r.name) {
       aliases.push({ brawlhallaId: r.brawlhalla_id, key: oldName.toLowerCase(), value: oldName })
     }
   }
-  if (aliases.length > 0) {
-    await deps.db.insert(playerAlias).values(aliases).onConflictDoNothing()
-  }
-
-  // Batch upsert all players
-  const now = new Date()
-  const rows = rankings.map((r) => ({
-    brawlhallaId: r.brawlhalla_id,
-    name: r.name ?? '',
-    region: r.region ?? null,
-    rating: r.rating ?? 0,
-    peakRating: r.peak_rating ?? 0,
-    tier: r.tier ?? null,
-    rankedGames: r.games ?? 0,
-    rankedWins: r.wins ?? 0,
-    bestLegend: r.best_legend ?? 0,
-    bestLegendGames: r.best_legend_games ?? 0,
-    bestLegendWins: r.best_legend_wins ?? 0,
-  }))
+  await repo.batchInsertAliases(aliases)
 
   try {
-    if (rows.length > 0) {
-      await deps.db
-        .insert(player)
-        .values(rows as (typeof player.$inferInsert)[])
-        .onConflictDoUpdate({
-          target: player.brawlhallaId,
-          set: {
-            name: sql`excluded.name`,
-            region: sql`excluded.region`,
-            rating: sql`excluded.rating`,
-            peakRating: sql`excluded.peak_rating`,
-            tier: sql`excluded.tier`,
-            rankedGames: sql`excluded.ranked_games`,
-            rankedWins: sql`excluded.ranked_wins`,
-            bestLegend: sql`excluded.best_legend`,
-            bestLegendGames: sql`excluded.best_legend_games`,
-            bestLegendWins: sql`excluded.best_legend_wins`,
-            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player.valhallan_confirmed_at END`,
-            lastUpdated: now,
-          },
-        })
-    }
+    await repo.batchUpsertPlayers(rankings)
   } catch (err) {
     console.error('[janitor] failed to batch save players:', err)
   }
 }
 
-async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
+async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[]) {
   try {
-    // Batch create placeholder players for all team members (deduplicated)
     const seenPlayers = new Set<number>()
-    const playerRows: (typeof player.$inferInsert)[] = []
+    const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
     for (const r of rankings) {
       const nameParts = (r.teamname ?? '').split('+')
       for (const [id, name] of [
@@ -293,13 +252,22 @@ async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
         }
       }
     }
-    if (playerRows.length > 0) {
-      await deps.db.insert(player).values(playerRows).onConflictDoNothing()
-    }
+    await repo.batchUpsertPlaceholderPlayers(playerRows)
 
-    // Batch upsert team rows (one per owner per team), deduplicated
     const seen = new Set<string>()
-    const teamRows: (typeof playerRankedTeam.$inferInsert)[] = []
+    const teamRows: Array<{
+      brawlhallaId: number
+      brawlhallaIdOne: number
+      brawlhallaIdTwo: number
+      teamName: string
+      rating: number
+      peakRating: number
+      tier: string
+      wins: number
+      games: number
+      region: string | null
+      globalRank: number | null
+    }> = []
     for (const r of rankings) {
       const shared = {
         brawlhallaIdOne: r.brawlhalla_id_one,
@@ -321,25 +289,7 @@ async function saveTeams(deps: JanitorDeps, rankings: BhApiRanking2v2[]) {
         }
       }
     }
-    if (teamRows.length > 0) {
-      await deps.db
-        .insert(playerRankedTeam)
-        .values(teamRows)
-        .onConflictDoUpdate({
-          target: [playerRankedTeam.brawlhallaId, playerRankedTeam.brawlhallaIdOne, playerRankedTeam.brawlhallaIdTwo],
-          set: {
-            teamName: sql`excluded.team_name`,
-            rating: sql`excluded.rating`,
-            peakRating: sql`excluded.peak_rating`,
-            tier: sql`excluded.tier`,
-            wins: sql`excluded.wins`,
-            games: sql`excluded.games`,
-            region: sql`excluded.region`,
-            globalRank: sql`excluded.global_rank`,
-            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
-          },
-        })
-    }
+    await repo.batchUpsertTeams(teamRows)
   } catch (err) {
     console.error('[janitor] failed to batch save teams:', err)
   }

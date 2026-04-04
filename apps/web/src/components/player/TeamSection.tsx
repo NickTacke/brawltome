@@ -114,7 +114,7 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-x-4 md:gap-y-6">
         {pairedTeams.map((team: PlayerData) => {
           const teammateId = team.brawlhallaIdOne === idNumber ? team.brawlhallaIdTwo : team.brawlhallaIdOne
           const teammateHref = `/player/${teammateId}`

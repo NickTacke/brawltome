@@ -1,5 +1,12 @@
 import type { Redis } from 'ioredis'
-import { RATE_LIMITS, type RateLimitAction } from './constants'
+
+export const RATE_LIMITS = {
+  discovery: { max: 20, windowSec: 15 * 60 },
+  refresh: { max: 20, windowSec: 15 * 60 },
+  'discovery:global': { max: 30, windowSec: 15 * 60 },
+} as const
+
+export type RateLimitAction = keyof typeof RATE_LIMITS
 
 const LUA_INCR_WITH_EXPIRE = `
   local c = redis.call('INCR', KEYS[1])
@@ -8,7 +15,7 @@ const LUA_INCR_WITH_EXPIRE = `
   return {c, t}
 `
 
-interface RateLimitResult {
+export interface RateLimitResult {
   allowed: boolean
   current: number
   retryAfter: number

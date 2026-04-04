@@ -1,19 +1,16 @@
 {
-  "name": "@brawltome/shared",
+  "name": "@brawltome/identity",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./constants": "./src/constants.ts"
+    ".": "./index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@brawltome/database": "workspace:*",
-    "@brawltome/bhapi": "workspace:*",
-    "drizzle-orm": "^0.39.0",
-    "ioredis": "^5.8.0"
+    "drizzle-orm": "^0.39.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

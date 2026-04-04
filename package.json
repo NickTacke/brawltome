@@ -1,7 +1,7 @@
 {
   "name": "brawltome",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": ["apps/*", "packages/*", "packages/contexts/*"],
   "scripts": {
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",

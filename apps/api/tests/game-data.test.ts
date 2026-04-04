@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { aggregateWeapons, normalizeWeaponName } from '../src/services/game-data.service'
+import { aggregateWeapons, normalizeWeaponName } from '@brawltome/shared'
 
 describe('normalizeWeaponName', () => {
   test('normalizes known aliases', () => {

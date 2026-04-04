@@ -1,9 +1,16 @@
 import type { BhApiClient } from '@brawltome/bhapi'
 import { legend } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
-import { WEAPON_NAME_MAP } from './constants'
 
-interface LegendData {
+const WEAPON_NAME_MAP: Record<string, string> = {
+  Fists: 'Gauntlets',
+  Pistol: 'Blasters',
+  Katar: 'Katars',
+  RocketLance: 'Lance',
+  Chakram: 'Chakrams',
+}
+
+export interface LegendData {
   legendId: number
   legendNameKey: string
   bioName: string
@@ -19,7 +26,7 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
 
   if (dbLegends.length === 0) {
     if (!bhapi) {
-      console.warn('[game-data] no legends in DB and no bhapi client — skipping init')
+      console.warn('[game-data] no legends in DB and no bhapi client -- skipping init')
       return
     }
     const apiLegends = await bhapi.getAllLegends()
