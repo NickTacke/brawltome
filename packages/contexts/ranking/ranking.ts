@@ -7,7 +7,7 @@ export type SortField = 'rating' | 'peakRating' | 'wins' | 'games'
 export type SortOrder = 'asc' | 'desc'
 
 export interface LeaderboardInput {
-  bracket: '1v1' | '2v2'
+  bracket: '1v1' | '2v2' | 'solo2v2'
   region: string
   page: number
   pageSize?: number
