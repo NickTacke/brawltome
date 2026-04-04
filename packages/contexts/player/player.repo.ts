@@ -361,6 +361,40 @@ export function createPlayerRepo(db: Database) {
         .limit(fetchLimit)
     },
 
+    getSolo2v2Leaderboard(opts: {
+      region: string
+      sort: 'rating' | 'peakRating' | 'wins' | 'games'
+      order: 'asc' | 'desc'
+      pageSize: number
+      offset: number
+      blacklistSet: Set<number>
+    }) {
+      const sortColumn = {
+        rating: playerRankedTeam.rating,
+        peakRating: playerRankedTeam.peakRating,
+        wins: playerRankedTeam.wins,
+        games: playerRankedTeam.games,
+      }[opts.sort]
+      const orderFn = opts.order === 'asc' ? asc : desc
+      return db
+        .select()
+        .from(playerRankedTeam)
+        .where(
+          and(
+            gt(playerRankedTeam.rating, 0),
+            gt(playerRankedTeam.games, 0),
+            or(eq(playerRankedTeam.brawlhallaIdOne, 0), eq(playerRankedTeam.brawlhallaIdTwo, 0)),
+            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
+            opts.blacklistSet.size > 0
+              ? not(inArray(playerRankedTeam.brawlhallaId, [...opts.blacklistSet]))
+              : undefined,
+          ),
+        )
+        .orderBy(orderFn(sortColumn))
+        .limit(opts.pageSize)
+        .offset(opts.offset)
+    },
+
     getPlayerNames(playerIds: number[]) {
       if (playerIds.length === 0) return Promise.resolve(new Map<number, string>())
       return db
