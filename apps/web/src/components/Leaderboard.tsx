@@ -44,11 +44,12 @@ const REGIONS = [
 const BRACKETS = [
   { id: '1v1', label: '1v1' },
   { id: '2v2', label: '2v2' },
+  { id: 'solo2v2', label: 'Solo 2v2' },
 ] as const
 
 const PAGE_SIZE = 20
 
-type BracketId = '1v1' | '2v2'
+type BracketId = '1v1' | '2v2' | 'solo2v2'
 type RegionId = 'all' | 'US-E' | 'EU' | 'SEA' | 'BRZ' | 'AUS' | 'US-W' | 'JPN' | 'ME' | 'SA'
 type SortField = 'rating' | 'peakRating' | 'wins' | 'games'
 type SortOrder = 'asc' | 'desc'
@@ -264,7 +265,7 @@ export function Leaderboard() {
           <TableHeader className="bg-muted/50">
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-20 text-center font-bold">Rank</TableHead>
-              <TableHead className="font-bold">{bracket === '1v1' ? 'Player' : 'Team'}</TableHead>
+              <TableHead className="font-bold">{bracket === '2v2' ? 'Team' : 'Player'}</TableHead>
               <SortableHeader
                 label="Rating"
                 sortKey="rating"
@@ -319,7 +320,7 @@ export function Leaderboard() {
                 </TableRow>
               ))
             ) : entries.length > 0 ? (
-              bracket === '1v1' ? (
+              bracket !== '2v2' ? (
                 // biome-ignore lint/suspicious/noExplicitAny: dynamic API response
                 entries.map((p: any, i: number) => {
                   const globalRank = (page - 1) * PAGE_SIZE + i + 1
@@ -466,7 +467,11 @@ export function Leaderboard() {
             ) : (
               <TableRow className="border-border hover:bg-transparent">
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  {bracket === '1v1' ? 'No players found for this region.' : 'No teams found for this region.'}
+                  {bracket === '2v2'
+                    ? 'No teams found for this region.'
+                    : bracket === 'solo2v2'
+                      ? 'No solo queue players found for this region.'
+                      : 'No players found for this region.'}
                 </TableCell>
               </TableRow>
             )}
