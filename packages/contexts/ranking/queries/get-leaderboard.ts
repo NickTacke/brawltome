@@ -1,8 +1,12 @@
+import type { PlayerRepo } from '@brawltome/player'
 import { getLegendById } from '@brawltome/shared'
 import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGES, MAX_PAGE_SIZE } from '../ranking'
 import type { RankingRepo } from '../ranking.repo'
 
-export async function getLeaderboard(repo: RankingRepo, input: LeaderboardInput) {
+export async function getLeaderboard(
+  deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo },
+  input: LeaderboardInput,
+) {
   const page = Math.max(1, Math.min(input.page, MAX_PAGES))
   const pageSize = Math.max(1, Math.min(input.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
   const sort = input.sort ?? 'rating'
@@ -10,14 +14,14 @@ export async function getLeaderboard(repo: RankingRepo, input: LeaderboardInput)
   const offset = (page - 1) * pageSize
 
   if (input.bracket === '2v2') {
-    return get2v2Leaderboard(repo, { ...input, page, pageSize, sort, order, offset })
+    return get2v2Leaderboard(deps, { ...input, page, pageSize, sort, order, offset })
   }
 
-  return get1v1Leaderboard(repo, { ...input, page, pageSize, sort, order, offset })
+  return get1v1Leaderboard(deps, { ...input, page, pageSize, sort, order, offset })
 }
 
 async function get1v1Leaderboard(
-  repo: RankingRepo,
+  deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo },
   opts: LeaderboardInput & {
     pageSize: number
     sort: 'rating' | 'peakRating' | 'wins' | 'games'
@@ -25,8 +29,8 @@ async function get1v1Leaderboard(
     offset: number
   },
 ) {
-  const blacklistSet = await repo.getBlacklistedIds()
-  const results = await repo.get1v1Leaderboard({
+  const blacklistSet = await deps.rankingRepo.getBlacklistedIds()
+  const results = await deps.playerRepo.get1v1Leaderboard({
     region: opts.region,
     sort: opts.sort,
     order: opts.order,
@@ -44,7 +48,7 @@ async function get1v1Leaderboard(
 }
 
 async function get2v2Leaderboard(
-  repo: RankingRepo,
+  deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo },
   opts: LeaderboardInput & {
     pageSize: number
     sort: 'rating' | 'peakRating' | 'wins' | 'games'
@@ -52,8 +56,8 @@ async function get2v2Leaderboard(
     offset: number
   },
 ) {
-  const blacklistSet = await repo.getBlacklistedIds()
-  const results = await repo.get2v2Leaderboard({
+  const blacklistSet = await deps.rankingRepo.getBlacklistedIds()
+  const results = await deps.playerRepo.get2v2Leaderboard({
     region: opts.region,
     sort: opts.sort,
     order: opts.order,
@@ -61,7 +65,6 @@ async function get2v2Leaderboard(
     offset: opts.offset,
   })
 
-  // Deduplicate teams by canonicalizing ID pair (min, max)
   const seen = new Set<string>()
   const deduped = results.filter((t) => {
     const min = Math.min(t.brawlhallaIdOne, t.brawlhallaIdTwo)
@@ -72,16 +75,13 @@ async function get2v2Leaderboard(
     return true
   })
 
-  // Filter blacklisted and take page size
-  const filtered = deduped
-    .filter((t) => !blacklistSet.has(t.brawlhallaIdOne) && !blacklistSet.has(t.brawlhallaIdTwo))
-    .slice(0, opts.pageSize)
+  const filtered = deduped.filter((t) => !blacklistSet.has(t.brawlhallaIdOne) && !blacklistSet.has(t.brawlhallaIdTwo))
+  const paged = filtered.slice(opts.offset, opts.offset + opts.pageSize)
 
-  // Enrich with player names
-  const playerIds = [...new Set(filtered.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))]
-  const nameMap = await repo.getPlayerNames(playerIds)
+  const playerIds = [...new Set(paged.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))]
+  const nameMap = await deps.playerRepo.getPlayerNames(playerIds)
 
-  const entries = filtered.map((t, i) => {
+  const entries = paged.map((t, i) => {
     const nameParts = (t.teamName ?? '').split('+')
     return {
       ...t,

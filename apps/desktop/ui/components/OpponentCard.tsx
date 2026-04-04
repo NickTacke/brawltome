@@ -41,14 +41,18 @@ export function OpponentCard({ opponent, refreshing }: OpponentCardProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] font-bold text-[hsl(var(--overlay-card-fg))]">{opponent.name}</span>
+            <span className="text-[13px] font-bold text-[hsl(var(--overlay-card-fg))]">
+              {opponent.name}
+            </span>
             <span className="rounded-full border border-[hsla(var(--overlay-border)/0.6)] bg-[hsla(var(--overlay-muted-bg)/0.8)] px-1.5 py-px font-mono text-[9px] font-medium text-[hsl(var(--overlay-fg))]">
               {opponent.region}
             </span>
           </div>
           <div className="mt-px flex items-center gap-1.5">
             <TierBadge tier={opponent.tier} />
-            <span className="text-[10px] text-[hsl(var(--overlay-muted-fg))]">{formatPlaytime(opponent.playtime)}</span>
+            <span className="text-[10px] text-[hsl(var(--overlay-muted-fg))]">
+              {formatPlaytime(opponent.playtime)}
+            </span>
           </div>
         </div>
 
@@ -75,13 +79,20 @@ export function OpponentCard({ opponent, refreshing }: OpponentCardProps) {
             {opponent.rating}
           </span>
           <span className="mx-[5px] text-[12px] text-[hsl(213.3,15.1%,40%)]">/</span>
-          <span className="font-mono text-[12px] font-bold text-[hsl(213.3,15.1%,50%)]">{opponent.peakRating}</span>
+          <span className="font-mono text-[12px] font-bold text-[hsl(213.3,15.1%,50%)]">
+            {opponent.peakRating}
+          </span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] uppercase tracking-wide text-[hsl(213.3,15.1%,45%)]">WR</span>
+          <span className="text-[9px] uppercase tracking-wide text-[hsl(213.3,15.1%,45%)]">
+            WR
+          </span>
           <div className="h-[5px] w-[55px] overflow-hidden rounded-full bg-[hsla(var(--overlay-muted-bg)/0.8)]">
-            <div className="h-full rounded-full" style={{ width: `${opponent.winRate}%`, backgroundColor: color }} />
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${opponent.winRate}%`, backgroundColor: color }}
+            />
           </div>
           <span className="font-mono text-[11px] font-semibold" style={{ color }}>
             {opponent.winRate}%

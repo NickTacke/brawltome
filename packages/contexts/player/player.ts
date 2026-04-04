@@ -11,18 +11,10 @@ import type {
 import type { LegendData } from '@brawltome/shared'
 import type { InferSelectModel } from 'drizzle-orm'
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 export const DEDUP_TTL_RANKED_SEC = 3600
 export const DEDUP_TTL_STATS_SEC = 43200
 export const DISCOVERY_MIN_TOKENS = 50
 export const VALHALLAN_GRACE_MS = 3 * 60 * 60 * 1000
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type EnrichedStatsLegend = InferSelectModel<typeof playerStatsLegend> & {
   weaponOne: string | null
@@ -39,10 +31,6 @@ export type PlayerResult = InferSelectModel<typeof player> & {
   rankedTeams: InferSelectModel<typeof playerRankedTeam>[]
   ratingHistory: InferSelectModel<typeof ratingHistory>[]
 }
-
-// ---------------------------------------------------------------------------
-// Pure functions (no I/O)
-// ---------------------------------------------------------------------------
 
 export function isValhallanGraced(tier: string | null, confirmedAt: Date | null): boolean {
   return !!(tier?.startsWith('Valhallan') && confirmedAt && Date.now() - confirmedAt.getTime() < VALHALLAN_GRACE_MS)

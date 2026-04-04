@@ -1,6 +1,6 @@
 import type { Database } from '@brawltome/database'
 import { clan, clanMember, player } from '@brawltome/database'
-import { eq, inArray } from 'drizzle-orm'
+import { desc, eq, ilike, inArray } from 'drizzle-orm'
 
 export function createClanRepo(db: Database) {
   return {
@@ -75,6 +75,14 @@ export function createClanRepo(db: Database) {
           })),
         )
       }
+    },
+
+    searchClans(query: string) {
+      return db.query.clan.findMany({
+        where: ilike(clan.clanName, `${query}%`),
+        orderBy: [desc(clan.clanXp)],
+        limit: 5,
+      })
     },
 
     transaction: db.transaction.bind(db),

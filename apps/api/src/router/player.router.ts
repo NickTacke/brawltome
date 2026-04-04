@@ -21,7 +21,6 @@ export const playerRouter = router({
       const p = await ctx.playerRepo.findById(brawlhallaId)
 
       if (!p) {
-        // Discovery flow
         if (ctx.isBot) return { isRefreshing: false }
         return discoverPlayer(
           {
@@ -35,7 +34,6 @@ export const playerRouter = router({
         )
       }
 
-      // Refresh flow for existing player
       if (ctx.isBot) return { isRefreshing: false }
 
       await ctx.playerRepo.incrementViewCount(brawlhallaId)
