@@ -418,13 +418,32 @@ export function Leaderboard() {
                       <TableCell>
                         <div className="flex flex-col">
                           <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal leading-tight">
-                            <Link href={`/player/${t.brawlhallaIdOne}`} prefetch={false} className="hover:text-primary">
-                              {fixEncoding(t.playerOneName || 'Unknown')}
-                            </Link>
-                            <span className="opacity-50"> + </span>
-                            <Link href={`/player/${t.brawlhallaIdTwo}`} prefetch={false} className="hover:text-primary">
-                              {fixEncoding(t.playerTwoName || 'Unknown')}
-                            </Link>
+                            {t.brawlhallaIdOne === 0 || t.brawlhallaIdTwo === 0 ? (
+                              <>
+                                <Link
+                                  href={`/player/${t.brawlhallaIdOne === 0 ? t.brawlhallaIdTwo : t.brawlhallaIdOne}`}
+                                  prefetch={false}
+                                  className="hover:text-primary"
+                                >
+                                  {fixEncoding(
+                                    t.brawlhallaIdOne === 0
+                                      ? t.playerTwoName || 'Unknown'
+                                      : t.playerOneName || 'Unknown',
+                                  )}
+                                </Link>
+                                <span className="text-muted-foreground font-normal text-sm"> (Solo Queue)</span>
+                              </>
+                            ) : (
+                              <>
+                                <Link href={`/player/${t.brawlhallaIdOne}`} prefetch={false} className="hover:text-primary">
+                                  {fixEncoding(t.playerOneName || 'Unknown')}
+                                </Link>
+                                <span className="opacity-50"> + </span>
+                                <Link href={`/player/${t.brawlhallaIdTwo}`} prefetch={false} className="hover:text-primary">
+                                  {fixEncoding(t.playerTwoName || 'Unknown')}
+                                </Link>
+                              </>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground font-mono">
                             <span>{t.region}</span>
