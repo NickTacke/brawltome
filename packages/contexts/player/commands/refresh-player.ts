@@ -4,6 +4,18 @@ import { aggregateWeapons } from '@brawltome/shared'
 import { computeBestLegend, isValhallanGraced, shouldSnapshotRating } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
+const REGION_BY_ID: Record<number, string> = {
+  2: 'US-E',
+  3: 'EU',
+  4: 'SEA',
+  5: 'BRZ',
+  6: 'AUS',
+  7: 'US-W',
+  8: 'JPN',
+  9: 'ME',
+  10: 'SA',
+}
+
 interface RefreshDeps {
   db: Database
   bhapi: BhApiClient
@@ -70,7 +82,7 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
           tier: gracedTeam ? (gracedTeam.tier ?? t.tier) : t.tier,
           wins: t.wins,
           games: t.games,
-          region: String(t.region),
+          region: REGION_BY_ID[t.region] ?? String(t.region),
           globalRank: t.global_rank,
           valhallanConfirmedAt: gracedTeam?.valhallanConfirmedAt ?? null,
         }
