@@ -1,5 +1,7 @@
 import './globals.css'
 import { MaintenancePage } from '@/components/MaintenancePage'
+import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
+import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
 import { ThemeProvider } from '@/components/theme-provider'
 import type { Metadata } from 'next'
 
@@ -50,10 +52,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <div className="bg-background text-foreground min-h-screen">
-            {isMaintenanceMode ? <MaintenancePage maintenanceEnd={maintenanceEnd} /> : children}
-          </div>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          <SidebarProvider>
+            <div className="bg-background text-foreground min-h-screen">
+              {isMaintenanceMode ? (
+                <MaintenancePage maintenanceEnd={maintenanceEnd} />
+              ) : (
+                <SidebarLayout>{children}</SidebarLayout>
+              )}
+            </div>
+          </SidebarProvider>
         </ThemeProvider>
       </body>
     </html>

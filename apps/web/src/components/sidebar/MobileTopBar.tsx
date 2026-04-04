@@ -4,7 +4,7 @@ import { Menu, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 
-import { Button } from "@brawltome/ui/button";
+import { Button } from "@brawltome/ui";
 
 import { useSidebar } from "./SidebarProvider";
 
