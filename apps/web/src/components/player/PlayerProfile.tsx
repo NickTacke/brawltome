@@ -78,10 +78,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           setPlayer(data)
           const currentTimestamp = new Date(data.statsLastUpdated ?? data.rankedLastUpdated ?? 0).getTime() || null
           const discoveryDone = isDiscovery && (data.rating !== 0 || (data.statsLegends?.length ?? 0) > 0)
-          const refreshDone =
-            !isDiscovery &&
-            currentTimestamp !== null &&
-            currentTimestamp !== refreshBaseline.current
+          const refreshDone = !isDiscovery && currentTimestamp !== null && currentTimestamp !== refreshBaseline.current
           if (discoveryDone || refreshDone) {
             setRefreshing(false)
             clearInterval(intervalId)
