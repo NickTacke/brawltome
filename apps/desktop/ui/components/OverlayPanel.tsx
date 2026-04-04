@@ -1,5 +1,5 @@
-import { useContentBounds } from '../hooks/useContentBounds'
 import { useCursorForwarding } from '../hooks/useCursorForwarding'
+import { useContentBounds } from '../hooks/useContentBounds'
 import type { Opponent } from '../types'
 import { OpponentCard } from './OpponentCard'
 

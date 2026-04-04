@@ -47,7 +47,9 @@ export function TierBadge({ tier }: TierBadgeProps) {
   const style = getStyle(tier)
 
   return (
-    <span className={`bg-gradient-to-br ${style.gradient} ${style.text} rounded px-1.5 py-px text-[9px] font-semibold`}>
+    <span
+      className={`bg-gradient-to-br ${style.gradient} ${style.text} rounded px-1.5 py-px text-[9px] font-semibold`}
+    >
       {tier}
     </span>
   )

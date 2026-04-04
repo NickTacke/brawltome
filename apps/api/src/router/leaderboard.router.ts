@@ -15,6 +15,6 @@ export const leaderboardRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return getLeaderboard(ctx.rankingRepo, input)
+      return getLeaderboard({ rankingRepo: ctx.rankingRepo, playerRepo: ctx.playerRepo }, input)
     }),
 })

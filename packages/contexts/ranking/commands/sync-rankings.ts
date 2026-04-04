@@ -1,9 +1,9 @@
 import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
+import { type PlayerRepo, createPlayerRepo } from '@brawltome/player'
 import type { Queue } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 import { JANITOR_MIN_TOKENS } from '../ranking'
-import { type RankingRepo, createRankingRepo } from '../ranking.repo'
 
 const REGIONS: Region[] = ['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me', 'sa']
 const HOT_PAGES = 10
@@ -39,7 +39,7 @@ interface JanitorDeps {
 }
 
 export function startJanitor(deps: JanitorDeps) {
-  const repo = createRankingRepo(deps.db)
+  const playerRepo = createPlayerRepo(deps.db)
   let tick = 0
   let lockValue = ''
   let heartbeatTimer: Timer | null = null
@@ -72,23 +72,27 @@ export function startJanitor(deps: JanitorDeps) {
       }
 
       // Hot pages every tick
-      await time('hot 1v1', () => sync1v1Page(deps, repo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
-      await time('hot 2v2', () => sync2v2Page(deps, repo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
+      await time('hot 1v1', () => sync1v1Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
+      await time('hot 2v2', () => sync2v2Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
 
       // Cold pages every N ticks
       if (tick % COLD_TICK_INTERVAL === 0) {
-        await time('cold 1v1', () => sync1v1Page(deps, repo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'))
-        await time('cold 2v2', () => sync2v2Page(deps, repo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'))
+        await time('cold 1v1', () =>
+          sync1v1Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'),
+        )
+        await time('cold 2v2', () =>
+          sync2v2Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'),
+        )
       }
 
       // Regional: rotate 1 region per tick
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
       await time(`1v1 ${region}`, () =>
-        sync1v1Page(deps, repo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`),
+        sync1v1Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`),
       )
       await time(`2v2 ${region}`, () =>
-        sync2v2Page(deps, repo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`),
+        sync2v2Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`),
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
@@ -125,8 +129,6 @@ export function startJanitor(deps: JanitorDeps) {
   }
 }
 
-// ---- LOCK MANAGEMENT ----
-
 async function acquireLock(redis: Redis): Promise<string | null> {
   const value = crypto.randomUUID()
   const result = await redis.set(LOCK_KEY, value, 'EX', LOCK_TTL_SEC, 'NX')
@@ -144,8 +146,6 @@ async function releaseLock(redis: Redis, value: string) {
   await redis.call('EVAL', RELEASE_LOCK_SCRIPT, '1', LOCK_KEY, value)
 }
 
-// ---- RANKING SYNC ----
-
 async function advanceCursor(redis: Redis, cursorKey: string, startPage: number, maxPage: number): Promise<number> {
   const cursor = await redis.get(cursorKey)
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
@@ -153,7 +153,7 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
 
 async function sync1v1Page(
   deps: JanitorDeps,
-  repo: RankingRepo,
+  playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
@@ -169,7 +169,7 @@ async function sync1v1Page(
     return
   }
 
-  await savePlayers(repo, rankings)
+  await savePlayers(playerRepo, rankings)
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -178,7 +178,7 @@ async function sync1v1Page(
 
 async function sync2v2Page(
   deps: JanitorDeps,
-  repo: RankingRepo,
+  playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
@@ -194,7 +194,7 @@ async function sync2v2Page(
     return
   }
 
-  await saveTeams(repo, rankings)
+  await saveTeams(playerRepo, rankings)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -202,7 +202,7 @@ async function sync2v2Page(
 }
 
 async function savePlayers(
-  repo: RankingRepo,
+  repo: PlayerRepo,
   rankings: Array<{
     brawlhalla_id: number
     name: string
@@ -236,7 +236,7 @@ async function savePlayers(
   }
 }
 
-async function saveTeams(repo: RankingRepo, rankings: BhApiRanking2v2[]) {
+async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[]) {
   try {
     const seenPlayers = new Set<number>()
     const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []

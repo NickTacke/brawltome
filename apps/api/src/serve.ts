@@ -69,14 +69,12 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
 
   const p = await getPlayer(playerRepo, bhid)
   if (!p) {
-    // Auto-discover: create placeholder and enqueue refresh
     await playerRepo.createPlaceholder(bhid)
 
     await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
     await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
     console.log(`[overlay] discovering player ${bhid}`)
 
-    // Return minimal placeholder data
     return c.json({
       brawlhallaId: bhid,
       name: `Player ${bhid}`,
@@ -90,7 +88,6 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     })
   }
 
-  // Enqueue refresh for stale data (same TTL thresholds as web)
   const now = Date.now()
   const ttl = TIERED_TTL.hot
 
