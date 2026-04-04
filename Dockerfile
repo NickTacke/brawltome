@@ -9,6 +9,10 @@ COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/shared/package.json packages/shared/
 COPY packages/ui/package.json packages/ui/
+COPY packages/contexts/player/package.json packages/contexts/player/
+COPY packages/contexts/clan/package.json packages/contexts/clan/
+COPY packages/contexts/ranking/package.json packages/contexts/ranking/
+COPY packages/contexts/identity/package.json packages/contexts/identity/
 RUN bun install
 
 FROM base AS build
