@@ -4,7 +4,7 @@ import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
-import { CLAN_TTL_MS } from '@brawltome/shared'
+import { CLAN_TTL_MS } from '@brawltome/shared/constants'
 import {
   Avatar,
   AvatarFallback,

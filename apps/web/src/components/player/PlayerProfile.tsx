@@ -5,7 +5,7 @@ import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
-import { TIERED_TTL } from '@brawltome/shared'
+import { TIERED_TTL } from '@brawltome/shared/constants'
 import {
   Avatar,
   AvatarFallback,

@@ -8,7 +8,7 @@ export const clanRouter = router({
     return getClan(ctx.clanRepo, input.id)
   }),
   refresh: internalProcedure
-    .input(z.object({ id: z.number().int().positive(), turnstileToken: z.string().min(1) }))
+    .input(z.object({ id: z.number().int().positive(), turnstileToken: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { id: clanId, turnstileToken } = input
 
