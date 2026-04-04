@@ -10,7 +10,7 @@ import {
   playerWeaponStat,
   ratingHistory,
 } from '@brawltome/database'
-import { and, asc, desc, eq, gt, ilike, inArray, not, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, ilike, inArray, not, or, sql } from 'drizzle-orm'
 
 export function createPlayerRepo(db: Database) {
   return {
@@ -316,15 +316,13 @@ export function createPlayerRepo(db: Database) {
         games: player.rankedGames,
       }[opts.sort]
       const orderFn = opts.order === 'asc' ? asc : desc
-      const regionFilter = opts.region !== 'all' ? sql`${player.region} = ${opts.region}` : undefined
-
       return db
         .select()
         .from(player)
         .where(
           and(
             gt(player.rating, 0),
-            regionFilter,
+            opts.region !== 'all' ? eq(player.region, opts.region) : undefined,
             opts.blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...opts.blacklistSet])) : undefined,
           ),
         )
@@ -347,14 +345,18 @@ export function createPlayerRepo(db: Database) {
         games: playerRankedTeam.games,
       }[opts.sort]
       const orderFn = opts.order === 'asc' ? asc : desc
-      const regionFilter = opts.region !== 'all' ? sql`${playerRankedTeam.region} = ${opts.region}` : undefined
-
       const fetchLimit = (opts.offset + opts.pageSize) * 3
 
       return db
         .select()
         .from(playerRankedTeam)
-        .where(and(gt(playerRankedTeam.rating, 0), gt(playerRankedTeam.games, 0), regionFilter))
+        .where(
+          and(
+            gt(playerRankedTeam.rating, 0),
+            gt(playerRankedTeam.games, 0),
+            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
+          ),
+        )
         .orderBy(orderFn(sortColumn))
         .limit(fetchLimit)
     },
@@ -371,7 +373,7 @@ export function createPlayerRepo(db: Database) {
     searchPlayersByName(query: string, blacklistSet: Set<number>) {
       return db.query.player.findMany({
         where: and(
-          sql`(${player.name} ILIKE ${`${query}%`} OR ${player.name} ILIKE ${`% | ${query}%`})`,
+          or(ilike(player.name, `${query}%`), ilike(player.name, `% | ${query}%`)),
           blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...blacklistSet])) : undefined,
         ),
         orderBy: [desc(player.rating), desc(player.viewCount)],
