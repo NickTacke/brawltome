@@ -1,24 +1,35 @@
 'use client'
 
-import { type ReactNode, createContext, useContext } from 'react'
+import { type ReactNode, createContext, useContext, useEffect, useState } from 'react'
 
 export interface SidebarSection {
   id: string
   label: string
 }
 
-const SidebarSectionsContext = createContext<SidebarSection[]>([])
-
-export function SidebarSectionsProvider({
-  sections,
-  children,
-}: {
+interface SidebarSectionsContextValue {
   sections: SidebarSection[]
-  children: ReactNode
-}) {
-  return <SidebarSectionsContext value={sections}>{children}</SidebarSectionsContext>
+  setSections: (sections: SidebarSection[]) => void
+}
+
+const SidebarSectionsContext = createContext<SidebarSectionsContextValue>({
+  sections: [],
+  setSections: () => {},
+})
+
+export function SidebarSectionsProvider({ children }: { children: ReactNode }) {
+  const [sections, setSections] = useState<SidebarSection[]>([])
+  return <SidebarSectionsContext value={{ sections, setSections }}>{children}</SidebarSectionsContext>
 }
 
 export function useSidebarSections() {
-  return useContext(SidebarSectionsContext)
+  return useContext(SidebarSectionsContext).sections
+}
+
+export function useRegisterSidebarSections(sections: SidebarSection[]) {
+  const { setSections } = useContext(SidebarSectionsContext)
+  useEffect(() => {
+    setSections(sections)
+    return () => setSections([])
+  }, [sections, setSections])
 }

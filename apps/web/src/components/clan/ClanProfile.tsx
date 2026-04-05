@@ -3,7 +3,7 @@
 import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
-import { type SidebarSection, SidebarSectionsProvider } from '@/components/sidebar/SidebarSectionsProvider'
+import { type SidebarSection, useRegisterSidebarSections } from '@/components/sidebar/SidebarSectionsProvider'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import { CLAN_TTL_MS } from '@brawltome/shared/constants'
 import {
@@ -189,209 +189,209 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value))
   }
 
+  useRegisterSidebarSections(clanSections)
+
   return (
-    <SidebarSectionsProvider sections={clanSections}>
-      <div className="space-y-8">
-        {turnstile}
-        <NavBar showBack />
+    <div className="space-y-8">
+      {turnstile}
+      <NavBar showBack />
 
-        {/* Overview */}
-        <div id="overview" className="flex flex-col gap-6">
-          <div>
-            <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">
-              {fixEncoding(clan.clanName)}
-            </h1>
-            <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span className="font-mono">ID: {id}</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                <span>Created {new Date(clan.clanCreateDate).toLocaleDateString()}</span>
-              </div>
-              {clan.lastUpdated && (
-                <>
-                  <span>•</span>
-                  <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
-                    <Clock className="w-3 h-3" />
-                    Updated {timeAgo(clan.lastUpdated)}
-                  </Badge>
-                </>
-              )}
-              {refreshing && (
-                <>
-                  <span>•</span>
-                  <Badge variant="secondary" className="gap-2 animate-pulse">
-                    <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
-                    Syncing live data...
-                  </Badge>
-                </>
-              )}
+      {/* Overview */}
+      <div id="overview" className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">
+            {fixEncoding(clan.clanName)}
+          </h1>
+          <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="font-mono">ID: {id}</span>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total XP</CardTitle>
-                <Trophy className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNum(clan.clanXp)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNum(members.length)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Average XP</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {members.length > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / members.length)) : '0'}
-                </div>
-              </CardContent>
-            </Card>
+            <span>•</span>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              <span>Created {new Date(clan.clanCreateDate).toLocaleDateString()}</span>
+            </div>
+            {clan.lastUpdated && (
+              <>
+                <span>•</span>
+                <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  Updated {timeAgo(clan.lastUpdated)}
+                </Badge>
+              </>
+            )}
+            {refreshing && (
+              <>
+                <span>•</span>
+                <Badge variant="secondary" className="gap-2 animate-pulse">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
+                  Syncing live data...
+                </Badge>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Members */}
-        <div id="members">
-          <Card className="bg-card/50 backdrop-blur-xs border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-yellow-500">&#127942;</span> Clan Members
-              </CardTitle>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
-                  <Select
-                    value={sortBy}
-                    onValueChange={(v) => {
-                      setSortBy(v as typeof sortBy)
-                      setPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="w-[140px] font-bold h-9">
-                      <SelectValue placeholder="Sort By" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="default" className="cursor-pointer">
-                        Clan Rank
-                      </SelectItem>
-                      <SelectItem value="xp" className="cursor-pointer">
-                        XP
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search members..."
-                    className="pl-8 h-9"
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value)
-                      setPage(1)
-                    }}
-                  />
-                </div>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total XP</CardTitle>
+              <Trophy className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-[60px] font-bold text-center">Rank</TableHead>
-                    <TableHead className="font-bold">Player</TableHead>
-                    <TableHead className="text-right font-bold">XP / Contribution</TableHead>
-                    <TableHead className="text-right font-bold hidden sm:table-cell">Joined</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedMembers.map((member: ClanData) => {
-                    const totalClanXp = Number(clan.clanXp) || 1
-                    const contribution = (member.xp / totalClanXp) * 100
-                    const href = `/player/${member.brawlhallaId}`
-                    return (
-                      <TableRow
-                        key={member.brawlhallaId}
-                        className="border-border hover:bg-muted/50 transition-colors h-16 group"
-                      >
-                        <TableCell className="p-0">
-                          <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                            <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
-                          </Link>
-                        </TableCell>
-                        <TableCell className="p-0">
-                          <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                            <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
-                              {fixEncoding(member.name)}
-                            </span>
-                          </Link>
-                        </TableCell>
-                        <TableCell className="p-0 text-right font-mono">
-                          <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                            <div className="flex flex-col items-end leading-tight">
-                              <span className="font-bold">{formatNum(member.xp)}</span>
-                              <span className="text-xs text-muted-foreground">{contribution.toFixed(1)}%</span>
-                            </div>
-                          </Link>
-                        </TableCell>
-                        <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
-                          <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                            {formatJoinedDate(member.joinDate)}
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNum(clan.clanXp)}</div>
             </CardContent>
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  ← Prev
-                </Button>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground font-mono">Page</span>
-                  <Input
-                    key={page}
-                    defaultValue={page}
-                    className="h-8 w-16 text-center font-mono"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const val = Number.parseInt(e.currentTarget.value)
-                        if (!Number.isNaN(val) && val >= 1 && val <= totalPages) setPage(val)
-                      }
-                    }}
-                  />
-                  <span className="text-sm text-muted-foreground font-mono">of {totalPages}</span>
-                </div>
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                  Next →
-                </Button>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNum(members.length)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Average XP</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {members.length > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / members.length)) : '0'}
               </div>
-            )}
+            </CardContent>
           </Card>
         </div>
       </div>
-    </SidebarSectionsProvider>
+
+      {/* Members */}
+      <div id="members">
+        <Card className="bg-card/50 backdrop-blur-xs border-border">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-yellow-500">&#127942;</span> Clan Members
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
+                <Select
+                  value={sortBy}
+                  onValueChange={(v) => {
+                    setSortBy(v as typeof sortBy)
+                    setPage(1)
+                  }}
+                >
+                  <SelectTrigger className="w-[140px] font-bold h-9">
+                    <SelectValue placeholder="Sort By" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default" className="cursor-pointer">
+                      Clan Rank
+                    </SelectItem>
+                    <SelectItem value="xp" className="cursor-pointer">
+                      XP
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search members..."
+                  className="pl-8 h-9"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    setPage(1)
+                  }}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-[60px] font-bold text-center">Rank</TableHead>
+                  <TableHead className="font-bold">Player</TableHead>
+                  <TableHead className="text-right font-bold">XP / Contribution</TableHead>
+                  <TableHead className="text-right font-bold hidden sm:table-cell">Joined</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedMembers.map((member: ClanData) => {
+                  const totalClanXp = Number(clan.clanXp) || 1
+                  const contribution = (member.xp / totalClanXp) * 100
+                  const href = `/player/${member.brawlhallaId}`
+                  return (
+                    <TableRow
+                      key={member.brawlhallaId}
+                      className="border-border hover:bg-muted/50 transition-colors h-16 group"
+                    >
+                      <TableCell className="p-0">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="p-0">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
+                            {fixEncoding(member.name)}
+                          </span>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="p-0 text-right font-mono">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          <div className="flex flex-col items-end leading-tight">
+                            <span className="font-bold">{formatNum(member.xp)}</span>
+                            <span className="text-xs text-muted-foreground">{contribution.toFixed(1)}%</span>
+                          </div>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          {formatJoinedDate(member.joinDate)}
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+          {totalPages > 1 && (
+            <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                ← Prev
+              </Button>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-mono">Page</span>
+                <Input
+                  key={page}
+                  defaultValue={page}
+                  className="h-8 w-16 text-center font-mono"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = Number.parseInt(e.currentTarget.value)
+                      if (!Number.isNaN(val) && val >= 1 && val <= totalPages) setPage(val)
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground font-mono">of {totalPages}</span>
+              </div>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next →
+              </Button>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
   )
 }
