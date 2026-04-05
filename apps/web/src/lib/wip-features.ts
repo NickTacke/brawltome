@@ -25,44 +25,44 @@ export interface WipFeature {
 export const wipFeatures = {
   stats: {
     title: "Statistics",
-    tagline: "See which legends and weapons are actually winning right now",
+    tagline: "Win rates, pick rates, tier list. Real ranked data",
     description:
-      "Win rates, pick rates, and tier placements pulled from every ranked player we track. Refreshes as the meta shifts, no guesswork about which matchups are real",
+      "Legends and weapons ranked by win rate, pick rate, tier. Filter by rank bracket and region. Pulled from every ranked player we track, updated as the meta shifts",
     icon: PieChart,
   },
   account: {
     title: "Account",
-    tagline: "Your own profile on BrawlTome",
+    tagline: "Your BrawlTome profile. One-click lookups, bookmarks",
     description:
-      "Sign in to bookmark players you're watching, save your Brawlhalla ID for one-click lookups, and get a heads-up when friends hit new peaks",
+      "Sign in. Save your Brawlhalla ID for instant lookups. Bookmark the players and clans you're tracking",
     icon: User,
   },
   matches: {
     title: "Matches",
-    tagline: "Your ranked match history, fully replayable",
+    tagline: "Full ranked history. Every replay, every stat",
     description:
-      "Every ranked game in one timeline. Drop a replay file and it fills in the details for you: opponent, map, legends, outcome, damage taken",
+      "Desktop overlay auto-uploads replays as you play. Per-weapon damage, dodges, movement, damage timelines, stock-by-stock. Your whole ranked career in one place",
     icon: Gamepad,
   },
   learn: {
     title: "Learn",
-    tagline: "Guides and combos, written by players who actually play",
+    tagline: "Guides, combos, tech. Progression paths built for you",
     description:
-      "Matchup writeups, combo breakdowns, and tech tutorials. No chatbot filler, just real players sharing what works and why",
+      "Matchup writeups, combo breakdowns, tech tutorials. Personal paths by difficulty, legend, and skill (edgeguarding, neutral, recovery). Real players, no chatbot filler",
     icon: BookBookmark,
   },
   tournaments: {
     title: "Tournaments",
-    tagline: "Every Brawlhalla tournament, live and archived",
+    tagline: "Every Brawlhalla tournament. Official, community, and yours",
     description:
-      "Bracket view, match results, and a calendar of what's coming up. Local weeklies all the way through to Worlds",
+      "Live brackets, results, and streams from Challengermode-hosted events. Players linked to their BrawlTome profiles. Approved organizers can host tournaments directly on BrawlTome",
     icon: Cup,
   },
   feed: {
     title: "Feed",
-    tagline: "Updates from the players you follow",
+    tagline: "Activity and posts from players you follow",
     description:
-      "Rank changes, tournament wins, and notable games from the players and clans you're tracking. Nothing you didn't ask to see",
+      "Rank changes, tournament runs, notable matches from followed players and clans. Plus their posts. Nothing you didn't ask to see",
     icon: UsersGroupRounded,
   },
 } as const satisfies Record<string, WipFeature>;
