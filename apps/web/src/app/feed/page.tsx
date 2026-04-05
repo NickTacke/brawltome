@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 
 import { WorkInProgress } from "@/components/WorkInProgress";
-import { wipFeatures } from "@/lib/wip-features";
 
 export const metadata: Metadata = {
-  title: `${wipFeatures.feed.title} — Coming Soon`,
+  title: "Feed — Coming Soon",
 };
 
 export default function Page() {
-  return <WorkInProgress feature={wipFeatures.feed} />;
+  return <WorkInProgress slug="feed" />;
 }
