@@ -94,15 +94,19 @@ export function AppSidebar() {
           {navItems.map((item) => {
             const isActive = item.href === pathname;
             const Icon = item.icon;
+            const tooltipLabel = item.wip
+              ? `${item.label} · coming soon`
+              : item.label;
+            const showWipOpacity = item.wip && !isActive;
             return (
-              <WithTooltip key={item.href} label={item.label}>
+              <WithTooltip key={item.href} label={tooltipLabel}>
                 <Link
                   href={item.href}
                   className={`my-2 flex w-10 items-center rounded-lg transition-colors ${
                     isActive
                       ? "text-foreground bg-white/[0.08]"
                       : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
-                  }`}
+                  } ${showWipOpacity ? "opacity-60 hover:opacity-80" : ""}`}
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center">
                     <Icon className="h-6 w-6" weight={item.iconWeight ?? "Linear"} />
