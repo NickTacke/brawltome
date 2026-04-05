@@ -39,7 +39,7 @@ export const wipFeatures = {
     title: 'Learn',
     tagline: 'Guides, combos, tech. Progression paths built for you',
     description:
-      'Matchup writeups, combo breakdowns, tech tutorials. Personal paths by difficulty, legend, and skill (edgeguarding, neutral, recovery). Real players, no chatbot filler',
+      'Matchup writeups, combo breakdowns, tech tutorials. Personal paths by difficulty, legend, and skill (edgeguarding, neutral, recovery)',
     icon: BookBookmark,
   },
   tournaments: {
