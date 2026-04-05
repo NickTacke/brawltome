@@ -102,6 +102,8 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
               ? w.ranked.peakRatings.reduce((a, b) => a + b, 0) / w.ranked.peakRatings.length
               : 0
 
+          const panelId = `weapon-panel-${w.weapon}`
+
           return (
             <div
               key={w.weapon}
@@ -109,6 +111,8 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
               // biome-ignore lint/a11y/useSemanticElements: complex expandable card layout
               role="button"
               tabIndex={0}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
               onClick={() => setExpandedWeapon(isExpanded ? null : w.weapon)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') setExpandedWeapon(isExpanded ? null : w.weapon)
@@ -156,6 +160,7 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
 
                   return (
                     <div
+                      id={panelId}
                       className={`grid transition-all duration-300 ease-out ${
                         isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                       }`}

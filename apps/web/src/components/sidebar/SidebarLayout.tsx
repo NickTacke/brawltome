@@ -7,13 +7,14 @@ import { CommandPalette } from '@/components/CommandPalette'
 import { AppSidebar } from './AppSidebar'
 import { MobileFloatingMenuButton } from './MobileFloatingMenuButton'
 import { MobileMenu } from './MobileMenu'
+import { SidebarSectionsProvider } from './SidebarSectionsProvider'
 
 export function SidebarLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isHome = pathname === '/'
 
   return (
-    <>
+    <SidebarSectionsProvider>
       <CommandPalette />
 
       {/* Mobile chrome: menu self-gates on isMobileOpen. The home-page
@@ -46,6 +47,6 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
           </main>
         )}
       </div>
-    </>
+    </SidebarSectionsProvider>
   )
 }
