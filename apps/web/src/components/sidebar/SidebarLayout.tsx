@@ -55,19 +55,22 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
         <AppSidebar />
       </div>
 
-      {/* Home renders its own full-width layout (search + leaderboard centered
-          to the viewport). All other pages use the shared max-w-6xl content
-          wrapper. The sidebar is fixed-positioned so it overlays in both cases
-          without affecting the content's horizontal centering. */}
-      {isHome ? (
-        children
-      ) : (
-        <main className="min-h-screen">
-          <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">
-            {children}
-          </div>
-        </main>
-      )}
+      {/* Reserve the sidebar width at md+ so content never sits underneath the
+          fixed sidebar. Below md the sidebar is hidden (mobile overlay only),
+          so no offset is needed. Home renders its own full-width layout
+          (search + leaderboard centered within the remaining area); all other
+          pages use the shared max-w-6xl content wrapper. */}
+      <div className="md:pl-[57px]">
+        {isHome ? (
+          children
+        ) : (
+          <main className="min-h-screen">
+            <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">
+              {children}
+            </div>
+          </main>
+        )}
+      </div>
     </>
   );
 }

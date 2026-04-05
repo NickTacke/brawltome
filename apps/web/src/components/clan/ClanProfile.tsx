@@ -1,6 +1,7 @@
 'use client'
 
 import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
+import { NavBar } from '@/components/NavBar'
 import {
   SidebarSectionsProvider,
   type SidebarSection,
@@ -152,7 +153,8 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   if (!clan) {
     return (
-      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+      <div>
+        <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           {!turnstileError && (
             <>
@@ -194,6 +196,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     <SidebarSectionsProvider sections={clanSections}>
       <div className="space-y-8">
         {turnstile}
+        <NavBar showBack />
 
         {/* Overview */}
         <div id="overview" className="flex flex-col gap-6">

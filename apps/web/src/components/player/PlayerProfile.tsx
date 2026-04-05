@@ -1,6 +1,7 @@
 'use client'
 
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
+import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import {
   SidebarSectionsProvider,
@@ -127,6 +128,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   if (!player) {
     return (
       <div>
+        <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           {!turnstileError && (
             <>
@@ -154,8 +156,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   return (
     <SidebarSectionsProvider sections={playerSections}>
-      <div className="space-y-8">
+      <div className="space-y-8 pb-10">
         {turnstile}
+        <NavBar showBack />
 
         <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
