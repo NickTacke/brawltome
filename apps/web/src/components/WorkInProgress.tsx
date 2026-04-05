@@ -1,13 +1,20 @@
-import type { WipFeature } from "@/lib/wip-features";
+"use client";
+
+import { wipFeatures } from "@/lib/wip-features";
 
 import { BrandSocialPills } from "./BrandSocialPills";
 
+export type WipFeatureSlug = keyof typeof wipFeatures;
+
 /**
- * Shared "coming soon" page for unreleased features. Renders inside
- * SidebarLayout's non-home content wrapper, so users can still navigate away
- * via the sidebar — the component only owns its own centered content block.
+ * Shared "coming soon" page for unreleased features. Marked "use client" so
+ * its Solar icon value imports (via wipFeatures) stay out of the server graph
+ * — importing them server-side triggers a createContext error during Next's
+ * page config collection. The page stubs that render this component only pass
+ * a plain string slug, keeping the server/client boundary clean.
  */
-export function WorkInProgress({ feature }: { feature: WipFeature }) {
+export function WorkInProgress({ slug }: { slug: WipFeatureSlug }) {
+  const feature = wipFeatures[slug];
   const Icon = feature.icon;
 
   return (
