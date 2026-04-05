@@ -6,10 +6,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 
-import { useSidebarSections } from './SidebarSectionsProvider'
 import { navItems } from './nav-items'
 import { socialLinks } from './social-links'
-import { useScrollspy } from './useScrollspy'
 
 // Fixed sidebar width. The bar is never collapsible or extendable — labels
 // appear as tooltips on hover instead.
@@ -31,42 +29,6 @@ function WithTooltip({
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
-  )
-}
-
-function ContextualSections() {
-  const sections = useSidebarSections()
-  const activeId = useScrollspy(sections.map((s) => s.id))
-
-  if (sections.length === 0) return null
-
-  return (
-    <div className="border-sidebar-border mt-4 border-t px-2 pt-3">
-      {sections.map((section) => {
-        const isActive = activeId === section.id
-        return (
-          <WithTooltip key={section.id} label={section.label}>
-            <a
-              href={`#${section.id}`}
-              aria-label={section.label}
-              className={`group my-1 flex w-10 items-center rounded-lg transition-colors ${
-                isActive ? 'text-foreground' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
-              }`}
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-                <div
-                  className={`rounded-full transition-all ${
-                    isActive
-                      ? 'bg-foreground h-2 w-2'
-                      : 'bg-muted-foreground/40 group-hover:bg-muted-foreground h-1.5 w-1.5'
-                  }`}
-                />
-              </div>
-            </a>
-          </WithTooltip>
-        )
-      })}
-    </div>
   )
 }
 
@@ -115,8 +77,6 @@ export function AppSidebar() {
               </WithTooltip>
             )
           })}
-
-          <ContextualSections />
         </nav>
 
         <div className="border-sidebar-border shrink-0 border-t px-2 py-2">
