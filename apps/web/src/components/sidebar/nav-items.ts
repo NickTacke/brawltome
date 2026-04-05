@@ -1,9 +1,9 @@
 import {
   BookBookmark,
   Cup,
-  Feed,
   Gamepad,
   PieChart,
+  UsersGroupRounded,
 } from "@solar-icons/react";
 import type { ComponentType, SVGProps } from "react";
 
@@ -23,7 +23,7 @@ export const navItems: NavItem[] = [
   { icon: HouseOutline, label: "Home", href: "/" },
   { icon: PieChart as NavIcon, label: "Statistics", href: "/stats", wip: true },
   { icon: Gamepad as NavIcon, label: "Matches", href: "/matches", wip: true },
-  { icon: Feed as NavIcon, label: "Feed", href: "/feed", wip: true },
+  { icon: UsersGroupRounded as NavIcon, label: "Feed", href: "/feed", wip: true },
   { icon: Cup as NavIcon, label: "Tournaments", href: "/tournaments", wip: true },
   { icon: BookBookmark as NavIcon, label: "Learn", href: "/learn", wip: true },
 ];
