@@ -1,6 +1,6 @@
-import type { ComponentPropsWithoutRef } from "react";
+import type { ComponentPropsWithoutRef } from 'react'
 
-type IconAdapterProps = ComponentPropsWithoutRef<"svg"> & { weight?: string };
+type IconAdapterProps = ComponentPropsWithoutRef<'svg'> & { weight?: string }
 
 /**
  * Outline variant of Tabler's IconHomeFilled with the door removed. Same
@@ -21,10 +21,11 @@ export function HouseOutline({ weight: _weight, ...props }: IconAdapterProps) {
       strokeLinejoin="round"
       {...props}
     >
+      <title>Home</title>
       {/* House outline - bottom runs straight across (no door notch) */}
       <path d="M12.707 2.293l9 9c.63.63.184 1.707-.707 1.707h-1v6a3 3 0 0 1-3 3h-10a3 3 0 0 1-3-3v-6h-1c-.89 0-1.337-1.077-.707-1.707l9-9a1 1 0 0 1 1.414 0" />
       {/* Arched door, sitting on the house's bottom line */}
       <path d="M10 22V17a2 2 0 0 1 4 0v5" />
     </svg>
-  );
+  )
 }

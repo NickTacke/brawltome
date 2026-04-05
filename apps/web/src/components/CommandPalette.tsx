@@ -1,8 +1,8 @@
 'use client'
 
+import { navItems } from '@/components/sidebar/nav-items'
 import { trpc } from '@/lib/trpc'
 import { fixEncoding } from '@/lib/utils'
-import { navItems } from '@/components/sidebar/nav-items'
 import { Avatar, AvatarFallback, AvatarImage, Card } from '@brawltome/ui'
 import { Search, Shield } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -41,6 +41,7 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const lastCommandsRef = useRef<Command[] | null>(null)
 
   const isSearchMode = query.trim().length >= 2
 
@@ -122,10 +123,11 @@ export function CommandPalette() {
     return () => clearTimeout(t)
   }, [open])
 
-  // Reset selection when the command list changes.
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [commands])
+  // Reset highlight when the command list identity changes.
+  if (lastCommandsRef.current !== commands) {
+    lastCommandsRef.current = commands
+    if (selectedIndex !== 0) setSelectedIndex(0)
+  }
 
   // Run tRPC search only when open and query is long enough.
   useEffect(() => {
@@ -217,6 +219,7 @@ export function CommandPalette() {
         className={`relative w-full max-w-xl mx-4 bg-card border-border shadow-2xl overflow-hidden transition-[opacity,transform] duration-200 ease-out ${
           open ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-3 scale-[0.98] opacity-0'
         }`}
+        // biome-ignore lint/a11y/useSemanticElements: native <dialog> incompatible with the always-mounted opacity transition; migration needs @starting-style/allow-discrete CSS.
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -332,15 +335,11 @@ export function CommandPalette() {
               &uarr;&darr;
             </kbd>
             <span>navigate</span>
-            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">
-              &crarr;
-            </kbd>
+            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">&crarr;</kbd>
             <span>select</span>
           </div>
           <div className="flex items-center gap-1">
-            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">
-              Ctrl
-            </kbd>
+            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">Ctrl</kbd>
             <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">K</kbd>
           </div>
         </div>

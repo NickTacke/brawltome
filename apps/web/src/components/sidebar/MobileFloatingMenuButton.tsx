@@ -1,9 +1,9 @@
-"use client";
+'use client'
 
-import { Button } from "@brawltome/ui";
-import { Menu } from "lucide-react";
+import { Button } from '@brawltome/ui'
+import { Menu } from 'lucide-react'
 
-import { useSidebar } from "./SidebarProvider";
+import { useSidebar } from './SidebarProvider'
 
 /**
  * Inline hamburger button for the top of the home page on mobile. Scrolls with
@@ -11,7 +11,7 @@ import { useSidebar } from "./SidebarProvider";
  * consistency across the app.
  */
 export function MobileFloatingMenuButton() {
-  const { open, isMobileOpen } = useSidebar();
+  const { open, isMobileOpen } = useSidebar()
 
   return (
     <Button
@@ -25,5 +25,5 @@ export function MobileFloatingMenuButton() {
     >
       <Menu className="h-5 w-5" />
     </Button>
-  );
+  )
 }

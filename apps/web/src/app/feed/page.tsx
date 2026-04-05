@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata } from 'next'
 
-import { WorkInProgress } from "@/components/WorkInProgress";
+import { WorkInProgress } from '@/components/WorkInProgress'
 
 export const metadata: Metadata = {
-  title: "Feed - Coming Soon",
-};
+  title: 'Feed - Coming Soon',
+}
 
 export default function Page() {
-  return <WorkInProgress slug="feed" />;
+  return <WorkInProgress slug="feed" />
 }
