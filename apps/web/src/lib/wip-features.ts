@@ -1,11 +1,11 @@
 import {
   BookBookmark,
   Cup,
-  Feed,
   Gamepad,
   type IconProps,
   PieChart,
   User,
+  UsersGroupRounded,
 } from "@solar-icons/react";
 import type { ComponentType } from "react";
 
@@ -67,6 +67,6 @@ export const wipFeatures = {
       "Follow players and clans to see their activity and achievements as it happens.",
     description:
       "A social feed of updates from the players and clans you care about. Celebrate rank-ups, tournament wins, and legendary moments in one place.",
-    icon: Feed,
+    icon: UsersGroupRounded,
   },
 } as const satisfies Record<string, WipFeature>;
