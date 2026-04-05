@@ -3,7 +3,7 @@
 import { trpc } from '@/lib/trpc'
 import { fixEncoding } from '@/lib/utils'
 import { navItems } from '@/components/sidebar/nav-items'
-import { Avatar, AvatarFallback, AvatarImage } from '@brawltome/ui'
+import { Avatar, AvatarFallback, AvatarImage, Card } from '@brawltome/ui'
 import { Search, Shield } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -26,7 +26,7 @@ export function CommandPalette() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [debouncedQuery] = useDebounce(query, 300)
+  const [debouncedQuery] = useDebounce(query, 200)
   const [playerResults, setPlayerResults] = useState<
     Array<{
       brawlhallaId: number
@@ -42,9 +42,14 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Build the flat command list the palette is currently showing.
+  const isSearchMode = query.trim().length >= 2
+
+  // Build the flat command list the palette is currently showing. The branch
+  // uses the live query so the list swaps instantly when the user starts/stops
+  // typing, but the actual search results come from debounced state, so old
+  // results stay visible while new ones are fetched (no flash of "no results").
   const commands = useMemo<Command[]>(() => {
-    if (query.trim().length < 2) {
+    if (!isSearchMode) {
       return navItems.map((item) => {
         const Icon = item.icon
         return {
@@ -52,7 +57,7 @@ export function CommandPalette() {
           id: `nav-${item.href}`,
           label: item.label,
           href: item.href,
-          icon: <Icon className="h-4 w-4" weight={item.iconWeight ?? 'Linear'} />,
+          icon: <Icon className="h-5 w-5" weight={item.iconWeight ?? 'Linear'} />,
         }
       })
     }
@@ -72,14 +77,10 @@ export function CommandPalette() {
       href: `/clan/${c.clanId}`,
     }))
     return [...players, ...clans]
-  }, [query, playerResults, clanResults])
+  }, [isSearchMode, playerResults, clanResults])
 
   const close = useCallback(() => {
     setOpen(false)
-    setQuery('')
-    setPlayerResults([])
-    setClanResults([])
-    setSelectedIndex(0)
   }, [])
 
   const activate = useCallback(
@@ -105,12 +106,20 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handler)
   }, [open, close])
 
-  // Focus the input when opened.
+  // Focus input on open and reset state a tick after close so the exit animation
+  // can play before the list clears.
   useEffect(() => {
     if (open) {
-      // A tick later so the input is mounted.
       requestAnimationFrame(() => inputRef.current?.focus())
+      return
     }
+    const t = setTimeout(() => {
+      setQuery('')
+      setPlayerResults([])
+      setClanResults([])
+      setSelectedIndex(0)
+    }, 200)
+    return () => clearTimeout(t)
   }, [open])
 
   // Reset selection when the command list changes.
@@ -118,8 +127,9 @@ export function CommandPalette() {
     setSelectedIndex(0)
   }, [commands])
 
-  // Run tRPC search when the debounced query changes.
+  // Run tRPC search only when open and query is long enough.
   useEffect(() => {
+    if (!open) return
     let cancelled = false
     if (debouncedQuery.trim().length < 2) {
       setPlayerResults([])
@@ -143,17 +153,26 @@ export function CommandPalette() {
     return () => {
       cancelled = true
     }
-  }, [debouncedQuery])
+  }, [open, debouncedQuery])
 
   // Scroll the selected row into view as the user arrow-keys through results.
   useEffect(() => {
+    if (!open) return
     const list = listRef.current
     if (!list) return
     const el = list.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`)
     if (el) el.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex])
+  }, [selectedIndex, open])
 
-  if (!open) return null
+  // Lock body scroll while the palette is open.
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -169,7 +188,6 @@ export function CommandPalette() {
         activate(cmd)
         return
       }
-      // Fallback: if the query is a numeric brawlhalla id, jump to that player.
       if (/^\d{5,}$/.test(query.trim())) {
         router.push(`/player/${query.trim()}`)
         close()
@@ -178,10 +196,15 @@ export function CommandPalette() {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh]">
+    <div
+      className={`fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] transition-opacity duration-200 ${
+        open ? 'opacity-100' : 'pointer-events-none opacity-0'
+      }`}
+      aria-hidden={!open}
+    >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60"
         onClick={close}
         onKeyDown={(e) => e.key === 'Escape' && close()}
         role="button"
@@ -190,15 +213,17 @@ export function CommandPalette() {
       />
 
       {/* Panel */}
-      <div
-        className="relative w-full max-w-xl mx-4 bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+      <Card
+        className={`relative w-full max-w-xl mx-4 bg-card border-border shadow-2xl overflow-hidden transition-[opacity,transform] duration-200 ease-out ${
+          open ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-3 scale-[0.98] opacity-0'
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
       >
-        {/* Input row */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        {/* Input row - matches SearchBar sizing for consistency */}
+        <div className="flex items-center gap-3 px-5 border-b border-border">
+          <Search className="h-5 w-5 text-muted-foreground shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -206,7 +231,7 @@ export function CommandPalette() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder="Search players, clans, or navigate..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+            className="flex-1 h-14 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
           />
           {isSearching && (
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
@@ -217,10 +242,13 @@ export function CommandPalette() {
         </div>
 
         {/* Results */}
-        <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-2">
+        <div
+          ref={listRef}
+          className="max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent"
+        >
           {query.trim().length < 2 ? (
             <>
-              <div className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1.5 tracking-wider">
+              <div className="text-[10px] font-bold uppercase text-muted-foreground px-4 pt-3 pb-1 tracking-wider">
                 Navigation
               </div>
               {commands.map((cmd, index) => (
@@ -230,21 +258,25 @@ export function CommandPalette() {
                   selected={index === selectedIndex}
                   onSelect={() => activate(cmd)}
                   onHover={() => setSelectedIndex(index)}
+                  isLast={index === commands.length - 1}
                 >
                   {cmd.kind === 'nav' && (
                     <>
-                      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground shrink-0">
                         {cmd.icon}
                       </div>
-                      <span className="text-sm font-medium text-foreground">{cmd.label}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-card-foreground">{cmd.label}</div>
+                        <div className="text-xs text-muted-foreground">Go to {cmd.href}</div>
+                      </div>
                     </>
                   )}
                 </CommandRow>
               ))}
             </>
           ) : commands.length === 0 ? (
-            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-              {isSearching ? 'Searching...' : 'No results found.'}
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {isSearching || debouncedQuery.trim().length < 2 ? 'Searching...' : 'No results found.'}
             </div>
           ) : (
             commands.map((cmd, index) => (
@@ -254,10 +286,11 @@ export function CommandPalette() {
                 selected={index === selectedIndex}
                 onSelect={() => activate(cmd)}
                 onHover={() => setSelectedIndex(index)}
+                isLast={index === commands.length - 1}
               >
                 {cmd.kind === 'player' && (
                   <>
-                    <Avatar className="h-8 w-8 rounded-md border border-border bg-muted shrink-0">
+                    <Avatar className="h-10 w-10 border border-border bg-muted rounded-md shrink-0">
                       {cmd.bestLegendNameKey && (
                         <AvatarImage
                           src={`/images/legends/avatars/${cmd.bestLegendNameKey}.png`}
@@ -265,25 +298,25 @@ export function CommandPalette() {
                           className="object-cover object-top"
                         />
                       )}
-                      <AvatarFallback className="text-[9px] uppercase font-bold text-muted-foreground rounded-md">
+                      <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
                         {cmd.label.substring(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{cmd.label}</div>
-                      <div className="text-[10px] text-muted-foreground">{cmd.region ?? 'Unknown'}</div>
+                      <div className="font-bold text-card-foreground truncate">{cmd.label}</div>
+                      <div className="text-xs text-muted-foreground">{cmd.region ?? 'Unknown'}</div>
                     </div>
-                    <div className="text-xs font-mono text-primary shrink-0">{cmd.rating ?? 0}</div>
+                    <div className="text-sm font-mono text-primary shrink-0">{cmd.rating ?? 0}</div>
                   </>
                 )}
                 {cmd.kind === 'clan' && (
                   <>
-                    <div className="h-8 w-8 rounded-md border border-border bg-muted flex items-center justify-center shrink-0">
-                      <Shield className="h-4 w-4 text-muted-foreground fill-current" />
+                    <div className="h-10 w-10 rounded-full border border-border bg-muted flex items-center justify-center shrink-0">
+                      <Shield className="h-5 w-5 text-muted-foreground fill-current" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{cmd.label}</div>
-                      <div className="text-[10px] text-muted-foreground">Clan</div>
+                      <div className="font-bold text-card-foreground truncate">{cmd.label}</div>
+                      <div className="text-xs text-muted-foreground">Clan</div>
                     </div>
                   </>
                 )}
@@ -311,7 +344,7 @@ export function CommandPalette() {
             <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">K</kbd>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -321,12 +354,14 @@ function CommandRow({
   selected,
   onSelect,
   onHover,
+  isLast,
   children,
 }: {
   index: number
   selected: boolean
   onSelect: () => void
   onHover: () => void
+  isLast: boolean
   children: React.ReactNode
 }) {
   return (
@@ -335,9 +370,9 @@ function CommandRow({
       data-index={index}
       onClick={onSelect}
       onMouseMove={onHover}
-      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
-        selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-      }`}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+        isLast ? '' : 'border-b border-border'
+      } ${selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'}`}
     >
       {children}
     </button>
