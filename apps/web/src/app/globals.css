@@ -224,8 +224,18 @@
   * {
     @apply border-border;
   }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
   html,
   body {
     @apply bg-background text-foreground;
+  }
+  /* Give scrollspy section anchors breathing room from the top of the viewport
+     when jumped to via in-page links from the sidebar. */
+  main [id] {
+    scroll-margin-top: 1.5rem;
   }
 }

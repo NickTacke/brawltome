@@ -44,8 +44,8 @@ export default async function Page({ params }: PageProps) {
   const initialData = await getClan(Number(id))
 
   return (
-    <main className="min-h-screen bg-background py-6">
+    <div className="space-y-8">
       <ClanProfile initialData={initialData} id={id} />
-    </main>
+    </div>
   )
 }

@@ -144,7 +144,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   if (!clan) {
     return (
-      <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6">
+      <div>
         <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           {!turnstileError && (
@@ -184,12 +184,12 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 pt-3 sm:pt-6 space-y-8">
+    <div className="space-y-8">
       {turnstile}
       <NavBar showBack />
 
-      {/* Header */}
-      <div className="flex flex-col gap-6">
+      {/* Overview */}
+      <div id="overview" className="flex flex-col gap-6">
         <div>
           <h1 className="text-4xl sm:text-6xl font-black text-foreground tracking-tight">
             {fixEncoding(clan.clanName)}
@@ -258,130 +258,132 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
       </div>
 
       {/* Members */}
-      <Card className="bg-card/50 backdrop-blur-xs border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-yellow-500">&#127942;</span> Clan Members
-          </CardTitle>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
-              <Select
-                value={sortBy}
-                onValueChange={(v) => {
-                  setSortBy(v as typeof sortBy)
-                  setPage(1)
-                }}
+      <div id="members">
+        <Card className="bg-card/50 backdrop-blur-xs border-border">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-yellow-500">&#127942;</span> Clan Members
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
+                <Select
+                  value={sortBy}
+                  onValueChange={(v) => {
+                    setSortBy(v as typeof sortBy)
+                    setPage(1)
+                  }}
+                >
+                  <SelectTrigger className="w-[140px] font-bold h-9">
+                    <SelectValue placeholder="Sort By" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default" className="cursor-pointer">
+                      Clan Rank
+                    </SelectItem>
+                    <SelectItem value="xp" className="cursor-pointer">
+                      XP
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search members..."
+                  className="pl-8 h-9"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    setPage(1)
+                  }}
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-[60px] font-bold text-center">Rank</TableHead>
+                  <TableHead className="font-bold">Player</TableHead>
+                  <TableHead className="text-right font-bold">XP / Contribution</TableHead>
+                  <TableHead className="text-right font-bold hidden sm:table-cell">Joined</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedMembers.map((member: ClanData) => {
+                  const totalClanXp = Number(clan.clanXp) || 1
+                  const contribution = (member.xp / totalClanXp) * 100
+                  const href = `/player/${member.brawlhallaId}`
+                  return (
+                    <TableRow
+                      key={member.brawlhallaId}
+                      className="border-border hover:bg-muted/50 transition-colors h-16 group"
+                    >
+                      <TableCell className="p-0">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="p-0">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
+                            {fixEncoding(member.name)}
+                          </span>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="p-0 text-right font-mono">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          <div className="flex flex-col items-end leading-tight">
+                            <span className="font-bold">{formatNum(member.xp)}</span>
+                            <span className="text-xs text-muted-foreground">{contribution.toFixed(1)}%</span>
+                          </div>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
+                        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+                          {formatJoinedDate(member.joinDate)}
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+          {totalPages > 1 && (
+            <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                <SelectTrigger className="w-[140px] font-bold h-9">
-                  <SelectValue placeholder="Sort By" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default" className="cursor-pointer">
-                    Clan Rank
-                  </SelectItem>
-                  <SelectItem value="xp" className="cursor-pointer">
-                    XP
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                ← Prev
+              </Button>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground font-mono">Page</span>
+                <Input
+                  key={page}
+                  defaultValue={page}
+                  className="h-8 w-16 text-center font-mono"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = Number.parseInt(e.currentTarget.value)
+                      if (!Number.isNaN(val) && val >= 1 && val <= totalPages) setPage(val)
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground font-mono">of {totalPages}</span>
+              </div>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next →
+              </Button>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search members..."
-                className="pl-8 h-9"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                  setPage(1)
-                }}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[60px] font-bold text-center">Rank</TableHead>
-                <TableHead className="font-bold">Player</TableHead>
-                <TableHead className="text-right font-bold">XP / Contribution</TableHead>
-                <TableHead className="text-right font-bold hidden sm:table-cell">Joined</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedMembers.map((member: ClanData) => {
-                const totalClanXp = Number(clan.clanXp) || 1
-                const contribution = (member.xp / totalClanXp) * 100
-                const href = `/player/${member.brawlhallaId}`
-                return (
-                  <TableRow
-                    key={member.brawlhallaId}
-                    className="border-border hover:bg-muted/50 transition-colors h-16 group"
-                  >
-                    <TableCell className="p-0">
-                      <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                        <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="p-0">
-                      <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                        <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
-                          {fixEncoding(member.name)}
-                        </span>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="p-0 text-right font-mono">
-                      <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                        <div className="flex flex-col items-end leading-tight">
-                          <span className="font-bold">{formatNum(member.xp)}</span>
-                          <span className="text-xs text-muted-foreground">{contribution.toFixed(1)}%</span>
-                        </div>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="p-0 text-right text-muted-foreground text-sm hidden sm:table-cell">
-                      <Link href={href} prefetch={false} className="block w-full h-full p-4">
-                        {formatJoinedDate(member.joinDate)}
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-border flex justify-between items-center bg-muted/20">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              ← Prev
-            </Button>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground font-mono">Page</span>
-              <Input
-                key={page}
-                defaultValue={page}
-                className="h-8 w-16 text-center font-mono"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const val = Number.parseInt(e.currentTarget.value)
-                    if (!Number.isNaN(val) && val >= 1 && val <= totalPages) setPage(val)
-                  }
-                }}
-              />
-              <span className="text-sm text-muted-foreground font-mono">of {totalPages}</span>
-            </div>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              Next →
-            </Button>
-          </div>
-        )}
-      </Card>
+          )}
+        </Card>
+      </div>
     </div>
   )
 }
