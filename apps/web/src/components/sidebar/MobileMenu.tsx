@@ -37,6 +37,24 @@ export function MobileMenu() {
     };
   }, [isMobileOpen]);
 
+  // Match the browser chrome color to the menu background while open, so the
+  // mobile status bar and URL bar blend into the menu instead of showing the
+  // page theme color. Restores the previous value on close.
+  useEffect(() => {
+    if (!isMobileOpen) return;
+    const meta = document.querySelector<HTMLMetaElement>(
+      'meta[name="theme-color"]',
+    );
+    if (!meta) return;
+    const previous = meta.getAttribute("content");
+    meta.setAttribute("content", "#0b0f1a");
+    return () => {
+      if (previous !== null) {
+        meta.setAttribute("content", previous);
+      }
+    };
+  }, [isMobileOpen]);
+
   // Escape to close + Tab focus trap + initial focus.
   useEffect(() => {
     if (!isMobileOpen) return;

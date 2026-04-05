@@ -16,9 +16,10 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
     <>
       <CommandPalette />
 
-      {/* Mobile chrome: menu (self-gates on isMobileOpen) + floating trigger on home. */}
+      {/* Mobile chrome: menu self-gates on isMobileOpen. The home-page
+          hamburger is rendered inline below, inside the home content branch,
+          so it scrolls with page content instead of floating. */}
       <MobileMenu />
-      {isHome ? <MobileFloatingMenuButton /> : null}
 
       {/* Fixed desktop sidebar - does not affect content flow. h-dvh gives the
           AppSidebar (which uses h-full) a proper container height. */}
@@ -33,7 +34,12 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
           pages use the shared max-w-6xl content wrapper. */}
       <div className="md:pl-[57px]">
         {isHome ? (
-          children
+          <>
+            <div className="flex px-3 pt-3 md:hidden">
+              <MobileFloatingMenuButton />
+            </div>
+            {children}
+          </>
         ) : (
           <main className="min-h-screen">
             <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">
