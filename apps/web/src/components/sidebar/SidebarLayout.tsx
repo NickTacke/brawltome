@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 
+import { CommandPalette } from "@/components/CommandPalette";
 import { AppSidebar } from "./AppSidebar";
 import { MobileTopBar } from "./MobileTopBar";
 import { useSidebar } from "./SidebarProvider";
@@ -48,6 +49,7 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <CommandPalette />
       <MobileTopBar />
       <MobileOverlay />
       {/* Fixed desktop sidebar - does not affect content flow */}
