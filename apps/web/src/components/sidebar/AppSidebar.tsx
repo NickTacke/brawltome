@@ -28,7 +28,7 @@ function WithTooltip({
   label,
   children,
 }: {
-  label: string;
+  label: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -94,9 +94,16 @@ export function AppSidebar() {
           {navItems.map((item) => {
             const isActive = item.href === pathname;
             const Icon = item.icon;
-            const tooltipLabel = item.wip
-              ? `${item.label} · coming soon`
-              : item.label;
+            const tooltipLabel: ReactNode = item.wip ? (
+              <span className="flex items-center gap-2">
+                {item.label}
+                <span className="text-muted-foreground/70 rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                  Soon
+                </span>
+              </span>
+            ) : (
+              item.label
+            );
             const showWipOpacity = item.wip && !isActive;
             return (
               <WithTooltip key={item.href} label={tooltipLabel}>
