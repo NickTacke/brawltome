@@ -1,11 +1,11 @@
 import {
-  Book,
+  BookBookmark,
   Cup,
   Feed,
+  Gamepad,
   type IconProps,
   PieChart,
   User,
-  VideoFrame,
 } from "@solar-icons/react";
 import type { ComponentType } from "react";
 
@@ -44,14 +44,14 @@ export const wipFeatures = {
     tagline: "Upload replays and browse your ranked match history.",
     description:
       "See every ranked match you've played with full context: opponent, map, legends used, and outcome. Upload replays to automatically populate stats and share with friends.",
-    icon: VideoFrame,
+    icon: Gamepad,
   },
   learn: {
     title: "Learn",
     tagline: "Guides, tutorials, and combo breakdowns from the BrawlTome community.",
     description:
       "Structured learning paths for every skill level. Read matchup guides, watch video tutorials, and practice combos with interactive trainers built by top players.",
-    icon: Book,
+    icon: BookBookmark,
   },
   tournaments: {
     title: "Tournaments",
