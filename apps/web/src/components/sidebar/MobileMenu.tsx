@@ -142,6 +142,7 @@ export function MobileMenu() {
             {navItems.map((item) => {
               const isActive = item.href === pathname;
               const Icon = item.icon;
+              const showWipOpacity = item.wip && !isActive;
               return (
                 <li key={item.href}>
                   <Link
@@ -150,13 +151,18 @@ export function MobileMenu() {
                       isActive
                         ? "text-foreground"
                         : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    } ${showWipOpacity ? "opacity-60" : ""}`}
                   >
                     <Icon
                       className={`h-6 w-6 ${isActive ? "opacity-100" : "opacity-60"}`}
                       weight={item.iconWeight ?? "Linear"}
                     />
                     {item.label}
+                    {item.wip && !isActive && (
+                      <span className="text-muted-foreground/70 ml-auto rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                        Soon
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
