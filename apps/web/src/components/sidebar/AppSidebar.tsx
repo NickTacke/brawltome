@@ -145,13 +145,13 @@ export function AppSidebar() {
             ))}
           </div>
 
-          <div className="border-sidebar-border border-t pt-2">
+          <div className="border-sidebar-border border-t pt-2 pb-1">
             <WithTooltip label="Sign in">
               <Link
                 href="/account"
-                className="text-muted-foreground hover:bg-white/[0.04] hover:text-foreground flex w-10 items-center rounded-lg transition-colors"
+                className="group flex w-10 items-center rounded-lg"
               >
-                <div className="bg-sidebar-accent text-muted-foreground border-sidebar flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2">
+                <div className="bg-sidebar-accent text-muted-foreground border-sidebar group-hover:brightness-150 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 transition-all">
                   <User className="h-6 w-6" weight="Linear" />
                 </div>
               </Link>
