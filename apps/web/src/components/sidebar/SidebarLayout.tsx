@@ -1,16 +1,16 @@
-"use client";
+'use client'
 
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname } from 'next/navigation'
+import type { ReactNode } from 'react'
 
-import { CommandPalette } from "@/components/CommandPalette";
-import { AppSidebar } from "./AppSidebar";
-import { MobileFloatingMenuButton } from "./MobileFloatingMenuButton";
-import { MobileMenu } from "./MobileMenu";
+import { CommandPalette } from '@/components/CommandPalette'
+import { AppSidebar } from './AppSidebar'
+import { MobileFloatingMenuButton } from './MobileFloatingMenuButton'
+import { MobileMenu } from './MobileMenu'
 
 export function SidebarLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isHome = pathname === "/";
+  const pathname = usePathname()
+  const isHome = pathname === '/'
 
   return (
     <>
@@ -42,12 +42,10 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
           </>
         ) : (
           <main className="min-h-screen">
-            <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">
-              {children}
-            </div>
+            <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">{children}</div>
           </main>
         )}
       </div>
     </>
-  );
+  )
 }

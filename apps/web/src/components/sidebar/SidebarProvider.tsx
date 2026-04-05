@@ -1,46 +1,35 @@
-"use client";
+'use client'
 
-import { usePathname } from "next/navigation";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { usePathname } from 'next/navigation'
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react'
 
 interface SidebarContextValue {
-  isMobileOpen: boolean;
-  open: () => void;
-  close: () => void;
+  isMobileOpen: boolean
+  open: () => void
+  close: () => void
 }
 
-const SidebarContext = createContext<SidebarContextValue | null>(null);
+const SidebarContext = createContext<SidebarContextValue | null>(null)
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const pathname = usePathname();
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const pathname = usePathname()
 
-  const open = useCallback(() => setIsMobileOpen(true), []);
-  const close = useCallback(() => setIsMobileOpen(false), []);
+  const open = useCallback(() => setIsMobileOpen(true), [])
+  const close = useCallback(() => setIsMobileOpen(false), [])
 
-  // Auto-close the mobile menu on any route change. Ensures that tapping a
-  // nav item inside the menu navigates and then the menu gets out of the way
-  // without each trigger having to call close() manually.
+  // Auto-close the mobile menu on route change so individual nav triggers
+  // don't each have to call close().
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is a trigger, not read in the body.
   useEffect(() => {
-    setIsMobileOpen(false);
-  }, [pathname]);
+    setIsMobileOpen(false)
+  }, [pathname])
 
-  return (
-    <SidebarContext value={{ isMobileOpen, open, close }}>
-      {children}
-    </SidebarContext>
-  );
+  return <SidebarContext value={{ isMobileOpen, open, close }}>{children}</SidebarContext>
 }
 
 export function useSidebar() {
-  const ctx = useContext(SidebarContext);
-  if (!ctx) throw new Error("useSidebar must be used within SidebarProvider");
-  return ctx;
+  const ctx = useContext(SidebarContext)
+  if (!ctx) throw new Error('useSidebar must be used within SidebarProvider')
+  return ctx
 }
