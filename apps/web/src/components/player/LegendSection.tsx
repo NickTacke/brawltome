@@ -47,8 +47,23 @@ const LEGEND_SORT_OPTIONS: { value: LegendSortKey; label: string }[] = [
 export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps) {
   const [showAllLegends, setShowAllLegends] = useState(false)
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null)
+  const [openedLegendIds, setOpenedLegendIds] = useState<Set<number>>(new Set())
   const [sortBy, setSortBy] = useState<LegendSortKey>('xp')
   const legendsRef = useRef<HTMLDivElement>(null)
+
+  const toggleLegend = (id: number) => {
+    if (expandedLegendId === id) {
+      setExpandedLegendId(null)
+      return
+    }
+    setOpenedLegendIds((prev) => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+    setExpandedLegendId(id)
+  }
 
   const sortedLegends = [...allLegends].sort((a: PlayerData, b: PlayerData) => {
     switch (sortBy) {
@@ -125,12 +140,12 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
               // biome-ignore lint/a11y/useSemanticElements: complex expandable card layout
               role="button"
               tabIndex={0}
-              onClick={() => setExpandedLegendId(isExpanded ? null : legend.legendId)}
+              onClick={() => toggleLegend(legend.legendId)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') setExpandedLegendId(isExpanded ? null : legend.legendId)
+                if (e.key === 'Enter' || e.key === ' ') toggleLegend(legend.legendId)
               }}
             >
-              <div className="p-4 space-y-3 relative overflow-hidden">
+              <div className="p-4 relative overflow-hidden">
                 <div className="flex items-center gap-4 relative z-10">
                   <Avatar className="w-12 h-12 rounded-lg shadow-sm shrink-0">
                     <AvatarImage
@@ -181,7 +196,14 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
                   </div>
                 </div>
 
-                {isExpanded &&
+                <div
+                  className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out relative z-10 ${
+                    isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                  }`}
+                  aria-hidden={!isExpanded}
+                >
+                  <div className="min-h-0 overflow-hidden">
+                {openedLegendIds.has(legend.legendId) &&
                   (() => {
                     const matchTime = parseNum(legend.matchTime)
                     const legendGames = parseNum(legend.games)
@@ -512,6 +534,8 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
                       </div>
                     )
                   })()}
+                  </div>
+                </div>
               </div>
             </div>
           )

@@ -26,7 +26,7 @@ export const SIDEBAR_WIDTH = 57;
 // Discord / X / GitHub brand icons (inline SVGs)
 const socialLinks = [
   {
-    href: "https://discord.gg/ZEN8xQbNaE",
+    href: "https://discord.gg/ft5CJyjkkS",
     label: "Discord",
     svg: (
       <svg
@@ -191,7 +191,7 @@ export function AppSidebar({ expanded = false }: { expanded?: boolean }) {
         {/* Bottom section - socials + account */}
         <div className="border-sidebar-border shrink-0 border-t px-2 py-2">
           {/* Socials as rounded icon buttons, matching nav items */}
-          <div className="mb-1">
+          <div className="mb-2">
             {socialLinks.map((link) => {
               const button = (
                 <a

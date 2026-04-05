@@ -114,7 +114,7 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
                 if (e.key === 'Enter' || e.key === ' ') setExpandedWeapon(isExpanded ? null : w.weapon)
               }}
             >
-              <div className="p-4 space-y-3">
+              <div className="p-4 relative overflow-hidden">
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 relative shrink-0">
                     <img src={getWeaponIcon(w.weapon)} alt={w.weapon} className="object-contain w-full h-full" />
@@ -147,8 +147,7 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
                   </div>
                 </div>
 
-                {isExpanded &&
-                  (() => {
+                {(() => {
                     const rankedWinrate = w.ranked.games > 0 ? (w.ranked.wins / w.ranked.games) * 100 : 0
                     const dmgPerKO = w.KOs > 0 ? Math.round(w.damage / w.KOs) : 0
                     const avgDmgPerGame = w.games > 0 ? Math.round(w.damage / w.games) : 0
@@ -156,7 +155,14 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
                     const avgLegendXp = w.legendCount > 0 ? Math.round(w.xp / w.legendCount) : 0
 
                     return (
-                      <div className="pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div
+                        className={`grid transition-all duration-300 ease-out ${
+                          isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                        }`}
+                        aria-hidden={!isExpanded}
+                      >
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="pt-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-0">
                           {/* Left: Overall Stats */}
                           <div className="space-y-3 md:pr-4 md:border-r md:border-border/30">
@@ -349,6 +355,8 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
                               </div>
                             )}
                           </div>
+                        </div>
+                      </div>
                         </div>
                       </div>
                     )
