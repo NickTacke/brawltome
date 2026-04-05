@@ -35,7 +35,7 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
       <div className="md:pl-[57px]">
         {isHome ? (
           <>
-            <div className="flex px-3 pt-3 md:hidden">
+            <div className="flex pl-5 pt-5 md:hidden">
               <MobileFloatingMenuButton />
             </div>
             {children}
