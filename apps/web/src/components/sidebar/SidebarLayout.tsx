@@ -25,7 +25,9 @@ function MobileOverlay() {
   if (!isMobileOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 md:hidden">
+    // z-[60] keeps the overlay above page content that uses z-50
+    // (e.g. the home page hero wrapper in app/page.tsx).
+    <div className="fixed inset-0 z-[60] md:hidden">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
@@ -35,9 +37,12 @@ function MobileOverlay() {
         tabIndex={0}
         aria-label="Close menu"
       />
-      {/* Slide-in sidebar - mobile shows labels, not tooltips */}
-      <div className="animate-in slide-in-from-left relative z-50 h-full w-[220px] duration-200">
-        <AppSidebar expanded />
+      {/* Slide-in sidebar - mobile shows labels, not tooltips.
+          absolute inset-y-0 anchors the panel to the full height of the
+          fixed inset-0 parent, which tracks the visual viewport on
+          mobile browsers. This is more robust than h-dvh here. */}
+      <div className="animate-in slide-in-from-left absolute inset-y-0 left-0 z-[61] w-[220px] duration-200">
+        <AppSidebar />
       </div>
     </div>
   );
@@ -52,8 +57,10 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
       <CommandPalette />
       <MobileTopBar />
       <MobileOverlay />
-      {/* Fixed desktop sidebar - does not affect content flow */}
-      <div className="hidden md:block fixed left-0 top-0 z-30">
+      {/* Fixed desktop sidebar - does not affect content flow. h-dvh
+          gives the AppSidebar (which uses h-full) a proper container
+          height on both desktop and mobile browsers. */}
+      <div className="hidden md:block fixed left-0 top-0 z-30 h-dvh">
         <AppSidebar />
       </div>
 
