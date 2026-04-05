@@ -24,6 +24,10 @@ export function MobileMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Body scroll lock while open.
+  // NOTE: When wiring this component into SidebarLayout, ensure the legacy
+  // MobileOverlay is removed in the same change. Two components running
+  // independent scroll-lock effects on the same body produce non-deterministic
+  // restoration when the menu closes.
   useEffect(() => {
     if (!isMobileOpen) return;
     const previous = document.body.style.overflow;
@@ -66,6 +70,11 @@ export function MobileMenu() {
         e.preventDefault();
         last.focus();
       } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!menu.contains(document.activeElement)) {
+        // Focus escaped the dialog (e.g., browser chrome stole it). Recapture
+        // to the first focusable so the trap stays honest.
         e.preventDefault();
         first.focus();
       }
@@ -169,6 +178,7 @@ export function MobileMenu() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={link.label}
+                onClick={(e) => e.stopPropagation()}
                 className="text-muted-foreground hover:text-foreground flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.04] transition-colors"
               >
                 {link.svg}
