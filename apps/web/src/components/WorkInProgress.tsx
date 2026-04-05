@@ -23,8 +23,12 @@ export function WorkInProgress({ slug }: { slug: WipFeatureSlug }) {
         <Icon className="h-16 w-16" weight="Linear" />
       </div>
 
-      <h1 className="text-foreground mt-8 text-4xl font-bold tracking-tight">
-        {feature.title} is coming soon
+      <p className="text-muted-foreground mt-8 text-xs font-semibold uppercase tracking-widest">
+        Coming soon
+      </p>
+
+      <h1 className="text-foreground mt-2 text-5xl font-bold tracking-tight">
+        {feature.title}
       </h1>
 
       <p className="text-muted-foreground mt-4 max-w-md text-xl">

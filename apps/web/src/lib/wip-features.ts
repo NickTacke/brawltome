@@ -25,48 +25,44 @@ export interface WipFeature {
 export const wipFeatures = {
   stats: {
     title: "Statistics",
-    tagline:
-      "Explore legend, weapon, and meta performance across the entire Brawlhalla community.",
+    tagline: "See which legends and weapons are actually winning right now",
     description:
-      "Compare win rates, pick rates, and tier placements for every legend and weapon combination. See what's strong, what's flexing, and how the meta shifts season over season.",
+      "Win rates, pick rates, and tier placements pulled from every ranked player we track. Refreshes as the meta shifts, no guesswork about which matchups are real",
     icon: PieChart,
   },
   account: {
     title: "Account",
-    tagline:
-      "Link your Brawlhalla profile and personalize your BrawlTome experience.",
+    tagline: "Your own profile on BrawlTome",
     description:
-      "Sign in to save favorite players and clans, track your own progress with personalized dashboards, and sync preferences across devices.",
+      "Sign in to bookmark players you're watching, save your Brawlhalla ID for one-click lookups, and get a heads-up when friends hit new peaks",
     icon: User,
   },
   matches: {
     title: "Matches",
-    tagline: "Upload replays and browse your ranked match history.",
+    tagline: "Your ranked match history, fully replayable",
     description:
-      "See every ranked match you've played with full context: opponent, map, legends used, and outcome. Upload replays to automatically populate stats and share with friends.",
+      "Every ranked game in one timeline. Drop a replay file and it fills in the details for you: opponent, map, legends, outcome, damage taken",
     icon: Gamepad,
   },
   learn: {
     title: "Learn",
-    tagline: "Guides, tutorials, and combo breakdowns from the BrawlTome community.",
+    tagline: "Guides and combos, written by players who actually play",
     description:
-      "Structured learning paths for every skill level. Read matchup guides, watch video tutorials, and practice combos with interactive trainers built by top players.",
+      "Matchup writeups, combo breakdowns, and tech tutorials. No chatbot filler, just real players sharing what works and why",
     icon: BookBookmark,
   },
   tournaments: {
     title: "Tournaments",
-    tagline:
-      "Track brackets, results, and upcoming events from the BrawlTome scene.",
+    tagline: "Every Brawlhalla tournament, live and archived",
     description:
-      "A central hub for Brawlhalla tournaments. Follow bracket progressions live, review historical results, and discover upcoming competitive events across skill levels.",
+      "Bracket view, match results, and a calendar of what's coming up. Local weeklies all the way through to Worlds",
     icon: Cup,
   },
   feed: {
     title: "Feed",
-    tagline:
-      "Follow players and clans to see their activity and achievements as it happens.",
+    tagline: "Updates from the players you follow",
     description:
-      "A social feed of updates from the players and clans you care about. Celebrate rank-ups, tournament wins, and legendary moments in one place.",
+      "Rank changes, tournament wins, and notable games from the players and clans you're tracking. Nothing you didn't ask to see",
     icon: UsersGroupRounded,
   },
 } as const satisfies Record<string, WipFeature>;
