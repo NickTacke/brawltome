@@ -1,6 +1,7 @@
 import './globals.css'
 import { MaintenancePage } from '@/components/MaintenancePage'
-import { ThemeProvider } from '@/components/theme-provider'
+import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
+import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -37,10 +38,7 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'BrawlTome',
   },
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
-    { media: '(prefers-color-scheme: dark)', color: '#1e2530' },
-  ],
+  themeColor: '#1e2530',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -48,13 +46,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const maintenanceEnd = process.env.MAINTENANCE_END
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <SidebarProvider>
           <div className="bg-background text-foreground min-h-screen">
-            {isMaintenanceMode ? <MaintenancePage maintenanceEnd={maintenanceEnd} /> : children}
+            {isMaintenanceMode ? (
+              <MaintenancePage maintenanceEnd={maintenanceEnd} />
+            ) : (
+              <SidebarLayout>{children}</SidebarLayout>
+            )}
           </div>
-        </ThemeProvider>
+        </SidebarProvider>
       </body>
     </html>
   )
