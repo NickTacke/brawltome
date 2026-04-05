@@ -2,16 +2,18 @@ import {
   Book,
   Cup,
   Feed,
+  type IconProps,
   PieChart,
   User,
   VideoFrame,
 } from "@solar-icons/react";
+import type { ComponentType } from "react";
 
 export interface WipFeature {
   title: string;
   tagline: string;
   description: string;
-  icon: typeof Book;
+  icon: ComponentType<IconProps>;
 }
 
 /**
