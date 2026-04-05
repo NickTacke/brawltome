@@ -3,7 +3,6 @@
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
-import { type SidebarSection, useRegisterSidebarSections } from '@/components/sidebar/SidebarSectionsProvider'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import { TIERED_TTL } from '@brawltome/shared/constants'
@@ -27,15 +26,6 @@ import { RatingChart } from './RatingChart'
 import { TeamSection } from './TeamSection'
 import { WeaponSection } from './WeaponSection'
 import { formatHours } from './shared'
-
-const playerSections: SidebarSection[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'ranked', label: 'Ranked' },
-  { id: 'rating-history', label: 'Rating History' },
-  { id: 'weapons', label: 'Weapons' },
-  { id: 'legends', label: 'Legends' },
-  { id: 'teams', label: 'Teams' },
-]
 
 // biome-ignore lint/suspicious/noExplicitAny: tRPC inferred type
 type PlayerData = any
@@ -150,8 +140,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     .filter((v: unknown): v is string => typeof v === 'string' && v.trim().length > 0)
     .filter((v: string) => v.trim() !== player.name)
     .sort((a: string, b: string) => a.localeCompare(b))
-
-  useRegisterSidebarSections(playerSections)
 
   return (
     <div className="space-y-8 pb-10">

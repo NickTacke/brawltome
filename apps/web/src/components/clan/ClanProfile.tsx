@@ -3,7 +3,6 @@
 import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
-import { type SidebarSection, useRegisterSidebarSections } from '@/components/sidebar/SidebarSectionsProvider'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import { CLAN_TTL_MS } from '@brawltome/shared/constants'
 import {
@@ -32,11 +31,6 @@ import {
 import { Calendar, Clock, Crown, Search, Shield, TrendingUp, Trophy, User, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-const clanSections: SidebarSection[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'members', label: 'Members' },
-]
 
 const PAGE_SIZE = 25
 
@@ -188,8 +182,6 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const formatJoinedDate = (value: string | Date) => {
     return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value))
   }
-
-  useRegisterSidebarSections(clanSections)
 
   return (
     <div className="space-y-8">
