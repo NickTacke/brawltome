@@ -64,6 +64,8 @@ export function AppSidebar() {
               <WithTooltip key={item.href} label={tooltipLabel}>
                 <Link
                   href={item.href}
+                  aria-label={item.label}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`my-2 flex w-10 items-center rounded-lg transition-colors ${
                     isActive
                       ? 'text-foreground bg-white/[0.08]'
@@ -98,7 +100,12 @@ export function AppSidebar() {
 
           <div className="border-sidebar-border border-t pt-2 pb-1">
             <WithTooltip label="Sign in">
-              <Link href="/account" className="group flex w-10 items-center rounded-lg">
+              <Link
+                href="/account"
+                aria-label="Sign in"
+                aria-current={pathname === '/account' ? 'page' : undefined}
+                className="group flex w-10 items-center rounded-lg"
+              >
                 <div className="bg-sidebar-accent text-muted-foreground border-sidebar group-hover:brightness-150 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 transition-all">
                   <User className="h-6 w-6" weight="Linear" />
                 </div>
