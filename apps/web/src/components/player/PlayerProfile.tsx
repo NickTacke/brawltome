@@ -33,7 +33,6 @@ import { formatHours } from './shared'
 const playerSections: SidebarSection[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'ranked', label: 'Ranked' },
-  { id: 'combat', label: 'Combat' },
   { id: 'rating-history', label: 'Rating History' },
   { id: 'weapons', label: 'Weapons' },
   { id: 'legends', label: 'Legends' },
@@ -246,11 +245,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         )}
       </div>
 
-        <div id="ranked">
+        <div id="ranked" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <RankedCard player={player} rankedTeams={rankedTeams} />
-        </div>
-
-        <div id="combat">
           <CombatCard player={player} />
         </div>
 

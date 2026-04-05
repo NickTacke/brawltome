@@ -1,13 +1,18 @@
-import { BarChart3, Home, Image, type LucideIcon } from "lucide-react";
+import { PieChart } from "@solar-icons/react";
+import type { ComponentType, SVGProps } from "react";
+
+import { HouseOutline } from "./icons";
+
+type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { weight?: string }>;
 
 export interface NavItem {
-  icon: LucideIcon;
+  icon: NavIcon;
   label: string;
   href: string;
+  iconWeight?: string;
 }
 
 export const navItems: NavItem[] = [
-  { icon: Home, label: "Home", href: "/" },
-  { icon: BarChart3, label: "Meta", href: "/meta" },
-  { icon: Image, label: "Player Cards", href: "/cards" },
+  { icon: HouseOutline, label: "Home", href: "/" },
+  { icon: PieChart as NavIcon, label: "Statistics", href: "/stats" },
 ];

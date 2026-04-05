@@ -34,9 +34,9 @@ function MobileOverlay() {
         tabIndex={0}
         aria-label="Close menu"
       />
-      {/* Slide-in sidebar */}
-      <div className="animate-in slide-in-from-left relative z-50 h-full w-[260px] duration-200">
-        <AppSidebar />
+      {/* Slide-in sidebar - mobile shows labels, not tooltips */}
+      <div className="animate-in slide-in-from-left relative z-50 h-full w-[220px] duration-200">
+        <AppSidebar expanded />
       </div>
     </div>
   );
@@ -46,27 +46,28 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  if (isHome) {
-    return <>{children}</>;
-  }
-
   return (
     <>
       <MobileTopBar />
       <MobileOverlay />
-      <div className="flex h-screen">
-        {/* Desktop sidebar */}
-        <div className="hidden md:block">
-          <AppSidebar />
-        </div>
+      {/* Fixed desktop sidebar - does not affect content flow */}
+      <div className="hidden md:block fixed left-0 top-0 z-30">
+        <AppSidebar />
+      </div>
 
-        {/* Content area */}
-        <main className="min-h-screen flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl p-6 pt-3 sm:pt-6">
+      {/* Home renders its own full-width layout (search + leaderboard centered
+          to the viewport). All other pages use the shared max-w-6xl content
+          wrapper. The sidebar is fixed-positioned so it overlays in both cases
+          without affecting the content's horizontal centering. */}
+      {isHome ? (
+        children
+      ) : (
+        <main className="min-h-screen">
+          <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">
             {children}
           </div>
         </main>
-      </div>
+      )}
     </>
   );
 }

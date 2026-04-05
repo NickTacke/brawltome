@@ -1,216 +1,250 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Moon, Sun, User } from "lucide-react";
+import { User } from "@solar-icons/react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@brawltome/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTheme } from "next-themes";
+import type { ReactNode } from "react";
 
-import { Button } from "@brawltome/ui";
-
-import { useSidebar } from "./SidebarProvider";
 import { useSidebarSections } from "./SidebarSectionsProvider";
 import { navItems } from "./nav-items";
 import { useScrollspy } from "./useScrollspy";
 
-function SocialLinks({ collapsed }: { collapsed: boolean }) {
-  const links = [
-    {
-      href: "https://discord.gg/ZEN8xQbNaE",
-      label: "Discord",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
-        </svg>
-      ),
-    },
-    {
-      href: "https://x.com/brawltome",
-      label: "X",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-        </svg>
-      ),
-    },
-    {
-      href: "https://github.com/nicktacke/brawltome",
-      label: "GitHub",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current">
-          <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-        </svg>
-      ),
-    },
-  ];
+// Fixed sidebar width. The bar is never collapsible or extendable - labels
+// appear as tooltips on hover instead. Mobile renders an overlay with labels.
+// 57 = 1px border-r + 8px nav padding + 40px icon tile + 8px nav padding.
+// The extra pixel compensates for the 1px right border (box-sizing: border-box
+// eats it from the content area) so icons sit exactly centered in the visible
+// sidebar area.
+export const SIDEBAR_WIDTH = 57;
 
+// Discord / X / GitHub brand icons (inline SVGs)
+const socialLinks = [
+  {
+    href: "https://discord.gg/ZEN8xQbNaE",
+    label: "Discord",
+    svg: (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-5 w-5 fill-current"
+        fillRule="evenodd"
+      >
+        <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.0187 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z" />
+      </svg>
+    ),
+  },
+  {
+    href: "https://x.com/brawltome",
+    label: "X",
+    svg: (
+      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-current">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      </svg>
+    ),
+  },
+  {
+    href: "https://github.com/NickTacke/brawltome",
+    label: "GitHub",
+    svg: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+      </svg>
+    ),
+  },
+];
+
+/**
+ * Wraps a trigger in a tooltip that only renders on the right side.
+ * When the sidebar is expanded (mobile overlay), no tooltip is shown.
+ */
+function MaybeTooltip({
+  label,
+  expanded,
+  children,
+}: {
+  label: string;
+  expanded: boolean;
+  children: ReactNode;
+}) {
+  if (expanded) return <>{children}</>;
   return (
-    <div
-      className={`flex items-center gap-1 ${collapsed ? "flex-col" : "flex-row justify-center"}`}
-    >
-      {links.map((link) => (
-        <a
-          key={link.label}
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={link.label}
-          className="text-muted-foreground hover:text-foreground rounded-md p-2 transition-colors"
-        >
-          {link.icon}
-        </a>
-      ))}
-    </div>
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
-function ContextualSections({ collapsed }: { collapsed: boolean }) {
+function ContextualSections({ expanded }: { expanded: boolean }) {
   const sections = useSidebarSections();
   const activeId = useScrollspy(sections.map((s) => s.id));
 
   if (sections.length === 0) return null;
 
-  if (collapsed) {
-    return (
-      <div className="border-border mt-2 flex flex-col items-center gap-1.5 border-t pt-3">
-        {sections.map((section) => (
+  return (
+    <div className="border-sidebar-border mt-4 border-t px-2 pt-3">
+      {expanded && (
+        <p className="text-muted-foreground mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider">
+          On this page
+        </p>
+      )}
+      {sections.map((section) => {
+        const isActive = activeId === section.id;
+        const dot = (
           <a
             key={section.id}
             href={`#${section.id}`}
             aria-label={section.label}
-            className="block rounded-full transition-colors"
+            className={`group my-1 flex items-center rounded-lg transition-colors ${
+              expanded ? "w-full" : "w-10"
+            } ${
+              isActive
+                ? "text-foreground"
+                : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+            }`}
           >
-            <div
-              className={`rounded-full ${
-                activeId === section.id
-                  ? "bg-primary h-2 w-2"
-                  : "bg-muted-foreground/30 h-1.5 w-1.5"
-              }`}
-            />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+              <div
+                className={`rounded-full transition-all ${
+                  isActive
+                    ? "bg-foreground h-2 w-2"
+                    : "bg-muted-foreground/40 group-hover:bg-muted-foreground h-1.5 w-1.5"
+                }`}
+              />
+            </div>
+            {expanded && (
+              <span className="whitespace-nowrap text-xs font-medium">
+                {section.label}
+              </span>
+            )}
           </a>
-        ))}
-      </div>
-    );
-  }
+        );
 
-  return (
-    <div className="border-border mt-2 border-t pt-3">
-      <p className="text-muted-foreground px-4 pb-2 text-[10px] font-medium uppercase tracking-wider">
-        On this page
-      </p>
-      {sections.map((section) => (
-        <a
-          key={section.id}
-          href={`#${section.id}`}
-          className={`block py-1.5 pl-7 pr-4 text-xs transition-colors ${
-            activeId === section.id
-              ? "text-primary border-primary bg-primary/5 border-l-2"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {section.label}
-        </a>
-      ))}
+        return (
+          <MaybeTooltip key={section.id} label={section.label} expanded={expanded}>
+            {dot}
+          </MaybeTooltip>
+        );
+      })}
     </div>
   );
 }
 
-export function AppSidebar() {
-  const { isCollapsed, toggle } = useSidebar();
+/**
+ * Icon-only sidebar with tooltips on hover. The `expanded` prop is only used
+ * by the mobile slide-over overlay, which renders the same sidebar with
+ * labels instead of tooltips.
+ */
+export function AppSidebar({ expanded = false }: { expanded?: boolean }) {
   const pathname = usePathname();
-  const { setTheme, resolvedTheme } = useTheme();
+  const width = expanded ? 220 : SIDEBAR_WIDTH;
 
   return (
-    <aside
-      className={`bg-card border-border flex h-screen flex-col border-r transition-all duration-200 ${
-        isCollapsed ? "w-[60px]" : "w-[220px]"
-      }`}
-    >
-      {/* Header */}
-      <div className="border-border flex items-center border-b p-3">
-        {!isCollapsed && (
-          <Link
-            href="/"
-            className="text-foreground text-sm font-bold tracking-tight"
-          >
-            BrawlTome
-          </Link>
-        )}
-        {isCollapsed && (
-          <Link
-            href="/"
-            className="text-foreground mx-auto text-base font-bold"
-          >
-            B
-          </Link>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggle}
-          className={`text-muted-foreground h-7 w-7 ${isCollapsed ? "mx-auto mt-1" : "ml-auto"}`}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+    <TooltipProvider>
+      <aside
+        className="bg-sidebar border-sidebar-border text-sidebar-foreground flex h-screen flex-col overflow-hidden border-r"
+        style={{ width }}
+      >
+        {/* Main nav. Scrollbar is hidden visually (functionality preserved) so
+            it doesn't eat space from the right side, which would make icons
+            appear shifted left when scrollspy sections overflow the viewport. */}
+        <nav className="flex-1 overflow-y-auto px-2 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {navItems.map((item) => {
+            const isActive = item.href === pathname;
+            const Icon = item.icon;
+            const link = (
+              <Link
+                href={item.href}
+                className={`my-2 flex items-center rounded-lg transition-colors ${
+                  expanded ? "w-full" : "w-10"
+                } ${
+                  isActive
+                    ? "text-foreground bg-white/[0.08]"
+                    : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                }`}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+                  <Icon className="h-6 w-6" weight={item.iconWeight ?? "Linear"} />
+                </div>
+                {expanded && (
+                  <span className="whitespace-nowrap text-sm font-semibold">
+                    {item.label}
+                  </span>
+                )}
+              </Link>
+            );
+            return (
+              <MaybeTooltip key={item.href} label={item.label} expanded={expanded}>
+                {link}
+              </MaybeTooltip>
+            );
+          })}
 
-      {/* Main nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-2">
-        {navItems.map((item) => {
-          const isActive = item.href === pathname;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`mb-0.5 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-                isActive
-                  ? "text-primary border-primary bg-primary/10 border-l-2"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              } ${isCollapsed ? "justify-center px-0" : ""}`}
-              title={isCollapsed ? item.label : undefined}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!isCollapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
+          <ContextualSections expanded={expanded} />
+        </nav>
 
-        <ContextualSections collapsed={isCollapsed} />
-      </nav>
+        {/* Bottom section - socials + account */}
+        <div className="border-sidebar-border shrink-0 border-t px-2 py-2">
+          {/* Socials as rounded icon buttons, matching nav items */}
+          <div className="mb-1">
+            {socialLinks.map((link) => {
+              const button = (
+                <a
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={link.label}
+                  className={`text-muted-foreground hover:bg-white/[0.04] hover:text-foreground my-1 flex items-center rounded-lg transition-colors ${
+                    expanded ? "w-full" : "w-10"
+                  }`}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+                    {link.svg}
+                  </div>
+                  {expanded && (
+                    <span className="whitespace-nowrap text-sm font-medium">
+                      {link.label}
+                    </span>
+                  )}
+                </a>
+              );
+              return (
+                <MaybeTooltip key={link.label} label={link.label} expanded={expanded}>
+                  {button}
+                </MaybeTooltip>
+              );
+            })}
+          </div>
 
-      {/* Bottom section */}
-      <div className="border-border space-y-1 border-t px-2 py-2">
-        <Button
-          variant="ghost"
-          onClick={() =>
-            setTheme(resolvedTheme === "dark" ? "light" : "dark")
-          }
-          className={`text-muted-foreground hover:text-foreground w-full justify-start gap-3 ${isCollapsed ? "justify-center px-0" : ""}`}
-          title={isCollapsed ? "Toggle theme" : undefined}
-        >
-          {resolvedTheme === "dark" ? (
-            <Sun className="h-4 w-4 shrink-0" />
-          ) : (
-            <Moon className="h-4 w-4 shrink-0" />
-          )}
-          {!isCollapsed && <span className="text-sm">Theme</span>}
-        </Button>
-
-        <Link
-          href="/account"
-          className={`text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${isCollapsed ? "justify-center px-0" : ""}`}
-          title={isCollapsed ? "Account" : undefined}
-        >
-          <User className="h-4 w-4 shrink-0" />
-          {!isCollapsed && <span>Account</span>}
-        </Link>
-
-        <SocialLinks collapsed={isCollapsed} />
-      </div>
-    </aside>
+          {/* Account with avatar - rounded button matching nav items.
+              Avatar is 40x40 with rounded-lg (8px) for a 20% ratio, matching
+              the legend avatars on PlayerProfile (80px rounded-2xl). */}
+          <div className="border-sidebar-border border-t pt-2">
+            <MaybeTooltip label="Sign in" expanded={expanded}>
+              <Link
+                href="/account"
+                className={`text-muted-foreground hover:bg-white/[0.04] hover:text-foreground flex items-center rounded-lg transition-colors ${
+                  expanded ? "w-full" : "w-10"
+                }`}
+              >
+                <div className="bg-sidebar-accent text-muted-foreground border-sidebar flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2">
+                  <User className="h-6 w-6" weight="Linear" />
+                </div>
+                {expanded && (
+                  <span className="ml-0 whitespace-nowrap text-sm font-medium">
+                    Sign in
+                  </span>
+                )}
+              </Link>
+            </MaybeTooltip>
+          </div>
+        </div>
+      </aside>
+    </TooltipProvider>
   );
 }
