@@ -3,7 +3,6 @@
 import { Leaderboard } from '@/components/Leaderboard'
 import { SearchBar } from '@/components/SearchBar'
 import { ServerStatus } from '@/components/ServerStatus'
-import { ModeToggle } from '@/components/mode-toggle'
 import { Skeleton } from '@brawltome/ui'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -60,7 +59,6 @@ export default function Home() {
             </div>
           </Link>
         </div>
-        <ModeToggle />
       </div>
 
       <div className="w-full max-w-4xl pt-2 pb-6 sm:pt-6 flex flex-col items-center text-center transition-all duration-300 relative z-50">

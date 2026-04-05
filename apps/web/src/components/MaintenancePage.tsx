@@ -1,6 +1,5 @@
 'use client'
 
-import { ModeToggle } from '@/components/mode-toggle'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -57,10 +56,6 @@ function CountdownTimer({ endTime }: { endTime: string }) {
 export function MaintenancePage({ maintenanceEnd }: { maintenanceEnd?: string }) {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 relative">
-      <div className="absolute top-4 right-4 z-50">
-        <ModeToggle />
-      </div>
-
       <div className="flex flex-col items-center text-center max-w-lg">
         <div className="mb-8">
           <Image
