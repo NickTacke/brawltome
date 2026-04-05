@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { WorkInProgress } from "@/components/WorkInProgress";
 
 export const metadata: Metadata = {
-  title: "Tournaments — Coming Soon",
+  title: "Tournaments - Coming Soon",
 };
 
 export default function Page() {

@@ -3,6 +3,7 @@
 import { wipFeatures } from "@/lib/wip-features";
 
 import { BrandSocialPills } from "./BrandSocialPills";
+import { MobileFloatingMenuButton } from "./sidebar/MobileFloatingMenuButton";
 
 export type WipFeatureSlug = keyof typeof wipFeatures;
 
@@ -18,7 +19,11 @@ export function WorkInProgress({ slug }: { slug: WipFeatureSlug }) {
   const Icon = feature.icon;
 
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center text-center">
+    <>
+      <div className="flex md:hidden">
+        <MobileFloatingMenuButton />
+      </div>
+    <div className="flex min-h-[calc(100dvh-6.5rem)] flex-col items-center justify-center text-center sm:min-h-[calc(100dvh-7rem)] md:min-h-[calc(100dvh-4.5rem)]">
       <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5">
         <Icon className="h-16 w-16" weight="Linear" />
       </div>
@@ -43,5 +48,6 @@ export function WorkInProgress({ slug }: { slug: WipFeatureSlug }) {
         <BrandSocialPills />
       </div>
     </div>
+    </>
   );
 }
