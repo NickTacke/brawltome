@@ -2,7 +2,7 @@ import { relations } from 'drizzle-orm'
 import {
   clan,
   clanMember,
-  discordLink,
+  oauthAccount,
   player,
   playerAlias,
   playerClan,
@@ -11,6 +11,8 @@ import {
   playerStatsLegend,
   playerWeaponStat,
   ratingHistory,
+  session,
+  user,
 } from './schema'
 
 export const playerRelations = relations(player, ({ one, many }) => ({
@@ -23,10 +25,6 @@ export const playerRelations = relations(player, ({ one, many }) => ({
   }),
   rankedLegends: many(playerRankedLegend),
   rankedTeams: many(playerRankedTeam),
-  discordLink: one(discordLink, {
-    fields: [player.brawlhallaId],
-    references: [discordLink.brawlhallaId],
-  }),
   ratingHistory: many(ratingHistory),
 }))
 
@@ -83,16 +81,28 @@ export const clanMemberRelations = relations(clanMember, ({ one }) => ({
   }),
 }))
 
-export const discordLinkRelations = relations(discordLink, ({ one }) => ({
-  player: one(player, {
-    fields: [discordLink.brawlhallaId],
-    references: [player.brawlhallaId],
-  }),
-}))
-
 export const ratingHistoryRelations = relations(ratingHistory, ({ one }) => ({
   player: one(player, {
     fields: [ratingHistory.brawlhallaId],
     references: [player.brawlhallaId],
+  }),
+}))
+
+export const userRelations = relations(user, ({ many }) => ({
+  oauthAccounts: many(oauthAccount),
+  sessions: many(session),
+}))
+
+export const oauthAccountRelations = relations(oauthAccount, ({ one }) => ({
+  user: one(user, {
+    fields: [oauthAccount.userId],
+    references: [user.id],
+  }),
+}))
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
   }),
 }))
