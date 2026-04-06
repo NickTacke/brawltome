@@ -1,7 +1,8 @@
 'use client'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { Link2, Monitor, Rss, Swords, Trophy, UserPlus, Users } from 'lucide-react'
+import { Gamepad2, Link2, Monitor, Rss, Trophy, UserPlus, Users } from 'lucide-react'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { type Me, signIn, signOut, useMe } from '@/lib/auth'
 import { Skeleton } from '@brawltome/ui'
@@ -57,47 +58,37 @@ function LoadingState() {
 
 function SignedOutState({ error }: { error: string | null }) {
   return (
-    <main className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-6 py-12">
+    <main className="mx-auto flex max-w-md flex-col items-center pb-12">
       {error && ERROR_MESSAGES[error] && (
-        <div className="mb-8 w-full max-w-md rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">
+        <div className="mb-8 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">
           {ERROR_MESSAGES[error]}
         </div>
       )}
 
-      <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Sign in to BrawlTome</h1>
-        <p className="text-muted-foreground mx-auto mt-3 max-w-sm text-base">
-          Create an account to unlock the full experience.
-        </p>
+      <Image src="/images/logo.png" alt="BrawlTome" width={400} height={400} className="w-64" />
+
+      <h1 className="mt-6 text-2xl font-bold tracking-tight">Sign in</h1>
+
+      <div className="mt-10 w-full space-y-2">
+        {FEATURE_TEASERS.map((feature) => (
+          <div key={feature.title} className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+            <feature.icon className="text-muted-foreground h-4 w-4 shrink-0" />
+            <div className="min-w-0">
+              <span className="text-sm font-medium">{feature.title}</span>
+              <span className="text-muted-foreground ml-2 text-xs">{feature.description}</span>
+            </div>
+          </div>
+        ))}
       </div>
 
       <button
         type="button"
         onClick={signIn}
-        className="mt-8 inline-flex cursor-pointer items-center gap-2.5 rounded-xl bg-[#5865F2] px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#5865F2]/20 transition-all hover:bg-[#4752C4] hover:shadow-[#5865F2]/30 active:scale-[0.98]"
+        className="mt-8 inline-flex cursor-pointer items-center gap-2.5 rounded-xl bg-[#5865F2] px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#4752C4] active:scale-[0.98]"
       >
         <DiscordIcon className="h-5 w-5" />
         Continue with Discord
       </button>
-
-      <div className="mt-14 grid w-full max-w-lg grid-cols-1 gap-3 sm:grid-cols-2">
-        {FEATURE_TEASERS.map((feature) => (
-          <div
-            key={feature.title}
-            className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-4 transition-colors hover:bg-white/[0.04]"
-          >
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-lg bg-white/[0.06] p-2">
-                <feature.icon className="text-muted-foreground h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{feature.title}</p>
-                <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">{feature.description}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
     </main>
   )
 }
@@ -144,7 +135,7 @@ function SignedInState({ user }: { user: Me }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-white/[0.06] p-2">
-                <Swords className="text-muted-foreground h-4 w-4" />
+                <Gamepad2 className="text-muted-foreground h-4 w-4" />
               </div>
               <div>
                 <p className="text-sm font-medium">Brawlhalla</p>
