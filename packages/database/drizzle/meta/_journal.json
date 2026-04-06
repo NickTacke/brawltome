@@ -43,6 +43,20 @@
       "when": 1775468100548,
       "tag": "0005_supreme_cargill",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775515125078,
+      "tag": "0006_illegal_lilith",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775515317104,
+      "tag": "0007_thankful_reptil",
+      "breakpoints": true
     }
   ]
 }
