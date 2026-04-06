@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Gamepad2, Link2, Monitor, Rss, Trophy, UserPlus, Users } from 'lucide-react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
 const ERROR_MESSAGES: Record<string, string> = {
   state: 'Your sign-in attempt expired or was interrupted. Please try again.',
@@ -189,7 +190,7 @@ function SignedInState({ user }: { user: Me }) {
   )
 }
 
-export default function AccountPage() {
+function AccountPageInner() {
   const { user, isLoading } = useMe()
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
@@ -197,4 +198,12 @@ export default function AccountPage() {
   if (isLoading) return <LoadingState />
   if (!user) return <SignedOutState error={error} />
   return <SignedInState user={user} />
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <AccountPageInner />
+    </Suspense>
+  )
 }
