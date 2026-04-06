@@ -32,7 +32,7 @@ impl ApiClient {
         let base_url = if base_url.is_empty() {
             DEFAULT_API_BASE.to_string()
         } else {
-            base_url
+            base_url.trim_end_matches('/').to_string()
         };
         Self {
             client: reqwest::Client::builder()
