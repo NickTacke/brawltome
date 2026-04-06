@@ -1,12 +1,15 @@
 import { invoke } from '@tauri-apps/api/core'
 import { useEffect, useRef } from 'react'
 
-export function useContentBounds<T extends HTMLElement>() {
+export function useContentBounds<T extends HTMLElement>(active: boolean) {
   const ref = useRef<T>(null)
 
   useEffect(() => {
     const el = ref.current
-    if (!el) return
+    if (!el || !active) {
+      invoke('update_content_bounds', { x: 0, y: 0, width: 0, height: 0 })
+      return
+    }
 
     let lastX = 0
     let lastY = 0
@@ -15,7 +18,6 @@ export function useContentBounds<T extends HTMLElement>() {
 
     const report = () => {
       const rect = el.getBoundingClientRect()
-      // Only invoke if bounds actually changed
       if (rect.x === lastX && rect.y === lastY && rect.width === lastW && rect.height === lastH) {
         return
       }
@@ -31,19 +33,16 @@ export function useContentBounds<T extends HTMLElement>() {
       })
     }
 
-    // Report initially and on resize
     report()
     const observer = new ResizeObserver(report)
     observer.observe(el)
-
-    // Poll for position changes (ResizeObserver doesn't detect moves)
     const interval = setInterval(report, 500)
 
     return () => {
       observer.disconnect()
       clearInterval(interval)
     }
-  }, [])
+  }, [active])
 
   return ref
 }
