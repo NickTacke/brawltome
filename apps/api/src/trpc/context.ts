@@ -1,5 +1,6 @@
 import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
+import type { Session, SessionRepo, UserRepo, UserWithPrimaryAccount } from '@brawltome/identity'
 import type { PlayerRepo } from '@brawltome/player'
 import type { RankingRepo } from '@brawltome/ranking'
 import type { Queue } from '@brawltome/shared'
@@ -14,7 +15,11 @@ export interface Context {
   playerRepo: PlayerRepo
   clanRepo: ClanRepo
   rankingRepo: RankingRepo
+  userRepo: UserRepo
+  sessionRepo: SessionRepo
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined
+  user: UserWithPrimaryAccount | null
+  session: Session | null
 }

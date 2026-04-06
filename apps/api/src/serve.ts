@@ -1,5 +1,6 @@
 import { createClanRepo } from '@brawltome/clan'
 import { db } from '@brawltome/database'
+import { SESSION_TTL_MS, createSessionRepo, createUserRepo, getCurrentUser } from '@brawltome/identity'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
 import { createRankingRepo } from '@brawltome/ranking'
 import { TIERED_TTL, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
@@ -7,6 +8,8 @@ import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
+import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
+import { createAuthRoutes } from './auth/routes'
 import { appRouter } from './router'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
@@ -21,8 +24,10 @@ const clanQueue = createQueue<{ clanId: number }>(redis, 'refresh-clan', async (
 const playerRepo = createPlayerRepo(db)
 const clanRepo = createClanRepo(db)
 const rankingRepo = createRankingRepo(db)
+const userRepo = createUserRepo(db)
+const sessionRepo = createSessionRepo(db)
 
-const sharedCtx = { db, redis, rankedQueue, statsQueue, clanQueue, playerRepo, clanRepo, rankingRepo }
+const sharedCtx = { db, redis, rankedQueue, statsQueue, clanQueue, playerRepo, clanRepo, rankingRepo, userRepo, sessionRepo }
 
 const app = new Hono()
 
@@ -31,6 +36,13 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3001')
   .map((origin) => origin.trim())
   .filter((origin) => origin.length > 0)
 
+const authConfig = {
+  discordClientId: process.env.DISCORD_CLIENT_ID ?? '',
+  discordClientSecret: process.env.DISCORD_CLIENT_SECRET ?? '',
+  discordRedirectUri: process.env.DISCORD_REDIRECT_URI ?? 'http://localhost:3000/auth/discord/callback',
+  webOrigin: process.env.WEB_ORIGIN ?? corsOrigins[0] ?? 'http://localhost:3001',
+}
+
 app.use(
   '/*',
   cors({
@@ -38,11 +50,13 @@ app.use(
   }),
 )
 
+app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, config: authConfig }))
+
 app.use(
   '/trpc/*',
   trpcServer({
     router: appRouter,
-    createContext: (_opts, c) => {
+    createContext: async (_opts, c) => {
       const clientIp =
         c.req.header('x-client-ip') ??
         c.req.header('cf-connecting-ip') ??
@@ -54,7 +68,23 @@ app.use(
           ua,
         )
       const internalSecret = c.req.header('x-internal-secret') ?? undefined
-      return { ...sharedCtx, clientIp, isBot, internalSecret } as unknown as Record<string, unknown>
+
+      const cookies = parseCookies(c.req.header('cookie'))
+      const rawToken = cookies[SESSION_COOKIE] ?? null
+      const current = await getCurrentUser({ userRepo, sessionRepo }, rawToken)
+
+      if (current?.extended && rawToken) {
+        c.header('Set-Cookie', buildSessionCookie(rawToken, SESSION_TTL_MS / 1000), { append: true })
+      }
+
+      return {
+        ...sharedCtx,
+        clientIp,
+        isBot,
+        internalSecret,
+        user: current?.user ?? null,
+        session: current?.session ?? null,
+      } as unknown as Record<string, unknown>
     },
   }),
 )
