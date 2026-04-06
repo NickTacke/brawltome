@@ -14,3 +14,7 @@ export type {
   DiscordProfile,
   SignInResult,
 } from './commands/sign-in-with-discord'
+export { signOut } from './commands/sign-out'
+export type { SignOutDeps } from './commands/sign-out'
+export { getCurrentUser } from './queries/get-current-user'
+export type { GetCurrentUserDeps, CurrentUserResult } from './queries/get-current-user'
