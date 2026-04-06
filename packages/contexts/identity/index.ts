@@ -8,6 +8,8 @@ export {
 } from './session'
 export { createUserRepo, type UserRepo } from './user.repo'
 export { createSessionRepo, type SessionRepo } from './session.repo'
+export type { PlayerLink, PlayerLinkStatus, PlayerLinkRepo } from './playerLink.repo'
+export { createPlayerLinkRepo } from './playerLink.repo'
 export { signInWithDiscord } from './commands/sign-in-with-discord'
 export type {
   SignInWithDiscordDeps,
