@@ -11,6 +11,7 @@ export const identityRouter = router({
       id: ctx.user.id,
       username: primaryAccount.username,
       avatarUrl,
+      createdAt: ctx.user.createdAt,
     }
   }),
 })

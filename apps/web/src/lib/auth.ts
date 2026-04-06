@@ -9,6 +9,7 @@ export interface Me {
   id: string
   username: string
   avatarUrl: string | null
+  createdAt: string
 }
 
 const ME_KEY = ['identity', 'me'] as const
