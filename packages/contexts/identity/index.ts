@@ -7,3 +7,4 @@ export {
   hashSessionToken,
 } from './session'
 export { createUserRepo, type UserRepo } from './user.repo'
+export { createSessionRepo, type SessionRepo } from './session.repo'
