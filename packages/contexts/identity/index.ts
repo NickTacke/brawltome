@@ -8,3 +8,9 @@ export {
 } from './session'
 export { createUserRepo, type UserRepo } from './user.repo'
 export { createSessionRepo, type SessionRepo } from './session.repo'
+export { signInWithDiscord } from './commands/sign-in-with-discord'
+export type {
+  SignInWithDiscordDeps,
+  DiscordProfile,
+  SignInResult,
+} from './commands/sign-in-with-discord'
