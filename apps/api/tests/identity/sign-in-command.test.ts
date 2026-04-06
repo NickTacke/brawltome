@@ -86,10 +86,7 @@ describe('signInWithDiscord', () => {
     const sessionRepo = fakeSessionRepo()
     const before = Date.now()
 
-    await signInWithDiscord(
-      { userRepo, sessionRepo },
-      { discordId: '12345', username: 'x', avatarHash: null },
-    )
+    await signInWithDiscord({ userRepo, sessionRepo }, { discordId: '12345', username: 'x', avatarHash: null })
 
     const expiresAt = sessionRepo.rows[0].expiresAt.getTime()
     const thirtyDays = 30 * 24 * 60 * 60 * 1000

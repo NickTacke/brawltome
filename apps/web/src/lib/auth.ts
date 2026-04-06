@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, type useQueryClient } from '@tanstack/react-query'
 import { trpc } from './trpc'
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'

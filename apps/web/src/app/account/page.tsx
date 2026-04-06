@@ -1,11 +1,11 @@
 'use client'
 
+import { type Me, signIn, signOut, useMe } from '@/lib/auth'
+import { Skeleton } from '@brawltome/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { Gamepad2, Link2, Monitor, Rss, Trophy, UserPlus, Users } from 'lucide-react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { type Me, signIn, signOut, useMe } from '@/lib/auth'
-import { Skeleton } from '@brawltome/ui'
 
 const ERROR_MESSAGES: Record<string, string> = {
   state: 'Your sign-in attempt expired or was interrupted. Please try again.',
@@ -106,12 +106,7 @@ function SignedInState({ user }: { user: Me }) {
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
         <div className="flex items-center gap-4">
           {user.avatarUrl ? (
-            // biome-ignore lint/performance/noImgElement: external avatar host
-            <img
-              src={user.avatarUrl}
-              alt=""
-              className="h-16 w-16 rounded-full object-cover ring-2 ring-white/[0.08]"
-            />
+            <img src={user.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover ring-2 ring-white/[0.08]" />
           ) : (
             <div className="bg-muted flex h-16 w-16 items-center justify-center rounded-full ring-2 ring-white/[0.08]">
               <Users className="text-muted-foreground h-7 w-7" />

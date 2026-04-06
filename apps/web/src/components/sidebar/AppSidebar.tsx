@@ -110,7 +110,6 @@ export function AppSidebar() {
               >
                 <div className="bg-sidebar-accent text-muted-foreground border-sidebar group-hover:brightness-150 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 transition-all">
                   {user?.avatarUrl ? (
-                    // biome-ignore lint/performance/noImgElement: external avatar host, no next/image remoteConfig yet
                     <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <User className="h-6 w-6" weight="Linear" />

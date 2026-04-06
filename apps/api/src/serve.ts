@@ -27,7 +27,18 @@ const rankingRepo = createRankingRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
 
-const sharedCtx = { db, redis, rankedQueue, statsQueue, clanQueue, playerRepo, clanRepo, rankingRepo, userRepo, sessionRepo }
+const sharedCtx = {
+  db,
+  redis,
+  rankedQueue,
+  statsQueue,
+  clanQueue,
+  playerRepo,
+  clanRepo,
+  rankingRepo,
+  userRepo,
+  sessionRepo,
+}
 
 const app = new Hono()
 

@@ -50,15 +50,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
         <Providers>
-        <SidebarProvider>
-          <div className="bg-background text-foreground min-h-screen">
-            {isMaintenanceMode ? (
-              <MaintenancePage maintenanceEnd={maintenanceEnd} />
-            ) : (
-              <SidebarLayout>{children}</SidebarLayout>
-            )}
-          </div>
-        </SidebarProvider>
+          <SidebarProvider>
+            <div className="bg-background text-foreground min-h-screen">
+              {isMaintenanceMode ? (
+                <MaintenancePage maintenanceEnd={maintenanceEnd} />
+              ) : (
+                <SidebarLayout>{children}</SidebarLayout>
+              )}
+            </div>
+          </SidebarProvider>
         </Providers>
       </body>
     </html>

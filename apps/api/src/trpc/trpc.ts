@@ -26,14 +26,13 @@ export function createInternalMiddleware(expectedSecret: string) {
 
 export function createProtectedMiddleware() {
   return t.middleware(({ ctx, next }) => {
-    const anyCtx = ctx as unknown as { user: unknown }
-    if (!anyCtx.user) {
+    if (!ctx.user) {
       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sign in required' })
     }
     return next({
       ctx: {
         ...ctx,
-        user: anyCtx.user as NonNullable<typeof anyCtx.user>,
+        user: ctx.user,
       },
     })
   })

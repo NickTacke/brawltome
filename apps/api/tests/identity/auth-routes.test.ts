@@ -133,10 +133,7 @@ describe('GET /auth/discord/callback', () => {
         return new Response(JSON.stringify({ access_token: 'at' }), { status: 200 })
       }
       if (u.includes('/users/@me')) {
-        return new Response(
-          JSON.stringify({ id: 'discord-42', username: 'coolguy', avatar: 'abc' }),
-          { status: 200 },
-        )
+        return new Response(JSON.stringify({ id: 'discord-42', username: 'coolguy', avatar: 'abc' }), { status: 200 })
       }
       return new Response('not mocked', { status: 500 })
     }) as unknown as typeof fetch

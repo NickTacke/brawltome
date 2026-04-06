@@ -38,6 +38,7 @@ export async function exchangeCode(params: ExchangeCodeParams): Promise<{ access
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
+    signal: AbortSignal.timeout(10_000),
   })
 
   if (!res.ok) {
@@ -59,6 +60,7 @@ export interface DiscordUserProfile {
 export async function fetchDiscordUser(accessToken: string): Promise<DiscordUserProfile> {
   const res = await fetch(DISCORD_USER_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(10_000),
   })
 
   if (!res.ok) {

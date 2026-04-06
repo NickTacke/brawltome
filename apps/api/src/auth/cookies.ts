@@ -13,7 +13,7 @@ interface CookieOptions {
 
 function serialize(name: string, value: string, opts: CookieOptions): string {
   const parts = [
-    `${name}=${value}`,
+    `${name}=${encodeURIComponent(value)}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
@@ -48,7 +48,13 @@ export function parseCookies(header: string | null | undefined): Record<string, 
     if (eq < 0) continue
     const k = part.slice(0, eq).trim()
     const v = part.slice(eq + 1).trim()
-    if (k) out[k] = decodeURIComponent(v)
+    if (k) {
+      try {
+        out[k] = decodeURIComponent(v)
+      } catch {
+        out[k] = v
+      }
+    }
   }
   return out
 }

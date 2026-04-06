@@ -38,10 +38,7 @@ export function createUserRepo(db: Database): UserRepo {
     async upsertDiscordUser(profile) {
       return db.transaction(async (tx) => {
         const existing = await tx.query.oauthAccount.findFirst({
-          where: and(
-            eq(oauthAccount.provider, 'discord'),
-            eq(oauthAccount.providerAccountId, profile.discordId),
-          ),
+          where: and(eq(oauthAccount.provider, 'discord'), eq(oauthAccount.providerAccountId, profile.discordId)),
           with: { user: true },
         })
 
@@ -53,12 +50,7 @@ export function createUserRepo(db: Database): UserRepo {
               avatarHash: profile.avatarHash,
               updatedAt: new Date(),
             })
-            .where(
-              and(
-                eq(oauthAccount.provider, 'discord'),
-                eq(oauthAccount.providerAccountId, profile.discordId),
-              ),
-            )
+            .where(and(eq(oauthAccount.provider, 'discord'), eq(oauthAccount.providerAccountId, profile.discordId)))
             .returning()
           return attachPrimary(existing.user, updated)
         }
@@ -99,7 +91,7 @@ function attachPrimary(
     updatedAt: u.updatedAt,
     primaryAccount: {
       userId: a.userId,
-      provider: 'discord',
+      provider: a.provider as 'discord',
       providerAccountId: a.providerAccountId,
       username: a.username,
       avatarHash: a.avatarHash,
