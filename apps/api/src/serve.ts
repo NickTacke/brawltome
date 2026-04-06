@@ -46,7 +46,8 @@ const authConfig = {
 app.use(
   '/*',
   cors({
-    origin: corsOrigins,
+    origin: (origin) => (corsOrigins.includes(origin) ? origin : null),
+    credentials: true,
   }),
 )
 
