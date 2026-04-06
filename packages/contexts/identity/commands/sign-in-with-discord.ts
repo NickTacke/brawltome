@@ -20,10 +20,7 @@ export interface SignInResult {
   expiresAt: Date
 }
 
-export async function signInWithDiscord(
-  deps: SignInWithDiscordDeps,
-  profile: DiscordProfile,
-): Promise<SignInResult> {
+export async function signInWithDiscord(deps: SignInWithDiscordDeps, profile: DiscordProfile): Promise<SignInResult> {
   const user = await deps.userRepo.upsertDiscordUser(profile)
 
   const rawToken = generateSessionToken()

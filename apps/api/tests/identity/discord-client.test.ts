@@ -48,9 +48,7 @@ describe('exchangeCode', () => {
 
   it('throws on non-200 responses', async () => {
     globalThis.fetch = mock(async () => new Response('nope', { status: 400 })) as unknown as typeof fetch
-    await expect(
-      exchangeCode({ clientId: 'c', clientSecret: 's', redirectUri: 'r', code: 'x' }),
-    ).rejects.toThrow()
+    await expect(exchangeCode({ clientId: 'c', clientSecret: 's', redirectUri: 'r', code: 'x' })).rejects.toThrow()
   })
 })
 
@@ -74,8 +72,7 @@ describe('fetchDiscordUser', () => {
 
   it('tolerates a null avatar', async () => {
     globalThis.fetch = mock(
-      async () =>
-        new Response(JSON.stringify({ id: '42', username: 'x', avatar: null }), { status: 200 }),
+      async () => new Response(JSON.stringify({ id: '42', username: 'x', avatar: null }), { status: 200 }),
     ) as unknown as typeof fetch
     const result = await fetchDiscordUser('tok')
     expect(result.avatarHash).toBeNull()

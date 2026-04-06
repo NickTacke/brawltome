@@ -107,10 +107,11 @@ describe('getCurrentUser', () => {
 
   it('extends the session when it is within the threshold window', async () => {
     const raw = 'raw-token'
+    const before = Date.now()
     const nearExpiry: Session = {
       id: hashSessionToken(raw),
       userId: 'user-1',
-      // 3 days out — inside the 7-day extend threshold
+      // 3 days out, inside the 7-day extend threshold
       expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       createdAt: new Date(),
     }
@@ -119,7 +120,7 @@ describe('getCurrentUser', () => {
 
     expect(result?.extended).toBe(true)
     const extended = sessions[0].expiresAt.getTime()
-    expect(extended - Date.now()).toBeGreaterThanOrEqual(SESSION_TTL_MS - 1000)
+    expect(extended - before).toBeGreaterThanOrEqual(SESSION_TTL_MS - 1000)
   })
 })
 

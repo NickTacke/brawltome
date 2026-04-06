@@ -121,7 +121,6 @@ export function MobileMenu() {
             className="text-muted-foreground hover:bg-white/[0.04] hover:text-foreground inline-flex items-center gap-2.5 rounded-xl px-1.5 py-2.5 text-base font-medium transition-colors"
           >
             {user?.avatarUrl ? (
-              // biome-ignore lint/performance/noImgElement: external avatar host
               <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
             ) : (
               <User className="h-5 w-5" weight="Linear" />
