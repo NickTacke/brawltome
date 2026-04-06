@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
 
@@ -280,23 +281,6 @@ export const clanMember = pgTable(
 )
 
 // ============================================================
-// Discord Link
-// ============================================================
-
-export const discordLink = pgTable(
-  'discord_link',
-  {
-    discordId: varchar('discord_id', { length: 64 }).primaryKey(),
-    brawlhallaId: integer('brawlhalla_id')
-      .notNull()
-      .references(() => player.brawlhallaId, { onDelete: 'cascade' }),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (t) => [index('idx_discord_link_bhid').on(t.brawlhallaId)],
-)
-
-// ============================================================
 // Blacklist
 // ============================================================
 
@@ -328,4 +312,47 @@ export const ratingHistory = pgTable(
     index('idx_rating_history_player').on(t.brawlhallaId),
     index('idx_rating_history_time').on(t.brawlhallaId, t.recordedAt),
   ],
+)
+
+// ============================================================
+// Identity
+// ============================================================
+
+export const user = pgTable('user', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+export const oauthAccount = pgTable(
+  'oauth_account',
+  {
+    provider: varchar('provider', { length: 32 }).notNull(),
+    providerAccountId: varchar('provider_account_id', { length: 64 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    username: varchar('username', { length: 64 }).notNull(),
+    avatarHash: varchar('avatar_hash', { length: 128 }),
+    refreshToken: text('refresh_token'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.provider, t.providerAccountId] }),
+    uniqueIndex('uq_oauth_account_user_provider').on(t.userId, t.provider),
+  ],
+)
+
+export const session = pgTable(
+  'session',
+  {
+    id: varchar('id', { length: 64 }).primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('idx_session_user_id').on(t.userId)],
 )

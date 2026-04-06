@@ -208,6 +208,7 @@ fn main() {
             {
                 let handle = app.handle().clone();
                 let api_url = std::env::var("BRAWLTOME_API_URL")
+                    .map(|s| s.trim().to_string())
                     .unwrap_or_else(|_| "https://brawltome.app".into());
                 tauri::async_runtime::spawn(async move {
                     game_detection::run(handle, api_url).await;

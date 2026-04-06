@@ -1,4 +1,4 @@
-import { BookBookmark, Cup, Gamepad, type IconProps, PieChart, User, UsersGroupRounded } from '@solar-icons/react'
+import { BookBookmark, Cup, Gamepad, type IconProps, PieChart, UsersGroupRounded } from '@solar-icons/react'
 import type { ComponentType } from 'react'
 
 export interface WipFeature {
@@ -21,12 +21,6 @@ export const wipFeatures = {
     description:
       'Legends and weapons ranked by win rate, pick rate, tier. Filter by rank bracket and region. Pulled from every ranked player we track, updated as the meta shifts',
     icon: PieChart,
-  },
-  account: {
-    title: 'Account',
-    tagline: 'Your BrawlTome profile. One-click lookups, bookmarks',
-    description: "Sign in. Save your Brawlhalla ID for instant lookups. Bookmark the players and clans you're tracking",
-    icon: User,
   },
   matches: {
     title: 'Matches',
