@@ -24,9 +24,25 @@ export function createInternalMiddleware(expectedSecret: string) {
   })
 }
 
+export function createProtectedMiddleware() {
+  return t.middleware(({ ctx, next }) => {
+    if (!ctx.user) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sign in required' })
+    }
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    })
+  })
+}
+
 const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
 const internalMiddleware = createInternalMiddleware(internalSecret)
+const protectedMiddleware = createProtectedMiddleware()
 
 export const router = t.router
 export const publicProcedure = t.procedure
 export const internalProcedure = t.procedure.use(internalMiddleware)
+export const protectedProcedure = t.procedure.use(protectedMiddleware)

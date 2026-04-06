@@ -31,7 +31,7 @@ function SkeletonCard() {
 }
 
 export function OverlayPanel({ opponents, matchType, visible, scanning, refreshing }: OverlayPanelProps) {
-  const panelRef = useContentBounds<HTMLDivElement>()
+  const panelRef = useContentBounds<HTMLDivElement>(visible)
   const { onMouseLeave } = useCursorForwarding()
 
   if (!visible) return null
