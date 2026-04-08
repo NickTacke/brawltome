@@ -1,6 +1,6 @@
 import { createClanRepo } from '@brawltome/clan'
 import { db } from '@brawltome/database'
-import { SESSION_TTL_MS, createSessionRepo, createUserRepo, getCurrentUser } from '@brawltome/identity'
+import { SESSION_TTL_MS, createPlayerLinkRepo, createSessionRepo, createUserRepo, getCurrentUser } from '@brawltome/identity'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
 import { createRankingRepo } from '@brawltome/ranking'
 import { TIERED_TTL, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
@@ -26,6 +26,13 @@ const clanRepo = createClanRepo(db)
 const rankingRepo = createRankingRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
+const playerLinkRepo = createPlayerLinkRepo(db)
+const steamLinkQueue = createQueue<{ userId: string; steamId: string }>(
+  redis,
+  'resolve-steam',
+  async () => {},
+  { concurrency: 0 },
+)
 
 const sharedCtx = {
   db,
@@ -38,6 +45,8 @@ const sharedCtx = {
   rankingRepo,
   userRepo,
   sessionRepo,
+  playerLinkRepo,
+  steamLinkQueue,
 }
 
 const app = new Hono()
@@ -52,6 +61,8 @@ const authConfig = {
   discordClientSecret: process.env.DISCORD_CLIENT_SECRET ?? '',
   discordRedirectUri: process.env.DISCORD_REDIRECT_URI ?? 'http://localhost:3000/auth/discord/callback',
   webOrigin: process.env.WEB_ORIGIN ?? corsOrigins[0] ?? 'http://localhost:3001',
+  steamReturnUrl: process.env.STEAM_RETURN_URL ?? 'http://localhost:3000/auth/steam/callback',
+  steamRealm: process.env.STEAM_REALM ?? 'http://localhost:3000',
 }
 
 app.use(
@@ -62,7 +73,7 @@ app.use(
   }),
 )
 
-app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, config: authConfig }))
+app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, playerLinkRepo, steamLinkQueue, config: authConfig }))
 
 app.use(
   '/trpc/*',
