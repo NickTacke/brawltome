@@ -356,3 +356,21 @@ export const session = pgTable(
   },
   (t) => [index('idx_session_user_id').on(t.userId)],
 )
+
+export const playerLink = pgTable(
+  'player_link',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    brawlhallaId: integer('brawlhalla_id'),
+    steamId: varchar('steam_id', { length: 64 }).notNull(),
+    linkedVia: varchar('linked_via', { length: 32 }).notNull().default('steam'),
+    status: varchar('status', { length: 16 }).notNull().default('pending'),
+    linkedAt: timestamp('linked_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('uq_player_link_brawlhalla').on(t.brawlhallaId),
+    uniqueIndex('uq_player_link_steam').on(t.steamId),
+  ],
+)

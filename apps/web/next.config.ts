@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@brawltome/ui'],
+  transpilePackages: ['@brawltome/ui', '@brawltome/shared'],
   typescript: {
     ignoreBuildErrors: true,
   },

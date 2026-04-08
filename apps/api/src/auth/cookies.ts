@@ -1,6 +1,7 @@
 // apps/api/src/auth/cookies.ts
 export const SESSION_COOKIE = 'brawltome_session'
 export const OAUTH_STATE_COOKIE = 'brawltome_oauth_state'
+export const STEAM_STATE_COOKIE = 'brawltome_steam_state'
 export const OAUTH_STATE_TTL_SEC = 10 * 60 // 10 minutes
 
 const isProd = process.env.NODE_ENV === 'production'
@@ -38,6 +39,14 @@ export function buildStateCookie(state: string): string {
 
 export function clearStateCookie(): string {
   return serialize(OAUTH_STATE_COOKIE, '', { maxAgeSec: 0 })
+}
+
+export function buildSteamStateCookie(state: string): string {
+  return serialize(STEAM_STATE_COOKIE, state, { maxAgeSec: OAUTH_STATE_TTL_SEC })
+}
+
+export function clearSteamStateCookie(): string {
+  return serialize(STEAM_STATE_COOKIE, '', { maxAgeSec: 0 })
 }
 
 export function parseCookies(header: string | null | undefined): Record<string, string> {

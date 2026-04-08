@@ -6,6 +6,7 @@ import {
   player,
   playerAlias,
   playerClan,
+  playerLink,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
@@ -88,9 +89,13 @@ export const ratingHistoryRelations = relations(ratingHistory, ({ one }) => ({
   }),
 }))
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ one, many }) => ({
   oauthAccounts: many(oauthAccount),
   sessions: many(session),
+  playerLink: one(playerLink, {
+    fields: [user.id],
+    references: [playerLink.userId],
+  }),
 }))
 
 export const oauthAccountRelations = relations(oauthAccount, ({ one }) => ({
@@ -103,6 +108,13 @@ export const oauthAccountRelations = relations(oauthAccount, ({ one }) => ({
 export const sessionRelations = relations(session, ({ one }) => ({
   user: one(user, {
     fields: [session.userId],
+    references: [user.id],
+  }),
+}))
+
+export const playerLinkRelations = relations(playerLink, ({ one }) => ({
+  user: one(user, {
+    fields: [playerLink.userId],
     references: [user.id],
   }),
 }))
