@@ -19,7 +19,8 @@
       "@brawltome/player": ["./packages/contexts/player/index.ts"],
       "@brawltome/clan": ["./packages/contexts/clan/index.ts"],
       "@brawltome/ranking": ["./packages/contexts/ranking/index.ts"],
-      "@brawltome/identity": ["./packages/contexts/identity/index.ts"]
+      "@brawltome/identity": ["./packages/contexts/identity/index.ts"],
+      "@brawltome/api/router": ["./apps/api/src/router/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist"]

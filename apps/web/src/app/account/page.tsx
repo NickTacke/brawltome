@@ -1,9 +1,9 @@
 'use client'
 
-import { type Me, signIn, signOut, useMe } from '@/lib/auth'
+import { type Me, type PlayerLinkInfo, linkSteam, signIn, signOut, unlinkPlayer, useMe } from '@/lib/auth'
 import { Skeleton } from '@brawltome/ui'
 import { useQueryClient } from '@tanstack/react-query'
-import { Gamepad2, Link2, Monitor, Rss, Trophy, UserPlus, Users } from 'lucide-react'
+import { Gamepad2, Link2, Loader2, Monitor, Rss, Trophy, UserPlus, Users } from 'lucide-react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
@@ -12,6 +12,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   state: 'Your sign-in attempt expired or was interrupted. Please try again.',
   discord: "We couldn't finish signing you in with Discord. Please try again in a moment.",
   server: 'Something went wrong on our end. Please try again.',
+  auth: 'You need to be signed in to link accounts.',
+  steam: "We couldn't verify your Steam account. Please try again.",
+  already_linked: 'You already have a linked player. Unlink first.',
 }
 
 const FEATURE_TEASERS = [
@@ -94,6 +97,117 @@ function SignedOutState({ error }: { error: string | null }) {
   )
 }
 
+function BrawlhallaLinkRow({ link }: { link: PlayerLinkInfo | null }) {
+  const queryClient = useQueryClient()
+
+  if (!link) {
+    return (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-white/[0.06] p-2">
+            <Gamepad2 className="text-muted-foreground h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">Brawlhalla</p>
+            <p className="text-muted-foreground text-xs">Link via Steam to connect your player profile</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={linkSteam}
+          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
+        >
+          Link Steam
+        </button>
+      </div>
+    )
+  }
+
+  if (link.status === 'pending') {
+    return (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-white/[0.06] p-2">
+            <Gamepad2 className="text-muted-foreground h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">Brawlhalla</p>
+            <p className="text-muted-foreground text-xs">Looking up your player profile...</p>
+          </div>
+        </div>
+        <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+      </div>
+    )
+  }
+
+  if (link.status === 'failed') {
+    return (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-red-500/10 p-2">
+            <Gamepad2 className="h-4 w-4 text-red-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-red-400">Brawlhalla</p>
+            <p className="text-xs text-red-400/70">No Brawlhalla account found for this Steam ID</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => unlinkPlayer(queryClient).then(linkSteam)}
+          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
+  if (link.status === 'conflict') {
+    return (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-amber-500/10 p-2">
+            <Gamepad2 className="h-4 w-4 text-amber-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-amber-400">Brawlhalla</p>
+            <p className="text-xs text-amber-400/70">This player is already linked to another account</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => unlinkPlayer(queryClient).then(linkSteam)}
+          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="rounded-lg bg-emerald-500/10 p-2">
+          <Gamepad2 className="h-4 w-4 text-emerald-400" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-emerald-400">Brawlhalla</p>
+          <p className="text-xs text-emerald-400/70">ID: {link.brawlhallaId}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => unlinkPlayer(queryClient)}
+        className="text-muted-foreground hover:text-foreground cursor-pointer text-xs underline-offset-4 transition-colors hover:underline"
+      >
+        Unlink
+      </button>
+    </div>
+  )
+}
+
 function SignedInState({ user }: { user: Me }) {
   const queryClient = useQueryClient()
   const memberSince = new Date(user.createdAt).toLocaleDateString('en-US', {
@@ -128,20 +242,7 @@ function SignedInState({ user }: { user: Me }) {
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
         <h2 className="text-sm font-semibold">Linked Accounts</h2>
         <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-white/[0.06] p-2">
-                <Gamepad2 className="text-muted-foreground h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Brawlhalla</p>
-                <p className="text-muted-foreground text-xs">Link your player profile</p>
-              </div>
-            </div>
-            <span className="text-muted-foreground rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider">
-              Soon
-            </span>
-          </div>
+          <BrawlhallaLinkRow link={user.playerLink} />
           <div className="border-border/50 border-t" />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
