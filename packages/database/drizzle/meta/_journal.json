@@ -50,6 +50,13 @@
       "when": 1775667588212,
       "tag": "0006_known_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775668964799,
+      "tag": "0007_magical_stark_industries",
+      "breakpoints": true
     }
   ]
 }

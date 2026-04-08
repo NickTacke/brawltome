@@ -186,7 +186,8 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       await linkPlayer({ playerLinkRepo }, { userId: session.userId, steamId })
     } catch (err) {
       console.error('[auth] linkPlayer failed', err)
-      return c.redirect(`${config.webOrigin}/account?error=already_linked`)
+      const isAlreadyLinked = err instanceof Error && err.message.includes('already has a linked player')
+      return c.redirect(`${config.webOrigin}/account?error=${isAlreadyLinked ? 'already_linked' : 'server'}`)
     }
 
     await steamLinkQueue.enqueue({ userId: session.userId, steamId })

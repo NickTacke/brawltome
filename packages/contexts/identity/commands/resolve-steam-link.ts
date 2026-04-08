@@ -25,5 +25,15 @@ export async function resolveSteamLink(
     return
   }
 
-  await deps.playerLinkRepo.resolve(params.userId, result.brawlhalla_id)
+  try {
+    await deps.playerLinkRepo.resolve(params.userId, result.brawlhalla_id)
+  } catch (err) {
+    // Unique constraint violation on brawlhallaId = concurrent claim race
+    const msg = err instanceof Error ? err.message : ''
+    if (msg.includes('uq_player_link_brawlhalla') || msg.includes('unique') || msg.includes('duplicate')) {
+      await deps.playerLinkRepo.setStatus(params.userId, 'conflict')
+      return
+    }
+    throw err
+  }
 }

@@ -16,5 +16,14 @@ export async function linkPlayer(
     // Clear stale failed/conflict link so user can retry
     await deps.playerLinkRepo.deleteByUserId(params.userId)
   }
-  return deps.playerLinkRepo.createPending(params)
+  try {
+    return await deps.playerLinkRepo.createPending(params)
+  } catch (err) {
+    // Unique constraint race: another request created a link concurrently
+    const latest = await deps.playerLinkRepo.findByUserId(params.userId)
+    if (latest?.status === 'linked' || latest?.status === 'pending') {
+      throw new Error('User already has a linked player. Unlink first.')
+    }
+    throw err
+  }
 }
