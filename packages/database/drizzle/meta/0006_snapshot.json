@@ -1,5 +1,5 @@
 {
-  "id": "ddc760d6-b033-48ec-af78-81ad5420e2c8",
+  "id": "40c93764-942d-4d6a-8abb-b177d9c7d2eb",
   "prevId": "9b324f87-5f76-41cf-a7a7-f27283dd8096",
   "version": "7",
   "dialect": "postgresql",
@@ -946,7 +946,7 @@
         "user_id": {
           "name": "user_id",
           "type": "uuid",
-          "primaryKey": false,
+          "primaryKey": true,
           "notNull": true
         },
         "brawlhalla_id": {
@@ -984,21 +984,6 @@
         }
       },
       "indexes": {
-        "uq_player_link_user": {
-          "name": "uq_player_link_user",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "uq_player_link_brawlhalla": {
           "name": "uq_player_link_brawlhalla",
           "columns": [
