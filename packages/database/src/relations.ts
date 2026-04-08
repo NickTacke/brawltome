@@ -6,12 +6,12 @@ import {
   player,
   playerAlias,
   playerClan,
+  playerLink,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
   playerWeaponStat,
   ratingHistory,
-  playerLink,
   session,
   user,
 } from './schema'

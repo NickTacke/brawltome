@@ -86,4 +86,6 @@ process.on('SIGINT', async () => {
   process.exit(0)
 })
 
-console.log('Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1). Janitor active.')
+console.log(
+  'Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1). Janitor active.',
+)
