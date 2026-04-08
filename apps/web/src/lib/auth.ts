@@ -9,7 +9,7 @@ export interface PlayerLinkInfo {
   brawlhallaId: number | null
   steamId: string
   status: 'pending' | 'linked' | 'failed' | 'conflict'
-  linkedAt: string
+  linkedAt: Date
 }
 
 export interface Me {

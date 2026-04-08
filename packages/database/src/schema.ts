@@ -369,5 +369,8 @@ export const playerLink = pgTable(
     status: varchar('status', { length: 16 }).notNull().default('pending'),
     linkedAt: timestamp('linked_at').defaultNow().notNull(),
   },
-  (t) => [uniqueIndex('uq_player_link_brawlhalla').on(t.brawlhallaId)],
+  (t) => [
+    uniqueIndex('uq_player_link_brawlhalla').on(t.brawlhallaId),
+    uniqueIndex('uq_player_link_steam').on(t.steamId),
+  ],
 )
