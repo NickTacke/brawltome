@@ -39,25 +39,16 @@ export function createPlayerLinkRepo(db: Database): PlayerLinkRepo {
     },
 
     async createPending({ userId, steamId }) {
-      const [row] = await db
-        .insert(playerLink)
-        .values({ userId, steamId, status: 'pending' })
-        .returning()
+      const [row] = await db.insert(playerLink).values({ userId, steamId, status: 'pending' }).returning()
       return row as PlayerLink
     },
 
     async resolve(userId, brawlhallaId) {
-      await db
-        .update(playerLink)
-        .set({ brawlhallaId, status: 'linked' })
-        .where(eq(playerLink.userId, userId))
+      await db.update(playerLink).set({ brawlhallaId, status: 'linked' }).where(eq(playerLink.userId, userId))
     },
 
     async setStatus(userId, status) {
-      await db
-        .update(playerLink)
-        .set({ status })
-        .where(eq(playerLink.userId, userId))
+      await db.update(playerLink).set({ status }).where(eq(playerLink.userId, userId))
     },
 
     async deleteByUserId(userId) {
