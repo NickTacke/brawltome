@@ -1,6 +1,7 @@
 import { BhApiClient } from '@brawltome/bhapi'
 import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
+import { createPlayerLinkRepo, resolveSteamLink } from '@brawltome/identity'
 import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
 import { startJanitor } from '@brawltome/ranking'
 import { createQueue, initGameData } from '@brawltome/shared'
@@ -16,6 +17,7 @@ const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379'
 const newRedis = () => new Redis(redisUrl)
 const bhapi = new BhApiClient({ apiKey })
 const deps = { db, bhapi }
+const playerLinkRepo = createPlayerLinkRepo(db)
 
 const rankedQueue = createQueue<{ brawlhallaId: number }>(
   newRedis(),
@@ -53,9 +55,21 @@ const clanQueue = createQueue<{ clanId: number }>(
   { concurrency: 1, retries: 3, backoffMs: 1000 },
 )
 
+const steamLinkQueue = createQueue<{ userId: string; steamId: string }>(
+  newRedis(),
+  'resolve-steam',
+  async (data) => {
+    const start = performance.now()
+    console.log(`[queue] resolve-steam START: userId=${data.userId}`)
+    await resolveSteamLink({ playerLinkRepo, bhapi }, data)
+    console.log(`[queue] resolve-steam DONE: userId=${data.userId} (${(performance.now() - start).toFixed(0)}ms)`)
+  },
+  { concurrency: 1, retries: 2, backoffMs: 1000 },
+)
+
 console.log('Worker starting...')
 await initGameData(db, bhapi)
-Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start()]).catch(console.error)
+Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]).catch(console.error)
 
 const stopJanitor = process.env.DISABLE_JANITOR
   ? async () => {}
@@ -66,9 +80,12 @@ process.on('SIGINT', async () => {
   rankedQueue.stop()
   statsQueue.stop()
   clanQueue.stop()
+  steamLinkQueue.stop()
   await stopJanitor()
   console.log('Lock released. Goodbye.')
   process.exit(0)
 })
 
-console.log('Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1). Janitor active.')
+console.log(
+  'Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1). Janitor active.',
+)
