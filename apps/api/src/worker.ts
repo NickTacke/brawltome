@@ -4,7 +4,7 @@ import { db } from '@brawltome/database'
 import { createPlayerLinkRepo, resolveSteamLink } from '@brawltome/identity'
 import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
 import { startJanitor } from '@brawltome/ranking'
-import { createQueue, initGameData } from '@brawltome/shared'
+import { createMetricsRegistry, createQueue, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
 
 const apiKey = process.env.BRAWLHALLA_API_KEY
@@ -19,16 +19,27 @@ const bhapi = new BhApiClient({ apiKey })
 const deps = { db, bhapi }
 const playerLinkRepo = createPlayerLinkRepo(db)
 
+const metricsRedis = newRedis()
+const metrics = createMetricsRegistry(metricsRedis)
+
 const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
   newRedis(),
   'refresh-ranked',
   async (data) => {
     const start = performance.now()
-    console.log(`[queue] refresh-ranked START: ${data.brawlhallaId}`)
-    await processRefreshRanked(deps, data.brawlhallaId)
+    console.log(`[queue] refresh-ranked START: ${data.brawlhallaId} (caller=${data.caller})`)
+    await processRefreshRanked(deps, data.brawlhallaId, data.caller ?? 'background')
     console.log(`[queue] refresh-ranked DONE: ${data.brawlhallaId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 3, retries: 3, backoffMs: 1000 },
+  {
+    concurrency: 3,
+    retries: 3,
+    backoffMs: 1000,
+    maxDepth: 2000,
+    dedupKey: (d) => String(d.brawlhallaId),
+    priorityRatio: 3,
+    metrics,
+  },
 )
 
 const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
@@ -36,11 +47,19 @@ const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'ba
   'refresh-stats',
   async (data) => {
     const start = performance.now()
-    console.log(`[queue] refresh-stats START: ${data.brawlhallaId}`)
-    await processRefreshStats(deps, data.brawlhallaId)
+    console.log(`[queue] refresh-stats START: ${data.brawlhallaId} (caller=${data.caller})`)
+    await processRefreshStats(deps, data.brawlhallaId, data.caller ?? 'background')
     console.log(`[queue] refresh-stats DONE: ${data.brawlhallaId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 2, retries: 3, backoffMs: 1000 },
+  {
+    concurrency: 2,
+    retries: 3,
+    backoffMs: 1000,
+    maxDepth: 2000,
+    dedupKey: (d) => String(d.brawlhallaId),
+    priorityRatio: 3,
+    metrics,
+  },
 )
 
 const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(
@@ -48,11 +67,19 @@ const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'backgroun
   'refresh-clan',
   async (data) => {
     const start = performance.now()
-    console.log(`[queue] refresh-clan START: ${data.clanId}`)
-    await processRefreshClan(deps, data.clanId)
+    console.log(`[queue] refresh-clan START: ${data.clanId} (caller=${data.caller})`)
+    await processRefreshClan(deps, data.clanId, data.caller ?? 'background')
     console.log(`[queue] refresh-clan DONE: ${data.clanId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 1, retries: 3, backoffMs: 1000 },
+  {
+    concurrency: 1,
+    retries: 3,
+    backoffMs: 1000,
+    maxDepth: 1000,
+    dedupKey: (d) => String(d.clanId),
+    priorityRatio: 3,
+    metrics,
+  },
 )
 
 const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
@@ -64,8 +91,25 @@ const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'b
     await resolveSteamLink({ playerLinkRepo, bhapi }, data)
     console.log(`[queue] resolve-steam DONE: userId=${data.userId} (${(performance.now() - start).toFixed(0)}ms)`)
   },
-  { concurrency: 1, retries: 2, backoffMs: 1000 },
+  {
+    concurrency: 1,
+    retries: 2,
+    backoffMs: 1000,
+    maxDepth: 500,
+    dedupKey: (d) => `${d.userId}:${d.steamId}`,
+    metrics,
+  },
 )
+
+const bhapiMetricsInterval = setInterval(async () => {
+  try {
+    await metrics.setScalar('bhapi:tokens_on_demand_remaining', bhapi.remainingTokens('on-demand'))
+    await metrics.setScalar('bhapi:tokens_background_remaining', bhapi.remainingTokens('background'))
+    await metrics.setScalar('bhapi:paused_until_ms', bhapi.pausedUntilMs)
+  } catch (err) {
+    console.error('[worker] bhapi metrics snapshot error:', err)
+  }
+}, 5000)
 
 console.log('Worker starting...')
 await initGameData(db, bhapi)
@@ -77,6 +121,7 @@ const stopJanitor = process.env.DISABLE_JANITOR
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
+  clearInterval(bhapiMetricsInterval)
   rankedQueue.stop()
   statsQueue.stop()
   clanQueue.stop()
