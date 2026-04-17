@@ -5,6 +5,7 @@ export interface QueueOptions {
   concurrency?: number
   retries?: number
   backoffMs?: number
+  maxDepth?: number
 }
 
 export interface Queue<T> {
@@ -20,7 +21,7 @@ export function createQueue<T>(
   handler: (data: T) => Promise<void>,
   opts: QueueOptions = {},
 ): Queue<T> {
-  const { concurrency = 5, retries = 3, backoffMs = 1000 } = opts
+  const { concurrency = 5, retries = 3, backoffMs = 1000, maxDepth } = opts
   const stream = `queue:${name}`
   const priorityKey = `queue:${name}:priority`
   const group = `${name}-workers`
@@ -38,6 +39,14 @@ export function createQueue<T>(
   }
 
   async function enqueue(data: T, priority = false): Promise<boolean> {
+    if (maxDepth !== undefined) {
+      const streamLen = await redis.xlen(stream)
+      const priorityLen = await redis.llen(priorityKey)
+      if (streamLen + priorityLen >= maxDepth) {
+        return false
+      }
+    }
+
     if (priority) {
       await redis.lpush(priorityKey, JSON.stringify(data))
     } else {
