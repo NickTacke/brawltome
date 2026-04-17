@@ -1,11 +1,13 @@
 import { RateLimitError } from '@brawltome/bhapi'
 import type { Redis } from 'ioredis'
 
-export interface QueueOptions {
+export interface QueueOptions<T = unknown> {
   concurrency?: number
   retries?: number
   backoffMs?: number
   maxDepth?: number
+  dedupKey?: (data: T) => string
+  dedupTtlSec?: number
 }
 
 export interface Queue<T> {
@@ -19,9 +21,23 @@ export function createQueue<T>(
   redis: Redis,
   name: string,
   handler: (data: T) => Promise<void>,
-  opts: QueueOptions = {},
+  opts: QueueOptions<T> = {},
 ): Queue<T> {
-  const { concurrency = 5, retries = 3, backoffMs = 1000, maxDepth } = opts
+  const { concurrency = 5, retries = 3, backoffMs = 1000, maxDepth, dedupKey, dedupTtlSec = 300 } = opts
+  function dedupRedisKey(data: T): string {
+    return `queue:${name}:dedup:${dedupKey!(data)}`
+  }
+
+  async function releaseDedup(data: T): Promise<void> {
+    if (dedupKey) {
+      try {
+        await redis.del(dedupRedisKey(data))
+      } catch (err) {
+        console.warn(`[queue:${name}] releaseDedup error:`, err)
+      }
+    }
+  }
+
   const stream = `queue:${name}`
   const priorityKey = `queue:${name}:priority`
   const group = `${name}-workers`
@@ -45,6 +61,11 @@ export function createQueue<T>(
       if (streamLen + priorityLen >= maxDepth) {
         return false
       }
+    }
+
+    if (dedupKey) {
+      const set = await redis.set(dedupRedisKey(data), '1', 'EX', dedupTtlSec, 'NX')
+      if (set !== 'OK') return false
     }
 
     if (priority) {
@@ -157,10 +178,12 @@ export function createQueue<T>(
     try {
       await handler(data)
       await ackAndDelete(id)
+      await releaseDedup(data)
     } catch (err) {
       if (err instanceof RateLimitError) {
         console.warn(`[queue:${name}] rate limited, re-enqueuing job for later`)
         await ackAndDelete(id)
+        await releaseDedup(data)
         await enqueue(data)
         return
       }
@@ -184,6 +207,7 @@ export function createQueue<T>(
         new Date().toISOString(),
       )
       await ackAndDelete(id)
+      await releaseDedup(data)
       console.error(`[queue:${name}] job sent to DLQ:`, err)
     }
   }
