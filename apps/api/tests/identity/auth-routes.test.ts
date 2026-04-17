@@ -183,7 +183,7 @@ describe('POST /auth/signout', () => {
 
     const res = await app.request('/auth/signout', {
       method: 'POST',
-      headers: { cookie: `brawltome_session=${raw}` },
+      headers: { cookie: `brawltome_session=${raw}`, 'x-requested-with': 'brawltome' },
     })
     expect(res.status).toBe(204)
     expect(fakes.sessions).toHaveLength(0)
@@ -195,7 +195,17 @@ describe('POST /auth/signout', () => {
   it('returns 204 even when there is no cookie', async () => {
     const fakes = makeFakes()
     const app = buildApp(fakes)
-    const res = await app.request('/auth/signout', { method: 'POST' })
+    const res = await app.request('/auth/signout', {
+      method: 'POST',
+      headers: { 'x-requested-with': 'brawltome' },
+    })
     expect(res.status).toBe(204)
+  })
+
+  it('rejects requests without the x-requested-with header', async () => {
+    const fakes = makeFakes()
+    const app = buildApp(fakes)
+    const res = await app.request('/auth/signout', { method: 'POST' })
+    expect(res.status).toBe(403)
   })
 })
