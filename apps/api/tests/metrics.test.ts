@@ -4,8 +4,10 @@ import Redis from 'ioredis'
 
 let redis: Redis
 
-beforeAll(() => {
+beforeAll(async () => {
   redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
+  const keys = await redis.keys('metrics:*')
+  if (keys.length > 0) await redis.del(...keys)
 })
 
 afterAll(async () => {

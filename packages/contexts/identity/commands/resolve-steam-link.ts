@@ -2,7 +2,12 @@ import type { PlayerLinkRepo } from '../playerLink.repo'
 
 export interface ResolveSteamLinkDeps {
   playerLinkRepo: PlayerLinkRepo
-  bhapi: { searchBySteamId(steamId: string, opts?: { caller?: string }): Promise<{ brawlhalla_id: number; name: string } | null> }
+  bhapi: {
+    searchBySteamId(
+      steamId: string,
+      opts?: { caller?: string },
+    ): Promise<{ brawlhalla_id: number; name: string } | null>
+  }
 }
 
 export async function resolveSteamLink(

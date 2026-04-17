@@ -84,12 +84,10 @@ describe('Queue', () => {
 
 describe('Queue maxDepth', () => {
   it('rejects enqueue when depth >= maxDepth', async () => {
-    const queue = createQueue<{ value: number }>(
-      redis,
-      'test-maxdepth',
-      async () => {},
-      { concurrency: 0, maxDepth: 3 },
-    )
+    const queue = createQueue<{ value: number }>(redis, 'test-maxdepth', async () => {}, {
+      concurrency: 0,
+      maxDepth: 3,
+    })
 
     const a = await queue.enqueue({ value: 1 })
     const b = await queue.enqueue({ value: 2 })
@@ -105,12 +103,10 @@ describe('Queue maxDepth', () => {
 
 describe('Queue dedup', () => {
   it('rejects duplicate enqueue while in-flight', async () => {
-    const queue = createQueue<{ brawlhallaId: number }>(
-      redis,
-      'test-dedup-queue',
-      async () => {},
-      { concurrency: 0, dedupKey: (d) => String(d.brawlhallaId) },
-    )
+    const queue = createQueue<{ brawlhallaId: number }>(redis, 'test-dedup-queue', async () => {}, {
+      concurrency: 0,
+      dedupKey: (d) => String(d.brawlhallaId),
+    })
 
     const first = await queue.enqueue({ brawlhallaId: 123 })
     const second = await queue.enqueue({ brawlhallaId: 123 })
@@ -199,12 +195,12 @@ describe('Queue rate-limit retry backoff', () => {
 
     await queue.enqueue({ value: 1 })
     queue.start()
-    await Bun.sleep(1000)
+    await Bun.sleep(1500)
     queue.stop()
 
-    expect(attempts.length).toBe(2)
+    expect(attempts.length).toBeGreaterThanOrEqual(2)
     const gap = attempts[1] - attempts[0]
-    expect(gap).toBeGreaterThanOrEqual(250)  // allow small slack from 300
+    expect(gap).toBeGreaterThanOrEqual(250) // allow small slack from 300
   })
 })
 

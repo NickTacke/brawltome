@@ -33,17 +33,17 @@ export function createQueue<T>(
     maxDepth,
     dedupKey,
     dedupTtlSec = 300,
-    priorityRatio = Infinity,
+    priorityRatio = Number.POSITIVE_INFINITY,
     metrics,
   } = opts
-  function dedupRedisKey(data: T): string {
-    return `queue:${name}:dedup:${dedupKey!(data)}`
+  function dedupRedisKey(resolver: (data: T) => string, data: T): string {
+    return `queue:${name}:dedup:${resolver(data)}`
   }
 
   async function releaseDedup(data: T): Promise<void> {
     if (dedupKey) {
       try {
-        await redis.del(dedupRedisKey(data))
+        await redis.del(dedupRedisKey(dedupKey, data))
       } catch (err) {
         console.warn(`[queue:${name}] releaseDedup error:`, err)
       }
@@ -77,7 +77,7 @@ export function createQueue<T>(
     }
 
     if (dedupKey) {
-      const set = await redis.set(dedupRedisKey(data), '1', 'EX', dedupTtlSec, 'NX')
+      const set = await redis.set(dedupRedisKey(dedupKey, data), '1', 'EX', dedupTtlSec, 'NX')
       if (set !== 'OK') {
         await metrics?.incrementQueue(name, 'dedup_skipped_total')
         return false
@@ -210,10 +210,11 @@ export function createQueue<T>(
       if (err instanceof RateLimitError) {
         console.warn(`[queue:${name}] rate limited, sleeping ${err.retryAfterMs}ms before re-enqueue`)
         await metrics?.incrementQueue(name, 'rate_limit_retries_total')
+        const wasPriority = id === null
         await ackAndDelete(id)
         await releaseDedup(data)
         await Bun.sleep(err.retryAfterMs)
-        await enqueue(data)
+        await enqueue(data, wasPriority)
         return
       }
 
