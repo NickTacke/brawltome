@@ -9,7 +9,7 @@ import {
 } from '@brawltome/identity'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
 import { createRankingRepo } from '@brawltome/ranking'
-import { TIERED_TTL, createMetricsRegistry, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
+import { TIERED_TTL, checkRateLimit, createMetricsRegistry, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -168,13 +168,25 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     return c.json({ error: 'Invalid bhid' }, 400)
   }
 
+  const clientIp =
+    c.req.header('x-client-ip') ??
+    c.req.header('cf-connecting-ip') ??
+    c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
+    '0.0.0.0'
+
+  const rateLimit = await checkRateLimit(redis, clientIp, 'overlay')
+
   const p = await getPlayer(playerRepo, bhid)
   if (!p) {
     await playerRepo.createPlaceholder(bhid)
 
-    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
-    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
-    console.log(`[overlay] discovering player ${bhid}`)
+    if (rateLimit.allowed) {
+      await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
+      await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
+      console.log(`[overlay] discovering player ${bhid}`)
+    } else {
+      console.log(`[overlay] rate-limited for ${clientIp}, returning placeholder only`)
+    }
 
     return c.json({
       brawlhallaId: bhid,
@@ -192,22 +204,22 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
   const now = Date.now()
   const ttl = TIERED_TTL.hot
 
-  const rankedStale = !p.rankedLastUpdated || now - p.rankedLastUpdated.getTime() > ttl.ranked
-  if (rankedStale) {
-    const canDedup = await tryDedup(redis, dedupKey('ranked', bhid), DEDUP_TTL_RANKED_SEC)
-    if (canDedup) await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
-  }
+  if (rateLimit.allowed) {
+    const rankedStale = !p.rankedLastUpdated || now - p.rankedLastUpdated.getTime() > ttl.ranked
+    if (rankedStale) {
+      const canDedup = await tryDedup(redis, dedupKey('ranked', bhid), DEDUP_TTL_RANKED_SEC)
+      if (canDedup) await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
+    }
 
-  const statsStale = !p.statsLastUpdated || now - p.statsLastUpdated.getTime() > ttl.stats
-  if (statsStale) {
-    const canDedup = await tryDedup(redis, dedupKey('stats', bhid), DEDUP_TTL_STATS_SEC)
-    if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
+    const statsStale = !p.statsLastUpdated || now - p.statsLastUpdated.getTime() > ttl.stats
+    if (statsStale) {
+      const canDedup = await tryDedup(redis, dedupKey('stats', bhid), DEDUP_TTL_STATS_SEC)
+      if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
+    }
   }
 
   const legendKey = p.bestLegend ? (getLegendById(p.bestLegend)?.legendNameKey ?? '') : ''
-
   const winRate = p.rankedGames > 0 ? Math.round((p.rankedWins / p.rankedGames) * 1000) / 10 : 0
-
   const playtime = p.matchTimeTotal ? Math.round((p.matchTimeTotal / 3600) * 10) / 10 : 0
 
   return c.json({
