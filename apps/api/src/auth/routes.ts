@@ -1,6 +1,13 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import type { PlayerLinkRepo, SessionRepo, UserRepo } from '@brawltome/identity'
-import { SESSION_TTL_MS, hashSessionToken, linkPlayer, signInWithDiscord, signOut } from '@brawltome/identity'
+import {
+  PlayerAlreadyLinkedError,
+  SESSION_TTL_MS,
+  hashSessionToken,
+  linkPlayer,
+  signInWithDiscord,
+  signOut,
+} from '@brawltome/identity'
 import type { Queue } from '@brawltome/shared'
 import { Hono } from 'hono'
 import {
@@ -104,6 +111,13 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   })
 
   app.post('/signout', async (c) => {
+    // CSRF protection: require a custom header that cross-site forms cannot set.
+    // Session cookie is SameSite=Lax (required for OAuth redirect), so without this
+    // check, a cross-site form could log the user out.
+    if (c.req.header('x-requested-with') !== 'brawltome') {
+      return c.json({ error: 'csrf' }, 403)
+    }
+
     const cookies = parseCookies(c.req.header('cookie'))
     const raw = cookies[SESSION_COOKIE]
     if (raw) {
@@ -186,7 +200,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       await linkPlayer({ playerLinkRepo }, { userId: session.userId, steamId })
     } catch (err) {
       console.error('[auth] linkPlayer failed', err)
-      const isAlreadyLinked = err instanceof Error && err.message.includes('already has a linked player')
+      const isAlreadyLinked = err instanceof PlayerAlreadyLinkedError
       return c.redirect(`${config.webOrigin}/account?error=${isAlreadyLinked ? 'already_linked' : 'server'}`)
     }
 
