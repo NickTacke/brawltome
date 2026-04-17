@@ -1,0 +1,2258 @@
+{
+  "id": "ba5c6ed1-dfaa-4c80-b300-a8155ed5ea91",
+  "prevId": "f2de52c5-889d-4537-a449-0a3c27a57adf",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.blacklist": {
+      "name": "blacklist",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.clan": {
+      "name": "clan",
+      "schema": "",
+      "columns": {
+        "clan_id": {
+          "name": "clan_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clan_name": {
+          "name": "clan_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clan_create_date": {
+          "name": "clan_create_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clan_xp": {
+          "name": "clan_xp",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clan_lifetime_xp": {
+          "name": "clan_lifetime_xp",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_updated": {
+          "name": "last_updated",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.clan_member": {
+      "name": "clan_member",
+      "schema": "",
+      "columns": {
+        "clan_id": {
+          "name": "clan_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rank": {
+          "name": "rank",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "join_date": {
+          "name": "join_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "xp": {
+          "name": "xp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legend_name_key": {
+          "name": "legend_name_key",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "clan_member_clan_id_clan_clan_id_fk": {
+          "name": "clan_member_clan_id_clan_clan_id_fk",
+          "tableFrom": "clan_member",
+          "tableTo": "clan",
+          "columnsFrom": [
+            "clan_id"
+          ],
+          "columnsTo": [
+            "clan_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "clan_member_clan_id_brawlhalla_id_pk": {
+          "name": "clan_member_clan_id_brawlhalla_id_pk",
+          "columns": [
+            "clan_id",
+            "brawlhalla_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.legend": {
+      "name": "legend",
+      "schema": "",
+      "columns": {
+        "legend_id": {
+          "name": "legend_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "legend_name_key": {
+          "name": "legend_name_key",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bio_name": {
+          "name": "bio_name",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bio_aka": {
+          "name": "bio_aka",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio_quote": {
+          "name": "bio_quote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio_quote_about_attrib": {
+          "name": "bio_quote_about_attrib",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bio_quote_from": {
+          "name": "bio_quote_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio_quote_from_attrib": {
+          "name": "bio_quote_from_attrib",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio_text": {
+          "name": "bio_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bot_name": {
+          "name": "bot_name",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weapon_one": {
+          "name": "weapon_one",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weapon_two": {
+          "name": "weapon_two",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strength": {
+          "name": "strength",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dexterity": {
+          "name": "dexterity",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "defense": {
+          "name": "defense",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "speed": {
+          "name": "speed",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_legend_name_key": {
+          "name": "idx_legend_name_key",
+          "columns": [
+            {
+              "expression": "legend_name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.match_events": {
+      "name": "match_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "match_slug": {
+          "name": "match_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timestamp_ms": {
+          "name": "timestamp_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "match_event_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_match_events_slug_ts": {
+          "name": "idx_match_events_slug_ts",
+          "columns": [
+            {
+              "expression": "match_slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "timestamp_ms",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "match_events_match_slug_matches_slug_fk": {
+          "name": "match_events_match_slug_matches_slug_fk",
+          "tableFrom": "match_events",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_slug"
+          ],
+          "columnsTo": [
+            "slug"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.match_players": {
+      "name": "match_players",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "match_slug": {
+          "name": "match_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "replay_entity_id": {
+          "name": "replay_entity_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_source": {
+          "name": "link_source",
+          "type": "match_link_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team": {
+          "name": "team",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legend_id": {
+          "name": "legend_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "costume_id": {
+          "name": "costume_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stance_index": {
+          "name": "stance_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weapon_skin_1": {
+          "name": "weapon_skin_1",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weapon_skin_2": {
+          "name": "weapon_skin_2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "color_scheme_id": {
+          "name": "color_scheme_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "companion_id": {
+          "name": "companion_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "emitter_id": {
+          "name": "emitter_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trail_effect_id": {
+          "name": "trail_effect_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avatar_id": {
+          "name": "avatar_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_bot": {
+          "name": "is_bot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "final_score": {
+          "name": "final_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_match_players_slug_entity": {
+          "name": "uq_match_players_slug_entity",
+          "columns": [
+            {
+              "expression": "match_slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "replay_entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_match_players_bhid": {
+          "name": "idx_match_players_bhid",
+          "columns": [
+            {
+              "expression": "brawlhalla_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "match_players_match_slug_matches_slug_fk": {
+          "name": "match_players_match_slug_matches_slug_fk",
+          "tableFrom": "match_players",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_slug"
+          ],
+          "columnsTo": [
+            "slug"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.matches": {
+      "name": "matches",
+      "schema": "",
+      "columns": {
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "dedupe_hash": {
+          "name": "dedupe_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uploaded_at": {
+          "name": "uploaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "parse_status": {
+          "name": "parse_status",
+          "type": "match_parse_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "format_version": {
+          "name": "format_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_storage_key": {
+          "name": "replay_storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "replay_bytes": {
+          "name": "replay_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "game_patch": {
+          "name": "game_patch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "random_seed": {
+          "name": "random_seed",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "playlist_name": {
+          "name": "playlist_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "online_game": {
+          "name": "online_game",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "level_id": {
+          "name": "level_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "match_duration_ms": {
+          "name": "match_duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "end_of_match_fanfare_id": {
+          "name": "end_of_match_fanfare_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "winner_team": {
+          "name": "winner_team",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scoring_type_id": {
+          "name": "scoring_type_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detailed_stats_key": {
+          "name": "detailed_stats_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sim_version": {
+          "name": "sim_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sim_ran_at": {
+          "name": "sim_ran_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_matches_dedupe_hash": {
+          "name": "uq_matches_dedupe_hash",
+          "columns": [
+            {
+              "expression": "dedupe_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_matches_uploaded_at": {
+          "name": "idx_matches_uploaded_at",
+          "columns": [
+            {
+              "expression": "uploaded_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_matches_parse_status": {
+          "name": "idx_matches_parse_status",
+          "columns": [
+            {
+              "expression": "parse_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_matches_pending_format_version": {
+          "name": "idx_matches_pending_format_version",
+          "columns": [
+            {
+              "expression": "format_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_account": {
+      "name": "oauth_account",
+      "schema": "",
+      "columns": {
+        "provider": {
+          "name": "provider",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_account_id": {
+          "name": "provider_account_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avatar_hash": {
+          "name": "avatar_hash",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_oauth_account_user_provider": {
+          "name": "uq_oauth_account_user_provider",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "oauth_account_user_id_user_id_fk": {
+          "name": "oauth_account_user_id_user_id_fk",
+          "tableFrom": "oauth_account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "oauth_account_provider_provider_account_id_pk": {
+          "name": "oauth_account_provider_provider_account_id_pk",
+          "columns": [
+            "provider",
+            "provider_account_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player": {
+      "name": "player",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region": {
+          "name": "region",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "peak_rating": {
+          "name": "peak_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "tier": {
+          "name": "tier",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ranked_games": {
+          "name": "ranked_games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "ranked_wins": {
+          "name": "ranked_wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "ranked_last_updated": {
+          "name": "ranked_last_updated",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "best_legend": {
+          "name": "best_legend",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "best_legend_games": {
+          "name": "best_legend_games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "best_legend_wins": {
+          "name": "best_legend_wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "xp": {
+          "name": "xp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "xp_percentage": {
+          "name": "xp_percentage",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_games": {
+          "name": "total_games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_wins": {
+          "name": "total_wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "match_time_total": {
+          "name": "match_time_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "damage_bomb": {
+          "name": "damage_bomb",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "damage_mine": {
+          "name": "damage_mine",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "damage_spikeball": {
+          "name": "damage_spikeball",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "damage_sidekick": {
+          "name": "damage_sidekick",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hit_snowball": {
+          "name": "hit_snowball",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ko_bomb": {
+          "name": "ko_bomb",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ko_mine": {
+          "name": "ko_mine",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ko_spikeball": {
+          "name": "ko_spikeball",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ko_sidekick": {
+          "name": "ko_sidekick",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ko_snowball": {
+          "name": "ko_snowball",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stats_last_updated": {
+          "name": "stats_last_updated",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valhallan_confirmed_at": {
+          "name": "valhallan_confirmed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_updated": {
+          "name": "last_updated",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "view_count": {
+          "name": "view_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_viewed_at": {
+          "name": "last_viewed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "refresh_tier": {
+          "name": "refresh_tier",
+          "type": "refresh_tier",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'cold'"
+        }
+      },
+      "indexes": {
+        "idx_player_name": {
+          "name": "idx_player_name",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_view_count": {
+          "name": "idx_player_view_count",
+          "columns": [
+            {
+              "expression": "view_count",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_rating": {
+          "name": "idx_player_rating",
+          "columns": [
+            {
+              "expression": "rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_peak_rating": {
+          "name": "idx_player_peak_rating",
+          "columns": [
+            {
+              "expression": "peak_rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_wins": {
+          "name": "idx_player_wins",
+          "columns": [
+            {
+              "expression": "ranked_wins",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_games": {
+          "name": "idx_player_games",
+          "columns": [
+            {
+              "expression": "ranked_games",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_region_rating": {
+          "name": "idx_player_region_rating",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_region_peak_rating": {
+          "name": "idx_player_region_peak_rating",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "peak_rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_region_wins": {
+          "name": "idx_player_region_wins",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ranked_wins",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_player_region_games": {
+          "name": "idx_player_region_games",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ranked_games",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_alias": {
+      "name": "player_alias",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_alias_key": {
+          "name": "idx_alias_key",
+          "columns": [
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "player_alias_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "player_alias_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "player_alias",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "player_alias_brawlhalla_id_key_pk": {
+          "name": "player_alias_brawlhalla_id_key_pk",
+          "columns": [
+            "brawlhalla_id",
+            "key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_clan": {
+      "name": "player_clan",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clan_name": {
+          "name": "clan_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clan_id": {
+          "name": "clan_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clan_xp": {
+          "name": "clan_xp",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clan_lifetime_xp": {
+          "name": "clan_lifetime_xp",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "personal_xp": {
+          "name": "personal_xp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "player_clan_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "player_clan_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "player_clan",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_link": {
+      "name": "player_link",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "steam_id": {
+          "name": "steam_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "linked_via": {
+          "name": "linked_via",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'steam'"
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "linked_at": {
+          "name": "linked_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_player_link_brawlhalla": {
+          "name": "uq_player_link_brawlhalla",
+          "columns": [
+            {
+              "expression": "brawlhalla_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_player_link_steam": {
+          "name": "uq_player_link_steam",
+          "columns": [
+            {
+              "expression": "steam_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "player_link_user_id_user_id_fk": {
+          "name": "player_link_user_id_user_id_fk",
+          "tableFrom": "player_link",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_ranked_legend": {
+      "name": "player_ranked_legend",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legend_id": {
+          "name": "legend_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legend_name_key": {
+          "name": "legend_name_key",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "peak_rating": {
+          "name": "peak_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tier": {
+          "name": "tier",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wins": {
+          "name": "wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "games": {
+          "name": "games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "player_ranked_legend_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "player_ranked_legend_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "player_ranked_legend",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "player_ranked_legend_brawlhalla_id_legend_id_pk": {
+          "name": "player_ranked_legend_brawlhalla_id_legend_id_pk",
+          "columns": [
+            "brawlhalla_id",
+            "legend_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_ranked_team": {
+      "name": "player_ranked_team",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brawlhalla_id_one": {
+          "name": "brawlhalla_id_one",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brawlhalla_id_two": {
+          "name": "brawlhalla_id_two",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_name": {
+          "name": "team_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "peak_rating": {
+          "name": "peak_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tier": {
+          "name": "tier",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wins": {
+          "name": "wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "games": {
+          "name": "games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region": {
+          "name": "region",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "global_rank": {
+          "name": "global_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valhallan_confirmed_at": {
+          "name": "valhallan_confirmed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_ranked_team_rating": {
+          "name": "idx_ranked_team_rating",
+          "columns": [
+            {
+              "expression": "rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_ranked_team_region_rating": {
+          "name": "idx_ranked_team_region_rating",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "rating",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "player_ranked_team_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "player_ranked_team_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "player_ranked_team",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "player_ranked_team_brawlhalla_id_brawlhalla_id_one_brawlhalla_id_two_pk": {
+          "name": "player_ranked_team_brawlhalla_id_brawlhalla_id_one_brawlhalla_id_two_pk",
+          "columns": [
+            "brawlhalla_id",
+            "brawlhalla_id_one",
+            "brawlhalla_id_two"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_stats_legend": {
+      "name": "player_stats_legend",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legend_id": {
+          "name": "legend_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "legend_name_key": {
+          "name": "legend_name_key",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "xp": {
+          "name": "xp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "xp_percentage": {
+          "name": "xp_percentage",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "games": {
+          "name": "games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wins": {
+          "name": "wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "match_time": {
+          "name": "match_time",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kos": {
+          "name": "kos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_kos": {
+          "name": "team_kos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suicides": {
+          "name": "suicides",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "falls": {
+          "name": "falls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_dealt": {
+          "name": "damage_dealt",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_taken": {
+          "name": "damage_taken",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_weapon_one": {
+          "name": "damage_weapon_one",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_weapon_two": {
+          "name": "damage_weapon_two",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_held_weapon_one": {
+          "name": "time_held_weapon_one",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_held_weapon_two": {
+          "name": "time_held_weapon_two",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ko_weapon_one": {
+          "name": "ko_weapon_one",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ko_weapon_two": {
+          "name": "ko_weapon_two",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ko_unarmed": {
+          "name": "ko_unarmed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ko_thrown_item": {
+          "name": "ko_thrown_item",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ko_gadgets": {
+          "name": "ko_gadgets",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_unarmed": {
+          "name": "damage_unarmed",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_thrown_item": {
+          "name": "damage_thrown_item",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage_gadgets": {
+          "name": "damage_gadgets",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "player_stats_legend_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "player_stats_legend_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "player_stats_legend",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "player_stats_legend_brawlhalla_id_legend_id_pk": {
+          "name": "player_stats_legend_brawlhalla_id_legend_id_pk",
+          "columns": [
+            "brawlhalla_id",
+            "legend_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.player_weapon_stat": {
+      "name": "player_weapon_stat",
+      "schema": "",
+      "columns": {
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weapon": {
+          "name": "weapon",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_held": {
+          "name": "time_held",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "damage": {
+          "name": "damage",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kos": {
+          "name": "kos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "player_weapon_stat_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "player_weapon_stat_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "player_weapon_stat",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "player_weapon_stat_brawlhalla_id_weapon_pk": {
+          "name": "player_weapon_stat_brawlhalla_id_weapon_pk",
+          "columns": [
+            "brawlhalla_id",
+            "weapon"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.rating_history": {
+      "name": "rating_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "brawlhalla_id": {
+          "name": "brawlhalla_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "peak_rating": {
+          "name": "peak_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tier": {
+          "name": "tier",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "games": {
+          "name": "games",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wins": {
+          "name": "wins",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_rating_history_player": {
+          "name": "idx_rating_history_player",
+          "columns": [
+            {
+              "expression": "brawlhalla_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_rating_history_time": {
+          "name": "idx_rating_history_time",
+          "columns": [
+            {
+              "expression": "brawlhalla_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recorded_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "rating_history_brawlhalla_id_player_brawlhalla_id_fk": {
+          "name": "rating_history_brawlhalla_id_player_brawlhalla_id_fk",
+          "tableFrom": "rating_history",
+          "tableTo": "player",
+          "columnsFrom": [
+            "brawlhalla_id"
+          ],
+          "columnsTo": [
+            "brawlhalla_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(64)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_session_user_id": {
+          "name": "idx_session_user_id",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.match_event_kind": {
+      "name": "match_event_kind",
+      "schema": "public",
+      "values": [
+        "ko",
+        "self_destruct",
+        "victory_face"
+      ]
+    },
+    "public.match_link_source": {
+      "name": "match_link_source",
+      "schema": "public",
+      "values": [
+        "overlay_memory"
+      ]
+    },
+    "public.match_parse_status": {
+      "name": "match_parse_status",
+      "schema": "public",
+      "values": [
+        "parsed",
+        "pending"
+      ]
+    },
+    "public.refresh_tier": {
+      "name": "refresh_tier",
+      "schema": "public",
+      "values": [
+        "hot",
+        "warm",
+        "cold"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

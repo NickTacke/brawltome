@@ -374,3 +374,90 @@ export const playerLink = pgTable(
     uniqueIndex('uq_player_link_steam').on(t.steamId),
   ],
 )
+
+// ============================================================
+// Matchmaking
+// ============================================================
+
+export const matchParseStatusEnum = pgEnum('match_parse_status', ['parsed', 'pending'])
+export const matchEventKindEnum = pgEnum('match_event_kind', ['ko', 'self_destruct', 'victory_face'])
+export const matchLinkSourceEnum = pgEnum('match_link_source', ['overlay_memory'])
+
+export const matches = pgTable(
+  'matches',
+  {
+    slug: text('slug').primaryKey(),
+    dedupeHash: text('dedupe_hash'),
+    uploadedBy: uuid('uploaded_by').notNull(),
+    uploadedAt: timestamp('uploaded_at', { withTimezone: true }).defaultNow().notNull(),
+    parseStatus: matchParseStatusEnum('parse_status').default('pending').notNull(),
+    formatVersion: integer('format_version'),
+    replayStorageKey: text('replay_storage_key').notNull(),
+    replayBytes: integer('replay_bytes').notNull(),
+    gamePatch: text('game_patch'),
+    randomSeed: bigint('random_seed', { mode: 'number' }),
+    playlistId: integer('playlist_id'),
+    playlistName: text('playlist_name'),
+    onlineGame: integer('online_game'),
+    levelId: integer('level_id'),
+    durationMs: integer('duration_ms'),
+    matchDurationMs: integer('match_duration_ms'),
+    endOfMatchFanfareId: integer('end_of_match_fanfare_id'),
+    winnerTeam: integer('winner_team'),
+    scoringTypeId: integer('scoring_type_id'),
+    detailedStatsKey: text('detailed_stats_key'),
+    simVersion: integer('sim_version'),
+    simRanAt: timestamp('sim_ran_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('uq_matches_dedupe_hash').on(t.dedupeHash),
+    index('idx_matches_uploaded_at').on(t.uploadedAt),
+    index('idx_matches_parse_status').on(t.parseStatus),
+    index('idx_matches_pending_format_version').on(t.formatVersion),
+  ],
+)
+
+export const matchPlayers = pgTable(
+  'match_players',
+  {
+    id: serial('id').primaryKey(),
+    matchSlug: text('match_slug')
+      .notNull()
+      .references(() => matches.slug, { onDelete: 'cascade' }),
+    replayEntityId: integer('replay_entity_id').notNull(),
+    brawlhallaId: integer('brawlhalla_id'),
+    linkSource: matchLinkSourceEnum('link_source'),
+    displayName: varchar('display_name', { length: 256 }).notNull(),
+    team: integer('team').notNull(),
+    legendId: integer('legend_id'),
+    costumeId: integer('costume_id'),
+    stanceIndex: integer('stance_index'),
+    weaponSkin1: integer('weapon_skin_1'),
+    weaponSkin2: integer('weapon_skin_2'),
+    colorSchemeId: integer('color_scheme_id'),
+    companionId: integer('companion_id'),
+    emitterId: integer('emitter_id'),
+    trailEffectId: integer('trail_effect_id'),
+    avatarId: integer('avatar_id'),
+    isBot: integer('is_bot'),
+    finalScore: integer('final_score'),
+  },
+  (t) => [
+    uniqueIndex('uq_match_players_slug_entity').on(t.matchSlug, t.replayEntityId),
+    index('idx_match_players_bhid').on(t.brawlhallaId),
+  ],
+)
+
+export const matchEvents = pgTable(
+  'match_events',
+  {
+    id: serial('id').primaryKey(),
+    matchSlug: text('match_slug')
+      .notNull()
+      .references(() => matches.slug, { onDelete: 'cascade' }),
+    entityId: integer('entity_id').notNull(),
+    timestampMs: integer('timestamp_ms').notNull(),
+    kind: matchEventKindEnum('kind').notNull(),
+  },
+  (t) => [index('idx_match_events_slug_ts').on(t.matchSlug, t.timestampMs)],
+)
