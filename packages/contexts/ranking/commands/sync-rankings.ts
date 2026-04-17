@@ -65,7 +65,7 @@ export function startJanitor(deps: JanitorDeps) {
     }
 
     try {
-      const tokens = deps.bhapi.remainingTokens
+      const tokens = deps.bhapi.remainingTokens('background')
       if (tokens < JANITOR_MIN_TOKENS) {
         console.log(`[janitor] tick ${tick} skipped: only ${tokens} tokens remaining`)
         return
@@ -96,7 +96,7 @@ export function startJanitor(deps: JanitorDeps) {
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
-      console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
+      console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens('background')} tokens remaining`)
     } catch (err) {
       console.error(`[janitor] tick ${tick} error:`, err)
     } finally {
@@ -160,7 +160,7 @@ async function sync1v1Page(
   cursorKey: string,
 ) {
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
-  if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) return
+  if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
   const rankings = await deps.bhapi.getRankings1v1(region as Region, page)
 
@@ -185,7 +185,7 @@ async function sync2v2Page(
   cursorKey: string,
 ) {
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
-  if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) return
+  if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
   const rankings = await deps.bhapi.getRankings2v2(region as Region, page)
 
