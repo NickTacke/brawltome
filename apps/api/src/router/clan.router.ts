@@ -24,7 +24,7 @@ export const clanRouter = router({
 
       if (ctx.isBot) return { isRefreshing: false }
 
-      if (!process.env.DISABLE_VIEW_REFRESH) {
+      if (process.env.DISABLE_VIEW_REFRESH !== '1') {
         const age = Date.now() - c.lastUpdated.getTime()
         if (age > CLAN_TTL_MS) {
           const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')

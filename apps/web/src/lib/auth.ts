@@ -47,11 +47,7 @@ export function linkSteam(): void {
 }
 
 export async function signOut(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  await fetch(`${apiUrl}/auth/signout`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'x-requested-with': 'brawltome' },
-  })
+  await fetch(`${apiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
   await queryClient.invalidateQueries({ queryKey: ME_KEY })
 }
 

@@ -39,7 +39,7 @@ export const playerRouter = router({
       await ctx.playerRepo.incrementViewCount(brawlhallaId)
 
       let isRefreshing = false
-      if (!process.env.DISABLE_VIEW_REFRESH) {
+      if (process.env.DISABLE_VIEW_REFRESH !== '1') {
         const ttl = TIERED_TTL.hot
 
         if (isStale(p.rankedLastUpdated, ttl.ranked)) {
