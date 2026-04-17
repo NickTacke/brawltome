@@ -9,7 +9,7 @@ import {
 } from '@brawltome/identity'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
 import { createRankingRepo } from '@brawltome/ranking'
-import { TIERED_TTL, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
+import { TIERED_TTL, createMetricsRegistry, createQueue, dedupKey, getLegendById, initGameData, tryDedup } from '@brawltome/shared'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -19,13 +19,29 @@ import { createAuthRoutes } from './auth/routes'
 import { appRouter } from './router'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
+const metrics = createMetricsRegistry(redis)
 
 await initGameData(db)
 
 // API only enqueues -- concurrency 0 means no consumer loop
-const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(redis, 'refresh-ranked', async () => {}, { concurrency: 0 })
-const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(redis, 'refresh-stats', async () => {}, { concurrency: 0 })
-const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(redis, 'refresh-clan', async () => {}, { concurrency: 0 })
+const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
+  redis,
+  'refresh-ranked',
+  async () => {},
+  { concurrency: 0, maxDepth: 2000, dedupKey: (d) => String(d.brawlhallaId), metrics },
+)
+const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
+  redis,
+  'refresh-stats',
+  async () => {},
+  { concurrency: 0, maxDepth: 2000, dedupKey: (d) => String(d.brawlhallaId), metrics },
+)
+const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(
+  redis,
+  'refresh-clan',
+  async () => {},
+  { concurrency: 0, maxDepth: 1000, dedupKey: (d) => String(d.clanId), metrics },
+)
 
 const playerRepo = createPlayerRepo(db)
 const clanRepo = createClanRepo(db)
@@ -33,9 +49,17 @@ const rankingRepo = createRankingRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
 const playerLinkRepo = createPlayerLinkRepo(db)
-const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(redis, 'resolve-steam', async () => {}, {
-  concurrency: 0,
-})
+const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
+  redis,
+  'resolve-steam',
+  async () => {},
+  {
+    concurrency: 0,
+    maxDepth: 500,
+    dedupKey: (d) => `${d.userId}:${d.steamId}`,
+    metrics,
+  },
+)
 
 const sharedCtx = {
   db,
@@ -116,6 +140,27 @@ app.use(
 )
 
 app.get('/health', (c) => c.json({ status: 'healthy' }))
+
+app.get('/internal/metrics', async (c) => {
+  const secret = c.req.header('x-internal-secret')
+  if (!process.env.INTERNAL_API_SECRET || secret !== process.env.INTERNAL_API_SECRET) {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+
+  const queues = await metrics.snapshotAllQueues()
+  const tokensOnDemand = await metrics.getScalar('bhapi:tokens_on_demand_remaining')
+  const tokensBackground = await metrics.getScalar('bhapi:tokens_background_remaining')
+  const pausedUntilMs = await metrics.getScalar('bhapi:paused_until_ms')
+
+  return c.json({
+    queues,
+    bhapi: {
+      tokens_on_demand_remaining: tokensOnDemand,
+      tokens_background_remaining: tokensBackground,
+      paused_until_ms: pausedUntilMs,
+    },
+  })
+})
 
 app.get('/api/overlay/opponent/:bhid', async (c) => {
   const bhid = Number(c.req.param('bhid'))
