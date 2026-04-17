@@ -25,7 +25,6 @@ export async function backfillPending(deps: BackfillDeps, row: MatchRow): Promis
 
   const existing = await deps.matchRepo.findByDedupeHash(dedupeHash)
   if (existing && existing.slug !== row.slug) {
-    // Duplicate of a previously-parsed match. Drop this pending row; cascade handles children.
     await deps.matchRepo.deleteMatch(row.slug)
     return
   }
@@ -44,8 +43,7 @@ export async function backfillPending(deps: BackfillDeps, row: MatchRow): Promis
     scoringTypeId: parsed.gameSettings.scoringTypeId,
   })
 
-  // Fill in cosmetic/legend fields that were unknown at pending-time ingest.
-  // displayName is NOT touched: the PlayerMap value set at ingest is authoritative.
+  // displayName is intentionally not overwritten; PlayerMap value from ingest wins.
   for (const e of parsed.entities) {
     const hero = e.playerData.heroes[0] ?? null
     await deps.matchRepo.updatePlayerCosmetics(row.slug, e.id, {

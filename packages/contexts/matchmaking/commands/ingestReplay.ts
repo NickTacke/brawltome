@@ -24,8 +24,6 @@ export class IngestError extends Error {
   }
 }
 
-// Allowed entity counts per playlist id. 0 (offline/custom) accepts anything;
-// unknown ids are treated permissively.
 const PLAYLIST_ENTITY_COUNTS: Record<number, number[]> = {
   0: [1, 2, 3, 4],
   1: [2],
