@@ -162,7 +162,7 @@ async function sync1v1Page(
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
-  const rankings = await deps.bhapi.getRankings1v1(region as Region, page)
+  const rankings = await deps.bhapi.getRankings1v1(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
     await deps.redis.set(cursorKey, String(startPage))
@@ -187,7 +187,7 @@ async function sync2v2Page(
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
-  const rankings = await deps.bhapi.getRankings2v2(region as Region, page)
+  const rankings = await deps.bhapi.getRankings2v2(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
     await deps.redis.set(cursorKey, String(startPage))

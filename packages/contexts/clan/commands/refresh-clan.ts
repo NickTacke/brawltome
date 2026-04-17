@@ -8,8 +8,12 @@ interface RefreshDeps {
   bhapi: BhApiClient
 }
 
-export async function processRefreshClan({ db, bhapi }: RefreshDeps, clanId: number) {
-  const data = await bhapi.getClan(clanId)
+export async function processRefreshClan(
+  { db, bhapi }: RefreshDeps,
+  clanId: number,
+  caller: 'on-demand' | 'background' = 'background',
+) {
+  const data = await bhapi.getClan(clanId, { caller })
   if (!data) return
 
   await db.transaction(async (tx) => {

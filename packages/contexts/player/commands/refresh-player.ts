@@ -21,8 +21,12 @@ interface RefreshDeps {
   bhapi: BhApiClient
 }
 
-export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhallaId: number) {
-  const data = await bhapi.getPlayerRanked(brawlhallaId)
+export async function processRefreshRanked(
+  { db, bhapi }: RefreshDeps,
+  brawlhallaId: number,
+  caller: 'on-demand' | 'background' = 'background',
+) {
+  const data = await bhapi.getPlayerRanked(brawlhallaId, { caller })
   if (!data) return
 
   const repo = createPlayerRepo(db)
@@ -110,8 +114,12 @@ export async function processRefreshRanked({ db, bhapi }: RefreshDeps, brawlhall
   })
 }
 
-export async function processRefreshStats({ db, bhapi }: RefreshDeps, brawlhallaId: number) {
-  const data = await bhapi.getPlayerStats(brawlhallaId)
+export async function processRefreshStats(
+  { db, bhapi }: RefreshDeps,
+  brawlhallaId: number,
+  caller: 'on-demand' | 'background' = 'background',
+) {
+  const data = await bhapi.getPlayerStats(brawlhallaId, { caller })
   if (!data) return
 
   const parseDmg = (s: string): bigint => BigInt(s || '0')
