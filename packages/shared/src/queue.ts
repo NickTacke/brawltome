@@ -8,6 +8,7 @@ export interface QueueOptions<T = unknown> {
   maxDepth?: number
   dedupKey?: (data: T) => string
   dedupTtlSec?: number
+  priorityRatio?: number
 }
 
 export interface Queue<T> {
@@ -23,7 +24,15 @@ export function createQueue<T>(
   handler: (data: T) => Promise<void>,
   opts: QueueOptions<T> = {},
 ): Queue<T> {
-  const { concurrency = 5, retries = 3, backoffMs = 1000, maxDepth, dedupKey, dedupTtlSec = 300 } = opts
+  const {
+    concurrency = 5,
+    retries = 3,
+    backoffMs = 1000,
+    maxDepth,
+    dedupKey,
+    dedupTtlSec = 300,
+    priorityRatio = Infinity,
+  } = opts
   function dedupRedisKey(data: T): string {
     return `queue:${name}:dedup:${dedupKey!(data)}`
   }
@@ -100,24 +109,29 @@ export function createQueue<T>(
     await init()
     await claimPending()
 
+    let consecutivePriority = 0
+
     while (!stopped) {
       if (running >= concurrency) {
         await Bun.sleep(50)
         continue
       }
 
-      // Drain priority jobs first
-      try {
-        const priorityItem = await redis.rpop(priorityKey)
-        if (priorityItem) {
-          running++
-          processJob(null, JSON.parse(priorityItem) as T, retries).finally(() => {
-            running--
-          })
-          continue
+      // Try priority first, but only if we haven't exceeded the ratio
+      if (consecutivePriority < priorityRatio) {
+        try {
+          const priorityItem = await redis.rpop(priorityKey)
+          if (priorityItem) {
+            consecutivePriority++
+            running++
+            processJob(null, JSON.parse(priorityItem) as T, retries).finally(() => {
+              running--
+            })
+            continue
+          }
+        } catch (err) {
+          if (!stopped) console.error(`[queue:${name}] priority read error:`, err)
         }
-      } catch (err) {
-        if (!stopped) console.error(`[queue:${name}] priority read error:`, err)
       }
 
       try {
@@ -138,6 +152,7 @@ export function createQueue<T>(
 
         for (const [, entries] of messages as [string, [string, string[]][]][]) {
           for (const [id, fields] of entries) {
+            consecutivePriority = 0 // reset after any regular drain
             running++
             processJob(id, JSON.parse(fields[1]) as T, retries).finally(() => {
               running--

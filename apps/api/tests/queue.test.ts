@@ -149,6 +149,35 @@ describe('Queue dedup', () => {
   })
 })
 
+describe('Queue priorityRatio', () => {
+  it('drains N priority for 1 regular', async () => {
+    const order: string[] = []
+    const queue = createQueue<{ tag: string }>(
+      redis,
+      'test-priority-ratio',
+      async (data) => {
+        order.push(data.tag)
+      },
+      { concurrency: 1, priorityRatio: 3 },
+    )
+
+    // Seed regular jobs first
+    for (let i = 0; i < 10; i++) await queue.enqueue({ tag: `r${i}` })
+    // Then priority jobs
+    for (let i = 0; i < 10; i++) await queue.enqueue({ tag: `p${i}` }, true)
+
+    queue.start()
+    await Bun.sleep(1500)
+    queue.stop()
+
+    // With ratio 3, at least one regular should appear within the first 4 items
+    const priorityCountBeforeFirstRegular = order.findIndex((tag) => tag.startsWith('r'))
+    expect(priorityCountBeforeFirstRegular).toBeGreaterThanOrEqual(0)
+    expect(priorityCountBeforeFirstRegular).toBeLessThanOrEqual(3)
+    expect(order.length).toBeGreaterThan(0)
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)
