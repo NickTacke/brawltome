@@ -1,4 +1,4 @@
-import { type Caller, RequestQueue } from './request-queue'
+import { type Caller, RequestQueue, type RequestQueuePersistence } from './request-queue'
 
 export class RateLimitError extends Error {
   constructor(
@@ -27,6 +27,7 @@ const BASE_URL = 'https://api.brawlhalla.com'
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
+  persistence?: RequestQueuePersistence
 }
 
 export interface CallOptions {
@@ -41,10 +42,15 @@ export class BhApiClient {
     this.apiKey = opts.apiKey
     this.queue = new RequestQueue({
       minSpacingMs: 150,
-      sustainedLimit: 150,
+      sustainedLimit: 180,
       sustainedWindowMs: 15 * 60 * 1000,
       onDemandHeadroom: opts.onDemandHeadroom ?? 30,
+      persistence: opts.persistence,
     })
+  }
+
+  async init(): Promise<void> {
+    await this.queue.init()
   }
 
   remainingTokens(caller: Caller = 'background'): number {

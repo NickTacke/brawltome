@@ -15,7 +15,8 @@ if (!apiKey) {
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379'
 // Each blocking consumer needs its own connection to avoid XREADGROUP serialization
 const newRedis = () => new Redis(redisUrl)
-const bhapi = new BhApiClient({ apiKey })
+const bhapiRedis = newRedis()
+const bhapi = new BhApiClient({ apiKey, persistence: { redis: bhapiRedis, keyPrefix: 'bhapi' } })
 const deps = { db, bhapi }
 const playerLinkRepo = createPlayerLinkRepo(db)
 
@@ -121,6 +122,7 @@ async function snapBhapiMetrics() {
 bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
 
 console.log('Worker starting...')
+await bhapi.init()
 await initGameData(db, bhapi)
 Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]).catch(console.error)
 
@@ -138,6 +140,7 @@ process.on('SIGINT', async () => {
   steamLinkQueue.stop()
   await stopJanitor()
   await metricsRedis.quit().catch(() => {})
+  await bhapiRedis.quit().catch(() => {})
   console.log('Lock released. Goodbye.')
   process.exit(0)
 })
