@@ -13,3 +13,4 @@ export {
   aggregateWeapons,
   type LegendData,
 } from './game-data'
+export { createR2Client, type R2Client, type R2Config } from './r2'
