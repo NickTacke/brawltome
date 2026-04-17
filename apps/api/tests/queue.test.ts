@@ -103,6 +103,52 @@ describe('Queue maxDepth', () => {
   })
 })
 
+describe('Queue dedup', () => {
+  it('rejects duplicate enqueue while in-flight', async () => {
+    const queue = createQueue<{ brawlhallaId: number }>(
+      redis,
+      'test-dedup-queue',
+      async () => {},
+      { concurrency: 0, dedupKey: (d) => String(d.brawlhallaId) },
+    )
+
+    const first = await queue.enqueue({ brawlhallaId: 123 })
+    const second = await queue.enqueue({ brawlhallaId: 123 })
+    const other = await queue.enqueue({ brawlhallaId: 456 })
+
+    expect(first).toBe(true)
+    expect(second).toBe(false)
+    expect(other).toBe(true)
+
+    // Cleanup
+    await redis.del('queue:test-dedup-queue:dedup:123')
+    await redis.del('queue:test-dedup-queue:dedup:456')
+  })
+
+  it('releases dedup key after successful processing', async () => {
+    let runs = 0
+    const queue = createQueue<{ brawlhallaId: number }>(
+      redis,
+      'test-dedup-release',
+      async () => {
+        runs++
+      },
+      { concurrency: 1, dedupKey: (d) => String(d.brawlhallaId) },
+    )
+
+    await queue.enqueue({ brawlhallaId: 999 })
+    queue.start()
+    await Bun.sleep(300)
+
+    const afterFirst = await queue.enqueue({ brawlhallaId: 999 })
+    await Bun.sleep(300)
+    queue.stop()
+
+    expect(runs).toBe(2)
+    expect(afterFirst).toBe(true)
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)
