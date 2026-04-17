@@ -5,6 +5,7 @@ export const RATE_LIMITS = {
   refresh: { max: 20, windowSec: 15 * 60 },
   'discovery:global': { max: 30, windowSec: 15 * 60 },
   overlay: { max: 60, windowSec: 15 * 60 },
+  ingest: { max: 60, windowSec: 15 * 60 },
 } as const
 
 export type RateLimitAction = keyof typeof RATE_LIMITS

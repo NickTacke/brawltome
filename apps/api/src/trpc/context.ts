@@ -1,9 +1,10 @@
 import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
 import type { PlayerLinkRepo, Session, SessionRepo, UserRepo, UserWithPrimaryAccount } from '@brawltome/identity'
+import type { MatchRepo } from '@brawltome/matchmaking'
 import type { PlayerRepo } from '@brawltome/player'
 import type { RankingRepo } from '@brawltome/ranking'
-import type { Queue } from '@brawltome/shared'
+import type { Queue, R2Client } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 
 export interface Context {
@@ -24,4 +25,7 @@ export interface Context {
   internalSecret: string | undefined
   user: UserWithPrimaryAccount | null
   session: Session | null
+  matchRepo: MatchRepo | null
+  r2: R2Client | null
+  matchmakingEnabled: boolean
 }
