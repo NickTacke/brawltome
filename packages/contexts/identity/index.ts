@@ -18,7 +18,7 @@ export type {
 } from './commands/sign-in-with-discord'
 export { signOut } from './commands/sign-out'
 export type { SignOutDeps } from './commands/sign-out'
-export { linkPlayer } from './commands/link-player'
+export { linkPlayer, PlayerAlreadyLinkedError } from './commands/link-player'
 export type { LinkPlayerDeps } from './commands/link-player'
 export { resolveSteamLink } from './commands/resolve-steam-link'
 export type { ResolveSteamLinkDeps } from './commands/resolve-steam-link'

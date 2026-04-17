@@ -183,7 +183,7 @@ describe('POST /auth/signout', () => {
 
     const res = await app.request('/auth/signout', {
       method: 'POST',
-      headers: { cookie: `brawltome_session=${raw}` },
+      headers: { cookie: `brawltome_session=${raw}`, origin: 'http://localhost:3001' },
     })
     expect(res.status).toBe(204)
     expect(fakes.sessions).toHaveLength(0)
@@ -195,7 +195,27 @@ describe('POST /auth/signout', () => {
   it('returns 204 even when there is no cookie', async () => {
     const fakes = makeFakes()
     const app = buildApp(fakes)
-    const res = await app.request('/auth/signout', { method: 'POST' })
+    const res = await app.request('/auth/signout', {
+      method: 'POST',
+      headers: { origin: 'http://localhost:3001' },
+    })
     expect(res.status).toBe(204)
+  })
+
+  it('rejects requests from a disallowed origin', async () => {
+    const fakes = makeFakes()
+    const app = buildApp(fakes)
+    const res = await app.request('/auth/signout', {
+      method: 'POST',
+      headers: { origin: 'http://evil.example.com' },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('rejects requests with no origin header', async () => {
+    const fakes = makeFakes()
+    const app = buildApp(fakes)
+    const res = await app.request('/auth/signout', { method: 'POST' })
+    expect(res.status).toBe(403)
   })
 })

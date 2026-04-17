@@ -126,9 +126,10 @@ await bhapi.init()
 await initGameData(db, bhapi)
 Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]).catch(console.error)
 
-const stopJanitor = process.env.DISABLE_JANITOR
-  ? async () => {}
-  : startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue, metrics })
+const stopJanitor =
+  process.env.DISABLE_JANITOR === '1'
+    ? async () => {}
+    : startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue, metrics })
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
