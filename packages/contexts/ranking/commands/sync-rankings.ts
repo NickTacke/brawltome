@@ -237,17 +237,6 @@ async function savePlayers(
   }
 }
 
-async function safeEnqueue<T>(
-  queue: { enqueue: (d: T, priority?: boolean) => Promise<boolean> },
-  data: T,
-  metrics: MetricsRegistry | undefined,
-  queueName: string,
-): Promise<boolean> {
-  const ok = await queue.enqueue(data)
-  if (!ok && metrics) await metrics.incrementQueue(queueName, 'janitor_throttled_total')
-  return ok
-}
-
 async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[]) {
   try {
     const seenPlayers = new Set<number>()

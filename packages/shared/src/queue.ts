@@ -156,7 +156,10 @@ export function createQueue<T>(
           '>',
         )
 
-        if (!messages || stopped) continue
+        if (!messages || stopped) {
+          consecutivePriority = 0 // regular stream empty — let priority drain again
+          continue
+        }
 
         for (const [, entries] of messages as [string, [string, string[]][]][]) {
           for (const [id, fields] of entries) {
