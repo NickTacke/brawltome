@@ -208,6 +208,30 @@ describe('Queue rate-limit retry backoff', () => {
   })
 })
 
+describe('Queue priorityRatio fairness', () => {
+  it('does not stall priority when regular stream is empty', async () => {
+    const processed: string[] = []
+    const queue = createQueue<{ tag: string }>(
+      redis,
+      'test-priority-fairness',
+      async (data) => {
+        processed.push(data.tag)
+      },
+      { concurrency: 1, priorityRatio: 6 },
+    )
+
+    // Seed only priority jobs (regular stream stays empty)
+    for (let i = 0; i < 6; i++) await queue.enqueue({ tag: `p${i}` }, true)
+
+    queue.start()
+    await Bun.sleep(3000) // enough time for one xreadgroup BLOCK cycle (2s) after draining all 6
+    queue.stop()
+
+    // All 6 priority jobs should have been processed despite empty regular stream
+    expect(processed.length).toBe(6)
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)
