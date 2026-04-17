@@ -183,7 +183,7 @@ describe('POST /auth/signout', () => {
 
     const res = await app.request('/auth/signout', {
       method: 'POST',
-      headers: { cookie: `brawltome_session=${raw}`, 'x-requested-with': 'brawltome' },
+      headers: { cookie: `brawltome_session=${raw}`, origin: 'http://localhost:3001' },
     })
     expect(res.status).toBe(204)
     expect(fakes.sessions).toHaveLength(0)
@@ -197,12 +197,22 @@ describe('POST /auth/signout', () => {
     const app = buildApp(fakes)
     const res = await app.request('/auth/signout', {
       method: 'POST',
-      headers: { 'x-requested-with': 'brawltome' },
+      headers: { origin: 'http://localhost:3001' },
     })
     expect(res.status).toBe(204)
   })
 
-  it('rejects requests without the x-requested-with header', async () => {
+  it('rejects requests from a disallowed origin', async () => {
+    const fakes = makeFakes()
+    const app = buildApp(fakes)
+    const res = await app.request('/auth/signout', {
+      method: 'POST',
+      headers: { origin: 'http://evil.example.com' },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('rejects requests with no origin header', async () => {
     const fakes = makeFakes()
     const app = buildApp(fakes)
     const res = await app.request('/auth/signout', { method: 'POST' })

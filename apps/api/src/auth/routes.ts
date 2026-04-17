@@ -111,10 +111,8 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   })
 
   app.post('/signout', async (c) => {
-    // CSRF protection: require a custom header that cross-site forms cannot set.
-    // Session cookie is SameSite=Lax (required for OAuth redirect), so without this
-    // check, a cross-site form could log the user out.
-    if (c.req.header('x-requested-with') !== 'brawltome') {
+    const origin = c.req.header('origin')
+    if (origin !== config.webOrigin) {
       return c.json({ error: 'csrf' }, 403)
     }
 
