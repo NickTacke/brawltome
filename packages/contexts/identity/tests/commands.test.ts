@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { linkPlayer } from '../commands/link-player'
+import { PlayerAlreadyLinkedError, linkPlayer } from '../commands/link-player'
 import { resolveSteamLink } from '../commands/resolve-steam-link'
 import { unlinkPlayer } from '../commands/unlink-player'
 import type { PlayerLinkRepo } from '../playerLink.repo'
@@ -31,7 +31,7 @@ describe('linkPlayer', () => {
     expect(repo.createPending).toHaveBeenCalledTimes(1)
   })
 
-  test('throws when user has an active linked player', async () => {
+  test('throws PlayerAlreadyLinkedError when user has an active linked player', async () => {
     const repo = mockPlayerLinkRepo({
       findByUserId: mock(async () => ({
         userId: 'user-1',
@@ -42,10 +42,12 @@ describe('linkPlayer', () => {
         linkedAt: new Date(),
       })),
     })
-    await expect(linkPlayer({ playerLinkRepo: repo }, { userId: 'user-1', steamId: '765' })).rejects.toThrow()
+    await expect(linkPlayer({ playerLinkRepo: repo }, { userId: 'user-1', steamId: '765' })).rejects.toBeInstanceOf(
+      PlayerAlreadyLinkedError,
+    )
   })
 
-  test('throws when user has a pending link', async () => {
+  test('throws PlayerAlreadyLinkedError when user has a pending link', async () => {
     const repo = mockPlayerLinkRepo({
       findByUserId: mock(async () => ({
         userId: 'user-1',
@@ -56,7 +58,9 @@ describe('linkPlayer', () => {
         linkedAt: new Date(),
       })),
     })
-    await expect(linkPlayer({ playerLinkRepo: repo }, { userId: 'user-1', steamId: '765' })).rejects.toThrow()
+    await expect(linkPlayer({ playerLinkRepo: repo }, { userId: 'user-1', steamId: '765' })).rejects.toBeInstanceOf(
+      PlayerAlreadyLinkedError,
+    )
   })
 
   test('clears stale failed link and creates new pending', async () => {
