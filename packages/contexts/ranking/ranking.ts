@@ -1,4 +1,4 @@
-export const JANITOR_MIN_TOKENS = 100
+export const JANITOR_MIN_TOKENS = 10
 export const MAX_PAGES = 200
 export const DEFAULT_PAGE_SIZE = 50
 export const MAX_PAGE_SIZE = 100

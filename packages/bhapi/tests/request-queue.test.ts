@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import Redis from 'ioredis'
 import { RequestQueue } from '../src/request-queue'
 
 describe('RequestQueue', () => {
@@ -142,5 +143,68 @@ describe('RequestQueue headroom', () => {
     const q = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 10, sustainedWindowMs: 60_000 })
     expect(q.remainingBackground).toBe(10)
     expect(q.remainingOnDemand).toBe(10)
+  })
+})
+
+describe('RequestQueue persistence', () => {
+  let redis: Redis
+  const keyPrefix = `test-bhapi-${Date.now()}`
+
+  beforeAll(() => {
+    redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
+  })
+
+  afterAll(async () => {
+    const keys = await redis.keys(`${keyPrefix}:*`)
+    if (keys.length > 0) await redis.del(...keys)
+    await redis.quit()
+  })
+
+  it('restores timestamps across restarts', async () => {
+    const first = new RequestQueue({
+      minSpacingMs: 0,
+      sustainedLimit: 10,
+      sustainedWindowMs: 60_000,
+      persistence: { redis, keyPrefix },
+    })
+
+    for (let i = 0; i < 5; i++) await first.acquire('on-demand')
+    expect(first.remainingOnDemand).toBe(5)
+
+    // Give fire-and-forget writes a moment
+    await Bun.sleep(50)
+
+    const second = new RequestQueue({
+      minSpacingMs: 0,
+      sustainedLimit: 10,
+      sustainedWindowMs: 60_000,
+      persistence: { redis, keyPrefix },
+    })
+    await second.init()
+
+    expect(second.remainingOnDemand).toBe(5)
+  })
+
+  it('restores pausedUntil across restarts', async () => {
+    const prefix = `${keyPrefix}-pause`
+    const first = new RequestQueue({
+      minSpacingMs: 0,
+      sustainedLimit: 10,
+      sustainedWindowMs: 60_000,
+      persistence: { redis, keyPrefix: prefix },
+    })
+    first.pause(30_000)
+    await Bun.sleep(50)
+
+    const second = new RequestQueue({
+      minSpacingMs: 0,
+      sustainedLimit: 10,
+      sustainedWindowMs: 60_000,
+      persistence: { redis, keyPrefix: prefix },
+    })
+    await second.init()
+
+    expect(second.isPaused).toBe(true)
+    expect(second.pausedUntilMs).toBeGreaterThan(Date.now())
   })
 })
