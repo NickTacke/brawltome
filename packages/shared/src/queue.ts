@@ -196,9 +196,10 @@ export function createQueue<T>(
       await releaseDedup(data)
     } catch (err) {
       if (err instanceof RateLimitError) {
-        console.warn(`[queue:${name}] rate limited, re-enqueuing job for later`)
+        console.warn(`[queue:${name}] rate limited, sleeping ${err.retryAfterMs}ms before re-enqueue`)
         await ackAndDelete(id)
         await releaseDedup(data)
+        await Bun.sleep(err.retryAfterMs)
         await enqueue(data)
         return
       }

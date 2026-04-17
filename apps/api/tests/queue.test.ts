@@ -178,6 +178,36 @@ describe('Queue priorityRatio', () => {
   })
 })
 
+describe('Queue rate-limit retry backoff', () => {
+  it('sleeps before re-enqueuing on RateLimitError', async () => {
+    const { RateLimitError } = await import('@brawltome/bhapi')
+    const attempts: number[] = []
+    let failOnce = true
+
+    const queue = createQueue<{ value: number }>(
+      redis,
+      'test-rate-limit-backoff',
+      async () => {
+        attempts.push(Date.now())
+        if (failOnce) {
+          failOnce = false
+          throw new RateLimitError('test', 300)
+        }
+      },
+      { concurrency: 1 },
+    )
+
+    await queue.enqueue({ value: 1 })
+    queue.start()
+    await Bun.sleep(1000)
+    queue.stop()
+
+    expect(attempts.length).toBe(2)
+    const gap = attempts[1] - attempts[0]
+    expect(gap).toBeGreaterThanOrEqual(250)  // allow small slack from 300
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)
