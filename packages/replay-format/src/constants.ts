@@ -1,9 +1,6 @@
-// Pre-match countdown duration baked into every replay's timestamps.
-// Confirmed by cross-referencing our Yarralytics sample replay against their API output.
-// Needs re-validation on other sample replays during implementation (see spec Open Questions).
+// Pre-match countdown duration baked into replay timestamps (360 frames at 60fps).
 export const INTRO_OFFSET_MS = 6016
 
-// 4-bit state machine codes in the replay bitstream.
 export const STATE_INPUTS = 1
 export const STATE_END = 2
 export const STATE_HEADER = 3

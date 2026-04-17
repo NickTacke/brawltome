@@ -167,7 +167,7 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
         break
       }
       case STATE_INPUTS: {
-        // Parse and discard: raw replay is stored in R2 for any re-parse.
+        // Parse and discard: raw replay is in R2 for any re-parse that needs inputs.
         while (r.bool()) {
           r.bits(5)
           const ic = r.i32()

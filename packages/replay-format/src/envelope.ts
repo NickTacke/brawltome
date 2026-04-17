@@ -12,14 +12,8 @@ export function decodeEnvelope(raw: Uint8Array): Uint8Array {
   return applyXor(new Uint8Array(inflated.buffer, inflated.byteOffset, inflated.byteLength))
 }
 
-/**
- * Returns the format version or null if envelope parsing fails. Never throws.
- *
- * Used by the overlay to classify replays even when the full parser doesn't
- * yet support the version: if we can decode the envelope we report the version
- * (and the server stores the upload as pending), if we can't we still upload
- * raw bytes with no version (rotated XOR key case).
- */
+// Returns the format version or null on any failure. Never throws; lets the overlay
+// classify replays even when the full parser doesn't yet support the version.
 export function peekFormatVersion(raw: Uint8Array): number | null {
   try {
     const body = decodeEnvelope(raw)
