@@ -5,7 +5,7 @@ import { DEDUP_TTL_CLAN_SEC } from '../clan'
 
 interface DiscoverDeps {
   redis: Redis
-  clanQueue: Queue<{ clanId: number }>
+  clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
   clientIp: string
 }
 
@@ -22,7 +22,7 @@ export async function discoverClan(deps: DiscoverDeps, clanId: number): Promise<
   if (!canDedup) return { isRefreshing: true }
 
   console.log(`[discover] enqueuing clan ${clanId} via priority queue`)
-  await clanQueue.enqueue({ clanId }, true)
+  await clanQueue.enqueue({ clanId, caller: 'on-demand' }, true)
 
   return { isRefreshing: true }
 }

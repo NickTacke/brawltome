@@ -8,8 +8,8 @@ import { createPlayerRepo } from '../player.repo'
 interface DiscoverDeps {
   db: Database
   redis: Redis
-  rankedQueue: Queue<{ brawlhallaId: number }>
-  statsQueue: Queue<{ brawlhallaId: number }>
+  rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   clientIp: string
 }
 
@@ -29,8 +29,8 @@ export async function discoverPlayer(deps: DiscoverDeps, brawlhallaId: number): 
   if (!canDedup) return { isRefreshing: true }
 
   console.log(`[discover] enqueuing ${brawlhallaId} via priority queue`)
-  await rankedQueue.enqueue({ brawlhallaId }, true)
-  await statsQueue.enqueue({ brawlhallaId }, true)
+  await rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' }, true)
+  await statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' }, true)
 
   return { isRefreshing: true }
 }

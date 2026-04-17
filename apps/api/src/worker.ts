@@ -19,7 +19,7 @@ const bhapi = new BhApiClient({ apiKey })
 const deps = { db, bhapi }
 const playerLinkRepo = createPlayerLinkRepo(db)
 
-const rankedQueue = createQueue<{ brawlhallaId: number }>(
+const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
   newRedis(),
   'refresh-ranked',
   async (data) => {
@@ -31,7 +31,7 @@ const rankedQueue = createQueue<{ brawlhallaId: number }>(
   { concurrency: 3, retries: 3, backoffMs: 1000 },
 )
 
-const statsQueue = createQueue<{ brawlhallaId: number }>(
+const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
   newRedis(),
   'refresh-stats',
   async (data) => {
@@ -43,7 +43,7 @@ const statsQueue = createQueue<{ brawlhallaId: number }>(
   { concurrency: 2, retries: 3, backoffMs: 1000 },
 )
 
-const clanQueue = createQueue<{ clanId: number }>(
+const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(
   newRedis(),
   'refresh-clan',
   async (data) => {
@@ -55,7 +55,7 @@ const clanQueue = createQueue<{ clanId: number }>(
   { concurrency: 1, retries: 3, backoffMs: 1000 },
 )
 
-const steamLinkQueue = createQueue<{ userId: string; steamId: string }>(
+const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
   newRedis(),
   'resolve-steam',
   async (data) => {

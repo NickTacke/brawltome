@@ -31,7 +31,7 @@ export interface CreateAuthRoutesDeps {
   userRepo: UserRepo
   sessionRepo: SessionRepo
   playerLinkRepo: PlayerLinkRepo
-  steamLinkQueue: Queue<{ userId: string; steamId: string }>
+  steamLinkQueue: Queue<{ userId: string; steamId: string; caller: 'background' }>
   config: AuthConfig
 }
 
@@ -190,7 +190,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       return c.redirect(`${config.webOrigin}/account?error=${isAlreadyLinked ? 'already_linked' : 'server'}`)
     }
 
-    await steamLinkQueue.enqueue({ userId: session.userId, steamId })
+    await steamLinkQueue.enqueue({ userId: session.userId, steamId, caller: 'background' })
     return c.redirect(`${config.webOrigin}/account`)
   })
 

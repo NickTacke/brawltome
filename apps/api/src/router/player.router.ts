@@ -46,7 +46,7 @@ export const playerRouter = router({
           const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
           if (refreshLimit.allowed) {
             const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-            if (canDedup) await ctx.rankedQueue.enqueue({ brawlhallaId })
+            if (canDedup) await ctx.rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' })
             isRefreshing = true
           }
         }
@@ -55,7 +55,7 @@ export const playerRouter = router({
           const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
           if (refreshLimit.allowed) {
             const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-            if (canDedup) await ctx.statsQueue.enqueue({ brawlhallaId })
+            if (canDedup) await ctx.statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' })
             isRefreshing = true
           }
         }
