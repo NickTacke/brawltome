@@ -1,7 +1,7 @@
 import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
 import { type PlayerRepo, createPlayerRepo } from '@brawltome/player'
-import type { Queue } from '@brawltome/shared'
+import type { MetricsRegistry, Queue } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 import { JANITOR_MIN_TOKENS } from '../ranking'
 
@@ -36,6 +36,7 @@ interface JanitorDeps {
   rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
+  metrics?: MetricsRegistry
 }
 
 export function startJanitor(deps: JanitorDeps) {
@@ -234,6 +235,17 @@ async function savePlayers(
   } catch (err) {
     console.error('[janitor] failed to batch save players:', err)
   }
+}
+
+async function safeEnqueue<T>(
+  queue: { enqueue: (d: T, priority?: boolean) => Promise<boolean> },
+  data: T,
+  metrics: MetricsRegistry | undefined,
+  queueName: string,
+): Promise<boolean> {
+  const ok = await queue.enqueue(data)
+  if (!ok && metrics) await metrics.incrementQueue(queueName, 'janitor_throttled_total')
+  return ok
 }
 
 async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[]) {
