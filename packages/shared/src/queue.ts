@@ -1,5 +1,6 @@
 import { RateLimitError } from '@brawltome/bhapi'
 import type { Redis } from 'ioredis'
+import type { MetricsRegistry } from './metrics'
 
 export interface QueueOptions<T = unknown> {
   concurrency?: number
@@ -9,6 +10,7 @@ export interface QueueOptions<T = unknown> {
   dedupKey?: (data: T) => string
   dedupTtlSec?: number
   priorityRatio?: number
+  metrics?: MetricsRegistry
 }
 
 export interface Queue<T> {
@@ -32,6 +34,7 @@ export function createQueue<T>(
     dedupKey,
     dedupTtlSec = 300,
     priorityRatio = Infinity,
+    metrics,
   } = opts
   function dedupRedisKey(data: T): string {
     return `queue:${name}:dedup:${dedupKey!(data)}`
@@ -68,13 +71,17 @@ export function createQueue<T>(
       const streamLen = await redis.xlen(stream)
       const priorityLen = await redis.llen(priorityKey)
       if (streamLen + priorityLen >= maxDepth) {
+        await metrics?.incrementQueue(name, 'rejected_total')
         return false
       }
     }
 
     if (dedupKey) {
       const set = await redis.set(dedupRedisKey(data), '1', 'EX', dedupTtlSec, 'NX')
-      if (set !== 'OK') return false
+      if (set !== 'OK') {
+        await metrics?.incrementQueue(name, 'dedup_skipped_total')
+        return false
+      }
     }
 
     if (priority) {
@@ -124,6 +131,7 @@ export function createQueue<T>(
           if (priorityItem) {
             consecutivePriority++
             running++
+            await metrics?.incrementQueue(name, 'priority_drained_total')
             processJob(null, JSON.parse(priorityItem) as T, retries).finally(() => {
               running--
             })
@@ -154,6 +162,7 @@ export function createQueue<T>(
           for (const [id, fields] of entries) {
             consecutivePriority = 0 // reset after any regular drain
             running++
+            await metrics?.incrementQueue(name, 'regular_drained_total')
             processJob(id, JSON.parse(fields[1]) as T, retries).finally(() => {
               running--
             })
@@ -197,6 +206,7 @@ export function createQueue<T>(
     } catch (err) {
       if (err instanceof RateLimitError) {
         console.warn(`[queue:${name}] rate limited, sleeping ${err.retryAfterMs}ms before re-enqueue`)
+        await metrics?.incrementQueue(name, 'rate_limit_retries_total')
         await ackAndDelete(id)
         await releaseDedup(data)
         await Bun.sleep(err.retryAfterMs)
