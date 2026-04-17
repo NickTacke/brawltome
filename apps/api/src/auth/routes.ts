@@ -42,9 +42,14 @@ export interface CreateAuthRoutesDeps {
   config: AuthConfig
 }
 
+function normalizeOrigin(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\/+$/, '').toLowerCase()
+}
+
 export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   const app = new Hono()
   const { userRepo, sessionRepo, playerLinkRepo, steamLinkQueue, config } = deps
+  const expectedOrigin = normalizeOrigin(config.webOrigin)
 
   app.get('/discord/login', (c) => {
     const state = randomBytes(32).toString('base64url')
@@ -111,8 +116,9 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   })
 
   app.post('/signout', async (c) => {
-    const origin = c.req.header('origin')
-    if (origin !== config.webOrigin) {
+    const origin = normalizeOrigin(c.req.header('origin'))
+    if (origin !== expectedOrigin) {
+      console.warn('[auth] signout rejected: origin mismatch', { origin, expected: expectedOrigin })
       return c.json({ error: 'csrf' }, 403)
     }
 
