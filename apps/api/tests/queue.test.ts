@@ -82,6 +82,27 @@ describe('Queue', () => {
   })
 })
 
+describe('Queue maxDepth', () => {
+  it('rejects enqueue when depth >= maxDepth', async () => {
+    const queue = createQueue<{ value: number }>(
+      redis,
+      'test-maxdepth',
+      async () => {},
+      { concurrency: 0, maxDepth: 3 },
+    )
+
+    const a = await queue.enqueue({ value: 1 })
+    const b = await queue.enqueue({ value: 2 })
+    const c = await queue.enqueue({ value: 3 })
+    const d = await queue.enqueue({ value: 4 })
+
+    expect(a).toBe(true)
+    expect(b).toBe(true)
+    expect(c).toBe(true)
+    expect(d).toBe(false)
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)
