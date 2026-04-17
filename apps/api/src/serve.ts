@@ -23,9 +23,9 @@ const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 await initGameData(db)
 
 // API only enqueues -- concurrency 0 means no consumer loop
-const rankedQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-ranked', async () => {}, { concurrency: 0 })
-const statsQueue = createQueue<{ brawlhallaId: number }>(redis, 'refresh-stats', async () => {}, { concurrency: 0 })
-const clanQueue = createQueue<{ clanId: number }>(redis, 'refresh-clan', async () => {}, { concurrency: 0 })
+const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(redis, 'refresh-ranked', async () => {}, { concurrency: 0 })
+const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(redis, 'refresh-stats', async () => {}, { concurrency: 0 })
+const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(redis, 'refresh-clan', async () => {}, { concurrency: 0 })
 
 const playerRepo = createPlayerRepo(db)
 const clanRepo = createClanRepo(db)
@@ -33,7 +33,7 @@ const rankingRepo = createRankingRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
 const playerLinkRepo = createPlayerLinkRepo(db)
-const steamLinkQueue = createQueue<{ userId: string; steamId: string }>(redis, 'resolve-steam', async () => {}, {
+const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(redis, 'resolve-steam', async () => {}, {
   concurrency: 0,
 })
 
@@ -127,8 +127,8 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
   if (!p) {
     await playerRepo.createPlaceholder(bhid)
 
-    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
-    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
+    await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
+    await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
     console.log(`[overlay] discovering player ${bhid}`)
 
     return c.json({
@@ -150,13 +150,13 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
   const rankedStale = !p.rankedLastUpdated || now - p.rankedLastUpdated.getTime() > ttl.ranked
   if (rankedStale) {
     const canDedup = await tryDedup(redis, dedupKey('ranked', bhid), DEDUP_TTL_RANKED_SEC)
-    if (canDedup) await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid }, true)
+    if (canDedup) await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
   }
 
   const statsStale = !p.statsLastUpdated || now - p.statsLastUpdated.getTime() > ttl.stats
   if (statsStale) {
     const canDedup = await tryDedup(redis, dedupKey('stats', bhid), DEDUP_TTL_STATS_SEC)
-    if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid }, true)
+    if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
   }
 
   const legendKey = p.bestLegend ? (getLegendById(p.bestLegend)?.legendNameKey ?? '') : ''

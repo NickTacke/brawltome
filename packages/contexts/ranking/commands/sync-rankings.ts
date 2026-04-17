@@ -33,9 +33,9 @@ interface JanitorDeps {
   db: Database
   bhapi: BhApiClient
   redis: Redis
-  rankedQueue: Queue<{ brawlhallaId: number }>
-  statsQueue: Queue<{ brawlhallaId: number }>
-  clanQueue: Queue<{ clanId: number }>
+  rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
 }
 
 export function startJanitor(deps: JanitorDeps) {

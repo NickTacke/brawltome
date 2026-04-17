@@ -9,16 +9,16 @@ import type { Redis } from 'ioredis'
 export interface Context {
   db: Database
   redis: Redis
-  rankedQueue: Queue<{ brawlhallaId: number }>
-  statsQueue: Queue<{ brawlhallaId: number }>
-  clanQueue: Queue<{ clanId: number }>
+  rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
   playerRepo: PlayerRepo
   clanRepo: ClanRepo
   rankingRepo: RankingRepo
   userRepo: UserRepo
   sessionRepo: SessionRepo
   playerLinkRepo: PlayerLinkRepo
-  steamLinkQueue: Queue<{ userId: string; steamId: string }>
+  steamLinkQueue: Queue<{ userId: string; steamId: string; caller: 'background' }>
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined
