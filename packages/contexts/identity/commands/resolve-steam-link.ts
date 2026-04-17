@@ -2,7 +2,12 @@ import type { PlayerLinkRepo } from '../playerLink.repo'
 
 export interface ResolveSteamLinkDeps {
   playerLinkRepo: PlayerLinkRepo
-  bhapi: { searchBySteamId(steamId: string): Promise<{ brawlhalla_id: number; name: string } | null> }
+  bhapi: {
+    searchBySteamId(
+      steamId: string,
+      opts?: { caller?: string },
+    ): Promise<{ brawlhalla_id: number; name: string } | null>
+  }
 }
 
 export async function resolveSteamLink(
@@ -12,7 +17,7 @@ export async function resolveSteamLink(
   const link = await deps.playerLinkRepo.findByUserId(params.userId)
   if (!link || link.status !== 'pending') return
 
-  const result = await deps.bhapi.searchBySteamId(params.steamId)
+  const result = await deps.bhapi.searchBySteamId(params.steamId, { caller: 'background' })
 
   if (!result) {
     await deps.playerLinkRepo.setStatus(params.userId, 'failed')

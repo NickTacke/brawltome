@@ -1,7 +1,7 @@
 import type { BhApiClient, BhApiRanking2v2, Region } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
 import { type PlayerRepo, createPlayerRepo } from '@brawltome/player'
-import type { Queue } from '@brawltome/shared'
+import type { MetricsRegistry, Queue } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 import { JANITOR_MIN_TOKENS } from '../ranking'
 
@@ -33,9 +33,10 @@ interface JanitorDeps {
   db: Database
   bhapi: BhApiClient
   redis: Redis
-  rankedQueue: Queue<{ brawlhallaId: number }>
-  statsQueue: Queue<{ brawlhallaId: number }>
-  clanQueue: Queue<{ clanId: number }>
+  rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
+  clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
+  metrics?: MetricsRegistry
 }
 
 export function startJanitor(deps: JanitorDeps) {
@@ -65,7 +66,7 @@ export function startJanitor(deps: JanitorDeps) {
     }
 
     try {
-      const tokens = deps.bhapi.remainingTokens
+      const tokens = deps.bhapi.remainingTokens('background')
       if (tokens < JANITOR_MIN_TOKENS) {
         console.log(`[janitor] tick ${tick} skipped: only ${tokens} tokens remaining`)
         return
@@ -96,7 +97,9 @@ export function startJanitor(deps: JanitorDeps) {
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
-      console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens} tokens remaining`)
+      console.log(
+        `[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens('background')} tokens remaining`,
+      )
     } catch (err) {
       console.error(`[janitor] tick ${tick} error:`, err)
     } finally {
@@ -160,9 +163,9 @@ async function sync1v1Page(
   cursorKey: string,
 ) {
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
-  if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) return
+  if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
-  const rankings = await deps.bhapi.getRankings1v1(region as Region, page)
+  const rankings = await deps.bhapi.getRankings1v1(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
     await deps.redis.set(cursorKey, String(startPage))
@@ -185,9 +188,9 @@ async function sync2v2Page(
   cursorKey: string,
 ) {
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
-  if (deps.bhapi.remainingTokens < JANITOR_MIN_TOKENS) return
+  if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
-  const rankings = await deps.bhapi.getRankings2v2(region as Region, page)
+  const rankings = await deps.bhapi.getRankings2v2(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
     await deps.redis.set(cursorKey, String(startPage))

@@ -1,4 +1,4 @@
-import { RequestQueue } from './request-queue'
+import { type Caller, RequestQueue } from './request-queue'
 
 export class RateLimitError extends Error {
   constructor(
@@ -26,6 +26,11 @@ const BASE_URL = 'https://api.brawlhalla.com'
 
 export interface BhApiClientOptions {
   apiKey: string
+  onDemandHeadroom?: number
+}
+
+export interface CallOptions {
+  caller?: Caller
 }
 
 export class BhApiClient {
@@ -34,55 +39,65 @@ export class BhApiClient {
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
-    this.queue = new RequestQueue({ minSpacingMs: 150, sustainedLimit: 150, sustainedWindowMs: 15 * 60 * 1000 })
+    this.queue = new RequestQueue({
+      minSpacingMs: 150,
+      sustainedLimit: 150,
+      sustainedWindowMs: 15 * 60 * 1000,
+      onDemandHeadroom: opts.onDemandHeadroom ?? 30,
+    })
   }
 
-  get remainingTokens(): number {
-    return this.queue.remaining
+  remainingTokens(caller: Caller = 'background'): number {
+    return caller === 'on-demand' ? this.queue.remainingOnDemand : this.queue.remainingBackground
   }
 
-  async searchBySteamId(steamId: string): Promise<BhApiSearchResult | null> {
-    return this.call(`/search?steamid=${steamId}`)
+  get pausedUntilMs(): number {
+    return this.queue.pausedUntilMs
   }
 
-  async getRankings1v1(region: Region, page: number): Promise<BhApiRanking1v1[]> {
-    return (await this.call<BhApiRanking1v1[]>(`/rankings/1v1/${region}/${page}`)) ?? []
+  async searchBySteamId(steamId: string, opts: CallOptions = {}): Promise<BhApiSearchResult | null> {
+    return this.call(`/search?steamid=${steamId}`, opts)
   }
 
-  async getRankings2v2(region: Region, page: number): Promise<BhApiRanking2v2[]> {
-    return (await this.call<BhApiRanking2v2[]>(`/rankings/2v2/${region}/${page}`)) ?? []
+  async getRankings1v1(region: Region, page: number, opts: CallOptions = {}): Promise<BhApiRanking1v1[]> {
+    return (await this.call<BhApiRanking1v1[]>(`/rankings/1v1/${region}/${page}`, opts)) ?? []
   }
 
-  async getPlayerStats(id: number): Promise<BhApiPlayerStats | null> {
-    return this.call(`/player/${id}/stats`)
+  async getRankings2v2(region: Region, page: number, opts: CallOptions = {}): Promise<BhApiRanking2v2[]> {
+    return (await this.call<BhApiRanking2v2[]>(`/rankings/2v2/${region}/${page}`, opts)) ?? []
   }
 
-  async getPlayerRanked(id: number): Promise<BhApiPlayerRanked | null> {
-    return this.call(`/player/${id}/ranked`)
+  async getPlayerStats(id: number, opts: CallOptions = {}): Promise<BhApiPlayerStats | null> {
+    return this.call(`/player/${id}/stats`, opts)
   }
 
-  async getClan(id: number): Promise<BhApiClan | null> {
-    return this.call(`/clan/${id}`)
+  async getPlayerRanked(id: number, opts: CallOptions = {}): Promise<BhApiPlayerRanked | null> {
+    return this.call(`/player/${id}/ranked`, opts)
   }
 
-  async getAllLegends(): Promise<BhApiLegend[]> {
-    return (await this.call<BhApiLegend[]>('/legend/all')) ?? []
+  async getClan(id: number, opts: CallOptions = {}): Promise<BhApiClan | null> {
+    return this.call(`/clan/${id}`, opts)
   }
 
-  async getLegend(id: number): Promise<BhApiLegendFull | null> {
-    return this.call(`/legend/${id}`)
+  async getAllLegends(opts: CallOptions = {}): Promise<BhApiLegend[]> {
+    return (await this.call<BhApiLegend[]>('/legend/all', opts)) ?? []
   }
 
-  private async call<T>(endpoint: string): Promise<T | null> {
+  async getLegend(id: number, opts: CallOptions = {}): Promise<BhApiLegendFull | null> {
+    return this.call(`/legend/${id}`, opts)
+  }
+
+  private async call<T>(endpoint: string, opts: CallOptions): Promise<T | null> {
+    const caller: Caller = opts.caller ?? 'background'
     const path = endpoint.split('?')[0]
 
-    const waitMs = await this.queue.acquire()
+    const waitMs = await this.queue.acquire(caller)
     if (waitMs > 0) {
-      console.log(`[bhapi] ${path} queue wait: ${(waitMs / 1000).toFixed(1)}s`)
+      console.log(`[bhapi] ${path} queue wait: ${(waitMs / 1000).toFixed(1)}s (caller=${caller})`)
     }
 
-    const remaining = this.queue.remaining
-    console.log(`[bhapi] ${path} (${remaining} sustained left)`)
+    const remaining = this.remainingTokens(caller)
+    console.log(`[bhapi] ${path} (${remaining} ${caller} tokens left)`)
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`

@@ -29,7 +29,7 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
       console.warn('[game-data] no legends in DB and no bhapi client -- skipping init')
       return
     }
-    const apiLegends = await bhapi.getAllLegends()
+    const apiLegends = await bhapi.getAllLegends({ caller: 'background' })
     for (const l of apiLegends) {
       await db
         .insert(legend)
