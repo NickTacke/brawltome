@@ -30,7 +30,7 @@ export const clanRouter = router({
           const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
           if (refreshLimit.allowed) {
             const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
-            if (canDedup) await ctx.clanQueue.enqueue({ clanId })
+            if (canDedup) await ctx.clanQueue.enqueue({ clanId, caller: 'on-demand' })
             return { isRefreshing: true }
           }
         }

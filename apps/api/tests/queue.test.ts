@@ -82,6 +82,152 @@ describe('Queue', () => {
   })
 })
 
+describe('Queue maxDepth', () => {
+  it('rejects enqueue when depth >= maxDepth', async () => {
+    const queue = createQueue<{ value: number }>(redis, 'test-maxdepth', async () => {}, {
+      concurrency: 0,
+      maxDepth: 3,
+    })
+
+    const a = await queue.enqueue({ value: 1 })
+    const b = await queue.enqueue({ value: 2 })
+    const c = await queue.enqueue({ value: 3 })
+    const d = await queue.enqueue({ value: 4 })
+
+    expect(a).toBe(true)
+    expect(b).toBe(true)
+    expect(c).toBe(true)
+    expect(d).toBe(false)
+  })
+})
+
+describe('Queue dedup', () => {
+  it('rejects duplicate enqueue while in-flight', async () => {
+    const queue = createQueue<{ brawlhallaId: number }>(redis, 'test-dedup-queue', async () => {}, {
+      concurrency: 0,
+      dedupKey: (d) => String(d.brawlhallaId),
+    })
+
+    const first = await queue.enqueue({ brawlhallaId: 123 })
+    const second = await queue.enqueue({ brawlhallaId: 123 })
+    const other = await queue.enqueue({ brawlhallaId: 456 })
+
+    expect(first).toBe(true)
+    expect(second).toBe(false)
+    expect(other).toBe(true)
+
+    // Cleanup
+    await redis.del('queue:test-dedup-queue:dedup:123')
+    await redis.del('queue:test-dedup-queue:dedup:456')
+  })
+
+  it('releases dedup key after successful processing', async () => {
+    let runs = 0
+    const queue = createQueue<{ brawlhallaId: number }>(
+      redis,
+      'test-dedup-release',
+      async () => {
+        runs++
+      },
+      { concurrency: 1, dedupKey: (d) => String(d.brawlhallaId) },
+    )
+
+    await queue.enqueue({ brawlhallaId: 999 })
+    queue.start()
+    await Bun.sleep(300)
+
+    const afterFirst = await queue.enqueue({ brawlhallaId: 999 })
+    await Bun.sleep(300)
+    queue.stop()
+
+    expect(runs).toBe(2)
+    expect(afterFirst).toBe(true)
+  })
+})
+
+describe('Queue priorityRatio', () => {
+  it('drains N priority for 1 regular', async () => {
+    const order: string[] = []
+    const queue = createQueue<{ tag: string }>(
+      redis,
+      'test-priority-ratio',
+      async (data) => {
+        order.push(data.tag)
+      },
+      { concurrency: 1, priorityRatio: 3 },
+    )
+
+    // Seed regular jobs first
+    for (let i = 0; i < 10; i++) await queue.enqueue({ tag: `r${i}` })
+    // Then priority jobs
+    for (let i = 0; i < 10; i++) await queue.enqueue({ tag: `p${i}` }, true)
+
+    queue.start()
+    await Bun.sleep(1500)
+    queue.stop()
+
+    // With ratio 3, at least one regular should appear within the first 4 items
+    const priorityCountBeforeFirstRegular = order.findIndex((tag) => tag.startsWith('r'))
+    expect(priorityCountBeforeFirstRegular).toBeGreaterThanOrEqual(0)
+    expect(priorityCountBeforeFirstRegular).toBeLessThanOrEqual(3)
+    expect(order.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Queue rate-limit retry backoff', () => {
+  it('sleeps before re-enqueuing on RateLimitError', async () => {
+    const { RateLimitError } = await import('@brawltome/bhapi')
+    const attempts: number[] = []
+    let failOnce = true
+
+    const queue = createQueue<{ value: number }>(
+      redis,
+      'test-rate-limit-backoff',
+      async () => {
+        attempts.push(Date.now())
+        if (failOnce) {
+          failOnce = false
+          throw new RateLimitError('test', 300)
+        }
+      },
+      { concurrency: 1 },
+    )
+
+    await queue.enqueue({ value: 1 })
+    queue.start()
+    await Bun.sleep(1500)
+    queue.stop()
+
+    expect(attempts.length).toBeGreaterThanOrEqual(2)
+    const gap = attempts[1] - attempts[0]
+    expect(gap).toBeGreaterThanOrEqual(250) // allow small slack from 300
+  })
+})
+
+describe('Queue priorityRatio fairness', () => {
+  it('does not stall priority when regular stream is empty', async () => {
+    const processed: string[] = []
+    const queue = createQueue<{ tag: string }>(
+      redis,
+      'test-priority-fairness',
+      async (data) => {
+        processed.push(data.tag)
+      },
+      { concurrency: 1, priorityRatio: 6 },
+    )
+
+    // Seed only priority jobs (regular stream stays empty)
+    for (let i = 0; i < 6; i++) await queue.enqueue({ tag: `p${i}` }, true)
+
+    queue.start()
+    await Bun.sleep(3000) // enough time for one xreadgroup BLOCK cycle (2s) after draining all 6
+    queue.stop()
+
+    // All 6 priority jobs should have been processed despite empty regular stream
+    expect(processed.length).toBe(6)
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)

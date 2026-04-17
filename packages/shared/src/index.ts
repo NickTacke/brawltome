@@ -3,6 +3,8 @@ export { createQueue, type Queue, type QueueOptions } from './queue'
 export { tryDedup, dedupKey } from './dedup'
 export { checkRateLimit, RATE_LIMITS, type RateLimitAction, type RateLimitResult } from './rate-limit'
 export { verifyTurnstile } from './turnstile'
+export { createMetricsRegistry } from './metrics'
+export type { MetricsRegistry, QueueMetricField, QueueMetricSnapshot } from './metrics'
 export {
   initGameData,
   getLegendById,

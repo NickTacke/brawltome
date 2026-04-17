@@ -1,10 +1,16 @@
 import { RateLimitError } from '@brawltome/bhapi'
 import type { Redis } from 'ioredis'
+import type { MetricsRegistry } from './metrics'
 
-export interface QueueOptions {
+export interface QueueOptions<T = unknown> {
   concurrency?: number
   retries?: number
   backoffMs?: number
+  maxDepth?: number
+  dedupKey?: (data: T) => string
+  dedupTtlSec?: number
+  priorityRatio?: number
+  metrics?: MetricsRegistry
 }
 
 export interface Queue<T> {
@@ -18,9 +24,32 @@ export function createQueue<T>(
   redis: Redis,
   name: string,
   handler: (data: T) => Promise<void>,
-  opts: QueueOptions = {},
+  opts: QueueOptions<T> = {},
 ): Queue<T> {
-  const { concurrency = 5, retries = 3, backoffMs = 1000 } = opts
+  const {
+    concurrency = 5,
+    retries = 3,
+    backoffMs = 1000,
+    maxDepth,
+    dedupKey,
+    dedupTtlSec = 300,
+    priorityRatio = Number.POSITIVE_INFINITY,
+    metrics,
+  } = opts
+  function dedupRedisKey(resolver: (data: T) => string, data: T): string {
+    return `queue:${name}:dedup:${resolver(data)}`
+  }
+
+  async function releaseDedup(data: T): Promise<void> {
+    if (dedupKey) {
+      try {
+        await redis.del(dedupRedisKey(dedupKey, data))
+      } catch (err) {
+        console.warn(`[queue:${name}] releaseDedup error:`, err)
+      }
+    }
+  }
+
   const stream = `queue:${name}`
   const priorityKey = `queue:${name}:priority`
   const group = `${name}-workers`
@@ -38,6 +67,23 @@ export function createQueue<T>(
   }
 
   async function enqueue(data: T, priority = false): Promise<boolean> {
+    if (maxDepth !== undefined) {
+      const streamLen = await redis.xlen(stream)
+      const priorityLen = await redis.llen(priorityKey)
+      if (streamLen + priorityLen >= maxDepth) {
+        await metrics?.incrementQueue(name, 'rejected_total')
+        return false
+      }
+    }
+
+    if (dedupKey) {
+      const set = await redis.set(dedupRedisKey(dedupKey, data), '1', 'EX', dedupTtlSec, 'NX')
+      if (set !== 'OK') {
+        await metrics?.incrementQueue(name, 'dedup_skipped_total')
+        return false
+      }
+    }
+
     if (priority) {
       await redis.lpush(priorityKey, JSON.stringify(data))
     } else {
@@ -70,24 +116,30 @@ export function createQueue<T>(
     await init()
     await claimPending()
 
+    let consecutivePriority = 0
+
     while (!stopped) {
       if (running >= concurrency) {
         await Bun.sleep(50)
         continue
       }
 
-      // Drain priority jobs first
-      try {
-        const priorityItem = await redis.rpop(priorityKey)
-        if (priorityItem) {
-          running++
-          processJob(null, JSON.parse(priorityItem) as T, retries).finally(() => {
-            running--
-          })
-          continue
+      // Try priority first, but only if we haven't exceeded the ratio
+      if (consecutivePriority < priorityRatio) {
+        try {
+          const priorityItem = await redis.rpop(priorityKey)
+          if (priorityItem) {
+            consecutivePriority++
+            running++
+            await metrics?.incrementQueue(name, 'priority_drained_total')
+            processJob(null, JSON.parse(priorityItem) as T, retries).finally(() => {
+              running--
+            })
+            continue
+          }
+        } catch (err) {
+          if (!stopped) console.error(`[queue:${name}] priority read error:`, err)
         }
-      } catch (err) {
-        if (!stopped) console.error(`[queue:${name}] priority read error:`, err)
       }
 
       try {
@@ -104,11 +156,16 @@ export function createQueue<T>(
           '>',
         )
 
-        if (!messages || stopped) continue
+        if (!messages || stopped) {
+          consecutivePriority = 0 // regular stream empty — let priority drain again
+          continue
+        }
 
         for (const [, entries] of messages as [string, [string, string[]][]][]) {
           for (const [id, fields] of entries) {
+            consecutivePriority = 0 // reset after any regular drain
             running++
+            await metrics?.incrementQueue(name, 'regular_drained_total')
             processJob(id, JSON.parse(fields[1]) as T, retries).finally(() => {
               running--
             })
@@ -148,11 +205,16 @@ export function createQueue<T>(
     try {
       await handler(data)
       await ackAndDelete(id)
+      await releaseDedup(data)
     } catch (err) {
       if (err instanceof RateLimitError) {
-        console.warn(`[queue:${name}] rate limited, re-enqueuing job for later`)
+        console.warn(`[queue:${name}] rate limited, sleeping ${err.retryAfterMs}ms before re-enqueue`)
+        await metrics?.incrementQueue(name, 'rate_limit_retries_total')
+        const wasPriority = id === null
         await ackAndDelete(id)
-        await enqueue(data)
+        await releaseDedup(data)
+        await Bun.sleep(err.retryAfterMs)
+        await enqueue(data, wasPriority)
         return
       }
 
@@ -175,6 +237,7 @@ export function createQueue<T>(
         new Date().toISOString(),
       )
       await ackAndDelete(id)
+      await releaseDedup(data)
       console.error(`[queue:${name}] job sent to DLQ:`, err)
     }
   }

@@ -1,18 +1,22 @@
+export type Caller = 'on-demand' | 'background'
+
 export interface RequestQueueOptions {
   minSpacingMs: number
   sustainedLimit: number
   sustainedWindowMs: number
+  onDemandHeadroom?: number
 }
 
 export class RequestQueue {
   private readonly minSpacingMs: number
   private readonly sustainedLimit: number
   private readonly sustainedWindowMs: number
+  private readonly onDemandHeadroom: number
   private readonly timestamps: number[] = []
   private lastRequestTime = 0
   private pausedUntil = 0
   private processing = false
-  private readonly pending: Array<{ resolve: (waitMs: number) => void; enqueuedAt: number }> = []
+  private readonly pending: Array<{ resolve: (waitMs: number) => void; enqueuedAt: number; caller: Caller }> = []
 
   constructor(opts: RequestQueueOptions) {
     if (!Number.isFinite(opts.minSpacingMs) || opts.minSpacingMs < 0) {
@@ -24,14 +28,33 @@ export class RequestQueue {
     if (!Number.isFinite(opts.sustainedWindowMs) || opts.sustainedWindowMs < 1) {
       throw new RangeError('sustainedWindowMs must be a finite number >= 1')
     }
+    const headroom = opts.onDemandHeadroom ?? 0
+    if (!Number.isInteger(headroom) || headroom < 0 || headroom >= opts.sustainedLimit) {
+      throw new RangeError('onDemandHeadroom must be an integer in [0, sustainedLimit)')
+    }
     this.minSpacingMs = opts.minSpacingMs
     this.sustainedLimit = opts.sustainedLimit
     this.sustainedWindowMs = opts.sustainedWindowMs
+    this.onDemandHeadroom = headroom
   }
 
-  get remaining(): number {
+  private effectiveLimit(caller: Caller): number {
+    if (caller === 'on-demand') return this.sustainedLimit
+    return Math.max(1, this.sustainedLimit - this.onDemandHeadroom)
+  }
+
+  get remainingOnDemand(): number {
     this.pruneTimestamps()
-    return Math.max(0, this.sustainedLimit - this.timestamps.length)
+    return Math.max(0, this.effectiveLimit('on-demand') - this.timestamps.length)
+  }
+
+  get remainingBackground(): number {
+    this.pruneTimestamps()
+    return Math.max(0, this.effectiveLimit('background') - this.timestamps.length)
+  }
+
+  get pausedUntilMs(): number {
+    return this.pausedUntil
   }
 
   get isPaused(): boolean {
@@ -43,9 +66,9 @@ export class RequestQueue {
     this.pausedUntil = Math.max(this.pausedUntil, Date.now() + durationMs)
   }
 
-  async acquire(): Promise<number> {
+  async acquire(caller: Caller): Promise<number> {
     return new Promise<number>((resolve) => {
-      this.pending.push({ resolve, enqueuedAt: Date.now() })
+      this.pending.push({ resolve, enqueuedAt: Date.now(), caller })
       this.processNext()
     })
   }
@@ -56,44 +79,43 @@ export class RequestQueue {
     this.processing = true
 
     while (this.pending.length > 0) {
-      await this.waitForSlot()
-      const caller = this.pending.shift()
-      if (!caller) break
+      const next = this.pending[0]
+      await this.waitForSlot(next.caller)
+      const popped = this.pending.shift()
+      if (!popped) break
       const now = Date.now()
       this.lastRequestTime = now
       this.timestamps.push(now)
-      caller.resolve(now - caller.enqueuedAt)
+      popped.resolve(now - popped.enqueuedAt)
     }
 
     this.processing = false
   }
 
-  private async waitForSlot(): Promise<void> {
-    // Wait for pause to expire (re-check in case pause was set during a prior sleep)
+  private async waitForSlot(caller: Caller): Promise<void> {
+    const limit = this.effectiveLimit(caller)
+
     while (this.isPaused) {
       const pauseWait = this.pausedUntil - Date.now()
       if (pauseWait > 0) await Bun.sleep(pauseWait)
     }
 
-    // Wait for burst spacing
     const sinceLast = Date.now() - this.lastRequestTime
     if (this.lastRequestTime > 0 && sinceLast < this.minSpacingMs) {
       await Bun.sleep(this.minSpacingMs - sinceLast)
-      // Re-check pause in case it was set during burst sleep
       while (this.isPaused) {
         const pauseWait = this.pausedUntil - Date.now()
         if (pauseWait > 0) await Bun.sleep(pauseWait)
       }
     }
 
-    // Wait for sustained window (loop to handle early wake from sleep jitter)
     while (true) {
       while (this.isPaused) {
         const pauseWait = this.pausedUntil - Date.now()
         if (pauseWait > 0) await Bun.sleep(pauseWait)
       }
       this.pruneTimestamps()
-      if (this.timestamps.length < this.sustainedLimit) break
+      if (this.timestamps.length < limit) break
       const oldest = this.timestamps[0]
       const sustainedWait = oldest + this.sustainedWindowMs - Date.now()
       if (sustainedWait > 0) await Bun.sleep(sustainedWait)
