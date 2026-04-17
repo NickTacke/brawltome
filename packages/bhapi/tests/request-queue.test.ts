@@ -22,7 +22,11 @@ describe('RequestQueue', () => {
       const queue = new RequestQueue({ minSpacingMs: 50, sustainedLimit: 150, sustainedWindowMs: 900_000 })
       const start = Date.now()
       // Fire 3 concurrent acquire() calls
-      const results = await Promise.all([queue.acquire('on-demand'), queue.acquire('on-demand'), queue.acquire('on-demand')])
+      const results = await Promise.all([
+        queue.acquire('on-demand'),
+        queue.acquire('on-demand'),
+        queue.acquire('on-demand'),
+      ])
       const totalElapsed = Date.now() - start
       // 3 requests with 50ms spacing = at least 100ms total
       expect(totalElapsed).toBeGreaterThanOrEqual(90)

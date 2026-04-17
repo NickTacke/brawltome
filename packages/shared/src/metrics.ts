@@ -20,7 +20,10 @@ export interface MetricsRegistry {
 
 export function createMetricsRegistry(redis: Redis): MetricsRegistry {
   async function incrementQueue(name: string, field: QueueMetricField): Promise<void> {
-    await redis.hincrby(`metrics:queue:${name}`, field, 1)
+    const pipeline = redis.multi()
+    pipeline.hincrby(`metrics:queue:${name}`, field, 1)
+    pipeline.sadd('metrics:queues:known', name)
+    await pipeline.exec()
   }
 
   async function snapshotQueue(name: string): Promise<QueueMetricSnapshot> {
@@ -33,13 +36,9 @@ export function createMetricsRegistry(redis: Redis): MetricsRegistry {
   }
 
   async function snapshotAllQueues(): Promise<Record<string, QueueMetricSnapshot>> {
-    const keys = await redis.keys('metrics:queue:*')
-    const out: Record<string, QueueMetricSnapshot> = {}
-    for (const key of keys) {
-      const name = key.slice('metrics:queue:'.length)
-      out[name] = await snapshotQueue(name)
-    }
-    return out
+    const names = await redis.smembers('metrics:queues:known')
+    const snaps = await Promise.all(names.map(async (n) => [n, await snapshotQueue(n)] as const))
+    return Object.fromEntries(snaps)
   }
 
   async function setScalar(key: string, value: number): Promise<void> {

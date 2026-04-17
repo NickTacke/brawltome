@@ -101,15 +101,24 @@ const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'b
   },
 )
 
-const bhapiMetricsInterval = setInterval(async () => {
+let bhapiMetricsTimer: Timer | null = null
+let bhapiMetricsStopped = false
+
+async function snapBhapiMetrics() {
   try {
     await metrics.setScalar('bhapi:tokens_on_demand_remaining', bhapi.remainingTokens('on-demand'))
     await metrics.setScalar('bhapi:tokens_background_remaining', bhapi.remainingTokens('background'))
     await metrics.setScalar('bhapi:paused_until_ms', bhapi.pausedUntilMs)
   } catch (err) {
     console.error('[worker] bhapi metrics snapshot error:', err)
+  } finally {
+    if (!bhapiMetricsStopped) {
+      bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
+    }
   }
-}, 5000)
+}
+
+bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
 
 console.log('Worker starting...')
 await initGameData(db, bhapi)
@@ -121,12 +130,14 @@ const stopJanitor = process.env.DISABLE_JANITOR
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
-  clearInterval(bhapiMetricsInterval)
+  bhapiMetricsStopped = true
+  if (bhapiMetricsTimer) clearTimeout(bhapiMetricsTimer)
   rankedQueue.stop()
   statsQueue.stop()
   clanQueue.stop()
   steamLinkQueue.stop()
   await stopJanitor()
+  await metricsRedis.quit().catch(() => {})
   console.log('Lock released. Goodbye.')
   process.exit(0)
 })

@@ -97,7 +97,9 @@ export function startJanitor(deps: JanitorDeps) {
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
-      console.log(`[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens('background')} tokens remaining`)
+      console.log(
+        `[janitor] tick ${tick} complete in ${elapsed}s, ${deps.bhapi.remainingTokens('background')} tokens remaining`,
+      )
     } catch (err) {
       console.error(`[janitor] tick ${tick} error:`, err)
     } finally {
