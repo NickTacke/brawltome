@@ -190,9 +190,11 @@ app.get('/internal/metrics', async (c) => {
   const tokensOnDemand = await metrics.getScalar('bhapi:tokens_on_demand_remaining')
   const tokensBackground = await metrics.getScalar('bhapi:tokens_background_remaining')
   const pausedUntilMs = await metrics.getScalar('bhapi:paused_until_ms')
+  const counters = await metrics.snapshotCounters()
 
   return c.json({
     queues,
+    counters,
     bhapi: {
       tokens_on_demand_remaining: tokensOnDemand,
       tokens_background_remaining: tokensBackground,

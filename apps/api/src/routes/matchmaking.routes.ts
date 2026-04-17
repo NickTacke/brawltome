@@ -51,7 +51,7 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
 
     const rl = await checkRateLimit(deps.redis, `user:${userId}`, 'ingest')
     if (!rl.allowed) {
-      await deps.metrics.incrementQueue('matchmaking_ingest', 'rejected_total')
+      await deps.metrics.incrementCounter('matchmaking_ingest_rejected_rate_limited')
       return c.json({ code: 'rate_limited' }, 429, { 'Retry-After': String(rl.retryAfter) })
     }
 
@@ -59,11 +59,13 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
     try {
       form = await c.req.formData()
     } catch {
+      await deps.metrics.incrementCounter('matchmaking_ingest_rejected_validation_error')
       return c.json({ code: 'validation_error', detail: 'bad_multipart' }, 400)
     }
     const rawFile = form.get('raw')
     const payloadField = form.get('payload')
     if (!(rawFile instanceof File) || typeof payloadField !== 'string') {
+      await deps.metrics.incrementCounter('matchmaking_ingest_rejected_validation_error')
       return c.json({ code: 'validation_error', detail: 'multipart_shape' }, 400)
     }
     const rawBytes = new Uint8Array(await rawFile.arrayBuffer())
@@ -71,6 +73,7 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
     try {
       parsed = payloadSchema.parse(JSON.parse(payloadField))
     } catch (err) {
+      await deps.metrics.incrementCounter('matchmaking_ingest_rejected_validation_error')
       return c.json(
         { code: 'validation_error', detail: err instanceof Error ? err.message : 'bad_payload' },
         400,
@@ -78,6 +81,7 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
     }
 
     if (parsed.parsedReplay === null) {
+      await deps.metrics.incrementCounter('matchmaking_ingest_rejected_parse_error')
       return c.json({ code: 'parse_error', detail: 'pending_path_not_yet_wired' }, 501)
     }
 
@@ -98,12 +102,11 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
         rawBytes,
         formatVersion: parsed.formatVersion ?? (parsed.parsedReplay as ParsedReplay).formatVersion,
       })
-      return c.json(
-        { slug: result.slug, alreadyIngested: result.alreadyIngested ?? false },
-        200,
-      )
+      await deps.metrics.incrementCounter('matchmaking_ingest_ok')
+      return c.json({ slug: result.slug, alreadyIngested: result.alreadyIngested ?? false }, 200)
     } catch (e) {
       if (e instanceof IngestError) {
+        await deps.metrics.incrementCounter(`matchmaking_ingest_rejected_${e.code}`)
         const status = e.code === 'r2_upload_failed' ? 503 : 400
         return c.json({ code: e.code, detail: e.detail }, status)
       }
