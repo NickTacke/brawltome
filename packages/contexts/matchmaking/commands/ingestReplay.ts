@@ -39,9 +39,9 @@ export interface IngestDeps {
   matchRepo: MatchRepo
   r2Put: (key: string, bytes: Uint8Array) => Promise<void>
   reparseRaw: (raw: Uint8Array) => ParsedReplay
-  knownLevelIds?: Set<number>
-  knownHeroIds?: Set<number>
-  knownPlaylistIds?: Set<number>
+  knownLevelIds?: ReadonlySet<number>
+  knownHeroIds?: ReadonlySet<number>
+  knownPlaylistIds?: ReadonlySet<number>
 }
 
 export interface IngestInput {

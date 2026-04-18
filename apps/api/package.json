@@ -16,6 +16,7 @@
     "@brawltome/bhapi": "workspace:*",
     "@brawltome/clan": "workspace:*",
     "@brawltome/database": "workspace:*",
+    "@brawltome/game-data": "workspace:*",
     "@brawltome/identity": "workspace:*",
     "@brawltome/matchmaking": "workspace:*",
     "@brawltome/player": "workspace:*",
