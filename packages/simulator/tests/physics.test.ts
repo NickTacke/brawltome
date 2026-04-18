@@ -53,12 +53,9 @@ describe('stepEntity: gravity', () => {
 describe('stepEntity: ground resolution', () => {
   test('falling entity lands on a hard horizontal line', () => {
     const e = makeEntity(0, 400)
-    e.vel.y = 200
+    e.vel.y = 1000
     let phys = makePhysState()
-    // With BH's per-tick units the fall from y=400 to y=500 is slower.
-    // 30 ticks is enough time for gravity + starting velocity to hit
-    // the floor at y=500.
-    for (let i = 0; i < 30; i++) phys = stepEntity(e, 0, phys, makeLevel([floor]))
+    for (let i = 0; i < 5; i++) phys = stepEntity(e, 0, phys, makeLevel([floor]))
     expect(e.posture).toBe('ground')
     expect(e.pos.y).toBeCloseTo(500, 0)
     expect(e.vel.y).toBe(0)
@@ -77,22 +74,14 @@ describe('stepEntity: ground resolution', () => {
 })
 
 describe('stepEntity: horizontal movement', () => {
-  test('MoveRight on ground accelerates toward walk-speed cap', () => {
+  test('MoveRight on ground advances x at walk speed', () => {
     const e = makeEntity(0, 500)
     e.posture = 'ground'
     let phys = makePhysState()
-    // Holding MoveRight for many ticks reaches the walkSpeed cap (BH
-    // accelerates at ~1.98 per tick, so it takes ~350 ticks to reach
-    // 700). After one tick we're only slightly above zero but facing
-    // and sign should already be set.
     phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([floor]))
-    expect(e.vel.x).toBeGreaterThan(0)
-    expect(e.vel.x).toBeLessThanOrEqual(DEFAULT_PHYSICS.walkSpeed)
-    expect(e.facing).toBe(1)
-    for (let i = 0; i < 400; i++) {
-      phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([floor]))
-    }
     expect(e.vel.x).toBe(DEFAULT_PHYSICS.walkSpeed)
+    expect(e.pos.x).toBeGreaterThan(0)
+    expect(e.facing).toBe(1)
   })
 
   test('MoveLeft on ground sets facing to -1', () => {
@@ -101,7 +90,7 @@ describe('stepEntity: horizontal movement', () => {
     let phys = makePhysState()
     phys = stepEntity(e, InputFlag.MoveLeft, phys, makeLevel([floor]))
     expect(e.facing).toBe(-1)
-    expect(e.vel.x).toBeLessThan(0)
+    expect(e.vel.x).toBe(-DEFAULT_PHYSICS.walkSpeed)
   })
 
   test('releasing input on ground applies friction, not snap-to-zero', () => {
@@ -240,16 +229,13 @@ describe('stepEntity: soft platforms', () => {
 
 describe('stepEntity: wall resolution', () => {
   test('horizontal movement into a vertical hard line stops', () => {
-    // BH accelerates from rest, so we pre-seed vel.x at the walkSpeed
-    // cap instead of waiting 350+ ticks of ground-accel to reach it.
     const wall: CollisionLine = { kind: 'hard', x1: 200, x2: 200, y1: 0, y2: 1000 }
     const e = makeEntity(0, 500)
     e.posture = 'ground'
-    e.vel.x = DEFAULT_PHYSICS.walkSpeed
     let phys = makePhysState()
-    // One tick is enough to cover the ~269-unit per-tick travel and hit
-    // the wall at x=200. vel.x should clamp to 0 on the crossing tick.
-    phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([floor, wall]))
+    for (let i = 0; i < 20; i++) {
+      phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([floor, wall]))
+    }
     expect(e.pos.x).toBeLessThanOrEqual(200)
     expect(e.vel.x).toBe(0)
   })

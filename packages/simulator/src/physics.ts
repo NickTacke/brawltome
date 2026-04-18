@@ -1,66 +1,47 @@
-// 1:1 port of Brawlhalla's 60Hz physics loop. Every constant and the
-// integration model come straight from the decompiled source:
-//
-//   research/jpexs/out-10.05/scripts/§_-U4U§.as:168       -> BH_TIMESTEP = 0.384
-//   research/jpexs/out-10.05/scripts/§_-Z1H§.as:1166      -> base gravity = 3.75 u/frame
-//   research/jpexs/out-10.05/scripts/§_-Z1H§.as:1170-1171 -> ground/air accel 5.16 / 4.7
-//   research/jpexs/out-10.05/scripts/§_-Z1H§.as:406-412   -> jump impulses 57 (ground/1st air), 65 (last)
-//   research/jpexs/out-10.05/scripts/§_-Z1H§.as:522-524   -> walk-speed cap 700, fall-speed cap 350
-//   research/jpexs/out-10.05/scripts/§_-Z1H§.as:404       -> ground friction multiplier 0.85
-//
-// BH integrates velocity and position like this every frame:
-//   vel.y += BASE_GRAVITY * BH_TIMESTEP           // effective +1.44 per tick
-//   vel.x += BASE_GROUND_ACCEL * BH_TIMESTEP      // effective +1.98 per tick
-//   pos   += vel * BH_TIMESTEP                    // subsecond integration
-//
-// So an impulse `vel.y = -57` produces a jump apex of 57^2 / (2 * 1.44) = 1128
-// in velocity-space, which becomes 1128 * 0.384 ~= 433 screen units. That's
-// the ~2-character-heights arc players actually see. We keep those native
-// numbers and apply the timestep in code, rather than shoe-horning them
-// into our old per-second convention.
+// First-pass platformer physics. Enough to move entities around and produce
+// non-trivial posture totals; the constants are plausible placeholders, not
+// a port of Brawlhalla's engine. Tuning happens when we have a regression
+// target to aim at.
 
 import type { CollisionLine, LevelGeometry } from '@brawltome/game-data'
 import { InputFlag } from '@brawltome/replay-format'
+import { TICK_MS } from './tick'
 import type { EntityState, PhysicsParams, Vec2 } from './types'
 
-// BH's per-tick integration multiplier. Applied to every velocity delta
-// and position update. Sourced from §_-U4U§.as:168.
-export const BH_TIMESTEP = 0.384
-
+// Default physics params in the same coord space as Brawlhalla (units ~ pixels
+// at 1x scale, y-down). Picked to feel roughly right, not frame-accurate.
 export const DEFAULT_PHYSICS: PhysicsParams = {
-  // Horizontal velocity cap (§_-Z1H§.as:522: §_-l3q§ = 700). Acts as a
-  // hard clamp on vel.x, not a target velocity.
   walkSpeed: 700,
-  // One-time velocity set on Jump press. Ground + first-air use the same
-  // magnitude; the last jump available uses 65 (higher, so recoveries
-  // arc taller than an opener jump).
-  jumpImpulse: 57,
-  secondAirJumpImpulse: 65,
+  // Ground + first-air impulse. BH native is 57 u/frame applied against
+  // a heavier gravity than ours; direct translation over-shot the real
+  // on-screen arc so these are tuned down to match the viewer. The
+  // second air jump keeps a ~1.14x ratio so the "last jump is bigger"
+  // feel survives (§_-Z1H§.as:7208).
+  jumpImpulse: 1500,
+  secondAirJumpImpulse: 1700,
   shortJumpMult: 0.86,
-  // Base per-frame gravity coefficient; the effective per-tick vel.y
-  // increment is `gravity * BH_TIMESTEP`.
-  gravity: 3.75,
-  // Clamp on vel.y downward (§_-Z1H§.as:524: §_-l3I§ = 350). Different
-  // from BH's separate ground-state cap which we may split out later if
-  // we observe terminal-velocity mismatches.
-  maxFallSpeed: 350,
+  gravity: 3500,
+  maxFallSpeed: 1800,
+  // Half-life ~4.3 ticks (~72ms) at 60Hz. Placeholder; BMG's actual value
+  // is unknown to us, but this feels closer to the real game than snap-to-0.
   groundFriction: 0.85,
-  // Ground and air horizontal accel coefficients. Each tick adds
-  // `accel * BH_TIMESTEP * direction` to vel.x, which makes ramp-up
-  // to walkSpeed take ~135 ticks (2.25 s).
-  airAccel: 4.7,
-  // Fast-fall multiplier. BH raises the fall cap rather than scaling
-  // gravity directly; for V1 we keep it as a gravity scalar.
+  // Air control accel of 2500 u/s^2 lets the entity approach walkSpeed in
+  // ~0.28s of airtime, which roughly matches BH's "sluggish but useable"
+  // air drift. Per `§_-D1C§.as` source the engine uses a fractional-per-
+  // tick multiplier rather than a constant accel, but 2500 u/s^2 is a
+  // close V1 approximation.
+  airAccel: 2500,
+  // Fast-fall multiplier applied to gravity while Drop is held in the air.
+  // BH's engine removes the fall-speed cap rather than multiplying gravity,
+  // but doubling gravity gives a similar feel without a second clamp.
   fastFallMult: 1.8,
 }
 
-export const GROUND_ACCEL = 5.16
+// Below this horizontal speed, friction collapses to zero so we don't
+// accumulate floating-point dribble indefinitely.
+const FRICTION_CUTOFF = 5
 
-// Below this horizontal speed (post-friction), vel.x snaps to zero so we
-// don't accumulate floating-point dribble indefinitely. Tiny per-tick
-// value now that we're in per-tick velocity units (was 5 in per-sec).
-const FRICTION_CUTOFF = 0.1
-
+const TICK_S = TICK_MS / 1000
 const EPSILON = 0.5
 
 // Default jump budget: 3 total, shared between ground + air. A grounded
@@ -100,13 +81,10 @@ const DASH_SPEED_MULT = 1.75
 const isHorizontal = (c: CollisionLine): boolean => c.y1 === c.y2
 const isVertical = (c: CollisionLine): boolean => c.x1 === c.x2
 
-// Finds the topmost horizontal surface that the entity's fall from `oldY`
-// to `pos.y` crosses, or rests near within `maxDrop`. Hard / no_slide lines
-// are always solid from both sides; soft platforms are solid only when the
-// entity is approaching from above (oldY above the line) and not holding
-// drop-through. Anchoring the distance check to `oldY` matters when the
-// entity overshoots a floor in a single tick, which happens at BH's
-// per-tick fall speed (~134 units at the cap).
+// Finds the topmost horizontal surface under `pos` within `maxDrop`. Hard /
+// no_slide lines are always solid from both sides; soft platforms are solid
+// only when we're approaching from above (oldY above the line) and not
+// holding drop-through.
 function groundBeneath(
   pos: Vec2,
   oldY: number,
@@ -118,7 +96,7 @@ function groundBeneath(
   for (const c of level.collisions) {
     if (!isHorizontal(c)) continue
     if (pos.x < Math.min(c.x1, c.x2) || pos.x > Math.max(c.x1, c.x2)) continue
-    const dy = c.y1 - oldY
+    const dy = c.y1 - pos.y
     if (dy < -EPSILON || dy > maxDrop) continue
     const isSoft = c.kind === 'soft' || c.kind === 'bouncy_no_slide'
     if (isSoft) {
@@ -202,29 +180,28 @@ export function stepEntity(
   }
   const isDashing = nowMs < dashUntilMs && dashDir !== 0
 
-  // Horizontal motion: ground and air use separate accel coefficients
-  // (GROUND_ACCEL vs params.airAccel) applied per tick through the
-  // BH_TIMESTEP multiplier. Velocity is capped at params.walkSpeed on
-  // both sides. No snap-to-target; BH accelerates you toward the cap
-  // over many frames, which is why walking feels weighty.
+  // Horizontal motion by state: dash overrides everything, then ground walk,
+  // then air drift (acceleration toward input dir, no hard cap).
   if (isDashing) {
     entity.vel.x = dashDir * params.walkSpeed * DASH_SPEED_MULT
     if (inputDir !== 0) entity.facing = inputDir < 0 ? -1 : 1
   } else if (entity.posture === 'ground') {
     if (inputDir !== 0) {
-      entity.vel.x += inputDir * GROUND_ACCEL * BH_TIMESTEP
-      if (entity.vel.x > params.walkSpeed) entity.vel.x = params.walkSpeed
-      else if (entity.vel.x < -params.walkSpeed) entity.vel.x = -params.walkSpeed
+      entity.vel.x = inputDir * params.walkSpeed
       entity.facing = inputDir < 0 ? -1 : 1
     } else {
       entity.vel.x *= params.groundFriction
       if (Math.abs(entity.vel.x) < FRICTION_CUTOFF) entity.vel.x = 0
     }
-  } else if (inputDir !== 0) {
-    entity.vel.x += inputDir * params.airAccel * BH_TIMESTEP
-    if (entity.vel.x > params.walkSpeed) entity.vel.x = params.walkSpeed
-    else if (entity.vel.x < -params.walkSpeed) entity.vel.x = -params.walkSpeed
-    entity.facing = inputDir < 0 ? -1 : 1
+  } else {
+    // Air: accelerate toward input direction, clamp to walkSpeed on either
+    // side so air drift doesn't exceed ground walk speed.
+    if (inputDir !== 0) {
+      entity.vel.x += inputDir * params.airAccel * TICK_S
+      if (entity.vel.x > params.walkSpeed) entity.vel.x = params.walkSpeed
+      else if (entity.vel.x < -params.walkSpeed) entity.vel.x = -params.walkSpeed
+      entity.facing = inputDir < 0 ? -1 : 1
+    }
   }
 
   // Jump: edge-triggered. Ground and air jumps draw from the same budget
@@ -252,19 +229,16 @@ export function stepEntity(
     if (entity.vel.y < clamped) entity.vel.y = clamped
   }
 
-  // Gravity when airborne. BH applies `vel.y += base_gravity * BH_TIMESTEP`
-  // per frame and clamps at maxFallSpeed; fast-fall scales gravity up.
+  // Gravity when airborne, scaled up if the player is fast-falling.
   if (entity.posture !== 'ground') {
     const dropHeld = (flags & InputFlag.Drop) !== 0
     const grav = dropHeld ? params.gravity * params.fastFallMult : params.gravity
-    entity.vel.y = Math.min(entity.vel.y + grav * BH_TIMESTEP, params.maxFallSpeed)
+    entity.vel.y = Math.min(entity.vel.y + grav * TICK_S, params.maxFallSpeed)
   }
 
-  // Position integration uses the same BH_TIMESTEP multiplier on velocity
-  // (§_-Z1H§.as:3721 shows `screen_y = vel_y * 0.384`). So position moves
-  // `vel * 0.384` per tick, not `vel * tick_seconds`.
+  // Swept horizontal move + wall clamp.
   const startX = entity.pos.x
-  const targetX = startX + entity.vel.x * BH_TIMESTEP
+  const targetX = startX + entity.vel.x * TICK_S
   const wallX = wallCrossed(entity.pos.y, startX, targetX, level)
   if (wallX !== null) {
     const dir = targetX > startX ? 1 : -1
@@ -274,12 +248,13 @@ export function stepEntity(
     entity.pos.x = targetX
   }
 
+  // Vertical integration + ground snap. Drop-through lets the entity phase
+  // through soft platforms this tick.
   const startY = entity.pos.y
   const dropThrough = (flags & InputFlag.Drop) !== 0
-  const posDeltaY = entity.vel.y * BH_TIMESTEP
-  entity.pos.y += posDeltaY
+  entity.pos.y += entity.vel.y * TICK_S
   if (entity.vel.y >= 0) {
-    const floorY = groundBeneath(entity.pos, startY, level, Math.max(8, posDeltaY + 2), dropThrough)
+    const floorY = groundBeneath(entity.pos, startY, level, Math.max(8, entity.vel.y * TICK_S + 2), dropThrough)
     if (floorY !== null) {
       entity.pos.y = floorY
       entity.vel.y = 0
