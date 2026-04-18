@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { basename } from 'node:path'
-import { getLevelById, getPowerById, levelGeometry } from '@brawltome/game-data'
+import { getLegendById, getLevelById, getPowerById, levelGeometry } from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
 import { Simulation } from '../src/sim'
 
@@ -50,6 +50,17 @@ function diagnose(path: string): void {
   const sim = new Simulation({ parsed, geometry: geo })
   const totals = sim.postureTotals()
   const attacks = sim.attackAttempts()
+  const pickups = sim.pickupCountsByEntity()
+  const weaponTime = sim.weaponTimeByEntity()
+
+  console.log(`\nlegend per entity:`)
+  for (const ent of parsed.entities) {
+    const heroId = ent.playerData.heroes[0]?.heroId
+    const legend = heroId !== undefined ? getLegendById(heroId) : undefined
+    console.log(
+      `  ${String(ent.id).padStart(3, ' ')} ${ent.name.padEnd(16, ' ')} heroId=${heroId ?? '?'}  internal=${legend?.heroName ?? '?'}  weapons=${legend?.weaponOne ?? '?'}/${legend?.weaponTwo ?? '?'}`,
+    )
+  }
 
   console.log(`\nposture breakdown per entity:`)
   console.log(`  id  name              air     ground  wall    sum(ms)   match(ms)`)
@@ -83,13 +94,48 @@ function diagnose(path: string): void {
     )
   }
 
+  // Dump up to 20 unresolvable attempts (by entity) so we can see which
+  // input combos the resolver is missing.
+  console.log(`\nunresolvable attempt samples (first 4 per entity):`)
+  const perEntitySamples = new Map<number, string[]>()
+  for (const a of attacks) {
+    if (a.powerId !== null || a.button === 'dodge') continue
+    const arr = perEntitySamples.get(a.entityId) ?? []
+    if (arr.length < 4) {
+      arr.push(`${a.button}+${a.direction}+${a.posture}`)
+      perEntitySamples.set(a.entityId, arr)
+    }
+  }
+  for (const t of totals) {
+    const ent = parsed.entities.find((e) => e.id === t.entityId)
+    const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
+    const samples = perEntitySamples.get(t.entityId) ?? []
+    console.log(`  ${name} ${samples.join(' | ')}`)
+  }
+
+  console.log(`\nweapon pickups + time held per entity:`)
+  console.log(`  id  name             pickups    weapon-held (ms)`)
+  for (const t of totals) {
+    const ent = parsed.entities.find((e) => e.id === t.entityId)
+    const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
+    const count = pickups.get(t.entityId) ?? 0
+    const byWeapon = weaponTime.get(t.entityId)
+    const parts: string[] = []
+    if (byWeapon) {
+      for (const [w, ms] of byWeapon.entries()) parts.push(`${w}=${ms}`)
+    }
+    console.log(
+      `  ${String(t.entityId).padStart(3, ' ')} ${name} ${String(count).padStart(7, ' ')}    ${parts.join(', ')}`,
+    )
+  }
+
   // Rough damage-attempted: sum of baseDamage across every resolved attempt.
   // Assumes every press connected, which it doesn't; this is an upper bound
   // for damage output, not actual damage dealt. Dodge and unresolved
-  // attempts are excluded. V1 only resolves unarmed (Base*) powers, so
-  // weapon attacks post-pickup currently fall through as unresolved.
+  // attempts (including throws while unarmed and air-side heavies that
+  // don't exist as moves) are excluded.
   console.log(
-    `\nrough damage-attempted (baseDamage of resolved Base* powers, upper bound, no hit detection):`,
+    `\nrough damage-attempted (sum of baseDamage across resolved presses, upper bound):`,
   )
   console.log(`  id  name             resolved  unresolvable  baseDamage  per-min`)
   for (const t of totals) {

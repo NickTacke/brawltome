@@ -54,15 +54,27 @@ function suffixFor(
   return 'SmashUp'
 }
 
-// For weapon signatures, Brawlhalla appends the legend's internal hero name
-// to the smash power (e.g. SwordSmashSideKnight). Base signatures don't get
-// this suffix. This helper returns the candidate names in priority order so
-// the caller can try each against the power table.
+// Builds candidate power names in priority order. Two weapon-family quirks
+// the base suffix table doesn't encode:
+//   - Signature naming: `Base` uses SmashUp/Side/Down; weapons use
+//     SmashNeutral/Side/Down AND append the legend's internal name
+//     (SwordSmashNeutralViking). If the caller didn't supply a legend we
+//     still try the unqualified weapon name as a fallback.
+//   - Everything else (light attacks, air attacks, throws) is a direct
+//     `[weapon][suffix]` concat and needs no special handling.
 function candidateNames(weapon: string, suffix: string, legend?: string): string[] {
-  const base = `${weapon}${suffix}`
-  if (!legend) return [base]
-  if (suffix.startsWith('Smash') && weapon !== 'Base') return [`${base}${legend}`, base]
-  return [base]
+  if (weapon === 'Base') return [`${weapon}${suffix}`]
+  if (suffix === 'SmashUp') {
+    const neutral = `${weapon}SmashNeutral`
+    if (legend) return [`${neutral}${legend}`, neutral, `${weapon}SmashUp`]
+    return [neutral, `${weapon}SmashUp`]
+  }
+  if (suffix === 'SmashSide' || suffix === 'SmashDown') {
+    const base = `${weapon}${suffix}`
+    if (legend) return [`${base}${legend}`, base]
+    return [base]
+  }
+  return [`${weapon}${suffix}`]
 }
 
 // Resolves an input combination to the Power record that fires, or null if

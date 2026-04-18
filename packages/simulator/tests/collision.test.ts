@@ -10,6 +10,7 @@ function makeLevel(overrides: Partial<LevelGeometry> = {}): LevelGeometry {
     spawnBotBounds: null,
     killBounds: { left: null, right: null, top: null, bottom: null },
     respawns: [],
+    itemSpawns: [],
     collisions: [],
     ...overrides,
   }

@@ -210,6 +210,19 @@ export function stepEntity(
   return { prevFlags: flags, jumpsRemaining }
 }
 
+// True if `pos` lies outside any non-null killBound. Exposed so callers can
+// detect a kill about to happen (e.g. to reset held items before respawn)
+// before they invoke checkKillAndRespawn.
+export function isOutOfBounds(pos: Vec2, level: LevelGeometry): boolean {
+  const { left, right, top, bottom } = level.killBounds
+  return (
+    (left !== null && pos.x < left) ||
+    (right !== null && pos.x > right) ||
+    (top !== null && pos.y < top) ||
+    (bottom !== null && pos.y > bottom)
+  )
+}
+
 // If the entity has crossed any non-null killBound, snap it back to the given
 // respawn point with zeroed velocity and a full jump budget. Returns the
 // physics state either unchanged (no kill) or with jumps reset.
@@ -223,13 +236,7 @@ export function checkKillAndRespawn(
   respawnPoint: Vec2,
   phys: EntityPhysState,
 ): EntityPhysState {
-  const { left, right, top, bottom } = level.killBounds
-  const killed =
-    (left !== null && entity.pos.x < left) ||
-    (right !== null && entity.pos.x > right) ||
-    (top !== null && entity.pos.y < top) ||
-    (bottom !== null && entity.pos.y > bottom)
-  if (!killed) return phys
+  if (!isOutOfBounds(entity.pos, level)) return phys
   entity.pos.x = respawnPoint.x
   entity.pos.y = respawnPoint.y
   entity.vel.x = 0

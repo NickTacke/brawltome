@@ -12,6 +12,7 @@ function makeLevel(collisions: CollisionLine[] = []): LevelGeometry {
     spawnBotBounds: null,
     killBounds: { left: null, right: null, top: null, bottom: null },
     respawns: [],
+    itemSpawns: [],
     collisions,
   }
 }
