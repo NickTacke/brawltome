@@ -279,6 +279,13 @@ const attrNum = (r: Map<string, string>, k: string, fallback = 0): number => {
   return Number.isFinite(n) ? n : fallback
 }
 
+// Inner text of the first `<tag>...</tag>` in the XML, or null if absent.
+// Stops at the first non-'<' run; Kill tags only contain a number.
+function textElement(xml: string, tag: string): string | null {
+  const m = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))
+  return m ? m[1] : null
+}
+
 function collisionsFrom(xml: string, tag: string, kind: CollisionLine['kind']): CollisionLine[] {
   return extractElements(xml, tag).map((a) => {
     // Lines are stored as (X1, X2, Y) for horizontal or (X, Y1, Y2) for vertical.
@@ -340,24 +347,36 @@ function loadLevelGeometry(): Record<string, LevelGeometry> {
         }
       : null
 
-    const killFrom = (tag: string): number | null => {
-      const v = extractElements(xml, tag)[0]
-      if (!v) return null
-      const n = attrNum(v, 'X') || attrNum(v, 'Y')
-      return Number.isFinite(n) ? n : null
+    // Kill tags are expansions from the camera bounds, stored as element text
+    // (`<LeftKill>500</LeftKill>`), not attributes. Most levels omit them and
+    // rely on engine defaults; the values below are observed on levels that
+    // do declare them (e.g. Atlas_3v3). Without CameraBounds we cannot compute
+    // an absolute position, so we leave killBounds null in that case.
+    const killOffset = (tag: string, fallback: number): number => {
+      const text = textElement(xml, tag)
+      if (text === null) return fallback
+      const n = Number(text)
+      return Number.isFinite(n) ? n : fallback
     }
+    const killLeft = killOffset('LeftKill', 500)
+    const killRight = killOffset('RightKill', 500)
+    const killTop = killOffset('TopKill', 500)
+    const killBottom = killOffset('BottomKill', 300)
+    const killBounds = cameraBounds
+      ? {
+          left: cameraBounds.x - killLeft,
+          right: cameraBounds.x + cameraBounds.w + killRight,
+          top: cameraBounds.y - killTop,
+          bottom: cameraBounds.y + cameraBounds.h + killBottom,
+        }
+      : { left: null, right: null, top: null, bottom: null }
 
     out[levelName] = {
       levelName,
       assetDir: rootAttrs.get('AssetDir') ?? '',
       cameraBounds,
       spawnBotBounds,
-      killBounds: {
-        left: killFrom('LeftKill'),
-        right: killFrom('RightKill'),
-        top: killFrom('TopKill'),
-        bottom: killFrom('BottomKill'),
-      },
+      killBounds,
       respawns: extractElements(xml, 'Respawn').map((a) => ({
         x: attrNum(a, 'X'),
         y: attrNum(a, 'Y'),

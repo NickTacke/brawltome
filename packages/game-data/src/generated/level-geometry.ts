@@ -18,10 +18,10 @@ const data = {
       "h": 1350
     },
     "killBounds": {
-      "left": 0,
-      "right": 0,
-      "top": 0,
-      "bottom": 0
+      "left": -1250,
+      "right": 4650,
+      "top": -1250,
+      "bottom": 2200
     },
     "respawns": [
       {
@@ -102,10 +102,10 @@ const data = {
       "h": 1350
     },
     "killBounds": {
-      "left": 0,
-      "right": 0,
-      "top": 0,
-      "bottom": 0
+      "left": -1250,
+      "right": 6250,
+      "top": -1250,
+      "bottom": 2200
     },
     "respawns": [
       {
@@ -194,10 +194,10 @@ const data = {
       "h": 964.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3092,
+      "right": 3092,
+      "top": -2700,
+      "bottom": 1016
     },
     "respawns": [
       {
@@ -364,10 +364,10 @@ const data = {
       "h": 964.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3092,
+      "right": 3092,
+      "top": -2430,
+      "bottom": 1286
     },
     "respawns": [
       {
@@ -457,10 +457,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -502.5,
+      "right": 6502.45,
+      "top": -502.5,
+      "bottom": 3675.15
     },
     "respawns": [
       {
@@ -725,10 +725,10 @@ const data = {
       "h": 1401.65
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1944,
+      "right": 4624,
+      "top": -529.45,
+      "bottom": 3579.9
     },
     "respawns": [
       {
@@ -946,10 +946,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2022.15,
+      "right": 4987.300000000001,
+      "top": -972.5,
+      "bottom": 3207.75
     },
     "respawns": [
       {
@@ -1200,10 +1200,10 @@ const data = {
       "h": 1717.8500000000001
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2191.45,
+      "right": 5569.45,
+      "top": -1002.7,
+      "bottom": 3610.15
     },
     "respawns": [
       {
@@ -1533,10 +1533,10 @@ const data = {
       "h": 1244.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2524.65,
+      "right": 4204.65,
+      "top": -2047.55,
+      "bottom": 2022.5000000000002
     },
     "respawns": [
       {
@@ -1689,10 +1689,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1449.9,
+      "right": 4261.949999999999,
+      "top": -201.5,
+      "bottom": 3529.25
     },
     "respawns": [
       {
@@ -1775,10 +1775,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1770,
+      "right": 5100,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -1955,10 +1955,10 @@ const data = {
       "h": 2311
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1690,
+      "right": 4855,
+      "top": -1547.25,
+      "bottom": 2593.2
     },
     "respawns": [
       {
@@ -2217,10 +2217,10 @@ const data = {
       "h": 1078.3000000000002
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1938,
+      "right": 4528,
+      "top": -732.5,
+      "bottom": 3142.125
     },
     "respawns": [
       {
@@ -2366,10 +2366,10 @@ const data = {
       "h": 1244.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2285,
+      "right": 4045,
+      "top": -2028,
+      "bottom": 1770.125
     },
     "respawns": [
       {
@@ -2487,10 +2487,10 @@ const data = {
       "h": 1600
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -615.9,
+      "right": 3491.9,
+      "top": -500,
+      "bottom": 2048.1375
     },
     "respawns": [
       {
@@ -3097,10 +3097,10 @@ const data = {
       "h": 1770
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -4282.4,
+      "right": 2002.4,
+      "top": -247,
+      "bottom": 3525.7
     },
     "respawns": [
       {
@@ -3365,10 +3365,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1587.05,
+      "right": 4417.05,
+      "top": -62.05000000000001,
+      "bottom": 3850.05
     },
     "respawns": [
       {
@@ -3615,10 +3615,10 @@ const data = {
       "h": 600
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1505,
+      "right": 5225,
+      "top": -1400,
+      "bottom": 2623.125
     },
     "respawns": [
       {
@@ -3890,10 +3890,10 @@ const data = {
       "h": 1000
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2455,
+      "right": 4275,
+      "top": -1020,
+      "bottom": 3003.125
     },
     "respawns": [
       {
@@ -4060,10 +4060,10 @@ const data = {
       "h": 1347.75
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2965,
+      "right": 3985,
+      "top": 135,
+      "bottom": 4281.875
     },
     "respawns": [
       {
@@ -4230,10 +4230,10 @@ const data = {
       "h": 964.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3092,
+      "right": 3092,
+      "top": -2430,
+      "bottom": 1286
     },
     "respawns": [
       {
@@ -4351,10 +4351,10 @@ const data = {
       "h": 1640.25
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 4020,
+      "top": -1046.35,
+      "bottom": 2453.65
     },
     "respawns": [
       {
@@ -4499,10 +4499,10 @@ const data = {
       "h": 1050
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3108,
+      "right": 3108,
+      "top": -1967,
+      "bottom": 1767
     },
     "respawns": [
       {
@@ -4620,10 +4620,10 @@ const data = {
       "h": 1050
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3108,
+      "right": 3108,
+      "top": -1967,
+      "bottom": 1767
     },
     "respawns": [
       {
@@ -4909,10 +4909,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -5681,10 +5681,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -5767,10 +5767,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -6525,10 +6525,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -6625,10 +6625,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2693.1,
+      "right": 5133.1,
+      "top": -1372.7,
+      "bottom": 3559.4000000000005
     },
     "respawns": [
       {
@@ -6927,10 +6927,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2693.1,
+      "right": 5133.1,
+      "top": -1372.7,
+      "bottom": 3559.4000000000005
     },
     "respawns": [
       {
@@ -7261,10 +7261,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2062.5,
+      "right": 5022.55,
+      "top": -1092.5,
+      "bottom": 3492.5
     },
     "respawns": [
       {
@@ -7501,10 +7501,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -209.85000000000002,
+      "right": 3519.9500000000003,
+      "top": 820.3499999999999,
+      "bottom": 3180.45
     },
     "respawns": [
       {
@@ -7734,10 +7734,10 @@ const data = {
       "h": 1587.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1436.3,
+      "right": 2816.3500000000004,
+      "top": -920.55,
+      "bottom": 1781.9
     },
     "respawns": [
       {
@@ -7792,10 +7792,10 @@ const data = {
       "h": 1713
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -502.9,
+      "right": 3604.9,
+      "top": -500,
+      "bottom": 2048.1375
     },
     "respawns": [
       {
@@ -8231,10 +8231,10 @@ const data = {
       "h": 1120
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1775,
+      "right": 4555,
+      "top": -360,
+      "bottom": 3438.125
     },
     "respawns": [
       {
@@ -8429,10 +8429,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1474.9,
+      "right": 4329.1,
+      "top": -652.45,
+      "bottom": 2851.1
     },
     "respawns": [
       {
@@ -8521,10 +8521,10 @@ const data = {
       "h": 1400
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -165,
+      "right": 6165,
+      "top": 123,
+      "bottom": 3921.125
     },
     "respawns": [
       {
@@ -8635,10 +8635,10 @@ const data = {
       "h": 1050
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3168.57495117188,
+      "right": 3208.57495117187,
+      "top": -2024.09997558594,
+      "bottom": 1794.45007324219
     },
     "respawns": [
       {
@@ -9022,10 +9022,10 @@ const data = {
       "h": 1640.25
     },
     "killBounds": {
-      "left": 0,
-      "right": 0,
-      "top": 0,
-      "bottom": 0
+      "left": -1780,
+      "right": 4020,
+      "top": -1046.349975585938,
+      "bottom": 2453.650024414062
     },
     "respawns": [
       {
@@ -9178,10 +9178,10 @@ const data = {
       "h": 1747.7499999999998
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1962.5,
+      "right": 4642.5,
+      "top": -290.85,
+      "bottom": 3661.9625
     },
     "respawns": [
       {
@@ -9313,10 +9313,10 @@ const data = {
       "h": 1002.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1722.5,
+      "right": 4422.5,
+      "top": -272.1,
+      "bottom": 3682.9
     },
     "respawns": [
       {
@@ -9483,10 +9483,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3195.6,
+      "right": 4556.4,
+      "top": -1767.7,
+      "bottom": 2830.3
     },
     "respawns": [
       {
@@ -9940,10 +9940,10 @@ const data = {
       "h": 1050
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3108,
+      "right": 3108,
+      "top": -1967,
+      "bottom": 1767
     },
     "respawns": [
       {
@@ -10040,10 +10040,10 @@ const data = {
       "h": 1347.75
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2965,
+      "right": 3985,
+      "top": 135,
+      "bottom": 4281.875
     },
     "respawns": [
       {
@@ -10203,10 +10203,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2405,
+      "right": 4325,
+      "top": -1005,
+      "bottom": 3018.125
     },
     "respawns": [
       {
@@ -10296,10 +10296,10 @@ const data = {
       "h": 1000
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1968.725,
+      "right": 4308.725,
+      "top": -808.85,
+      "bottom": 2955.525
     },
     "respawns": [
       {
@@ -10508,10 +10508,10 @@ const data = {
       "h": 1747.7500000000002
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1736,
+      "right": 4416,
+      "top": -272.1,
+      "bottom": 3425.9
     },
     "respawns": [
       {
@@ -10643,10 +10643,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1429.8,
+      "right": 4312.349999999999,
+      "top": -502.5,
+      "bottom": 3332.5
     },
     "respawns": [
       {
@@ -10806,10 +10806,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1291.074951171875,
+      "right": 4451.074951171875,
+      "top": -345,
+      "bottom": 3122.46
     },
     "respawns": [
       {
@@ -10906,10 +10906,10 @@ const data = {
       "h": 1401.65
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1760,
+      "right": 4440,
+      "top": -600,
+      "bottom": 3050
     },
     "respawns": [
       {
@@ -11076,10 +11076,10 @@ const data = {
       "h": 1401.65
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1760,
+      "right": 4440,
+      "top": -600,
+      "bottom": 3050
     },
     "respawns": [
       {
@@ -11225,10 +11225,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1709.65,
+      "right": 4810.35,
+      "top": -52.69999999999999,
+      "bottom": 3852.3
     },
     "respawns": [
       {
@@ -11346,10 +11346,10 @@ const data = {
       "h": 680.3
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1495,
+      "right": 4275,
+      "top": -170.7,
+      "bottom": 3312.425
     },
     "respawns": [
       {
@@ -11425,10 +11425,10 @@ const data = {
       "h": 1717.8500000000001
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2610.95,
+      "right": 4067.95,
+      "top": -386.4,
+      "bottom": 3610.55
     },
     "respawns": [
       {
@@ -11588,10 +11588,10 @@ const data = {
       "h": 1640.25
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 4020,
+      "top": -1046.35,
+      "bottom": 2453.65
     },
     "respawns": [
       {
@@ -11744,10 +11744,10 @@ const data = {
       "h": 2216.94995117188
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -437.3499984741211,
+      "right": 3747.349952697759,
+      "top": 473.799987792969,
+      "bottom": 3254.5499877929688
     },
     "respawns": [
       {
@@ -11893,10 +11893,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1429.8,
+      "right": 4312.349999999999,
+      "top": -502.5,
+      "bottom": 3332.5
     },
     "respawns": [
       {
@@ -12070,10 +12070,10 @@ const data = {
       "h": 1448.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1846,
+      "right": 4306,
+      "top": -492.5,
+      "bottom": 3205.5
     },
     "respawns": [
       {
@@ -12582,10 +12582,10 @@ const data = {
       "h": 1448.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1846,
+      "right": 4306,
+      "top": -492.5,
+      "bottom": 3205.5
     },
     "respawns": [
       {
@@ -13126,10 +13126,10 @@ const data = {
       "h": 2216.94995117188
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -437.3499984741211,
+      "right": 3747.349952697759,
+      "top": 600,
+      "bottom": 3380.75
     },
     "respawns": [
       {
@@ -13457,10 +13457,10 @@ const data = {
       "h": 1000
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2285,
+      "right": 4045,
+      "top": -1500,
+      "bottom": 2298.125
     },
     "respawns": [
       {
@@ -13725,10 +13725,10 @@ const data = {
       "h": 680.3
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1495,
+      "right": 4275,
+      "top": -170.7,
+      "bottom": 3312.425
     },
     "respawns": [
       {
@@ -13839,10 +13839,10 @@ const data = {
       "h": 1717.8500000000001
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2610.95,
+      "right": 4067.95,
+      "top": -386.4,
+      "bottom": 3610.55
     },
     "respawns": [
       {
@@ -13957,10 +13957,10 @@ const data = {
       "h": 1717.8500000000001
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2610.95,
+      "right": 4067.95,
+      "top": -386.4,
+      "bottom": 3610.55
     },
     "respawns": [
       {
@@ -14075,10 +14075,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1320,
+      "right": 4480,
+      "top": -200,
+      "bottom": 3300
     },
     "respawns": [
       {
@@ -14221,10 +14221,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2028.8,
+      "right": 4847.849999999999,
+      "top": -743.05,
+      "bottom": 3180.2
     },
     "respawns": [
       {
@@ -14517,10 +14517,10 @@ const data = {
       "h": 1513.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1725,
+      "right": 5035,
+      "top": -562.4,
+      "bottom": 3477.6
     },
     "respawns": [
       {
@@ -14813,10 +14813,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1449.85,
+      "right": 4262.200000000001,
+      "top": -201.55,
+      "bottom": 3529.25
     },
     "respawns": [
       {
@@ -14883,10 +14883,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -609.425,
+      "right": 4069.4249999999997,
+      "top": -190,
+      "bottom": 2897.9
     },
     "respawns": [
       {
@@ -15067,10 +15067,10 @@ const data = {
       "h": 964.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3092,
+      "right": 3092,
+      "top": -2430,
+      "bottom": 1286
     },
     "respawns": [
       {
@@ -15167,10 +15167,10 @@ const data = {
       "h": 964.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3092,
+      "right": 3092,
+      "top": -2430,
+      "bottom": 1286
     },
     "respawns": [
       {
@@ -15260,10 +15260,10 @@ const data = {
       "h": 600
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -895,
+      "right": 2105,
+      "top": -875,
+      "bottom": 1050
     },
     "respawns": [
       {
@@ -15386,10 +15386,10 @@ const data = {
       "h": 680
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1514,
+      "right": 4254,
+      "top": -250,
+      "bottom": 3232
     },
     "respawns": [
       {
@@ -15542,10 +15542,10 @@ const data = {
       "h": 1050
     },
     "killBounds": {
-      "left": 0,
-      "right": 0,
-      "top": 0,
-      "bottom": 0
+      "left": -3308,
+      "right": 3308,
+      "top": -1867,
+      "bottom": 2317
     },
     "respawns": [
       {
@@ -15677,10 +15677,10 @@ const data = {
       "h": 1244.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -500,
+      "right": 3500,
+      "top": -2077,
+      "bottom": 410.5
     },
     "respawns": [
       {
@@ -15882,10 +15882,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -15996,10 +15996,10 @@ const data = {
       "h": 900
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1844,
+      "right": 1844,
+      "top": -1777,
+      "bottom": 535
     },
     "respawns": [
       {
@@ -16096,10 +16096,10 @@ const data = {
       "h": 900
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1844,
+      "right": 1844,
+      "top": -1777,
+      "bottom": 535
     },
     "respawns": [
       {
@@ -16182,10 +16182,10 @@ const data = {
       "h": 1267.7
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1902.65,
+      "right": 3980.35,
+      "top": -410.3,
+      "bottom": 3136.3875
     },
     "respawns": [
       {
@@ -16324,10 +16324,10 @@ const data = {
       "h": 680.3
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1495,
+      "right": 4275,
+      "top": -170.7,
+      "bottom": 3312.425
     },
     "respawns": [
       {
@@ -16417,10 +16417,10 @@ const data = {
       "h": 1850
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1864,
+      "right": 4064,
+      "top": -221.85000000000002,
+      "bottom": 3350.15
     },
     "respawns": [
       {
@@ -16524,10 +16524,10 @@ const data = {
       "h": 729.4
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1804,
+      "right": 3924,
+      "top": -604.3,
+      "bottom": 2855.2
     },
     "respawns": [
       {
@@ -16729,10 +16729,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2405,
+      "right": 4325,
+      "top": -1005,
+      "bottom": 3018.125
     },
     "respawns": [
       {
@@ -16822,10 +16822,10 @@ const data = {
       "h": 926.25
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -255,
+      "right": 5215,
+      "top": 22.600000000000023,
+      "bottom": 3336.975
     },
     "respawns": [
       {
@@ -16971,10 +16971,10 @@ const data = {
       "h": 1002.45
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1736,
+      "right": 4416,
+      "top": -272.1,
+      "bottom": 3425.9
     },
     "respawns": [
       {
@@ -17120,10 +17120,10 @@ const data = {
       "h": 2397.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1480.6,
+      "right": 5039.4,
+      "top": -52.69999999999999,
+      "bottom": 3852.3
     },
     "respawns": [
       {
@@ -17255,10 +17255,10 @@ const data = {
       "h": 680.3
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1495,
+      "right": 4275,
+      "top": -170.7,
+      "bottom": 3312.425
     },
     "respawns": [
       {
@@ -17362,10 +17362,10 @@ const data = {
       "h": 1513.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -670,
+      "right": 3900,
+      "top": 300,
+      "bottom": 3100
     },
     "respawns": [
       {
@@ -17581,10 +17581,10 @@ const data = {
       "h": 1050
     },
     "killBounds": {
-      "left": 0,
-      "right": 0,
-      "top": 0,
-      "bottom": 0
+      "left": -3308,
+      "right": 3308,
+      "top": -1867,
+      "bottom": 2317
     },
     "respawns": [
       {
@@ -17898,10 +17898,10 @@ const data = {
       "h": 1513.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1725,
+      "right": 5035,
+      "top": -562.4,
+      "bottom": 3477.6
     },
     "respawns": [
       {
@@ -18019,10 +18019,10 @@ const data = {
       "h": 1747.75
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2028.8,
+      "right": 4847.849999999999,
+      "top": -156.95,
+      "bottom": 3766.3
     },
     "respawns": [
       {
@@ -18182,10 +18182,10 @@ const data = {
       "h": 680.3
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1830,
+      "right": 4610,
+      "top": -155,
+      "bottom": 3705
     },
     "respawns": [
       {
@@ -18275,10 +18275,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -437.35,
+      "right": 3747.35,
+      "top": 473.79999999999995,
+      "bottom": 3254.55
     },
     "respawns": [
       {
@@ -18613,10 +18613,10 @@ const data = {
       "h": 2216.94995117188
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -437.3499984741211,
+      "right": 3747.349952697759,
+      "top": 473.799987792969,
+      "bottom": 3254.5499877929688
     },
     "respawns": [
       {
@@ -18916,10 +18916,10 @@ const data = {
       "h": 900
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -3302.5,
+      "right": 3302.5,
+      "top": -400,
+      "bottom": 3552.8125
     },
     "respawns": [
       {
@@ -19065,10 +19065,10 @@ const data = {
       "h": 1244.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2285,
+      "right": 4045,
+      "top": -1847.55,
+      "bottom": 1950.575
     },
     "respawns": [
       {
@@ -19347,10 +19347,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -19468,10 +19468,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2405,
+      "right": 4325,
+      "top": -1005,
+      "bottom": 3018.125
     },
     "respawns": [
       {
@@ -19589,10 +19589,10 @@ const data = {
       "h": 600
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1045,
+      "right": 2255,
+      "top": -1000,
+      "bottom": 1093.75
     },
     "respawns": [
       {
@@ -19841,10 +19841,10 @@ const data = {
       "h": 1000
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2564.65,
+      "right": 4243.35,
+      "top": -2475,
+      "bottom": 1592
     },
     "respawns": [
       {
@@ -20060,10 +20060,10 @@ const data = {
       "h": 1061
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -677,
+      "right": 3987,
+      "top": 290,
+      "bottom": 3151
     },
     "respawns": [
       {
@@ -20391,10 +20391,10 @@ const data = {
       "h": 1747.75
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2028.8,
+      "right": 4847.849999999999,
+      "top": -156.95,
+      "bottom": 3766.3
     },
     "respawns": [
       {
@@ -20554,10 +20554,10 @@ const data = {
       "h": 1513.9500000000003
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1780,
+      "right": 5090,
+      "top": -562.4,
+      "bottom": 3539.475
     },
     "respawns": [
       {
@@ -20872,10 +20872,10 @@ const data = {
       "h": 1713
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1690,
+      "right": 4855,
+      "top": -1547.25,
+      "bottom": 2593.2
     },
     "respawns": [
       {
@@ -21056,10 +21056,10 @@ const data = {
       "h": 1347.75
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1682.4,
+      "right": 4602.4,
+      "top": 135,
+      "bottom": 3907.7
     },
     "respawns": [
       {
@@ -21177,10 +21177,10 @@ const data = {
       "h": 943.25
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2650.9,
+      "right": 3871.5499999999997,
+      "top": -1885,
+      "bottom": 1935.0500000000002
     },
     "respawns": [
       {
@@ -21361,10 +21361,10 @@ const data = {
       "h": 1850
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1864,
+      "right": 4064,
+      "top": -221.85000000000002,
+      "bottom": 3350.15
     },
     "respawns": [
       {
@@ -21510,10 +21510,10 @@ const data = {
       "h": 1770
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -4282.4,
+      "right": 2002.4,
+      "top": -247,
+      "bottom": 3525.7
     },
     "respawns": [
       {
@@ -21712,10 +21712,10 @@ const data = {
       "h": 1347.75
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2965,
+      "right": 3985,
+      "top": 135,
+      "bottom": 4281.875
     },
     "respawns": [
       {
@@ -21903,10 +21903,10 @@ const data = {
       "h": 1387.5
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1429.8,
+      "right": 4312.349999999999,
+      "top": -502.5,
+      "bottom": 3332.5
     },
     "respawns": [
       {
@@ -22007,10 +22007,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1879.2,
+      "right": 3991.3500000000004,
+      "top": -515.45,
+      "bottom": 3064.8
     },
     "respawns": [
       {
@@ -22073,10 +22073,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1667.05,
+      "right": 3676.75,
+      "top": -725.25,
+      "bottom": 2855
     },
     "respawns": [
       {
@@ -22164,10 +22164,10 @@ const data = {
       "h": 1352.2
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2423.1,
+      "right": 4306.199999999999,
+      "top": -1005.05,
+      "bottom": 3065
     },
     "respawns": [
       {
@@ -22257,10 +22257,10 @@ const data = {
       "h": 2216.95
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -1002.6,
+      "right": 4472.550000000001,
+      "top": -315.3,
+      "bottom": 3268.35
     },
     "respawns": [
       {
@@ -22493,10 +22493,10 @@ const data = {
       "h": 2000
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -995,
+      "right": 4505,
+      "top": -100,
+      "bottom": 3231.25
     },
     "respawns": [
       {
@@ -22655,10 +22655,10 @@ const data = {
       "h": 2000
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -995,
+      "right": 4505,
+      "top": -100,
+      "bottom": 3231.25
     },
     "respawns": [
       {
@@ -22845,10 +22845,10 @@ const data = {
       "h": 2665
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2009.2,
+      "right": 5789.2,
+      "top": -1653.45,
+      "bottom": 3148.9000000000005
     },
     "respawns": [
       {
@@ -23211,10 +23211,10 @@ const data = {
       "h": 1244.05
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2285,
+      "right": 4045,
+      "top": -1847.55,
+      "bottom": 1950.575
     },
     "respawns": [
       {
@@ -23318,10 +23318,10 @@ const data = {
       "h": 300
     },
     "killBounds": {
-      "left": null,
-      "right": null,
-      "top": null,
-      "bottom": null
+      "left": -2887.5,
+      "right": 1278.1,
+      "top": -1029.5,
+      "bottom": 1551.15
     },
     "respawns": [
       {
