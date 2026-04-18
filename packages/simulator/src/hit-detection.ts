@@ -57,16 +57,12 @@ export function planAttackWindows(power: Power, attackerId: number, pressMs: num
     const end = p.activeEnd ?? p.activeStart
     if (end > maxEnd) maxEnd = end
   }
-  // Widen the window significantly to absorb positional drift from our
-  // knockback-free physics model. Real BH active-frame windows are tight
-  // (a few ms), but our entity positions drift from reality by ~hundreds
-  // of units; allowing the "attacker is near a target" check to span
-  // startup + active + a couple recovery ticks catches connecting hits
-  // that would have landed in the real game. This is a pragmatic
-  // compensation for the missing knockback physics, not an accurate
-  // model of BH's real timing.
-  const startMs = pressMs
-  const endMs = pressMs + Math.max(maxEnd + 3, 10) * FRAME_MS
+  // Widen the window by half a frame either side to absorb rounding at
+  // the 60Hz tick boundary. Now that knockback applies, we can be more
+  // faithful to BH's actual active-frame windows instead of the wider
+  // compensation the pre-knockback sim needed.
+  const startMs = pressMs + minStart * FRAME_MS - FRAME_MS / 2
+  const endMs = pressMs + maxEnd * FRAME_MS + FRAME_MS / 2
   return [{ attackerId, power, pressMs, hitboxIdx, activeStartMs: startMs, activeEndMs: endMs }]
 }
 

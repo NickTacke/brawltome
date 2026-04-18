@@ -12,6 +12,14 @@ export type EntityState = {
   facing: -1 | 1
   posture: Posture
   alive: boolean
+  // Accumulated damage percent. Feeds knockback scaling: outgoing hits
+  // launch harder the more damage the defender has taken. Reset to 0 on
+  // respawn. Capped at 700 per the game source.
+  damagePct: number
+  // Absolute ms at which the entity's input lock (from hitstun) ends.
+  // While ms < hitstunUntilMs the sim ignores this entity's inputs for
+  // attack/dodge purposes (movement still runs via physics).
+  hitstunUntilMs: number
 }
 
 // Snapshot of one entity at one tick; emitted by the simulator for external

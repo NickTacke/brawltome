@@ -4,6 +4,7 @@ import { detectAttackAttempts } from './attack-events'
 import { type AttackWindow, type LandedHit, checkWindow, planAttackWindows } from './hit-detection'
 import { InputDriver } from './input-driver'
 import { type ItemSlotState, advanceItemSlots, consumeSlot, findPickupSlot, makeItemSlots } from './item-sim'
+import { computeKnockback } from './knockback'
 import {
   DEFAULT_PHYSICS,
   type EntityPhysState,
@@ -46,6 +47,11 @@ export class Simulation {
   // will have a known legend (bots, corrupt replays); those stay undefined
   // and the resolver falls back to the base signature.
   private readonly legendName = new Map<number, string>()
+  // Cached per-entity strength and weight stats from their legend, used by
+  // the knockback formula (attacker strength scales outgoing impulse,
+  // defender weight reduces incoming).
+  private readonly entityStrength = new Map<number, number>()
+  private readonly entityWeight = new Map<number, number>()
   // Union of every entity's weaponOne + weaponTwo (de-duplicated, insertion-
   // order). Slots cycle through this pool. 'Base' is implicit - an unarmed
   // state is always reachable by dropping or respawning.
@@ -103,6 +109,10 @@ export class Simulation {
       const heroId = e.playerData.heroes[0]?.heroId
       const legend = heroId !== undefined ? getLegendById(heroId) : undefined
       if (legend?.heroName) this.legendName.set(e.id, legend.heroName)
+      if (legend) {
+        this.entityStrength.set(e.id, legend.strength)
+        this.entityWeight.set(e.id, legend.weight)
+      }
       const own = new Set<string>()
       if (legend?.weaponOne) {
         weaponSet.add(legend.weaponOne)
@@ -122,6 +132,8 @@ export class Simulation {
         facing: 1,
         posture: 'air',
         alive: true,
+        damagePct: 0,
+        hitstunUntilMs: 0,
       })
       this.physState.set(e.id, makePhysState())
     }
@@ -148,13 +160,37 @@ export class Simulation {
           if (e.id !== w.attackerId && e.team !== attacker.team) opponents.push(e)
         }
         const hits = checkWindow(w, ms, attacker, opponents, this.hitCooldowns)
-        if (hits.length > 0) this.landedHits.push(...hits)
+        if (hits.length === 0) continue
+        this.landedHits.push(...hits)
+        // Apply knockback + hitstun + damage accumulator to each defender.
+        for (const h of hits) {
+          const defender = this.entities.get(h.defenderId)
+          if (!defender) continue
+          const kb = computeKnockback({
+            power: w.power,
+            hitboxIdx: w.hitboxIdx,
+            attacker,
+            defender,
+            attackerStrength: this.entityStrength.get(w.attackerId) ?? 5,
+            defenderWeight: this.entityWeight.get(h.defenderId) ?? 5,
+          })
+          defender.vel.x = kb.vx
+          defender.vel.y = kb.vy
+          defender.posture = 'air'
+          defender.hitstunUntilMs = ms + kb.hitstunMs
+          defender.damagePct = Math.min(700, defender.damagePct + h.baseDamage)
+        }
       }
       for (const entity of this.entities.values()) {
         if (!entity.alive) continue
-        const flags = this.driver.flagsAt(entity.id, ms)
+        const rawFlags = this.driver.flagsAt(entity.id, ms)
         const phys = this.physState.get(entity.id)
         if (!phys) continue
+        // While in hitstun the defender can't initiate attacks/dodges or
+        // start pickups. Movement bits are also stripped so the sim's
+        // momentum carries them (matches BH where hitstun locks inputs).
+        const inHitstun = ms < entity.hitstunUntilMs
+        const flags = inHitstun ? 0 : rawFlags
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
         const priorHeld = held
 
@@ -221,11 +257,19 @@ export class Simulation {
         // If the kill check is about to fire, the entity loses its weapon.
         // Check before the respawn mutates position so we don't need to
         // inspect the return value.
-        if (held !== 'Base' && isOutOfBounds(entity.pos, this.geometry)) {
-          this.heldWeapon.set(entity.id, 'Base')
-          const tl = this.weaponChangeTimeline.get(entity.id) ?? []
-          tl.push({ ms, weapon: 'Base' })
-          this.weaponChangeTimeline.set(entity.id, tl)
+        const willDie = isOutOfBounds(entity.pos, this.geometry)
+        if (willDie) {
+          if (held !== 'Base') {
+            this.heldWeapon.set(entity.id, 'Base')
+            const tl = this.weaponChangeTimeline.get(entity.id) ?? []
+            tl.push({ ms, weapon: 'Base' })
+            this.weaponChangeTimeline.set(entity.id, tl)
+          }
+          // Reset damage accumulator and clear hitstun on death; otherwise
+          // the knockback formula keeps scaling off stale damage after
+          // respawn and the entity stays input-locked in mid-air.
+          entity.damagePct = 0
+          entity.hitstunUntilMs = 0
         }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
         this.physState.set(entity.id, after)
