@@ -57,6 +57,13 @@
       "when": 1775668964799,
       "tag": "0007_magical_stark_industries",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776461294074,
+      "tag": "0008_dry_wasp",
+      "breakpoints": true
     }
   ]
 }

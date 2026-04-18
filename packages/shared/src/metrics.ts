@@ -16,6 +16,8 @@ export interface MetricsRegistry {
   snapshotAllQueues(): Promise<Record<string, QueueMetricSnapshot>>
   setScalar(key: string, value: number): Promise<void>
   getScalar(key: string): Promise<number | null>
+  incrementCounter(key: string): Promise<void>
+  snapshotCounters(): Promise<Record<string, number>>
 }
 
 export function createMetricsRegistry(redis: Redis): MetricsRegistry {
@@ -50,5 +52,24 @@ export function createMetricsRegistry(redis: Redis): MetricsRegistry {
     return v === null ? null : Number(v)
   }
 
-  return { incrementQueue, snapshotQueue, snapshotAllQueues, setScalar, getScalar }
+  async function incrementCounter(key: string): Promise<void> {
+    await redis.hincrby('metrics:counters', key, 1)
+  }
+
+  async function snapshotCounters(): Promise<Record<string, number>> {
+    const data = await redis.hgetall('metrics:counters')
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(data)) out[k] = Number(v)
+    return out
+  }
+
+  return {
+    incrementQueue,
+    snapshotQueue,
+    snapshotAllQueues,
+    setScalar,
+    getScalar,
+    incrementCounter,
+    snapshotCounters,
+  }
 }

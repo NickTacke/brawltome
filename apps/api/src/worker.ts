@@ -2,10 +2,13 @@ import { BhApiClient } from '@brawltome/bhapi'
 import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
 import { createPlayerLinkRepo, resolveSteamLink } from '@brawltome/identity'
+import { backfillPending, createMatchRepo } from '@brawltome/matchmaking'
 import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
 import { startJanitor } from '@brawltome/ranking'
-import { createMetricsRegistry, createQueue, initGameData } from '@brawltome/shared'
+import { type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
+import { createMetricsRegistry, createQueue, createR2Client, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
+import { readMatchmakingConfig } from './matchmaking-config'
 
 const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) {
@@ -102,6 +105,96 @@ const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'b
   },
 )
 
+export interface ActiveSimulator {
+  version: number
+  supportedFormatVersions: readonly number[]
+  run(parsed: ParsedReplay, raw: Uint8Array): Promise<unknown>
+}
+
+// Function form stops TS narrowing to `never` once a simulator is wired up.
+export function getActiveSimulator(): ActiveSimulator | null {
+  return null
+}
+
+const matchmakingConfig = readMatchmakingConfig()
+const r2 = createR2Client(matchmakingConfig.r2)
+const matchmakingLive = matchmakingConfig.enabled && !!r2
+const matchRepo = matchmakingLive ? createMatchRepo(db) : null
+
+const simulateQueue =
+  matchmakingLive && matchRepo && r2
+    ? createQueue<{ matchSlug: string; formatVersion: number }>(
+        newRedis(),
+        'match-simulate',
+        async (data) => {
+          const sim = getActiveSimulator()
+          if (!sim) return
+          if (!sim.supportedFormatVersions.includes(data.formatVersion)) return
+          console.log(`[queue] match-simulate ${data.matchSlug} (fmt=${data.formatVersion})`)
+          const row = await matchRepo.findBySlug(data.matchSlug)
+          if (!row) return
+          const raw = await r2.get(row.replayStorageKey)
+          const parsed = parseReplay(raw)
+          const stats = await sim.run(parsed, raw)
+          const statsKey = `stats/${row.slug}.json`
+          await r2.put(statsKey, new TextEncoder().encode(JSON.stringify(stats)), {
+            contentType: 'application/json',
+          })
+          await matchRepo.markParsed(row.slug, {
+            detailedStatsKey: statsKey,
+            simVersion: sim.version,
+            simRanAt: new Date(),
+          })
+        },
+        {
+          concurrency: 1,
+          retries: 2,
+          backoffMs: 2000,
+          maxDepth: 1000,
+          dedupKey: (d) => d.matchSlug,
+          metrics,
+        },
+      )
+    : null
+
+const backfillQueue =
+  matchmakingLive && matchRepo && r2
+    ? createQueue<{ matchSlug: string }>(
+        newRedis(),
+        'match-backfill-parse',
+        async (data) => {
+          const row = await matchRepo.findBySlug(data.matchSlug)
+          if (!row || row.parseStatus !== 'pending') return
+          console.log(`[queue] match-backfill-parse ${row.slug} (fmt=${row.formatVersion})`)
+          await backfillPending(
+            {
+              matchRepo,
+              r2Get: (k) => r2.get(k),
+              parse: (raw) => parseReplay(raw),
+            },
+            row,
+          )
+          const sim = getActiveSimulator()
+          if (simulateQueue && sim && row.formatVersion && sim.supportedFormatVersions.includes(row.formatVersion)) {
+            await simulateQueue.enqueue({
+              matchSlug: row.slug,
+              formatVersion: row.formatVersion,
+            })
+          }
+        },
+        {
+          concurrency: 1,
+          retries: 2,
+          backoffMs: 2000,
+          maxDepth: 1000,
+          dedupKey: (d) => d.matchSlug,
+          metrics,
+        },
+      )
+    : null
+
+console.log(`[worker] matchmaking: ${matchmakingLive ? 'ENABLED' : 'disabled'}`)
+
 let bhapiMetricsTimer: Timer | null = null
 let bhapiMetricsStopped = false
 
@@ -124,7 +217,10 @@ bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
 console.log('Worker starting...')
 await bhapi.init()
 await initGameData(db, bhapi)
-Promise.all([rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]).catch(console.error)
+const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]
+if (backfillQueue) starts.push(backfillQueue.start())
+if (simulateQueue) starts.push(simulateQueue.start())
+Promise.all(starts).catch(console.error)
 
 const stopJanitor =
   process.env.DISABLE_JANITOR === '1'
@@ -139,6 +235,8 @@ process.on('SIGINT', async () => {
   statsQueue.stop()
   clanQueue.stop()
   steamLinkQueue.stop()
+  backfillQueue?.stop()
+  simulateQueue?.stop()
   await stopJanitor()
   await metricsRedis.quit().catch(() => {})
   await bhapiRedis.quit().catch(() => {})
@@ -146,6 +244,7 @@ process.on('SIGINT', async () => {
   process.exit(0)
 })
 
+const matchmakingQueues = matchmakingLive ? ', match-backfill-parse(1), match-simulate(1)' : ''
 console.log(
-  'Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1). Janitor active.',
+  `Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1)${matchmakingQueues}. Janitor active.`,
 )
