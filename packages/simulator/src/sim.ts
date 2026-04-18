@@ -274,11 +274,15 @@ export class Simulation {
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
         const priorHeld = held
 
-        // Pickup: overlap-based. Only unarmed entities can pick up, and only
-        // weapons they own (their legend's weaponOne/weaponTwo). The
-        // findPickupSlot call also gates on the match-start countdown so
-        // nobody grabs an item at t=0.
-        if (held === 'Base' && this.weaponPool.length > 0) {
+        // Pickup: the entity must PRESS PickUpThrow while unarmed and over
+        // an available item slot. Walking over a weapon does not auto-grab
+        // it in BH; the player has to intent-press the pickup button.
+        // Edge-triggered so holding the button through a slot doesn't spam
+        // re-picks on subsequent ticks. findPickupSlot also gates on the
+        // match-start countdown.
+        const pickupNow = (flags & InputFlag.PickUpThrow) !== 0
+        const pickupPrev = (phys.prevFlags & InputFlag.PickUpThrow) !== 0
+        if (pickupNow && !pickupPrev && held === 'Base' && this.weaponPool.length > 0) {
           const owned = this.ownedWeapons.get(entity.id) ?? new Set<string>()
           const slotIdx = findPickupSlot(entity.pos, this.itemSlots, this.weaponPool, owned, ms)
           if (slotIdx !== null) {
