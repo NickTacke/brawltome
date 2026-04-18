@@ -51,6 +51,19 @@ export type Power = {
   aoeRadiusY: number[]
   centerOffsetX: number[]
   centerOffsetY: number[]
+  // Per-hitbox-slot launch direction offsets. The impulse vector for a
+  // landed hit points from (ImpulseOffsetX * facing, ImpulseOffsetY)
+  // scaled by magnitude from fixedImpulse + variableImpulse * damagePct.
+  impulseOffsetX: number[]
+  impulseOffsetY: number[]
+  // Max directional-influence angle the defender can tilt the launch by.
+  // 0 means DI is disabled for this power.
+  diMaxAngle: number
+  // Some signatures bypass the attacker's strength multiplier (projectile
+  // weapons with fixed damage, e.g. fireballs).
+  ignoreStrength: boolean
+  // If true, knockback angle snaps to the nearest 45-degree step.
+  lockTo45Degrees: boolean
   isAirPower: boolean
   isSignature: boolean
   isMultihit: boolean
