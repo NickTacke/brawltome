@@ -13,6 +13,7 @@
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/clan": "workspace:*",
         "@brawltome/database": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "@brawltome/identity": "workspace:*",
         "@brawltome/matchmaking": "workspace:*",
         "@brawltome/player": "workspace:*",
@@ -171,6 +172,12 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/game-data": {
+      "name": "@brawltome/game-data",
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/replay-format": {
       "name": "@brawltome/replay-format",
       "devDependencies": {
@@ -282,6 +289,8 @@
     "@brawltome/desktop": ["@brawltome/desktop@workspace:apps/desktop"],
 
     "@brawltome/discord-bot": ["@brawltome/discord-bot@workspace:apps/discord-bot"],
+
+    "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
 
     "@brawltome/identity": ["@brawltome/identity@workspace:packages/contexts/identity"],
 

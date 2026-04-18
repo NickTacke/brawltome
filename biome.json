@@ -22,6 +22,6 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", "dist", ".next", "drizzle", "research"]
+    "ignore": ["node_modules", "dist", ".next", "drizzle", "research", "packages/game-data/src/generated"]
   }
 }

@@ -242,6 +242,88 @@ describe('ingestReplay', () => {
     ).rejects.toMatchObject({ code: 'validation_error' })
   })
 
+  test('rejects unknown heroId when knownHeroIds is provided', async () => {
+    const bad: ParsedReplay = {
+      ...validParsed,
+      entities: validParsed.entities.map((e, i) =>
+        i === 0
+          ? {
+              ...e,
+              playerData: {
+                ...e.playerData,
+                heroes: [{ ...e.playerData.heroes[0], heroId: 99999 }],
+              },
+            }
+          : e,
+      ),
+    }
+    await expect(
+      ingestReplay(
+        {
+          matchRepo: mockRepo(),
+          r2Put: mock(async () => {}),
+          reparseRaw: () => bad,
+          knownHeroIds: new Set([18, 52, 16, 65]),
+        },
+        {
+          userId: 'u1',
+          parsedReplay: bad,
+          entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
+          rawBytes: fakeRaw,
+          formatVersion: 264,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'validation_error' })
+  })
+
+  test('rejects unknown levelId when knownLevelIds is provided', async () => {
+    const bad = { ...validParsed, levelId: 99999 }
+    await expect(
+      ingestReplay(
+        {
+          matchRepo: mockRepo(),
+          r2Put: mock(async () => {}),
+          reparseRaw: () => bad,
+          knownLevelIds: new Set([223]),
+        },
+        {
+          userId: 'u1',
+          parsedReplay: bad,
+          entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
+          rawBytes: fakeRaw,
+          formatVersion: 264,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'validation_error' })
+  })
+
+  test('accepts when knownHeroIds/knownLevelIds are not provided (backwards-compat)', async () => {
+    // Use deliberately fake IDs to prove the legacy code path actually skips
+    // validation, not that the IDs happen to be in some default allowlist.
+    const fakeIds: ParsedReplay = {
+      ...validParsed,
+      levelId: 99999,
+      entities: validParsed.entities.map((e) => ({
+        ...e,
+        playerData: {
+          ...e.playerData,
+          heroes: [{ ...e.playerData.heroes[0], heroId: 99998 }],
+        },
+      })),
+    }
+    const res = await ingestReplay(
+      { matchRepo: mockRepo(), r2Put: mock(async () => {}), reparseRaw: () => fakeIds },
+      {
+        userId: 'u1',
+        parsedReplay: fakeIds,
+        entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
+        rawBytes: fakeRaw,
+        formatVersion: 264,
+      },
+    )
+    expect(res.slug).toMatch(/^[0-9A-Za-z]{9}$/)
+  })
+
   test('shutout: losing team has zero KOs, winner still inferred', async () => {
     const shutout: ParsedReplay = {
       ...validParsed,
