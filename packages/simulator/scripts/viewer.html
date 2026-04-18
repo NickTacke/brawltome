@@ -104,16 +104,43 @@
       const a = w2c(c.x1, c.y1); const b2 = w2c(c.x2, c.y2)
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke()
     }
-    ctx.fillStyle = '#ca6'
-    for (const s of geo.itemSpawns) {
-      const p = w2c(s.x, s.y)
-      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill()
-    }
+    // Item dots: only render items that are actually present (available on
+    // their landed platform). Colour by weapon family so it's obvious what
+    // a player would pick up. Items that were just consumed and are
+    // respawning aren't drawn.
+    // (The item render is now per-frame - see drawItems - but we keep this
+    // block empty to leave geometry rendering intact.)
     ctx.strokeStyle = '#468'; ctx.lineWidth = 1
     for (const r of geo.respawns) {
       const p = w2c(r.x, r.y)
       ctx.beginPath(); ctx.moveTo(p.x - 5, p.y); ctx.lineTo(p.x + 5, p.y)
       ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x, p.y + 5); ctx.stroke()
+    }
+  }
+
+  function drawItems(frame) {
+    if (!frame || !frame.items) return
+    const weaponColours = {
+      Sword: '#dd6', Hammer: '#ea6', Spear: '#6de', Bow: '#ae5',
+      Axe: '#c86', Gauntlets: '#e8d', Katar: '#d8a', Pistol: '#9ce',
+      Lance: '#de8', Cannon: '#f80', Orb: '#a9f', Scythe: '#b8e',
+      Chakram: '#ad6', Greatsword: '#db4', Boots: '#c94',
+    }
+    for (const item of frame.items) {
+      if (!item.available) continue
+      const p = w2c(item.x, item.y)
+      const sc = state.camera.scale
+      ctx.fillStyle = weaponColours[item.weapon] || '#ca6'
+      ctx.strokeStyle = '#000'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 6 * sc, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#ddd'
+      ctx.font = '10px ui-monospace'
+      ctx.textAlign = 'center'
+      ctx.fillText(item.weapon, p.x, p.y - 12 * sc)
     }
   }
 
@@ -169,6 +196,7 @@
     if (!state.data) return
     drawGeometry(state.data.geometry)
     const frame = state.data.frames[state.frameIdx]
+    drawItems(frame)
     drawEntities(frame)
     drawHitFlashes(frame && frame.ms || 0)
   }
@@ -232,8 +260,15 @@
     if (state.playing && state.data) {
       const dt = state.lastTs ? ts - state.lastTs : 16.67
       const frameMs = 16.667
-      const advance = Math.max(1, Math.round((dt * state.speed) / frameMs))
-      setFrame(state.frameIdx + advance)
+      // Accumulate fractional frames so speeds below 1x actually run
+      // below 1x. Math.max(1, ...) on a per-rAF basis would otherwise
+      // pin 0.25x to one frame per animation tick (= 1x real).
+      state.frameAcc = (state.frameAcc || 0) + (dt * state.speed) / frameMs
+      const advance = Math.floor(state.frameAcc)
+      if (advance !== 0) {
+        state.frameAcc -= advance
+        setFrame(state.frameIdx + advance)
+      }
       if (state.frameIdx >= state.data.frames.length - 1) {
         state.playing = false; playBtn.textContent = '▶'
       }
@@ -243,14 +278,22 @@
   }
   requestAnimationFrame(tick)
 
+  // Skip the 6000 ms pregame countdown by default. Scrubber still has the
+  // full frame range as its max so the user can drag back to inspect the
+  // frozen countdown frames if needed, but both initial position and the
+  // slider's lower bound start at countdown end.
+  const COUNTDOWN_SKIP_MS = 5000
+
   document.getElementById('file').addEventListener('change', async (e) => {
     const f = e.target.files && e.target.files[0]
     if (!f) return
     const text = await f.text()
     state.data = JSON.parse(text)
-    state.frameIdx = 0
+    const startIdx = state.data.frames.findIndex((fr) => fr.ms >= COUNTDOWN_SKIP_MS)
+    state.frameIdx = startIdx > 0 ? startIdx : 0
+    scrub.min = '0'
     scrub.max = String(state.data.frames.length - 1)
-    fitCamera(state.data.geometry); setFrame(0)
+    fitCamera(state.data.geometry); setFrame(state.frameIdx)
   })
 
   playBtn.addEventListener('click', () => {
@@ -259,11 +302,15 @@
     playBtn.textContent = state.playing ? '⏸' : '▶'
   })
 
-  scrub.addEventListener('input', () => { setFrame(Number(scrub.value)) })
+  scrub.addEventListener('input', () => {
+    state.frameAcc = 0
+    setFrame(Number(scrub.value))
+  })
 
   for (const btn of document.querySelectorAll('.speed button')) {
     btn.addEventListener('click', () => {
       state.speed = Number(btn.dataset.speed)
+      state.frameAcc = 0
       document.querySelectorAll('.speed button').forEach((b) => b.classList.remove('on'))
       btn.classList.add('on')
     })

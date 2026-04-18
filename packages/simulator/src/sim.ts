@@ -1,7 +1,7 @@
 import { type LevelGeometry, getLegendById, getPowerById } from '@brawltome/game-data'
 import { InputFlag, type ParsedReplay } from '@brawltome/replay-format'
 import { detectAttackAttempts } from './attack-events'
-import { type AttackWindow, type LandedHit, checkWindow, planAttackWindows } from './hit-detection'
+import { type AttackWindow, type LandedHit, checkWindow, detectClash, planAttackWindows } from './hit-detection'
 import { InputDriver } from './input-driver'
 import { type ItemSlotState, advanceItemSlots, consumeSlot, findPickupSlot, makeItemSlots } from './item-sim'
 import { computeKnockback } from './knockback'
@@ -166,14 +166,73 @@ export class Simulation {
         continue
       }
       advanceItemSlots(this.itemSlots, ms, this.weaponPool.length)
-      // Hit detection: walk every live attack window and check overlap
-      // against opponents. Prune spent windows in-place.
+
+      // Prune spent hit-detection windows first.
+      for (let i = this.activeWindows.length - 1; i >= 0; i--) {
+        if (ms > this.activeWindows[i].activeEndMs) this.activeWindows.splice(i, 1)
+      }
+
+      // Clash pass: any two cross-team windows whose hitboxes overlap
+      // on this tick cancel each other and apply ClashLight / ClashHeavy
+      // knockback + hitstun to both attackers (no damage). After this
+      // runs, the clashed windows are removed so the normal hit check
+      // below doesn't also register them as landed hits.
+      const clashed = new Set<AttackWindow>()
+      for (let i = 0; i < this.activeWindows.length; i++) {
+        const a = this.activeWindows[i]
+        if (clashed.has(a)) continue
+        if (ms < a.activeStartMs) continue
+        const aAttacker = this.entities.get(a.attackerId)
+        if (!aAttacker || !aAttacker.alive) continue
+        for (let j = i + 1; j < this.activeWindows.length; j++) {
+          const b = this.activeWindows[j]
+          if (clashed.has(b)) continue
+          if (ms < b.activeStartMs) continue
+          const bAttacker = this.entities.get(b.attackerId)
+          if (!bAttacker || !bAttacker.alive) continue
+          const clashPower = detectClash(a, aAttacker, b, bAttacker)
+          if (!clashPower) continue
+          // Apply clash-as-hit to each entity, using the OTHER entity as
+          // the attacker source for the knockback direction.
+          for (const [atk, def, win] of [
+            [bAttacker, aAttacker, a],
+            [aAttacker, bAttacker, b],
+          ] as const) {
+            const kb = computeKnockback({
+              power: clashPower,
+              hitboxIdx: 0,
+              attacker: atk,
+              defender: def,
+              attackerStrength: this.entityStrength.get(atk.id) ?? 5,
+              defenderWeight: this.entityWeight.get(def.id) ?? 5,
+            })
+            def.vel.x = kb.vx
+            def.vel.y = kb.vy
+            def.posture = 'air'
+            def.hitstunUntilMs = ms + kb.hitstunMs
+            def.damagePct = Math.min(700, def.damagePct + (clashPower.baseDamage[0] ?? 0))
+            this.landedHits.push({
+              attackerId: atk.id,
+              defenderId: def.id,
+              ms,
+              powerId: clashPower.powerId,
+              baseDamage: clashPower.baseDamage[0] ?? 0,
+            })
+          }
+          clashed.add(a)
+          clashed.add(b)
+          break
+        }
+      }
+      for (const w of clashed) {
+        const idx = this.activeWindows.indexOf(w)
+        if (idx >= 0) this.activeWindows.splice(idx, 1)
+      }
+
+      // Normal hit detection: walk remaining live windows and check overlap
+      // against opponents' body boxes.
       for (let i = this.activeWindows.length - 1; i >= 0; i--) {
         const w = this.activeWindows[i]
-        if (ms > w.activeEndMs) {
-          this.activeWindows.splice(i, 1)
-          continue
-        }
         const attacker = this.entities.get(w.attackerId)
         if (!attacker || !attacker.alive) continue
         const opponents: EntityState[] = []
@@ -323,6 +382,18 @@ export class Simulation {
   // entry. Diagnostic-only.
   weaponChangesByEntity(): ReadonlyMap<number, readonly { ms: number; weapon: string }[]> {
     return this.weaponChangeTimeline
+  }
+
+  // Snapshot of each item slot's landed position + current availability
+  // + current weapon, for the dev viewer. Landed position is the platform
+  // level the item rests on after falling from its XML air spawn.
+  itemSlotSnapshots(nowMs: number): { x: number; y: number; weapon: string; available: boolean }[] {
+    return this.itemSlots.map((s) => ({
+      x: s.landedPos.x,
+      y: s.landedPos.y,
+      weapon: this.weaponPool[s.weaponIndex] ?? 'Base',
+      available: s.status === 'available' && nowMs >= 6000,
+    }))
   }
 
   // Every landed hit the detector recorded, in match order.

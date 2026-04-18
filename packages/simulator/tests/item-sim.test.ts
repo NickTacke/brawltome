@@ -45,8 +45,12 @@ describe('findPickupSlot', () => {
 
   test('area-style rolling slot respects its declared W/H', () => {
     const slots = makeItemSlots(makeGeo([{ kind: 'rolling', x: 0, y: 0, w: 600, h: 40 }]), 1)
-    expect(findPickupSlot({ x: 280, y: 0 }, slots, ['Sword'], anyWeapon)).toBe(0)
-    expect(findPickupSlot({ x: 400, y: 0 }, slots, ['Sword'], anyWeapon)).toBeNull()
+    // Rolling slots start in 'respawning' state until their first cycle
+    // elapses post-countdown; advance to clear that before testing the
+    // width/height check.
+    advanceItemSlots(slots, 30000, 1)
+    expect(findPickupSlot({ x: 280, y: 0 }, slots, ['Sword'], anyWeapon, 30000)).toBe(0)
+    expect(findPickupSlot({ x: 400, y: 0 }, slots, ['Sword'], anyWeapon, 30000)).toBeNull()
   })
 
   test('respawning slot is not pickable', () => {

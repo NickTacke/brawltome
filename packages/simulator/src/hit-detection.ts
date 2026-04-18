@@ -1,4 +1,4 @@
-import type { Power } from '@brawltome/game-data'
+import { type Power, getPowerByName } from '@brawltome/game-data'
 import type { EntityState } from './types'
 
 // First-pass hitbox simulation. The real BH pipeline (per the decompiled
@@ -110,6 +110,47 @@ function overlaps(
   brh: number,
 ): boolean {
   return Math.abs(ax - bx) <= arw + brw && Math.abs(ay - by) <= arh + brh
+}
+
+// World-space hitbox AABB for an active attack window.
+export type HitboxAabb = {
+  cx: number
+  cy: number
+  halfW: number
+  halfH: number
+}
+
+export function windowHitbox(window: AttackWindow, attacker: EntityState): HitboxAabb | null {
+  const { power, hitboxIdx } = window
+  const halfW = power.aoeRadiusX[hitboxIdx] ?? 0
+  const halfH = power.aoeRadiusY[hitboxIdx] ?? 0
+  if (halfW <= 0 || halfH <= 0) return null
+  const cx = attacker.pos.x + (power.centerOffsetX[hitboxIdx] ?? 0) * attacker.facing
+  const cy = attacker.pos.y + (power.centerOffsetY[hitboxIdx] ?? 0)
+  return { cx, cy, halfW, halfH }
+}
+
+// If a pair of hitboxes overlap we treat it as a clash: both attacks are
+// replaced by ClashLight (or ClashHeavy when both isSignature), neither
+// side takes baseDamage from the original hit, and each attacker gets the
+// clash power's knockback + hitstun. Caller walks pairs of different-team
+// windows and invokes this for every overlap.
+export function detectClash(
+  aWindow: AttackWindow,
+  aAttacker: EntityState,
+  bWindow: AttackWindow,
+  bAttacker: EntityState,
+): Power | null {
+  if (aAttacker.team === bAttacker.team) return null
+  const aBox = windowHitbox(aWindow, aAttacker)
+  const bBox = windowHitbox(bWindow, bAttacker)
+  if (!aBox || !bBox) return null
+  if (!overlaps(aBox.cx, aBox.cy, aBox.halfW, aBox.halfH, bBox.cx, bBox.cy, bBox.halfW, bBox.halfH)) {
+    return null
+  }
+  const bothSig = aWindow.power.isSignature && bWindow.power.isSignature
+  const name = bothSig ? 'ClashHeavy' : 'ClashLight'
+  return getPowerByName(name) ?? null
 }
 
 // Checks every live AttackWindow at `nowMs`. For each window whose active

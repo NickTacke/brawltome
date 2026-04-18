@@ -57,13 +57,14 @@ type Frame = {
     inHitstun: boolean
     heldWeapon: string
   }[]
+  items: { x: number; y: number; weapon: string; available: boolean }[]
 }
 
 const frames: Frame[] = []
 let currentFrame: Frame | null = null
 for (const t of sim.ticks()) {
   if (currentFrame === null || currentFrame.ms !== t.ms) {
-    currentFrame = { ms: t.ms, entities: [] }
+    currentFrame = { ms: t.ms, entities: [], items: sim.itemSlotSnapshots(t.ms) }
     frames.push(currentFrame)
   }
   currentFrame.entities.push({
