@@ -258,22 +258,28 @@ function loadPowers(): Power[] {
 
 function loadHurtboxes(): Hurtbox[] {
   const { header, rows } = parseBmgCsv(findCsvByLabel('Game', 'hurtboxTypes'))
-  const idx = (n: string) => header.indexOf(n)
-  const nameIdx = idx('HurtboxName')
-  const idIdx = idx('HurtboxID')
-  const animClassIdx = idx('AnimClass')
-  const animNameIdx = idx('AnimName')
-  const widthIdx = idx('Width')
-  const heightIdx = idx('Height')
+  const idx = (n: string) => {
+    const i = header.indexOf(n)
+    if (i === -1) throw new Error(`hurtboxTypes: column ${n} not found in header`)
+    return i
+  }
+  const c = {
+    name: idx('HurtboxName'),
+    id: idx('HurtboxID'),
+    animClass: idx('AnimClass'),
+    animName: idx('AnimName'),
+    width: idx('Width'),
+    height: idx('Height'),
+  }
   return rows
-    .filter((r) => r[nameIdx] && r[nameIdx] !== 'Template')
+    .filter((r) => r[c.name] && r[c.name] !== 'Template')
     .map((r) => ({
-      hurtboxName: col(r, nameIdx),
-      hurtboxId: colNum(r, idIdx),
-      animClass: col(r, animClassIdx),
-      animName: col(r, animNameIdx),
-      width: colNum(r, widthIdx),
-      height: colNum(r, heightIdx),
+      hurtboxName: col(r, c.name),
+      hurtboxId: colNum(r, c.id),
+      animClass: col(r, c.animClass),
+      animName: col(r, c.animName),
+      width: colNum(r, c.width),
+      height: colNum(r, c.height),
     }))
 }
 
