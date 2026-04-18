@@ -13,6 +13,8 @@ COPY packages/contexts/player/package.json packages/contexts/player/
 COPY packages/contexts/clan/package.json packages/contexts/clan/
 COPY packages/contexts/ranking/package.json packages/contexts/ranking/
 COPY packages/contexts/identity/package.json packages/contexts/identity/
+COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
+COPY packages/replay-format/package.json packages/replay-format/
 RUN bun install
 
 FROM base AS build
