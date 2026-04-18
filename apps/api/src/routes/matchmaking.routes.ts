@@ -1,3 +1,4 @@
+import { knownHeroIds, knownLevelIds } from '@brawltome/game-data'
 import type { GetCurrentUserDeps } from '@brawltome/identity'
 import { getCurrentUser } from '@brawltome/identity'
 import { type IngestDeps, IngestError, type MatchRepo, ingestReplay } from '@brawltome/matchmaking'
@@ -107,6 +108,8 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
         matchRepo,
         r2Put: (key, bytes) => r2.put(key, bytes),
         reparseRaw: () => serverParsed,
+        knownHeroIds,
+        knownLevelIds,
       }
       const entityBhids = Object.fromEntries(Object.entries(parsed.entityBhids).map(([k, v]) => [Number(k), v]))
 

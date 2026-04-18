@@ -15,6 +15,7 @@ COPY packages/contexts/ranking/package.json packages/contexts/ranking/
 COPY packages/contexts/identity/package.json packages/contexts/identity/
 COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
 COPY packages/replay-format/package.json packages/replay-format/
+COPY packages/game-data/package.json packages/game-data/
 RUN bun install
 
 FROM base AS build

@@ -1,0 +1,2 @@
+packages/game-data/src/generated/** linguist-generated=true -diff
+packages/database/drizzle/meta/*.json linguist-generated=true
