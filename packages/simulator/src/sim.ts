@@ -1,13 +1,14 @@
 import type { LevelGeometry } from '@brawltome/game-data'
 import type { ParsedReplay } from '@brawltome/replay-format'
-import { classifyPosture } from './collision'
 import { InputDriver } from './input-driver'
+import { DEFAULT_PHYSICS, type EntityPhysState, makePhysState, stepEntity } from './physics'
 import { TICK_MS, msToTick, tickToMs } from './tick'
-import type { EntityState, EntityTick, Posture } from './types'
+import type { EntityState, EntityTick, PhysicsParams, Posture } from './types'
 
 export type SimInput = {
   parsed: ParsedReplay
   geometry: LevelGeometry
+  physics?: PhysicsParams
 }
 
 export type PostureTotals = {
@@ -18,19 +19,24 @@ export type PostureTotals = {
   totalTicks: number
 }
 
-// Per-entity position samples over the match. v1 walks entities from their
-// spawn respawn points with zero movement (physics pass lands in a follow-up
-// commit); this is the scaffold that plugs every piece together: input
-// driver, level geometry, tick loop, per-tick posture classification.
+// Per-entity position samples over the match. Each tick:
+//  1. Read input flags from the cursor for this ms.
+//  2. Apply horizontal input + gravity + jump.
+//  3. Integrate velocity into position.
+//  4. Resolve ground/wall collisions against the level geometry.
+//  5. Update posture from the resolved state.
 export class Simulation {
   private readonly endTick: number
   private readonly entities = new Map<number, EntityState>()
+  private readonly physState = new Map<number, EntityPhysState>()
   private readonly driver: InputDriver
   private readonly geometry: LevelGeometry
+  private readonly physicsParams: PhysicsParams
 
   constructor(input: SimInput) {
     this.driver = new InputDriver(input.parsed.inputs)
     this.geometry = input.geometry
+    this.physicsParams = input.physics ?? DEFAULT_PHYSICS
     const lengthMs = input.parsed.results[0]?.lengthMs ?? 0
     this.endTick = msToTick(lengthMs)
     const respawns = input.geometry.respawns
@@ -45,23 +51,25 @@ export class Simulation {
         posture: 'air',
         alive: true,
       })
+      this.physState.set(e.id, makePhysState())
     })
   }
 
-  /** Runs every tick and emits per-entity posture samples. */
   *ticks(): Generator<EntityTick> {
     for (let tick = 0; tick <= this.endTick; tick++) {
       const ms = tickToMs(tick)
       for (const entity of this.entities.values()) {
         if (!entity.alive) continue
-        this.driver.flagsAt(entity.id, ms) // pumped even when ignored so ms cursors stay in sync
-        entity.posture = classifyPosture(entity.pos, this.geometry)
+        const flags = this.driver.flagsAt(entity.id, ms)
+        const phys = this.physState.get(entity.id)
+        if (!phys) continue
+        const next = stepEntity(entity, flags, phys, this.geometry, this.physicsParams)
+        this.physState.set(entity.id, next)
         yield { tick, ms, entity }
       }
     }
   }
 
-  /** Accumulates posture time per entity across the whole match. */
   postureTotals(): PostureTotals[] {
     const acc = new Map<number, { air: number; ground: number; wall: number; total: number }>()
     for (const { entity } of this.ticks()) {

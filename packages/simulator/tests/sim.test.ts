@@ -32,5 +32,10 @@ describe('Simulation integration', () => {
       const sumMs = t.air + t.ground + t.wall
       expect(Math.abs(sumMs - lengthMs)).toBeLessThanOrEqual(50)
     }
+
+    // Physics should produce non-trivial ground time; if everyone is 100% air,
+    // the ground/wall resolution never fires and something is wrong.
+    const totalGround = totals.reduce((s, t) => s + t.ground, 0)
+    expect(totalGround).toBeGreaterThan(0)
   })
 })
