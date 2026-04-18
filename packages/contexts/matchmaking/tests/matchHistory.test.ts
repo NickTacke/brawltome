@@ -35,14 +35,9 @@ describe('matchHistory', () => {
       row(String(i).padStart(9, 'A'), new Date(2026, 3, 17 - i)),
     )
     const repo = {
-      listByPlayer: mock(async (_bhid: number, _cur: unknown, limit: number) =>
-        rows.slice(0, limit),
-      ),
+      listByPlayer: mock(async (_bhid: number, _cur: unknown, limit: number) => rows.slice(0, limit)),
     }
-    const res = await matchHistory(
-      { matchRepo: repo as never },
-      { brawlhallaId: 123, cursor: null, limit: 25 },
-    )
+    const res = await matchHistory({ matchRepo: repo as never }, { brawlhallaId: 123, cursor: null, limit: 25 })
     expect(res.matches).toHaveLength(25)
     expect(res.nextCursor).not.toBeNull()
     expect(res.nextCursor?.slug).toBe(rows[24].slug)
@@ -50,10 +45,7 @@ describe('matchHistory', () => {
 
   test('returns no cursor when fewer results than limit', async () => {
     const repo = { listByPlayer: mock(async () => []) }
-    const res = await matchHistory(
-      { matchRepo: repo as never },
-      { brawlhallaId: 123, cursor: null, limit: 25 },
-    )
+    const res = await matchHistory({ matchRepo: repo as never }, { brawlhallaId: 123, cursor: null, limit: 25 })
     expect(res.matches).toEqual([])
     expect(res.nextCursor).toBeNull()
   })

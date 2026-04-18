@@ -1,8 +1,8 @@
 import { decodeCursor, encodeCursor, matchDetail, matchHistory } from '@brawltome/matchmaking'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { publicProcedure, router } from '../trpc/trpc'
 import type { Context } from '../trpc/context'
+import { publicProcedure, router } from '../trpc/trpc'
 
 function requireEnabled(ctx: Context) {
   if (!ctx.matchmakingEnabled || !ctx.matchRepo) {

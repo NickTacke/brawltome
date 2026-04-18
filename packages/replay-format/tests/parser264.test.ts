@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { deflateSync } from 'node:zlib'
-import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { deflateSync } from 'node:zlib'
 import { EnvelopeError, FormatVersionUnsupportedError } from '../src/errors'
 import { parse, peekFormatVersion } from '../src/parser'
 import { applyXor } from '../src/xor-key'
@@ -15,7 +15,8 @@ const suzaku = read('suzaku.replay')
 
 describe('parse() on sample replays (format 264)', () => {
   test.if(mishima !== null)('parses Mishima 2v2 match end-to-end', () => {
-    const r = parse(mishima!)
+    if (!mishima) return
+    const r = parse(mishima)
     expect(r.formatVersion).toBe(264)
     expect(r.playlistId).toBe(8)
     expect(r.playlistName).toContain('2v2Unranked')
@@ -30,14 +31,16 @@ describe('parse() on sample replays (format 264)', () => {
   })
 
   test.if(suzaku !== null)('parses Suzaku 2v2 match end-to-end', () => {
-    const r = parse(suzaku!)
+    if (!suzaku) return
+    const r = parse(suzaku)
     expect(r.formatVersion).toBe(264)
     expect(r.entities).toHaveLength(4)
     expect(r.levelId).toBe(185)
   })
 
   test.if(mishima !== null)('throws on truncated input', () => {
-    const short = mishima!.slice(0, 100)
+    if (!mishima) return
+    const short = mishima.slice(0, 100)
     expect(() => parse(short)).toThrow()
   })
 })
