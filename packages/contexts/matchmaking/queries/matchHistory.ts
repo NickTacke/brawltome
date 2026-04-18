@@ -9,8 +9,14 @@ export function encodeCursor(c: Cursor): string {
 
 export function decodeCursor(raw: string): Cursor | null {
   try {
-    const j = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as { u: string; s: string }
-    return { uploadedAt: new Date(j.u), slug: j.s }
+    const j = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'))
+    if (typeof j !== 'object' || j === null) return null
+    const u = (j as { u?: unknown }).u
+    const s = (j as { s?: unknown }).s
+    if (typeof u !== 'string' || typeof s !== 'string') return null
+    const uploadedAt = new Date(u)
+    if (Number.isNaN(uploadedAt.getTime())) return null
+    return { uploadedAt, slug: s }
   } catch {
     return null
   }
