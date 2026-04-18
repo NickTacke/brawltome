@@ -161,15 +161,20 @@ const colBool = (r: string[], i: number): boolean => {
   const v = r[i]
   return v === 'TRUE' || v === 'True' || v === 'true' || v === '1'
 }
-// BMG's numeric-array columns look like "20,20,0" or sometimes "0,t10"
-// (with tagged tokens like "t10" for time-scaled values). We keep only
-// finite numbers and zero-out any tagged entries so downstream code has
-// a stable shape. Empty cells yield an empty array, not [0].
+// BMG's numeric-array columns are comma-separated per hitbox slot. Each
+// entry can itself contain `&`-separated charge-level variants (e.g.
+// "43.5&48,58&39,45&39" = three slots, each with two charge levels) or
+// `~`-separated time-interpolated variants (e.g. "45~56" = ramp from 45
+// to 56 across the phase). We flatten both by taking the first numeric
+// token in each comma-separated slot, which picks the "primary" or
+// uncharged value consistent with how we index into these arrays from
+// castTime phases. Empty cells yield an empty array, not [0].
 const colNumArray = (r: string[], i: number): number[] => {
   const v = r[i]
   if (!v) return []
   return v.split(',').map((tok) => {
-    const n = Number(tok)
+    const firstPart = tok.split(/[&~]/)[0] ?? ''
+    const n = Number(firstPart)
     return Number.isFinite(n) ? n : 0
   })
 }
@@ -257,8 +262,8 @@ function loadPowers(): Power[] {
       fixedStunTime: colNum(r, c.fixedStunTime),
       cooldownTime: colNum(r, c.cooldownTime),
       onHitCooldownTime: colNum(r, c.onHitCooldownTime),
-      aoeRadiusX: colNum(r, c.aoeRadiusX),
-      aoeRadiusY: colNum(r, c.aoeRadiusY),
+      aoeRadiusX: colNumArray(r, c.aoeRadiusX),
+      aoeRadiusY: colNumArray(r, c.aoeRadiusY),
       centerOffsetX: colNumArray(r, c.centerOffsetX),
       centerOffsetY: colNumArray(r, c.centerOffsetY),
       isAirPower: colBool(r, c.isAirPower),

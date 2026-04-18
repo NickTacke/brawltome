@@ -43,12 +43,12 @@ export type Power = {
   fixedStunTime: number
   cooldownTime: number
   onHitCooldownTime: number
-  aoeRadiusX: number
-  aoeRadiusY: number
-  // Per-hitbox-slot offsets from the attacker's position to the hitbox
-  // centre. X is in the attacker-facing orientation (callers multiply by
-  // facing before adding to world x). Indexed by the hitbox slot referenced
-  // by castTime phases.
+  // Per-hitbox-slot dimensions and offsets of the attack's AABB. Indexed
+  // by the hitbox slot referenced by castTime phases. X offsets are in
+  // attacker-facing orientation (multiply by `facing` before applying to
+  // world x). Empty arrays for powers without explicit hitboxes.
+  aoeRadiusX: number[]
+  aoeRadiusY: number[]
   centerOffsetX: number[]
   centerOffsetY: number[]
   isAirPower: boolean
