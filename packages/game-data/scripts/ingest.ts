@@ -161,6 +161,18 @@ const colBool = (r: string[], i: number): boolean => {
   const v = r[i]
   return v === 'TRUE' || v === 'True' || v === 'true' || v === '1'
 }
+// BMG's numeric-array columns look like "20,20,0" or sometimes "0,t10"
+// (with tagged tokens like "t10" for time-scaled values). We keep only
+// finite numbers and zero-out any tagged entries so downstream code has
+// a stable shape. Empty cells yield an empty array, not [0].
+const colNumArray = (r: string[], i: number): number[] => {
+  const v = r[i]
+  if (!v) return []
+  return v.split(',').map((tok) => {
+    const n = Number(tok)
+    return Number.isFinite(n) ? n : 0
+  })
+}
 
 function loadLegends(): Legend[] {
   const xml = readFileSync(findXmlEntry('Game', 'HeroTypes'), 'utf8')
@@ -233,10 +245,10 @@ function loadPowers(): Power[] {
     .map((r) => ({
       powerId: colNum(r, c.powerId),
       powerName: col(r, c.powerName),
-      baseDamage: colNum(r, c.baseDamage),
-      variableImpulse: colNum(r, c.variableImpulse),
-      fixedImpulse: colNum(r, c.fixedImpulse),
-      minimumImpulse: colNum(r, c.minimumImpulse),
+      baseDamage: colNumArray(r, c.baseDamage),
+      variableImpulse: colNumArray(r, c.variableImpulse),
+      fixedImpulse: colNumArray(r, c.fixedImpulse),
+      minimumImpulse: colNumArray(r, c.minimumImpulse),
       castTime: col(r, c.castTime),
       fixedRecoverTime: col(r, c.fixedRecoverTime),
       recoverTime: col(r, c.recoverTime),

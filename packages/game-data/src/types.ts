@@ -29,10 +29,14 @@ export type LevelMeta = {
 export type Power = {
   powerId: number
   powerName: string
-  baseDamage: number
-  fixedImpulse: number
-  variableImpulse: number
-  minimumImpulse: number
+  // Arrays indexed by hitbox slot. A single-hit move has one element; a
+  // multi-hit move has one per hitbox referenced by castTime. The CSV
+  // source stores these as comma-joined strings like "20,20,0". Elements
+  // can legitimately be 0 to disable that slot's hit.
+  baseDamage: number[]
+  fixedImpulse: number[]
+  variableImpulse: number[]
+  minimumImpulse: number[]
   castTime: string
   recoverTime: string
   fixedRecoverTime: string
