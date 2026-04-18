@@ -29,44 +29,45 @@ export async function backfillPending(deps: BackfillDeps, row: MatchRow): Promis
     return
   }
 
-  await deps.matchRepo.markParsed(row.slug, {
-    parseStatus: 'parsed',
-    dedupeHash,
-    randomSeed: parsed.randomSeed,
-    playlistId: parsed.playlistId,
-    playlistName: parsed.playlistName,
-    onlineGame: parsed.onlineGame ? 1 : 0,
-    levelId: parsed.levelId,
-    durationMs: duration,
-    matchDurationMs: Math.max(0, duration - INTRO_OFFSET_MS),
-    endOfMatchFanfareId: fanfareId,
-    scoringTypeId: parsed.gameSettings.scoringTypeId,
-  })
-
-  // displayName is intentionally not overwritten; PlayerMap value from ingest wins.
-  for (const e of parsed.entities) {
-    const hero = e.playerData.heroes[0] ?? null
-    await deps.matchRepo.updatePlayerCosmetics(row.slug, e.id, {
-      legendId: hero?.heroId ?? null,
-      costumeId: hero?.costumeId ?? null,
-      stanceIndex: hero?.stanceIndex ?? null,
-      weaponSkin1: hero?.weaponSkin1 ?? null,
-      weaponSkin2: hero?.weaponSkin2 ?? null,
-      colorSchemeId: e.playerData.colorSchemeId,
-      companionId: e.playerData.companionId,
-      emitterId: e.playerData.emitterId,
-      trailEffectId: e.playerData.trailEffectId,
-      avatarId: e.playerData.avatarId,
-      isBot: e.isBot ? 1 : 0,
-      finalScore: parsed.results[0]?.scores[e.id] ?? null,
-    })
-  }
-
   const events = parsed.koFaces.map((ev) => ({
     matchSlug: row.slug,
     entityId: ev.entityId,
     timestampMs: ev.timestampMs,
     kind: 'ko' as const,
   }))
-  await deps.matchRepo.insertEvents(events)
+
+  await deps.matchRepo.transaction(async (tx) => {
+    await tx.markParsed(row.slug, {
+      parseStatus: 'parsed',
+      dedupeHash,
+      randomSeed: parsed.randomSeed,
+      playlistId: parsed.playlistId,
+      playlistName: parsed.playlistName,
+      onlineGame: parsed.onlineGame ? 1 : 0,
+      levelId: parsed.levelId,
+      durationMs: duration,
+      matchDurationMs: Math.max(0, duration - INTRO_OFFSET_MS),
+      endOfMatchFanfareId: fanfareId,
+      scoringTypeId: parsed.gameSettings.scoringTypeId,
+    })
+    // displayName is intentionally not overwritten; PlayerMap value from ingest wins.
+    for (const e of parsed.entities) {
+      const hero = e.playerData.heroes[0] ?? null
+      await tx.updatePlayerCosmetics(row.slug, e.id, {
+        legendId: hero?.heroId ?? null,
+        costumeId: hero?.costumeId ?? null,
+        stanceIndex: hero?.stanceIndex ?? null,
+        weaponSkin1: hero?.weaponSkin1 ?? null,
+        weaponSkin2: hero?.weaponSkin2 ?? null,
+        colorSchemeId: e.playerData.colorSchemeId,
+        companionId: e.playerData.companionId,
+        emitterId: e.playerData.emitterId,
+        trailEffectId: e.playerData.trailEffectId,
+        avatarId: e.playerData.avatarId,
+        isBot: e.isBot ? 1 : 0,
+        finalScore: parsed.results[0]?.scores[e.id] ?? null,
+      })
+    }
+    await tx.insertEvents(events)
+  })
 }

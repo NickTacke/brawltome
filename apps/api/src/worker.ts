@@ -5,7 +5,7 @@ import { createPlayerLinkRepo, resolveSteamLink } from '@brawltome/identity'
 import { backfillPending, createMatchRepo } from '@brawltome/matchmaking'
 import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
 import { startJanitor } from '@brawltome/ranking'
-import { parse as parseReplay, type ParsedReplay } from '@brawltome/replay-format'
+import { type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
 import { createMetricsRegistry, createQueue, createR2Client, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
 import { readMatchmakingConfig } from './matchmaking-config'
@@ -217,12 +217,7 @@ bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
 console.log('Worker starting...')
 await bhapi.init()
 await initGameData(db, bhapi)
-const starts: Promise<void>[] = [
-  rankedQueue.start(),
-  statsQueue.start(),
-  clanQueue.start(),
-  steamLinkQueue.start(),
-]
+const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]
 if (backfillQueue) starts.push(backfillQueue.start())
 if (simulateQueue) starts.push(simulateQueue.start())
 Promise.all(starts).catch(console.error)

@@ -16,15 +16,16 @@ export interface MatchRepo {
   insertEvents(rows: Omit<MatchEventRow, 'id'>[]): Promise<void>
   listPendingByFormatVersion(formatVersion: number, limit: number): Promise<MatchRow[]>
   markParsed(slug: MatchSlug, patch: Partial<MatchRow>): Promise<void>
-  updatePlayerCosmetics(
-    slug: MatchSlug,
-    replayEntityId: number,
-    patch: Partial<MatchPlayerRow>,
-  ): Promise<void>
+  updatePlayerCosmetics(slug: MatchSlug, replayEntityId: number, patch: Partial<MatchPlayerRow>): Promise<void>
   deleteMatch(slug: MatchSlug): Promise<void>
+  transaction<T>(fn: (tx: MatchRepo) => Promise<T>): Promise<T>
 }
 
 export function createMatchRepo(db: Database): MatchRepo {
+  return buildRepo(db)
+}
+
+function buildRepo(db: Database): MatchRepo {
   return {
     async findBySlug(slug) {
       const rows = await db.select().from(matches).where(eq(matches.slug, slug)).limit(1)
@@ -37,10 +38,7 @@ export function createMatchRepo(db: Database): MatchRepo {
     },
 
     async findPlayers(slug) {
-      return (await db
-        .select()
-        .from(matchPlayers)
-        .where(eq(matchPlayers.matchSlug, slug))) as MatchPlayerRow[]
+      return (await db.select().from(matchPlayers).where(eq(matchPlayers.matchSlug, slug))) as MatchPlayerRow[]
     },
 
     async findEvents(slug) {
@@ -107,13 +105,15 @@ export function createMatchRepo(db: Database): MatchRepo {
       await db
         .update(matchPlayers)
         .set(patch as Partial<typeof matchPlayers.$inferInsert>)
-        .where(
-          and(eq(matchPlayers.matchSlug, slug), eq(matchPlayers.replayEntityId, replayEntityId)),
-        )
+        .where(and(eq(matchPlayers.matchSlug, slug), eq(matchPlayers.replayEntityId, replayEntityId)))
     },
 
     async deleteMatch(slug) {
       await db.delete(matches).where(eq(matches.slug, slug))
+    },
+
+    async transaction(fn) {
+      return db.transaction(async (tx) => fn(buildRepo(tx as unknown as Database)))
     },
   }
 }

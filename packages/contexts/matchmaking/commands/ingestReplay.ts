@@ -77,10 +77,7 @@ export async function ingestReplay(deps: IngestDeps, input: IngestInput): Promis
   }
   const allowedCounts = PLAYLIST_ENTITY_COUNTS[pr.playlistId] ?? [1, 2, 3, 4]
   if (!allowedCounts.includes(pr.entities.length)) {
-    throw new IngestError(
-      'validation_error',
-      `entity_count ${pr.entities.length} vs playlist ${pr.playlistId}`,
-    )
+    throw new IngestError('validation_error', `entity_count ${pr.entities.length} vs playlist ${pr.playlistId}`)
   }
   if (knownPlaylistIds && pr.playlistId !== 0 && !knownPlaylistIds.has(pr.playlistId)) {
     throw new IngestError('validation_error', `unknown playlistId ${pr.playlistId}`)
@@ -156,7 +153,6 @@ export async function ingestReplay(deps: IngestDeps, input: IngestInput): Promis
     simVersion: null,
     simRanAt: null,
   }
-  await matchRepo.insertMatch(matchRow)
 
   const players: Omit<MatchPlayerRow, 'id'>[] = pr.entities.map((e) => {
     const bhid = entityBhids[e.id] ?? null
@@ -182,7 +178,6 @@ export async function ingestReplay(deps: IngestDeps, input: IngestInput): Promis
       finalScore: pr.results[0].scores[e.id] ?? null,
     }
   })
-  await matchRepo.insertPlayers(players)
 
   const events = pr.koFaces.map((ev) => ({
     matchSlug: slug,
@@ -190,20 +185,27 @@ export async function ingestReplay(deps: IngestDeps, input: IngestInput): Promis
     timestampMs: ev.timestampMs,
     kind: 'ko' as const,
   }))
-  await matchRepo.insertEvents(events)
+
+  await matchRepo.transaction(async (tx) => {
+    await tx.insertMatch(matchRow)
+    await tx.insertPlayers(players)
+    await tx.insertEvents(events)
+  })
 
   return { slug }
 }
 
 function inferWinnerTeam(pr: ParsedReplay): number | null {
-  const deathsByTeam: Record<number, number> = {}
+  // Seed every team from entities so shutout wins (loser's team never in koFaces
+  // would otherwise disappear) and zero-death teams are still counted.
+  const deathsByTeam = new Map<number, number>()
+  for (const e of pr.entities) deathsByTeam.set(e.team, 0)
   for (const ev of pr.koFaces) {
     const ent = pr.entities.find((e) => e.id === ev.entityId)
     if (!ent) continue
-    deathsByTeam[ent.team] = (deathsByTeam[ent.team] ?? 0) + 1
+    deathsByTeam.set(ent.team, (deathsByTeam.get(ent.team) ?? 0) + 1)
   }
-  const teams = Object.keys(deathsByTeam).map(Number)
-  if (teams.length < 2) return null
-  const sorted = teams.sort((a, b) => deathsByTeam[a] - deathsByTeam[b])
-  return deathsByTeam[sorted[0]] < deathsByTeam[sorted[1]] ? sorted[0] : null
+  if (deathsByTeam.size < 2) return null
+  const sorted = [...deathsByTeam.entries()].sort((a, b) => a[1] - b[1])
+  return sorted[0][1] < sorted[1][1] ? sorted[0][0] : null
 }

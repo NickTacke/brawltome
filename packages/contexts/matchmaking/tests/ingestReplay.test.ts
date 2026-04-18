@@ -76,7 +76,7 @@ function makeEntity(id: number, name: string, team: number, heroId: number) {
 }
 
 function mockRepo(overrides: Partial<MatchRepo> = {}): MatchRepo {
-  return {
+  const repo: MatchRepo = {
     findBySlug: mock(async () => null),
     findByDedupeHash: mock(async () => null),
     findPlayers: mock(async () => []),
@@ -89,8 +89,10 @@ function mockRepo(overrides: Partial<MatchRepo> = {}): MatchRepo {
     markParsed: mock(async () => {}),
     updatePlayerCosmetics: mock(async () => {}),
     deleteMatch: mock(async () => {}),
-    ...overrides,
+    transaction: async (fn) => fn(repo),
   }
+  Object.assign(repo, overrides)
+  return repo
 }
 
 const fakeRaw = new Uint8Array([1, 2, 3])
@@ -238,6 +240,37 @@ describe('ingestReplay', () => {
         },
       ),
     ).rejects.toMatchObject({ code: 'validation_error' })
+  })
+
+  test('shutout: losing team has zero KOs, winner still inferred', async () => {
+    const shutout: ParsedReplay = {
+      ...validParsed,
+      koFaces: [
+        { entityId: 1, timestampMs: 30000 },
+        { entityId: 2, timestampMs: 60000 },
+        { entityId: 1, timestampMs: 90000 },
+        { entityId: 2, timestampMs: 100000 },
+        { entityId: 1, timestampMs: 120000 },
+        { entityId: 2, timestampMs: 160000 },
+      ],
+    }
+    const inserted: { winnerTeam: number | null }[] = []
+    const repo = mockRepo({
+      insertMatch: mock(async (row) => {
+        inserted.push({ winnerTeam: (row as { winnerTeam: number | null }).winnerTeam })
+      }),
+    })
+    await ingestReplay(
+      { matchRepo: repo, r2Put: mock(async () => {}), reparseRaw: () => shutout },
+      {
+        userId: 'u1',
+        parsedReplay: shutout,
+        entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
+        rawBytes: fakeRaw,
+        formatVersion: 264,
+      },
+    )
+    expect(inserted[0].winnerTeam).toBe(2)
   })
 
   test('rejects r2 upload failure', async () => {
