@@ -233,6 +233,32 @@ function diagnose(path: string, statsPath?: string): void {
     )
   }
 
+  // Landed-damage from per-tick hit detection (baseDamage of resolved hits
+  // summed per attacker, scaled by attacker strength + defender weight).
+  const landed = sim.landedHitEvents()
+  console.log(`\nlanded damage per attacker (hit-detected; real vs sim):`)
+  console.log(`  name              real    sim    delta`)
+  for (const p of players) {
+    const ent = parsed.entities.find((e) => e.name === p.PlayerName)
+    if (!ent) continue
+    const heroId = ent.playerData.heroes[0]?.heroId
+    const legend = heroId !== undefined ? getLegendById(heroId) : undefined
+    const strMult = legend ? strengthMultiplier(legend.strength) : 1
+    let simLanded = 0
+    for (const h of landed) {
+      if (h.attackerId !== ent.id) continue
+      const def = parsed.entities.find((e) => e.id === h.defenderId)
+      const defHeroId = def?.playerData.heroes[0]?.heroId
+      const defLegend = defHeroId !== undefined ? getLegendById(defHeroId) : undefined
+      const wMult = weightMultiplier(defLegend?.weight ?? 5)
+      simLanded += h.baseDamage * strMult * wMult
+    }
+    const delta = simLanded - p.DamageDealt
+    console.log(
+      `  ${p.PlayerName.padEnd(16, ' ')} ${p.DamageDealt.toFixed(1).padStart(6, ' ')}  ${simLanded.toFixed(1).padStart(6, ' ')}   ${(delta >= 0 ? '+' : '') + delta.toFixed(1)}`,
+    )
+  }
+
   // Per-player weapon-in-hand agreement: fraction of ticks where the sim's
   // heldWeapon matches the stats Sequence's weapon at the same ms.
   console.log(`\nweapon-in-hand agreement per tick:`)
