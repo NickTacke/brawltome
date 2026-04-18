@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  GAME_DATA_PATCH_VERSION,
   getHurtboxByName,
   getLegendById,
   getLegendByName,
   getLevelById,
+  getLevelGeometry,
   getPowerById,
   hurtboxes,
   knownHeroIds,
   knownLevelIds,
   legends,
+  levelGeometry,
   levels,
   powers,
 } from '../index'
@@ -80,5 +83,44 @@ describe('validation ID sets', () => {
   test('knownLevelIds covers all generated levels', () => {
     for (const l of levels) expect(knownLevelIds.has(l.levelId)).toBe(true)
     expect(knownLevelIds.size).toBe(levels.length)
+  })
+})
+
+describe('metadata', () => {
+  test('patch version is set', () => {
+    expect(GAME_DATA_PATCH_VERSION).toMatch(/^\d+\.\d+$|^unknown$/)
+  })
+})
+
+describe('level geometry', () => {
+  test('loaded at least 100 levels', () => {
+    expect(Object.keys(levelGeometry).length).toBeGreaterThan(100)
+  })
+
+  test('a sample level has camera bounds, kill bounds, and collisions', () => {
+    const sample = Object.values(levelGeometry).find((g) => g.cameraBounds && g.collisions.length > 3)
+    if (!sample) throw new Error('no geometry sample with collisions')
+    expect(sample.levelName).toBeTruthy()
+    expect(sample.cameraBounds?.w).toBeGreaterThan(0)
+    expect(sample.cameraBounds?.h).toBeGreaterThan(0)
+    expect(sample.collisions.some((c) => c.kind === 'hard')).toBe(true)
+  })
+
+  test('getLevelGeometry returns undefined for unknown level name', () => {
+    expect(getLevelGeometry('NotARealLevel')).toBeUndefined()
+  })
+
+  test('collision lines have finite coordinates', () => {
+    let count = 0
+    for (const g of Object.values(levelGeometry)) {
+      for (const c of g.collisions) {
+        expect(Number.isFinite(c.x1)).toBe(true)
+        expect(Number.isFinite(c.x2)).toBe(true)
+        expect(Number.isFinite(c.y1)).toBe(true)
+        expect(Number.isFinite(c.y2)).toBe(true)
+        count++
+      }
+    }
+    expect(count).toBeGreaterThan(1000)
   })
 })

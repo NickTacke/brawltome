@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Hurtbox, Legend, LevelMeta, Power } from '../src/types'
+import type { CollisionLine, Hurtbox, Legend, LevelGeometry, LevelMeta, Power } from '../src/types'
 
 const EXTRACT_ROOT = join(import.meta.dir, '..', '..', '..', 'research', 'swz-extract', 'out')
 const OUT_DIR = join(import.meta.dir, '..', 'src', 'generated')
@@ -256,6 +256,124 @@ function loadPowers(): Power[] {
     }))
 }
 
+// Top-level element extractor for LevelDesc. Unlike extractRecords, it collects
+// every occurrence of `tag` (including self-closed) as its attribute map; nested
+// children are returned as separate records from their own call.
+function extractElements(xml: string, tag: string): Map<string, string>[] {
+  const pattern = new RegExp(`<${tag}(\\s[^>]*?)?(?:/>|>)`, 'g')
+  const results: Map<string, string>[] = []
+  for (const match of xml.matchAll(pattern)) {
+    const attrs = new Map<string, string>()
+    if (match[1]) {
+      for (const a of match[1].matchAll(/(\w+)="([^"]*)"/g)) attrs.set(a[1], a[2])
+    }
+    results.push(attrs)
+  }
+  return results
+}
+
+const attrNum = (r: Map<string, string>, k: string, fallback = 0): number => {
+  const v = r.get(k)
+  if (v === undefined || v === '') return fallback
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function collisionsFrom(xml: string, tag: string, kind: CollisionLine['kind']): CollisionLine[] {
+  return extractElements(xml, tag).map((a) => {
+    // Lines are stored as (X1, X2, Y) for horizontal or (X, Y1, Y2) for vertical.
+    const x = a.get('X')
+    const y = a.get('Y')
+    if (x !== undefined) {
+      const xn = Number(x)
+      return { kind, x1: xn, x2: xn, y1: attrNum(a, 'Y1'), y2: attrNum(a, 'Y2') }
+    }
+    if (y !== undefined) {
+      const yn = Number(y)
+      return { kind, x1: attrNum(a, 'X1'), x2: attrNum(a, 'X2'), y1: yn, y2: yn }
+    }
+    return {
+      kind,
+      x1: attrNum(a, 'X1'),
+      x2: attrNum(a, 'X2'),
+      y1: attrNum(a, 'Y1'),
+      y2: attrNum(a, 'Y2'),
+    }
+  })
+}
+
+function loadLevelGeometry(): Record<string, LevelGeometry> {
+  const manifest = JSON.parse(readFileSync(join(EXTRACT_ROOT, 'Dynamic', '_manifest.json'), 'utf8')) as {
+    i: number
+    sniff: string
+  }[]
+  const out: Record<string, LevelGeometry> = {}
+  for (const e of manifest) {
+    if (e.sniff !== 'LevelDesc') continue
+    const pad = String(e.i).padStart(3, '0')
+    const xml = readFileSync(join(EXTRACT_ROOT, 'Dynamic', `entry-${pad}.xml`), 'utf8')
+
+    const rootMatch = xml.match(/<LevelDesc\s+([^>]*)>/)
+    if (!rootMatch) continue
+    const rootAttrs = new Map<string, string>()
+    for (const a of rootMatch[1].matchAll(/(\w+)="([^"]*)"/g)) rootAttrs.set(a[1], a[2])
+    const levelName = rootAttrs.get('LevelName') ?? ''
+    if (!levelName) continue
+
+    const cameraEls = extractElements(xml, 'CameraBounds')
+    const cameraBounds = cameraEls[0]
+      ? {
+          x: attrNum(cameraEls[0], 'X'),
+          y: attrNum(cameraEls[0], 'Y'),
+          w: attrNum(cameraEls[0], 'W'),
+          h: attrNum(cameraEls[0], 'H'),
+        }
+      : null
+
+    const spawnBotEls = extractElements(xml, 'SpawnBotBounds')
+    const spawnBotBounds = spawnBotEls[0]
+      ? {
+          x: attrNum(spawnBotEls[0], 'X'),
+          y: attrNum(spawnBotEls[0], 'Y'),
+          w: attrNum(spawnBotEls[0], 'W'),
+          h: attrNum(spawnBotEls[0], 'H'),
+        }
+      : null
+
+    const killFrom = (tag: string): number | null => {
+      const v = extractElements(xml, tag)[0]
+      if (!v) return null
+      const n = attrNum(v, 'X') || attrNum(v, 'Y')
+      return Number.isFinite(n) ? n : null
+    }
+
+    out[levelName] = {
+      levelName,
+      assetDir: rootAttrs.get('AssetDir') ?? '',
+      cameraBounds,
+      spawnBotBounds,
+      killBounds: {
+        left: killFrom('LeftKill'),
+        right: killFrom('RightKill'),
+        top: killFrom('TopKill'),
+        bottom: killFrom('BottomKill'),
+      },
+      respawns: extractElements(xml, 'Respawn').map((a) => ({
+        x: attrNum(a, 'X'),
+        y: attrNum(a, 'Y'),
+      })),
+      collisions: [
+        ...collisionsFrom(xml, 'HardCollision', 'hard'),
+        ...collisionsFrom(xml, 'SoftCollision', 'soft'),
+        ...collisionsFrom(xml, 'NoSlideCollision', 'no_slide'),
+        ...collisionsFrom(xml, 'BouncyHardCollision', 'bouncy_hard'),
+        ...collisionsFrom(xml, 'BouncyNoSlideCollision', 'bouncy_no_slide'),
+      ],
+    }
+  }
+  return out
+}
+
 function loadHurtboxes(): Hurtbox[] {
   const { header, rows } = parseBmgCsv(findCsvByLabel('Game', 'hurtboxTypes'))
   const idx = (n: string) => {
@@ -291,8 +409,22 @@ function emit<T>(name: string, values: T[], typeName: string) {
   console.log(`wrote ${name}.ts  (${values.length} rows)`)
 }
 
+function emitMeta(patch: string) {
+  const body = `// @generated by packages/game-data/scripts/ingest.ts - do not edit.\nexport const GAME_DATA_PATCH_VERSION = '${patch}'\nexport const GAME_DATA_GENERATED_AT = '${new Date().toISOString()}'\n`
+  writeFileSync(join(OUT_DIR, 'meta.ts'), body)
+  console.log(`wrote meta.ts  (patch=${patch})`)
+}
+
+const patch = process.env.GAME_DATA_PATCH_VERSION ?? process.argv[2] ?? 'unknown'
 emit('legends', loadLegends(), 'Legend')
 emit('levels', loadLevels(), 'LevelMeta')
 emit('powers', loadPowers(), 'Power')
 emit('hurtboxes', loadHurtboxes(), 'Hurtbox')
+
+const geometry = loadLevelGeometry()
+const geoBody = `// @generated by packages/game-data/scripts/ingest.ts - do not edit.\nimport type { LevelGeometry } from '../types'\n\nconst data = ${JSON.stringify(geometry, null, 2)} as const\n\nexport const levelGeometry: Readonly<Record<string, LevelGeometry>> = data as unknown as Readonly<Record<string, LevelGeometry>>\n`
+writeFileSync(join(OUT_DIR, 'level-geometry.ts'), geoBody)
+console.log(`wrote level-geometry.ts  (${Object.keys(geometry).length} levels)`)
+
+emitMeta(patch)
 console.log('done.')

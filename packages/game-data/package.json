@@ -8,7 +8,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "generate": "bun run scripts/ingest.ts"
+    "generate": "bun run scripts/ingest.ts",
+    "regen": "bun run scripts/regen.ts"
   },
   "dependencies": {},
   "devDependencies": {

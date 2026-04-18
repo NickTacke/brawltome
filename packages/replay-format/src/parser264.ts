@@ -11,7 +11,11 @@ import {
   STATE_RESULTS,
 } from './constants'
 import { ParseError } from './errors'
-import type { Entity, GameSettings, Hero, KoEvent, MatchResult, ParsedReplay } from './types'
+import type { Entity, EntityInputs, GameSettings, Hero, InputEvent, KoEvent, MatchResult, ParsedReplay } from './types'
+
+export type Parse264Options = {
+  inputs?: boolean
+}
 
 function readGameSettings(r: BitReader): GameSettings {
   return {
@@ -92,7 +96,8 @@ function readEntity(r: BitReader, heroCount: number): Entity {
   }
 }
 
-export function parse264(envelopeBody: Uint8Array): ParsedReplay {
+export function parse264(envelopeBody: Uint8Array, opts: Parse264Options = {}): ParsedReplay {
+  const keepInputs = opts.inputs ?? false
   const r = new BitReader(envelopeBody)
   const formatVersion = r.u32()
 
@@ -110,6 +115,7 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
   const results: MatchResult[] = []
   let koFaces: KoEvent[] = []
   let victoryFaces: KoEvent[] | null = null
+  const inputs: EntityInputs[] = []
 
   let reached = false
   while (!reached) {
@@ -167,14 +173,17 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
         break
       }
       case STATE_INPUTS: {
-        // Parse and discard: raw replay is in R2 for any re-parse that needs inputs.
         while (r.bool()) {
-          r.bits(5)
+          const entityId = r.bits(5)
           const ic = r.i32()
+          const events: InputEvent[] = keepInputs ? new Array(ic) : []
           for (let i = 0; i < ic; i++) {
-            r.i32()
-            if (r.bool()) r.bits(14)
+            const timestampMs = r.i32()
+            const hasFlags = r.bool()
+            const inputFlags = hasFlags ? r.bits(14) : 0
+            if (keepInputs) events[i] = { timestampMs, inputFlags }
           }
+          if (keepInputs) inputs.push({ entityId, inputs: events })
         }
         break
       }
@@ -203,5 +212,6 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
     koFaces,
     victoryFaces,
     gameDataChecksum,
+    inputs,
   }
 }

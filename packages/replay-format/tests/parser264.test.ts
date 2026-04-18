@@ -43,6 +43,29 @@ describe('parse() on sample replays (format 264)', () => {
     const short = mishima.slice(0, 100)
     expect(() => parse(short)).toThrow()
   })
+
+  test.if(mishima !== null)('inputs are empty by default', () => {
+    if (!mishima) return
+    const r = parse(mishima)
+    expect(r.inputs).toEqual([])
+  })
+
+  test.if(mishima !== null)('inputs populated when requested', () => {
+    if (!mishima) return
+    const r = parse(mishima, { inputs: true })
+    expect(r.inputs.length).toBe(4)
+    for (const entry of r.inputs) {
+      expect(entry.entityId).toBeGreaterThan(0)
+      expect(entry.inputs.length).toBeGreaterThan(0)
+      for (const ev of entry.inputs.slice(0, 3)) {
+        expect(Number.isFinite(ev.timestampMs)).toBe(true)
+        expect(ev.inputFlags).toBeGreaterThanOrEqual(0)
+        expect(ev.inputFlags).toBeLessThan(1 << 14)
+      }
+    }
+    const total = r.inputs.reduce((s, e) => s + e.inputs.length, 0)
+    expect(total).toBe(4481)
+  })
 })
 
 describe('parse error paths', () => {

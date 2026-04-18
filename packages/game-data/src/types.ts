@@ -59,3 +59,25 @@ export type Hurtbox = {
   width: number
   height: number
 }
+
+// A flat collision segment. Either horizontal (X1/X2 + Y) or vertical (X + Y1/Y2).
+// Coordinates are in level space (same units as Platform X/Y).
+export type CollisionLine = {
+  kind: 'hard' | 'soft' | 'no_slide' | 'bouncy_hard' | 'bouncy_no_slide'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+// Level geometry the simulator needs: blast-zone boundaries, collision segments, respawns.
+// One record per LevelDesc file; keyed by levelName on the generated map.
+export type LevelGeometry = {
+  levelName: string
+  assetDir: string
+  cameraBounds: { x: number; y: number; w: number; h: number } | null
+  spawnBotBounds: { x: number; y: number; w: number; h: number } | null
+  killBounds: { left: number | null; right: number | null; top: number | null; bottom: number | null }
+  respawns: { x: number; y: number }[]
+  collisions: CollisionLine[]
+}
