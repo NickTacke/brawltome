@@ -111,17 +111,18 @@ export class Simulation {
     const weaponSet = new Set<string>()
     // Respawn points in the XML alternate team sides: index 0 is the
     // outermost left-side spawn, 1 is the outermost right, 2 is the next
-    // left-side, etc. Assign entities to spawns of their team so team
-    // members end up on the same side of the stage. Without this, a 2v2
-    // gets its four players scrambled across both sides, which drives our
-    // sim's players too far apart to ever engage.
+    // left-side, etc. BH's 2v2 matches spawn players on the inner
+    // respawns rather than the stage edges; for a 4-entity match we skip
+    // the outermost pair and use indices 2..5. 1v1 stays at 0,1. Larger
+    // player counts fall back to using everything.
+    const startOffset = input.parsed.entities.length === 4 && respawns.length >= 6 ? 2 : 0
     const teamCursor = new Map<number, number>()
     for (const e of input.parsed.entities) {
       // Team 1 (or first-seen team) takes even indices, team 2 odd.
       const parity = e.team === 1 ? 0 : e.team === 2 ? 1 : e.team % 2
       const nth = teamCursor.get(e.team) ?? 0
       teamCursor.set(e.team, nth + 1)
-      const idx = (parity + nth * 2) % Math.max(respawns.length, 1)
+      const idx = (startOffset + parity + nth * 2) % Math.max(respawns.length, 1)
       const spawn = respawns[idx] ?? { x: 0, y: 0 }
       this.respawnPoints.set(e.id, { x: spawn.x, y: spawn.y })
       const heroId = e.playerData.heroes[0]?.heroId
@@ -153,6 +154,7 @@ export class Simulation {
         damagePct: 0,
         hitstunUntilMs: 0,
         invulnUntilMs: 0,
+        readyForInput: false,
         chaseDodgeTokens: 0,
         chaseWindowUntilMs: 0,
       })
@@ -292,7 +294,12 @@ export class Simulation {
         // Everything else is zero-flagged; the entity's carry-over
         // momentum handles positional drift.
         const inHitstun = ms < entity.hitstunUntilMs
-        const flags = inHitstun ? rawFlags & InputFlag.DodgeDash : rawFlags
+        // Entities that haven't touched the ground since spawn/respawn
+        // get their inputs zero-flagged. BH's countdown ends with players
+        // still mid-air (falling from spawn) and only starts accepting
+        // inputs once the first landing happens.
+        const rawGated = entity.readyForInput ? rawFlags : 0
+        const flags = inHitstun ? rawGated & InputFlag.DodgeDash : rawGated
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
         const priorHeld = held
 
@@ -403,11 +410,16 @@ export class Simulation {
           entity.damagePct = 0
           entity.hitstunUntilMs = 0
           entity.invulnUntilMs = 0
+          entity.readyForInput = false
           entity.chaseDodgeTokens = 0
           entity.chaseWindowUntilMs = 0
         }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
         this.physState.set(entity.id, after)
+        // First ground contact post-(re)spawn unlocks input processing.
+        if (!entity.readyForInput && entity.posture === 'ground') {
+          entity.readyForInput = true
+        }
         yield { tick, ms, entity }
       }
     }
