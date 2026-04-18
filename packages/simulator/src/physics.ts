@@ -15,7 +15,14 @@ export const DEFAULT_PHYSICS: PhysicsParams = {
   jumpImpulse: 1200,
   gravity: 3500,
   maxFallSpeed: 1800,
+  // Half-life ~4.3 ticks (~72ms) at 60Hz. Placeholder; BMG's actual value
+  // is unknown to us, but this feels closer to the real game than snap-to-0.
+  groundFriction: 0.85,
 }
+
+// Below this horizontal speed, friction collapses to zero so we don't
+// accumulate floating-point dribble indefinitely.
+const FRICTION_CUTOFF = 5
 
 const TICK_S = TICK_MS / 1000
 const EPSILON = 0.5
@@ -116,7 +123,8 @@ export function stepEntity(
       entity.vel.x = params.walkSpeed
       entity.facing = 1
     } else {
-      entity.vel.x = 0
+      entity.vel.x *= params.groundFriction
+      if (Math.abs(entity.vel.x) < FRICTION_CUTOFF) entity.vel.x = 0
     }
   } else {
     // Air: allow direction change but keep speed constant.

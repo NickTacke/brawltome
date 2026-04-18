@@ -92,12 +92,24 @@ describe('stepEntity: horizontal movement', () => {
     expect(e.vel.x).toBe(-DEFAULT_PHYSICS.walkSpeed)
   })
 
-  test('releasing input on ground zeroes horizontal velocity', () => {
+  test('releasing input on ground applies friction, not snap-to-zero', () => {
     const e = makeEntity(0, 500)
     e.posture = 'ground'
     let phys = makePhysState()
     phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([floor]))
+    const velAfterWalk = e.vel.x
     phys = stepEntity(e, 0, phys, makeLevel([floor]))
+    // One idle tick: friction coefficient applied, still moving in the old direction.
+    expect(e.vel.x).toBeGreaterThan(0)
+    expect(e.vel.x).toBeLessThan(velAfterWalk)
+  })
+
+  test('sustained no-input on ground eventually brings vel.x to 0', () => {
+    const e = makeEntity(0, 500)
+    e.posture = 'ground'
+    let phys = makePhysState()
+    phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([floor]))
+    for (let i = 0; i < 60; i++) phys = stepEntity(e, 0, phys, makeLevel([floor]))
     expect(e.vel.x).toBe(0)
   })
 })

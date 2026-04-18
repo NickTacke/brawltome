@@ -35,4 +35,8 @@ export type PhysicsParams = {
   gravity: number
   // Max fall speed.
   maxFallSpeed: number
+  // Per-tick multiplicative decay applied to horizontal velocity on the
+  // ground when no directional input is held. BMG's engine uses a friction
+  // coefficient here rather than snapping velocity to zero.
+  groundFriction: number
 }
