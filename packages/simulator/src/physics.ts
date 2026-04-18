@@ -18,6 +18,16 @@ export const DEFAULT_PHYSICS: PhysicsParams = {
   // Half-life ~4.3 ticks (~72ms) at 60Hz. Placeholder; BMG's actual value
   // is unknown to us, but this feels closer to the real game than snap-to-0.
   groundFriction: 0.85,
+  // Air control accel of 2500 u/s^2 lets the entity approach walkSpeed in
+  // ~0.28s of airtime, which roughly matches BH's "sluggish but useable"
+  // air drift. Per `§_-D1C§.as` source the engine uses a fractional-per-
+  // tick multiplier rather than a constant accel, but 2500 u/s^2 is a
+  // close V1 approximation.
+  airAccel: 2500,
+  // Fast-fall multiplier applied to gravity while Drop is held in the air.
+  // BH's engine removes the fall-speed cap rather than multiplying gravity,
+  // but doubling gravity gives a similar feel without a second clamp.
+  fastFallMult: 1.8,
 }
 
 // Below this horizontal speed, friction collapses to zero so we don't
@@ -38,15 +48,28 @@ export const DEFAULT_MAX_JUMPS = 3
 
 // Active physics state that spans the tick loop. Tracks the previous-tick
 // input bitmask so we can detect edge-triggered actions (Jump press, etc.),
-// and the remaining mid-air jumps before needing to touch ground again.
+// the remaining mid-air jumps before needing to touch ground again, and
+// the dash/dodge window.
 export type EntityPhysState = {
   prevFlags: number
   jumpsRemaining: number
+  // Absolute ms until which a DodgeDash burst overrides normal movement.
+  // 0 means the entity is not dashing.
+  dashUntilMs: number
+  // Direction of the active dash (+1 or -1). Ignored unless dashUntilMs > ms.
+  dashDir: number
 }
 
 export function makePhysState(): EntityPhysState {
-  return { prevFlags: 0, jumpsRemaining: DEFAULT_MAX_JUMPS }
+  return { prevFlags: 0, jumpsRemaining: DEFAULT_MAX_JUMPS, dashUntilMs: 0, dashDir: 0 }
 }
+
+// Dash parameters: BH's dash lasts ~40 frames at ~1.75x walk speed. Source
+// (§_-H1Y§.as:§_-r27§ = 40) confirms the duration; the 1.75x multiplier is
+// an empirical best-fit from the subagent report until we pin down the
+// actual impulse constant.
+const DASH_DURATION_MS = (40 * 1000) / 60
+const DASH_SPEED_MULT = 1.75
 
 const isHorizontal = (c: CollisionLine): boolean => c.y1 === c.y2
 const isVertical = (c: CollisionLine): boolean => c.x1 === c.x2
@@ -122,38 +145,62 @@ function wallCrossed(y: number, x0: number, x1: number, level: LevelGeometry): n
 }
 
 // One tick of movement for one entity. Mutates `entity` in place and returns
-// the new prevFlags so the caller can thread state across ticks.
+// the new EntityPhysState. `nowMs` lets the dash window track absolute time;
+// callers that don't need dashes can pass 0 and the branch is a no-op.
 export function stepEntity(
   entity: EntityState,
   flags: number,
   phys: EntityPhysState,
   level: LevelGeometry,
   params: PhysicsParams = DEFAULT_PHYSICS,
+  nowMs = 0,
 ): EntityPhysState {
-  // Horizontal input -> desired velocity. Immediate on the ground, slower
-  // acceleration in the air (approximated here as zero air control).
   const leftHeld = (flags & InputFlag.MoveLeft) !== 0
   const rightHeld = (flags & InputFlag.MoveRight) !== 0
-  if (entity.posture === 'ground') {
-    if (leftHeld && !rightHeld) {
-      entity.vel.x = -params.walkSpeed
-      entity.facing = -1
-    } else if (rightHeld && !leftHeld) {
-      entity.vel.x = params.walkSpeed
-      entity.facing = 1
+  const inputDir = leftHeld && !rightHeld ? -1 : rightHeld && !leftHeld ? 1 : 0
+
+  // Dash: edge-triggered DodgeDash press starts a ~667ms high-speed burst.
+  // Direction prefers currently-held horizontal input, falls back to the
+  // entity's facing (so a neutral-direction press dashes forward).
+  const dashNow = (flags & InputFlag.DodgeDash) !== 0
+  const dashPrev = (phys.prevFlags & InputFlag.DodgeDash) !== 0
+  let dashUntilMs = phys.dashUntilMs
+  let dashDir = phys.dashDir
+  if (dashNow && !dashPrev) {
+    dashDir = inputDir !== 0 ? inputDir : entity.facing
+    dashUntilMs = nowMs + DASH_DURATION_MS
+    entity.facing = dashDir < 0 ? -1 : 1
+  }
+  const isDashing = nowMs < dashUntilMs && dashDir !== 0
+
+  // Horizontal motion by state: dash overrides everything, then ground walk,
+  // then air drift (acceleration toward input dir, no hard cap).
+  if (isDashing) {
+    entity.vel.x = dashDir * params.walkSpeed * DASH_SPEED_MULT
+    if (inputDir !== 0) entity.facing = inputDir < 0 ? -1 : 1
+  } else if (entity.posture === 'ground') {
+    if (inputDir !== 0) {
+      entity.vel.x = inputDir * params.walkSpeed
+      entity.facing = inputDir < 0 ? -1 : 1
     } else {
       entity.vel.x *= params.groundFriction
       if (Math.abs(entity.vel.x) < FRICTION_CUTOFF) entity.vel.x = 0
     }
   } else {
-    // Air: allow direction change but keep speed constant.
-    if (leftHeld && !rightHeld) entity.facing = -1
-    else if (rightHeld && !leftHeld) entity.facing = 1
+    // Air: accelerate toward input direction, clamp to walkSpeed on either
+    // side so air drift doesn't exceed ground walk speed.
+    if (inputDir !== 0) {
+      entity.vel.x += inputDir * params.airAccel * TICK_S
+      if (entity.vel.x > params.walkSpeed) entity.vel.x = params.walkSpeed
+      else if (entity.vel.x < -params.walkSpeed) entity.vel.x = -params.walkSpeed
+      entity.facing = inputDir < 0 ? -1 : 1
+    }
   }
 
   // Jump: edge-triggered. Ground and air jumps draw from the same budget.
   // Walking off a ledge doesn't consume one (posture flips to air without
-  // a Jump press).
+  // a Jump press). A jump during a dash preserves the dash horizontal
+  // velocity, producing BH's "dash-jump" arc.
   const jumpNow = (flags & InputFlag.Jump) !== 0
   const jumpPrev = (phys.prevFlags & InputFlag.Jump) !== 0
   let jumpsRemaining = phys.jumpsRemaining
@@ -163,9 +210,11 @@ export function stepEntity(
     jumpsRemaining -= 1
   }
 
-  // Gravity when airborne.
+  // Gravity when airborne, scaled up if the player is fast-falling.
   if (entity.posture !== 'ground') {
-    entity.vel.y = Math.min(entity.vel.y + params.gravity * TICK_S, params.maxFallSpeed)
+    const dropHeld = (flags & InputFlag.Drop) !== 0
+    const grav = dropHeld ? params.gravity * params.fastFallMult : params.gravity
+    entity.vel.y = Math.min(entity.vel.y + grav * TICK_S, params.maxFallSpeed)
   }
 
   // Swept horizontal move + wall clamp.
@@ -207,7 +256,7 @@ export function stepEntity(
     if (wallX !== null || isAdjacentToWall(entity.pos, level)) entity.posture = 'wall'
   }
 
-  return { prevFlags: flags, jumpsRemaining }
+  return { prevFlags: flags, jumpsRemaining, dashUntilMs, dashDir }
 }
 
 // True if `pos` lies outside any non-null killBound. Exposed so callers can

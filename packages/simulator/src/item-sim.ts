@@ -10,11 +10,12 @@ import type { Vec2 } from './types'
 const PICKUP_RANGE_X = 200
 const PICKUP_RANGE_Y = 200
 
-// Brawlhalla has a ~2.5-3s countdown at match start during which inputs
-// are locked and items finish falling to their landing positions. Before
-// this elapses no pickups fire, matching the stats-dump observation that
-// real first-pickup times sit in the 2.5-10s range (never 0ms).
-const MATCH_START_DELAY_MS = 2500
+// Brawlhalla's pregame countdown is a hardcoded 6 s (§_-H5M§.as). Inputs
+// are gated, entity physics paused, and items are still mid-fall from
+// their air spawns to their landing platforms, so nothing is pickable.
+// Matches sim.ts COUNTDOWN_MS; kept as a separate constant here only to
+// avoid a circular import between the physics/item sub-modules.
+const MATCH_START_DELAY_MS = 6000
 
 // Time the slot is unavailable after an item is picked up, in ms. Real
 // Brawlhalla cycles between ~5s and ~10s depending on the spawn-rate rule

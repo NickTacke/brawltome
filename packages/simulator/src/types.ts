@@ -73,4 +73,11 @@ export type PhysicsParams = {
   // ground when no directional input is held. BMG's engine uses a friction
   // coefficient here rather than snapping velocity to zero.
   groundFriction: number
+  // Horizontal acceleration while airborne from MoveLeft/MoveRight input,
+  // in units/second^2. Air drift converges on walkSpeed but slower than
+  // ground movement.
+  airAccel: number
+  // Multiplier applied to gravity while Drop is held in the air. BH's
+  // fast-fall pulls characters down quicker than gravity alone.
+  fastFallMult: number
 }

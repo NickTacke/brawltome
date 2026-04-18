@@ -16,6 +16,13 @@ import {
 import { TICK_MS, msToTick, tickToMs } from './tick'
 import type { AttackAttempt, EntityState, EntityTick, PhysicsParams, Posture, Vec2 } from './types'
 
+// Brawlhalla's hardcoded pre-match countdown length. During this window
+// the game engine gates its entire update loop (§_-H5M§.as pregame check
+// `_loc4_ < 6000`), freezing player physics and dropping any buffered
+// input presses. Tracked as a sim-wide constant so the item-pickup code
+// can line up to the same gate.
+export const COUNTDOWN_MS = 6000
+
 export type SimInput = {
   parsed: ParsedReplay
   geometry: LevelGeometry
@@ -144,6 +151,20 @@ export class Simulation {
   *ticks(): Generator<EntityTick> {
     for (let tick = 0; tick <= this.endTick; tick++) {
       const ms = tickToMs(tick)
+      // Brawlhalla has a hardcoded 6000 ms pre-match countdown during which
+      // the engine skips its whole update loop: entity physics, input
+      // processing, hit detection, and item timers are all gated by the
+      // `_loc4_ < 6000` check in §_-H5M§.as. During this window the
+      // replay's own input stream may record a few early presses (keys
+      // buffered by the player pre-match) but the game drops them. Our
+      // sim mirrors that behaviour by yielding frozen entities and
+      // skipping every subsystem until the countdown elapses.
+      if (ms < COUNTDOWN_MS) {
+        for (const entity of this.entities.values()) {
+          yield { tick, ms, entity }
+        }
+        continue
+      }
       advanceItemSlots(this.itemSlots, ms, this.weaponPool.length)
       // Hit detection: walk every live attack window and check overlap
       // against opponents. Prune spent windows in-place.
@@ -254,7 +275,7 @@ export class Simulation {
           }
         }
 
-        const next = stepEntity(entity, flags, phys, this.geometry, this.physicsParams)
+        const next = stepEntity(entity, flags, phys, this.geometry, this.physicsParams, ms)
         const respawn = this.respawnPoints.get(entity.id) ?? { x: 0, y: 0 }
         // If the kill check is about to fire, the entity loses its weapon.
         // Check before the respawn mutates position so we don't need to

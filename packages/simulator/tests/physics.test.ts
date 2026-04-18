@@ -187,7 +187,7 @@ describe('stepEntity: jump', () => {
     const e = makeEntity(0, 400)
     e.posture = 'air'
     e.vel.y = 800
-    let phys = { prevFlags: 0, jumpsRemaining: 0 }
+    let phys = { prevFlags: 0, jumpsRemaining: 0, dashUntilMs: 0, dashDir: 0 }
     for (let i = 0; i < 30; i++) phys = stepEntity(e, 0, phys, makeLevel([floor]))
     expect(e.posture).toBe('ground')
     expect(phys.jumpsRemaining).toBe(3)
@@ -346,7 +346,7 @@ describe('checkKillAndRespawn', () => {
 
   test('respawn refills the jump budget even if it was spent', () => {
     const e = makeEntity(0, 3000)
-    const phys = { prevFlags: 0, jumpsRemaining: 0 }
+    const phys = { prevFlags: 0, jumpsRemaining: 0, dashUntilMs: 0, dashDir: 0 }
     const level = bounded({ bottom: 2000 })
     const next = checkKillAndRespawn(e, level, respawnPoint, phys)
     expect(next.jumpsRemaining).toBe(3)
