@@ -7,6 +7,7 @@ import {
   createUserRepo,
   getCurrentUser,
 } from '@brawltome/identity'
+import { createMatchRepo } from '@brawltome/matchmaking'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
 import { createRankingRepo } from '@brawltome/ranking'
 import {
@@ -14,6 +15,7 @@ import {
   checkRateLimit,
   createMetricsRegistry,
   createQueue,
+  createR2Client,
   dedupKey,
   getLegendById,
   initGameData,
@@ -25,7 +27,9 @@ import { cors } from 'hono/cors'
 import Redis from 'ioredis'
 import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
 import { createAuthRoutes } from './auth/routes'
+import { readMatchmakingConfig } from './matchmaking-config'
 import { appRouter } from './router'
+import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
@@ -70,6 +74,17 @@ const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'b
   },
 )
 
+const matchmakingConfig = readMatchmakingConfig()
+const r2 = createR2Client(matchmakingConfig.r2)
+const matchmakingLive = matchmakingConfig.enabled && !!r2
+const matchRepo = matchmakingLive ? createMatchRepo(db) : null
+
+console.log(
+  `[api] matchmaking: ${matchmakingLive ? 'ENABLED' : 'disabled'}${
+    matchmakingConfig.enabled && !r2 ? ' (R2 not configured)' : ''
+  }`,
+)
+
 const sharedCtx = {
   db,
   redis,
@@ -83,6 +98,9 @@ const sharedCtx = {
   sessionRepo,
   playerLinkRepo,
   steamLinkQueue,
+  matchRepo,
+  r2,
+  matchmakingEnabled: matchmakingLive,
 }
 
 const app = new Hono()
@@ -110,6 +128,18 @@ app.use(
 )
 
 app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, playerLinkRepo, steamLinkQueue, config: authConfig }))
+
+app.route(
+  '/api/matches',
+  createMatchmakingRoutes({
+    matchRepo,
+    r2,
+    redis,
+    metrics,
+    getUserFromCookie: { userRepo, sessionRepo },
+    enabled: matchmakingLive,
+  }),
+)
 
 app.use(
   '/trpc/*',
@@ -160,9 +190,11 @@ app.get('/internal/metrics', async (c) => {
   const tokensOnDemand = await metrics.getScalar('bhapi:tokens_on_demand_remaining')
   const tokensBackground = await metrics.getScalar('bhapi:tokens_background_remaining')
   const pausedUntilMs = await metrics.getScalar('bhapi:paused_until_ms')
+  const counters = await metrics.snapshotCounters()
 
   return c.json({
     queues,
+    counters,
     bhapi: {
       tokens_on_demand_remaining: tokensOnDemand,
       tokens_background_remaining: tokensBackground,

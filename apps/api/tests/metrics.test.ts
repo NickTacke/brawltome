@@ -45,4 +45,15 @@ describe('MetricsRegistry', () => {
     expect(snap['queue-a']?.rejected_total).toBe(1)
     expect(snap['queue-b']?.rate_limit_retries_total).toBe(1)
   })
+
+  it('incrementCounter and snapshotCounters track free-form keys', async () => {
+    const metrics = createMetricsRegistry(redis)
+    await metrics.incrementCounter('matchmaking_ingest_ok')
+    await metrics.incrementCounter('matchmaking_ingest_ok')
+    await metrics.incrementCounter('matchmaking_ingest_rejected_tampered')
+
+    const snap = await metrics.snapshotCounters()
+    expect(snap.matchmaking_ingest_ok).toBe(2)
+    expect(snap.matchmaking_ingest_rejected_tampered).toBe(1)
+  })
 })
