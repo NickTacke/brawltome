@@ -2,15 +2,19 @@ import type { ItemSpawn, LevelGeometry } from '@brawltome/game-data'
 import type { Vec2 } from './types'
 
 // Horizontal and vertical range within which an entity is considered to
-// be overlapping an item slot for pickup purposes. These ranges are also
-// doing work the sim doesn't do yet: BH items spawn in the air and fall
-// to the nearest platform before becoming pickable, but we treat them as
-// sitting at the spawn position. A generous Y range (600) approximates
-// "reachable" for high init/teamInit slots that would, in reality, fall
-// onto a platform the player walks across. Tuned against the SmallTerminus
-// stats dump.
+// be overlapping an item slot for pickup purposes. The Y range is tight
+// enough that entities need to be at roughly platform level to grab an
+// item - high init/teamInit slots that spawn in the air aren't reachable
+// until the item falls onto a platform, which the sim approximates by
+// making slots available only after MATCH_START_DELAY_MS has elapsed.
 const PICKUP_RANGE_X = 200
-const PICKUP_RANGE_Y = 1500
+const PICKUP_RANGE_Y = 200
+
+// Brawlhalla has a ~2.5-3s countdown at match start during which inputs
+// are locked and items finish falling to their landing positions. Before
+// this elapses no pickups fire, matching the stats-dump observation that
+// real first-pickup times sit in the 2.5-10s range (never 0ms).
+const MATCH_START_DELAY_MS = 2500
 
 // Time the slot is unavailable after an item is picked up, in ms. Real
 // Brawlhalla cycles between ~5s and ~10s depending on the spawn-rate rule
@@ -60,7 +64,9 @@ export function findPickupSlot(
   slots: ItemSlotState[],
   weaponPool: readonly string[],
   allowedWeapons: ReadonlySet<string>,
+  nowMs = Number.POSITIVE_INFINITY,
 ): number | null {
+  if (nowMs < MATCH_START_DELAY_MS) return null
   const anyAllowed = allowedWeapons.size === 0
   for (let i = 0; i < slots.length; i++) {
     const s = slots[i]
@@ -100,3 +106,4 @@ export function consumeSlot(slot: ItemSlotState, nowMs: number, weaponPool: read
 }
 
 export const RESPAWN_MS_DEFAULT = RESPAWN_MS
+export const MATCH_START_DELAY_MS_DEFAULT = MATCH_START_DELAY_MS

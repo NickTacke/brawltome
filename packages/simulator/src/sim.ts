@@ -195,10 +195,12 @@ export class Simulation {
         const priorHeld = held
 
         // Pickup: overlap-based. Only unarmed entities can pick up, and only
-        // weapons they own (their legend's weaponOne/weaponTwo).
+        // weapons they own (their legend's weaponOne/weaponTwo). The
+        // findPickupSlot call also gates on the match-start countdown so
+        // nobody grabs an item at t=0.
         if (held === 'Base' && this.weaponPool.length > 0) {
           const owned = this.ownedWeapons.get(entity.id) ?? new Set<string>()
-          const slotIdx = findPickupSlot(entity.pos, this.itemSlots, this.weaponPool, owned)
+          const slotIdx = findPickupSlot(entity.pos, this.itemSlots, this.weaponPool, owned, ms)
           if (slotIdx !== null) {
             held = consumeSlot(this.itemSlots[slotIdx], ms, this.weaponPool)
             this.heldWeapon.set(entity.id, held)
