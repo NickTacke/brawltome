@@ -1,5 +1,6 @@
 import type { LevelGeometry } from '@brawltome/game-data'
 import type { ParsedReplay } from '@brawltome/replay-format'
+import { detectAttackAttempts } from './attack-events'
 import { InputDriver } from './input-driver'
 import {
   DEFAULT_PHYSICS,
@@ -9,7 +10,14 @@ import {
   stepEntity,
 } from './physics'
 import { TICK_MS, msToTick, tickToMs } from './tick'
-import type { EntityState, EntityTick, PhysicsParams, Posture, Vec2 } from './types'
+import type {
+  AttackAttempt,
+  EntityState,
+  EntityTick,
+  PhysicsParams,
+  Posture,
+  Vec2,
+} from './types'
 
 export type SimInput = {
   parsed: ParsedReplay
@@ -36,6 +44,7 @@ export class Simulation {
   private readonly entities = new Map<number, EntityState>()
   private readonly physState = new Map<number, EntityPhysState>()
   private readonly respawnPoints = new Map<number, Vec2>()
+  private readonly attacks: AttackAttempt[] = []
   private readonly driver: InputDriver
   private readonly geometry: LevelGeometry
   private readonly physicsParams: PhysicsParams
@@ -71,6 +80,18 @@ export class Simulation {
         const flags = this.driver.flagsAt(entity.id, ms)
         const phys = this.physState.get(entity.id)
         if (!phys) continue
+        // Detect attack-button edges before stepEntity runs, so posture is
+        // the state the entity had when the press "happened", not the state
+        // after the tick's physics resolved.
+        const attempts = detectAttackAttempts({
+          tick,
+          ms,
+          entityId: entity.id,
+          flags,
+          prevFlags: phys.prevFlags,
+          posture: entity.posture,
+        })
+        if (attempts.length > 0) this.attacks.push(...attempts)
         const next = stepEntity(entity, flags, phys, this.geometry, this.physicsParams)
         const respawn = this.respawnPoints.get(entity.id) ?? { x: 0, y: 0 }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
@@ -78,6 +99,13 @@ export class Simulation {
         yield { tick, ms, entity }
       }
     }
+  }
+
+  // Every edge-triggered attack-button press in match order. Computed as a
+  // side effect of iterating ticks(); if the caller has not yet drained the
+  // tick generator, this returns whatever has accumulated so far.
+  attackAttempts(): readonly AttackAttempt[] {
+    return this.attacks
   }
 
   postureTotals(): PostureTotals[] {

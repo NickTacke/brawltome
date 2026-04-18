@@ -49,6 +49,7 @@ function diagnose(path: string): void {
 
   const sim = new Simulation({ parsed, geometry: geo })
   const totals = sim.postureTotals()
+  const attacks = sim.attackAttempts()
 
   console.log(`\nposture breakdown per entity:`)
   console.log(`  id  name              air     ground  wall    sum(ms)   match(ms)`)
@@ -58,6 +59,27 @@ function diagnose(path: string): void {
     const sum = t.air + t.ground + t.wall
     console.log(
       `  ${String(t.entityId).padStart(3, ' ')} ${name} ${pct(t.air, sum)} ${pct(t.ground, sum)} ${pct(t.wall, sum)} ${fmt(sum, 8, 0)}   ${fmt(lengthMs, 8, 0)}`,
+    )
+  }
+
+  const minutes = lengthMs / 60000
+  const buttons = ['light', 'heavy', 'dodge', 'throw'] as const
+  console.log(`\nattack-attempt counts (edge-triggered presses, not landed hits):`)
+  console.log(`  id  name             light  heavy  dodge  throw   total   per-min`)
+  for (const t of totals) {
+    const ent = parsed.entities.find((e) => e.id === t.entityId)
+    const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
+    const byButton: Record<string, number> = { light: 0, heavy: 0, dodge: 0, throw: 0 }
+    let total = 0
+    for (const a of attacks) {
+      if (a.entityId !== t.entityId) continue
+      byButton[a.button] += 1
+      total += 1
+    }
+    const cols = buttons.map((b) => String(byButton[b]).padStart(5, ' ')).join('  ')
+    const perMin = minutes > 0 ? total / minutes : 0
+    console.log(
+      `  ${String(t.entityId).padStart(3, ' ')} ${name} ${cols}   ${String(total).padStart(5, ' ')}    ${perMin.toFixed(1).padStart(5, ' ')}`,
     )
   }
 }

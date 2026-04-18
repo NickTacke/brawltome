@@ -22,6 +22,27 @@ export type EntityTick = {
   entity: EntityState
 }
 
+// Which attack button was pressed. "light"/"heavy"/"dodge"/"throw" mirror
+// the four InputFlag bits (Light/Heavy/DodgeDash/PickUpThrow). Edge-triggered
+// by Simulation, so holding the button yields a single event on press.
+export type AttackButton = 'light' | 'heavy' | 'dodge' | 'throw'
+
+// Directional context at the moment of the press. Vertical (AimUp, Drop)
+// dominates over horizontal so that e.g. Up+Right+Light still reads as 'up'.
+// This matches the in-engine precedence used for picking sig vs aerial.
+export type AttackDirection = 'neutral' | 'up' | 'down' | 'side'
+
+// One attack-button press event. Damage and hitbox resolution come later;
+// for now these are "attempts" that downstream stats consumers can count.
+export type AttackAttempt = {
+  tick: number
+  ms: number
+  entityId: number
+  button: AttackButton
+  direction: AttackDirection
+  posture: Posture
+}
+
 // Brawlhalla's per-legend attribute scaling rolls up into these derived
 // physics params. Filled by the caller (from game-data) and passed into the
 // simulator so we don't hard-code per-legend values here.
