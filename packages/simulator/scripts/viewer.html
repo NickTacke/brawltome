@@ -201,6 +201,33 @@
     drawHitFlashes(frame && frame.ms || 0)
   }
 
+  // Input flag bit positions must match InputFlag in replay-format.
+  const INPUT_LABELS = [
+    { bit: 1 << 0, name: 'Up' },
+    { bit: 1 << 1, name: 'Drop' },
+    { bit: 1 << 2, name: 'L' },
+    { bit: 1 << 3, name: 'R' },
+    { bit: 1 << 4, name: 'Jump' },
+    { bit: 1 << 5, name: 'PriN' },
+    { bit: 1 << 6, name: 'Heavy' },
+    { bit: 1 << 7, name: 'Light' },
+    { bit: 1 << 8, name: 'Dodge' },
+    { bit: 1 << 9, name: 'Throw' },
+    { bit: 1 << 10, name: 'TU' },
+    { bit: 1 << 11, name: 'TR' },
+    { bit: 1 << 12, name: 'TD' },
+    { bit: 1 << 13, name: 'TL' },
+  ]
+
+  function formatInputs(flags) {
+    if (!flags) return '-'
+    const parts = []
+    for (const { bit, name } of INPUT_LABELS) {
+      if (flags & bit) parts.push(name)
+    }
+    return parts.join('+')
+  }
+
   function el(tag, attrs, text) {
     const n = document.createElement(tag)
     if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -230,6 +257,11 @@
       row.appendChild(el('div', { class: 'dmg' }, ent.damagePct.toFixed(1) + '%'))
       row.appendChild(el('div', { class: 'meta' }, 'pos=(' + Math.round(ent.x) + ', ' + Math.round(ent.y) + ')'))
       row.appendChild(el('div', { class: 'meta' }, 'vel=(' + Math.round(ent.vx) + ', ' + Math.round(ent.vy) + ') · ' + ent.posture))
+      // Raw replay input bitmask at this ms - same data BH recorded,
+      // regardless of whether our sim is processing it this tick.
+      const inputs = formatInputs(ent.inputFlags || 0)
+      const inputLine = el('div', { class: 'meta', style: 'color:#cd7' }, 'inputs=' + inputs)
+      row.appendChild(inputLine)
       row.appendChild(el('div', { class: 'meta' }, ent.heldWeapon))
       side.appendChild(row)
     }

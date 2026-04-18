@@ -86,9 +86,19 @@ export type AttackAttempt = {
 export type PhysicsParams = {
   // Baseline horizontal velocity cap (units/second at speed stat 5).
   walkSpeed: number
-  // Jump initial velocity (units/second, upward positive-in-world means
-  // negative-y in screen space; Brawlhalla uses y-down).
+  // Jump initial velocity (units/second) for the ground jump and first
+  // air jump. BH uses the same value for both. Upward positive-in-world
+  // means negative-y in screen space; Brawlhalla uses y-down.
   jumpImpulse: number
+  // Initial velocity for the second air jump - the last one available
+  // before touching ground. BH empirically uses a higher impulse for
+  // this jump than the first air jump (65 vs 57 units/frame in the
+  // decompiled source), so recoveries reach a taller apex.
+  secondAirJumpImpulse: number
+  // Multiplier applied to vel.y when the Jump input is released while
+  // the entity is still rising. BH's "short jump" scales by 0.86 when
+  // the player taps rather than holds.
+  shortJumpMult: number
   // Gravity acceleration, units/second^2.
   gravity: number
   // Max fall speed.

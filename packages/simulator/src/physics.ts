@@ -12,7 +12,14 @@ import type { EntityState, PhysicsParams, Vec2 } from './types'
 // at 1x scale, y-down). Picked to feel roughly right, not frame-accurate.
 export const DEFAULT_PHYSICS: PhysicsParams = {
   walkSpeed: 700,
-  jumpImpulse: 1200,
+  // Ground + first-air impulse. BH native is 57 u/frame applied against
+  // a heavier gravity than ours; direct translation over-shot the real
+  // on-screen arc so these are tuned down to match the viewer. The
+  // second air jump keeps a ~1.14x ratio so the "last jump is bigger"
+  // feel survives (§_-Z1H§.as:7208).
+  jumpImpulse: 1500,
+  secondAirJumpImpulse: 1700,
+  shortJumpMult: 0.86,
   gravity: 3500,
   maxFallSpeed: 1800,
   // Half-life ~4.3 ticks (~72ms) at 60Hz. Placeholder; BMG's actual value
@@ -197,17 +204,29 @@ export function stepEntity(
     }
   }
 
-  // Jump: edge-triggered. Ground and air jumps draw from the same budget.
-  // Walking off a ledge doesn't consume one (posture flips to air without
-  // a Jump press). A jump during a dash preserves the dash horizontal
-  // velocity, producing BH's "dash-jump" arc.
+  // Jump: edge-triggered. Ground and air jumps draw from the same budget
+  // of DEFAULT_MAX_JUMPS. Walking off a ledge doesn't consume one
+  // (posture flips to air without a Jump press). A jump during a dash
+  // preserves the dash horizontal velocity, producing BH's "dash-jump"
+  // arc. The final jump in the budget (jumpsRemaining === 1 before
+  // consumption) uses a higher impulse per BH (the "2nd air jump" path
+  // in the decompiled state machine).
   const jumpNow = (flags & InputFlag.Jump) !== 0
   const jumpPrev = (phys.prevFlags & InputFlag.Jump) !== 0
   let jumpsRemaining = phys.jumpsRemaining
   if (jumpNow && !jumpPrev && jumpsRemaining > 0) {
-    entity.vel.y = -params.jumpImpulse
+    const impulse = jumpsRemaining === 1 ? params.secondAirJumpImpulse : params.jumpImpulse
+    entity.vel.y = -impulse
     entity.posture = 'air'
     jumpsRemaining -= 1
+  }
+
+  // Short-press jump: tapping rather than holding Jump clamps upward
+  // velocity to shortJumpMult * impulse while the player is still
+  // rising. BH does this with a 0.86x multiplier (§_-Z1H§.as:7071).
+  if (!jumpNow && jumpPrev && entity.vel.y < 0) {
+    const clamped = -params.jumpImpulse * params.shortJumpMult
+    if (entity.vel.y < clamped) entity.vel.y = clamped
   }
 
   // Gravity when airborne, scaled up if the player is fast-falling.

@@ -17,6 +17,7 @@ import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getLegendById, getLevelById, getPowerById, levelGeometry } from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
+import { InputDriver } from '../src/input-driver'
 import { Simulation } from '../src/sim'
 
 const args = process.argv.slice(2)
@@ -56,9 +57,15 @@ type Frame = {
     damagePct: number
     inHitstun: boolean
     heldWeapon: string
+    // Raw input bitmask from the replay at this ms - what the player was
+    // actually holding, regardless of whether the sim processed it this
+    // tick (e.g. during countdown or pre-land gate).
+    inputFlags: number
   }[]
   items: { x: number; y: number; weapon: string; available: boolean }[]
 }
+
+const driver = new InputDriver(parsed.inputs)
 
 const frames: Frame[] = []
 let currentFrame: Frame | null = null
@@ -82,6 +89,7 @@ for (const t of sim.ticks()) {
     // reconstruct per-tick held weapon from it here since EntityState
     // doesn't carry it directly.
     heldWeapon: '',
+    inputFlags: driver.flagsAt(t.entity.id, t.ms),
   })
 }
 
