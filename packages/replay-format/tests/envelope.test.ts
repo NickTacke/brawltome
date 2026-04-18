@@ -1,8 +1,8 @@
+import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, test } from 'bun:test'
-import { EnvelopeError } from '../src/errors'
 import { decodeEnvelope, peekFormatVersion } from '../src/envelope'
+import { EnvelopeError } from '../src/errors'
 
 const FIX = join(import.meta.dir, 'fixtures')
 const maybeReadFixture = (name: string): Uint8Array | null =>
@@ -13,11 +13,13 @@ const yarra = maybeReadFixture('yarralytics_1v1.replay')
 
 describe('peekFormatVersion', () => {
   test.if(mishima !== null)('returns 264 for 10.05 fixture', () => {
-    expect(peekFormatVersion(mishima!)).toBe(264)
+    if (!mishima) return
+    expect(peekFormatVersion(mishima)).toBe(264)
   })
 
   test.if(yarra !== null)('returns 261 for 10.02 fixture', () => {
-    expect(peekFormatVersion(yarra!)).toBe(261)
+    if (!yarra) return
+    expect(peekFormatVersion(yarra)).toBe(261)
   })
 
   test('returns null on non-zlib input', () => {
@@ -27,7 +29,8 @@ describe('peekFormatVersion', () => {
 
 describe('decodeEnvelope', () => {
   test.if(mishima !== null)('decompresses and XORs to a buffer with version prefix', () => {
-    const out = decodeEnvelope(mishima!)
+    if (!mishima) return
+    const out = decodeEnvelope(mishima)
     expect(out.length).toBeGreaterThan(1000)
     const dv = new DataView(out.buffer, out.byteOffset, 4)
     expect(dv.getUint32(0)).toBe(264)

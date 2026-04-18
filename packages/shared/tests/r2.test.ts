@@ -3,18 +3,10 @@ import { createR2Client } from '../src/r2'
 
 describe('createR2Client', () => {
   test('returns null when any credential is missing', () => {
-    expect(
-      createR2Client({ accessKeyId: '', secretAccessKey: 'x', endpoint: 'x', bucket: 'x' }),
-    ).toBeNull()
-    expect(
-      createR2Client({ accessKeyId: 'x', secretAccessKey: '', endpoint: 'x', bucket: 'x' }),
-    ).toBeNull()
-    expect(
-      createR2Client({ accessKeyId: 'x', secretAccessKey: 'x', endpoint: '', bucket: 'x' }),
-    ).toBeNull()
-    expect(
-      createR2Client({ accessKeyId: 'x', secretAccessKey: 'x', endpoint: 'x', bucket: '' }),
-    ).toBeNull()
+    expect(createR2Client({ accessKeyId: '', secretAccessKey: 'x', endpoint: 'x', bucket: 'x' })).toBeNull()
+    expect(createR2Client({ accessKeyId: 'x', secretAccessKey: '', endpoint: 'x', bucket: 'x' })).toBeNull()
+    expect(createR2Client({ accessKeyId: 'x', secretAccessKey: 'x', endpoint: '', bucket: 'x' })).toBeNull()
+    expect(createR2Client({ accessKeyId: 'x', secretAccessKey: 'x', endpoint: 'x', bucket: '' })).toBeNull()
   })
 
   test('returns client with put, get, delete, presignGet when configured', () => {
@@ -24,10 +16,10 @@ describe('createR2Client', () => {
       endpoint: 'https://example.com',
       bucket: 'x',
     })
-    expect(c).not.toBeNull()
-    expect(typeof c!.put).toBe('function')
-    expect(typeof c!.get).toBe('function')
-    expect(typeof c!.delete).toBe('function')
-    expect(typeof c!.presignGet).toBe('function')
+    if (!c) throw new Error('createR2Client returned null with valid config')
+    expect(typeof c.put).toBe('function')
+    expect(typeof c.get).toBe('function')
+    expect(typeof c.delete).toBe('function')
+    expect(typeof c.presignGet).toBe('function')
   })
 })

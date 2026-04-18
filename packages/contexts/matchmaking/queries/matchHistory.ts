@@ -4,9 +4,7 @@ import type { Cursor, MatchRepo } from '../match.repo'
 export type { Cursor } from '../match.repo'
 
 export function encodeCursor(c: Cursor): string {
-  return Buffer.from(JSON.stringify({ u: c.uploadedAt.toISOString(), s: c.slug })).toString(
-    'base64url',
-  )
+  return Buffer.from(JSON.stringify({ u: c.uploadedAt.toISOString(), s: c.slug })).toString('base64url')
 }
 
 export function decodeCursor(raw: string): Cursor | null {

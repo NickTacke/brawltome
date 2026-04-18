@@ -21,8 +21,6 @@ describe('computeDedupeHash', () => {
 
 describe('computeRawHash', () => {
   test('sha256 of empty buffer matches known value', () => {
-    expect(computeRawHash(new Uint8Array([]))).toBe(
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    )
+    expect(computeRawHash(new Uint8Array([]))).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
   })
 })

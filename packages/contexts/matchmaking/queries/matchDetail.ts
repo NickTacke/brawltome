@@ -7,9 +7,6 @@ export async function matchDetail(
 ): Promise<{ match: MatchRow; players: MatchPlayerRow[]; events: MatchEventRow[] } | null> {
   const match = await deps.matchRepo.findBySlug(slug)
   if (!match) return null
-  const [players, events] = await Promise.all([
-    deps.matchRepo.findPlayers(slug),
-    deps.matchRepo.findEvents(slug),
-  ])
+  const [players, events] = await Promise.all([deps.matchRepo.findPlayers(slug), deps.matchRepo.findEvents(slug)])
   return { match, players, events }
 }
