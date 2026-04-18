@@ -96,7 +96,7 @@ function parsedStub(): ParsedReplay {
 }
 
 function mockRepo(overrides: Partial<MatchRepo> = {}): MatchRepo {
-  return {
+  const repo: MatchRepo = {
     findBySlug: mock(async () => null),
     findByDedupeHash: mock(async () => null),
     findPlayers: mock(async () => []),
@@ -109,8 +109,10 @@ function mockRepo(overrides: Partial<MatchRepo> = {}): MatchRepo {
     markParsed: mock(async () => {}),
     updatePlayerCosmetics: mock(async () => {}),
     deleteMatch: mock(async () => {}),
-    ...overrides,
+    transaction: async (fn) => fn(repo),
   }
+  Object.assign(repo, overrides)
+  return repo
 }
 
 describe('backfillPending', () => {

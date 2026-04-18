@@ -1,20 +1,17 @@
 import { db, oauthAccount, user } from '@brawltome/database'
-import {
-  SESSION_TTL_MS,
-  createSessionRepo,
-  generateSessionToken,
-  hashSessionToken,
-} from '@brawltome/identity'
+import { SESSION_TTL_MS, createSessionRepo, generateSessionToken, hashSessionToken } from '@brawltome/identity'
 import { and, eq } from 'drizzle-orm'
+
+if (process.env.NODE_ENV === 'production' || process.env.ALLOW_TEST_SESSION_MINT !== 'true') {
+  console.error('Refusing to mint a test session without ALLOW_TEST_SESSION_MINT=true in non-production.')
+  process.exit(1)
+}
 
 const TEST_DISCORD_ID = 'test-ingest-user'
 
 async function ensureUser(): Promise<string> {
   const existing = await db.query.oauthAccount.findFirst({
-    where: and(
-      eq(oauthAccount.provider, 'discord'),
-      eq(oauthAccount.providerAccountId, TEST_DISCORD_ID),
-    ),
+    where: and(eq(oauthAccount.provider, 'discord'), eq(oauthAccount.providerAccountId, TEST_DISCORD_ID)),
   })
   if (existing) return existing.userId
 
