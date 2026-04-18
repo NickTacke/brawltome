@@ -23,7 +23,11 @@ import {
   levelGeometry,
 } from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
-import { estimatePowerDamage, strengthMultiplier } from '../src/damage-estimator'
+import {
+  estimatePowerDamage,
+  strengthMultiplier,
+  weightMultiplier,
+} from '../src/damage-estimator'
 import { Simulation } from '../src/sim'
 import { TICK_MS } from '../src/tick'
 import { loadStats, statsPlayers, weaponAtMs } from './stats-loader'
@@ -144,11 +148,30 @@ function diagnose(path: string, statsPath?: string): void {
   }
 
   // Damage-attempted upper bound per press: resolved Power's base damage
-  // (via estimator) scaled by the attacker's strength stat. Real in-game
-  // hits further reduce on the defender's weight/defence and by dodge/CC
-  // modifiers we don't model. Assumes every press connects.
+  // (via estimator) scaled by the attacker's strength and the average
+  // opponent weight multiplier. Assumes every press connects to a target
+  // from the opposing team; ignores stage knockback and crouch-cancel
+  // reductions which would reduce the number further.
+  const entityTeam = new Map<number, number>()
+  const entityWeight = new Map<number, number>()
+  for (const ent of parsed.entities) {
+    entityTeam.set(ent.id, ent.team)
+    const hid = ent.playerData.heroes[0]?.heroId
+    const lg = hid !== undefined ? getLegendById(hid) : undefined
+    entityWeight.set(ent.id, lg?.weight ?? 5)
+  }
+  const avgOpponentWeight = (attackerId: number): number => {
+    const team = entityTeam.get(attackerId)
+    const weights: number[] = []
+    for (const [eid, t] of entityTeam.entries()) {
+      if (t !== team) weights.push(entityWeight.get(eid) ?? 5)
+    }
+    if (weights.length === 0) return 5
+    return weights.reduce((s, w) => s + w, 0) / weights.length
+  }
+
   console.log(
-    `\ndamage-attempted (estimator * strength multiplier; upper bound):`,
+    `\ndamage-attempted (estimator * strength * avg-opponent-weight; upper bound):`,
   )
   console.log(`  id  name             resolved  unresolvable  damage  per-min`)
   for (const t of totals) {
@@ -157,6 +180,7 @@ function diagnose(path: string, statsPath?: string): void {
     const heroId = ent?.playerData.heroes[0]?.heroId
     const legend = heroId !== undefined ? getLegendById(heroId) : undefined
     const strMult = legend ? strengthMultiplier(legend.strength) : 1
+    const weightMult = weightMultiplier(avgOpponentWeight(t.entityId))
     let resolved = 0
     let unresolvable = 0
     let damage = 0
@@ -168,7 +192,7 @@ function diagnose(path: string, statsPath?: string): void {
       }
       resolved += 1
       const p = getPowerById(a.powerId)
-      if (p) damage += estimatePowerDamage(p, getPowerByName) * strMult
+      if (p) damage += estimatePowerDamage(p, getPowerByName) * strMult * weightMult
     }
     const perMin = minutes > 0 ? damage / minutes : 0
     console.log(
@@ -194,11 +218,12 @@ function diagnose(path: string, statsPath?: string): void {
     const heroId = ent.playerData.heroes[0]?.heroId
     const legend = heroId !== undefined ? getLegendById(heroId) : undefined
     const strMult = legend ? strengthMultiplier(legend.strength) : 1
+    const weightMult = weightMultiplier(avgOpponentWeight(ent.id))
     let simDamage = 0
     for (const a of attacks) {
       if (a.entityId !== ent.id || a.powerId === null) continue
       const pw = getPowerById(a.powerId)
-      if (pw) simDamage += estimatePowerDamage(pw, getPowerByName) * strMult
+      if (pw) simDamage += estimatePowerDamage(pw, getPowerByName) * strMult * weightMult
     }
     const real = p.DamageDealt
     const delta = simDamage - real
