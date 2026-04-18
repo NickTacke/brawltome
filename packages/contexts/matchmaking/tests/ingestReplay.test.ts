@@ -298,11 +298,24 @@ describe('ingestReplay', () => {
   })
 
   test('accepts when knownHeroIds/knownLevelIds are not provided (backwards-compat)', async () => {
+    // Use deliberately fake IDs to prove the legacy code path actually skips
+    // validation, not that the IDs happen to be in some default allowlist.
+    const fakeIds: ParsedReplay = {
+      ...validParsed,
+      levelId: 99999,
+      entities: validParsed.entities.map((e) => ({
+        ...e,
+        playerData: {
+          ...e.playerData,
+          heroes: [{ ...e.playerData.heroes[0], heroId: 99998 }],
+        },
+      })),
+    }
     const res = await ingestReplay(
-      { matchRepo: mockRepo(), r2Put: mock(async () => {}), reparseRaw: () => validParsed },
+      { matchRepo: mockRepo(), r2Put: mock(async () => {}), reparseRaw: () => fakeIds },
       {
         userId: 'u1',
-        parsedReplay: validParsed,
+        parsedReplay: fakeIds,
         entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
         rawBytes: fakeRaw,
         formatVersion: 264,
