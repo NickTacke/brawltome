@@ -1,20 +1,7 @@
-export type WeaponName =
-  | 'Hammer'
-  | 'Spear'
-  | 'Lance'
-  | 'Blasters'
-  | 'Katars'
-  | 'Gauntlets'
-  | 'Sword'
-  | 'Axe'
-  | 'Bow'
-  | 'Unarmed'
-  | 'Scythe'
-  | 'Cannon'
-  | 'Orb'
-  | 'Greatsword'
-  | 'Battleboots'
-  | string
+// Weapon identifier. Kept as bare string rather than a literal union because
+// BMG owns the canonical list and we'd drift from it. Compare against
+// constants from game files, not hardcoded strings.
+export type WeaponName = string
 
 export type Legend = {
   heroId: number
