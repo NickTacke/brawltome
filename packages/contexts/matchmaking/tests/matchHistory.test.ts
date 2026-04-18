@@ -63,4 +63,13 @@ describe('cursor codec', () => {
   test('decode returns null on garbage', () => {
     expect(decodeCursor('!!!')).toBe(null)
   })
+
+  test('decode rejects structurally-valid-but-wrong payloads', () => {
+    const encode = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url')
+    expect(decodeCursor(encode({ u: 'not-a-date', s: 'ok' }))).toBe(null)
+    expect(decodeCursor(encode({ u: '2026-04-18T00:00:00Z', s: 123 }))).toBe(null)
+    expect(decodeCursor(encode({ u: 123, s: 'ok' }))).toBe(null)
+    expect(decodeCursor(encode('plain-string'))).toBe(null)
+    expect(decodeCursor(encode(null))).toBe(null)
+  })
 })
