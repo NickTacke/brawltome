@@ -3,6 +3,7 @@ export { InputDriver, InputCursor } from './src/input-driver'
 export { classifyPosture } from './src/collision'
 export {
   DEFAULT_PHYSICS,
+  DEFAULT_MAX_JUMPS,
   makePhysState,
   stepEntity,
   type EntityPhysState,

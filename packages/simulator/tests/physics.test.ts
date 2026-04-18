@@ -124,13 +124,93 @@ describe('stepEntity: jump', () => {
     expect(e.vel.y).toBeGreaterThan(vyAfterJump)
   })
 
-  test('jump is ignored in the air', () => {
-    const e = makeEntity(0, 0)
-    e.posture = 'air'
+  test('ground jump + two air jumps (3 total)', () => {
+    const e = makeEntity(0, 500)
+    e.posture = 'ground'
+    let phys = makePhysState()
+    expect(phys.jumpsRemaining).toBe(3)
+    phys = stepEntity(e, InputFlag.Jump, phys, makeLevel([floor])) // ground
+    expect(phys.jumpsRemaining).toBe(2)
+    phys = stepEntity(e, 0, phys, makeLevel([floor]))
+    phys = stepEntity(e, InputFlag.Jump, phys, makeLevel([floor])) // air 1
+    expect(phys.jumpsRemaining).toBe(1)
+    phys = stepEntity(e, 0, phys, makeLevel([floor]))
+    phys = stepEntity(e, InputFlag.Jump, phys, makeLevel([floor])) // air 2
+    expect(phys.jumpsRemaining).toBe(0)
+  })
+
+  test('fourth jump without landing is ignored', () => {
+    const e = makeEntity(0, 500)
+    e.posture = 'ground'
+    let phys = makePhysState()
+    // Spend all 3 jumps.
+    for (let i = 0; i < 3; i++) {
+      phys = stepEntity(e, InputFlag.Jump, phys, makeLevel([floor]))
+      phys = stepEntity(e, 0, phys, makeLevel([floor]))
+    }
+    expect(phys.jumpsRemaining).toBe(0)
     const before = e.vel.y
-    const phys = makePhysState()
-    stepEntity(e, InputFlag.Jump, phys, makeLevel())
-    expect(e.vel.y).toBeGreaterThanOrEqual(before)
+    phys = stepEntity(e, InputFlag.Jump, phys, makeLevel([floor])) // fourth attempt
+    expect(e.vel.y).toBeGreaterThan(before) // gravity only, no new kick
+    expect(phys.jumpsRemaining).toBe(0)
+  })
+
+  test('walking off a ledge preserves full jump budget', () => {
+    // Ledge: floor from x=0..200, nothing beyond.
+    const ledge = { kind: 'hard' as const, x1: 0, x2: 200, y1: 500, y2: 500 }
+    const e = makeEntity(150, 500)
+    e.posture = 'ground'
+    let phys = makePhysState()
+    expect(phys.jumpsRemaining).toBe(3)
+    // Walk off the right edge. Doesn't consume a jump.
+    for (let i = 0; i < 15; i++) {
+      phys = stepEntity(e, InputFlag.MoveRight, phys, makeLevel([ledge]))
+    }
+    expect(e.posture).toBe('air')
+    expect(phys.jumpsRemaining).toBe(3)
+  })
+
+  test('landing on ground resets the jump count to 3', () => {
+    const e = makeEntity(0, 400)
+    e.posture = 'air'
+    e.vel.y = 800
+    let phys = { prevFlags: 0, jumpsRemaining: 0 }
+    for (let i = 0; i < 30; i++) phys = stepEntity(e, 0, phys, makeLevel([floor]))
+    expect(e.posture).toBe('ground')
+    expect(phys.jumpsRemaining).toBe(3)
+  })
+})
+
+describe('stepEntity: soft platforms', () => {
+  test('falling entity lands on a soft line from above', () => {
+    const soft = { kind: 'soft' as const, x1: 0, x2: 500, y1: 300, y2: 300 }
+    const e = makeEntity(250, 100)
+    e.vel.y = 800
+    let phys = makePhysState()
+    for (let i = 0; i < 10; i++) phys = stepEntity(e, 0, phys, makeLevel([soft]))
+    expect(e.posture).toBe('ground')
+    expect(e.pos.y).toBeCloseTo(300, 0)
+  })
+
+  test('rising entity passes through a soft line from below', () => {
+    const soft = { kind: 'soft' as const, x1: 0, x2: 500, y1: 300, y2: 300 }
+    const e = makeEntity(250, 400)
+    e.vel.y = -1500
+    let phys = makePhysState()
+    for (let i = 0; i < 5; i++) phys = stepEntity(e, 0, phys, makeLevel([soft]))
+    // Didn't snap to the soft line on the way up.
+    expect(e.pos.y).toBeLessThan(300)
+  })
+
+  test('Drop input phases through a soft platform', () => {
+    const soft = { kind: 'soft' as const, x1: 0, x2: 500, y1: 300, y2: 300 }
+    const e = makeEntity(250, 100)
+    e.vel.y = 800
+    let phys = makePhysState()
+    for (let i = 0; i < 20; i++) phys = stepEntity(e, InputFlag.Drop, phys, makeLevel([soft]))
+    // Held Drop means we never caught on the soft platform.
+    expect(e.pos.y).toBeGreaterThan(300)
+    expect(e.posture).toBe('air')
   })
 })
 

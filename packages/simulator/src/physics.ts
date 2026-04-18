@@ -20,29 +20,56 @@ export const DEFAULT_PHYSICS: PhysicsParams = {
 const TICK_S = TICK_MS / 1000
 const EPSILON = 0.5
 
+// Default jump budget: 3 total, shared between ground + air. A grounded
+// player can do 1 ground + 2 air; a player who walks off a ledge without
+// jumping still has 3 air jumps left. Landing on any surface refills to 3.
+//
+// Recoveries (the Jump-while-held-Up special arc, and the "exhausted
+// recovery" that consumes a jump slot once the normal recovery is spent)
+// are a separate mechanic and not modelled here.
+export const DEFAULT_MAX_JUMPS = 3
+
 // Active physics state that spans the tick loop. Tracks the previous-tick
-// input bitmask so we can detect edge-triggered actions (Jump press, etc.).
+// input bitmask so we can detect edge-triggered actions (Jump press, etc.),
+// and the remaining mid-air jumps before needing to touch ground again.
 export type EntityPhysState = {
   prevFlags: number
+  jumpsRemaining: number
 }
 
 export function makePhysState(): EntityPhysState {
-  return { prevFlags: 0 }
+  return { prevFlags: 0, jumpsRemaining: DEFAULT_MAX_JUMPS }
 }
 
 const isHorizontal = (c: CollisionLine): boolean => c.y1 === c.y2
 const isVertical = (c: CollisionLine): boolean => c.x1 === c.x2
 
-// Finds the topmost horizontal hard surface directly under the point, within
-// `maxDrop` units. Returns its Y, or null if there's nothing to land on.
-function groundBeneath(pos: Vec2, level: LevelGeometry, maxDrop: number): number | null {
+// Finds the topmost horizontal surface under `pos` within `maxDrop`. Hard /
+// no_slide lines are always solid from both sides; soft platforms are solid
+// only when we're approaching from above (oldY above the line) and not
+// holding drop-through.
+function groundBeneath(
+  pos: Vec2,
+  oldY: number,
+  level: LevelGeometry,
+  maxDrop: number,
+  dropThrough: boolean,
+): number | null {
   let best: number | null = null
   for (const c of level.collisions) {
-    if (c.kind !== 'hard' && c.kind !== 'no_slide') continue
     if (!isHorizontal(c)) continue
     if (pos.x < Math.min(c.x1, c.x2) || pos.x > Math.max(c.x1, c.x2)) continue
     const dy = c.y1 - pos.y
     if (dy < -EPSILON || dy > maxDrop) continue
+    const isSoft = c.kind === 'soft' || c.kind === 'bouncy_no_slide'
+    if (isSoft) {
+      if (dropThrough) continue
+      // Require the previous-tick position to be above the line (standing up
+      // through a soft platform shouldn't snap us to the top).
+      if (oldY > c.y1 + EPSILON) continue
+    } else if (c.kind !== 'hard' && c.kind !== 'no_slide' && c.kind !== 'bouncy_hard') {
+      continue
+    }
     if (best === null || c.y1 < best) best = c.y1
   }
   return best
@@ -97,12 +124,16 @@ export function stepEntity(
     else if (rightHeld && !leftHeld) entity.facing = 1
   }
 
-  // Jump: edge-triggered, only from the ground.
+  // Jump: edge-triggered. Ground and air jumps draw from the same budget.
+  // Walking off a ledge doesn't consume one (posture flips to air without
+  // a Jump press).
   const jumpNow = (flags & InputFlag.Jump) !== 0
   const jumpPrev = (phys.prevFlags & InputFlag.Jump) !== 0
-  if (jumpNow && !jumpPrev && entity.posture === 'ground') {
+  let jumpsRemaining = phys.jumpsRemaining
+  if (jumpNow && !jumpPrev && jumpsRemaining > 0) {
     entity.vel.y = -params.jumpImpulse
     entity.posture = 'air'
+    jumpsRemaining -= 1
   }
 
   // Gravity when airborne.
@@ -122,14 +153,18 @@ export function stepEntity(
     entity.pos.x = targetX
   }
 
-  // Vertical integration + ground snap.
+  // Vertical integration + ground snap. Drop-through lets the entity phase
+  // through soft platforms this tick.
+  const startY = entity.pos.y
+  const dropThrough = (flags & InputFlag.Drop) !== 0
   entity.pos.y += entity.vel.y * TICK_S
   if (entity.vel.y >= 0) {
-    const floorY = groundBeneath(entity.pos, level, Math.max(8, entity.vel.y * TICK_S + 2))
+    const floorY = groundBeneath(entity.pos, startY, level, Math.max(8, entity.vel.y * TICK_S + 2), dropThrough)
     if (floorY !== null) {
       entity.pos.y = floorY
       entity.vel.y = 0
       entity.posture = 'ground'
+      jumpsRemaining = DEFAULT_MAX_JUMPS // landing on any surface refills
     } else {
       entity.posture = 'air'
     }
@@ -140,5 +175,5 @@ export function stepEntity(
   // If we hit a wall while grounded, posture stays 'ground'; if airborne, mark wall.
   if (wallX !== null && entity.posture !== 'ground') entity.posture = 'wall'
 
-  return { prevFlags: flags }
+  return { prevFlags: flags, jumpsRemaining }
 }
