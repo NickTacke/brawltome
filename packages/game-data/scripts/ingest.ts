@@ -42,6 +42,8 @@ function findCsvByLabel(dir: string, label: string): string {
 
 // Flat BMG XML: <Type attr="x">...<Field>value</Field>...</Type>.
 // Extract each top-level Type record as a Map of {fieldName -> text}.
+// No XML entity decoding (&amp;, &lt;, ...); BMG doesn't ship them today.
+// Revisit if a regeneration ever surfaces literal `&...;` in a generated value.
 function extractRecords(xml: string, tag: string): Map<string, string>[] {
   const open = new RegExp(`<${tag}\\s+[^>]*>`, 'g')
   const records: Map<string, string>[] = []
@@ -162,6 +164,8 @@ const colBool = (r: string[], i: number): boolean => {
 
 function loadLegends(): Legend[] {
   const xml = readFileSync(findXmlEntry('Game', 'HeroTypes'), 'utf8')
+  // Inactive/beta heroes (e.g. DEFAULT_CHARACTER, Random) stay in knownHeroIds
+  // so historical replays referencing them don't bounce at Layer 2 validation.
   return extractRecords(xml, 'HeroType')
     .filter((r) => r.get('HeroName') && r.get('HeroName') !== 'Template')
     .map((r) => ({
@@ -194,32 +198,61 @@ function loadLevels(): LevelMeta[] {
 }
 
 function loadPowers(): Power[] {
-  const { rows } = parseBmgCsv(findCsvByLabel('Game', 'powerTypes'))
+  const { header, rows } = parseBmgCsv(findCsvByLabel('Game', 'powerTypes'))
+  const idx = (n: string) => {
+    const i = header.indexOf(n)
+    if (i === -1) throw new Error(`powerTypes: column ${n} not found in header`)
+    return i
+  }
+  const c = {
+    powerName: idx('PowerName'),
+    powerId: idx('PowerID'),
+    baseDamage: idx('BaseDamage'),
+    variableImpulse: idx('VariableImpulse'),
+    fixedImpulse: idx('FixedImpulse'),
+    minimumImpulse: idx('MinimumImpulse'),
+    castTime: idx('CastTime'),
+    fixedRecoverTime: idx('FixedRecoverTime'),
+    recoverTime: idx('RecoverTime'),
+    fixedStunTime: idx('FixedStunTime'),
+    cooldownTime: idx('CooldownTime'),
+    onHitCooldownTime: idx('OnHitCooldownTime'),
+    aoeRadiusX: idx('AoERadiusX'),
+    aoeRadiusY: idx('AoERadiusY'),
+    isAirPower: idx('IsAirPower'),
+    isSignature: idx('IsSignature'),
+    isAntiair: idx('IsAntiair'),
+    isMultihit: idx('IsMultihit'),
+    endOnHit: idx('EndOnHit'),
+    cancelGravity: idx('CancelGravity'),
+    wallCancel: idx('WallCancel'),
+    hurtbox: idx('Hurtbox'),
+  }
   return rows
-    .filter((r) => r[0] && r[0] !== 'Template')
+    .filter((r) => r[c.powerName] && r[c.powerName] !== 'Template')
     .map((r) => ({
-      powerId: colNum(r, 1),
-      powerName: col(r, 0),
-      baseDamage: colNum(r, 66),
-      variableImpulse: colNum(r, 67),
-      fixedImpulse: colNum(r, 68),
-      minimumImpulse: colNum(r, 69),
-      castTime: col(r, 49),
-      fixedRecoverTime: col(r, 50),
-      recoverTime: col(r, 51),
-      fixedStunTime: colNum(r, 99),
-      cooldownTime: colNum(r, 56),
-      onHitCooldownTime: colNum(r, 58),
-      aoeRadiusX: colNum(r, 16),
-      aoeRadiusY: colNum(r, 17),
-      isAirPower: colBool(r, 12),
-      isSignature: colBool(r, 13),
-      isAntiair: colBool(r, 14),
-      isMultihit: colBool(r, 92),
-      endOnHit: colBool(r, 32),
-      cancelGravity: colBool(r, 33),
-      wallCancel: colBool(r, 34),
-      hurtboxName: col(r, 48) || null,
+      powerId: colNum(r, c.powerId),
+      powerName: col(r, c.powerName),
+      baseDamage: colNum(r, c.baseDamage),
+      variableImpulse: colNum(r, c.variableImpulse),
+      fixedImpulse: colNum(r, c.fixedImpulse),
+      minimumImpulse: colNum(r, c.minimumImpulse),
+      castTime: col(r, c.castTime),
+      fixedRecoverTime: col(r, c.fixedRecoverTime),
+      recoverTime: col(r, c.recoverTime),
+      fixedStunTime: colNum(r, c.fixedStunTime),
+      cooldownTime: colNum(r, c.cooldownTime),
+      onHitCooldownTime: colNum(r, c.onHitCooldownTime),
+      aoeRadiusX: colNum(r, c.aoeRadiusX),
+      aoeRadiusY: colNum(r, c.aoeRadiusY),
+      isAirPower: colBool(r, c.isAirPower),
+      isSignature: colBool(r, c.isSignature),
+      isAntiair: colBool(r, c.isAntiair),
+      isMultihit: colBool(r, c.isMultihit),
+      endOnHit: colBool(r, c.endOnHit),
+      cancelGravity: colBool(r, c.cancelGravity),
+      wallCancel: colBool(r, c.wallCancel),
+      hurtboxName: col(r, c.hurtbox) || null,
     }))
 }
 
