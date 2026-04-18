@@ -154,6 +154,8 @@ export class Simulation {
         damagePct: 0,
         hitstunUntilMs: 0,
         invulnUntilMs: 0,
+        readyForInput: false,
+        bufferedFlags: 0,
         chaseDodgeTokens: 0,
         chaseWindowUntilMs: 0,
       })
@@ -293,7 +295,23 @@ export class Simulation {
         // Everything else is zero-flagged; the entity's carry-over
         // momentum handles positional drift.
         const inHitstun = ms < entity.hitstunUntilMs
-        const flags = inHitstun ? rawFlags & InputFlag.DodgeDash : rawFlags
+        // Entities that haven't touched the ground since spawn/respawn
+        // get their inputs zero-flagged, but we remember any edges
+        // that occurred during the fall so a pre-buffered dash+jump
+        // can still fire as rising edges on the landing tick. OR the
+        // buffered bits into the current rawFlags for exactly one
+        // tick after readyForInput flips true.
+        let rawGated: number
+        if (!entity.readyForInput) {
+          entity.bufferedFlags |= rawFlags
+          rawGated = 0
+        } else if (entity.bufferedFlags !== 0) {
+          rawGated = rawFlags | entity.bufferedFlags
+          entity.bufferedFlags = 0
+        } else {
+          rawGated = rawFlags
+        }
+        const flags = inHitstun ? rawGated & InputFlag.DodgeDash : rawGated
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
         const priorHeld = held
 
@@ -404,11 +422,17 @@ export class Simulation {
           entity.damagePct = 0
           entity.hitstunUntilMs = 0
           entity.invulnUntilMs = 0
+          entity.readyForInput = false
+          entity.bufferedFlags = 0
           entity.chaseDodgeTokens = 0
           entity.chaseWindowUntilMs = 0
         }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
         this.physState.set(entity.id, after)
+        // First ground contact post-(re)spawn unlocks input processing.
+        if (!entity.readyForInput && entity.posture === 'ground') {
+          entity.readyForInput = true
+        }
         yield { tick, ms, entity }
       }
     }

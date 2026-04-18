@@ -23,6 +23,19 @@ export type EntityState = {
   // Absolute ms during which the entity is invulnerable (dodge i-frames).
   // Hit detection skips entities whose ms < invulnUntilMs.
   invulnUntilMs: number
+  // Inputs are ignored until the entity first touches the ground after
+  // spawn/respawn. BH's countdown ends with players still mid-air
+  // falling from their spawn coordinates; the engine only starts
+  // applying held inputs once the first landing happens. Observed
+  // behaviour wins over what the decompiled input-loop looks like at
+  // first glance - an earlier "no gate" subagent reading missed this.
+  readyForInput: boolean
+  // Accumulated input bits seen during the pre-ready window. On the
+  // first active tick these are OR-ed into the raw flags so a briefly
+  // held dash / jump / attack press from the countdown fall still
+  // fires as an edge, matching the "dash-jump the moment they land"
+  // behaviour players rely on.
+  bufferedFlags: number
   // Chase-dodge tokens earned by landing a hit. +2 when airborne lands a
   // hit while grounded, +1 when airborne. Each DodgeDash press consumes
   // one; the counter resets to zero when the attacker throws another
