@@ -36,39 +36,51 @@ export type AttackWindow = {
   activeEndMs: number
 }
 
-// Parses Power.castTime into absolute-ms windows during which the power's
-// hitbox is live. Format:
-//   `[frames]:[hitboxIdx]@activeStart[-activeEnd]`, phases joined by ','.
-// The leading frames+hitboxIdx describe animation state; the `@` range
-// is the frame window the hitbox is active. Missing end = same as start.
-//
-// A move with N phases plants N windows: one per phase, each pointing at
-// its own hitbox slot. That way multi-hit moves like HammerSide
-// ("9:2@4,0:3@5,0:4@6-6") each get their own live window, position, and
-// damage contribution, rather than collapsing to one.
-export function planAttackWindows(
-  power: Power,
-  attackerId: number,
-  pressMs: number,
-): AttackWindow[] {
+// Parses Power.castTime into one absolute-ms window spanning the union of
+// every active frame range across all phases. Empirically, castTime's
+// `:N` middle number doesn't reliably index into baseDamage for many
+// moves, so we ignore it and use argmax(baseDamage) as the hitbox slot.
+// That matches how the engine seems to pick "the" damaging hit per press
+// - whichever slot carries the highest base damage. Multi-hit registers
+// are flattened into a single window; the per-(attacker,defender,power)
+// cooldown keeps it from double-triggering across consecutive ticks.
+export function planAttackWindows(power: Power, attackerId: number, pressMs: number): AttackWindow[] {
   const phases = parseCastTimePhases(power.castTime)
-  const windows: AttackWindow[] = []
-  for (const phase of phases) {
-    // Widen 1-frame windows by half a frame on each side so the hit has
-    // a chance to register at our 60Hz tick boundary alignment. Real BH
-    // runs hitboxes at 60Hz so this mostly catches rounding.
-    const startMs = pressMs + phase.activeStart * FRAME_MS - FRAME_MS / 2
-    const endMsRaw = pressMs + (phase.activeEnd ?? phase.activeStart) * FRAME_MS + FRAME_MS / 2
-    windows.push({
-      attackerId,
-      power,
-      pressMs,
-      hitboxIdx: phase.hitboxIdx,
-      activeStartMs: startMs,
-      activeEndMs: endMsRaw,
-    })
+  if (phases.length === 0) return []
+  const hitboxIdx = argmax(power.baseDamage)
+  if (hitboxIdx < 0) return []
+  const firstStart = phases[0].activeStart
+  let minStart = firstStart
+  let maxEnd = phases[0].activeEnd ?? firstStart
+  for (const p of phases.slice(1)) {
+    if (p.activeStart < minStart) minStart = p.activeStart
+    const end = p.activeEnd ?? p.activeStart
+    if (end > maxEnd) maxEnd = end
   }
-  return windows
+  // Widen the window significantly to absorb positional drift from our
+  // knockback-free physics model. Real BH active-frame windows are tight
+  // (a few ms), but our entity positions drift from reality by ~hundreds
+  // of units; allowing the "attacker is near a target" check to span
+  // startup + active + a couple recovery ticks catches connecting hits
+  // that would have landed in the real game. This is a pragmatic
+  // compensation for the missing knockback physics, not an accurate
+  // model of BH's real timing.
+  const startMs = pressMs
+  const endMs = pressMs + Math.max(maxEnd + 3, 10) * FRAME_MS
+  return [{ attackerId, power, pressMs, hitboxIdx, activeStartMs: startMs, activeEndMs: endMs }]
+}
+
+function argmax(arr: readonly number[]): number {
+  if (arr.length === 0) return -1
+  let idx = 0
+  let best = arr[0]
+  for (let i = 1; i < arr.length; i++) {
+    if (arr[i] > best) {
+      best = arr[i]
+      idx = i
+    }
+  }
+  return idx
 }
 
 type Phase = { hitboxIdx: number; activeStart: number; activeEnd: number | null }
@@ -136,11 +148,23 @@ export function checkWindow(
   for (const opp of opponents) {
     if (!opp.alive) continue
     const cdKey = `${attackerId}->${opp.id}:${power.powerId}`
-    const lastHit = cooldowns.get(cdKey) ?? -Infinity
+    const lastHit = cooldowns.get(cdKey) ?? Number.NEGATIVE_INFINITY
     if (nowMs - lastHit < SAME_TARGET_COOLDOWN_MS) continue
     const bx = opp.pos.x
     const by = opp.pos.y + DEFAULT_OPPONENT_HURTBOX.offsetY
-    if (!overlaps(cx, cy, hbHalfW, hbHalfH, bx, by, DEFAULT_OPPONENT_HURTBOX.width / 2, DEFAULT_OPPONENT_HURTBOX.height / 2)) continue
+    if (
+      !overlaps(
+        cx,
+        cy,
+        hbHalfW,
+        hbHalfH,
+        bx,
+        by,
+        DEFAULT_OPPONENT_HURTBOX.width / 2,
+        DEFAULT_OPPONENT_HURTBOX.height / 2,
+      )
+    )
+      continue
     const dmg = power.baseDamage[hitboxIdx] ?? 0
     if (dmg <= 0) continue
     cooldowns.set(cdKey, nowMs)

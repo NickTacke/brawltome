@@ -1,12 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ItemSpawn, LevelGeometry } from '@brawltome/game-data'
-import {
-  RESPAWN_MS_DEFAULT,
-  advanceItemSlots,
-  consumeSlot,
-  findPickupSlot,
-  makeItemSlots,
-} from '../src/item-sim'
+import { RESPAWN_MS_DEFAULT, advanceItemSlots, consumeSlot, findPickupSlot, makeItemSlots } from '../src/item-sim'
 
 function makeGeo(itemSpawns: ItemSpawn[]): LevelGeometry {
   return {
@@ -43,29 +37,20 @@ describe('findPickupSlot', () => {
   const anyWeapon = new Set<string>()
 
   test('point-style init slot uses a fixed pickup radius', () => {
-    const slots = makeItemSlots(
-      makeGeo([{ kind: 'init', x: 500, y: 500, w: 0, h: 0 }]),
-      1,
-    )
+    const slots = makeItemSlots(makeGeo([{ kind: 'init', x: 500, y: 500, w: 0, h: 0 }]), 1)
     expect(findPickupSlot({ x: 500, y: 500 }, slots, ['Sword'], anyWeapon)).toBe(0)
     expect(findPickupSlot({ x: 570, y: 500 }, slots, ['Sword'], anyWeapon)).toBe(0)
     expect(findPickupSlot({ x: 1000, y: 500 }, slots, ['Sword'], anyWeapon)).toBeNull()
   })
 
   test('area-style rolling slot respects its declared W/H', () => {
-    const slots = makeItemSlots(
-      makeGeo([{ kind: 'rolling', x: 0, y: 0, w: 600, h: 40 }]),
-      1,
-    )
+    const slots = makeItemSlots(makeGeo([{ kind: 'rolling', x: 0, y: 0, w: 600, h: 40 }]), 1)
     expect(findPickupSlot({ x: 280, y: 0 }, slots, ['Sword'], anyWeapon)).toBe(0)
     expect(findPickupSlot({ x: 400, y: 0 }, slots, ['Sword'], anyWeapon)).toBeNull()
   })
 
   test('respawning slot is not pickable', () => {
-    const slots = makeItemSlots(
-      makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]),
-      1,
-    )
+    const slots = makeItemSlots(makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]), 1)
     consumeSlot(slots[0], 0, ['Sword'])
     expect(findPickupSlot({ x: 0, y: 0 }, slots, ['Sword'], anyWeapon)).toBeNull()
   })
@@ -92,10 +77,7 @@ describe('findPickupSlot', () => {
 
 describe('consumeSlot + advanceItemSlots lifecycle', () => {
   test('consume flips to respawning with the right deadline', () => {
-    const slots = makeItemSlots(
-      makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]),
-      1,
-    )
+    const slots = makeItemSlots(makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]), 1)
     const picked = consumeSlot(slots[0], 1000, ['Sword'])
     expect(picked).toBe('Sword')
     expect(slots[0].status).toBe('respawning')
@@ -103,10 +85,7 @@ describe('consumeSlot + advanceItemSlots lifecycle', () => {
   })
 
   test('advance re-enables the slot once past the deadline', () => {
-    const slots = makeItemSlots(
-      makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]),
-      2,
-    )
+    const slots = makeItemSlots(makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]), 2)
     consumeSlot(slots[0], 0, ['Sword', 'Hammer'])
     advanceItemSlots(slots, RESPAWN_MS_DEFAULT - 1, 2)
     expect(slots[0].status).toBe('respawning')
@@ -115,10 +94,7 @@ describe('consumeSlot + advanceItemSlots lifecycle', () => {
   })
 
   test('successive respawns rotate through the weapon pool', () => {
-    const slots = makeItemSlots(
-      makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]),
-      2,
-    )
+    const slots = makeItemSlots(makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]), 2)
     const pool = ['Sword', 'Hammer']
     expect(consumeSlot(slots[0], 0, pool)).toBe('Sword')
     advanceItemSlots(slots, RESPAWN_MS_DEFAULT, 2)

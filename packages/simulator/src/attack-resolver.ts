@@ -1,4 +1,4 @@
-import { getPowerByName, type Power } from '@brawltome/game-data'
+import { type Power, getPowerByName } from '@brawltome/game-data'
 import type { AttackButton, AttackDirection, Posture } from './types'
 
 // Input to the resolver. `weapon` is the in-hand weapon name matching the
@@ -24,11 +24,7 @@ export type ResolveInput = {
 //   ground heavy: 'SmashUp'    | 'SmashSide'   | 'SmashDown'   ('Up' maps to SmashUp)
 //   air light:    'Air'        | 'AirSide'     | 'AirDown'     (up-air folds into 'Air')
 //   air heavy:    'AirUpHeavy' | null          | 'GroundPound' (no air-side heavy)
-function suffixFor(
-  button: AttackButton,
-  direction: AttackDirection,
-  airborne: boolean,
-): string | null {
+function suffixFor(button: AttackButton, direction: AttackDirection, airborne: boolean): string | null {
   if (button === 'dodge') return null
   if (button === 'throw') return 'Thrown'
   if (airborne) {

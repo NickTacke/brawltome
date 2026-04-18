@@ -80,11 +80,7 @@ export function findPickupSlot(
 // next spawn at the same slot has a different weapon. This roughly matches
 // Brawlhalla's variety guarantee and keeps every weapon in circulation even
 // when the pool is larger than the owned-weapon set of any single player.
-export function advanceItemSlots(
-  slots: ItemSlotState[],
-  nowMs: number,
-  weaponPoolSize: number,
-): void {
+export function advanceItemSlots(slots: ItemSlotState[], nowMs: number, weaponPoolSize: number): void {
   if (weaponPoolSize === 0) return
   for (const s of slots) {
     if (s.status === 'respawning' && nowMs >= s.respawnAtMs) {
@@ -97,11 +93,7 @@ export function advanceItemSlots(
 // Mark a slot as just picked up: goes to 'respawning' with the timer
 // starting from `nowMs`. Returns the weapon that was picked up so the
 // caller can set it on the entity.
-export function consumeSlot(
-  slot: ItemSlotState,
-  nowMs: number,
-  weaponPool: readonly string[],
-): string {
+export function consumeSlot(slot: ItemSlotState, nowMs: number, weaponPool: readonly string[]): string {
   slot.status = 'respawning'
   slot.respawnAtMs = nowMs + RESPAWN_MS
   return weaponPool[slot.weaponIndex] ?? 'Base'

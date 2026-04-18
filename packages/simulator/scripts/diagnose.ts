@@ -15,19 +15,9 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { basename } from 'node:path'
-import {
-  getLegendById,
-  getLevelById,
-  getPowerById,
-  getPowerByName,
-  levelGeometry,
-} from '@brawltome/game-data'
+import { getLegendById, getLevelById, getPowerById, getPowerByName, levelGeometry } from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
-import {
-  estimatePowerDamage,
-  strengthMultiplier,
-  weightMultiplier,
-} from '../src/damage-estimator'
+import { estimatePowerDamage, strengthMultiplier, weightMultiplier } from '../src/damage-estimator'
 import { Simulation } from '../src/sim'
 import { TICK_MS } from '../src/tick'
 import { loadStats, statsPlayers, weaponAtMs } from './stats-loader'
@@ -71,7 +61,7 @@ function diagnose(path: string, statsPath?: string): void {
   const pickups = sim.pickupCountsByEntity()
   const weaponTime = sim.weaponTimeByEntity()
 
-  console.log(`\nlegend per entity:`)
+  console.log('\nlegend per entity:')
   for (const ent of parsed.entities) {
     const heroId = ent.playerData.heroes[0]?.heroId
     const legend = heroId !== undefined ? getLegendById(heroId) : undefined
@@ -80,8 +70,8 @@ function diagnose(path: string, statsPath?: string): void {
     )
   }
 
-  console.log(`\nposture breakdown per entity:`)
-  console.log(`  id  name              air     ground  wall    sum(ms)   match(ms)`)
+  console.log('\nposture breakdown per entity:')
+  console.log('  id  name              air     ground  wall    sum(ms)   match(ms)')
   for (const t of totals) {
     const ent = parsed.entities.find((e) => e.id === t.entityId)
     const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
@@ -93,8 +83,8 @@ function diagnose(path: string, statsPath?: string): void {
 
   const minutes = lengthMs / 60000
   const buttons = ['light', 'heavy', 'dodge', 'throw'] as const
-  console.log(`\nattack-attempt counts (edge-triggered presses, not landed hits):`)
-  console.log(`  id  name             light  heavy  dodge  throw   total   per-min`)
+  console.log('\nattack-attempt counts (edge-triggered presses, not landed hits):')
+  console.log('  id  name             light  heavy  dodge  throw   total   per-min')
   for (const t of totals) {
     const ent = parsed.entities.find((e) => e.id === t.entityId)
     const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
@@ -114,7 +104,7 @@ function diagnose(path: string, statsPath?: string): void {
 
   // Dump up to 20 unresolvable attempts (by entity) so we can see which
   // input combos the resolver is missing.
-  console.log(`\nunresolvable attempt samples (first 4 per entity):`)
+  console.log('\nunresolvable attempt samples (first 4 per entity):')
   const perEntitySamples = new Map<number, string[]>()
   for (const a of attacks) {
     if (a.powerId !== null || a.button === 'dodge') continue
@@ -131,8 +121,8 @@ function diagnose(path: string, statsPath?: string): void {
     console.log(`  ${name} ${samples.join(' | ')}`)
   }
 
-  console.log(`\nweapon pickups + time held per entity:`)
-  console.log(`  id  name             pickups    weapon-held (ms)`)
+  console.log('\nweapon pickups + time held per entity:')
+  console.log('  id  name             pickups    weapon-held (ms)')
   for (const t of totals) {
     const ent = parsed.entities.find((e) => e.id === t.entityId)
     const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
@@ -170,10 +160,8 @@ function diagnose(path: string, statsPath?: string): void {
     return weights.reduce((s, w) => s + w, 0) / weights.length
   }
 
-  console.log(
-    `\ndamage-attempted (estimator * strength * avg-opponent-weight; upper bound):`,
-  )
-  console.log(`  id  name             resolved  unresolvable  damage  per-min`)
+  console.log('\ndamage-attempted (estimator * strength * avg-opponent-weight; upper bound):')
+  console.log('  id  name             resolved  unresolvable  damage  per-min')
   for (const t of totals) {
     const ent = parsed.entities.find((e) => e.id === t.entityId)
     const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
@@ -210,8 +198,8 @@ function diagnose(path: string, statsPath?: string): void {
   const players = statsPlayers(stats)
 
   // Stats DamageDealt vs sim upper-bound damage.
-  console.log(`\ndamage: real DamageDealt vs sim upper-bound:`)
-  console.log(`  name              real     sim     delta`)
+  console.log('\ndamage: real DamageDealt vs sim upper-bound:')
+  console.log('  name              real     sim     delta')
   for (const p of players) {
     const ent = parsed.entities.find((e) => e.name === p.PlayerName)
     if (!ent) continue
@@ -236,8 +224,8 @@ function diagnose(path: string, statsPath?: string): void {
   // Landed-damage from per-tick hit detection (baseDamage of resolved hits
   // summed per attacker, scaled by attacker strength + defender weight).
   const landed = sim.landedHitEvents()
-  console.log(`\nlanded damage per attacker (hit-detected; real vs sim):`)
-  console.log(`  name              real    sim    delta`)
+  console.log('\nlanded damage per attacker (hit-detected; real vs sim):')
+  console.log('  name              real    sim    delta')
   for (const p of players) {
     const ent = parsed.entities.find((e) => e.name === p.PlayerName)
     if (!ent) continue
@@ -261,8 +249,8 @@ function diagnose(path: string, statsPath?: string): void {
 
   // Per-player weapon-in-hand agreement: fraction of ticks where the sim's
   // heldWeapon matches the stats Sequence's weapon at the same ms.
-  console.log(`\nweapon-in-hand agreement per tick:`)
-  console.log(`  name              ticks   match     %`)
+  console.log('\nweapon-in-hand agreement per tick:')
+  console.log('  name              ticks   match     %')
   for (const p of players) {
     const ent = parsed.entities.find((e) => e.name === p.PlayerName)
     if (!ent) continue
@@ -285,7 +273,7 @@ function diagnose(path: string, statsPath?: string): void {
 
   // Per-player total ms held per weapon, sim vs stats. Stats TimeHeld fields
   // are on each weapon sub-record (e.g. p.Hammer.TimeHeld).
-  console.log(`\ntime held per weapon (ms): real vs sim`)
+  console.log('\ntime held per weapon (ms): real vs sim')
   for (const p of players) {
     const ent = parsed.entities.find((e) => e.name === p.PlayerName)
     if (!ent) continue
@@ -299,9 +287,7 @@ function diagnose(path: string, statsPath?: string): void {
     for (const w of simByWeapon.keys()) weaponKeys.add(w)
     for (const w of [...weaponKeys].sort()) {
       const statsKey = w === 'Base' ? 'Unarmed' : w
-      const block = (p as Record<string, unknown>)[statsKey] as
-        | { TimeHeld?: number }
-        | undefined
+      const block = (p as Record<string, unknown>)[statsKey] as { TimeHeld?: number } | undefined
       const real = block?.TimeHeld ?? 0
       const simMs = simByWeapon.get(w) ?? 0
       console.log(

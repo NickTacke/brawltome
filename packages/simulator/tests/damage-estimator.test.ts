@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getPowerByName } from '@brawltome/game-data'
-import {
-  estimatePowerDamage,
-  strengthMultiplier,
-  weightMultiplier,
-} from '../src/damage-estimator'
+import { estimatePowerDamage, strengthMultiplier, weightMultiplier } from '../src/damage-estimator'
 
 describe('estimatePowerDamage', () => {
   test('returns max of baseDamage array for single-hit moves', () => {

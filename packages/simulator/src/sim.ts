@@ -1,15 +1,9 @@
-import { getLegendById, getPowerById, type LevelGeometry } from '@brawltome/game-data'
+import { type LevelGeometry, getLegendById, getPowerById } from '@brawltome/game-data'
 import { InputFlag, type ParsedReplay } from '@brawltome/replay-format'
 import { detectAttackAttempts } from './attack-events'
 import { type AttackWindow, type LandedHit, checkWindow, planAttackWindows } from './hit-detection'
 import { InputDriver } from './input-driver'
-import {
-  advanceItemSlots,
-  consumeSlot,
-  findPickupSlot,
-  type ItemSlotState,
-  makeItemSlots,
-} from './item-sim'
+import { type ItemSlotState, advanceItemSlots, consumeSlot, findPickupSlot, makeItemSlots } from './item-sim'
 import {
   DEFAULT_PHYSICS,
   type EntityPhysState,
@@ -19,14 +13,7 @@ import {
   stepEntity,
 } from './physics'
 import { TICK_MS, msToTick, tickToMs } from './tick'
-import type {
-  AttackAttempt,
-  EntityState,
-  EntityTick,
-  PhysicsParams,
-  Posture,
-  Vec2,
-} from './types'
+import type { AttackAttempt, EntityState, EntityTick, PhysicsParams, Posture, Vec2 } from './types'
 
 export type SimInput = {
   parsed: ParsedReplay
@@ -98,8 +85,20 @@ export class Simulation {
     this.endTick = msToTick(lengthMs)
     const respawns = input.geometry.respawns
     const weaponSet = new Set<string>()
-    input.parsed.entities.forEach((e, i) => {
-      const spawn = respawns[i % Math.max(respawns.length, 1)] ?? { x: 0, y: 0 }
+    // Respawn points in the XML alternate team sides: index 0 is the
+    // outermost left-side spawn, 1 is the outermost right, 2 is the next
+    // left-side, etc. Assign entities to spawns of their team so team
+    // members end up on the same side of the stage. Without this, a 2v2
+    // gets its four players scrambled across both sides, which drives our
+    // sim's players too far apart to ever engage.
+    const teamCursor = new Map<number, number>()
+    for (const e of input.parsed.entities) {
+      // Team 1 (or first-seen team) takes even indices, team 2 odd.
+      const parity = e.team === 1 ? 0 : e.team === 2 ? 1 : e.team % 2
+      const nth = teamCursor.get(e.team) ?? 0
+      teamCursor.set(e.team, nth + 1)
+      const idx = (parity + nth * 2) % Math.max(respawns.length, 1)
+      const spawn = respawns[idx] ?? { x: 0, y: 0 }
       this.respawnPoints.set(e.id, { x: spawn.x, y: spawn.y })
       const heroId = e.playerData.heroes[0]?.heroId
       const legend = heroId !== undefined ? getLegendById(heroId) : undefined
@@ -125,7 +124,7 @@ export class Simulation {
         alive: true,
       })
       this.physState.set(e.id, makePhysState())
-    })
+    }
     this.weaponPool = [...weaponSet]
     this.itemSlots = makeItemSlots(this.geometry, this.weaponPool.length)
   }

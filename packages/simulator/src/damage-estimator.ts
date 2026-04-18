@@ -38,10 +38,7 @@ function maxOrZero(arr: readonly number[]): number {
   return m
 }
 
-export function estimatePowerDamage(
-  power: Power,
-  getPowerByName: (name: string) => Power | undefined,
-): number {
+export function estimatePowerDamage(power: Power, getPowerByName: (name: string) => Power | undefined): number {
   const starter = maxOrZero(power.baseDamage)
   if (starter > 0) return starter
   const hit = getPowerByName(`${power.powerName}Hit`)

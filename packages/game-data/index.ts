@@ -1,4 +1,13 @@
-export type { CollisionLine, Hurtbox, ItemSpawn, Legend, LevelGeometry, LevelMeta, Power, WeaponName } from './src/types'
+export type {
+  CollisionLine,
+  Hurtbox,
+  ItemSpawn,
+  Legend,
+  LevelGeometry,
+  LevelMeta,
+  Power,
+  WeaponName,
+} from './src/types'
 
 import { hurtboxes } from './src/generated/hurtboxes'
 import { legends } from './src/generated/legends'
