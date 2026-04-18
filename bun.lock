@@ -196,6 +196,16 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/simulator": {
+      "name": "@brawltome/simulator",
+      "dependencies": {
+        "@brawltome/game-data": "workspace:*",
+        "@brawltome/replay-format": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/ui": {
       "name": "@brawltome/ui",
       "dependencies": {
@@ -303,6 +313,8 @@
     "@brawltome/replay-format": ["@brawltome/replay-format@workspace:packages/replay-format"],
 
     "@brawltome/shared": ["@brawltome/shared@workspace:packages/shared"],
+
+    "@brawltome/simulator": ["@brawltome/simulator@workspace:packages/simulator"],
 
     "@brawltome/ui": ["@brawltome/ui@workspace:packages/ui"],
 

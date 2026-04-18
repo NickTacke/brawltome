@@ -1,0 +1,19 @@
+{
+  "name": "@brawltome/simulator",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@brawltome/game-data": "workspace:*",
+    "@brawltome/replay-format": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

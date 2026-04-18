@@ -1,0 +1,38 @@
+export type Vec2 = { x: number; y: number }
+
+// Which surface (if any) the entity is currently resting on, used for the
+// primary sim metric: air/ground/wall time per entity.
+export type Posture = 'air' | 'ground' | 'wall'
+
+export type EntityState = {
+  id: number
+  team: number
+  pos: Vec2
+  vel: Vec2
+  facing: -1 | 1
+  posture: Posture
+  alive: boolean
+}
+
+// Snapshot of one entity at one tick; emitted by the simulator for external
+// stat aggregation (positioning time, movement counts, etc.).
+export type EntityTick = {
+  tick: number
+  ms: number
+  entity: EntityState
+}
+
+// Brawlhalla's per-legend attribute scaling rolls up into these derived
+// physics params. Filled by the caller (from game-data) and passed into the
+// simulator so we don't hard-code per-legend values here.
+export type PhysicsParams = {
+  // Baseline horizontal velocity cap (units/second at speed stat 5).
+  walkSpeed: number
+  // Jump initial velocity (units/second, upward positive-in-world means
+  // negative-y in screen space; Brawlhalla uses y-down).
+  jumpImpulse: number
+  // Gravity acceleration, units/second^2.
+  gravity: number
+  // Max fall speed.
+  maxFallSpeed: number
+}

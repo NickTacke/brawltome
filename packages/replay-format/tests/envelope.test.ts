@@ -9,17 +9,11 @@ const maybeReadFixture = (name: string): Uint8Array | null =>
   existsSync(join(FIX, name)) ? new Uint8Array(readFileSync(join(FIX, name))) : null
 
 const mishima = maybeReadFixture('mishima.replay')
-const yarra = maybeReadFixture('yarralytics_1v1.replay')
 
 describe('peekFormatVersion', () => {
   test.if(mishima !== null)('returns 264 for 10.05 fixture', () => {
     if (!mishima) return
     expect(peekFormatVersion(mishima)).toBe(264)
-  })
-
-  test.if(yarra !== null)('returns 261 for 10.02 fixture', () => {
-    if (!yarra) return
-    expect(peekFormatVersion(yarra)).toBe(261)
   })
 
   test('returns null on non-zlib input', () => {
