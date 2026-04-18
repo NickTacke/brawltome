@@ -35,6 +35,9 @@ python-testing/
 # Brawlhalla replay samples used for local reverse-engineering
 *.replay
 
+# Sim recorder output (multi-MB JSON dumps, developer-local)
+packages/simulator/scripts/frames.json
+
 # Local reverse-engineering scratch (SWZ dumps, SWF copies, experiments)
 research/
 example.html

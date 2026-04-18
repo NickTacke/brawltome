@@ -22,6 +22,14 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", "dist", ".next", "drizzle", "research", "packages/game-data/src/generated"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      ".next",
+      "drizzle",
+      "research",
+      "packages/game-data/src/generated",
+      "packages/simulator/scripts/frames.json"
+    ]
   }
 }

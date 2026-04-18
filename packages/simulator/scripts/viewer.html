@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Brawltome sim viewer</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #111; color: #ddd; font-family: ui-monospace, monospace; }
+    .wrap { display: flex; flex-direction: column; height: 100vh; }
+    .bar { padding: 8px 12px; background: #1a1a1a; border-bottom: 1px solid #333; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .bar label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #aaa; }
+    .bar input[type=file] { color: #aaa; }
+    .bar button { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 4px 10px; font-family: inherit; cursor: pointer; border-radius: 3px; }
+    .bar button:hover { background: #333; }
+    .scrub { flex: 1; display: flex; gap: 8px; align-items: center; }
+    .scrub input[type=range] { flex: 1; }
+    .time { font-size: 12px; color: #aaa; min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+    .speed { display: flex; gap: 4px; }
+    .speed button { min-width: 32px; font-size: 11px; }
+    .speed button.on { background: #3a5; border-color: #3a5; color: #111; font-weight: bold; }
+    .view { flex: 1; display: grid; grid-template-columns: 1fr 260px; overflow: hidden; }
+    canvas { background: #0a0a0a; display: block; width: 100%; height: 100%; }
+    .side { background: #1a1a1a; border-left: 1px solid #333; padding: 12px; overflow-y: auto; font-size: 12px; }
+    .side h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; font-weight: normal; }
+    .ent { padding: 8px; margin-bottom: 6px; background: #222; border-left: 3px solid; border-radius: 3px; }
+    .ent .name { font-weight: normal; }
+    .ent .team { color: #888; margin-left: 6px; }
+    .ent .meta { color: #888; font-size: 10px; margin-top: 2px; }
+    .ent .dmg { font-size: 14px; font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .ent .stun { color: #f88; font-weight: bold; margin-left: 6px; }
+    .empty { text-align: center; color: #666; padding: 40px; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <label>Data: <input type="file" id="file" accept=".json" /></label>
+    <button id="play">▶</button>
+    <div class="speed">
+      <button data-speed="0.25">0.25×</button>
+      <button data-speed="0.5">0.5×</button>
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="2">2×</button>
+      <button data-speed="4">4×</button>
+    </div>
+    <div class="scrub">
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" />
+      <span class="time" id="time">0.00s / 0.00s</span>
+    </div>
+  </div>
+  <div class="view">
+    <canvas id="canvas" width="1600" height="900"></canvas>
+    <div class="side" id="side"><div class="empty">Load a frames.json to begin.</div></div>
+  </div>
+</div>
+<script>
+  const TEAM_COLOURS = { 1: '#4a9', 2: '#e66', 3: '#ea4', 4: '#79e' }
+
+  const state = {
+    data: null,
+    frameIdx: 0,
+    playing: false,
+    speed: 1,
+    camera: { x: 0, y: 0, scale: 1 },
+    lastTs: 0,
+  }
+
+  const canvas = document.getElementById('canvas')
+  const ctx = canvas.getContext('2d')
+  const scrub = document.getElementById('scrub')
+  const timeLabel = document.getElementById('time')
+  const side = document.getElementById('side')
+  const playBtn = document.getElementById('play')
+
+  function teamColour(team) { return TEAM_COLOURS[team] ?? '#ccc' }
+
+  function fitCamera(geo) {
+    const pad = 200
+    const b = geo.cameraBounds ?? { x: -2000, y: -1000, w: 4000, h: 2000 }
+    const rect = { x: b.x - pad, y: b.y - pad, w: b.w + 2 * pad, h: b.h + 2 * pad }
+    state.camera = { x: rect.x, y: rect.y, scale: Math.min(canvas.width / rect.w, canvas.height / rect.h) }
+  }
+
+  function w2c(x, y) {
+    return { x: (x - state.camera.x) * state.camera.scale, y: (y - state.camera.y) * state.camera.scale }
+  }
+
+  function drawGeometry(geo) {
+    if (geo.cameraBounds) {
+      const p0 = w2c(geo.cameraBounds.x, geo.cameraBounds.y)
+      const p1 = w2c(geo.cameraBounds.x + geo.cameraBounds.w, geo.cameraBounds.y + geo.cameraBounds.h)
+      ctx.strokeStyle = '#223'; ctx.lineWidth = 1
+      ctx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y)
+    }
+    const k = geo.killBounds
+    if (k && k.left !== null && k.right !== null && k.top !== null && k.bottom !== null) {
+      const p0 = w2c(k.left, k.top); const p1 = w2c(k.right, k.bottom)
+      ctx.strokeStyle = '#822'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
+      ctx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y); ctx.setLineDash([])
+    }
+    for (const c of geo.collisions) {
+      const hard = c.kind === 'hard' || c.kind === 'no_slide' || c.kind === 'bouncy_hard'
+      ctx.strokeStyle = hard ? '#6a8' : '#567'; ctx.lineWidth = 2
+      const a = w2c(c.x1, c.y1); const b2 = w2c(c.x2, c.y2)
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke()
+    }
+    ctx.fillStyle = '#ca6'
+    for (const s of geo.itemSpawns) {
+      const p = w2c(s.x, s.y)
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.strokeStyle = '#468'; ctx.lineWidth = 1
+    for (const r of geo.respawns) {
+      const p = w2c(r.x, r.y)
+      ctx.beginPath(); ctx.moveTo(p.x - 5, p.y); ctx.lineTo(p.x + 5, p.y)
+      ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x, p.y + 5); ctx.stroke()
+    }
+  }
+
+  function drawEntities(frame) {
+    if (!frame) return
+    const metaById = new Map(state.data.entitiesMeta.map((e) => [e.id, e]))
+    for (const ent of frame.entities) {
+      if (!ent.alive) continue
+      const meta = metaById.get(ent.id)
+      const col = teamColour(meta && meta.team)
+      const p = w2c(ent.x, ent.y)
+      const sc = state.camera.scale
+      ctx.strokeStyle = col; ctx.lineWidth = ent.inHitstun ? 3 : 1.5
+      ctx.strokeRect(p.x - 72.5 * sc, p.y - 160 * sc, 145 * sc, 160 * sc)
+      ctx.fillStyle = col
+      ctx.fillRect(p.x + ent.facing * 72.5 * sc - 3, p.y - 80 * sc - 2, 6, 4)
+      if (Math.abs(ent.vx) + Math.abs(ent.vy) > 10) {
+        ctx.strokeStyle = '#ffc'; ctx.lineWidth = 1
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - 80 * sc)
+        ctx.lineTo(p.x + ent.vx * 0.05, p.y - 80 * sc + ent.vy * 0.05); ctx.stroke()
+      }
+      ctx.fillStyle = col; ctx.font = '11px ui-monospace'; ctx.textAlign = 'center'
+      ctx.fillText((meta && meta.name) || ('#' + ent.id), p.x, p.y - 170 * sc)
+      ctx.fillStyle = '#ddd'
+      ctx.fillText(Math.round(ent.damagePct) + '%', p.x, p.y - 155 * sc)
+      if (ent.heldWeapon && ent.heldWeapon !== 'Base') {
+        ctx.fillStyle = '#cc8'; ctx.fillText(ent.heldWeapon, p.x, p.y + 12)
+      }
+    }
+  }
+
+  function drawHitFlashes(ms) {
+    if (!state.data) return
+    const fadeMs = 300
+    for (const h of state.data.landed) {
+      const dt = ms - h.ms
+      if (dt < 0 || dt > fadeMs) continue
+      const def = state.data.frames[state.frameIdx].entities.find((e) => e.id === h.defenderId)
+      if (!def) continue
+      const p = w2c(def.x, def.y - 80)
+      const alpha = 1 - dt / fadeMs
+      ctx.fillStyle = 'rgba(255, 120, 80, ' + alpha.toFixed(2) + ')'
+      ctx.beginPath(); ctx.arc(p.x, p.y, 20 * state.camera.scale, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = 'rgba(255, 200, 160, ' + alpha.toFixed(2) + ')'
+      ctx.font = '11px ui-monospace'; ctx.textAlign = 'left'
+      const label = (h.powerName || ('#' + h.powerId)) + ' +' + h.baseDamage
+      ctx.fillText(label, p.x + 24 * state.camera.scale, p.y)
+    }
+  }
+
+  function render() {
+    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    if (!state.data) return
+    drawGeometry(state.data.geometry)
+    const frame = state.data.frames[state.frameIdx]
+    drawEntities(frame)
+    drawHitFlashes(frame && frame.ms || 0)
+  }
+
+  function el(tag, attrs, text) {
+    const n = document.createElement(tag)
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'style') n.setAttribute('style', v); else n.setAttribute(k, v)
+    }
+    if (text !== undefined) n.textContent = text
+    return n
+  }
+
+  function renderSide() {
+    if (!state.data) return
+    const frame = state.data.frames[state.frameIdx]
+    if (!frame) return
+    while (side.firstChild) side.removeChild(side.firstChild)
+    const metaById = new Map(state.data.entitiesMeta.map((e) => [e.id, e]))
+    side.appendChild(el('h3', null, 'Entities'))
+    for (const ent of frame.entities) {
+      const meta = metaById.get(ent.id)
+      const col = teamColour(meta && meta.team)
+      const row = el('div', { class: 'ent', style: 'border-left-color:' + col })
+      const head = el('div')
+      head.appendChild(el('span', { class: 'name' }, (meta && meta.name) || ('#' + ent.id)))
+      head.appendChild(el('span', { class: 'team' }, 'T' + (meta && meta.team || '?')))
+      if (ent.inHitstun) head.appendChild(el('span', { class: 'stun' }, 'HITSTUN'))
+      row.appendChild(head)
+      row.appendChild(el('div', { class: 'meta' }, ((meta && meta.legend) || '?') + ' · ' + ((meta && meta.weaponOne) || '') + '/' + ((meta && meta.weaponTwo) || '')))
+      row.appendChild(el('div', { class: 'dmg' }, ent.damagePct.toFixed(1) + '%'))
+      row.appendChild(el('div', { class: 'meta' }, 'pos=(' + Math.round(ent.x) + ', ' + Math.round(ent.y) + ')'))
+      row.appendChild(el('div', { class: 'meta' }, 'vel=(' + Math.round(ent.vx) + ', ' + Math.round(ent.vy) + ') · ' + ent.posture))
+      row.appendChild(el('div', { class: 'meta' }, ent.heldWeapon))
+      side.appendChild(row)
+    }
+    const recent = state.data.landed.filter((h) => h.ms >= frame.ms - 3000 && h.ms <= frame.ms)
+    if (recent.length > 0) {
+      side.appendChild(el('h3', null, 'Recent hits'))
+      for (const h of recent.slice(-5)) {
+        const atk = metaById.get(h.attackerId)
+        const def = metaById.get(h.defenderId)
+        const ago = ((frame.ms - h.ms) / 1000).toFixed(1)
+        side.appendChild(el('div', { class: 'meta' }, '-' + ago + 's · ' + ((atk && atk.name) || '?') + ' → ' + ((def && def.name) || '?') + ' · ' + (h.powerName || ('#' + h.powerId)) + ' (' + h.baseDamage + ')'))
+      }
+    }
+  }
+
+  function fmtTime(ms) { return (ms / 1000).toFixed(2) + 's' }
+
+  function setFrame(idx) {
+    if (!state.data) return
+    state.frameIdx = Math.max(0, Math.min(state.data.frames.length - 1, idx))
+    scrub.value = String(state.frameIdx)
+    const ms = (state.data.frames[state.frameIdx] && state.data.frames[state.frameIdx].ms) || 0
+    timeLabel.textContent = fmtTime(ms) + ' / ' + fmtTime(state.data.lengthMs)
+    render(); renderSide()
+  }
+
+  function tick(ts) {
+    if (state.playing && state.data) {
+      const dt = state.lastTs ? ts - state.lastTs : 16.67
+      const frameMs = 16.667
+      const advance = Math.max(1, Math.round((dt * state.speed) / frameMs))
+      setFrame(state.frameIdx + advance)
+      if (state.frameIdx >= state.data.frames.length - 1) {
+        state.playing = false; playBtn.textContent = '▶'
+      }
+    }
+    state.lastTs = ts
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+
+  document.getElementById('file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]
+    if (!f) return
+    const text = await f.text()
+    state.data = JSON.parse(text)
+    state.frameIdx = 0
+    scrub.max = String(state.data.frames.length - 1)
+    fitCamera(state.data.geometry); setFrame(0)
+  })
+
+  playBtn.addEventListener('click', () => {
+    if (!state.data) return
+    state.playing = !state.playing
+    playBtn.textContent = state.playing ? '⏸' : '▶'
+  })
+
+  scrub.addEventListener('input', () => { setFrame(Number(scrub.value)) })
+
+  for (const btn of document.querySelectorAll('.speed button')) {
+    btn.addEventListener('click', () => {
+      state.speed = Number(btn.dataset.speed)
+      document.querySelectorAll('.speed button').forEach((b) => b.classList.remove('on'))
+      btn.classList.add('on')
+    })
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (!state.data) return
+    if (e.code === 'Space') { e.preventDefault(); playBtn.click() }
+    else if (e.code === 'ArrowLeft') setFrame(state.frameIdx - (e.shiftKey ? 60 : 1))
+    else if (e.code === 'ArrowRight') setFrame(state.frameIdx + (e.shiftKey ? 60 : 1))
+  })
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = Math.max(800, Math.floor(rect.width))
+    canvas.height = Math.max(400, Math.floor(rect.height))
+    if (state.data) fitCamera(state.data.geometry)
+    render()
+  }
+  window.addEventListener('resize', resize)
+  setTimeout(resize, 0)
+</script>
+</body>
+</html>
