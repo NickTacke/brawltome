@@ -70,6 +70,20 @@ export type CollisionLine = {
   y2: number
 }
 
+// Where weapons and other items can spawn on a level. Brawlhalla has three
+// flavours: `init` lays an item at match start (a single slot), `teamInit`
+// is a per-team initial slot (rarity-unclear; assigned in XML order), and
+// `rolling` is an area that cycles items through a respawn timer over the
+// course of the match. Area dimensions `w`/`h` default to 0 for the init
+// variants since they're point spawns.
+export type ItemSpawn = {
+  kind: 'init' | 'teamInit' | 'rolling'
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 // Level geometry the simulator needs: blast-zone boundaries, collision segments, respawns.
 // One record per LevelDesc file; keyed by levelName on the generated map.
 export type LevelGeometry = {
@@ -79,5 +93,6 @@ export type LevelGeometry = {
   spawnBotBounds: { x: number; y: number; w: number; h: number } | null
   killBounds: { left: number | null; right: number | null; top: number | null; bottom: number | null }
   respawns: { x: number; y: number }[]
+  itemSpawns: ItemSpawn[]
   collisions: CollisionLine[]
 }

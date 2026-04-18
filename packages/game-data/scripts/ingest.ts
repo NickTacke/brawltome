@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CollisionLine, Hurtbox, Legend, LevelGeometry, LevelMeta, Power } from '../src/types'
+import type { CollisionLine, Hurtbox, ItemSpawn, Legend, LevelGeometry, LevelMeta, Power } from '../src/types'
 
 const EXTRACT_ROOT = join(import.meta.dir, '..', '..', '..', 'research', 'swz-extract', 'out')
 const OUT_DIR = join(import.meta.dir, '..', 'src', 'generated')
@@ -381,6 +381,29 @@ function loadLevelGeometry(): Record<string, LevelGeometry> {
         x: attrNum(a, 'X'),
         y: attrNum(a, 'Y'),
       })),
+      itemSpawns: [
+        ...extractElements(xml, 'ItemInitSpawn').map<ItemSpawn>((a) => ({
+          kind: 'init',
+          x: attrNum(a, 'X'),
+          y: attrNum(a, 'Y'),
+          w: 0,
+          h: 0,
+        })),
+        ...extractElements(xml, 'TeamItemInitSpawn').map<ItemSpawn>((a) => ({
+          kind: 'teamInit',
+          x: attrNum(a, 'X'),
+          y: attrNum(a, 'Y'),
+          w: 0,
+          h: 0,
+        })),
+        ...extractElements(xml, 'ItemSpawn').map<ItemSpawn>((a) => ({
+          kind: 'rolling',
+          x: attrNum(a, 'X'),
+          y: attrNum(a, 'Y'),
+          w: attrNum(a, 'W'),
+          h: attrNum(a, 'H'),
+        })),
+      ],
       collisions: [
         ...collisionsFrom(xml, 'HardCollision', 'hard'),
         ...collisionsFrom(xml, 'SoftCollision', 'soft'),
