@@ -114,7 +114,7 @@ describe('consumeSlot + advanceItemSlots lifecycle', () => {
     expect(slots[0].status).toBe('available')
   })
 
-  test('respawn advances the weaponIndex so successive pickups vary', () => {
+  test('successive respawns rotate through the weapon pool', () => {
     const slots = makeItemSlots(
       makeGeo([{ kind: 'init', x: 0, y: 0, w: 0, h: 0 }]),
       2,

@@ -2,15 +2,20 @@ import type { ItemSpawn, LevelGeometry } from '@brawltome/game-data'
 import type { Vec2 } from './types'
 
 // Horizontal and vertical range within which an entity is considered to
-// be overlapping an item slot for pickup purposes. Brawlhalla items have
-// a generous grab box; 80x120 is a placeholder until we can measure.
-const PICKUP_RANGE_X = 80
-const PICKUP_RANGE_Y = 120
+// be overlapping an item slot for pickup purposes. These ranges are also
+// doing work the sim doesn't do yet: BH items spawn in the air and fall
+// to the nearest platform before becoming pickable, but we treat them as
+// sitting at the spawn position. A generous Y range (600) approximates
+// "reachable" for high init/teamInit slots that would, in reality, fall
+// onto a platform the player walks across. Tuned against the SmallTerminus
+// stats dump.
+const PICKUP_RANGE_X = 200
+const PICKUP_RANGE_Y = 1500
 
 // Time the slot is unavailable after an item is picked up, in ms. Real
 // Brawlhalla cycles between ~5s and ~10s depending on the spawn-rate rule
-// set; 8s is a neutral placeholder.
-const RESPAWN_MS = 8000
+// set.
+const RESPAWN_MS = 6000
 
 // Running state of one item slot defined in LevelGeometry.itemSpawns. The
 // slot owns the weapon currently sitting on it (or that will appear after
@@ -72,8 +77,9 @@ export function findPickupSlot(
 
 // Tick the respawn timer for every slot. Slots whose respawn deadline has
 // passed flip back to 'available' and advance their weaponIndex so the
-// next pickup yields a different weapon (approximating Brawlhalla's
-// weapon-variety guarantee across consecutive pickups at the same slot).
+// next spawn at the same slot has a different weapon. This roughly matches
+// Brawlhalla's variety guarantee and keeps every weapon in circulation even
+// when the pool is larger than the owned-weapon set of any single player.
 export function advanceItemSlots(
   slots: ItemSlotState[],
   nowMs: number,

@@ -6,7 +6,11 @@
  * sweeping constants.
  *
  * Run:
- *   bun run packages/simulator/scripts/diagnose.ts packages/replay-format/tests/fixtures/mishima.replay
+ *   bun run scripts/diagnose.ts <replay.replay> [stats.json]
+ *
+ * If a Brawlhalla stats JSON is supplied as the second argument, the script
+ * also prints a tick-level weapon-in-hand agreement score so we can tune
+ * pickup parameters against ground truth.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -14,6 +18,8 @@ import { basename } from 'node:path'
 import { getLegendById, getLevelById, getPowerById, levelGeometry } from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
 import { Simulation } from '../src/sim'
+import { TICK_MS } from '../src/tick'
+import { loadStats, statsPlayers, weaponAtMs } from './stats-loader'
 
 function pct(part: number, total: number): string {
   if (total === 0) return '  0.0%'
@@ -24,13 +30,14 @@ function fmt(n: number, width = 8, decimals = 1): string {
   return n.toFixed(decimals).padStart(width, ' ')
 }
 
-function diagnose(path: string): void {
+function diagnose(path: string, statsPath?: string): void {
   if (!existsSync(path)) {
     console.error(`fixture not found: ${path}`)
     process.exit(1)
   }
   const raw = new Uint8Array(readFileSync(path))
   const parsed = parse(raw, { inputs: true })
+  const stats = statsPath ? loadStats(statsPath) : null
 
   const meta = getLevelById(parsed.levelId)
   if (!meta) throw new Error(`no LevelMeta for levelId ${parsed.levelId}`)
@@ -129,13 +136,13 @@ function diagnose(path: string): void {
     )
   }
 
-  // Rough damage-attempted: sum of baseDamage across every resolved attempt.
-  // Assumes every press connected, which it doesn't; this is an upper bound
-  // for damage output, not actual damage dealt. Dodge and unresolved
-  // attempts (including throws while unarmed and air-side heavies that
-  // don't exist as moves) are excluded.
+  // Sum of baseDamage across every resolved attempt. NOTE: Many BH powers
+  // store zero baseDamage on the primary record because damage lives on
+  // chained Hit/Combo variants encoded in castTime. Until the chain-walker
+  // lands (phase 2.3), this number undercounts badly for multi-hit moves
+  // but is still useful as a "how many presses resolved at all" signal.
   console.log(
-    `\nrough damage-attempted (sum of baseDamage across resolved presses, upper bound):`,
+    `\ndamage-attempted (sum of baseDamage of resolved powers; undercounts multi-hit):`,
   )
   console.log(`  id  name             resolved  unresolvable  baseDamage  per-min`)
   for (const t of totals) {
@@ -160,11 +167,97 @@ function diagnose(path: string): void {
       `  ${String(t.entityId).padStart(3, ' ')} ${name} ${String(resolved).padStart(8, ' ')}  ${String(unresolvable).padStart(12, ' ')}  ${String(damage).padStart(10, ' ')}   ${perMin.toFixed(1).padStart(5, ' ')}`,
     )
   }
+
+  if (!stats) return
+
+  // Walk both weapon-in-hand timelines tick by tick, counting how many ticks
+  // agree on the weapon. Players are matched by name; unmatched entities are
+  // skipped. The stats JSON holds the canonical "real" timeline.
+  console.log(`\n=== stats comparison (vs ${basename(statsPath ?? '?')}) ===`)
+  const simChanges = sim.weaponChangesByEntity()
+  const players = statsPlayers(stats)
+
+  // Stats DamageDealt vs sim upper-bound damage.
+  console.log(`\ndamage: real DamageDealt vs sim upper-bound:`)
+  console.log(`  name              real     sim     delta`)
+  for (const p of players) {
+    const ent = parsed.entities.find((e) => e.name === p.PlayerName)
+    if (!ent) continue
+    let simDamage = 0
+    for (const a of attacks) {
+      if (a.entityId !== ent.id || a.powerId === null) continue
+      const pw = getPowerById(a.powerId)
+      if (pw) simDamage += pw.baseDamage
+    }
+    const real = p.DamageDealt
+    const delta = simDamage - real
+    const pct = real > 0 ? (delta / real) * 100 : 0
+    console.log(
+      `  ${p.PlayerName.padEnd(16, ' ')} ${real.toFixed(1).padStart(7, ' ')}   ${String(simDamage).padStart(5, ' ')}   ${(delta >= 0 ? '+' : '') + delta.toFixed(1)} (${pct.toFixed(1)}%)`,
+    )
+  }
+
+  // Per-player weapon-in-hand agreement: fraction of ticks where the sim's
+  // heldWeapon matches the stats Sequence's weapon at the same ms.
+  console.log(`\nweapon-in-hand agreement per tick:`)
+  console.log(`  name              ticks   match     %`)
+  for (const p of players) {
+    const ent = parsed.entities.find((e) => e.name === p.PlayerName)
+    if (!ent) continue
+    const simTl = [{ ms: 0, weapon: 'Base' }, ...(simChanges.get(ent.id) ?? [])]
+    let ticks = 0
+    let matches = 0
+    let simIdx = 0
+    for (let ms = 0; ms <= lengthMs; ms += TICK_MS) {
+      while (simIdx + 1 < simTl.length && simTl[simIdx + 1].ms <= ms) simIdx += 1
+      const simWeapon = simTl[simIdx].weapon
+      const realWeapon = weaponAtMs(p.Sequence, ms)
+      ticks += 1
+      if (simWeapon === realWeapon) matches += 1
+    }
+    const pct = ticks > 0 ? (matches / ticks) * 100 : 0
+    console.log(
+      `  ${p.PlayerName.padEnd(16, ' ')} ${String(ticks).padStart(5, ' ')}   ${String(matches).padStart(5, ' ')}   ${pct.toFixed(1).padStart(5, ' ')}`,
+    )
+  }
+
+  // Per-player total ms held per weapon, sim vs stats. Stats TimeHeld fields
+  // are on each weapon sub-record (e.g. p.Hammer.TimeHeld).
+  console.log(`\ntime held per weapon (ms): real vs sim`)
+  for (const p of players) {
+    const ent = parsed.entities.find((e) => e.name === p.PlayerName)
+    if (!ent) continue
+    const simByWeapon = sim.weaponTimeByEntity().get(ent.id) ?? new Map<string, number>()
+    console.log(`  ${p.PlayerName}`)
+    const weaponKeys = new Set<string>()
+    for (const k of Object.keys(p)) {
+      if (k === 'Unarmed' || (p[k as keyof typeof p] as { TimeHeld?: number })?.TimeHeld != null)
+        weaponKeys.add(k === 'Unarmed' ? 'Base' : k)
+    }
+    for (const w of simByWeapon.keys()) weaponKeys.add(w)
+    for (const w of [...weaponKeys].sort()) {
+      const statsKey = w === 'Base' ? 'Unarmed' : w
+      const block = (p as Record<string, unknown>)[statsKey] as
+        | { TimeHeld?: number }
+        | undefined
+      const real = block?.TimeHeld ?? 0
+      const simMs = simByWeapon.get(w) ?? 0
+      console.log(
+        `    ${w.padEnd(14, ' ')} real=${String(real).padStart(6, ' ')}  sim=${String(Math.round(simMs)).padStart(6, ' ')}`,
+      )
+    }
+  }
 }
 
 const args = process.argv.slice(2)
 if (args.length === 0) {
-  console.error('usage: bun run scripts/diagnose.ts <replay-path> [more-replay-paths...]')
+  console.error('usage: bun run scripts/diagnose.ts <replay-path> [stats.json]')
   process.exit(1)
 }
-for (const path of args) diagnose(path)
+const replays: string[] = []
+let statsPath: string | undefined
+for (const a of args) {
+  if (a.endsWith('.json')) statsPath = a
+  else replays.push(a)
+}
+for (const path of replays) diagnose(path, statsPath)

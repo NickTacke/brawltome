@@ -73,6 +73,11 @@ export class Simulation {
   // Debug counters for the diagnostic harness; not part of the product API.
   private readonly pickupCounts = new Map<number, number>()
   private readonly weaponTimeMs = new Map<number, Map<string, number>>()
+  // Compact per-entity timeline of weapon-in-hand changes. Each entry is
+  // "from ms onward, the entity held `weapon`". Starts with an implicit
+  // 'Base' at ms=0 (spawn); a change event is recorded only when heldWeapon
+  // differs from the prior entry.
+  private readonly weaponChangeTimeline = new Map<number, { ms: number; weapon: string }[]>()
   private readonly driver: InputDriver
   private readonly geometry: LevelGeometry
   private readonly physicsParams: PhysicsParams
@@ -127,6 +132,7 @@ export class Simulation {
         const phys = this.physState.get(entity.id)
         if (!phys) continue
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
+        const priorHeld = held
 
         // Pickup: overlap-based. Only unarmed entities can pick up, and only
         // weapons they own (their legend's weaponOne/weaponTwo).
@@ -139,20 +145,24 @@ export class Simulation {
             this.pickupCounts.set(entity.id, (this.pickupCounts.get(entity.id) ?? 0) + 1)
           }
         }
+
+        // Dropping on PickUpThrow over-unarms entities: the input bit
+        // doubles as pickup, grab, short-press drop, and long-press throw,
+        // but the stats JSON shows real throws happen a handful of times
+        // per match. Short-press drops also stay recoverable for ~1s, so
+        // players usually re-pick their own weapon. Until we can distinguish
+        // the intents, treating armed state as persistent until death is a
+        // closer approximation than dropping on every PickUpThrow press.
+
+        if (held !== priorHeld) {
+          const tl = this.weaponChangeTimeline.get(entity.id) ?? []
+          tl.push({ ms, weapon: held })
+          this.weaponChangeTimeline.set(entity.id, tl)
+        }
         // Weapon-held-time accumulator for diagnostics.
         const bucket = this.weaponTimeMs.get(entity.id) ?? new Map<string, number>()
         bucket.set(held, (bucket.get(held) ?? 0) + TICK_MS)
         this.weaponTimeMs.set(entity.id, bucket)
-
-        // Drop: edge-triggered PickUpThrow while holding a weapon drops it.
-        // V1 doesn't model the dropped weapon landing on the ground - it
-        // dematerialises. The slot continues its own respawn cycle.
-        const throwNow = (flags & InputFlag.PickUpThrow) !== 0
-        const throwPrev = (phys.prevFlags & InputFlag.PickUpThrow) !== 0
-        if (held !== 'Base' && throwNow && !throwPrev) {
-          held = 'Base'
-          this.heldWeapon.set(entity.id, held)
-        }
 
         // Detect attack-button edges before stepEntity runs, so posture is
         // the state the entity had when the press "happened", not the state
@@ -177,6 +187,9 @@ export class Simulation {
         // inspect the return value.
         if (held !== 'Base' && isOutOfBounds(entity.pos, this.geometry)) {
           this.heldWeapon.set(entity.id, 'Base')
+          const tl = this.weaponChangeTimeline.get(entity.id) ?? []
+          tl.push({ ms, weapon: 'Base' })
+          this.weaponChangeTimeline.set(entity.id, tl)
         }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
         this.physState.set(entity.id, after)
@@ -200,6 +213,13 @@ export class Simulation {
   // Per-entity, per-weapon ms-held totals. Diagnostic-only.
   weaponTimeByEntity(): ReadonlyMap<number, ReadonlyMap<string, number>> {
     return this.weaponTimeMs
+  }
+
+  // Per-entity weapon-change timeline. Each inner array is sorted by ms
+  // ascending; an implicit { ms: 0, weapon: 'Base' } precedes the first
+  // entry. Diagnostic-only.
+  weaponChangesByEntity(): ReadonlyMap<number, readonly { ms: number; weapon: string }[]> {
+    return this.weaponChangeTimeline
   }
 
   postureTotals(): PostureTotals[] {
