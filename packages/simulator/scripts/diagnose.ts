@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { basename } from 'node:path'
-import { getLevelById, levelGeometry } from '@brawltome/game-data'
+import { getLevelById, getPowerById, levelGeometry } from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
 import { Simulation } from '../src/sim'
 
@@ -80,6 +80,38 @@ function diagnose(path: string): void {
     const perMin = minutes > 0 ? total / minutes : 0
     console.log(
       `  ${String(t.entityId).padStart(3, ' ')} ${name} ${cols}   ${String(total).padStart(5, ' ')}    ${perMin.toFixed(1).padStart(5, ' ')}`,
+    )
+  }
+
+  // Rough damage-attempted: sum of baseDamage across every resolved attempt.
+  // Assumes every press connected, which it doesn't; this is an upper bound
+  // for damage output, not actual damage dealt. Dodge and unresolved
+  // attempts are excluded. V1 only resolves unarmed (Base*) powers, so
+  // weapon attacks post-pickup currently fall through as unresolved.
+  console.log(
+    `\nrough damage-attempted (baseDamage of resolved Base* powers, upper bound, no hit detection):`,
+  )
+  console.log(`  id  name             resolved  unresolvable  baseDamage  per-min`)
+  for (const t of totals) {
+    const ent = parsed.entities.find((e) => e.id === t.entityId)
+    const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
+    let resolved = 0
+    let unresolvable = 0
+    let damage = 0
+    for (const a of attacks) {
+      if (a.entityId !== t.entityId) continue
+      if (a.powerId === null) {
+        // Dodges always return null; skip them in the unresolvable count.
+        if (a.button !== 'dodge') unresolvable += 1
+        continue
+      }
+      resolved += 1
+      const p = getPowerById(a.powerId)
+      if (p) damage += p.baseDamage
+    }
+    const perMin = minutes > 0 ? damage / minutes : 0
+    console.log(
+      `  ${String(t.entityId).padStart(3, ' ')} ${name} ${String(resolved).padStart(8, ' ')}  ${String(unresolvable).padStart(12, ' ')}  ${String(damage).padStart(10, ' ')}   ${perMin.toFixed(1).padStart(5, ' ')}`,
     )
   }
 }

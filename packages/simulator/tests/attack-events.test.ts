@@ -31,7 +31,13 @@ describe('directionFromFlags', () => {
 })
 
 describe('detectAttackAttempts', () => {
-  const common = { tick: 10, ms: 166, entityId: 1, posture: 'air' as const }
+  const common = {
+    tick: 10,
+    ms: 166,
+    entityId: 1,
+    posture: 'air' as const,
+    weapon: 'Base',
+  }
 
   test('edge-trigger emits once on press', () => {
     const events = detectAttackAttempts({
@@ -101,5 +107,76 @@ describe('detectAttackAttempts', () => {
     })
     expect(events.length).toBe(1)
     expect(events[0].button).toBe('throw')
+  })
+})
+
+describe('detectAttackAttempts: power resolution', () => {
+  const common = {
+    tick: 1,
+    ms: 16,
+    entityId: 1,
+    weapon: 'Base',
+  }
+
+  test('ground neutral light resolves to BaseNeutral', () => {
+    const [e] = detectAttackAttempts({
+      ...common,
+      posture: 'ground',
+      prevFlags: 0,
+      flags: InputFlag.Light,
+    })
+    expect(e.powerName).toBe('BaseNeutral')
+    expect(e.powerId).toBeGreaterThan(0)
+  })
+
+  test('ground side light resolves to BaseSide', () => {
+    const [e] = detectAttackAttempts({
+      ...common,
+      posture: 'ground',
+      prevFlags: 0,
+      flags: InputFlag.Light | InputFlag.MoveRight,
+    })
+    expect(e.powerName).toBe('BaseSide')
+  })
+
+  test('ground side heavy resolves to BaseSmashSide', () => {
+    const [e] = detectAttackAttempts({
+      ...common,
+      posture: 'ground',
+      prevFlags: 0,
+      flags: InputFlag.Heavy | InputFlag.MoveRight,
+    })
+    expect(e.powerName).toBe('BaseSmashSide')
+  })
+
+  test('air down heavy resolves to BaseGroundPound', () => {
+    const [e] = detectAttackAttempts({
+      ...common,
+      posture: 'air',
+      prevFlags: 0,
+      flags: InputFlag.Heavy | InputFlag.Drop,
+    })
+    expect(e.powerName).toBe('BaseGroundPound')
+  })
+
+  test('air up heavy resolves to BaseAirUpHeavy (recovery)', () => {
+    const [e] = detectAttackAttempts({
+      ...common,
+      posture: 'air',
+      prevFlags: 0,
+      flags: InputFlag.Heavy | InputFlag.AimUp,
+    })
+    expect(e.powerName).toBe('BaseAirUpHeavy')
+  })
+
+  test('dodge never resolves to a power', () => {
+    const [e] = detectAttackAttempts({
+      ...common,
+      posture: 'ground',
+      prevFlags: 0,
+      flags: InputFlag.DodgeDash,
+    })
+    expect(e.powerName).toBeNull()
+    expect(e.powerId).toBeNull()
   })
 })

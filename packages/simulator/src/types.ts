@@ -32,8 +32,11 @@ export type AttackButton = 'light' | 'heavy' | 'dodge' | 'throw'
 // This matches the in-engine precedence used for picking sig vs aerial.
 export type AttackDirection = 'neutral' | 'up' | 'down' | 'side'
 
-// One attack-button press event. Damage and hitbox resolution come later;
-// for now these are "attempts" that downstream stats consumers can count.
+// One attack-button press event. `powerId`/`powerName` are the Power record
+// the resolver mapped this input to (null if the combination has no damaging
+// move, e.g. dodges, or if the lookup failed). Damage and hitbox resolution
+// come later; downstream stats consumers can count attempts and, once the
+// power is resolved, sum baseDamage as a rough damage-output estimate.
 export type AttackAttempt = {
   tick: number
   ms: number
@@ -41,6 +44,8 @@ export type AttackAttempt = {
   button: AttackButton
   direction: AttackDirection
   posture: Posture
+  powerId: number | null
+  powerName: string | null
 }
 
 // Brawlhalla's per-legend attribute scaling rolls up into these derived

@@ -1,4 +1,4 @@
-import type { LevelGeometry } from '@brawltome/game-data'
+import { getLegendById, type LevelGeometry } from '@brawltome/game-data'
 import type { ParsedReplay } from '@brawltome/replay-format'
 import { detectAttackAttempts } from './attack-events'
 import { InputDriver } from './input-driver'
@@ -45,6 +45,11 @@ export class Simulation {
   private readonly physState = new Map<number, EntityPhysState>()
   private readonly respawnPoints = new Map<number, Vec2>()
   private readonly attacks: AttackAttempt[] = []
+  // Per-entity legend internal name, used by the attack resolver when
+  // selecting between legend-specific signature powers. Not all entities
+  // will have a known legend (bots, corrupt replays); those stay undefined
+  // and the resolver falls back to the base signature.
+  private readonly legendName = new Map<number, string>()
   private readonly driver: InputDriver
   private readonly geometry: LevelGeometry
   private readonly physicsParams: PhysicsParams
@@ -59,6 +64,9 @@ export class Simulation {
     input.parsed.entities.forEach((e, i) => {
       const spawn = respawns[i % Math.max(respawns.length, 1)] ?? { x: 0, y: 0 }
       this.respawnPoints.set(e.id, { x: spawn.x, y: spawn.y })
+      const heroId = e.playerData.heroes[0]?.heroId
+      const legend = heroId !== undefined ? getLegendById(heroId) : undefined
+      if (legend?.heroName) this.legendName.set(e.id, legend.heroName)
       this.entities.set(e.id, {
         id: e.id,
         team: e.team,
@@ -82,7 +90,9 @@ export class Simulation {
         if (!phys) continue
         // Detect attack-button edges before stepEntity runs, so posture is
         // the state the entity had when the press "happened", not the state
-        // after the tick's physics resolved.
+        // after the tick's physics resolved. V1 assumes the attacker is
+        // unarmed ('Base' prefix); weapon-pickup tracking during a match
+        // will refine this to the actual in-hand weapon later.
         const attempts = detectAttackAttempts({
           tick,
           ms,
@@ -90,6 +100,8 @@ export class Simulation {
           flags,
           prevFlags: phys.prevFlags,
           posture: entity.posture,
+          weapon: 'Base',
+          legend: this.legendName.get(entity.id),
         })
         if (attempts.length > 0) this.attacks.push(...attempts)
         const next = stepEntity(entity, flags, phys, this.geometry, this.physicsParams)

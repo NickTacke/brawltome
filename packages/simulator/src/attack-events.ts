@@ -1,4 +1,5 @@
 import { InputFlag } from '@brawltome/replay-format'
+import { resolveAttackPower } from './attack-resolver'
 import type { AttackAttempt, AttackButton, AttackDirection, Posture } from './types'
 
 // Bit positions for each attack button. Order matters: if multiple buttons
@@ -23,9 +24,11 @@ export function directionFromFlags(flags: number): AttackDirection {
 }
 
 // Edge-detect attack presses by comparing this tick's flags to the previous
-// tick's. Returns one AttackAttempt per button freshly pressed. Input posture
-// is the entity's state at the start of the tick (before the tick's physics
-// have run), which is what the in-engine state machine would see.
+// tick's. Returns one AttackAttempt per button freshly pressed, each tagged
+// with the Power the resolver mapped it to (or nulls when the combination
+// doesn't correspond to a damaging move, e.g. dodges). Input posture is the
+// entity's state at the start of the tick, which is what the in-engine state
+// machine would see.
 export function detectAttackAttempts(args: {
   tick: number
   ms: number
@@ -33,16 +36,27 @@ export function detectAttackAttempts(args: {
   flags: number
   prevFlags: number
   posture: Posture
+  weapon: string
+  legend?: string
 }): AttackAttempt[] {
-  const { tick, ms, entityId, flags, prevFlags, posture } = args
+  const { tick, ms, entityId, flags, prevFlags, posture, weapon, legend } = args
   const direction = directionFromFlags(flags)
   const out: AttackAttempt[] = []
   for (const { flag, button } of BUTTONS) {
     const nowOn = (flags & flag) !== 0
     const prevOn = (prevFlags & flag) !== 0
-    if (nowOn && !prevOn) {
-      out.push({ tick, ms, entityId, button, direction, posture })
-    }
+    if (!nowOn || prevOn) continue
+    const power = resolveAttackPower({ weapon, button, direction, posture, legend })
+    out.push({
+      tick,
+      ms,
+      entityId,
+      button,
+      direction,
+      posture,
+      powerId: power?.powerId ?? null,
+      powerName: power?.powerName ?? null,
+    })
   }
   return out
 }
