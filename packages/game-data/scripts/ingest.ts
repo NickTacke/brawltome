@@ -231,6 +231,8 @@ function loadPowers(): Power[] {
     onHitCooldownTime: idx('OnHitCooldownTime'),
     aoeRadiusX: idx('AoERadiusX'),
     aoeRadiusY: idx('AoERadiusY'),
+    centerOffsetX: idx('CenterOffsetX'),
+    centerOffsetY: idx('CenterOffsetY'),
     isAirPower: idx('IsAirPower'),
     isSignature: idx('IsSignature'),
     isAntiair: idx('IsAntiair'),
@@ -257,6 +259,8 @@ function loadPowers(): Power[] {
       onHitCooldownTime: colNum(r, c.onHitCooldownTime),
       aoeRadiusX: colNum(r, c.aoeRadiusX),
       aoeRadiusY: colNum(r, c.aoeRadiusY),
+      centerOffsetX: colNumArray(r, c.centerOffsetX),
+      centerOffsetY: colNumArray(r, c.centerOffsetY),
       isAirPower: colBool(r, c.isAirPower),
       isSignature: colBool(r, c.isSignature),
       isAntiair: colBool(r, c.isAntiair),
@@ -442,6 +446,9 @@ function loadHurtboxes(): Hurtbox[] {
     animName: idx('AnimName'),
     width: idx('Width'),
     height: idx('Height'),
+    offsetX: idx('OffsetX'),
+    offsetY: idx('OffsetY'),
+    frames: idx('Frames'),
   }
   return rows
     .filter((r) => r[c.name] && r[c.name] !== 'Template')
@@ -450,8 +457,11 @@ function loadHurtboxes(): Hurtbox[] {
       hurtboxId: colNum(r, c.id),
       animClass: col(r, c.animClass),
       animName: col(r, c.animName),
-      width: colNum(r, c.width),
-      height: colNum(r, c.height),
+      width: colNumArray(r, c.width),
+      height: colNumArray(r, c.height),
+      offsetX: colNumArray(r, c.offsetX),
+      offsetY: colNumArray(r, c.offsetY),
+      frames: col(r, c.frames),
     }))
 }
 

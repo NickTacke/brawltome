@@ -45,6 +45,12 @@ export type Power = {
   onHitCooldownTime: number
   aoeRadiusX: number
   aoeRadiusY: number
+  // Per-hitbox-slot offsets from the attacker's position to the hitbox
+  // centre. X is in the attacker-facing orientation (callers multiply by
+  // facing before adding to world x). Indexed by the hitbox slot referenced
+  // by castTime phases.
+  centerOffsetX: number[]
+  centerOffsetY: number[]
   isAirPower: boolean
   isSignature: boolean
   isMultihit: boolean
@@ -55,13 +61,22 @@ export type Power = {
   hurtboxName: string | null
 }
 
+// A per-animation hurtbox record. Width/Height/OffsetX/OffsetY are
+// per-animation-frame arrays whose i-th entry covers the i-th span in
+// `frames` (e.g. frames="1,2-3,4" means entry 0 covers frame 1, entry 1
+// covers frames 2 and 3, entry 2 covers frame 4). Offsets are in the
+// attacker-facing orientation (positive X faces right); callers multiply
+// by `facing` before applying to the entity's world position.
 export type Hurtbox = {
   hurtboxName: string
   hurtboxId: number
   animClass: string
   animName: string
-  width: number
-  height: number
+  width: number[]
+  height: number[]
+  offsetX: number[]
+  offsetY: number[]
+  frames: string
 }
 
 // A flat collision segment. Either horizontal (X1/X2 + Y) or vertical (X + Y1/Y2).
