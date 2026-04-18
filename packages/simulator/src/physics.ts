@@ -82,6 +82,25 @@ function groundBeneath(
   return best
 }
 
+// Range within which an airborne entity is considered pressed against a
+// vertical hard line (wall-slide / wall-stick posture). Matches the probe
+// width used in collision.classifyPosture.
+const WALL_ADJACENT_PX = 8
+
+// True if `pos` is inside the y-range of any vertical hard line and within
+// WALL_ADJACENT_PX of it horizontally. Used to refine posture from 'air' to
+// 'wall' after collision resolution, so that entities sliding down walls
+// register as wall time instead of just the single tick they bumped.
+function isAdjacentToWall(pos: Vec2, level: LevelGeometry): boolean {
+  for (const c of level.collisions) {
+    if (c.kind !== 'hard') continue
+    if (!isVertical(c)) continue
+    if (pos.y < Math.min(c.y1, c.y2) || pos.y > Math.max(c.y1, c.y2)) continue
+    if (Math.abs(pos.x - c.x1) <= WALL_ADJACENT_PX) return true
+  }
+  return false
+}
+
 // Returns the nearest vertical hard line that a horizontal move from x0 to x1
 // at height y crosses, or null if the path is clear.
 function wallCrossed(y: number, x0: number, x1: number, level: LevelGeometry): number | null {
@@ -180,8 +199,13 @@ export function stepEntity(
     entity.posture = 'air'
   }
 
-  // If we hit a wall while grounded, posture stays 'ground'; if airborne, mark wall.
-  if (wallX !== null && entity.posture !== 'ground') entity.posture = 'wall'
+  // If we hit a wall while grounded, posture stays 'ground'. If airborne,
+  // refine to 'wall' either because we just crossed one or because we're
+  // flush against one this tick (wall-slide: falling alongside a wall even
+  // when horizontal velocity is zero).
+  if (entity.posture === 'air') {
+    if (wallX !== null || isAdjacentToWall(entity.pos, level)) entity.posture = 'wall'
+  }
 
   return { prevFlags: flags, jumpsRemaining }
 }

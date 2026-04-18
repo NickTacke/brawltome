@@ -238,6 +238,39 @@ describe('stepEntity: wall resolution', () => {
     expect(e.pos.x).toBeLessThanOrEqual(200)
     expect(e.vel.x).toBe(0)
   })
+
+  test('airborne entity falling flush against a wall registers as wall posture', () => {
+    // Vertical hard line at x=200 covering the entire fall path. Entity
+    // starts right at the wall with only gravity acting on it; no horizontal
+    // velocity, so wallCrossed won't fire. The adjacency check should still
+    // classify the tick as 'wall'.
+    const wall: CollisionLine = { kind: 'hard', x1: 200, x2: 200, y1: 0, y2: 1000 }
+    const e = makeEntity(200, 100)
+    e.posture = 'air'
+    let phys = makePhysState()
+    phys = stepEntity(e, 0, phys, makeLevel([wall]))
+    expect(e.posture).toBe('wall')
+  })
+
+  test('airborne entity far from any wall stays air', () => {
+    const wall: CollisionLine = { kind: 'hard', x1: 200, x2: 200, y1: 0, y2: 1000 }
+    const e = makeEntity(-500, 100)
+    e.posture = 'air'
+    let phys = makePhysState()
+    phys = stepEntity(e, 0, phys, makeLevel([wall]))
+    expect(e.posture).toBe('air')
+  })
+
+  test('grounded entity next to a wall stays ground, not wall', () => {
+    // Ground posture wins: standing on a floor right next to a wall still
+    // reports 'ground' (wall refinement only applies while airborne).
+    const wall: CollisionLine = { kind: 'hard', x1: 200, x2: 200, y1: 0, y2: 1000 }
+    const e = makeEntity(200, 500)
+    e.posture = 'ground'
+    let phys = makePhysState()
+    phys = stepEntity(e, 0, phys, makeLevel([floor, wall]))
+    expect(e.posture).toBe('ground')
+  })
 })
 
 describe('checkKillAndRespawn', () => {
