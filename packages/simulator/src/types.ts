@@ -23,12 +23,6 @@ export type EntityState = {
   // Absolute ms during which the entity is invulnerable (dodge i-frames).
   // Hit detection skips entities whose ms < invulnUntilMs.
   invulnUntilMs: number
-  // Inputs are ignored until the entity first touches the ground after
-  // spawn/respawn. 0 means "not yet grounded since (re)spawn" and the
-  // tick loop zero-flags this entity's inputs. BH's countdown ends with
-  // players falling to the stage; inputs only take effect once they've
-  // landed.
-  readyForInput: boolean
   // Chase-dodge tokens earned by landing a hit. +2 when airborne lands a
   // hit while grounded, +1 when airborne. Each DodgeDash press consumes
   // one; the counter resets to zero when the attacker throws another

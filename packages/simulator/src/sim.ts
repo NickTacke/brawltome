@@ -154,7 +154,6 @@ export class Simulation {
         damagePct: 0,
         hitstunUntilMs: 0,
         invulnUntilMs: 0,
-        readyForInput: false,
         chaseDodgeTokens: 0,
         chaseWindowUntilMs: 0,
       })
@@ -294,12 +293,7 @@ export class Simulation {
         // Everything else is zero-flagged; the entity's carry-over
         // momentum handles positional drift.
         const inHitstun = ms < entity.hitstunUntilMs
-        // Entities that haven't touched the ground since spawn/respawn
-        // get their inputs zero-flagged. BH's countdown ends with players
-        // still mid-air (falling from spawn) and only starts accepting
-        // inputs once the first landing happens.
-        const rawGated = entity.readyForInput ? rawFlags : 0
-        const flags = inHitstun ? rawGated & InputFlag.DodgeDash : rawGated
+        const flags = inHitstun ? rawFlags & InputFlag.DodgeDash : rawFlags
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
         const priorHeld = held
 
@@ -410,16 +404,11 @@ export class Simulation {
           entity.damagePct = 0
           entity.hitstunUntilMs = 0
           entity.invulnUntilMs = 0
-          entity.readyForInput = false
           entity.chaseDodgeTokens = 0
           entity.chaseWindowUntilMs = 0
         }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
         this.physState.set(entity.id, after)
-        // First ground contact post-(re)spawn unlocks input processing.
-        if (!entity.readyForInput && entity.posture === 'ground') {
-          entity.readyForInput = true
-        }
         yield { tick, ms, entity }
       }
     }
