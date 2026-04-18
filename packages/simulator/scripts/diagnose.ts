@@ -15,8 +15,15 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { basename } from 'node:path'
-import { getLegendById, getLevelById, getPowerById, levelGeometry } from '@brawltome/game-data'
+import {
+  getLegendById,
+  getLevelById,
+  getPowerById,
+  getPowerByName,
+  levelGeometry,
+} from '@brawltome/game-data'
 import { parse } from '@brawltome/replay-format'
+import { estimatePowerDamage, strengthMultiplier } from '../src/damage-estimator'
 import { Simulation } from '../src/sim'
 import { TICK_MS } from '../src/tick'
 import { loadStats, statsPlayers, weaponAtMs } from './stats-loader'
@@ -136,35 +143,36 @@ function diagnose(path: string, statsPath?: string): void {
     )
   }
 
-  // Sum of baseDamage across every resolved attempt. NOTE: Many BH powers
-  // store zero baseDamage on the primary record because damage lives on
-  // chained Hit/Combo variants encoded in castTime. Until the chain-walker
-  // lands (phase 2.3), this number undercounts badly for multi-hit moves
-  // but is still useful as a "how many presses resolved at all" signal.
+  // Damage-attempted upper bound per press: resolved Power's base damage
+  // (via estimator) scaled by the attacker's strength stat. Real in-game
+  // hits further reduce on the defender's weight/defence and by dodge/CC
+  // modifiers we don't model. Assumes every press connects.
   console.log(
-    `\ndamage-attempted (sum of baseDamage of resolved powers; undercounts multi-hit):`,
+    `\ndamage-attempted (estimator * strength multiplier; upper bound):`,
   )
-  console.log(`  id  name             resolved  unresolvable  baseDamage  per-min`)
+  console.log(`  id  name             resolved  unresolvable  damage  per-min`)
   for (const t of totals) {
     const ent = parsed.entities.find((e) => e.id === t.entityId)
     const name = ent ? `${ent.name}`.padEnd(16, ' ') : '?'.padEnd(16, ' ')
+    const heroId = ent?.playerData.heroes[0]?.heroId
+    const legend = heroId !== undefined ? getLegendById(heroId) : undefined
+    const strMult = legend ? strengthMultiplier(legend.strength) : 1
     let resolved = 0
     let unresolvable = 0
     let damage = 0
     for (const a of attacks) {
       if (a.entityId !== t.entityId) continue
       if (a.powerId === null) {
-        // Dodges always return null; skip them in the unresolvable count.
         if (a.button !== 'dodge') unresolvable += 1
         continue
       }
       resolved += 1
       const p = getPowerById(a.powerId)
-      if (p) damage += p.baseDamage
+      if (p) damage += estimatePowerDamage(p, getPowerByName) * strMult
     }
     const perMin = minutes > 0 ? damage / minutes : 0
     console.log(
-      `  ${String(t.entityId).padStart(3, ' ')} ${name} ${String(resolved).padStart(8, ' ')}  ${String(unresolvable).padStart(12, ' ')}  ${String(damage).padStart(10, ' ')}   ${perMin.toFixed(1).padStart(5, ' ')}`,
+      `  ${String(t.entityId).padStart(3, ' ')} ${name} ${String(resolved).padStart(8, ' ')}  ${String(unresolvable).padStart(12, ' ')}  ${damage.toFixed(1).padStart(6, ' ')}   ${perMin.toFixed(1).padStart(5, ' ')}`,
     )
   }
 
@@ -183,17 +191,20 @@ function diagnose(path: string, statsPath?: string): void {
   for (const p of players) {
     const ent = parsed.entities.find((e) => e.name === p.PlayerName)
     if (!ent) continue
+    const heroId = ent.playerData.heroes[0]?.heroId
+    const legend = heroId !== undefined ? getLegendById(heroId) : undefined
+    const strMult = legend ? strengthMultiplier(legend.strength) : 1
     let simDamage = 0
     for (const a of attacks) {
       if (a.entityId !== ent.id || a.powerId === null) continue
       const pw = getPowerById(a.powerId)
-      if (pw) simDamage += pw.baseDamage
+      if (pw) simDamage += estimatePowerDamage(pw, getPowerByName) * strMult
     }
     const real = p.DamageDealt
     const delta = simDamage - real
     const pct = real > 0 ? (delta / real) * 100 : 0
     console.log(
-      `  ${p.PlayerName.padEnd(16, ' ')} ${real.toFixed(1).padStart(7, ' ')}   ${String(simDamage).padStart(5, ' ')}   ${(delta >= 0 ? '+' : '') + delta.toFixed(1)} (${pct.toFixed(1)}%)`,
+      `  ${p.PlayerName.padEnd(16, ' ')} ${real.toFixed(1).padStart(7, ' ')}   ${simDamage.toFixed(1).padStart(7, ' ')}   ${(delta >= 0 ? '+' : '') + delta.toFixed(1)} (${pct.toFixed(1)}%)`,
     )
   }
 
