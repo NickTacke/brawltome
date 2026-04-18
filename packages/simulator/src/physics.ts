@@ -177,3 +177,31 @@ export function stepEntity(
 
   return { prevFlags: flags, jumpsRemaining }
 }
+
+// If the entity has crossed any non-null killBound, snap it back to the given
+// respawn point with zeroed velocity and a full jump budget. Returns the
+// physics state either unchanged (no kill) or with jumps reset.
+//
+// Instant respawn (no death animation or stock cost) is enough for V1: the
+// aggregate posture metric just needs entities to stop falling into the void
+// forever so we can run full-match sims without garbage tail frames.
+export function checkKillAndRespawn(
+  entity: EntityState,
+  level: LevelGeometry,
+  respawnPoint: Vec2,
+  phys: EntityPhysState,
+): EntityPhysState {
+  const { left, right, top, bottom } = level.killBounds
+  const killed =
+    (left !== null && entity.pos.x < left) ||
+    (right !== null && entity.pos.x > right) ||
+    (top !== null && entity.pos.y < top) ||
+    (bottom !== null && entity.pos.y > bottom)
+  if (!killed) return phys
+  entity.pos.x = respawnPoint.x
+  entity.pos.y = respawnPoint.y
+  entity.vel.x = 0
+  entity.vel.y = 0
+  entity.posture = 'air'
+  return { prevFlags: phys.prevFlags, jumpsRemaining: DEFAULT_MAX_JUMPS }
+}

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CollisionLine, LevelGeometry } from '@brawltome/game-data'
 import { InputFlag } from '@brawltome/replay-format'
-import { DEFAULT_PHYSICS, makePhysState, stepEntity } from '../src/physics'
+import { DEFAULT_PHYSICS, checkKillAndRespawn, makePhysState, stepEntity } from '../src/physics'
 import type { EntityState } from '../src/types'
 
 function makeLevel(collisions: CollisionLine[] = []): LevelGeometry {
@@ -225,5 +225,104 @@ describe('stepEntity: wall resolution', () => {
     }
     expect(e.pos.x).toBeLessThanOrEqual(200)
     expect(e.vel.x).toBe(0)
+  })
+})
+
+describe('checkKillAndRespawn', () => {
+  const respawnPoint = { x: 0, y: 0 }
+  const bounded = (
+    bounds: Partial<LevelGeometry['killBounds']>,
+    respawns: { x: number; y: number }[] = [respawnPoint],
+  ): LevelGeometry => ({
+    ...makeLevel(),
+    killBounds: { left: null, right: null, top: null, bottom: null, ...bounds },
+    respawns,
+  })
+
+  test('all null bounds never kill', () => {
+    const e = makeEntity(1e9, 1e9)
+    e.vel.x = 500
+    const phys = makePhysState()
+    const next = checkKillAndRespawn(e, makeLevel(), respawnPoint, phys)
+    expect(e.pos.x).toBe(1e9)
+    expect(e.vel.x).toBe(500)
+    expect(next).toBe(phys)
+  })
+
+  test('within bounds does not reset', () => {
+    const e = makeEntity(50, 50)
+    e.vel.x = 100
+    const phys = makePhysState()
+    const level = bounded({ left: -1000, right: 1000, top: -500, bottom: 1500 })
+    checkKillAndRespawn(e, level, respawnPoint, phys)
+    expect(e.pos.x).toBe(50)
+    expect(e.vel.x).toBe(100)
+  })
+
+  test('crossing left bound respawns', () => {
+    const e = makeEntity(-2000, 500)
+    const phys = makePhysState()
+    const level = bounded({ left: -1000 }, [{ x: 10, y: 20 }])
+    checkKillAndRespawn(e, level, level.respawns[0], phys)
+    expect(e.pos.x).toBe(10)
+    expect(e.pos.y).toBe(20)
+  })
+
+  test('crossing right bound respawns', () => {
+    const e = makeEntity(5000, 500)
+    const phys = makePhysState()
+    const level = bounded({ right: 1000 })
+    checkKillAndRespawn(e, level, respawnPoint, phys)
+    expect(e.pos.x).toBe(0)
+    expect(e.pos.y).toBe(0)
+  })
+
+  test('crossing top bound respawns', () => {
+    const e = makeEntity(0, -1000)
+    const phys = makePhysState()
+    const level = bounded({ top: -500 })
+    checkKillAndRespawn(e, level, respawnPoint, phys)
+    expect(e.pos.y).toBe(0)
+  })
+
+  test('crossing bottom bound respawns and zeroes velocity', () => {
+    const e = makeEntity(0, 3000)
+    e.vel.x = 500
+    e.vel.y = DEFAULT_PHYSICS.maxFallSpeed
+    const phys = makePhysState()
+    const level = bounded({ bottom: 2000 })
+    checkKillAndRespawn(e, level, respawnPoint, phys)
+    expect(e.pos.y).toBe(0)
+    expect(e.vel.x).toBe(0)
+    expect(e.vel.y).toBe(0)
+    expect(e.posture).toBe('air')
+  })
+
+  test('respawn refills the jump budget even if it was spent', () => {
+    const e = makeEntity(0, 3000)
+    const phys = { prevFlags: 0, jumpsRemaining: 0 }
+    const level = bounded({ bottom: 2000 })
+    const next = checkKillAndRespawn(e, level, respawnPoint, phys)
+    expect(next.jumpsRemaining).toBe(3)
+  })
+
+  test('falling off the void in the sim loop snaps back to a respawn point', () => {
+    // Drive stepEntity in a level with a deep pit and a bottom kill bound.
+    // Entity starts airborne above empty space and falls until killed.
+    const pit: LevelGeometry = {
+      ...makeLevel(),
+      killBounds: { left: null, right: null, top: null, bottom: 1500 },
+      respawns: [{ x: 0, y: 0 }],
+    }
+    const e = makeEntity(0, 0)
+    let phys = makePhysState()
+    for (let i = 0; i < 60; i++) {
+      phys = stepEntity(e, 0, phys, pit)
+      phys = checkKillAndRespawn(e, pit, pit.respawns[0], phys)
+    }
+    // 60 ticks is long enough for gravity to drive past the bound at least once;
+    // after any kill, pos is clamped back toward 0 and jumps are refilled.
+    expect(e.pos.y).toBeLessThanOrEqual(1500)
+    expect(phys.jumpsRemaining).toBe(3)
   })
 })

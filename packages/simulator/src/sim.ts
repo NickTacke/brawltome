@@ -1,9 +1,15 @@
 import type { LevelGeometry } from '@brawltome/game-data'
 import type { ParsedReplay } from '@brawltome/replay-format'
 import { InputDriver } from './input-driver'
-import { DEFAULT_PHYSICS, type EntityPhysState, makePhysState, stepEntity } from './physics'
+import {
+  DEFAULT_PHYSICS,
+  type EntityPhysState,
+  checkKillAndRespawn,
+  makePhysState,
+  stepEntity,
+} from './physics'
 import { TICK_MS, msToTick, tickToMs } from './tick'
-import type { EntityState, EntityTick, PhysicsParams, Posture } from './types'
+import type { EntityState, EntityTick, PhysicsParams, Posture, Vec2 } from './types'
 
 export type SimInput = {
   parsed: ParsedReplay
@@ -29,6 +35,7 @@ export class Simulation {
   private readonly endTick: number
   private readonly entities = new Map<number, EntityState>()
   private readonly physState = new Map<number, EntityPhysState>()
+  private readonly respawnPoints = new Map<number, Vec2>()
   private readonly driver: InputDriver
   private readonly geometry: LevelGeometry
   private readonly physicsParams: PhysicsParams
@@ -42,6 +49,7 @@ export class Simulation {
     const respawns = input.geometry.respawns
     input.parsed.entities.forEach((e, i) => {
       const spawn = respawns[i % Math.max(respawns.length, 1)] ?? { x: 0, y: 0 }
+      this.respawnPoints.set(e.id, { x: spawn.x, y: spawn.y })
       this.entities.set(e.id, {
         id: e.id,
         team: e.team,
@@ -64,7 +72,9 @@ export class Simulation {
         const phys = this.physState.get(entity.id)
         if (!phys) continue
         const next = stepEntity(entity, flags, phys, this.geometry, this.physicsParams)
-        this.physState.set(entity.id, next)
+        const respawn = this.respawnPoints.get(entity.id) ?? { x: 0, y: 0 }
+        const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
+        this.physState.set(entity.id, after)
         yield { tick, ms, entity }
       }
     }

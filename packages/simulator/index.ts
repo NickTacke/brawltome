@@ -4,6 +4,7 @@ export { classifyPosture } from './src/collision'
 export {
   DEFAULT_PHYSICS,
   DEFAULT_MAX_JUMPS,
+  checkKillAndRespawn,
   makePhysState,
   stepEntity,
   type EntityPhysState,
