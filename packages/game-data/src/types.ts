@@ -64,6 +64,10 @@ export type Power = {
   ignoreStrength: boolean
   // If true, knockback angle snaps to the nearest 45-degree step.
   lockTo45Degrees: boolean
+  // Multiplier applied to damage when this power's hit lands on a defender
+  // who is already in hitstun from a prior hit (combo scaling). Empty or
+  // zero means no combo tuning.
+  postHitDamageMultiplier: number[]
   isAirPower: boolean
   isSignature: boolean
   isMultihit: boolean

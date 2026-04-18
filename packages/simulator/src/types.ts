@@ -20,6 +20,17 @@ export type EntityState = {
   // While ms < hitstunUntilMs the sim ignores this entity's inputs for
   // attack/dodge purposes (movement still runs via physics).
   hitstunUntilMs: number
+  // Absolute ms during which the entity is invulnerable (dodge i-frames).
+  // Hit detection skips entities whose ms < invulnUntilMs.
+  invulnUntilMs: number
+  // Chase-dodge tokens earned by landing a hit. +2 when airborne lands a
+  // hit while grounded, +1 when airborne. Each DodgeDash press consumes
+  // one; the counter resets to zero when the attacker throws another
+  // attack (chain break) or after CHASE_WINDOW_MS of no dodge.
+  chaseDodgeTokens: number
+  // Absolute ms at which the chase-dodge token window expires. 0 means
+  // no active chase window.
+  chaseWindowUntilMs: number
 }
 
 // Snapshot of one entity at one tick; emitted by the simulator for external

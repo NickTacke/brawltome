@@ -38,10 +38,35 @@ function maxOrZero(arr: readonly number[]): number {
   return m
 }
 
+// Fallback variant names to try when the starter's baseDamage array is
+// empty or all zeros. Viking weapon signatures are the main case: the
+// starter (e.g. HammerSmashSideViking) is a pure trigger record with
+// zero damage, and the real numbers live on *Release* or *Hit* variants
+// the engine chains to after the charge window.
+const DAMAGE_FALLBACK_SUFFIXES = ['Release', 'Hit', 'Hit2', 'Hit3', 'Combo']
+
 export function estimatePowerDamage(power: Power, getPowerByName: (name: string) => Power | undefined): number {
   const starter = maxOrZero(power.baseDamage)
   if (starter > 0) return starter
-  const hit = getPowerByName(`${power.powerName}Hit`)
-  if (hit && hit.powerId !== power.powerId) return maxOrZero(hit.baseDamage)
+  for (const suffix of DAMAGE_FALLBACK_SUFFIXES) {
+    const variant = getPowerByName(`${power.powerName}${suffix}`)
+    if (!variant || variant.powerId === power.powerId) continue
+    const dmg = maxOrZero(variant.baseDamage)
+    if (dmg > 0) return dmg
+  }
   return 0
+}
+
+// Returns the Power record whose baseDamage the estimator chose for the
+// given starter power. Hit detection + knockback also need this so the
+// knockback formula reads from the variant that actually carries the
+// impulse/stun data, not the zero-filled trigger record.
+export function resolveDamageVariant(power: Power, getPowerByName: (name: string) => Power | undefined): Power {
+  if (maxOrZero(power.baseDamage) > 0) return power
+  for (const suffix of DAMAGE_FALLBACK_SUFFIXES) {
+    const variant = getPowerByName(`${power.powerName}${suffix}`)
+    if (!variant || variant.powerId === power.powerId) continue
+    if (maxOrZero(variant.baseDamage) > 0) return variant
+  }
+  return power
 }

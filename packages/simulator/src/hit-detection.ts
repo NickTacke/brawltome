@@ -1,4 +1,5 @@
 import { type Power, getPowerByName } from '@brawltome/game-data'
+import { resolveDamageVariant } from './damage-estimator'
 import type { EntityState } from './types'
 
 // First-pass hitbox simulation. The real BH pipeline (per the decompiled
@@ -47,7 +48,14 @@ export type AttackWindow = {
 export function planAttackWindows(power: Power, attackerId: number, pressMs: number): AttackWindow[] {
   const phases = parseCastTimePhases(power.castTime)
   if (phases.length === 0) return []
-  const hitboxIdx = argmax(power.baseDamage)
+  // Walk to the variant that actually carries the damage/impulse numbers
+  // (e.g. HammerSmashSideVikingRelease when the starter is just a
+  // trigger record). Use the variant's baseDamage + impulse + stun +
+  // hitbox geometry for the rest of the pipeline, but keep the starter's
+  // castTime for active-frame timing because variants often have empty
+  // or single-frame castTime strings.
+  const variant = resolveDamageVariant(power, getPowerByName)
+  const hitboxIdx = argmax(variant.baseDamage)
   if (hitboxIdx < 0) return []
   const firstStart = phases[0].activeStart
   let minStart = firstStart
@@ -57,13 +65,9 @@ export function planAttackWindows(power: Power, attackerId: number, pressMs: num
     const end = p.activeEnd ?? p.activeStart
     if (end > maxEnd) maxEnd = end
   }
-  // Widen the window by half a frame either side to absorb rounding at
-  // the 60Hz tick boundary. Now that knockback applies, we can be more
-  // faithful to BH's actual active-frame windows instead of the wider
-  // compensation the pre-knockback sim needed.
   const startMs = pressMs + minStart * FRAME_MS - FRAME_MS / 2
   const endMs = pressMs + maxEnd * FRAME_MS + FRAME_MS / 2
-  return [{ attackerId, power, pressMs, hitboxIdx, activeStartMs: startMs, activeEndMs: endMs }]
+  return [{ attackerId, power: variant, pressMs, hitboxIdx, activeStartMs: startMs, activeEndMs: endMs }]
 }
 
 function argmax(arr: readonly number[]): number {
@@ -166,6 +170,12 @@ export type LandedHit = {
   baseDamage: number
 }
 
+// Multiplier applied when an isAntiair power connects with an airborne
+// defender. BH has no explicit number in the type layer so we use the
+// commonly-cited ~1.25x bonus that competitive community-data sources
+// agree on.
+const ANTIAIR_MULT = 1.25
+
 export function checkWindow(
   window: AttackWindow,
   nowMs: number,
@@ -184,6 +194,8 @@ export function checkWindow(
   const hits: LandedHit[] = []
   for (const opp of opponents) {
     if (!opp.alive) continue
+    // Invulnerability frames (dodge i-frames) make the defender immune.
+    if (nowMs < opp.invulnUntilMs) continue
     const cdKey = `${attackerId}->${opp.id}:${power.powerId}`
     const lastHit = cooldowns.get(cdKey) ?? Number.NEGATIVE_INFINITY
     if (nowMs - lastHit < SAME_TARGET_COOLDOWN_MS) continue
@@ -202,7 +214,16 @@ export function checkWindow(
       )
     )
       continue
-    const dmg = power.baseDamage[hitboxIdx] ?? 0
+    // Base damage, then anti-air + combo multipliers. A defender already
+    // in hitstun is a "combo hit" and scales by PostHitDamageMultiplier
+    // (array indexed by hitbox slot, falls back to the first entry).
+    let dmg = power.baseDamage[hitboxIdx] ?? 0
+    const inCombo = nowMs < opp.hitstunUntilMs
+    if (inCombo && power.postHitDamageMultiplier.length > 0) {
+      const m = power.postHitDamageMultiplier[hitboxIdx] ?? power.postHitDamageMultiplier[0] ?? 1
+      if (m > 0) dmg *= m
+    }
+    if (power.isAntiair && opp.posture !== 'ground') dmg *= ANTIAIR_MULT
     if (dmg <= 0) continue
     cooldowns.set(cdKey, nowMs)
     hits.push({

@@ -23,6 +23,17 @@ import type { AttackAttempt, EntityState, EntityTick, PhysicsParams, Posture, Ve
 // can line up to the same gate.
 export const COUNTDOWN_MS = 6000
 
+// Dodge invulnerability window, in ms. Approximately 22 frames at 60Hz,
+// close to the community-documented 20-25 frame range for ground/air
+// dodges in BH. Not yet split between ground and air variants.
+const DODGE_INVULN_MS = 370
+
+// Chase-dodge chain window: after landing a hit the attacker keeps their
+// chase tokens alive for this long. 600ms (~36 frames) is a starting
+// guess pending a tighter measurement; the tokens also reset when the
+// attacker throws another attack (chain break).
+const CHASE_WINDOW_MS = 600
+
 export type SimInput = {
   parsed: ParsedReplay
   geometry: LevelGeometry
@@ -141,6 +152,9 @@ export class Simulation {
         alive: true,
         damagePct: 0,
         hitstunUntilMs: 0,
+        invulnUntilMs: 0,
+        chaseDodgeTokens: 0,
+        chaseWindowUntilMs: 0,
       })
       this.physState.set(e.id, makePhysState())
     }
@@ -242,7 +256,13 @@ export class Simulation {
         const hits = checkWindow(w, ms, attacker, opponents, this.hitCooldowns)
         if (hits.length === 0) continue
         this.landedHits.push(...hits)
-        // Apply knockback + hitstun + damage accumulator to each defender.
+        // Apply knockback + hitstun + damage accumulator to each defender,
+        // and grant chase-dodge tokens to the attacker (2 on ground, 1 in
+        // the air). The window refreshes on every landed hit so a combo
+        // keeps tokens alive as long as hits keep connecting.
+        const chaseTokens = attacker.posture === 'ground' ? 2 : 1
+        attacker.chaseDodgeTokens = chaseTokens
+        attacker.chaseWindowUntilMs = ms + CHASE_WINDOW_MS
         for (const h of hits) {
           const defender = this.entities.get(h.defenderId)
           if (!defender) continue
@@ -266,13 +286,39 @@ export class Simulation {
         const rawFlags = this.driver.flagsAt(entity.id, ms)
         const phys = this.physState.get(entity.id)
         if (!phys) continue
-        // While in hitstun the defender can't initiate attacks/dodges or
-        // start pickups. Movement bits are also stripped so the sim's
-        // momentum carries them (matches BH where hitstun locks inputs).
+        // During hitstun the entity can't initiate attacks or pickups, but
+        // BH explicitly lets the DodgeDash input through so the defender
+        // can chase-dodge out of hitstun (§_-Z1H§.as:7490 `§_-E1f§`).
+        // Everything else is zero-flagged; the entity's carry-over
+        // momentum handles positional drift.
         const inHitstun = ms < entity.hitstunUntilMs
-        const flags = inHitstun ? 0 : rawFlags
+        const flags = inHitstun ? rawFlags & InputFlag.DodgeDash : rawFlags
         let held = this.heldWeapon.get(entity.id) ?? 'Base'
         const priorHeld = held
+
+        // Edge-detected attack press breaks the chase-dodge chain: throwing
+        // another attack forfeits any remaining tokens.
+        const lightEdge = (flags & InputFlag.Light) !== 0 && (phys.prevFlags & InputFlag.Light) === 0
+        const heavyEdge = (flags & InputFlag.Heavy) !== 0 && (phys.prevFlags & InputFlag.Heavy) === 0
+        if (lightEdge || heavyEdge) {
+          entity.chaseDodgeTokens = 0
+          entity.chaseWindowUntilMs = 0
+        }
+
+        // Dodge press grants invuln. If the entity has chase tokens within
+        // their active window, consume one (first post-hit dodge is the
+        // "chase dodge"; second is also legal while grounded, optionally
+        // a gravity-cancel - we don't model that variant yet).
+        const dodgeEdge = (flags & InputFlag.DodgeDash) !== 0 && (phys.prevFlags & InputFlag.DodgeDash) === 0
+        if (dodgeEdge) {
+          entity.invulnUntilMs = ms + DODGE_INVULN_MS
+          if (entity.chaseDodgeTokens > 0 && ms < entity.chaseWindowUntilMs) {
+            entity.chaseDodgeTokens -= 1
+          }
+        }
+        if (ms >= entity.chaseWindowUntilMs) {
+          entity.chaseDodgeTokens = 0
+        }
 
         // Pickup: the entity must PRESS PickUpThrow while unarmed and over
         // an available item slot. Walking over a weapon does not auto-grab
@@ -351,11 +397,14 @@ export class Simulation {
             tl.push({ ms, weapon: 'Base' })
             this.weaponChangeTimeline.set(entity.id, tl)
           }
-          // Reset damage accumulator and clear hitstun on death; otherwise
-          // the knockback formula keeps scaling off stale damage after
-          // respawn and the entity stays input-locked in mid-air.
+          // Reset per-entity runtime state on death; otherwise the next
+          // life inherits stale damage scaling, hitstun lockout, or
+          // phantom chase-dodge tokens.
           entity.damagePct = 0
           entity.hitstunUntilMs = 0
+          entity.invulnUntilMs = 0
+          entity.chaseDodgeTokens = 0
+          entity.chaseWindowUntilMs = 0
         }
         const after = checkKillAndRespawn(entity, this.geometry, respawn, next)
         this.physState.set(entity.id, after)
