@@ -15,11 +15,18 @@ interface SortableHeaderProps {
 
 export function SortableHeader({ label, sortKey, currentSort, currentOrder, onSort, className }: SortableHeaderProps) {
   const isActive = currentSort === sortKey
+  const ariaSort: 'ascending' | 'descending' | 'none' = isActive
+    ? currentOrder === 'asc'
+      ? 'ascending'
+      : 'descending'
+    : 'none'
+  const nextOrder = isActive && currentOrder === 'desc' ? 'ascending' : 'descending'
   return (
-    <TableHead className={className}>
+    <TableHead className={className} aria-sort={ariaSort}>
       <button
         type="button"
         onClick={() => onSort(sortKey)}
+        aria-label={`Sort by ${label} ${nextOrder}`}
         className="flex items-center gap-2 w-full hover:text-primary transition-colors font-bold"
       >
         {label}
