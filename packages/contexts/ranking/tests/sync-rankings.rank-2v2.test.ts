@@ -102,4 +102,24 @@ describe('replaceRankPage2v2', () => {
     })
     expect(rows.length).toBe(4)
   })
+
+  it('handles a self-team (idOne === idTwo) without conflict-key duplicate', async () => {
+    await db.delete(playerRankedTeam).where(eq(playerRankedTeam.region, TEST_REGION))
+
+    await playerRepo.replaceRankPage2v2({
+      region: TEST_REGION,
+      page: 1,
+      pageSize: 50,
+      teams: [teamArgs(992001, 992001, 1), teamArgs(992003, 992004, 2)],
+    })
+
+    const rows = await db.query.playerRankedTeam.findMany({
+      where: eq(playerRankedTeam.region, TEST_REGION),
+      orderBy: (t, { asc }) => [asc(t.globalRank)],
+    })
+    expect(rows.length).toBe(3)
+    const selfTeam = rows.filter((r) => r.brawlhallaIdOne === r.brawlhallaIdTwo)
+    expect(selfTeam.length).toBe(1)
+    expect(selfTeam[0]?.brawlhallaId).toBe(992001)
+  })
 })
