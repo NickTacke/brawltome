@@ -25,12 +25,17 @@ import type {
 const BASE_URL = 'https://api.brawlhalla.com'
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000
 
+export interface BhApiMetricsSink {
+  incrementCounter(key: string): Promise<void>
+}
+
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
   persistence?: RequestQueuePersistence
   baseUrl?: string
   fetchTimeoutMs?: number
+  metrics?: BhApiMetricsSink
 }
 
 export interface CallOptions {
@@ -42,11 +47,13 @@ export class BhApiClient {
   private readonly baseUrl: string
   private readonly queue: RequestQueue
   private readonly fetchTimeoutMs: number
+  private readonly metrics?: BhApiMetricsSink
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.baseUrl = opts.baseUrl ?? BASE_URL
     this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
+    this.metrics = opts.metrics
     this.queue = new RequestQueue({
       minSpacingMs: 150,
       sustainedLimit: 180,
@@ -121,6 +128,7 @@ export class BhApiClient {
       res = await fetch(url, { signal: AbortSignal.timeout(this.fetchTimeoutMs) })
     } catch (err) {
       if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        await this.metrics?.incrementCounter('bhapi:timeouts')
         throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
       }
       throw err
@@ -157,6 +165,7 @@ export class BhApiClient {
     try {
       return (await res.json()) as T
     } catch (err) {
+      await this.metrics?.incrementCounter('bhapi:json_errors')
       throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
   }
