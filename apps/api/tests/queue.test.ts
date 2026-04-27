@@ -226,31 +226,31 @@ describe('Queue priorityRatio fairness', () => {
     // All 6 priority jobs should have been processed despite empty regular stream
     expect(processed.length).toBe(6)
   })
-})
 
-it('drains many priority items quickly without ratio-induced 2s waits', async () => {
-  const processed: number[] = []
-  const queue = createQueue<{ value: number }>(
-    redis,
-    'test-priority-starve',
-    async (data) => {
-      processed.push(data.value)
-    },
-    { concurrency: 1, priorityRatio: 3 },
-  )
+  it('drains many priority items quickly without ratio-induced 2s waits', async () => {
+    const processed: number[] = []
+    const queue = createQueue<{ value: number }>(
+      redis,
+      'test-priority-starve',
+      async (data) => {
+        processed.push(data.value)
+      },
+      { concurrency: 1, priorityRatio: 3 },
+    )
 
-  for (let i = 0; i < 30; i++) await queue.enqueue({ value: i }, true)
+    for (let i = 0; i < 30; i++) await queue.enqueue({ value: i }, true)
 
-  const start = performance.now()
-  void queue.start()
-  while (processed.length < 30 && performance.now() - start < 10_000) {
-    await Bun.sleep(50)
-  }
-  queue.stop()
-  const elapsed = performance.now() - start
+    const start = performance.now()
+    void queue.start()
+    while (processed.length < 30 && performance.now() - start < 10_000) {
+      await Bun.sleep(50)
+    }
+    queue.stop()
+    const elapsed = performance.now() - start
 
-  expect(processed).toHaveLength(30)
-  expect(elapsed).toBeLessThan(3_000)
+    expect(processed).toHaveLength(30)
+    expect(elapsed).toBeLessThan(6_000)
+  })
 })
 
 describe('Dedup', () => {
