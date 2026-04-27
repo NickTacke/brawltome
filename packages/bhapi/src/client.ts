@@ -121,7 +121,7 @@ export class BhApiClient {
       res = await fetch(url, { signal: AbortSignal.timeout(this.fetchTimeoutMs) })
     } catch (err) {
       if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-        throw new Error(`Brawlhalla API timeout for ${endpoint}`)
+        throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
       }
       throw err
     }
@@ -156,8 +156,8 @@ export class BhApiClient {
 
     try {
       return (await res.json()) as T
-    } catch {
-      throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`)
+    } catch (err) {
+      throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
   }
 }
