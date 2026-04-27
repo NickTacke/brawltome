@@ -14,6 +14,8 @@ import {
 import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, not, or, sql } from 'drizzle-orm'
 import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
 
+const normalizeRegion = (region: string) => (region === 'all' ? 'all' : region.toUpperCase())
+
 export function createPlayerRepo(db: Database) {
   return {
     findById(brawlhallaId: number) {
@@ -576,15 +578,12 @@ export function createPlayerRepo(db: Database) {
     }) {
       const minRank = (args.page - 1) * args.pageSize + 1
       const maxRank = args.page * args.pageSize
+      const region = normalizeRegion(args.region)
       await db.transaction(async (tx) => {
         await tx
           .delete(playerRank1v1)
           .where(
-            and(
-              eq(playerRank1v1.region, args.region),
-              gte(playerRank1v1.rank, minRank),
-              lte(playerRank1v1.rank, maxRank),
-            ),
+            and(eq(playerRank1v1.region, region), gte(playerRank1v1.rank, minRank), lte(playerRank1v1.rank, maxRank)),
           )
         if (args.entries.length > 0) {
           await tx
@@ -592,7 +591,7 @@ export function createPlayerRepo(db: Database) {
             .values(
               args.entries.map((e) => ({
                 brawlhallaId: e.brawlhallaId,
-                region: args.region,
+                region,
                 rank: e.rank,
               })),
             )
@@ -625,6 +624,7 @@ export function createPlayerRepo(db: Database) {
     }) {
       const minRank = (args.page - 1) * args.pageSize + 1
       const maxRank = args.page * args.pageSize
+      const region = normalizeRegion(args.region)
 
       const rowsToInsert: Array<typeof playerRankedTeam.$inferInsert> = []
       for (const t of args.teams) {
@@ -641,7 +641,7 @@ export function createPlayerRepo(db: Database) {
             tier: t.tier,
             wins: t.wins,
             games: t.games,
-            region: args.region,
+            region,
             globalRank: t.globalRank,
           })
         }
@@ -652,7 +652,7 @@ export function createPlayerRepo(db: Database) {
           .delete(playerRankedTeam)
           .where(
             and(
-              eq(playerRankedTeam.region, args.region),
+              eq(playerRankedTeam.region, region),
               gte(playerRankedTeam.globalRank, minRank),
               lte(playerRankedTeam.globalRank, maxRank),
             ),

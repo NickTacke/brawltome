@@ -3,7 +3,7 @@ import { db, player, playerRank1v1 } from '@brawltome/database'
 import { createPlayerRepo } from '@brawltome/player'
 import { and, eq, inArray } from 'drizzle-orm'
 
-const TEST_REGION = 'test-rank-1v1'
+const TEST_REGION = 'TEST-RANK-1V1'
 const TEST_IDS = [991001, 991002, 991003, 991004]
 
 const playerRepo = createPlayerRepo(db)
@@ -120,5 +120,22 @@ describe('replaceRankPage1v1', () => {
     })
     expect(rows.length).toBe(1)
     expect(rows[0]?.rank).toBe(60)
+  })
+
+  it('normalizes regional region casing to uppercase on write', async () => {
+    const lowerRegion = TEST_REGION.toLowerCase()
+    await db.delete(playerRank1v1).where(eq(playerRank1v1.region, TEST_REGION))
+
+    await playerRepo.replaceRankPage1v1({
+      region: lowerRegion,
+      page: 1,
+      pageSize: 50,
+      entries: [{ brawlhallaId: 991001, rank: 1 }],
+    })
+
+    const upper = await db.query.playerRank1v1.findMany({ where: eq(playerRank1v1.region, TEST_REGION) })
+    const lower = await db.query.playerRank1v1.findMany({ where: eq(playerRank1v1.region, lowerRegion) })
+    expect(upper.length).toBe(1)
+    expect(lower.length).toBe(0)
   })
 })

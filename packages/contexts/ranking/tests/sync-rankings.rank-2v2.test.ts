@@ -4,7 +4,7 @@ import { createPlayerRepo } from '@brawltome/player'
 import { eq, inArray } from 'drizzle-orm'
 import { saveTeams } from '../commands/sync-rankings'
 
-const TEST_REGION = 'test-2v2'
+const TEST_REGION = 'TEST-2V2'
 const TEST_IDS = [992001, 992002, 992003, 992004, 992005, 992006]
 
 const playerRepo = createPlayerRepo(db)
