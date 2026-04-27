@@ -2,7 +2,7 @@ import type { PlayerRepo } from '@brawltome/player'
 import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGES, MAX_PAGE_SIZE } from '../ranking'
 import type { RankingRepo } from '../ranking.repo'
 
-const STALE_RANK_MS = 24 * 60 * 60 * 1000
+const STALE_RANK_MS = 72 * 60 * 60 * 1000
 
 export async function getLeaderboard(
   deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo },

@@ -358,7 +358,7 @@ export function createPlayerRepo(db: Database) {
         .innerJoin(player, eq(playerRank1v1.brawlhallaId, player.brawlhallaId))
         .where(
           and(
-            opts.region !== 'all' ? eq(playerRank1v1.region, opts.region) : undefined,
+            eq(playerRank1v1.region, opts.region),
             gt(playerRank1v1.syncedAt, opts.freshSince),
             opts.blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...opts.blacklistSet])) : undefined,
           ),
@@ -388,11 +388,7 @@ export function createPlayerRepo(db: Database) {
         .select()
         .from(playerRankedTeam)
         .where(
-          and(
-            gt(playerRankedTeam.rating, 0),
-            gt(playerRankedTeam.games, 0),
-            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
-          ),
+          and(gt(playerRankedTeam.rating, 0), gt(playerRankedTeam.games, 0), eq(playerRankedTeam.region, opts.region)),
         )
         .orderBy(orderFn(sortColumn))
         .limit(fetchLimit)
@@ -411,7 +407,7 @@ export function createPlayerRepo(db: Database) {
         .where(
           and(
             gt(playerRankedTeam.globalRank, 0),
-            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
+            eq(playerRankedTeam.region, opts.region),
             gt(playerRankedTeam.syncedAt, opts.freshSince),
           ),
         )
@@ -442,7 +438,7 @@ export function createPlayerRepo(db: Database) {
             gt(playerRankedTeam.rating, 0),
             gt(playerRankedTeam.games, 0),
             or(eq(playerRankedTeam.brawlhallaIdOne, 0), eq(playerRankedTeam.brawlhallaIdTwo, 0)),
-            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
+            eq(playerRankedTeam.region, opts.region),
             opts.blacklistSet.size > 0
               ? not(inArray(playerRankedTeam.brawlhallaId, [...opts.blacklistSet]))
               : undefined,
@@ -650,7 +646,6 @@ export function createPlayerRepo(db: Database) {
         tier: string
         wins: number
         games: number
-        region: string | null
         globalRank: number
       }>
     }) {
@@ -670,7 +665,7 @@ export function createPlayerRepo(db: Database) {
             tier: t.tier,
             wins: t.wins,
             games: t.games,
-            region: t.region,
+            region: args.region,
             globalRank: t.globalRank,
           })
         }

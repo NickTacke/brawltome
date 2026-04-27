@@ -18,7 +18,6 @@ const teamArgs = (one: number, two: number, rank: number) => ({
   tier: 'Diamond',
   wins: 50,
   games: 100,
-  region: TEST_REGION,
   globalRank: rank,
 })
 

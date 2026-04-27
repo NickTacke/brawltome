@@ -307,13 +307,13 @@ export async function saveTeams(
     tier: string
     wins: number
     games: number
-    region: string | null
-    globalRank: number | null
+    globalRank: number
   }> = []
   for (const r of rankings) {
     const key = `${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
     if (seen.has(key)) continue
     seen.add(key)
+    if (r.rank == null || r.rank <= 0) continue
     teamRows.push({
       brawlhallaIdOne: r.brawlhalla_id_one,
       brawlhallaIdTwo: r.brawlhalla_id_two,
@@ -323,8 +323,7 @@ export async function saveTeams(
       tier: r.tier ?? '',
       wins: r.wins ?? 0,
       games: r.games ?? 0,
-      region: r.region ?? null,
-      globalRank: r.rank ?? null,
+      globalRank: r.rank,
     })
   }
 
@@ -334,7 +333,7 @@ export async function saveTeams(
       region,
       page,
       pageSize: 50,
-      teams: teamRows.map((r) => ({ ...r, globalRank: r.globalRank ?? 0 })),
+      teams: teamRows,
     })
   })
 }
