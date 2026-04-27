@@ -172,14 +172,14 @@ export function createQueue<T>(
             )
 
         if (!messages || stopped) {
-          consecutivePriority = 0
+          consecutivePriority = 0 // regular stream empty - let priority drain again
           if (ratioCapHit) await Bun.sleep(50)
           continue
         }
 
         for (const [, entries] of messages as [string, [string, string[]][]][]) {
           for (const [id, fields] of entries) {
-            consecutivePriority = 0
+            consecutivePriority = 0 // reset after any regular drain
             running++
             await metrics?.incrementQueue(name, 'regular_drained_total')
             processJob(id, JSON.parse(fields[1]) as T, retries).finally(() => {
