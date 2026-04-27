@@ -1,14 +1,9 @@
 import type { BhApiClient } from '@brawltome/bhapi'
 import { legend } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
+import { normalizeWeaponName } from './weapons'
 
-const WEAPON_NAME_MAP: Record<string, string> = {
-  Fists: 'Gauntlets',
-  Pistol: 'Blasters',
-  Katar: 'Katars',
-  RocketLance: 'Lance',
-  Chakram: 'Chakrams',
-}
+export { normalizeWeaponName } from './weapons'
 
 export interface LegendData {
   legendId: number
@@ -62,10 +57,6 @@ export function getLegendById(id: number): LegendData | undefined {
 
 export function getLegendByKey(key: string): LegendData | undefined {
   return legendByKey.get(key)
-}
-
-export function normalizeWeaponName(name: string): string {
-  return WEAPON_NAME_MAP[name] ?? name
 }
 
 export function aggregateWeapons(

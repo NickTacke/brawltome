@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./constants": "./src/constants.ts"
+    "./constants": "./src/constants.ts",
+    "./weapons": "./src/weapons.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

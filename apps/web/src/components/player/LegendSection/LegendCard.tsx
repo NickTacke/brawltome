@@ -1,5 +1,5 @@
 import { formatNum } from '@/lib/utils'
-import { normalizeWeaponName } from '@brawltome/shared'
+import { normalizeWeaponName } from '@brawltome/shared/weapons'
 import { Avatar, AvatarFallback, AvatarImage, Badge } from '@brawltome/ui'
 import {
   type PlayerData,
