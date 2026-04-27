@@ -34,15 +34,15 @@ describe('overlay rate limit', () => {
 
 describe('fail mode on Redis error', () => {
   it('blocks fail-closed action when Redis is down', async () => {
-    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
-    await broken.quit()
+    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { lazyConnect: true })
+    broken.disconnect()
     const result = await checkRateLimit(broken, `test-fail-closed-${Date.now()}`, 'discovery')
     expect(result.allowed).toBe(false)
   })
 
   it('allows fail-open action when Redis is down', async () => {
-    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
-    await broken.quit()
+    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { lazyConnect: true })
+    broken.disconnect()
     const result = await checkRateLimit(broken, `test-fail-open-${Date.now()}`, 'overlay')
     expect(result.allowed).toBe(true)
   })
