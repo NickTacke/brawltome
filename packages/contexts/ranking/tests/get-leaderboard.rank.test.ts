@@ -25,7 +25,7 @@ beforeAll(async () => {
   )
 
   const fresh = new Date()
-  const stale = new Date(Date.now() - 25 * 60 * 60 * 1000)
+  const stale = new Date(Date.now() - 73 * 60 * 60 * 1000)
   await db.insert(playerRank1v1).values(
     TEST_IDS.map((id, i) => ({
       brawlhallaId: id,
@@ -51,7 +51,7 @@ describe('getLeaderboard 1v1 rank-based', () => {
     expect(result.entries.map((e) => e.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   })
 
-  it('filters out entries whose rank is older than 24h', async () => {
+  it('filters out entries whose rank is older than 72h', async () => {
     const result = await getLeaderboard(
       { rankingRepo, playerRepo },
       { bracket: '1v1', region: TEST_REGION, page: 1, pageSize: 50 },
