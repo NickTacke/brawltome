@@ -57,7 +57,7 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
 
       const userId = current.user.id
 
-      const rl = await checkRateLimit(deps.redis, `user:${userId}`, 'ingest')
+      const rl = await checkRateLimit(deps.redis, `user:${userId}`, 'ingest', deps.metrics)
       if (!rl.allowed) {
         await deps.metrics.incrementCounter('matchmaking_ingest_rejected_rate_limited')
         return c.json({ code: 'rate_limited' }, 429, { 'Retry-After': String(rl.retryAfter) })

@@ -215,7 +215,7 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
     '0.0.0.0'
 
-  const rateLimit = await checkRateLimit(redis, clientIp, 'overlay')
+  const rateLimit = await checkRateLimit(redis, clientIp, 'overlay', metrics)
 
   const p = await getPlayer(playerRepo, bhid)
   if (!p) {
