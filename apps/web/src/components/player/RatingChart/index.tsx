@@ -13,126 +13,55 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-
-interface RatingHistoryEntry {
-  rating: number
-  peakRating: number
-  tier: string | null
-  games: number
-  wins: number
-  recordedAt: string | Date
-}
+import { ChartTooltip } from './ChartTooltip'
+import { type ChartPoint, type RatingHistoryEntry, SEASONS, TIER_THRESHOLDS, prepareChartData } from './utils'
 
 interface RatingChartProps {
   data: RatingHistoryEntry[]
 }
 
-const SEASONS = [
-  { label: 'Season 40', start: new Date('2026-03-25T14:00:00Z').getTime() },
-  { label: 'Season 39', start: 0 },
-]
-
-const TIER_THRESHOLDS = [
-  { rating: 2000, label: 'Diamond', color: '#60a5fa' },
-  { rating: 1680, label: 'Platinum', color: '#a78bfa' },
-  { rating: 1390, label: 'Gold', color: '#eab308' },
-  { rating: 1130, label: 'Silver', color: '#94a3b8' },
-  { rating: 910, label: 'Bronze', color: '#b45309' },
-  { rating: 720, label: 'Tin', color: '#78716c' },
-]
-
-function CustomTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ value: number; dataKey: string; payload: Record<string, unknown> }>
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-
-  const entry = payload[0]?.payload as unknown as RatingHistoryEntry & { date: string }
-  if (!entry) return null
-
-  const winrate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : '0'
-
-  return (
-    <div className="rounded-lg border border-border bg-card p-3 shadow-lg text-sm space-y-1.5">
-      <div className="font-bold text-foreground">{entry.date}</div>
-      <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-primary" />
-        <span className="text-muted-foreground">Rating:</span>
-        <span className="font-black text-foreground">{entry.rating}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
-        <span className="text-muted-foreground">Peak:</span>
-        <span className="font-bold text-foreground">{entry.peakRating}</span>
-      </div>
-      {entry.tier && <div className="text-xs text-muted-foreground">{entry.tier}</div>}
-      <div className="text-xs text-muted-foreground border-t border-border pt-1.5 mt-1.5">
-        {entry.wins}W / {entry.games - entry.wins}L ({winrate}%) &bull; {entry.games} games
-      </div>
-    </div>
-  )
-}
-
 export function RatingChart({ data }: RatingChartProps) {
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null)
 
-  const allSorted = [...data]
-    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
-    .map((entry) => {
-      const ts = new Date(entry.recordedAt)
-      return {
-        ...entry,
-        date: ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        timestamp: ts.getTime(),
-      }
-    })
+  const allSorted = useMemo(() => prepareChartData(data), [data])
 
-  // Determine which seasons have data
-  const availableSeasons = SEASONS.filter((season, i) => {
-    const nextSeason = SEASONS[i - 1]
-    const end = nextSeason ? nextSeason.start : Number.POSITIVE_INFINITY
-    return allSorted.some((d) => d.timestamp >= season.start && d.timestamp < end)
+  const seasonsAsc = useMemo(() => [...SEASONS].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()), [])
+
+  const availableSeasons = seasonsAsc.filter((season, i) => {
+    const next = seasonsAsc[i + 1]
+    const start = season.startsAt.getTime()
+    const end = next ? next.startsAt.getTime() : Number.POSITIVE_INFINITY
+    return allSorted.some((d) => d.timestamp >= start && d.timestamp < end)
   })
 
-  // Insert synthetic points at season boundaries so the curve drops
-  // vertically instead of smoothing through the reset
   const withSeasonDrops = useMemo(() => {
-    const boundaries = new Set(SEASONS.filter((s) => s.start > 0).map((s) => s.start))
-    const result: typeof allSorted = []
+    const boundaries = seasonsAsc.filter((s) => s.startsAt.getTime() > 0).map((s) => s.startsAt.getTime())
+    const result: ChartPoint[] = []
     for (let i = 0; i < allSorted.length; i++) {
       const prev = result[result.length - 1]
       const curr = allSorted[i]
       if (prev) {
-        for (const boundary of boundaries) {
-          if (prev.timestamp < boundary && curr.timestamp >= boundary) {
-            // Point just before reset with pre-reset values
-            result.push({ ...prev, timestamp: boundary - 1 })
-            // Point at reset with post-reset values
-            result.push({ ...curr, timestamp: boundary })
-            break
-          }
+        const crossed = boundaries.filter((b) => prev.timestamp < b && curr.timestamp >= b).sort((a, b) => a - b)
+        for (const boundary of crossed) {
+          result.push({ ...prev, timestamp: boundary - 1 })
+          result.push({ ...curr, timestamp: boundary })
         }
       }
       result.push(curr)
     }
     return result
-  }, [allSorted])
+  }, [allSorted, seasonsAsc])
 
-  // Filter data by selected season
-  const sorted = selectedSeason
-    ? (() => {
-        const seasonIdx = SEASONS.findIndex((s) => s.label === selectedSeason)
-        const season = SEASONS[seasonIdx]
-        const nextSeason = SEASONS[seasonIdx - 1]
-        const end = nextSeason ? nextSeason.start : Number.POSITIVE_INFINITY
-        return withSeasonDrops.filter((d) => d.timestamp >= season.start && d.timestamp < end)
-      })()
-    : withSeasonDrops
+  const sorted = useMemo(() => {
+    if (!selectedSeason) return withSeasonDrops
+    const idx = seasonsAsc.findIndex((s) => s.name === selectedSeason)
+    if (idx === -1) return withSeasonDrops
+    const season = seasonsAsc[idx]
+    const next = seasonsAsc[idx + 1]
+    const start = season.startsAt.getTime()
+    const end = next ? next.startsAt.getTime() : Number.POSITIVE_INFINITY
+    return withSeasonDrops.filter((d) => d.timestamp >= start && d.timestamp < end)
+  }, [selectedSeason, withSeasonDrops, seasonsAsc])
 
   const uniqueTicks = useMemo(() => {
     const seen = new Set<string>()
@@ -151,7 +80,14 @@ export function RatingChart({ data }: RatingChartProps) {
   const minRating = Math.floor((Math.min(...allRatings) - 50) / 50) * 50
   const maxRating = Math.ceil((Math.max(...allRatings) + 50) / 50) * 50
 
-  const visibleThresholds = TIER_THRESHOLDS.filter((t) => t.rating >= minRating && t.rating <= maxRating)
+  const visibleThresholds = TIER_THRESHOLDS.filter((t) => t.minRating >= minRating && t.minRating <= maxRating)
+
+  const firstTs = sorted[0].timestamp
+  const lastTs = sorted[sorted.length - 1].timestamp
+  const visibleSeasonBoundaries = seasonsAsc.filter((s) => {
+    const ts = s.startsAt.getTime()
+    return ts > 0 && ts >= firstTs && ts <= lastTs
+  })
 
   return (
     <Card className="border-border">
@@ -168,15 +104,15 @@ export function RatingChart({ data }: RatingChartProps) {
               >
                 All
               </Button>
-              {availableSeasons.map((s) => (
+              {[...availableSeasons].reverse().map((s) => (
                 <Button
-                  key={s.label}
-                  variant={selectedSeason === s.label ? 'secondary' : 'ghost'}
+                  key={s.name}
+                  variant={selectedSeason === s.name ? 'secondary' : 'ghost'}
                   size="sm"
                   className="h-7 text-xs font-mono px-2.5"
-                  onClick={() => setSelectedSeason(s.label)}
+                  onClick={() => setSelectedSeason(s.name)}
                 >
-                  {s.label.replace('Season ', 'S')}
+                  {s.name.replace('Season ', 'S')}
                 </Button>
               ))}
             </div>
@@ -195,13 +131,13 @@ export function RatingChart({ data }: RatingChartProps) {
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
             {visibleThresholds.map((t) => (
               <ReferenceLine
-                key={t.label}
-                y={t.rating}
+                key={t.name}
+                y={t.minRating}
                 stroke={t.color}
                 strokeDasharray="6 4"
                 strokeOpacity={0.4}
                 label={{
-                  value: `${t.label} (${t.rating})`,
+                  value: `${t.name} (${t.minRating})`,
                   position: 'insideTopLeft',
                   fill: t.color,
                   fontSize: 11,
@@ -210,17 +146,15 @@ export function RatingChart({ data }: RatingChartProps) {
                 }}
               />
             ))}
-            {SEASONS.filter(
-              (s) => s.start > 0 && s.start >= sorted[0].timestamp && s.start <= sorted[sorted.length - 1].timestamp,
-            ).map((s) => (
+            {visibleSeasonBoundaries.map((s) => (
               <ReferenceLine
-                key={s.label}
-                x={s.start}
+                key={s.name}
+                x={s.startsAt.getTime()}
                 stroke="hsl(var(--muted-foreground))"
                 strokeDasharray="4 4"
                 strokeOpacity={0.6}
                 label={{
-                  value: s.label,
+                  value: s.name,
                   position: 'insideTopRight',
                   fill: 'hsl(var(--muted-foreground))',
                   fontSize: 11,
@@ -250,7 +184,7 @@ export function RatingChart({ data }: RatingChartProps) {
               axisLine={false}
               width={45}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<ChartTooltip />} />
             <Area
               type="monotone"
               dataKey="rating"
