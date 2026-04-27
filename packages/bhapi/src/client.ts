@@ -28,6 +28,7 @@ export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
   persistence?: RequestQueuePersistence
+  baseUrl?: string
 }
 
 export interface CallOptions {
@@ -36,10 +37,12 @@ export interface CallOptions {
 
 export class BhApiClient {
   private readonly apiKey: string
+  private readonly baseUrl: string
   private readonly queue: RequestQueue
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
+    this.baseUrl = opts.baseUrl ?? BASE_URL
     this.queue = new RequestQueue({
       minSpacingMs: 150,
       sustainedLimit: 180,
@@ -62,7 +65,7 @@ export class BhApiClient {
   }
 
   async searchBySteamId(steamId: string, opts: CallOptions = {}): Promise<BhApiSearchResult | null> {
-    return this.call(`/search?steamid=${steamId}`, opts)
+    return this.call(`/search?steamid=${encodeURIComponent(steamId)}`, opts)
   }
 
   async getRankings1v1(region: Region, page: number, opts: CallOptions = {}): Promise<BhApiRanking1v1[]> {
@@ -106,7 +109,7 @@ export class BhApiClient {
     console.log(`[bhapi] ${path} (${remaining} ${caller} tokens left)`)
 
     const separator = endpoint.includes('?') ? '&' : '?'
-    const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
+    const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
 
     const fetchStart = Date.now()
     const res = await fetch(url)
