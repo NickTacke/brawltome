@@ -9,11 +9,20 @@ export async function getPlayer(repo: PlayerRepo, brawlhallaId: number): Promise
   const p = await repo.findById(brawlhallaId)
   if (!p) return null
 
-  const history = await repo.getRatingHistory(brawlhallaId)
+  const [history, effective] = await Promise.all([
+    repo.getRatingHistory(brawlhallaId),
+    repo.getEffectiveBestLegend(brawlhallaId),
+  ])
 
   const enrichedStatsLegends = (p.statsLegends || []).map((l) =>
     enrichStatsLegend(l, getLegendById, normalizeWeaponName),
   )
 
-  return { ...p, statsLegends: enrichedStatsLegends, ratingHistory: history }
+  return {
+    ...p,
+    statsLegends: enrichedStatsLegends,
+    ratingHistory: history,
+    bestLegend: effective?.legendId ?? p.bestLegend ?? 0,
+    bestLegendNameKey: effective?.legendNameKey ?? null,
+  }
 }

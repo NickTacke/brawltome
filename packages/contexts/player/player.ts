@@ -30,6 +30,7 @@ export type PlayerResult = InferSelectModel<typeof player> & {
   rankedLegends: InferSelectModel<typeof playerRankedLegend>[]
   rankedTeams: InferSelectModel<typeof playerRankedTeam>[]
   ratingHistory: InferSelectModel<typeof ratingHistory>[]
+  bestLegendNameKey: string | null
 }
 
 export function isValhallanGraced(tier: string | null, confirmedAt: Date | null): boolean {

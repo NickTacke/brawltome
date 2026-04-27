@@ -12,6 +12,7 @@ import {
   ratingHistory,
 } from '@brawltome/database'
 import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, not, or, sql } from 'drizzle-orm'
+import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
 
 export function createPlayerRepo(db: Database) {
   return {
@@ -332,6 +333,41 @@ export function createPlayerRepo(db: Database) {
         .offset(opts.offset)
     },
 
+    get1v1LeaderboardByRank(opts: {
+      region: string
+      pageSize: number
+      offset: number
+      freshSince: Date
+      blacklistSet: Set<number>
+    }) {
+      return db
+        .select({
+          rank: playerRank1v1.rank,
+          syncedAt: playerRank1v1.syncedAt,
+          brawlhallaId: player.brawlhallaId,
+          name: player.name,
+          region: player.region,
+          rating: player.rating,
+          peakRating: player.peakRating,
+          tier: player.tier,
+          rankedGames: player.rankedGames,
+          rankedWins: player.rankedWins,
+          bestLegend: player.bestLegend,
+        })
+        .from(playerRank1v1)
+        .innerJoin(player, eq(playerRank1v1.brawlhallaId, player.brawlhallaId))
+        .where(
+          and(
+            opts.region !== 'all' ? eq(playerRank1v1.region, opts.region) : undefined,
+            gt(playerRank1v1.syncedAt, opts.freshSince),
+            opts.blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...opts.blacklistSet])) : undefined,
+          ),
+        )
+        .orderBy(asc(playerRank1v1.rank))
+        .limit(opts.pageSize)
+        .offset(opts.offset)
+    },
+
     get2v2Leaderboard(opts: {
       region: string
       sort: 'rating' | 'peakRating' | 'wins' | 'games'
@@ -359,6 +395,27 @@ export function createPlayerRepo(db: Database) {
           ),
         )
         .orderBy(orderFn(sortColumn))
+        .limit(fetchLimit)
+    },
+
+    get2v2LeaderboardByRank(opts: {
+      region: string
+      pageSize: number
+      offset: number
+      freshSince: Date
+    }) {
+      const fetchLimit = (opts.offset + opts.pageSize) * 3
+      return db
+        .select()
+        .from(playerRankedTeam)
+        .where(
+          and(
+            gt(playerRankedTeam.globalRank, 0),
+            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
+            gt(playerRankedTeam.syncedAt, opts.freshSince),
+          ),
+        )
+        .orderBy(asc(playerRankedTeam.globalRank))
         .limit(fetchLimit)
     },
 
@@ -633,6 +690,14 @@ export function createPlayerRepo(db: Database) {
           await tx.insert(playerRankedTeam).values(rowsToInsert)
         }
       })
+    },
+
+    getEffectiveBestLegend(brawlhallaId: number) {
+      return getEffectiveBestLegend(db, brawlhallaId)
+    },
+
+    getEffectiveBestLegendsBatch(brawlhallaIds: number[]) {
+      return getEffectiveBestLegendsBatch(db, brawlhallaIds)
     },
 
     transaction: db.transaction.bind(db),

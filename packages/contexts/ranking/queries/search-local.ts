@@ -1,6 +1,5 @@
 import type { ClanRepo } from '@brawltome/clan'
 import type { PlayerRepo } from '@brawltome/player'
-import { getLegendById } from '@brawltome/shared'
 import type { RankingRepo } from '../ranking.repo'
 
 function sanitizeQuery(query: string): string {
@@ -31,9 +30,12 @@ export async function searchLocal(
     playersByAlias = await deps.playerRepo.getPlayersByIds(aliasIds)
   }
 
-  const players = [...playersByName, ...playersByAlias].slice(0, 40).map((p) => ({
+  const merged = [...playersByName, ...playersByAlias].slice(0, 40)
+  const effective = await deps.playerRepo.getEffectiveBestLegendsBatch(merged.map((p) => p.brawlhallaId))
+
+  const players = merged.map((p) => ({
     ...p,
-    bestLegendNameKey: p.bestLegend != null ? (getLegendById(p.bestLegend)?.legendNameKey ?? null) : null,
+    bestLegendNameKey: effective.get(p.brawlhallaId)?.legendNameKey ?? null,
   }))
 
   const clans = await deps.clanRepo.searchClans(query)

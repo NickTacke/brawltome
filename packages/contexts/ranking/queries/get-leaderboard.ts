@@ -1,7 +1,8 @@
 import type { PlayerRepo } from '@brawltome/player'
-import { getLegendById } from '@brawltome/shared'
 import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGES, MAX_PAGE_SIZE } from '../ranking'
 import type { RankingRepo } from '../ranking.repo'
+
+const STALE_RANK_MS = 24 * 60 * 60 * 1000
 
 export async function getLeaderboard(
   deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo },
@@ -34,18 +35,20 @@ async function get1v1Leaderboard(
   },
 ) {
   const blacklistSet = await deps.rankingRepo.getBlacklistedIds()
-  const results = await deps.playerRepo.get1v1Leaderboard({
+  const freshSince = new Date(Date.now() - STALE_RANK_MS)
+  const rows = await deps.playerRepo.get1v1LeaderboardByRank({
     region: opts.region,
-    sort: opts.sort,
-    order: opts.order,
     pageSize: opts.pageSize,
     offset: opts.offset,
+    freshSince,
     blacklistSet,
   })
 
-  const entries = results.map((entry) => ({
-    ...entry,
-    bestLegendNameKey: entry.bestLegend != null ? (getLegendById(entry.bestLegend)?.legendNameKey ?? null) : null,
+  const effective = await deps.playerRepo.getEffectiveBestLegendsBatch(rows.map((r) => r.brawlhallaId))
+
+  const entries = rows.map((r) => ({
+    ...r,
+    bestLegendNameKey: effective.get(r.brawlhallaId)?.legendNameKey ?? null,
   }))
 
   return { entries, page: opts.page, pageSize: opts.pageSize }
@@ -61,12 +64,12 @@ async function get2v2Leaderboard(
   },
 ) {
   const blacklistSet = await deps.rankingRepo.getBlacklistedIds()
-  const results = await deps.playerRepo.get2v2Leaderboard({
+  const freshSince = new Date(Date.now() - STALE_RANK_MS)
+  const results = await deps.playerRepo.get2v2LeaderboardByRank({
     region: opts.region,
-    sort: opts.sort,
-    order: opts.order,
     pageSize: opts.pageSize,
     offset: opts.offset,
+    freshSince,
   })
 
   const seen = new Set<string>()
@@ -83,15 +86,20 @@ async function get2v2Leaderboard(
   const paged = filtered.slice(opts.offset, opts.offset + opts.pageSize)
 
   const playerIds = [...new Set(paged.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))]
-  const nameMap = await deps.playerRepo.getPlayerNames(playerIds)
+  const [nameMap, effective] = await Promise.all([
+    deps.playerRepo.getPlayerNames(playerIds),
+    deps.playerRepo.getEffectiveBestLegendsBatch(playerIds),
+  ])
 
   const entries = paged.map((t, i) => {
     const nameParts = (t.teamName ?? '').split('+')
     return {
       ...t,
-      rank: opts.offset + i + 1,
+      rank: t.globalRank ?? opts.offset + i + 1,
       playerOneName: nameMap.get(t.brawlhallaIdOne) || nameParts[0]?.trim() || 'Unknown',
       playerTwoName: nameMap.get(t.brawlhallaIdTwo) || nameParts[1]?.trim() || 'Unknown',
+      playerOneBestLegendNameKey: effective.get(t.brawlhallaIdOne)?.legendNameKey ?? null,
+      playerTwoBestLegendNameKey: effective.get(t.brawlhallaIdTwo)?.legendNameKey ?? null,
     }
   })
 
@@ -118,7 +126,10 @@ async function getSolo2v2Leaderboard(
   })
 
   const playerIds = results.map((r) => r.brawlhallaId)
-  const nameMap = await deps.playerRepo.getPlayerNames(playerIds)
+  const [nameMap, effective] = await Promise.all([
+    deps.playerRepo.getPlayerNames(playerIds),
+    deps.playerRepo.getEffectiveBestLegendsBatch(playerIds),
+  ])
 
   const entries = results.map((r, i) => ({
     brawlhallaId: r.brawlhallaId,
@@ -130,6 +141,7 @@ async function getSolo2v2Leaderboard(
     games: r.games,
     region: r.region,
     rank: opts.offset + i + 1,
+    bestLegendNameKey: effective.get(r.brawlhallaId)?.legendNameKey ?? null,
   }))
 
   return { entries, page: opts.page, pageSize: opts.pageSize }
