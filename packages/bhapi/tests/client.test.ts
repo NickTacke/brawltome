@@ -37,7 +37,7 @@ describe('fetch hardening', () => {
     const slow = Bun.serve({
       port: 0,
       async fetch() {
-        await Bun.sleep(5000)
+        await Bun.sleep(500)
         return new Response('null')
       },
     })
@@ -48,7 +48,7 @@ describe('fetch hardening', () => {
         fetchTimeoutMs: 100,
       })
       await client.init()
-      await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/timeout/i)
+      await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Brawlhalla API timeout for/)
     } finally {
       slow.stop()
     }
