@@ -47,6 +47,14 @@ describe('parseInteger', () => {
     expect(parseInteger('0', { min: 1, max: 200, default: 1 })).toBe(1)
     expect(parseInteger('500', { min: 1, max: 200, default: 1 })).toBe(200)
   })
+
+  it('clamps default below min', () => {
+    expect(parseInteger(null, { min: 1, default: -1 })).toBe(1)
+  })
+
+  it('clamps default above max', () => {
+    expect(parseInteger(null, { max: 200, default: 9999 })).toBe(200)
+  })
 })
 
 describe('buildQueryString', () => {
