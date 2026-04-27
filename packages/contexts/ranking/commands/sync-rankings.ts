@@ -39,10 +39,12 @@ interface JanitorDeps {
   metrics?: MetricsRegistry
 }
 
+type LockState = { lost: boolean; value: string }
+export type { LockState }
+
 export function startJanitor(deps: JanitorDeps) {
   const playerRepo = createPlayerRepo(deps.db)
   let tick = 0
-  let lockValue = ''
   let heartbeatTimer: Timer | null = null
 
   async function runTick() {
@@ -53,10 +55,10 @@ export function startJanitor(deps: JanitorDeps) {
     }
 
     tick++
-    lockValue = acquired
+    const lockState: LockState = { lost: false, value: acquired }
     const tickStart = performance.now()
     console.log(`[janitor] tick ${tick} starting...`)
-    heartbeatTimer = setInterval(() => renewLock(deps.redis, lockValue), HEARTBEAT_INTERVAL_MS)
+    heartbeatTimer = setInterval(() => renewLock(deps.redis, lockState), HEARTBEAT_INTERVAL_MS)
 
     const time = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const start = performance.now()
@@ -73,16 +75,16 @@ export function startJanitor(deps: JanitorDeps) {
       }
 
       // Hot pages every tick
-      await time('hot 1v1', () => sync1v1Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
-      await time('hot 2v2', () => sync2v2Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
+      await time('hot 1v1', () => sync1v1Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1', lockState))
+      await time('hot 2v2', () => sync2v2Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2', lockState))
 
       // Cold pages every N ticks
       if (tick % COLD_TICK_INTERVAL === 0) {
         await time('cold 1v1', () =>
-          sync1v1Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'),
+          sync1v1Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1', lockState),
         )
         await time('cold 2v2', () =>
-          sync2v2Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'),
+          sync2v2Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2', lockState),
         )
       }
 
@@ -90,10 +92,10 @@ export function startJanitor(deps: JanitorDeps) {
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
       await time(`1v1 ${region}`, () =>
-        sync1v1Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`),
+        sync1v1Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`, lockState),
       )
       await time(`2v2 ${region}`, () =>
-        sync2v2Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`),
+        sync2v2Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`, lockState),
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
@@ -107,7 +109,7 @@ export function startJanitor(deps: JanitorDeps) {
         clearInterval(heartbeatTimer)
         heartbeatTimer = null
       }
-      await releaseLock(deps.redis, lockValue)
+      if (!lockState.lost) await releaseLock(deps.redis, lockState.value)
     }
   }
 
@@ -128,7 +130,7 @@ export function startJanitor(deps: JanitorDeps) {
     stopped = true
     if (timer) clearTimeout(timer)
     if (heartbeatTimer) clearInterval(heartbeatTimer)
-    if (lockValue) await releaseLock(deps.redis, lockValue)
+    // In-flight tick's lock is scoped to runTick; rely on LOCK_TTL_SEC for any held lock to expire.
   }
 }
 
@@ -138,10 +140,11 @@ async function acquireLock(redis: Redis): Promise<string | null> {
   return result === 'OK' ? value : null
 }
 
-async function renewLock(redis: Redis, value: string) {
-  const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, value, String(LOCK_TTL_SEC))
+async function renewLock(redis: Redis, lockState: LockState) {
+  const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, lockState.value, String(LOCK_TTL_SEC))
   if (result === 0) {
     console.warn('[janitor] lock lost during heartbeat')
+    lockState.lost = true
   }
 }
 
@@ -154,13 +157,14 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
 }
 
-async function sync1v1Page(
+export async function sync1v1Page(
   deps: JanitorDeps,
   playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
   cursorKey: string,
+  lockState: LockState,
 ) {
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
@@ -179,13 +183,14 @@ async function sync1v1Page(
   await deps.redis.set(cursorKey, String(nextPage))
 }
 
-async function sync2v2Page(
+export async function sync2v2Page(
   deps: JanitorDeps,
   playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
   cursorKey: string,
+  lockState: LockState,
 ) {
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
