@@ -25,11 +25,11 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
       <CardHeader className="pb-4">
         <div className="flex justify-between items-center">
           <CardTitle className="text-lg font-bold flex items-center gap-2">&#127942; Ranked Performance</CardTitle>
-          {player.rankedLastUpdated && (
+          {player.lastUpdated && (
             <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
               <Clock className="w-3 h-3" />
               <span className="hidden sm:inline">Updated </span>
-              {timeAgo(player.rankedLastUpdated)}
+              {timeAgo(player.lastUpdated)}
             </Badge>
           )}
         </div>
