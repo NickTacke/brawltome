@@ -23,12 +23,14 @@ import type {
 } from './types'
 
 const BASE_URL = 'https://api.brawlhalla.com'
+const DEFAULT_FETCH_TIMEOUT_MS = 30_000
 
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
   persistence?: RequestQueuePersistence
   baseUrl?: string
+  fetchTimeoutMs?: number
 }
 
 export interface CallOptions {
@@ -39,10 +41,12 @@ export class BhApiClient {
   private readonly apiKey: string
   private readonly baseUrl: string
   private readonly queue: RequestQueue
+  private readonly fetchTimeoutMs: number
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.baseUrl = opts.baseUrl ?? BASE_URL
+    this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
     this.queue = new RequestQueue({
       minSpacingMs: 150,
       sustainedLimit: 180,
@@ -112,7 +116,15 @@ export class BhApiClient {
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
 
     const fetchStart = Date.now()
-    const res = await fetch(url)
+    let res: Response
+    try {
+      res = await fetch(url, { signal: AbortSignal.timeout(this.fetchTimeoutMs) })
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        throw new Error(`Brawlhalla API timeout for ${endpoint}`)
+      }
+      throw err
+    }
     const fetchMs = Date.now() - fetchStart
 
     if (res.status === 404) {
@@ -142,6 +154,10 @@ export class BhApiClient {
       console.log(`[bhapi] ${path} -> 200 SLOW (${fetchMs}ms)`)
     }
 
-    return res.json() as Promise<T>
+    try {
+      return (await res.json()) as T
+    } catch {
+      throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`)
+    }
   }
 }
