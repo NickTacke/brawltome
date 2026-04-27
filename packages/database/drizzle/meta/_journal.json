@@ -64,6 +64,13 @@
       "when": 1776461294074,
       "tag": "0008_dry_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777324426317,
+      "tag": "0009_material_prowler",
+      "breakpoints": true
     }
   ]
 }

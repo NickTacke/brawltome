@@ -213,14 +213,36 @@ export const playerRankedTeam = pgTable(
     tier: varchar('tier', { length: 64 }).notNull(),
     wins: integer('wins').notNull(),
     games: integer('games').notNull(),
-    region: varchar('region', { length: 16 }),
+    region: varchar('region', { length: 16 }).notNull(),
     globalRank: integer('global_rank'),
     valhallanConfirmedAt: timestamp('valhallan_confirmed_at'),
+    syncedAt: timestamp('synced_at').defaultNow().notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.brawlhallaId, t.brawlhallaIdOne, t.brawlhallaIdTwo] }),
+    primaryKey({ columns: [t.brawlhallaId, t.brawlhallaIdOne, t.brawlhallaIdTwo, t.region] }),
     index('idx_ranked_team_rating').on(t.rating),
     index('idx_ranked_team_region_rating').on(t.region, t.rating),
+  ],
+)
+
+// ============================================================
+// Player Rank 1v1
+// ============================================================
+
+export const playerRank1v1 = pgTable(
+  'player_rank_1v1',
+  {
+    brawlhallaId: integer('brawlhalla_id')
+      .notNull()
+      .references(() => player.brawlhallaId, { onDelete: 'cascade' }),
+    region: varchar('region', { length: 16 }).notNull(),
+    rank: integer('rank').notNull(),
+    syncedAt: timestamp('synced_at').defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.brawlhallaId, t.region] }),
+    uniqueIndex('uq_player_rank_1v1_region_rank').on(t.region, t.rank),
+    index('idx_player_rank_1v1_synced_at').on(t.syncedAt),
   ],
 )
 

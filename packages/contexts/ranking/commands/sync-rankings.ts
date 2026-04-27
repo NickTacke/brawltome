@@ -189,6 +189,12 @@ export async function sync1v1Page(
   }
 
   await savePlayers(playerRepo, rankings, deps.metrics)
+  await playerRepo.replaceRankPage1v1({
+    region,
+    page,
+    pageSize: 50,
+    entries: rankings.map((r) => ({ brawlhallaId: r.brawlhalla_id, rank: r.rank })),
+  })
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -215,7 +221,7 @@ export async function sync2v2Page(
     return
   }
 
-  await saveTeams(playerRepo, rankings, deps.metrics)
+  await saveTeams(playerRepo, rankings, region, page, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -269,24 +275,30 @@ async function savePlayers(
   })
 }
 
-async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics: MetricsRegistry | undefined) {
+export async function saveTeams(
+  repo: PlayerRepo,
+  rankings: BhApiRanking2v2[],
+  region: string,
+  page: number,
+  metrics: MetricsRegistry | undefined,
+) {
   const seenPlayers = new Set<number>()
   const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
   for (const r of rankings) {
-    const nameParts = (r.teamname ?? '').split('+')
-    for (const [id, name] of [
-      [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
-      [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
-    ] as [number, string][]) {
+    for (const id of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
       if (!seenPlayers.has(id)) {
         seenPlayers.add(id)
-        playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
+        playerRows.push({
+          brawlhallaId: id,
+          name: `Player ${id}`,
+          region: r.region ?? null,
+          rating: 0,
+        })
       }
     }
   }
   const seen = new Set<string>()
   const teamRows: Array<{
-    brawlhallaId: number
     brawlhallaIdOne: number
     brawlhallaIdTwo: number
     teamName: string
@@ -295,11 +307,14 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
     tier: string
     wins: number
     games: number
-    region: string | null
-    globalRank: number | null
+    globalRank: number
   }> = []
   for (const r of rankings) {
-    const shared = {
+    const key = `${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (r.rank == null || r.rank <= 0) continue
+    teamRows.push({
       brawlhallaIdOne: r.brawlhalla_id_one,
       brawlhallaIdTwo: r.brawlhalla_id_two,
       teamName: r.teamname ?? '',
@@ -308,20 +323,17 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
       tier: r.tier ?? '',
       wins: r.wins ?? 0,
       games: r.games ?? 0,
-      region: r.region ?? null,
-      globalRank: r.rank ?? null,
-    }
-    for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
-      const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        teamRows.push({ brawlhallaId: ownerId, ...shared })
-      }
-    }
+      globalRank: r.rank,
+    })
   }
 
   await withSaveFailureMetric(metrics, '2v2', async () => {
     await repo.batchUpsertPlaceholderPlayers(playerRows)
-    await repo.batchUpsertTeams(teamRows)
+    await repo.replaceRankPage2v2({
+      region,
+      page,
+      pageSize: 50,
+      teams: teamRows,
+    })
   })
 }
