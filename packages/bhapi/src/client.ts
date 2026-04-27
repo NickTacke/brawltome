@@ -165,6 +165,12 @@ export class BhApiClient {
     try {
       return (await res.json()) as T
     } catch (err) {
+      // AbortSignal.timeout() also aborts the response body stream, so a body-read
+      // timeout surfaces here as AbortError/TimeoutError. Route it to the timeout counter.
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        await this.metrics?.incrementCounter('bhapi:timeouts')
+        throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
+      }
       await this.metrics?.incrementCounter('bhapi:json_errors')
       throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
