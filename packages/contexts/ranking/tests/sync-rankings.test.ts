@@ -109,6 +109,61 @@ describe('sync1v1Page', () => {
     expect(after).toBe('5')
     expect(calls).toContain('janitor:save_failures:1v1')
   })
+
+  it('increments save_failures:1v1 when batchInsertAliases throws', async () => {
+    const cursorKey = `cursor:test:alias-fail:${Date.now()}`
+    await redis.set(cursorKey, '5')
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+
+    const { metrics, calls } = makeSpyMetrics()
+    const failingRepo = {
+      async getExistingPlayerNames() {
+        return new Map<number, string>([[1, 'oldname']])
+      },
+      async batchInsertAliases() {
+        throw new Error('forced alias failure')
+      },
+      async batchUpsertPlayers() {},
+      async batchUpsertPlaceholderPlayers() {},
+      async batchUpsertTeams() {},
+    } as unknown as PlayerRepo
+
+    const newSample = { ...SAMPLE, brawlhalla_id: 1, name: 'newname' }
+
+    const deps = {
+      db: {} as never,
+      bhapi: makeFakeBhapi([newSample]),
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics,
+    }
+
+    await expect(sync1v1Page(deps, failingRepo, 'all', 1, 10, cursorKey, lockState)).rejects.toThrow(
+      /forced alias failure/,
+    )
+
+    expect(calls).toContain('janitor:save_failures:1v1')
+    const after = await redis.get(cursorKey)
+    expect(after).toBe('5')
+  })
+})
+
+describe('renewLock heartbeat error handling', () => {
+  it('treats redis.call rejection as lock-loss', async () => {
+    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { lazyConnect: true })
+    broken.disconnect()
+
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+    const { metrics, calls } = makeSpyMetrics()
+
+    const { renewLock } = await import('../commands/sync-rankings')
+    await renewLock(broken, lockState, metrics)
+
+    expect(lockState.lost).toBe(true)
+    expect(calls).toContain('janitor:lock_lost_total')
+  })
 })
 
 describe('lockState abort', () => {

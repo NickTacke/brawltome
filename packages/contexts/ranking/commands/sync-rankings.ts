@@ -58,7 +58,11 @@ export function startJanitor(deps: JanitorDeps) {
     const lockState: LockState = { lost: false, value: acquired }
     const tickStart = performance.now()
     console.log(`[janitor] tick ${tick} starting...`)
-    heartbeatTimer = setInterval(() => renewLock(deps.redis, lockState, deps.metrics), HEARTBEAT_INTERVAL_MS)
+    heartbeatTimer = setInterval(() => {
+      renewLock(deps.redis, lockState, deps.metrics).catch((err) =>
+        console.error('[janitor] unexpected heartbeat rejection:', err),
+      )
+    }, HEARTBEAT_INTERVAL_MS)
 
     const time = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const start = performance.now()
@@ -141,13 +145,18 @@ async function acquireLock(redis: Redis): Promise<string | null> {
   return result === 'OK' ? value : null
 }
 
-async function renewLock(redis: Redis, lockState: LockState, metrics?: MetricsRegistry) {
-  const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, lockState.value, String(LOCK_TTL_SEC))
-  if (result === 0) {
+export async function renewLock(redis: Redis, lockState: LockState, metrics?: MetricsRegistry) {
+  // Any heartbeat failure (mismatch OR Redis error) must mark the lock lost: if Redis stays
+  // unreachable past LOCK_TTL_SEC the key TTL-expires and another instance can take it.
+  try {
+    const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, lockState.value, String(LOCK_TTL_SEC))
+    if (result !== 0) return
     console.error('[janitor] lock lost during heartbeat')
-    lockState.lost = true
-    await metrics?.incrementCounter('janitor:lock_lost_total')
+  } catch (err) {
+    console.error('[janitor] heartbeat error, treating lock as lost:', err)
   }
+  lockState.lost = true
+  await metrics?.incrementCounter('janitor:lock_lost_total').catch(() => {})
 }
 
 async function releaseLock(redis: Redis, value: string) {
@@ -253,9 +262,11 @@ async function savePlayers(
       aliases.push({ brawlhallaId: r.brawlhalla_id, key: oldName.toLowerCase(), value: oldName })
     }
   }
-  await repo.batchInsertAliases(aliases)
 
-  await withSaveFailureMetric(metrics, '1v1', () => repo.batchUpsertPlayers(rankings))
+  await withSaveFailureMetric(metrics, '1v1', async () => {
+    await repo.batchInsertAliases(aliases)
+    await repo.batchUpsertPlayers(rankings)
+  })
 }
 
 async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics: MetricsRegistry | undefined) {
@@ -273,8 +284,6 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
       }
     }
   }
-  await repo.batchUpsertPlaceholderPlayers(playerRows)
-
   const seen = new Set<string>()
   const teamRows: Array<{
     brawlhallaId: number
@@ -311,5 +320,8 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
     }
   }
 
-  await withSaveFailureMetric(metrics, '2v2', () => repo.batchUpsertTeams(teamRows))
+  await withSaveFailureMetric(metrics, '2v2', async () => {
+    await repo.batchUpsertPlaceholderPlayers(playerRows)
+    await repo.batchUpsertTeams(teamRows)
+  })
 }
