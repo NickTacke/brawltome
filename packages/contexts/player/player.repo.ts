@@ -18,8 +18,8 @@ const normalizeRegion = (region: string) => (region === 'all' ? 'all' : region.t
 
 export function createPlayerRepo(db: Database) {
   return {
-    findById(brawlhallaId: number) {
-      return db.query.player.findFirst({
+    async findById(brawlhallaId: number) {
+      const p = await db.query.player.findFirst({
         where: eq(player.brawlhallaId, brawlhallaId),
         with: {
           aliases: true,
@@ -30,6 +30,19 @@ export function createPlayerRepo(db: Database) {
           rankedTeams: true,
         },
       })
+      if (!p) return p
+      // playerRankedTeam can hold a per-player row (region from API) AND a leaderboard 'all' row
+      // for the same team — dedupe by unordered pair, preferring the non-'all' row.
+      const byPair = new Map<string, (typeof p.rankedTeams)[number]>()
+      for (const t of p.rankedTeams) {
+        const a = Math.min(t.brawlhallaIdOne, t.brawlhallaIdTwo)
+        const b = Math.max(t.brawlhallaIdOne, t.brawlhallaIdTwo)
+        const key = `${a}:${b}`
+        const existing = byPair.get(key)
+        if (!existing || (existing.region === 'all' && t.region !== 'all')) byPair.set(key, t)
+      }
+      p.rankedTeams = [...byPair.values()]
+      return p
     },
 
     isBlacklisted(brawlhallaId: number) {
