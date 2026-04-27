@@ -14,6 +14,7 @@ import {
   SelectValue,
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -108,9 +109,17 @@ export function MemberList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((member: Member) => (
-                <MemberRow key={member.brawlhallaId} member={member} totalClanXp={totalClanXp} />
-              ))}
+              {visible.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    No members found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                visible.map((member: Member) => (
+                  <MemberRow key={member.brawlhallaId} member={member} totalClanXp={totalClanXp} />
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

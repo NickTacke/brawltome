@@ -19,15 +19,16 @@ export const REGIONS = [
   { id: 'SA', label: 'South Africa' },
 ] as const
 
-export const BRACKET_IDS = ['1v1', '2v2', 'solo2v2'] as const
-export const REGION_IDS = ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
 export const SORT_FIELDS = ['rating', 'peakRating', 'wins', 'games'] as const
 export const SORT_ORDERS = ['asc', 'desc'] as const
 
-export type BracketId = (typeof BRACKET_IDS)[number]
-export type RegionId = (typeof REGION_IDS)[number]
+export type BracketId = (typeof BRACKETS)[number]['id']
+export type RegionId = (typeof REGIONS)[number]['id']
 export type SortField = (typeof SORT_FIELDS)[number]
 export type SortOrder = (typeof SORT_ORDERS)[number]
+
+export const BRACKET_IDS = BRACKETS.map((b) => b.id) as readonly BracketId[]
+export const REGION_IDS = REGIONS.map((r) => r.id) as readonly RegionId[]
 
 export const PAGE_SIZE = 20
 export const MAX_PAGE = 200
