@@ -14,7 +14,7 @@ export async function getEffectiveBestLegend(db: Database, brawlhallaId: number)
   })
   if (p?.bestLegend && p.bestLegend > 0) {
     const meta = getLegendById(p.bestLegend)
-    if (meta) return { legendId: p.bestLegend, legendNameKey: meta.legendNameKey }
+    return { legendId: p.bestLegend, legendNameKey: meta?.legendNameKey ?? '' }
   }
 
   const top = await db.query.playerStatsLegend.findFirst({
@@ -43,10 +43,11 @@ export async function getEffectiveBestLegendsBatch(
   for (const p of explicits) {
     if (p.bestLegend && p.bestLegend > 0) {
       const meta = getLegendById(p.bestLegend)
-      if (meta) {
-        result.set(p.brawlhallaId, { legendId: p.bestLegend, legendNameKey: meta.legendNameKey })
-        continue
-      }
+      result.set(p.brawlhallaId, {
+        legendId: p.bestLegend,
+        legendNameKey: meta?.legendNameKey ?? '',
+      })
+      continue
     }
     fallbackIds.push(p.brawlhallaId)
   }
