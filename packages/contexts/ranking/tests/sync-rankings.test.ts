@@ -110,3 +110,26 @@ describe('sync1v1Page', () => {
     expect(calls).toContain('janitor:save_failures:1v1')
   })
 })
+
+describe('lockState abort', () => {
+  it('aborts sync1v1Page when lockState.lost is set', async () => {
+    const cursorKey = `cursor:test:lock-lost:${Date.now()}`
+    await redis.set(cursorKey, '7')
+    const lockState: LockState = { lost: true, value: 'test-lock' }
+
+    const deps = {
+      db: {} as never,
+      bhapi: makeFakeBhapi([SAMPLE]),
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics: NULL_METRICS,
+    }
+
+    await expect(sync1v1Page(deps, makeFakeRepo(), 'all', 1, 10, cursorKey, lockState)).rejects.toThrow(/lock lost/i)
+
+    const after = await redis.get(cursorKey)
+    expect(after).toBe('7')
+  })
+})
