@@ -189,6 +189,12 @@ export async function sync1v1Page(
   }
 
   await savePlayers(playerRepo, rankings, deps.metrics)
+  await playerRepo.replaceRankPage1v1({
+    region,
+    page,
+    pageSize: 50,
+    entries: rankings.map((r) => ({ brawlhallaId: r.brawlhalla_id, rank: r.rank })),
+  })
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1

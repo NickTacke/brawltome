@@ -4,13 +4,14 @@ import {
   player,
   playerAlias,
   playerClan,
+  playerRank1v1,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
   playerWeaponStat,
   ratingHistory,
 } from '@brawltome/database'
-import { and, asc, desc, eq, gt, ilike, inArray, not, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, not, or, sql } from 'drizzle-orm'
 
 export function createPlayerRepo(db: Database) {
   return {
@@ -547,6 +548,36 @@ export function createPlayerRepo(db: Database) {
             valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
           },
         })
+    },
+
+    async replaceRankPage1v1(args: {
+      region: string
+      page: number
+      pageSize: number
+      entries: Array<{ brawlhallaId: number; rank: number }>
+    }) {
+      const minRank = (args.page - 1) * args.pageSize + 1
+      const maxRank = args.page * args.pageSize
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(playerRank1v1)
+          .where(
+            and(
+              eq(playerRank1v1.region, args.region),
+              gte(playerRank1v1.rank, minRank),
+              lte(playerRank1v1.rank, maxRank),
+            ),
+          )
+        if (args.entries.length > 0) {
+          await tx.insert(playerRank1v1).values(
+            args.entries.map((e) => ({
+              brawlhallaId: e.brawlhallaId,
+              region: args.region,
+              rank: e.rank,
+            })),
+          )
+        }
+      })
     },
 
     transaction: db.transaction.bind(db),
