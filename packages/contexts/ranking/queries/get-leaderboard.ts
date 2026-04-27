@@ -86,15 +86,20 @@ async function get2v2Leaderboard(
   const paged = filtered.slice(opts.offset, opts.offset + opts.pageSize)
 
   const playerIds = [...new Set(paged.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))]
+  const isGlobalView = opts.region === 'all'
   const [nameMap, effective, regionMap] = await Promise.all([
     deps.playerRepo.getPlayerNames(playerIds),
     deps.playerRepo.getEffectiveBestLegendsBatch(playerIds),
-    deps.playerRepo.getPlayerRegions(playerIds),
+    isGlobalView ? deps.playerRepo.getPlayerRegions(playerIds) : Promise.resolve(new Map<number, string>()),
   ])
 
   const entries = paged.map((t, i) => ({
     ...t,
-    region: regionMap.get(t.brawlhallaIdOne) ?? regionMap.get(t.brawlhallaIdTwo) ?? t.region,
+    // Row.region is the page-slot scope ('all' for global syncs). Only override the displayed
+    // region when the user is on the global view, where 'all' carries no useful info.
+    region: isGlobalView
+      ? (regionMap.get(t.brawlhallaIdOne) ?? regionMap.get(t.brawlhallaIdTwo) ?? t.region)
+      : t.region,
     rank: t.globalRank && t.globalRank > 0 ? t.globalRank : opts.offset + i + 1,
     playerOneName: nameMap.get(t.brawlhallaIdOne) ?? 'Unknown',
     playerTwoName: nameMap.get(t.brawlhallaIdTwo) ?? 'Unknown',
