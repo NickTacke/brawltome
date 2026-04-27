@@ -9,18 +9,17 @@ export interface RefreshStateInput {
 
 export interface RefreshState {
   isRefreshing: boolean
-  isTimedOut: boolean
 }
 
 export function computeRefreshState(input: RefreshStateInput): RefreshState {
   if (input.startedAt === null) {
-    return { isRefreshing: false, isTimedOut: false }
+    return { isRefreshing: false }
   }
   const elapsed = input.now - input.startedAt
   if (elapsed > input.maxRefreshMs) {
-    return { isRefreshing: false, isTimedOut: true }
+    return { isRefreshing: false }
   }
-  return { isRefreshing: true, isTimedOut: false }
+  return { isRefreshing: true }
 }
 
 export class RefreshTimeoutError extends Error {
@@ -33,7 +32,8 @@ export class RefreshTimeoutError extends Error {
 interface UseStaleRefreshOptions<T> {
   initialData: T
   queryFn: () => Promise<T>
-  isStaleFn: (data: T) => boolean
+  shouldStart: (data: T) => boolean
+  isDone: (prev: T, next: T) => boolean
   pollMs?: number
   maxRefreshMs?: number
 }
@@ -45,43 +45,49 @@ interface UseStaleRefreshResult<T> {
 }
 
 export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRefreshResult<T> {
-  const pollMs = opts.pollMs ?? 2_000
-  const maxRefreshMs = opts.maxRefreshMs ?? 30_000
-
   const [data, setData] = useState<T>(opts.initialData)
   const [error, setError] = useState<Error | null>(null)
-  const [startedAt, setStartedAt] = useState<number | null>(null)
-  const [now, setNow] = useState<number>(0)
-  const startedAtRef = useRef<number | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: effect intentionally runs once on mount; opts.queryFn/isStaleFn are treated as stable, and pollMs/maxRefreshMs are captured at start.
+  const queryFnRef = useRef(opts.queryFn)
+  const shouldStartRef = useRef(opts.shouldStart)
+  const isDoneRef = useRef(opts.isDone)
+  const prevDataRef = useRef<T>(opts.initialData)
+  const initialDataRef = useRef<T>(opts.initialData)
+  const pollMsRef = useRef<number>(opts.pollMs ?? 2_000)
+  const maxRefreshMsRef = useRef<number>(opts.maxRefreshMs ?? 30_000)
+
+  queryFnRef.current = opts.queryFn
+  shouldStartRef.current = opts.shouldStart
+  isDoneRef.current = opts.isDone
+
   useEffect(() => {
-    if (!opts.isStaleFn(opts.initialData)) return
+    if (!shouldStartRef.current(initialDataRef.current)) return
     const start = Date.now()
-    startedAtRef.current = start
-    setStartedAt(start)
-    setNow(start)
+    const maxRefreshMs = maxRefreshMsRef.current
+    const pollMs = pollMsRef.current
+    setIsRefreshing(true)
 
     const interval = setInterval(async () => {
-      const elapsed = Date.now() - (startedAtRef.current ?? Date.now())
+      const elapsed = Date.now() - start
       if (elapsed > maxRefreshMs) {
         setError(new RefreshTimeoutError())
-        setNow(Date.now())
+        setIsRefreshing(false)
         clearInterval(interval)
         return
       }
       try {
-        const next = await opts.queryFn()
+        const next = await queryFnRef.current()
         setData(next)
-        setNow(Date.now())
-        if (!opts.isStaleFn(next)) {
-          startedAtRef.current = null
-          setStartedAt(null)
+        if (isDoneRef.current(prevDataRef.current, next)) {
+          setIsRefreshing(false)
           clearInterval(interval)
+        } else {
+          prevDataRef.current = next
         }
       } catch (err) {
         setError(err instanceof Error ? err : new Error(String(err)))
-        setNow(Date.now())
+        setIsRefreshing(false)
         clearInterval(interval)
       }
     }, pollMs)
@@ -89,11 +95,9 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
     return () => clearInterval(interval)
   }, [])
 
-  const state = computeRefreshState({ startedAt, now, maxRefreshMs })
-
   return {
     data,
-    isRefreshing: state.isRefreshing,
+    isRefreshing,
     error,
   }
 }

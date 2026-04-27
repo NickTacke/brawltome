@@ -4,10 +4,13 @@ export function parseEnum<T extends string>(raw: string | null, allowed: readonl
 }
 
 export function parseInteger(raw: string | null, opts: { min?: number; max?: number; default: number }): number {
-  if (raw === null) return opts.default
-  const parsed = Number.parseInt(raw, 10)
-  if (Number.isNaN(parsed)) return opts.default
-  let value = parsed
+  let value: number
+  if (raw === null) {
+    value = opts.default
+  } else {
+    const parsed = Number.parseInt(raw, 10)
+    value = Number.isNaN(parsed) ? opts.default : parsed
+  }
   if (opts.min !== undefined && value < opts.min) value = opts.min
   if (opts.max !== undefined && value > opts.max) value = opts.max
   return value

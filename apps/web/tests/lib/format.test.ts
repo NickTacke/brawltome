@@ -29,6 +29,14 @@ describe('formatPlaytime', () => {
   it('returns "-" for negative', () => {
     expect(formatPlaytime(-1)).toBe('-')
   })
+
+  it('returns "-" for NaN', () => {
+    expect(formatPlaytime(Number.NaN)).toBe('-')
+  })
+
+  it('returns "-" for Infinity', () => {
+    expect(formatPlaytime(Number.POSITIVE_INFINITY)).toBe('-')
+  })
 })
 
 describe('formatWinrate', () => {
@@ -43,5 +51,13 @@ describe('formatWinrate', () => {
 
   it('returns "-" when games is negative', () => {
     expect(formatWinrate(0, -1)).toBe('-')
+  })
+
+  it('returns "-" when wins is NaN', () => {
+    expect(formatWinrate(Number.NaN, 100)).toBe('-')
+  })
+
+  it('returns "-" when games is NaN', () => {
+    expect(formatWinrate(50, Number.NaN)).toBe('-')
   })
 })
