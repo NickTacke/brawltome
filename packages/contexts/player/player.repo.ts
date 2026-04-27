@@ -568,41 +568,6 @@ export function createPlayerRepo(db: Database) {
         .then(() => {})
     },
 
-    async batchUpsertTeams(
-      teamRows: Array<{
-        brawlhallaId: number
-        brawlhallaIdOne: number
-        brawlhallaIdTwo: number
-        teamName: string
-        rating: number
-        peakRating: number
-        tier: string
-        wins: number
-        games: number
-        region: string | null
-        globalRank: number | null
-      }>,
-    ) {
-      if (teamRows.length === 0) return
-      await db
-        .insert(playerRankedTeam)
-        .values(teamRows)
-        .onConflictDoUpdate({
-          target: [playerRankedTeam.brawlhallaId, playerRankedTeam.brawlhallaIdOne, playerRankedTeam.brawlhallaIdTwo],
-          set: {
-            teamName: sql`excluded.team_name`,
-            rating: sql`excluded.rating`,
-            peakRating: sql`excluded.peak_rating`,
-            tier: sql`excluded.tier`,
-            wins: sql`excluded.wins`,
-            games: sql`excluded.games`,
-            region: sql`excluded.region`,
-            globalRank: sql`excluded.global_rank`,
-            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
-          },
-        })
-    },
-
     async replaceRankPage1v1(args: {
       region: string
       page: number
