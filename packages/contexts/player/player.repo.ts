@@ -628,7 +628,9 @@ export function createPlayerRepo(db: Database) {
 
       const rowsToInsert: Array<typeof playerRankedTeam.$inferInsert> = []
       for (const t of args.teams) {
-        for (const ownerId of [t.brawlhallaIdOne, t.brawlhallaIdTwo]) {
+        const ownerIds =
+          t.brawlhallaIdOne === t.brawlhallaIdTwo ? [t.brawlhallaIdOne] : [t.brawlhallaIdOne, t.brawlhallaIdTwo]
+        for (const ownerId of ownerIds) {
           rowsToInsert.push({
             brawlhallaId: ownerId,
             brawlhallaIdOne: t.brawlhallaIdOne,
