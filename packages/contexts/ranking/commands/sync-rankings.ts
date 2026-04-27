@@ -210,6 +210,19 @@ export async function sync2v2Page(
   await deps.redis.set(cursorKey, String(nextPage))
 }
 
+async function withSaveFailureMetric<T>(
+  metrics: MetricsRegistry | undefined,
+  label: '1v1' | '2v2',
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    await metrics?.incrementCounter(`janitor:save_failures:${label}`)
+    throw err
+  }
+}
+
 async function savePlayers(
   repo: PlayerRepo,
   rankings: Array<{
@@ -239,12 +252,7 @@ async function savePlayers(
   }
   await repo.batchInsertAliases(aliases)
 
-  try {
-    await repo.batchUpsertPlayers(rankings)
-  } catch (err) {
-    await metrics?.incrementCounter('janitor:save_failures:1v1')
-    throw err
-  }
+  await withSaveFailureMetric(metrics, '1v1', () => repo.batchUpsertPlayers(rankings))
 }
 
 async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics: MetricsRegistry | undefined) {
@@ -300,10 +308,5 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
     }
   }
 
-  try {
-    await repo.batchUpsertTeams(teamRows)
-  } catch (err) {
-    await metrics?.incrementCounter('janitor:save_failures:2v2')
-    throw err
-  }
+  await withSaveFailureMetric(metrics, '2v2', () => repo.batchUpsertTeams(teamRows))
 }
