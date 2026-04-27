@@ -275,7 +275,7 @@ async function savePlayers(
   })
 }
 
-async function saveTeams(
+export async function saveTeams(
   repo: PlayerRepo,
   rankings: BhApiRanking2v2[],
   region: string,
@@ -299,7 +299,6 @@ async function saveTeams(
   }
   const seen = new Set<string>()
   const teamRows: Array<{
-    brawlhallaId: number
     brawlhallaIdOne: number
     brawlhallaIdTwo: number
     teamName: string
@@ -312,7 +311,10 @@ async function saveTeams(
     globalRank: number | null
   }> = []
   for (const r of rankings) {
-    const shared = {
+    const key = `${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    teamRows.push({
       brawlhallaIdOne: r.brawlhalla_id_one,
       brawlhallaIdTwo: r.brawlhalla_id_two,
       teamName: r.teamname ?? '',
@@ -323,14 +325,7 @@ async function saveTeams(
       games: r.games ?? 0,
       region: r.region ?? null,
       globalRank: r.rank ?? null,
-    }
-    for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
-      const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        teamRows.push({ brawlhallaId: ownerId, ...shared })
-      }
-    }
+    })
   }
 
   await withSaveFailureMetric(metrics, '2v2', async () => {
@@ -339,18 +334,7 @@ async function saveTeams(
       region,
       page,
       pageSize: 50,
-      teams: teamRows.map((r) => ({
-        brawlhallaIdOne: r.brawlhallaIdOne,
-        brawlhallaIdTwo: r.brawlhallaIdTwo,
-        teamName: r.teamName,
-        rating: r.rating,
-        peakRating: r.peakRating,
-        tier: r.tier,
-        wins: r.wins,
-        games: r.games,
-        region: r.region,
-        globalRank: r.globalRank ?? 0,
-      })),
+      teams: teamRows.map((r) => ({ ...r, globalRank: r.globalRank ?? 0 })),
     })
   })
 }

@@ -91,17 +91,14 @@ async function get2v2Leaderboard(
     deps.playerRepo.getEffectiveBestLegendsBatch(playerIds),
   ])
 
-  const entries = paged.map((t, i) => {
-    const nameParts = (t.teamName ?? '').split('+')
-    return {
-      ...t,
-      rank: t.globalRank ?? opts.offset + i + 1,
-      playerOneName: nameMap.get(t.brawlhallaIdOne) || nameParts[0]?.trim() || 'Unknown',
-      playerTwoName: nameMap.get(t.brawlhallaIdTwo) || nameParts[1]?.trim() || 'Unknown',
-      playerOneBestLegendNameKey: effective.get(t.brawlhallaIdOne)?.legendNameKey ?? null,
-      playerTwoBestLegendNameKey: effective.get(t.brawlhallaIdTwo)?.legendNameKey ?? null,
-    }
-  })
+  const entries = paged.map((t, i) => ({
+    ...t,
+    rank: t.globalRank && t.globalRank > 0 ? t.globalRank : opts.offset + i + 1,
+    playerOneName: nameMap.get(t.brawlhallaIdOne) ?? 'Unknown',
+    playerTwoName: nameMap.get(t.brawlhallaIdTwo) ?? 'Unknown',
+    playerOneBestLegendNameKey: effective.get(t.brawlhallaIdOne)?.legendNameKey ?? null,
+    playerTwoBestLegendNameKey: effective.get(t.brawlhallaIdTwo)?.legendNameKey ?? null,
+  }))
 
   return { entries, page: opts.page, pageSize: opts.pageSize }
 }
