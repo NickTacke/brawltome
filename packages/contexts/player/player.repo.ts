@@ -610,29 +610,33 @@ export function createPlayerRepo(db: Database) {
       const minRank = (args.page - 1) * args.pageSize + 1
       const maxRank = args.page * args.pageSize
       const region = normalizeRegion(args.region)
+      const batchIds = args.entries.map((e) => e.brawlhallaId)
       await db.transaction(async (tx) => {
+        // Two clauses: clear the rank slot, AND clear any row for a player in the new batch
+        // that may live on another page. Without the second clause, a cross-page mover would
+        // collide with their existing row and an ON-CONFLICT-UPDATE would collapse two INSERT
+        // rows into one — leaving a gap in the destination page (e.g. EU page 2 at 49 rows).
         await tx
           .delete(playerRank1v1)
           .where(
-            and(eq(playerRank1v1.region, region), gte(playerRank1v1.rank, minRank), lte(playerRank1v1.rank, maxRank)),
+            and(
+              eq(playerRank1v1.region, region),
+              batchIds.length > 0
+                ? or(
+                    and(gte(playerRank1v1.rank, minRank), lte(playerRank1v1.rank, maxRank)),
+                    inArray(playerRank1v1.brawlhallaId, batchIds),
+                  )
+                : and(gte(playerRank1v1.rank, minRank), lte(playerRank1v1.rank, maxRank)),
+            ),
           )
         if (args.entries.length > 0) {
-          await tx
-            .insert(playerRank1v1)
-            .values(
-              args.entries.map((e) => ({
-                brawlhallaId: e.brawlhallaId,
-                region,
-                rank: e.rank,
-              })),
-            )
-            .onConflictDoUpdate({
-              target: [playerRank1v1.brawlhallaId, playerRank1v1.region],
-              set: {
-                rank: sql`excluded.rank`,
-                syncedAt: sql`excluded.synced_at`,
-              },
-            })
+          await tx.insert(playerRank1v1).values(
+            args.entries.map((e) => ({
+              brawlhallaId: e.brawlhallaId,
+              region,
+              rank: e.rank,
+            })),
+          )
         }
       })
     },
