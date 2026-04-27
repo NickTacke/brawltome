@@ -18,6 +18,7 @@ const MAX_ENTITIES = 16
 const MAX_SCORE_ENTRIES = 32
 const MAX_KO_EVENTS = 4096
 const MAX_INPUT_ENTITIES = 16
+const MAX_INPUTS_PER_ENTITY = 1 << 20
 
 function readGameSettings(r: BitReader): GameSettings {
   return {
@@ -199,6 +200,9 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
             throw new ParseBoundsError(`input entities exceeded ${MAX_INPUT_ENTITIES}`)
           r.bits(5)
           const ic = r.i32()
+          if (ic < 0 || ic > MAX_INPUTS_PER_ENTITY) {
+            throw new ParseBoundsError(`inputs per entity exceeded ${MAX_INPUTS_PER_ENTITY} (got ${ic})`)
+          }
           for (let i = 0; i < ic; i++) {
             r.i32()
             if (r.bool()) r.bits(14)

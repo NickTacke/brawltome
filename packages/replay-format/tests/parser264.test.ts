@@ -89,4 +89,26 @@ describe('parse error paths', () => {
     expect(() => parse(raw)).toThrow(ParseBoundsError)
     expect(() => parse(raw)).toThrow(/exceeded/)
   })
+
+  test('throws ParseBoundsError on inputs-per-entity overflow', () => {
+    // Build envelope: STATE_INPUTS with one entity declaring ic = MAX_INPUTS_PER_ENTITY + 1.
+    const bits: number[] = []
+    const pushBits = (value: number, width: number) => {
+      for (let i = width - 1; i >= 0; i--) bits.push((value >>> i) & 1)
+    }
+    pushBits(264, 32)
+    pushBits(1, 4) // STATE_INPUTS
+    bits.push(1) // outer bool: one input entity present
+    pushBits(0, 5) // entityId
+    pushBits(1048577, 32) // ic = (1 << 20) + 1
+    while (bits.length % 8 !== 0) bits.push(0)
+    const body = new Uint8Array(bits.length / 8)
+    for (let i = 0; i < bits.length; i++) {
+      if (bits[i]) body[i >> 3] |= 1 << (7 - (i & 7))
+    }
+    const xored = applyXor(body)
+    const raw = new Uint8Array(deflateSync(Buffer.from(xored)))
+    expect(() => parse(raw)).toThrow(ParseBoundsError)
+    expect(() => parse(raw)).toThrow(/inputs per entity exceeded/)
+  })
 })
