@@ -273,14 +273,15 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
   const seenPlayers = new Set<number>()
   const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
   for (const r of rankings) {
-    const nameParts = (r.teamname ?? '').split('+')
-    for (const [id, name] of [
-      [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
-      [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
-    ] as [number, string][]) {
+    for (const id of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
       if (!seenPlayers.has(id)) {
         seenPlayers.add(id)
-        playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
+        playerRows.push({
+          brawlhallaId: id,
+          name: `Player ${id}`,
+          region: r.region ?? null,
+          rating: 0,
+        })
       }
     }
   }
