@@ -21,9 +21,9 @@ describe('parseLeaderboardSearchParams', () => {
     expect(result.bracket).toBe('2v2')
   })
 
-  it('accepts solo2v2 bracket', () => {
+  it('falls back to 1v1 for unsupported bracket (solo2v2 hidden)', () => {
     const result = parseLeaderboardSearchParams(new URLSearchParams('bracket=solo2v2'))
-    expect(result.bracket).toBe('solo2v2')
+    expect(result.bracket).toBe('1v1')
   })
 
   it('clamps NaN page to 1', () => {
