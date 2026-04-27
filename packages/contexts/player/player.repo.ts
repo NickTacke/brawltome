@@ -460,6 +460,15 @@ export function createPlayerRepo(db: Database) {
         .then((rows) => new Map(rows.map((p) => [p.brawlhallaId, p.name])))
     },
 
+    getPlayerRegions(playerIds: number[]) {
+      if (playerIds.length === 0) return Promise.resolve(new Map<number, string>())
+      return db
+        .select({ brawlhallaId: player.brawlhallaId, region: player.region })
+        .from(player)
+        .where(inArray(player.brawlhallaId, playerIds))
+        .then((rows) => new Map(rows.filter((r) => r.region).map((r) => [r.brawlhallaId, r.region as string])))
+    },
+
     searchPlayersByName(query: string, blacklistSet: Set<number>) {
       return db.query.player.findMany({
         where: and(
