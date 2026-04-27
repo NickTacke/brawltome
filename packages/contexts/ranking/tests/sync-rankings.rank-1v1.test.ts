@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { db, player, playerRank1v1 } from '@brawltome/database'
 import { createPlayerRepo } from '@brawltome/player'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, gte, inArray, lte } from 'drizzle-orm'
 
 const TEST_REGION = 'TEST-RANK-1V1'
 const TEST_IDS = [991001, 991002, 991003, 991004]
@@ -120,6 +120,38 @@ describe('replaceRankPage1v1', () => {
     })
     expect(rows.length).toBe(1)
     expect(rows[0]?.rank).toBe(60)
+  })
+
+  it('does not drop rows when a cross-page player is in the new batch', async () => {
+    // Page 1 has 991001 at rank 1.
+    await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 1,
+      pageSize: 50,
+      entries: [{ brawlhallaId: 991001, rank: 1 }],
+    })
+
+    // Page 2 sync now sees 991001 (moved from rank 1 to rank 60) AND a fresh entry 991002 at rank 61.
+    // Old behaviour collapsed 991001's INSERT via ON CONFLICT UPDATE, leaving the page with 1 row instead of 2.
+    await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 2,
+      pageSize: 50,
+      entries: [
+        { brawlhallaId: 991001, rank: 60 },
+        { brawlhallaId: 991002, rank: 61 },
+      ],
+    })
+
+    const page2Rows = await db.query.playerRank1v1.findMany({
+      where: and(eq(playerRank1v1.region, TEST_REGION), gte(playerRank1v1.rank, 51), lte(playerRank1v1.rank, 100)),
+    })
+    expect(page2Rows.length).toBe(2)
+    // Source-page slot (rank 1) is intentionally vacated — it'll repopulate on next page-1 sync.
+    const oldSlot = await db.query.playerRank1v1.findFirst({
+      where: and(eq(playerRank1v1.region, TEST_REGION), eq(playerRank1v1.rank, 1)),
+    })
+    expect(oldSlot).toBeUndefined()
   })
 
   it('normalizes regional region casing to uppercase on write', async () => {
