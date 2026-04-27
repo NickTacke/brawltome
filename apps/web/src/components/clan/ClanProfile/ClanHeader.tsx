@@ -4,6 +4,7 @@ import { formatDate } from '@/lib/format'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Calendar, Clock, TrendingUp, Trophy, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 // biome-ignore lint/suspicious/noExplicitAny: dynamic API response
 type ClanData = any
@@ -16,6 +17,15 @@ interface ClanHeaderProps {
 }
 
 export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProps) {
+  const [relativeUpdated, setRelativeUpdated] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!clan.lastUpdated) return
+    setRelativeUpdated(timeAgo(clan.lastUpdated))
+    const intervalId = setInterval(() => setRelativeUpdated(timeAgo(clan.lastUpdated)), 60_000)
+    return () => clearInterval(intervalId)
+  }, [clan.lastUpdated])
+
   return (
     <div id="overview" className="flex flex-col gap-6">
       <div>
@@ -29,12 +39,12 @@ export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProp
             <Calendar className="w-4 h-4" />
             <span>Created {formatDate(clan.clanCreateDate)}</span>
           </div>
-          {clan.lastUpdated && (
+          {clan.lastUpdated && relativeUpdated !== null && (
             <>
               <span>•</span>
               <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
                 <Clock className="w-3 h-3" />
-                Updated {timeAgo(clan.lastUpdated)}
+                Updated {relativeUpdated}
               </Badge>
             </>
           )}

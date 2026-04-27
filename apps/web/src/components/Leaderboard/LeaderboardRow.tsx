@@ -62,7 +62,7 @@ export function SoloLeaderboardRow({ entry, rank }: SoloRowProps) {
           <div className="flex flex-col items-center">
             <span className="font-black text-foreground text-lg tracking-tight">{entry.rating}</span>
             <span className="text-[10px] text-muted-foreground uppercase font-bold">
-              Peak: {entry.peakRating || '---'}
+              Peak: {entry.peakRating ?? '---'}
             </span>
           </div>
         </Link>

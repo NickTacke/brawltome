@@ -7,7 +7,7 @@ export function ChartTooltip({ active, payload }: Partial<TooltipContentProps<nu
   const entry = payload[0]?.payload as ChartPoint | undefined
   if (!entry) return null
 
-  const winrate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : '0'
+  const winrate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : '0.0'
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-lg text-sm space-y-1.5">
