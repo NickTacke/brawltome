@@ -92,6 +92,7 @@ console.log(
 const sharedCtx = {
   db,
   redis,
+  metrics,
   rankedQueue,
   statsQueue,
   clanQueue,

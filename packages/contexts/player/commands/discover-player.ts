@@ -1,5 +1,5 @@
 import type { Database } from '@brawltome/database'
-import type { Queue } from '@brawltome/shared'
+import type { MetricsRegistry, Queue } from '@brawltome/shared'
 import { checkRateLimit, dedupKey, tryDedup } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 import { DEDUP_TTL_RANKED_SEC } from '../player'
@@ -11,15 +11,16 @@ interface DiscoverDeps {
   rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   clientIp: string
+  metrics?: MetricsRegistry
 }
 
 export async function discoverPlayer(deps: DiscoverDeps, brawlhallaId: number): Promise<{ isRefreshing: boolean }> {
-  const { db, redis, rankedQueue, statsQueue, clientIp } = deps
+  const { db, redis, rankedQueue, statsQueue, clientIp, metrics } = deps
 
-  const globalLimit = await checkRateLimit(redis, 'global', 'discovery:global')
+  const globalLimit = await checkRateLimit(redis, 'global', 'discovery:global', metrics)
   if (!globalLimit.allowed) return { isRefreshing: false }
 
-  const discoveryLimit = await checkRateLimit(redis, clientIp, 'discovery')
+  const discoveryLimit = await checkRateLimit(redis, clientIp, 'discovery', metrics)
   if (!discoveryLimit.allowed) return { isRefreshing: false }
 
   const repo = createPlayerRepo(db)

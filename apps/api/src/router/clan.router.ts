@@ -19,7 +19,10 @@ export const clanRouter = router({
 
       if (!c) {
         if (ctx.isBot) return { isRefreshing: false }
-        return discoverClan({ redis: ctx.redis, clanQueue: ctx.clanQueue, clientIp: ctx.clientIp }, clanId)
+        return discoverClan(
+          { redis: ctx.redis, clanQueue: ctx.clanQueue, clientIp: ctx.clientIp, metrics: ctx.metrics },
+          clanId,
+        )
       }
 
       if (ctx.isBot) return { isRefreshing: false }
@@ -27,7 +30,7 @@ export const clanRouter = router({
       if (process.env.DISABLE_VIEW_REFRESH !== '1') {
         const age = Date.now() - c.lastUpdated.getTime()
         if (age > CLAN_TTL_MS) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh', ctx.metrics)
           if (refreshLimit.allowed) {
             const canDedup = await tryDedup(ctx.redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
             if (canDedup) await ctx.clanQueue.enqueue({ clanId, caller: 'on-demand' })
