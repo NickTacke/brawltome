@@ -27,7 +27,10 @@ export function WeaponCard({ weapon: w, isExpanded, onToggle }: WeaponCardProps)
       aria-controls={panelId}
       onClick={onToggle}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onToggle()
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle()
+        }
       }}
     >
       <div className="p-4 relative overflow-hidden">
