@@ -24,6 +24,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
       region: string | null
       rating: number
       bestLegendNameKey?: string | null
+      matchedAlias?: string | null
     }>
   >([])
   const [clanResults, setClanResults] = useState<
@@ -164,9 +165,11 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                                 {fixEncoding(p.name).substring(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
-                            <div>
-                              <div className="font-bold text-card-foreground">{fixEncoding(p.name)}</div>
-                              <div className="text-xs text-muted-foreground">{p.region}</div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-card-foreground truncate">{fixEncoding(p.name)}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {p.matchedAlias ? `Matched alias: ${fixEncoding(p.matchedAlias)}` : p.region}
+                              </div>
                             </div>
                           </div>
                           <div className="text-sm font-mono text-primary">{p.rating ?? 0}</div>
