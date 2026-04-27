@@ -2,7 +2,7 @@ import { knownHeroIds, knownLevelIds } from '@brawltome/game-data'
 import type { GetCurrentUserDeps } from '@brawltome/identity'
 import { getCurrentUser } from '@brawltome/identity'
 import { type IngestDeps, IngestError, type MatchRepo, ingestReplay } from '@brawltome/matchmaking'
-import { type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
+import { ParseBoundsError, type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
 import { type MetricsRegistry, type R2Client, checkRateLimit } from '@brawltome/shared'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
@@ -101,6 +101,9 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
         serverParsed = parseReplay(rawBytes)
       } catch (err) {
         await deps.metrics.incrementCounter('matchmaking_ingest_rejected_parse_error')
+        if (err instanceof ParseBoundsError) {
+          await deps.metrics.incrementCounter('replay:parse_errors:bound_exceeded')
+        }
         return c.json({ code: 'parse_error', detail: err instanceof Error ? err.message : 'bad_raw' }, 400)
       }
 
