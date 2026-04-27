@@ -21,9 +21,7 @@ export function WeaponStatRow({ name, kos, dmg, time, totalKOs, totalDmg, totalT
   return (
     <div className="p-3 rounded-lg bg-background/40 border border-border/20 hover:bg-background/50 transition-colors">
       <div className="flex items-center gap-2 mb-3">
-        {name !== 'Unarmed' && name !== 'Weapon 1' && name !== 'Weapon 2' && (
-          <img src={getWeaponIcon(name)} alt={name} className="h-6 w-6 object-contain" />
-        )}
+        <img src={getWeaponIcon(name)} alt={name} className="h-6 w-6 object-contain" />
         <span className="text-xs font-bold text-foreground uppercase">{name}</span>
       </div>
 

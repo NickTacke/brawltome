@@ -10,6 +10,7 @@ export type Command =
       region: string | null
       rating: number
       bestLegendNameKey?: string | null
+      matchedAlias?: string | null
       href: string
     }
   | { kind: 'clan'; id: string; label: string; href: string }
@@ -20,6 +21,7 @@ export interface PlayerSearchResult {
   region: string | null
   rating: number
   bestLegendNameKey?: string | null
+  matchedAlias?: string | null
 }
 
 export interface ClanSearchResult {
@@ -59,6 +61,7 @@ export function buildCommands(deps: {
     region: p.region,
     rating: p.rating,
     bestLegendNameKey: p.bestLegendNameKey,
+    matchedAlias: p.matchedAlias ? fixEncoding(p.matchedAlias) : null,
     href: `/player/${p.brawlhallaId}`,
   }))
   const clans: Command[] = deps.clanResults.map((c) => ({

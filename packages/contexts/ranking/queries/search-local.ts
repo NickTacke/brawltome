@@ -21,9 +21,14 @@ export async function searchLocal(
   const playersByName = await deps.playerRepo.searchPlayersByName(query, blacklistSet)
 
   const aliasMatches = await deps.playerRepo.searchPlayersByAlias(query)
-  const aliasIds = aliasMatches
-    .map((a) => a.brawlhallaId)
-    .filter((id) => !blacklistSet.has(id) && !playersByName.some((p) => p.brawlhallaId === id))
+  const aliasByPlayerId = new Map<number, string>()
+  for (const m of aliasMatches) {
+    if (!aliasByPlayerId.has(m.brawlhallaId)) aliasByPlayerId.set(m.brawlhallaId, m.alias)
+  }
+  const aliasIds = [...aliasByPlayerId.keys()].filter(
+    (id) => !blacklistSet.has(id) && !playersByName.some((p) => p.brawlhallaId === id),
+  )
+  const aliasOnlyIds = new Set(aliasIds)
 
   let playersByAlias: typeof playersByName = []
   if (aliasIds.length > 0) {
@@ -36,6 +41,9 @@ export async function searchLocal(
   const players = merged.map((p) => ({
     ...p,
     bestLegendNameKey: effective.get(p.brawlhallaId)?.legendNameKey ?? null,
+    // Only show 'matched alias' for players surfaced *only* via alias — name-matched players
+    // shouldn't be labeled as alias matches even if they happen to have stale aliases.
+    matchedAlias: aliasOnlyIds.has(p.brawlhallaId) ? (aliasByPlayerId.get(p.brawlhallaId) ?? null) : null,
   }))
 
   const clans = await deps.clanRepo.searchClans(query)

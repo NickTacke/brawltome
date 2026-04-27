@@ -1,4 +1,5 @@
 import { formatNum } from '@/lib/utils'
+import { normalizeWeaponName } from '@brawltome/shared'
 import { Avatar, AvatarFallback, AvatarImage, Badge } from '@brawltome/ui'
 import {
   type PlayerData,
@@ -136,9 +137,11 @@ function LegendCardExpanded({ legend, rankedLegend }: LegendCardExpandedProps) {
   const unarmedDmg = parseNum(legend.damageUnarmed)
   const totalWeaponDmg = weaponOneDmg + weaponTwoDmg + unarmedDmg
 
+  const weaponOneName = legend.weaponOne ? normalizeWeaponName(legend.weaponOne) : 'Weapon 1'
+  const weaponTwoName = legend.weaponTwo ? normalizeWeaponName(legend.weaponTwo) : 'Weapon 2'
   const weaponDistribution = [
-    { name: 'Weapon 1', kos: weaponOneKOs, dmg: weaponOneDmg, time: weaponOneTime },
-    { name: 'Weapon 2', kos: weaponTwoKOs, dmg: weaponTwoDmg, time: weaponTwoTime },
+    { name: weaponOneName, kos: weaponOneKOs, dmg: weaponOneDmg, time: weaponOneTime },
+    { name: weaponTwoName, kos: weaponTwoKOs, dmg: weaponTwoDmg, time: weaponTwoTime },
     { name: 'Unarmed', kos: unarmedKOs, dmg: unarmedDmg, time: unarmedTime },
   ].filter((w) => w.kos > 0 || w.dmg > 0 || w.time > 0)
 

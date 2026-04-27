@@ -11,6 +11,7 @@ import {
   playerWeaponStat,
   ratingHistory,
 } from '@brawltome/database'
+import { getLegendById } from '@brawltome/shared'
 import { and, asc, desc, eq, gt, gte, ilike, inArray, lte, not, or, sql } from 'drizzle-orm'
 import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
 
@@ -42,7 +43,11 @@ export function createPlayerRepo(db: Database) {
         if (!existing || (existing.region === 'all' && t.region !== 'all')) byPair.set(key, t)
       }
       p.rankedTeams = [...byPair.values()]
-      return p
+      const enrichedLegends = p.statsLegends.map((s) => {
+        const meta = getLegendById(s.legendId)
+        return { ...s, weaponOne: meta?.weaponOne ?? null, weaponTwo: meta?.weaponTwo ?? null }
+      })
+      return { ...p, statsLegends: enrichedLegends }
     },
 
     isBlacklisted(brawlhallaId: number) {
@@ -498,9 +503,10 @@ export function createPlayerRepo(db: Database) {
 
     searchPlayersByAlias(query: string) {
       return db
-        .select({ brawlhallaId: playerAlias.brawlhallaId })
+        .select({ brawlhallaId: playerAlias.brawlhallaId, alias: playerAlias.value })
         .from(playerAlias)
         .where(ilike(playerAlias.key, `${query.toLowerCase()}%`))
+        .orderBy(asc(playerAlias.brawlhallaId), desc(playerAlias.createdAt))
         .limit(50)
     },
 

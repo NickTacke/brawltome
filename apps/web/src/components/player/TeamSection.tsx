@@ -1,7 +1,8 @@
 'use client'
 
-import { fixEncoding, formatNum } from '@/lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
+import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
+import { Badge, Card, CardContent } from '@brawltome/ui'
+import { Clock } from 'lucide-react'
 import Link from 'next/link'
 import { type PlayerData, WinLossBar, getRankBanner, parseNum } from './shared'
 
@@ -39,7 +40,19 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <h2 className="text-2xl font-bold text-foreground">Ranked 2v2</h2>
-        <span className="text-sm text-muted-foreground font-mono">Teams: {rankedTeams.length}</span>
+        <div className="flex items-center gap-3">
+          {player.rankedLastUpdated && (
+            <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
+              <Clock className="w-3 h-3" aria-hidden="true" />
+              <span className="sr-only">Updated </span>
+              <span className="hidden sm:inline" aria-hidden="true">
+                Updated{' '}
+              </span>
+              {timeAgo(player.rankedLastUpdated)}
+            </Badge>
+          )}
+          <span className="text-sm text-muted-foreground font-mono">Teams: {rankedTeams.length}</span>
+        </div>
       </div>
 
       <Card className="bg-linear-to-br from-card to-background border-border">
@@ -114,7 +127,7 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-x-4 md:gap-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-x-4 md:gap-y-10">
         {pairedTeams.map((team: PlayerData) => {
           const teammateId = team.brawlhallaIdOne === idNumber ? team.brawlhallaIdTwo : team.brawlhallaIdOne
           const teammateHref = `/player/${teammateId}`
