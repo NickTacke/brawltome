@@ -104,6 +104,7 @@ export function startJanitor(deps: JanitorDeps) {
       )
     } catch (err) {
       console.error(`[janitor] tick ${tick} error:`, err)
+      await deps.metrics?.incrementCounter('janitor:tick_failures')
     } finally {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer)
@@ -176,7 +177,7 @@ export async function sync1v1Page(
     return
   }
 
-  await savePlayers(playerRepo, rankings)
+  await savePlayers(playerRepo, rankings, deps.metrics)
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -202,7 +203,7 @@ export async function sync2v2Page(
     return
   }
 
-  await saveTeams(playerRepo, rankings)
+  await saveTeams(playerRepo, rankings, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -224,6 +225,7 @@ async function savePlayers(
     best_legend_games: number
     best_legend_wins: number
   }>,
+  metrics: MetricsRegistry | undefined,
 ) {
   const ids = rankings.map((r) => r.brawlhalla_id)
   const nameMap = await repo.getExistingPlayerNames(ids)
@@ -240,65 +242,68 @@ async function savePlayers(
   try {
     await repo.batchUpsertPlayers(rankings)
   } catch (err) {
-    console.error('[janitor] failed to batch save players:', err)
+    await metrics?.incrementCounter('janitor:save_failures:1v1')
+    throw err
   }
 }
 
-async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[]) {
-  try {
-    const seenPlayers = new Set<number>()
-    const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
-    for (const r of rankings) {
-      const nameParts = (r.teamname ?? '').split('+')
-      for (const [id, name] of [
-        [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
-        [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
-      ] as [number, string][]) {
-        if (!seenPlayers.has(id)) {
-          seenPlayers.add(id)
-          playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
-        }
+async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics: MetricsRegistry | undefined) {
+  const seenPlayers = new Set<number>()
+  const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
+  for (const r of rankings) {
+    const nameParts = (r.teamname ?? '').split('+')
+    for (const [id, name] of [
+      [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
+      [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
+    ] as [number, string][]) {
+      if (!seenPlayers.has(id)) {
+        seenPlayers.add(id)
+        playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
       }
     }
-    await repo.batchUpsertPlaceholderPlayers(playerRows)
+  }
+  await repo.batchUpsertPlaceholderPlayers(playerRows)
 
-    const seen = new Set<string>()
-    const teamRows: Array<{
-      brawlhallaId: number
-      brawlhallaIdOne: number
-      brawlhallaIdTwo: number
-      teamName: string
-      rating: number
-      peakRating: number
-      tier: string
-      wins: number
-      games: number
-      region: string | null
-      globalRank: number | null
-    }> = []
-    for (const r of rankings) {
-      const shared = {
-        brawlhallaIdOne: r.brawlhalla_id_one,
-        brawlhallaIdTwo: r.brawlhalla_id_two,
-        teamName: r.teamname ?? '',
-        rating: r.rating ?? 0,
-        peakRating: r.peak_rating ?? 0,
-        tier: r.tier ?? '',
-        wins: r.wins ?? 0,
-        games: r.games ?? 0,
-        region: r.region ?? null,
-        globalRank: r.rank ?? null,
-      }
-      for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
-        const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          teamRows.push({ brawlhallaId: ownerId, ...shared })
-        }
+  const seen = new Set<string>()
+  const teamRows: Array<{
+    brawlhallaId: number
+    brawlhallaIdOne: number
+    brawlhallaIdTwo: number
+    teamName: string
+    rating: number
+    peakRating: number
+    tier: string
+    wins: number
+    games: number
+    region: string | null
+    globalRank: number | null
+  }> = []
+  for (const r of rankings) {
+    const shared = {
+      brawlhallaIdOne: r.brawlhalla_id_one,
+      brawlhallaIdTwo: r.brawlhalla_id_two,
+      teamName: r.teamname ?? '',
+      rating: r.rating ?? 0,
+      peakRating: r.peak_rating ?? 0,
+      tier: r.tier ?? '',
+      wins: r.wins ?? 0,
+      games: r.games ?? 0,
+      region: r.region ?? null,
+      globalRank: r.rank ?? null,
+    }
+    for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
+      const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        teamRows.push({ brawlhallaId: ownerId, ...shared })
       }
     }
+  }
+
+  try {
     await repo.batchUpsertTeams(teamRows)
   } catch (err) {
-    console.error('[janitor] failed to batch save teams:', err)
+    await metrics?.incrementCounter('janitor:save_failures:2v2')
+    throw err
   }
 }
