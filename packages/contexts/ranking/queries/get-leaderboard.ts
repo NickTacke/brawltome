@@ -86,13 +86,15 @@ async function get2v2Leaderboard(
   const paged = filtered.slice(opts.offset, opts.offset + opts.pageSize)
 
   const playerIds = [...new Set(paged.flatMap((t) => [t.brawlhallaIdOne, t.brawlhallaIdTwo]))]
-  const [nameMap, effective] = await Promise.all([
+  const [nameMap, effective, regionMap] = await Promise.all([
     deps.playerRepo.getPlayerNames(playerIds),
     deps.playerRepo.getEffectiveBestLegendsBatch(playerIds),
+    deps.playerRepo.getPlayerRegions(playerIds),
   ])
 
   const entries = paged.map((t, i) => ({
     ...t,
+    region: regionMap.get(t.brawlhallaIdOne) ?? regionMap.get(t.brawlhallaIdTwo) ?? t.region,
     rank: t.globalRank && t.globalRank > 0 ? t.globalRank : opts.offset + i + 1,
     playerOneName: nameMap.get(t.brawlhallaIdOne) ?? 'Unknown',
     playerTwoName: nameMap.get(t.brawlhallaIdTwo) ?? 'Unknown',
