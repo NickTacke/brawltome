@@ -506,6 +506,7 @@ export function createPlayerRepo(db: Database) {
         .select({ brawlhallaId: playerAlias.brawlhallaId, alias: playerAlias.value })
         .from(playerAlias)
         .where(ilike(playerAlias.key, `${query.toLowerCase()}%`))
+        .orderBy(asc(playerAlias.brawlhallaId), desc(playerAlias.createdAt))
         .limit(50)
     },
 
