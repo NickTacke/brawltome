@@ -99,4 +99,26 @@ describe('replaceRankPage1v1', () => {
     })
     expect(rows.length).toBe(1)
   })
+
+  it('handles a player moving between pages without PK conflict', async () => {
+    await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 1,
+      pageSize: 50,
+      entries: [{ brawlhallaId: 991001, rank: 5 }],
+    })
+
+    await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 2,
+      pageSize: 50,
+      entries: [{ brawlhallaId: 991001, rank: 60 }],
+    })
+
+    const rows = await db.query.playerRank1v1.findMany({
+      where: and(eq(playerRank1v1.region, TEST_REGION), eq(playerRank1v1.brawlhallaId, 991001)),
+    })
+    expect(rows.length).toBe(1)
+    expect(rows[0]?.rank).toBe(60)
+  })
 })
