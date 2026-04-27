@@ -3,6 +3,7 @@
 import { type PlayerLinkInfo, linkSteam, unlinkPlayer } from '@/lib/auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { Gamepad2, Loader2 } from 'lucide-react'
+import { useState } from 'react'
 
 interface BrawlhallaLinkRowProps {
   link: PlayerLinkInfo | null
@@ -10,6 +11,18 @@ interface BrawlhallaLinkRowProps {
 
 export function BrawlhallaLinkRow({ link }: BrawlhallaLinkRowProps) {
   const queryClient = useQueryClient()
+  const [pending, setPending] = useState(false)
+
+  const handleRelink = async () => {
+    if (pending) return
+    setPending(true)
+    try {
+      await unlinkPlayer(queryClient)
+      await linkSteam()
+    } finally {
+      setPending(false)
+    }
+  }
 
   if (!link) {
     return (
@@ -65,8 +78,9 @@ export function BrawlhallaLinkRow({ link }: BrawlhallaLinkRowProps) {
         </div>
         <button
           type="button"
-          onClick={() => unlinkPlayer(queryClient).then(linkSteam)}
-          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
+          onClick={handleRelink}
+          disabled={pending}
+          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Try Again
         </button>
@@ -88,8 +102,9 @@ export function BrawlhallaLinkRow({ link }: BrawlhallaLinkRowProps) {
         </div>
         <button
           type="button"
-          onClick={() => unlinkPlayer(queryClient).then(linkSteam)}
-          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
+          onClick={handleRelink}
+          disabled={pending}
+          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Try Again
         </button>

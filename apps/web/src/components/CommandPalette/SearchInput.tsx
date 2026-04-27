@@ -22,6 +22,7 @@ export function SearchInput({ value, onChange, onKeyDown, isSearching, inputRef 
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder="Search players, clans, or navigate..."
+        aria-label="Command palette search"
         className="flex-1 h-14 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
       />
       {isSearching && (
