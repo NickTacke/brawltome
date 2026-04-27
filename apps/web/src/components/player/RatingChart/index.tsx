@@ -35,18 +35,16 @@ export function RatingChart({ data }: RatingChartProps) {
   })
 
   const withSeasonDrops = useMemo(() => {
-    const boundaries = new Set(seasonsAsc.filter((s) => s.startsAt.getTime() > 0).map((s) => s.startsAt.getTime()))
+    const boundaries = seasonsAsc.filter((s) => s.startsAt.getTime() > 0).map((s) => s.startsAt.getTime())
     const result: ChartPoint[] = []
     for (let i = 0; i < allSorted.length; i++) {
       const prev = result[result.length - 1]
       const curr = allSorted[i]
       if (prev) {
-        for (const boundary of boundaries) {
-          if (prev.timestamp < boundary && curr.timestamp >= boundary) {
-            result.push({ ...prev, timestamp: boundary - 1 })
-            result.push({ ...curr, timestamp: boundary })
-            break
-          }
+        const crossed = boundaries.filter((b) => prev.timestamp < b && curr.timestamp >= b).sort((a, b) => a - b)
+        for (const boundary of crossed) {
+          result.push({ ...prev, timestamp: boundary - 1 })
+          result.push({ ...curr, timestamp: boundary })
         }
       }
       result.push(curr)

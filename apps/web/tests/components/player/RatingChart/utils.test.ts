@@ -28,16 +28,8 @@ describe('prepareChartData', () => {
     expect(typeof result[0].date).toBe('string')
   })
 
-  it('handles multiple entries preserving order', () => {
+  it('sorts entries by recordedAt ascending', () => {
     const result = prepareChartData([
-      {
-        rating: 1500,
-        peakRating: 1500,
-        tier: null,
-        games: 10,
-        wins: 5,
-        recordedAt: new Date(Date.UTC(2026, 2, 15)),
-      },
       {
         rating: 1600,
         peakRating: 1600,
@@ -46,8 +38,39 @@ describe('prepareChartData', () => {
         wins: 7,
         recordedAt: new Date(Date.UTC(2026, 2, 16)),
       },
+      {
+        rating: 1500,
+        peakRating: 1500,
+        tier: null,
+        games: 10,
+        wins: 5,
+        recordedAt: new Date(Date.UTC(2026, 2, 15)),
+      },
     ])
     expect(result.map((p) => p.rating)).toEqual([1500, 1600])
+  })
+
+  it('filters out entries with invalid recordedAt', () => {
+    const result = prepareChartData([
+      {
+        rating: 1500,
+        peakRating: 1500,
+        tier: null,
+        games: 0,
+        wins: 0,
+        recordedAt: 'not a date',
+      },
+      {
+        rating: 1600,
+        peakRating: 1600,
+        tier: null,
+        games: 0,
+        wins: 0,
+        recordedAt: new Date(Date.UTC(2026, 2, 15)).toISOString(),
+      },
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].rating).toBe(1600)
   })
 })
 

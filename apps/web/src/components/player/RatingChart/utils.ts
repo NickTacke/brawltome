@@ -42,6 +42,7 @@ export interface ChartPoint extends RatingHistoryEntry {
 
 export function prepareChartData(history: RatingHistoryEntry[]): ChartPoint[] {
   return [...history]
+    .filter((e) => !Number.isNaN(new Date(e.recordedAt).getTime()))
     .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
     .map((entry) => {
       const ts = new Date(entry.recordedAt)
