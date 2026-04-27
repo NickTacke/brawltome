@@ -58,7 +58,7 @@ export function startJanitor(deps: JanitorDeps) {
     const lockState: LockState = { lost: false, value: acquired }
     const tickStart = performance.now()
     console.log(`[janitor] tick ${tick} starting...`)
-    heartbeatTimer = setInterval(() => renewLock(deps.redis, lockState), HEARTBEAT_INTERVAL_MS)
+    heartbeatTimer = setInterval(() => renewLock(deps.redis, lockState, deps.metrics), HEARTBEAT_INTERVAL_MS)
 
     const time = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const start = performance.now()
@@ -141,11 +141,12 @@ async function acquireLock(redis: Redis): Promise<string | null> {
   return result === 'OK' ? value : null
 }
 
-async function renewLock(redis: Redis, lockState: LockState) {
+async function renewLock(redis: Redis, lockState: LockState, metrics?: MetricsRegistry) {
   const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, lockState.value, String(LOCK_TTL_SEC))
   if (result === 0) {
-    console.warn('[janitor] lock lost during heartbeat')
+    console.error('[janitor] lock lost during heartbeat')
     lockState.lost = true
+    await metrics?.incrementCounter('janitor:lock_lost_total')
   }
 }
 
@@ -167,6 +168,7 @@ export async function sync1v1Page(
   cursorKey: string,
   lockState: LockState,
 ) {
+  if (lockState.lost) throw new Error('janitor lock lost during tick')
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
@@ -193,6 +195,7 @@ export async function sync2v2Page(
   cursorKey: string,
   lockState: LockState,
 ) {
+  if (lockState.lost) throw new Error('janitor lock lost during tick')
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
