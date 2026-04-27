@@ -24,6 +24,7 @@ export function CommandPalette() {
       region: string | null
       rating: number
       bestLegendNameKey?: string | null
+      matchedAlias?: string | null
     }>
   >([])
   const [clanResults, setClanResults] = useState<Array<{ clanId: number; clanName: string }>>([])
@@ -245,7 +246,9 @@ export function CommandPalette() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-card-foreground truncate">{cmd.label}</div>
-                      <div className="text-xs text-muted-foreground">{cmd.region ?? 'Unknown'}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {cmd.matchedAlias ? `Matched alias: ${cmd.matchedAlias}` : (cmd.region ?? 'Unknown')}
+                      </div>
                     </div>
                     <div className="text-sm font-mono text-primary shrink-0">{cmd.rating ?? 0}</div>
                   </>
