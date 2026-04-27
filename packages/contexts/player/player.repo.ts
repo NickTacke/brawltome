@@ -432,6 +432,9 @@ export function createPlayerRepo(db: Database) {
         games: playerRankedTeam.games,
       }[opts.sort]
       const orderFn = opts.order === 'asc' ? asc : desc
+      // Brawlhalla's API tie-breaks by wins desc; mirror that as a secondary ordering.
+      const orderClauses =
+        opts.sort === 'wins' ? [orderFn(sortColumn)] : [orderFn(sortColumn), desc(playerRankedTeam.wins)]
       return db
         .select()
         .from(playerRankedTeam)
@@ -446,7 +449,7 @@ export function createPlayerRepo(db: Database) {
               : undefined,
           ),
         )
-        .orderBy(orderFn(sortColumn))
+        .orderBy(...orderClauses)
         .limit(opts.pageSize)
         .offset(opts.offset)
     },
