@@ -587,13 +587,22 @@ export function createPlayerRepo(db: Database) {
             ),
           )
         if (args.entries.length > 0) {
-          await tx.insert(playerRank1v1).values(
-            args.entries.map((e) => ({
-              brawlhallaId: e.brawlhallaId,
-              region: args.region,
-              rank: e.rank,
-            })),
-          )
+          await tx
+            .insert(playerRank1v1)
+            .values(
+              args.entries.map((e) => ({
+                brawlhallaId: e.brawlhallaId,
+                region: args.region,
+                rank: e.rank,
+              })),
+            )
+            .onConflictDoUpdate({
+              target: [playerRank1v1.brawlhallaId, playerRank1v1.region],
+              set: {
+                rank: sql`excluded.rank`,
+                syncedAt: sql`excluded.synced_at`,
+              },
+            })
         }
       })
     },
@@ -647,7 +656,27 @@ export function createPlayerRepo(db: Database) {
             ),
           )
         if (rowsToInsert.length > 0) {
-          await tx.insert(playerRankedTeam).values(rowsToInsert)
+          await tx
+            .insert(playerRankedTeam)
+            .values(rowsToInsert)
+            .onConflictDoUpdate({
+              target: [
+                playerRankedTeam.brawlhallaId,
+                playerRankedTeam.brawlhallaIdOne,
+                playerRankedTeam.brawlhallaIdTwo,
+                playerRankedTeam.region,
+              ],
+              set: {
+                teamName: sql`excluded.team_name`,
+                rating: sql`excluded.rating`,
+                peakRating: sql`excluded.peak_rating`,
+                tier: sql`excluded.tier`,
+                wins: sql`excluded.wins`,
+                games: sql`excluded.games`,
+                globalRank: sql`excluded.global_rank`,
+                syncedAt: sql`excluded.synced_at`,
+              },
+            })
         }
       })
     },
