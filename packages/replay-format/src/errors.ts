@@ -18,3 +18,10 @@ export class FormatVersionUnsupportedError extends Error {
     this.name = 'FormatVersionUnsupportedError'
   }
 }
+
+export class ParseBoundsError extends ParseError {
+  constructor(detail: string) {
+    super(detail)
+    this.name = 'ParseBoundsError'
+  }
+}

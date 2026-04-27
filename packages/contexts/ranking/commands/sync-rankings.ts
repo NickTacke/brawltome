@@ -39,10 +39,12 @@ interface JanitorDeps {
   metrics?: MetricsRegistry
 }
 
+type LockState = { lost: boolean; value: string }
+export type { LockState }
+
 export function startJanitor(deps: JanitorDeps) {
   const playerRepo = createPlayerRepo(deps.db)
   let tick = 0
-  let lockValue = ''
   let heartbeatTimer: Timer | null = null
 
   async function runTick() {
@@ -53,10 +55,14 @@ export function startJanitor(deps: JanitorDeps) {
     }
 
     tick++
-    lockValue = acquired
+    const lockState: LockState = { lost: false, value: acquired }
     const tickStart = performance.now()
     console.log(`[janitor] tick ${tick} starting...`)
-    heartbeatTimer = setInterval(() => renewLock(deps.redis, lockValue), HEARTBEAT_INTERVAL_MS)
+    heartbeatTimer = setInterval(() => {
+      renewLock(deps.redis, lockState, deps.metrics).catch((err) =>
+        console.error('[janitor] unexpected heartbeat rejection:', err),
+      )
+    }, HEARTBEAT_INTERVAL_MS)
 
     const time = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       const start = performance.now()
@@ -73,16 +79,16 @@ export function startJanitor(deps: JanitorDeps) {
       }
 
       // Hot pages every tick
-      await time('hot 1v1', () => sync1v1Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1'))
-      await time('hot 2v2', () => sync2v2Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2'))
+      await time('hot 1v1', () => sync1v1Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:1v1', lockState))
+      await time('hot 2v2', () => sync2v2Page(deps, playerRepo, 'all', 1, HOT_PAGES, 'cursor:hot:2v2', lockState))
 
       // Cold pages every N ticks
       if (tick % COLD_TICK_INTERVAL === 0) {
         await time('cold 1v1', () =>
-          sync1v1Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1'),
+          sync1v1Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:1v1', lockState),
         )
         await time('cold 2v2', () =>
-          sync2v2Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2'),
+          sync2v2Page(deps, playerRepo, 'all', HOT_PAGES + 1, MAX_COLD_PAGE, 'cursor:cold:2v2', lockState),
         )
       }
 
@@ -90,10 +96,10 @@ export function startJanitor(deps: JanitorDeps) {
       const regionIndex = (tick - 1) % REGIONS.length
       const region = REGIONS[regionIndex]
       await time(`1v1 ${region}`, () =>
-        sync1v1Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`),
+        sync1v1Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:1v1:${region}`, lockState),
       )
       await time(`2v2 ${region}`, () =>
-        sync2v2Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`),
+        sync2v2Page(deps, playerRepo, region, 1, MAX_COLD_PAGE, `cursor:region:2v2:${region}`, lockState),
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
@@ -102,12 +108,13 @@ export function startJanitor(deps: JanitorDeps) {
       )
     } catch (err) {
       console.error(`[janitor] tick ${tick} error:`, err)
+      await deps.metrics?.incrementCounter('janitor:tick_failures')
     } finally {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer)
         heartbeatTimer = null
       }
-      await releaseLock(deps.redis, lockValue)
+      if (!lockState.lost) await releaseLock(deps.redis, lockState.value)
     }
   }
 
@@ -128,7 +135,7 @@ export function startJanitor(deps: JanitorDeps) {
     stopped = true
     if (timer) clearTimeout(timer)
     if (heartbeatTimer) clearInterval(heartbeatTimer)
-    if (lockValue) await releaseLock(deps.redis, lockValue)
+    // In-flight tick's lock is scoped to runTick; rely on LOCK_TTL_SEC for any held lock to expire.
   }
 }
 
@@ -138,11 +145,18 @@ async function acquireLock(redis: Redis): Promise<string | null> {
   return result === 'OK' ? value : null
 }
 
-async function renewLock(redis: Redis, value: string) {
-  const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, value, String(LOCK_TTL_SEC))
-  if (result === 0) {
-    console.warn('[janitor] lock lost during heartbeat')
+export async function renewLock(redis: Redis, lockState: LockState, metrics?: MetricsRegistry) {
+  // Any heartbeat failure (mismatch OR Redis error) must mark the lock lost: if Redis stays
+  // unreachable past LOCK_TTL_SEC the key TTL-expires and another instance can take it.
+  try {
+    const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, lockState.value, String(LOCK_TTL_SEC))
+    if (result !== 0) return
+    console.error('[janitor] lock lost during heartbeat')
+  } catch (err) {
+    console.error('[janitor] heartbeat error, treating lock as lost:', err)
   }
+  lockState.lost = true
+  await metrics?.incrementCounter('janitor:lock_lost_total').catch(() => {})
 }
 
 async function releaseLock(redis: Redis, value: string) {
@@ -154,14 +168,16 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
 }
 
-async function sync1v1Page(
+export async function sync1v1Page(
   deps: JanitorDeps,
   playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
   cursorKey: string,
+  lockState: LockState,
 ) {
+  if (lockState.lost) throw new Error('janitor lock lost during tick')
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
@@ -172,21 +188,23 @@ async function sync1v1Page(
     return
   }
 
-  await savePlayers(playerRepo, rankings)
+  await savePlayers(playerRepo, rankings, deps.metrics)
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
   await deps.redis.set(cursorKey, String(nextPage))
 }
 
-async function sync2v2Page(
+export async function sync2v2Page(
   deps: JanitorDeps,
   playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
   cursorKey: string,
+  lockState: LockState,
 ) {
+  if (lockState.lost) throw new Error('janitor lock lost during tick')
   const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
@@ -197,11 +215,24 @@ async function sync2v2Page(
     return
   }
 
-  await saveTeams(playerRepo, rankings)
+  await saveTeams(playerRepo, rankings, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
   await deps.redis.set(cursorKey, String(nextPage))
+}
+
+async function withSaveFailureMetric<T>(
+  metrics: MetricsRegistry | undefined,
+  label: '1v1' | '2v2',
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    await metrics?.incrementCounter(`janitor:save_failures:${label}`)
+    throw err
+  }
 }
 
 async function savePlayers(
@@ -219,6 +250,7 @@ async function savePlayers(
     best_legend_games: number
     best_legend_wins: number
   }>,
+  metrics: MetricsRegistry | undefined,
 ) {
   const ids = rankings.map((r) => r.brawlhalla_id)
   const nameMap = await repo.getExistingPlayerNames(ids)
@@ -230,70 +262,66 @@ async function savePlayers(
       aliases.push({ brawlhallaId: r.brawlhalla_id, key: oldName.toLowerCase(), value: oldName })
     }
   }
-  await repo.batchInsertAliases(aliases)
 
-  try {
+  await withSaveFailureMetric(metrics, '1v1', async () => {
+    await repo.batchInsertAliases(aliases)
     await repo.batchUpsertPlayers(rankings)
-  } catch (err) {
-    console.error('[janitor] failed to batch save players:', err)
-  }
+  })
 }
 
-async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[]) {
-  try {
-    const seenPlayers = new Set<number>()
-    const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
-    for (const r of rankings) {
-      const nameParts = (r.teamname ?? '').split('+')
-      for (const [id, name] of [
-        [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
-        [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
-      ] as [number, string][]) {
-        if (!seenPlayers.has(id)) {
-          seenPlayers.add(id)
-          playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
-        }
+async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics: MetricsRegistry | undefined) {
+  const seenPlayers = new Set<number>()
+  const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
+  for (const r of rankings) {
+    const nameParts = (r.teamname ?? '').split('+')
+    for (const [id, name] of [
+      [r.brawlhalla_id_one, nameParts[0]?.trim() ?? ''],
+      [r.brawlhalla_id_two, nameParts[1]?.trim() ?? ''],
+    ] as [number, string][]) {
+      if (!seenPlayers.has(id)) {
+        seenPlayers.add(id)
+        playerRows.push({ brawlhallaId: id, name, region: r.region ?? null, rating: 0 })
       }
     }
-    await repo.batchUpsertPlaceholderPlayers(playerRows)
-
-    const seen = new Set<string>()
-    const teamRows: Array<{
-      brawlhallaId: number
-      brawlhallaIdOne: number
-      brawlhallaIdTwo: number
-      teamName: string
-      rating: number
-      peakRating: number
-      tier: string
-      wins: number
-      games: number
-      region: string | null
-      globalRank: number | null
-    }> = []
-    for (const r of rankings) {
-      const shared = {
-        brawlhallaIdOne: r.brawlhalla_id_one,
-        brawlhallaIdTwo: r.brawlhalla_id_two,
-        teamName: r.teamname ?? '',
-        rating: r.rating ?? 0,
-        peakRating: r.peak_rating ?? 0,
-        tier: r.tier ?? '',
-        wins: r.wins ?? 0,
-        games: r.games ?? 0,
-        region: r.region ?? null,
-        globalRank: r.rank ?? null,
-      }
-      for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
-        const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          teamRows.push({ brawlhallaId: ownerId, ...shared })
-        }
-      }
-    }
-    await repo.batchUpsertTeams(teamRows)
-  } catch (err) {
-    console.error('[janitor] failed to batch save teams:', err)
   }
+  const seen = new Set<string>()
+  const teamRows: Array<{
+    brawlhallaId: number
+    brawlhallaIdOne: number
+    brawlhallaIdTwo: number
+    teamName: string
+    rating: number
+    peakRating: number
+    tier: string
+    wins: number
+    games: number
+    region: string | null
+    globalRank: number | null
+  }> = []
+  for (const r of rankings) {
+    const shared = {
+      brawlhallaIdOne: r.brawlhalla_id_one,
+      brawlhallaIdTwo: r.brawlhalla_id_two,
+      teamName: r.teamname ?? '',
+      rating: r.rating ?? 0,
+      peakRating: r.peak_rating ?? 0,
+      tier: r.tier ?? '',
+      wins: r.wins ?? 0,
+      games: r.games ?? 0,
+      region: r.region ?? null,
+      globalRank: r.rank ?? null,
+    }
+    for (const ownerId of [r.brawlhalla_id_one, r.brawlhalla_id_two]) {
+      const key = `${ownerId}:${r.brawlhalla_id_one}:${r.brawlhalla_id_two}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        teamRows.push({ brawlhallaId: ownerId, ...shared })
+      }
+    }
+  }
+
+  await withSaveFailureMetric(metrics, '2v2', async () => {
+    await repo.batchUpsertPlaceholderPlayers(playerRows)
+    await repo.batchUpsertTeams(teamRows)
+  })
 }

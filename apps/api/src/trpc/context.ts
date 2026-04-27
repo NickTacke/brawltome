@@ -4,12 +4,13 @@ import type { PlayerLinkRepo, Session, SessionRepo, UserRepo, UserWithPrimaryAcc
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { PlayerRepo } from '@brawltome/player'
 import type { RankingRepo } from '@brawltome/ranking'
-import type { Queue, R2Client } from '@brawltome/shared'
+import type { MetricsRegistry, Queue, R2Client } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 
 export interface Context {
   db: Database
   redis: Redis
+  metrics: MetricsRegistry
   rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>

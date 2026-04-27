@@ -29,6 +29,7 @@ export const playerRouter = router({
             rankedQueue: ctx.rankedQueue,
             statsQueue: ctx.statsQueue,
             clientIp: ctx.clientIp,
+            metrics: ctx.metrics,
           },
           brawlhallaId,
         )
@@ -43,7 +44,7 @@ export const playerRouter = router({
         const ttl = TIERED_TTL.hot
 
         if (isStale(p.rankedLastUpdated, ttl.ranked)) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh', ctx.metrics)
           if (refreshLimit.allowed) {
             const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
             if (canDedup) await ctx.rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' })
@@ -52,7 +53,7 @@ export const playerRouter = router({
         }
 
         if (isStale(p.statsLastUpdated, ttl.stats)) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh')
+          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh', ctx.metrics)
           if (refreshLimit.allowed) {
             const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
             if (canDedup) await ctx.statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' })

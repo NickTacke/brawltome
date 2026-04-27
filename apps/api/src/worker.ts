@@ -15,16 +15,23 @@ if (!apiKey) {
   throw new Error('BRAWLHALLA_API_KEY environment variable is required')
 }
 
+if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
+  throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
+}
+
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379'
 // Each blocking consumer needs its own connection to avoid XREADGROUP serialization
 const newRedis = () => new Redis(redisUrl)
 const bhapiRedis = newRedis()
-const bhapi = new BhApiClient({ apiKey, persistence: { redis: bhapiRedis, keyPrefix: 'bhapi' } })
-const deps = { db, bhapi }
-const playerLinkRepo = createPlayerLinkRepo(db)
-
 const metricsRedis = newRedis()
 const metrics = createMetricsRegistry(metricsRedis)
+const bhapi = new BhApiClient({
+  apiKey,
+  persistence: { redis: bhapiRedis, keyPrefix: 'bhapi' },
+  metrics,
+})
+const deps = { db, bhapi }
+const playerLinkRepo = createPlayerLinkRepo(db)
 
 const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
   newRedis(),

@@ -23,11 +23,19 @@ import type {
 } from './types'
 
 const BASE_URL = 'https://api.brawlhalla.com'
+const DEFAULT_FETCH_TIMEOUT_MS = 30_000
+
+export interface BhApiMetricsSink {
+  incrementCounter(key: string): Promise<void>
+}
 
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
   persistence?: RequestQueuePersistence
+  baseUrl?: string
+  fetchTimeoutMs?: number
+  metrics?: BhApiMetricsSink
 }
 
 export interface CallOptions {
@@ -36,10 +44,16 @@ export interface CallOptions {
 
 export class BhApiClient {
   private readonly apiKey: string
+  private readonly baseUrl: string
   private readonly queue: RequestQueue
+  private readonly fetchTimeoutMs: number
+  private readonly metrics?: BhApiMetricsSink
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
+    this.baseUrl = opts.baseUrl ?? BASE_URL
+    this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
+    this.metrics = opts.metrics
     this.queue = new RequestQueue({
       minSpacingMs: 150,
       sustainedLimit: 180,
@@ -62,7 +76,7 @@ export class BhApiClient {
   }
 
   async searchBySteamId(steamId: string, opts: CallOptions = {}): Promise<BhApiSearchResult | null> {
-    return this.call(`/search?steamid=${steamId}`, opts)
+    return this.call(`/search?steamid=${encodeURIComponent(steamId)}`, opts)
   }
 
   async getRankings1v1(region: Region, page: number, opts: CallOptions = {}): Promise<BhApiRanking1v1[]> {
@@ -106,10 +120,19 @@ export class BhApiClient {
     console.log(`[bhapi] ${path} (${remaining} ${caller} tokens left)`)
 
     const separator = endpoint.includes('?') ? '&' : '?'
-    const url = `${BASE_URL}${endpoint}${separator}api_key=${this.apiKey}`
+    const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
 
     const fetchStart = Date.now()
-    const res = await fetch(url)
+    let res: Response
+    try {
+      res = await fetch(url, { signal: AbortSignal.timeout(this.fetchTimeoutMs) })
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        await this.metrics?.incrementCounter('bhapi:timeouts')
+        throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
+      }
+      throw err
+    }
     const fetchMs = Date.now() - fetchStart
 
     if (res.status === 404) {
@@ -139,6 +162,17 @@ export class BhApiClient {
       console.log(`[bhapi] ${path} -> 200 SLOW (${fetchMs}ms)`)
     }
 
-    return res.json() as Promise<T>
+    try {
+      return (await res.json()) as T
+    } catch (err) {
+      // AbortSignal.timeout() also aborts the response body stream, so a body-read
+      // timeout surfaces here as AbortError/TimeoutError. Route it to the timeout counter.
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        await this.metrics?.incrementCounter('bhapi:timeouts')
+        throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
+      }
+      await this.metrics?.incrementCounter('bhapi:json_errors')
+      throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
+    }
   }
 }

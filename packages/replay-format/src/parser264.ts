@@ -10,8 +10,15 @@ import {
   STATE_KO_FACES,
   STATE_RESULTS,
 } from './constants'
-import { ParseError } from './errors'
+import { ParseBoundsError, ParseError } from './errors'
 import type { Entity, GameSettings, Hero, KoEvent, MatchResult, ParsedReplay } from './types'
+
+const MAX_ENTITY_EXTRA = 64
+const MAX_ENTITIES = 16
+const MAX_SCORE_ENTRIES = 32
+const MAX_KO_EVENTS = 4096
+const MAX_INPUT_ENTITIES = 16
+const MAX_INPUTS_PER_ENTITY = 1 << 20
 
 function readGameSettings(r: BitReader): GameSettings {
   return {
@@ -57,7 +64,11 @@ function readEntity(r: BitReader, heroCount: number): Entity {
   for (let i = 0; i < 8; i++) taunts.push(r.u32())
   const winTauntId = r.u16()
   const loseTauntId = r.u16()
-  while (r.bool()) r.u32()
+  let extra = 0
+  while (r.bool()) {
+    if (++extra > MAX_ENTITY_EXTRA) throw new ParseBoundsError(`entity extra exceeded ${MAX_ENTITY_EXTRA}`)
+    r.u32()
+  }
   const avatarId = r.u16()
   const team = r.i32()
   const connectionTime = r.i32()
@@ -136,7 +147,11 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
         if (heroCount < 1 || heroCount > 5) {
           throw new ParseError(`heroCount out of range: ${heroCount}`)
         }
-        while (r.bool()) entities.push(readEntity(r, heroCount))
+        let entityCount = 0
+        while (r.bool()) {
+          if (++entityCount > MAX_ENTITIES) throw new ParseBoundsError(`entities exceeded ${MAX_ENTITIES}`)
+          entities.push(readEntity(r, heroCount))
+        }
         gameDataChecksum = r.u32()
         break
       }
@@ -144,7 +159,10 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
         const lengthMs = r.u32()
         const scores: Record<number, number> = {}
         if (r.bool()) {
+          let scoreCount = 0
           while (r.bool()) {
+            if (++scoreCount > MAX_SCORE_ENTRIES)
+              throw new ParseBoundsError(`score entries exceeded ${MAX_SCORE_ENTRIES}`)
             const eid = r.bits(5)
             const score = r.i16()
             scores[eid] = score
@@ -156,21 +174,35 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
       }
       case STATE_KO_FACES: {
         const arr: KoEvent[] = []
-        while (r.bool()) arr.push({ entityId: r.bits(5), timestampMs: r.i32() })
+        let koCount = 0
+        while (r.bool()) {
+          if (++koCount > MAX_KO_EVENTS) throw new ParseBoundsError(`ko events exceeded ${MAX_KO_EVENTS}`)
+          arr.push({ entityId: r.bits(5), timestampMs: r.i32() })
+        }
         koFaces = arr
         break
       }
       case STATE_FACES: {
         const arr: KoEvent[] = []
-        while (r.bool()) arr.push({ entityId: r.bits(5), timestampMs: r.i32() })
+        let koCount = 0
+        while (r.bool()) {
+          if (++koCount > MAX_KO_EVENTS) throw new ParseBoundsError(`ko events exceeded ${MAX_KO_EVENTS}`)
+          arr.push({ entityId: r.bits(5), timestampMs: r.i32() })
+        }
         victoryFaces = arr
         break
       }
       case STATE_INPUTS: {
         // Parse and discard: raw replay is in R2 for any re-parse that needs inputs.
+        let inputEntityCount = 0
         while (r.bool()) {
+          if (++inputEntityCount > MAX_INPUT_ENTITIES)
+            throw new ParseBoundsError(`input entities exceeded ${MAX_INPUT_ENTITIES}`)
           r.bits(5)
           const ic = r.i32()
+          if (ic < 0 || ic > MAX_INPUTS_PER_ENTITY) {
+            throw new ParseBoundsError(`inputs per entity exceeded ${MAX_INPUTS_PER_ENTITY} (got ${ic})`)
+          }
           for (let i = 0; i < ic; i++) {
             r.i32()
             if (r.bool()) r.bits(14)

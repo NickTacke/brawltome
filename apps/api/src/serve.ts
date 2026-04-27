@@ -31,6 +31,10 @@ import { readMatchmakingConfig } from './matchmaking-config'
 import { appRouter } from './router'
 import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 
+if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
+  throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
+}
+
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
 
@@ -88,6 +92,7 @@ console.log(
 const sharedCtx = {
   db,
   redis,
+  metrics,
   rankedQueue,
   statsQueue,
   clanQueue,
@@ -215,7 +220,7 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
     '0.0.0.0'
 
-  const rateLimit = await checkRateLimit(redis, clientIp, 'overlay')
+  const rateLimit = await checkRateLimit(redis, clientIp, 'overlay', metrics)
 
   const p = await getPlayer(playerRepo, bhid)
   if (!p) {

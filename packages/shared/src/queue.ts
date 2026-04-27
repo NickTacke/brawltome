@@ -142,22 +142,38 @@ export function createQueue<T>(
         }
       }
 
+      const ratioCapHit = consecutivePriority >= priorityRatio
+
       try {
-        const messages = await redis.xreadgroup(
-          'GROUP',
-          group,
-          consumer,
-          'COUNT',
-          String(concurrency - running),
-          'BLOCK',
-          '2000',
-          'STREAMS',
-          stream,
-          '>',
-        )
+        // Redis XREADGROUP: omitting BLOCK is non-blocking; BLOCK 0 means block forever.
+        // When the ratio cap is hit, we want to return to priority asap, so use the non-blocking form.
+        const messages = ratioCapHit
+          ? await redis.xreadgroup(
+              'GROUP',
+              group,
+              consumer,
+              'COUNT',
+              String(concurrency - running),
+              'STREAMS',
+              stream,
+              '>',
+            )
+          : await redis.xreadgroup(
+              'GROUP',
+              group,
+              consumer,
+              'COUNT',
+              String(concurrency - running),
+              'BLOCK',
+              '2000',
+              'STREAMS',
+              stream,
+              '>',
+            )
 
         if (!messages || stopped) {
-          consecutivePriority = 0 // regular stream empty — let priority drain again
+          consecutivePriority = 0 // regular stream empty - let priority drain again
+          if (ratioCapHit) await Bun.sleep(50)
           continue
         }
 
