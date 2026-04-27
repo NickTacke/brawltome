@@ -25,4 +25,10 @@ describe('computeRefreshState', () => {
       isRefreshing: true,
     })
   })
+
+  it('returns refreshing for fresh start', () => {
+    expect(computeRefreshState({ startedAt: 1000, now: 1000, maxRefreshMs: 30_000 })).toEqual({
+      isRefreshing: true,
+    })
+  })
 })
