@@ -2,25 +2,15 @@
 
 import { navItems } from '@/components/sidebar/nav-items'
 import { trpc } from '@/lib/trpc'
-import { fixEncoding } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage, Card } from '@brawltome/ui'
-import { Search, Shield } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounce } from 'use-debounce'
-
-type Command =
-  | { kind: 'nav'; id: string; label: string; href: string; icon: React.ReactNode }
-  | {
-      kind: 'player'
-      id: string
-      label: string
-      region: string | null
-      rating: number
-      bestLegendNameKey?: string | null
-      href: string
-    }
-  | { kind: 'clan'; id: string; label: string; href: string }
+import { CommandFooter } from './CommandFooter'
+import { CommandRow } from './CommandRow'
+import { SearchInput } from './SearchInput'
+import { type Command, buildCommands, isNumericPlayerId } from './utils'
 
 export function CommandPalette() {
   const router = useRouter()
@@ -45,40 +35,10 @@ export function CommandPalette() {
 
   const isSearchMode = query.trim().length >= 2
 
-  // Build the flat command list the palette is currently showing. The branch
-  // uses the live query so the list swaps instantly when the user starts/stops
-  // typing, but the actual search results come from debounced state, so old
-  // results stay visible while new ones are fetched (no flash of "no results").
-  const commands = useMemo<Command[]>(() => {
-    if (!isSearchMode) {
-      return navItems.map((item) => {
-        const Icon = item.icon
-        return {
-          kind: 'nav' as const,
-          id: `nav-${item.href}`,
-          label: item.label,
-          href: item.href,
-          icon: <Icon className="h-5 w-5" weight={item.iconWeight ?? 'Linear'} />,
-        }
-      })
-    }
-    const players: Command[] = playerResults.map((p) => ({
-      kind: 'player' as const,
-      id: `p-${p.brawlhallaId}`,
-      label: fixEncoding(p.name),
-      region: p.region,
-      rating: p.rating,
-      bestLegendNameKey: p.bestLegendNameKey,
-      href: `/player/${p.brawlhallaId}`,
-    }))
-    const clans: Command[] = clanResults.map((c) => ({
-      kind: 'clan' as const,
-      id: `c-${c.clanId}`,
-      label: fixEncoding(c.clanName),
-      href: `/clan/${c.clanId}`,
-    }))
-    return [...players, ...clans]
-  }, [isSearchMode, playerResults, clanResults])
+  const commands = useMemo<Command[]>(
+    () => buildCommands({ isSearchMode, navItems, playerResults, clanResults }),
+    [isSearchMode, playerResults, clanResults],
+  )
 
   const close = useCallback(() => {
     setOpen(false)
@@ -92,7 +52,6 @@ export function CommandPalette() {
     [router, close],
   )
 
-  // Global shortcut: Cmd+K on Mac, Ctrl+K elsewhere. Also Escape to close.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -107,8 +66,6 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', handler)
   }, [open, close])
 
-  // Focus input on open and reset state a tick after close so the exit animation
-  // can play before the list clears.
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => inputRef.current?.focus())
@@ -123,13 +80,11 @@ export function CommandPalette() {
     return () => clearTimeout(t)
   }, [open])
 
-  // Reset highlight when the command list identity changes.
   if (lastCommandsRef.current !== commands) {
     lastCommandsRef.current = commands
     if (selectedIndex !== 0) setSelectedIndex(0)
   }
 
-  // Run tRPC search only when open and query is long enough.
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -157,7 +112,6 @@ export function CommandPalette() {
     }
   }, [open, debouncedQuery])
 
-  // Scroll the selected row into view as the user arrow-keys through results.
   useEffect(() => {
     if (!open) return
     const list = listRef.current
@@ -166,7 +120,6 @@ export function CommandPalette() {
     if (el) el.scrollIntoView({ block: 'nearest' })
   }, [selectedIndex, open])
 
-  // Lock body scroll while the palette is open.
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
@@ -190,7 +143,7 @@ export function CommandPalette() {
         activate(cmd)
         return
       }
-      if (/^\d{5,}$/.test(query.trim())) {
+      if (isNumericPlayerId(query)) {
         router.push(`/player/${query.trim()}`)
         close()
       }
@@ -204,7 +157,6 @@ export function CommandPalette() {
       }`}
       aria-hidden={!open}
     >
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60"
         onClick={close}
@@ -214,7 +166,6 @@ export function CommandPalette() {
         aria-label="Close command palette"
       />
 
-      {/* Panel */}
       <Card
         className={`relative w-full max-w-xl mx-4 bg-card border-border shadow-2xl overflow-hidden transition-[opacity,transform] duration-200 ease-out ${
           open ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-3 scale-[0.98] opacity-0'
@@ -224,27 +175,14 @@ export function CommandPalette() {
         aria-modal="true"
         aria-label="Command palette"
       >
-        {/* Input row - matches SearchBar sizing for consistency */}
-        <div className="flex items-center gap-3 px-5 border-b border-border">
-          <Search className="h-5 w-5 text-muted-foreground shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder="Search players, clans, or navigate..."
-            className="flex-1 h-14 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
-          />
-          {isSearching && (
-            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
-          )}
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-border text-[10px] font-mono text-muted-foreground shrink-0">
-            ESC
-          </kbd>
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          onKeyDown={handleInputKeyDown}
+          isSearching={isSearching}
+          inputRef={inputRef}
+        />
 
-        {/* Results */}
         <div
           ref={listRef}
           className="max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent"
@@ -328,52 +266,8 @@ export function CommandPalette() {
           )}
         </div>
 
-        {/* Footer hint */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20 text-[10px] text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">
-              &uarr;&darr;
-            </kbd>
-            <span>navigate</span>
-            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">&crarr;</kbd>
-            <span>select</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">Ctrl</kbd>
-            <kbd className="inline-flex items-center px-1 py-0.5 rounded border border-border font-mono">K</kbd>
-          </div>
-        </div>
+        <CommandFooter />
       </Card>
     </div>
-  )
-}
-
-function CommandRow({
-  index,
-  selected,
-  onSelect,
-  onHover,
-  isLast,
-  children,
-}: {
-  index: number
-  selected: boolean
-  onSelect: () => void
-  onHover: () => void
-  isLast: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      data-index={index}
-      onClick={onSelect}
-      onMouseMove={onHover}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-        isLast ? '' : 'border-b border-border'
-      } ${selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'}`}
-    >
-      {children}
-    </button>
   )
 }
