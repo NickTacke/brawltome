@@ -1,5 +1,5 @@
 {
-  "id": "3ffd68dd-92d4-4fe5-afbc-9aa0a557caa3",
+  "id": "8732081e-b7c6-4d30-96a0-3ac01d552063",
   "prevId": "ba5c6ed1-dfaa-4c80-b300-a8155ed5ea91",
   "version": "7",
   "dialect": "postgresql",
@@ -1746,7 +1746,7 @@
           "name": "region",
           "type": "varchar(16)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "global_rank": {
           "name": "global_rank",
@@ -1822,12 +1822,13 @@
         }
       },
       "compositePrimaryKeys": {
-        "player_ranked_team_brawlhalla_id_brawlhalla_id_one_brawlhalla_id_two_pk": {
-          "name": "player_ranked_team_brawlhalla_id_brawlhalla_id_one_brawlhalla_id_two_pk",
+        "player_ranked_team_brawlhalla_id_brawlhalla_id_one_brawlhalla_id_two_region_pk": {
+          "name": "player_ranked_team_brawlhalla_id_brawlhalla_id_one_brawlhalla_id_two_region_pk",
           "columns": [
             "brawlhalla_id",
             "brawlhalla_id_one",
-            "brawlhalla_id_two"
+            "brawlhalla_id_two",
+            "region"
           ]
         }
       },
