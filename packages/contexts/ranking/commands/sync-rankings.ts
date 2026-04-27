@@ -221,7 +221,7 @@ export async function sync2v2Page(
     return
   }
 
-  await saveTeams(playerRepo, rankings, deps.metrics)
+  await saveTeams(playerRepo, rankings, region, page, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
   const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -275,7 +275,13 @@ async function savePlayers(
   })
 }
 
-async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics: MetricsRegistry | undefined) {
+async function saveTeams(
+  repo: PlayerRepo,
+  rankings: BhApiRanking2v2[],
+  region: string,
+  page: number,
+  metrics: MetricsRegistry | undefined,
+) {
   const seenPlayers = new Set<number>()
   const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
   for (const r of rankings) {
@@ -329,6 +335,22 @@ async function saveTeams(repo: PlayerRepo, rankings: BhApiRanking2v2[], metrics:
 
   await withSaveFailureMetric(metrics, '2v2', async () => {
     await repo.batchUpsertPlaceholderPlayers(playerRows)
-    await repo.batchUpsertTeams(teamRows)
+    await repo.replaceRankPage2v2({
+      region,
+      page,
+      pageSize: 50,
+      teams: teamRows.map((r) => ({
+        brawlhallaIdOne: r.brawlhallaIdOne,
+        brawlhallaIdTwo: r.brawlhallaIdTwo,
+        teamName: r.teamName,
+        rating: r.rating,
+        peakRating: r.peakRating,
+        tier: r.tier,
+        wins: r.wins,
+        games: r.games,
+        region: r.region,
+        globalRank: r.globalRank ?? 0,
+      })),
+    })
   })
 }
