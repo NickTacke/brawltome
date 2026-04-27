@@ -580,6 +580,61 @@ export function createPlayerRepo(db: Database) {
       })
     },
 
+    async replaceRankPage2v2(args: {
+      region: string
+      page: number
+      pageSize: number
+      teams: Array<{
+        brawlhallaIdOne: number
+        brawlhallaIdTwo: number
+        teamName: string
+        rating: number
+        peakRating: number
+        tier: string
+        wins: number
+        games: number
+        region: string | null
+        globalRank: number
+      }>
+    }) {
+      const minRank = (args.page - 1) * args.pageSize + 1
+      const maxRank = args.page * args.pageSize
+
+      const rowsToInsert: Array<typeof playerRankedTeam.$inferInsert> = []
+      for (const t of args.teams) {
+        for (const ownerId of [t.brawlhallaIdOne, t.brawlhallaIdTwo]) {
+          rowsToInsert.push({
+            brawlhallaId: ownerId,
+            brawlhallaIdOne: t.brawlhallaIdOne,
+            brawlhallaIdTwo: t.brawlhallaIdTwo,
+            teamName: t.teamName,
+            rating: t.rating,
+            peakRating: t.peakRating,
+            tier: t.tier,
+            wins: t.wins,
+            games: t.games,
+            region: t.region,
+            globalRank: t.globalRank,
+          })
+        }
+      }
+
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(playerRankedTeam)
+          .where(
+            and(
+              eq(playerRankedTeam.region, args.region),
+              gte(playerRankedTeam.globalRank, minRank),
+              lte(playerRankedTeam.globalRank, maxRank),
+            ),
+          )
+        if (rowsToInsert.length > 0) {
+          await tx.insert(playerRankedTeam).values(rowsToInsert)
+        }
+      })
+    },
+
     transaction: db.transaction.bind(db),
   }
 }
