@@ -68,11 +68,28 @@ const NULL_METRICS: MetricsRegistry = {
   snapshotCounters: async () => ({}),
 }
 
+function makeSpyMetrics(): { metrics: MetricsRegistry; calls: string[] } {
+  const calls: string[] = []
+  const metrics: MetricsRegistry = {
+    incrementQueue: async () => {},
+    snapshotQueue: async () => ({}),
+    snapshotAllQueues: async () => ({}),
+    setScalar: async () => {},
+    getScalar: async () => null,
+    incrementCounter: async (key: string) => {
+      calls.push(key)
+    },
+    snapshotCounters: async () => ({}),
+  }
+  return { metrics, calls }
+}
+
 describe('sync1v1Page', () => {
   it('does not advance cursor when batchUpsertPlayers throws', async () => {
     const cursorKey = `cursor:test:save-fail:${Date.now()}`
     await redis.set(cursorKey, '5')
     const lockState: LockState = { lost: false, value: 'test-lock' }
+    const { metrics, calls } = makeSpyMetrics()
 
     const deps = {
       db: {} as never,
@@ -81,7 +98,7 @@ describe('sync1v1Page', () => {
       rankedQueue: {} as never,
       statsQueue: {} as never,
       clanQueue: {} as never,
-      metrics: NULL_METRICS,
+      metrics,
     }
 
     await expect(
@@ -90,5 +107,6 @@ describe('sync1v1Page', () => {
 
     const after = await redis.get(cursorKey)
     expect(after).toBe('5')
+    expect(calls).toContain('janitor:save_failures:1v1')
   })
 })
