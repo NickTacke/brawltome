@@ -31,6 +31,10 @@ import { readMatchmakingConfig } from './matchmaking-config'
 import { appRouter } from './router'
 import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 
+if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
+  throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
+}
+
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
 
