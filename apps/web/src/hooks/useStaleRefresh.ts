@@ -47,7 +47,8 @@ interface UseStaleRefreshResult<T> {
 export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRefreshResult<T> {
   const [data, setData] = useState<T>(opts.initialData)
   const [error, setError] = useState<Error | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [now, setNow] = useState<number>(0)
 
   const queryFnRef = useRef(opts.queryFn)
   const shouldStartRef = useRef(opts.shouldStart)
@@ -64,36 +65,53 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
   useEffect(() => {
     if (!shouldStartRef.current(initialDataRef.current)) return
     const start = Date.now()
-    const maxRefreshMs = maxRefreshMsRef.current
-    const pollMs = pollMsRef.current
-    setIsRefreshing(true)
+    setStartedAt(start)
+    setNow(start)
 
-    const interval = setInterval(async () => {
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const tick = async () => {
+      if (cancelled) return
       const elapsed = Date.now() - start
-      if (elapsed > maxRefreshMs) {
+      if (elapsed > maxRefreshMsRef.current) {
         setError(new RefreshTimeoutError())
-        setIsRefreshing(false)
-        clearInterval(interval)
+        setNow(Date.now())
         return
       }
       try {
         const next = await queryFnRef.current()
+        if (cancelled) return
         setData(next)
+        setNow(Date.now())
         if (isDoneRef.current(prevDataRef.current, next)) {
-          setIsRefreshing(false)
-          clearInterval(interval)
-        } else {
-          prevDataRef.current = next
+          setStartedAt(null)
+          return
         }
+        prevDataRef.current = next
       } catch (err) {
+        if (cancelled) return
         setError(err instanceof Error ? err : new Error(String(err)))
-        setIsRefreshing(false)
-        clearInterval(interval)
+        setNow(Date.now())
+        setStartedAt(null)
+        return
       }
-    }, pollMs)
+      timeoutId = setTimeout(tick, pollMsRef.current)
+    }
 
-    return () => clearInterval(interval)
+    timeoutId = setTimeout(tick, pollMsRef.current)
+
+    return () => {
+      cancelled = true
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
+
+  const { isRefreshing } = computeRefreshState({
+    startedAt,
+    now,
+    maxRefreshMs: maxRefreshMsRef.current,
+  })
 
   return {
     data,
