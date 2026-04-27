@@ -75,6 +75,10 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
 
+  if (error && !(error instanceof RefreshTimeoutError)) {
+    throw error
+  }
+
   if (!clan) {
     const lookupFailed = turnstileError || error instanceof RefreshTimeoutError
     return (
@@ -93,8 +97,6 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
       </div>
     )
   }
-
-  if (error && !(error instanceof RefreshTimeoutError)) throw error
 
   const members = clan.members || []
 

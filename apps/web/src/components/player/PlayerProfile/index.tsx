@@ -83,12 +83,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
 
+  if (error && !(error instanceof RefreshTimeoutError)) {
+    throw error
+  }
+
   if (!player) {
     const lookupFailed = turnstileError || error instanceof RefreshTimeoutError
     return <LookupState errored={lookupFailed} turnstile={turnstile} />
   }
-
-  if (error && !(error instanceof RefreshTimeoutError)) throw error
 
   const { allLegends, rankedTeams, aliases } = deriveDisplayLists(player)
 
