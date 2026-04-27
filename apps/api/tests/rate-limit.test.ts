@@ -18,7 +18,7 @@ afterAll(async () => {
 
 describe('overlay rate limit', () => {
   it('defines overlay action with 60 per 15 min', () => {
-    expect(RATE_LIMITS.overlay).toEqual({ max: 60, windowSec: 15 * 60 })
+    expect(RATE_LIMITS.overlay).toEqual({ max: 60, windowSec: 15 * 60, failMode: 'open' })
   })
 
   it('allows up to max, blocks beyond', async () => {
@@ -29,5 +29,21 @@ describe('overlay rate limit', () => {
     }
     const blocked = await checkRateLimit(redis, ip, 'overlay')
     expect(blocked.allowed).toBe(false)
+  })
+})
+
+describe('fail mode on Redis error', () => {
+  it('blocks fail-closed action when Redis is down', async () => {
+    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { lazyConnect: true })
+    broken.disconnect()
+    const result = await checkRateLimit(broken, `test-fail-closed-${Date.now()}`, 'discovery')
+    expect(result.allowed).toBe(false)
+  })
+
+  it('allows fail-open action when Redis is down', async () => {
+    const broken = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { lazyConnect: true })
+    broken.disconnect()
+    const result = await checkRateLimit(broken, `test-fail-open-${Date.now()}`, 'overlay')
+    expect(result.allowed).toBe(true)
   })
 })

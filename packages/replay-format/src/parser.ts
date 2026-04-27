@@ -5,6 +5,7 @@ import { parse264 } from './parser264'
 import type { ParsedReplay } from './types'
 
 export { peekFormatVersion } from './envelope'
+export { ParseBoundsError } from './errors'
 
 export function parse(raw: Uint8Array): ParsedReplay {
   const body = decodeEnvelope(raw)

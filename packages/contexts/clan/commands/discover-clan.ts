@@ -1,4 +1,4 @@
-import type { Queue } from '@brawltome/shared'
+import type { MetricsRegistry, Queue } from '@brawltome/shared'
 import { checkRateLimit, dedupKey, tryDedup } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 import { DEDUP_TTL_CLAN_SEC } from '../clan'
@@ -7,15 +7,16 @@ interface DiscoverDeps {
   redis: Redis
   clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
   clientIp: string
+  metrics?: MetricsRegistry
 }
 
 export async function discoverClan(deps: DiscoverDeps, clanId: number): Promise<{ isRefreshing: boolean }> {
-  const { redis, clanQueue, clientIp } = deps
+  const { redis, clanQueue, clientIp, metrics } = deps
 
-  const globalLimit = await checkRateLimit(redis, 'global', 'discovery:global')
+  const globalLimit = await checkRateLimit(redis, 'global', 'discovery:global', metrics)
   if (!globalLimit.allowed) return { isRefreshing: false }
 
-  const discoveryLimit = await checkRateLimit(redis, clientIp, 'discovery')
+  const discoveryLimit = await checkRateLimit(redis, clientIp, 'discovery', metrics)
   if (!discoveryLimit.allowed) return { isRefreshing: false }
 
   const canDedup = await tryDedup(redis, dedupKey('clan', clanId), DEDUP_TTL_CLAN_SEC)
