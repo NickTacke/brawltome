@@ -3,7 +3,6 @@ import { buildQueryString, parseEnum, parseInteger } from '../../lib/searchParam
 export const BRACKETS = [
   { id: '1v1', label: '1v1' },
   { id: '2v2', label: '2v2' },
-  { id: 'solo2v2', label: 'Solo 2v2' },
 ] as const
 
 export const REGIONS = [

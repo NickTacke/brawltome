@@ -193,11 +193,7 @@ export function Leaderboard() {
             ) : (
               <TableRow className="border-border hover:bg-transparent">
                 <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  {bracket === '2v2'
-                    ? 'No teams found for this region.'
-                    : bracket === 'solo2v2'
-                      ? 'No solo queue players found for this region.'
-                      : 'No players found for this region.'}
+                  {bracket === '2v2' ? 'No teams found for this region.' : 'No players found for this region.'}
                 </TableCell>
               </TableRow>
             )}
