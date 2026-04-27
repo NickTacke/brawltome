@@ -1,11 +1,12 @@
 import type { Redis } from 'ioredis'
+import type { MetricsRegistry } from './metrics'
 
 export const RATE_LIMITS = {
-  discovery: { max: 20, windowSec: 15 * 60 },
-  refresh: { max: 20, windowSec: 15 * 60 },
-  'discovery:global': { max: 30, windowSec: 15 * 60 },
-  overlay: { max: 60, windowSec: 15 * 60 },
-  ingest: { max: 60, windowSec: 15 * 60 },
+  discovery: { max: 20, windowSec: 15 * 60, failMode: 'closed' as const },
+  refresh: { max: 20, windowSec: 15 * 60, failMode: 'open' as const },
+  'discovery:global': { max: 30, windowSec: 15 * 60, failMode: 'closed' as const },
+  overlay: { max: 60, windowSec: 15 * 60, failMode: 'open' as const },
+  ingest: { max: 60, windowSec: 15 * 60, failMode: 'closed' as const },
 } as const
 
 export type RateLimitAction = keyof typeof RATE_LIMITS
@@ -23,8 +24,13 @@ export interface RateLimitResult {
   retryAfter: number
 }
 
-export async function checkRateLimit(redis: Redis, ip: string, action: RateLimitAction): Promise<RateLimitResult> {
-  const { max, windowSec } = RATE_LIMITS[action]
+export async function checkRateLimit(
+  redis: Redis,
+  ip: string,
+  action: RateLimitAction,
+  metrics?: MetricsRegistry,
+): Promise<RateLimitResult> {
+  const { max, windowSec, failMode } = RATE_LIMITS[action]
   const key = `ratelimit:${action}:${ip}`
 
   try {
@@ -37,7 +43,11 @@ export async function checkRateLimit(redis: Redis, ip: string, action: RateLimit
 
     return { allowed: true, current, retryAfter: 0 }
   } catch (err) {
-    console.error(`[RATE_LIMIT] Redis error for ${action}:${ip}:`, err)
+    console.error(`[RATE_LIMIT] Redis error for ${action}:${ip} (failMode=${failMode}):`, err)
+    await metrics?.incrementCounter(`ratelimit:redis_errors:${action}:${failMode}`)
+    if (failMode === 'closed') {
+      return { allowed: false, current: 0, retryAfter: windowSec }
+    }
     return { allowed: true, current: 0, retryAfter: 0 }
   }
 }
