@@ -72,4 +72,49 @@ describe('fetch hardening', () => {
       html.stop()
     }
   })
+
+  it('routes body-read timeout to bhapi:timeouts not bhapi:json_errors', async () => {
+    // Server sends headers fast (200 OK) but stalls in the body - exactly the body-read
+    // timeout case where AbortSignal.timeout fires during res.json().
+    const slowBody = Bun.serve({
+      port: 0,
+      async fetch() {
+        // Stream that emits headers immediately but stalls the body.
+        const stream = new ReadableStream({
+          start(controller) {
+            // Send a partial JSON token, then never close.
+            controller.enqueue(new TextEncoder().encode('{'))
+            // intentionally do not close - body read will timeout
+          },
+        })
+        return new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    })
+
+    const counters: string[] = []
+    const metrics = {
+      incrementCounter: async (key: string) => {
+        counters.push(key)
+      },
+    }
+
+    try {
+      const client = new BhApiClient({
+        apiKey: 'test',
+        baseUrl: `http://localhost:${slowBody.port}`,
+        fetchTimeoutMs: 100,
+        metrics,
+      })
+      await client.init()
+      await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Brawlhalla API timeout for/)
+    } finally {
+      slowBody.stop()
+    }
+
+    expect(counters).toContain('bhapi:timeouts')
+    expect(counters).not.toContain('bhapi:json_errors')
+  })
 })
