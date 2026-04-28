@@ -5,7 +5,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { getLeaderboard } from '../queries/get-leaderboard'
 import { createRankingRepo } from '../ranking.repo'
 
-const TEST_REGION = 'test-lb'
+const TEST_REGION = 'TEST-LB'
 const TEST_IDS = Array.from({ length: 30 }, (_, i) => 993000 + i)
 
 const playerRepo = createPlayerRepo(db)
