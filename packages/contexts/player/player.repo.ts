@@ -670,10 +670,17 @@ export function createPlayerRepo(db: Database) {
         games: number
         globalRank: number
       }>
-    }) {
+    }): Promise<{ vacatedSourcePages: number[] }> {
       const minRank = (args.page - 1) * args.pageSize + 1
       const maxRank = args.page * args.pageSize
       const region = normalizeRegion(args.region)
+
+      const batchOwnerIds = new Set<number>()
+      for (const t of args.teams) {
+        batchOwnerIds.add(t.brawlhallaIdOne)
+        batchOwnerIds.add(t.brawlhallaIdTwo)
+      }
+      const ownerIdList = [...batchOwnerIds]
 
       const rowsToInsert: Array<typeof playerRankedTeam.$inferInsert> = []
       for (const t of args.teams) {
@@ -696,7 +703,35 @@ export function createPlayerRepo(db: Database) {
         }
       }
 
-      await db.transaction(async (tx) => {
+      return await db.transaction(async (tx) => {
+        const moverRows =
+          ownerIdList.length > 0
+            ? await tx
+                .select({
+                  one: playerRankedTeam.brawlhallaIdOne,
+                  two: playerRankedTeam.brawlhallaIdTwo,
+                  rank: playerRankedTeam.globalRank,
+                })
+                .from(playerRankedTeam)
+                .where(
+                  and(
+                    eq(playerRankedTeam.region, region),
+                    inArray(playerRankedTeam.brawlhallaId, ownerIdList),
+                    or(lt(playerRankedTeam.globalRank, minRank), gt(playerRankedTeam.globalRank, maxRank)),
+                  ),
+                )
+            : []
+        const teamSourcePages = new Set<number>()
+        const seenTeams = new Set<string>()
+        for (const r of moverRows) {
+          if (r.rank == null || r.rank <= 0) continue
+          const key = `${Math.min(r.one, r.two)}:${Math.max(r.one, r.two)}`
+          if (seenTeams.has(key)) continue
+          seenTeams.add(key)
+          teamSourcePages.add(Math.ceil(r.rank / args.pageSize))
+        }
+        const vacatedSourcePages = [...teamSourcePages]
+
         await tx
           .delete(playerRankedTeam)
           .where(
@@ -729,6 +764,8 @@ export function createPlayerRepo(db: Database) {
               },
             })
         }
+
+        return { vacatedSourcePages }
       })
     },
 
