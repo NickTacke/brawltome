@@ -73,6 +73,11 @@ export function startJanitor(deps: JanitorDeps) {
     }
 
     try {
+      // Drain pending resyncs first so vacated source pages get re-fetched promptly.
+      // drainResyncQueue respects token + time budget internally, so it's safe to run before the tick skip check.
+      await time('drain 1v1 resync', () => drainResyncQueue(deps, playerRepo, '1v1', lockState, tickStart))
+      await time('drain 2v2 resync', () => drainResyncQueue(deps, playerRepo, '2v2', lockState, tickStart))
+
       const tokens = deps.bhapi.remainingTokens('background')
       if (tokens < JANITOR_MIN_TOKENS) {
         console.log(`[janitor] tick ${tick} skipped: only ${tokens} tokens remaining`)
@@ -110,10 +115,26 @@ export function startJanitor(deps: JanitorDeps) {
       const coldRegionIndex = (tick - 1) % REGIONS.length
       const coldRegion = REGIONS[coldRegionIndex]
       await time(`1v1 ${coldRegion}`, () =>
-        sync1v1Page(deps, playerRepo, coldRegion, HOT_REGIONAL_PAGES + 1, MAX_COLD_PAGE, `cursor:region:1v1:${coldRegion}`, lockState),
+        sync1v1Page(
+          deps,
+          playerRepo,
+          coldRegion,
+          HOT_REGIONAL_PAGES + 1,
+          MAX_COLD_PAGE,
+          `cursor:region:1v1:${coldRegion}`,
+          lockState,
+        ),
       )
       await time(`2v2 ${coldRegion}`, () =>
-        sync2v2Page(deps, playerRepo, coldRegion, HOT_REGIONAL_PAGES + 1, MAX_COLD_PAGE, `cursor:region:2v2:${coldRegion}`, lockState),
+        sync2v2Page(
+          deps,
+          playerRepo,
+          coldRegion,
+          HOT_REGIONAL_PAGES + 1,
+          MAX_COLD_PAGE,
+          `cursor:region:2v2:${coldRegion}`,
+          lockState,
+        ),
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
@@ -194,12 +215,7 @@ function normalizeRegionKey(region: Region | 'all'): string {
   return region === 'all' ? 'all' : region.toUpperCase()
 }
 
-async function enqueueResyncs(
-  redis: Redis,
-  bracket: '1v1' | '2v2',
-  region: Region | 'all',
-  pages: number[],
-) {
+async function enqueueResyncs(redis: Redis, bracket: '1v1' | '2v2', region: Region | 'all', pages: number[]) {
   const filtered = pages.filter((p) => shouldEnqueueSourcePage(p, region))
   if (filtered.length === 0) return
   const regionKey = normalizeRegionKey(region)
@@ -284,6 +300,59 @@ export async function sync2v2Page(
   if (cursorKey !== null) {
     const nextPage = page + 1 > maxPage ? startPage : page + 1
     await deps.redis.set(cursorKey, String(nextPage))
+  }
+}
+
+const TICK_BUDGET_MS = 30_000
+
+export async function drainResyncQueue(
+  deps: JanitorDeps,
+  playerRepo: PlayerRepo,
+  bracket: '1v1' | '2v2',
+  lockState: LockState,
+  tickStart: number,
+) {
+  const queueKey = `resync:${bracket}:queue`
+  const members = await deps.redis.smembers(queueKey)
+  if (members.length === 0) return
+  // SMEMBERS + DEL is safe under single-instance lock — no other writer between read and delete.
+  await deps.redis.del(queueKey)
+
+  const remaining: string[] = []
+  for (let i = 0; i < members.length; i++) {
+    if (lockState.lost) {
+      remaining.push(...members.slice(i))
+      break
+    }
+    if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) {
+      remaining.push(...members.slice(i))
+      break
+    }
+    if (performance.now() - tickStart > TICK_BUDGET_MS) {
+      remaining.push(...members.slice(i))
+      break
+    }
+    const member = members[i]
+    if (!member) continue
+    const sep = member.indexOf(':')
+    if (sep < 0) continue
+    const region = member.slice(0, sep) as Region | 'all'
+    const page = Number.parseInt(member.slice(sep + 1), 10)
+    if (!Number.isFinite(page)) continue
+    try {
+      if (bracket === '1v1') {
+        await sync1v1Page(deps, playerRepo, region, page, page, null, lockState, { depth: 1 })
+      } else {
+        await sync2v2Page(deps, playerRepo, region, page, page, null, lockState, { depth: 1 })
+      }
+    } catch (err) {
+      console.error(`[janitor] resync failed ${bracket} ${member}:`, err)
+      await deps.metrics?.incrementCounter('janitor:resync_failures').catch(() => {})
+    }
+  }
+
+  if (remaining.length > 0) {
+    await deps.redis.sadd(queueKey, ...remaining)
   }
 }
 
