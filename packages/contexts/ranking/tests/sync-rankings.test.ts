@@ -275,7 +275,8 @@ describe('drainResyncQueue', () => {
     expect(remaining).toEqual([])
     expect(calls.length).toBe(3)
     const sorted = calls.map((c) => `${c.region}:${c.page}`).sort()
-    expect(sorted).toEqual(['BRZ:9', 'EU:7', 'US-E:5'])
+    // Drain lowercases the region back to BHAPI form (queue stores uppercase via normalizeRegionKey).
+    expect(sorted).toEqual(['brz:9', 'eu:7', 'us-e:5'])
   })
 
   it('stops draining and re-adds remaining members when budget runs out mid-loop', async () => {

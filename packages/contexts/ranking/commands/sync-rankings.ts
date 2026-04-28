@@ -313,30 +313,22 @@ export async function drainResyncQueue(
   tickStart: number,
 ) {
   const queueKey = `resync:${bracket}:queue`
-  const members = await deps.redis.smembers(queueKey)
-  if (members.length === 0) return
-  // SMEMBERS + DEL is safe under single-instance lock — no other writer between read and delete.
-  await deps.redis.del(queueKey)
+  // SPOP per iteration: each entry leaves the set only after we own it. A crash mid-loop
+  // loses at most the in-flight entry, not the rest of the backlog. Budget guards (lock,
+  // tokens, wall clock) check FIRST so we don't pop entries we won't process.
+  while (true) {
+    if (lockState.lost) break
+    if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) break
+    if (performance.now() - tickStart > TICK_BUDGET_MS) break
 
-  const remaining: string[] = []
-  for (let i = 0; i < members.length; i++) {
-    if (lockState.lost) {
-      remaining.push(...members.slice(i))
-      break
-    }
-    if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) {
-      remaining.push(...members.slice(i))
-      break
-    }
-    if (performance.now() - tickStart > TICK_BUDGET_MS) {
-      remaining.push(...members.slice(i))
-      break
-    }
-    const member = members[i]
-    if (!member) continue
+    const member = await deps.redis.spop(queueKey)
+    if (!member) break
+
     const sep = member.indexOf(':')
     if (sep < 0) continue
-    const region = member.slice(0, sep) as Region | 'all'
+    const rawRegion = member.slice(0, sep)
+    // Queue members are stored uppercase via normalizeRegionKey; BHAPI region paths are lowercase.
+    const region = rawRegion === 'all' ? 'all' : (rawRegion.toLowerCase() as Region)
     const page = Number.parseInt(member.slice(sep + 1), 10)
     if (!Number.isFinite(page)) continue
     try {
@@ -349,10 +341,6 @@ export async function drainResyncQueue(
       console.error(`[janitor] resync failed ${bracket} ${member}:`, err)
       await deps.metrics?.incrementCounter('janitor:resync_failures').catch(() => {})
     }
-  }
-
-  if (remaining.length > 0) {
-    await deps.redis.sadd(queueKey, ...remaining)
   }
 }
 
