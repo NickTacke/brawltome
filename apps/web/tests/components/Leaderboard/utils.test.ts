@@ -33,7 +33,7 @@ describe('parseLeaderboardSearchParams', () => {
 
   it('clamps page to max', () => {
     const result = parseLeaderboardSearchParams(new URLSearchParams('page=9999'))
-    expect(result.page).toBe(200)
+    expect(result.page).toBe(100)
   })
 
   it('clamps page below 1 to 1', () => {
