@@ -172,6 +172,55 @@ describe('sync1v1Page', () => {
     const cursorScanAfter = await redis.keys('cursor:test:explicit:*')
     expect(cursorScanAfter.length).toBe(0)
   })
+
+  it('enqueues vacated source pages to resync set at depth=0', async () => {
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+    const queueKey = 'resync:1v1:queue'
+    await redis.del(queueKey)
+
+    const deps = {
+      db: {} as never,
+      bhapi: makeFakeBhapi([{ ...SAMPLE, rank: 151 }]),
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics: NULL_METRICS,
+    }
+    const repo = makeFakeRepo()
+    ;(repo as unknown as { replaceRankPage1v1: () => Promise<{ vacatedSourcePages: number[] }> }).replaceRankPage1v1 =
+      async () => ({ vacatedSourcePages: [3, 5, 41, 1] }) // page 1 filtered (hot), 41 filtered (out of cap), 3+5 kept
+
+    await sync1v1Page(deps, repo, 'us-e', 4, 4, null, lockState, { depth: 0 })
+
+    const queued = await redis.smembers(queueKey)
+    await redis.del(queueKey)
+    expect(queued.sort()).toEqual(['US-E:3', 'US-E:5'])
+  })
+
+  it('does not enqueue at depth=1 even when source pages are vacated', async () => {
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+    const queueKey = 'resync:1v1:queue'
+    await redis.del(queueKey)
+
+    const deps = {
+      db: {} as never,
+      bhapi: makeFakeBhapi([{ ...SAMPLE, rank: 151 }]),
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics: NULL_METRICS,
+    }
+    const repo = makeFakeRepo()
+    ;(repo as unknown as { replaceRankPage1v1: () => Promise<{ vacatedSourcePages: number[] }> }).replaceRankPage1v1 =
+      async () => ({ vacatedSourcePages: [3, 5] })
+
+    await sync1v1Page(deps, repo, 'us-e', 4, 4, null, lockState, { depth: 1 })
+
+    const queued = await redis.smembers(queueKey)
+    expect(queued).toEqual([])
+  })
 })
 
 describe('renewLock heartbeat error handling', () => {

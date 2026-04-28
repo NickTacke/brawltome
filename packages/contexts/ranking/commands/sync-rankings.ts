@@ -182,6 +182,31 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
 }
 
+function shouldEnqueueSourcePage(page: number, region: Region | 'all'): boolean {
+  if (page > MAX_COLD_PAGE) return false
+  // 'all' has its own hot zone (HOT_PAGES = 10); regional has HOT_REGIONAL_PAGES = 2.
+  const hotZone = region === 'all' ? HOT_PAGES : HOT_REGIONAL_PAGES
+  if (page <= hotZone) return false
+  return true
+}
+
+function normalizeRegionKey(region: Region | 'all'): string {
+  return region === 'all' ? 'all' : region.toUpperCase()
+}
+
+async function enqueueResyncs(
+  redis: Redis,
+  bracket: '1v1' | '2v2',
+  region: Region | 'all',
+  pages: number[],
+) {
+  const filtered = pages.filter((p) => shouldEnqueueSourcePage(p, region))
+  if (filtered.length === 0) return
+  const regionKey = normalizeRegionKey(region)
+  const members = filtered.map((p) => `${regionKey}:${p}`)
+  await redis.sadd(`resync:${bracket}:queue`, ...members)
+}
+
 export type SyncPageOpts = { depth: 0 | 1 }
 
 export async function sync1v1Page(
@@ -206,8 +231,8 @@ export async function sync1v1Page(
   }
 
   await savePlayers(playerRepo, rankings, deps.metrics)
-  // result.vacatedSourcePages and opts.depth are consumed by source-page enqueue logic in Task 6.
-  // depth=0 (top-level tick): enqueue resyncs. depth=1 (drained from queue): skip to guarantee termination.
+  // depth=0 (top-level tick): enqueue resyncs for vacated source pages.
+  // depth=1 (drained from queue): skip enqueueing to guarantee termination.
   const result = await playerRepo.replaceRankPage1v1({
     region,
     page,
@@ -215,8 +240,10 @@ export async function sync1v1Page(
     entries: rankings.map((r) => ({ brawlhallaId: r.brawlhalla_id, rank: r.rank })),
   })
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
-  void opts
-  void result
+
+  if (opts.depth === 0 && result.vacatedSourcePages.length > 0) {
+    await enqueueResyncs(deps.redis, '1v1', region, result.vacatedSourcePages)
+  }
 
   if (cursorKey !== null) {
     const nextPage = page + 1 > maxPage ? startPage : page + 1
@@ -245,11 +272,14 @@ export async function sync2v2Page(
     return
   }
 
-  // result.vacatedSourcePages and opts.depth are consumed by source-page enqueue logic in Task 6.
+  // depth=0 (top-level tick): enqueue resyncs for vacated source pages.
+  // depth=1 (drained from queue): skip enqueueing to guarantee termination.
   const result = await saveTeams(playerRepo, rankings, region, page, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
-  void opts
-  void result
+
+  if (opts.depth === 0 && result.vacatedSourcePages.length > 0) {
+    await enqueueResyncs(deps.redis, '2v2', region, result.vacatedSourcePages)
+  }
 
   if (cursorKey !== null) {
     const nextPage = page + 1 > maxPage ? startPage : page + 1
