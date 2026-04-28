@@ -122,4 +122,116 @@ describe('replaceRankPage2v2', () => {
     expect(selfTeam.length).toBe(1)
     expect(selfTeam[0]?.brawlhallaId).toBe(992001)
   })
+
+  it('returns empty vacatedSourcePages when no batch team exists outside the page range', async () => {
+    const result = await playerRepo.replaceRankPage2v2({
+      region: TEST_REGION,
+      page: 1,
+      pageSize: 50,
+      teams: [
+        {
+          brawlhallaIdOne: TEST_IDS[0],
+          brawlhallaIdTwo: TEST_IDS[1],
+          teamName: 'A+B',
+          rating: 2000,
+          peakRating: 2000,
+          tier: 'Gold',
+          wins: 10,
+          games: 20,
+          globalRank: 1,
+        },
+      ],
+    })
+    expect(result.vacatedSourcePages).toEqual([])
+  })
+
+  it('returns distinct source pages for cross-page mover teams', async () => {
+    await db.delete(playerRankedTeam).where(eq(playerRankedTeam.region, TEST_REGION))
+    await db.insert(playerRankedTeam).values([
+      {
+        brawlhallaId: TEST_IDS[0],
+        brawlhallaIdOne: TEST_IDS[0],
+        brawlhallaIdTwo: TEST_IDS[1],
+        teamName: 'A+B',
+        rating: 1500,
+        peakRating: 1500,
+        tier: 'Gold',
+        wins: 1,
+        games: 2,
+        region: TEST_REGION,
+        globalRank: 60,
+      },
+      {
+        brawlhallaId: TEST_IDS[1],
+        brawlhallaIdOne: TEST_IDS[0],
+        brawlhallaIdTwo: TEST_IDS[1],
+        teamName: 'A+B',
+        rating: 1500,
+        peakRating: 1500,
+        tier: 'Gold',
+        wins: 1,
+        games: 2,
+        region: TEST_REGION,
+        globalRank: 60,
+      },
+      {
+        brawlhallaId: TEST_IDS[2],
+        brawlhallaIdOne: TEST_IDS[2],
+        brawlhallaIdTwo: TEST_IDS[3],
+        teamName: 'C+D',
+        rating: 1300,
+        peakRating: 1300,
+        tier: 'Silver',
+        wins: 1,
+        games: 2,
+        region: TEST_REGION,
+        globalRank: 105,
+      },
+      {
+        brawlhallaId: TEST_IDS[3],
+        brawlhallaIdOne: TEST_IDS[2],
+        brawlhallaIdTwo: TEST_IDS[3],
+        teamName: 'C+D',
+        rating: 1300,
+        peakRating: 1300,
+        tier: 'Silver',
+        wins: 1,
+        games: 2,
+        region: TEST_REGION,
+        globalRank: 105,
+      },
+    ])
+
+    const result = await playerRepo.replaceRankPage2v2({
+      region: TEST_REGION,
+      page: 4,
+      pageSize: 50,
+      teams: [
+        {
+          brawlhallaIdOne: TEST_IDS[0],
+          brawlhallaIdTwo: TEST_IDS[1],
+          teamName: 'A+B',
+          rating: 1700,
+          peakRating: 1700,
+          tier: 'Plat',
+          wins: 1,
+          games: 2,
+          globalRank: 151,
+        },
+        {
+          brawlhallaIdOne: TEST_IDS[2],
+          brawlhallaIdTwo: TEST_IDS[3],
+          teamName: 'C+D',
+          rating: 1700,
+          peakRating: 1700,
+          tier: 'Plat',
+          wins: 1,
+          games: 2,
+          globalRank: 152,
+        },
+      ],
+    })
+
+    expect(result.vacatedSourcePages.sort()).toEqual([2, 3])
+  })
 })
