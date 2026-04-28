@@ -170,4 +170,61 @@ describe('replaceRankPage1v1', () => {
     expect(upper.length).toBe(1)
     expect(lower.length).toBe(0)
   })
+
+  it('returns empty vacatedSourcePages when no batch ID exists outside the page range', async () => {
+    await db.delete(playerRank1v1).where(eq(playerRank1v1.region, TEST_REGION))
+
+    const result = await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 1,
+      pageSize: 50,
+      entries: [
+        { brawlhallaId: 991001, rank: 1 },
+        { brawlhallaId: 991002, rank: 2 },
+      ],
+    })
+
+    expect(result.vacatedSourcePages).toEqual([])
+  })
+
+  it('returns distinct source pages when batch IDs span multiple foreign pages', async () => {
+    await db.delete(playerRank1v1).where(eq(playerRank1v1.region, TEST_REGION))
+
+    // Seed: 991001 at rank 5 (page 1), 991002 at rank 60 (page 2), 991003 at rank 105 (page 3)
+    await db.insert(playerRank1v1).values([
+      { brawlhallaId: 991001, region: TEST_REGION, rank: 5 },
+      { brawlhallaId: 991002, region: TEST_REGION, rank: 60 },
+      { brawlhallaId: 991003, region: TEST_REGION, rank: 105 },
+    ])
+
+    // Sync page 4 (ranks 151-200) with all three IDs at new ranks within the page
+    const result = await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 4,
+      pageSize: 50,
+      entries: [
+        { brawlhallaId: 991001, rank: 151 },
+        { brawlhallaId: 991002, rank: 152 },
+        { brawlhallaId: 991003, rank: 153 },
+      ],
+    })
+
+    expect(result.vacatedSourcePages.sort()).toEqual([1, 2, 3])
+  })
+
+  it('does not list the current page as a vacated source page', async () => {
+    await db.delete(playerRank1v1).where(eq(playerRank1v1.region, TEST_REGION))
+
+    // 991001 currently at rank 60 (page 2). New batch keeps them on page 2.
+    await db.insert(playerRank1v1).values([{ brawlhallaId: 991001, region: TEST_REGION, rank: 60 }])
+
+    const result = await playerRepo.replaceRankPage1v1({
+      region: TEST_REGION,
+      page: 2,
+      pageSize: 50,
+      entries: [{ brawlhallaId: 991001, rank: 75 }],
+    })
+
+    expect(result.vacatedSourcePages).toEqual([])
+  })
 })
