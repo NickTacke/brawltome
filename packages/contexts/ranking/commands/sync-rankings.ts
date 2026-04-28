@@ -6,8 +6,9 @@ import type { Redis } from 'ioredis'
 import { JANITOR_MIN_TOKENS } from '../ranking'
 
 const REGIONS: Region[] = ['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me', 'sa']
-const HOT_PAGES = 10
-const MAX_COLD_PAGE = 200
+export const HOT_PAGES = 10
+export const MAX_COLD_PAGE = 40
+export const HOT_REGIONAL_PAGES = 2
 const COLD_TICK_INTERVAL = 10
 const LOCK_KEY = 'janitor:lock'
 const LOCK_TTL_SEC = 60
@@ -92,25 +93,27 @@ export function startJanitor(deps: JanitorDeps) {
         )
       }
 
-      // Hot regional: refresh page 1 of one region per tick. Each region's top 50 stays fresh
-      // within ~9 minutes instead of the ~30 hours it'd take via cold rotation alone.
+      // Hot regional: refresh pages 1-2 of one region per tick. Each region's top 100 stays fresh
+      // within ~18 minutes instead of the ~30 hours it'd take via cold rotation alone.
       const hotRegionIndex = (tick - 1) % REGIONS.length
       const hotRegion = REGIONS[hotRegionIndex]
-      await time(`hot 1v1 ${hotRegion}`, () =>
-        sync1v1Page(deps, playerRepo, hotRegion, 1, 1, `cursor:region:hot:1v1:${hotRegion}`, lockState),
-      )
-      await time(`hot 2v2 ${hotRegion}`, () =>
-        sync2v2Page(deps, playerRepo, hotRegion, 1, 1, `cursor:region:hot:2v2:${hotRegion}`, lockState),
-      )
+      for (let p = 1; p <= HOT_REGIONAL_PAGES; p++) {
+        await time(`hot 1v1 ${hotRegion} p${p}`, () =>
+          sync1v1Page(deps, playerRepo, hotRegion, p, p, `cursor:region:hot:1v1:${hotRegion}:p${p}`, lockState),
+        )
+        await time(`hot 2v2 ${hotRegion} p${p}`, () =>
+          sync2v2Page(deps, playerRepo, hotRegion, p, p, `cursor:region:hot:2v2:${hotRegion}:p${p}`, lockState),
+        )
+      }
 
-      // Cold regional: rotate 1 region per tick across pages 2..MAX_COLD_PAGE.
+      // Cold regional: rotate 1 region per tick across pages HOT_REGIONAL_PAGES+1..MAX_COLD_PAGE.
       const coldRegionIndex = (tick - 1) % REGIONS.length
       const coldRegion = REGIONS[coldRegionIndex]
       await time(`1v1 ${coldRegion}`, () =>
-        sync1v1Page(deps, playerRepo, coldRegion, 2, MAX_COLD_PAGE, `cursor:region:1v1:${coldRegion}`, lockState),
+        sync1v1Page(deps, playerRepo, coldRegion, HOT_REGIONAL_PAGES + 1, MAX_COLD_PAGE, `cursor:region:1v1:${coldRegion}`, lockState),
       )
       await time(`2v2 ${coldRegion}`, () =>
-        sync2v2Page(deps, playerRepo, coldRegion, 2, MAX_COLD_PAGE, `cursor:region:2v2:${coldRegion}`, lockState),
+        sync2v2Page(deps, playerRepo, coldRegion, HOT_REGIONAL_PAGES + 1, MAX_COLD_PAGE, `cursor:region:2v2:${coldRegion}`, lockState),
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
