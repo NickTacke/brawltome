@@ -182,37 +182,46 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
 }
 
+export type SyncPageOpts = { depth: 0 | 1 }
+
 export async function sync1v1Page(
   deps: JanitorDeps,
   playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
-  cursorKey: string,
+  cursorKey: string | null,
   lockState: LockState,
+  opts: SyncPageOpts = { depth: 0 },
 ) {
   if (lockState.lost) throw new Error('janitor lock lost during tick')
-  const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
+  const page = cursorKey === null ? startPage : await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
   const rankings = await deps.bhapi.getRankings1v1(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
-    await deps.redis.set(cursorKey, String(startPage))
+    if (cursorKey !== null) await deps.redis.set(cursorKey, String(startPage))
     return
   }
 
   await savePlayers(playerRepo, rankings, deps.metrics)
-  await playerRepo.replaceRankPage1v1({
+  // result.vacatedSourcePages and opts.depth are consumed by source-page enqueue logic in Task 6.
+  // depth=0 (top-level tick): enqueue resyncs. depth=1 (drained from queue): skip to guarantee termination.
+  const result = await playerRepo.replaceRankPage1v1({
     region,
     page,
     pageSize: 50,
     entries: rankings.map((r) => ({ brawlhallaId: r.brawlhalla_id, rank: r.rank })),
   })
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
+  void opts
+  void result
 
-  const nextPage = page + 1 > maxPage ? startPage : page + 1
-  await deps.redis.set(cursorKey, String(nextPage))
+  if (cursorKey !== null) {
+    const nextPage = page + 1 > maxPage ? startPage : page + 1
+    await deps.redis.set(cursorKey, String(nextPage))
+  }
 }
 
 export async function sync2v2Page(
@@ -221,25 +230,31 @@ export async function sync2v2Page(
   region: Region | 'all',
   startPage: number,
   maxPage: number,
-  cursorKey: string,
+  cursorKey: string | null,
   lockState: LockState,
+  opts: SyncPageOpts = { depth: 0 },
 ) {
   if (lockState.lost) throw new Error('janitor lock lost during tick')
-  const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
+  const page = cursorKey === null ? startPage : await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
   const rankings = await deps.bhapi.getRankings2v2(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
-    await deps.redis.set(cursorKey, String(startPage))
+    if (cursorKey !== null) await deps.redis.set(cursorKey, String(startPage))
     return
   }
 
-  await saveTeams(playerRepo, rankings, region, page, deps.metrics)
+  // result.vacatedSourcePages and opts.depth are consumed by source-page enqueue logic in Task 6.
+  const result = await saveTeams(playerRepo, rankings, region, page, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
+  void opts
+  void result
 
-  const nextPage = page + 1 > maxPage ? startPage : page + 1
-  await deps.redis.set(cursorKey, String(nextPage))
+  if (cursorKey !== null) {
+    const nextPage = page + 1 > maxPage ? startPage : page + 1
+    await deps.redis.set(cursorKey, String(nextPage))
+  }
 }
 
 async function withSaveFailureMetric<T>(
@@ -295,7 +310,7 @@ export async function saveTeams(
   region: string,
   page: number,
   metrics: MetricsRegistry | undefined,
-) {
+): Promise<{ vacatedSourcePages: number[] }> {
   const seenPlayers = new Set<number>()
   const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
   for (const r of rankings) {
@@ -341,9 +356,9 @@ export async function saveTeams(
     })
   }
 
-  await withSaveFailureMetric(metrics, '2v2', async () => {
+  return await withSaveFailureMetric(metrics, '2v2', async () => {
     await repo.batchUpsertPlaceholderPlayers(playerRows)
-    await repo.replaceRankPage2v2({
+    return await repo.replaceRankPage2v2({
       region,
       page,
       pageSize: 50,

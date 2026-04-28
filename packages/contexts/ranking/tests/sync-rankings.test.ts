@@ -148,6 +148,30 @@ describe('sync1v1Page', () => {
     const after = await redis.get(cursorKey)
     expect(after).toBe('5')
   })
+
+  it('with cursorKey=null syncs the explicit page and does not touch any cursor', async () => {
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+    const cursorScanBefore = await redis.keys('cursor:test:explicit:*')
+    expect(cursorScanBefore.length).toBe(0)
+
+    const deps = {
+      db: {} as never,
+      bhapi: makeFakeBhapi([{ ...SAMPLE, rank: 75 }]),
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics: NULL_METRICS,
+    }
+    const repo = makeFakeRepo()
+    ;(repo as unknown as { replaceRankPage1v1: () => Promise<{ vacatedSourcePages: number[] }> }).replaceRankPage1v1 =
+      async () => ({ vacatedSourcePages: [] })
+
+    await sync1v1Page(deps, repo, 'us-e', 2, 2, null, lockState, { depth: 1 })
+
+    const cursorScanAfter = await redis.keys('cursor:test:explicit:*')
+    expect(cursorScanAfter.length).toBe(0)
+  })
 })
 
 describe('renewLock heartbeat error handling', () => {
