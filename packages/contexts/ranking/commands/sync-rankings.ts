@@ -6,8 +6,9 @@ import type { Redis } from 'ioredis'
 import { JANITOR_MIN_TOKENS } from '../ranking'
 
 const REGIONS: Region[] = ['us-e', 'eu', 'sea', 'brz', 'aus', 'us-w', 'jpn', 'me', 'sa']
-const HOT_PAGES = 10
-const MAX_COLD_PAGE = 200
+export const HOT_PAGES = 10
+export const MAX_COLD_PAGE = 40
+export const HOT_REGIONAL_PAGES = 2
 const COLD_TICK_INTERVAL = 10
 const LOCK_KEY = 'janitor:lock'
 const LOCK_TTL_SEC = 60
@@ -72,6 +73,11 @@ export function startJanitor(deps: JanitorDeps) {
     }
 
     try {
+      // Drain pending resyncs first so vacated source pages get re-fetched promptly.
+      // drainResyncQueue respects token + time budget internally, so it's safe to run before the tick skip check.
+      await time('drain 1v1 resync', () => drainResyncQueue(deps, playerRepo, '1v1', lockState, tickStart))
+      await time('drain 2v2 resync', () => drainResyncQueue(deps, playerRepo, '2v2', lockState, tickStart))
+
       const tokens = deps.bhapi.remainingTokens('background')
       if (tokens < JANITOR_MIN_TOKENS) {
         console.log(`[janitor] tick ${tick} skipped: only ${tokens} tokens remaining`)
@@ -92,25 +98,43 @@ export function startJanitor(deps: JanitorDeps) {
         )
       }
 
-      // Hot regional: refresh page 1 of one region per tick. Each region's top 50 stays fresh
-      // within ~9 minutes instead of the ~30 hours it'd take via cold rotation alone.
+      // Hot regional: refresh pages 1-2 of one region per tick. Each region's top 100 stays fresh
+      // within ~18 minutes instead of the ~30 hours it'd take via cold rotation alone.
       const hotRegionIndex = (tick - 1) % REGIONS.length
       const hotRegion = REGIONS[hotRegionIndex]
-      await time(`hot 1v1 ${hotRegion}`, () =>
-        sync1v1Page(deps, playerRepo, hotRegion, 1, 1, `cursor:region:hot:1v1:${hotRegion}`, lockState),
-      )
-      await time(`hot 2v2 ${hotRegion}`, () =>
-        sync2v2Page(deps, playerRepo, hotRegion, 1, 1, `cursor:region:hot:2v2:${hotRegion}`, lockState),
-      )
+      for (let p = 1; p <= HOT_REGIONAL_PAGES; p++) {
+        await time(`hot 1v1 ${hotRegion} p${p}`, () =>
+          sync1v1Page(deps, playerRepo, hotRegion, p, p, `cursor:region:hot:1v1:${hotRegion}:p${p}`, lockState),
+        )
+        await time(`hot 2v2 ${hotRegion} p${p}`, () =>
+          sync2v2Page(deps, playerRepo, hotRegion, p, p, `cursor:region:hot:2v2:${hotRegion}:p${p}`, lockState),
+        )
+      }
 
-      // Cold regional: rotate 1 region per tick across pages 2..MAX_COLD_PAGE.
+      // Cold regional: rotate 1 region per tick across pages HOT_REGIONAL_PAGES+1..MAX_COLD_PAGE.
       const coldRegionIndex = (tick - 1) % REGIONS.length
       const coldRegion = REGIONS[coldRegionIndex]
       await time(`1v1 ${coldRegion}`, () =>
-        sync1v1Page(deps, playerRepo, coldRegion, 2, MAX_COLD_PAGE, `cursor:region:1v1:${coldRegion}`, lockState),
+        sync1v1Page(
+          deps,
+          playerRepo,
+          coldRegion,
+          HOT_REGIONAL_PAGES + 1,
+          MAX_COLD_PAGE,
+          `cursor:region:1v1:${coldRegion}`,
+          lockState,
+        ),
       )
       await time(`2v2 ${coldRegion}`, () =>
-        sync2v2Page(deps, playerRepo, coldRegion, 2, MAX_COLD_PAGE, `cursor:region:2v2:${coldRegion}`, lockState),
+        sync2v2Page(
+          deps,
+          playerRepo,
+          coldRegion,
+          HOT_REGIONAL_PAGES + 1,
+          MAX_COLD_PAGE,
+          `cursor:region:2v2:${coldRegion}`,
+          lockState,
+        ),
       )
 
       const elapsed = ((performance.now() - tickStart) / 1000).toFixed(1)
@@ -179,28 +203,53 @@ async function advanceCursor(redis: Redis, cursorKey: string, startPage: number,
   return cursor ? Math.max(startPage, Math.min(Number.parseInt(cursor, 10), maxPage)) : startPage
 }
 
+function shouldEnqueueSourcePage(page: number, region: Region | 'all'): boolean {
+  if (page > MAX_COLD_PAGE) return false
+  // 'all' has its own hot zone (HOT_PAGES = 10); regional has HOT_REGIONAL_PAGES = 2.
+  const hotZone = region === 'all' ? HOT_PAGES : HOT_REGIONAL_PAGES
+  if (page <= hotZone) return false
+  return true
+}
+
+function normalizeRegionKey(region: Region | 'all'): string {
+  return region === 'all' ? 'all' : region.toUpperCase()
+}
+
+async function enqueueResyncs(redis: Redis, bracket: '1v1' | '2v2', region: Region | 'all', pages: number[]) {
+  const filtered = pages.filter((p) => shouldEnqueueSourcePage(p, region))
+  if (filtered.length === 0) return
+  const regionKey = normalizeRegionKey(region)
+  const members = filtered.map((p) => `${regionKey}:${p}`)
+  await redis.sadd(`resync:${bracket}:queue`, ...members)
+}
+
+export type SyncPageOpts = { depth: 0 | 1 }
+
 export async function sync1v1Page(
   deps: JanitorDeps,
   playerRepo: PlayerRepo,
   region: Region | 'all',
   startPage: number,
   maxPage: number,
-  cursorKey: string,
+  cursorKey: string | null,
   lockState: LockState,
+  opts: SyncPageOpts = { depth: 0 },
 ) {
   if (lockState.lost) throw new Error('janitor lock lost during tick')
-  const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
+  const page = cursorKey === null ? startPage : await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
   const rankings = await deps.bhapi.getRankings1v1(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
-    await deps.redis.set(cursorKey, String(startPage))
+    if (cursorKey !== null) await deps.redis.set(cursorKey, String(startPage))
     return
   }
 
   await savePlayers(playerRepo, rankings, deps.metrics)
-  await playerRepo.replaceRankPage1v1({
+  // depth=0 (top-level tick): enqueue resyncs for vacated source pages.
+  // depth=1 (drained from queue): skip enqueueing to guarantee termination.
+  const result = await playerRepo.replaceRankPage1v1({
     region,
     page,
     pageSize: 50,
@@ -208,8 +257,14 @@ export async function sync1v1Page(
   })
   console.log(`[janitor] 1v1 ${region} page ${page}: ${rankings.length} players`)
 
-  const nextPage = page + 1 > maxPage ? startPage : page + 1
-  await deps.redis.set(cursorKey, String(nextPage))
+  if (opts.depth === 0 && result.vacatedSourcePages.length > 0) {
+    await enqueueResyncs(deps.redis, '1v1', region, result.vacatedSourcePages)
+  }
+
+  if (cursorKey !== null) {
+    const nextPage = page + 1 > maxPage ? startPage : page + 1
+    await deps.redis.set(cursorKey, String(nextPage))
+  }
 }
 
 export async function sync2v2Page(
@@ -218,25 +273,75 @@ export async function sync2v2Page(
   region: Region | 'all',
   startPage: number,
   maxPage: number,
-  cursorKey: string,
+  cursorKey: string | null,
   lockState: LockState,
+  opts: SyncPageOpts = { depth: 0 },
 ) {
   if (lockState.lost) throw new Error('janitor lock lost during tick')
-  const page = await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
+  const page = cursorKey === null ? startPage : await advanceCursor(deps.redis, cursorKey, startPage, maxPage)
   if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) return
 
   const rankings = await deps.bhapi.getRankings2v2(region as Region, page, { caller: 'background' })
 
   if (rankings.length === 0) {
-    await deps.redis.set(cursorKey, String(startPage))
+    if (cursorKey !== null) await deps.redis.set(cursorKey, String(startPage))
     return
   }
 
-  await saveTeams(playerRepo, rankings, region, page, deps.metrics)
+  // depth=0 (top-level tick): enqueue resyncs for vacated source pages.
+  // depth=1 (drained from queue): skip enqueueing to guarantee termination.
+  const result = await saveTeams(playerRepo, rankings, region, page, deps.metrics)
   console.log(`[janitor] 2v2 ${region} page ${page}: ${rankings.length} teams`)
 
-  const nextPage = page + 1 > maxPage ? startPage : page + 1
-  await deps.redis.set(cursorKey, String(nextPage))
+  if (opts.depth === 0 && result.vacatedSourcePages.length > 0) {
+    await enqueueResyncs(deps.redis, '2v2', region, result.vacatedSourcePages)
+  }
+
+  if (cursorKey !== null) {
+    const nextPage = page + 1 > maxPage ? startPage : page + 1
+    await deps.redis.set(cursorKey, String(nextPage))
+  }
+}
+
+const TICK_BUDGET_MS = 30_000
+
+export async function drainResyncQueue(
+  deps: JanitorDeps,
+  playerRepo: PlayerRepo,
+  bracket: '1v1' | '2v2',
+  lockState: LockState,
+  tickStart: number,
+) {
+  const queueKey = `resync:${bracket}:queue`
+  // SPOP per iteration: each entry leaves the set only after we own it. A crash mid-loop
+  // loses at most the in-flight entry, not the rest of the backlog. Budget guards (lock,
+  // tokens, wall clock) check FIRST so we don't pop entries we won't process.
+  while (true) {
+    if (lockState.lost) break
+    if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) break
+    if (performance.now() - tickStart > TICK_BUDGET_MS) break
+
+    const member = await deps.redis.spop(queueKey)
+    if (!member) break
+
+    const sep = member.indexOf(':')
+    if (sep < 0) continue
+    const rawRegion = member.slice(0, sep)
+    // Queue members are stored uppercase via normalizeRegionKey; BHAPI region paths are lowercase.
+    const region = rawRegion === 'all' ? 'all' : (rawRegion.toLowerCase() as Region)
+    const page = Number.parseInt(member.slice(sep + 1), 10)
+    if (!Number.isFinite(page)) continue
+    try {
+      if (bracket === '1v1') {
+        await sync1v1Page(deps, playerRepo, region, page, page, null, lockState, { depth: 1 })
+      } else {
+        await sync2v2Page(deps, playerRepo, region, page, page, null, lockState, { depth: 1 })
+      }
+    } catch (err) {
+      console.error(`[janitor] resync failed ${bracket} ${member}:`, err)
+      await deps.metrics?.incrementCounter('janitor:resync_failures').catch(() => {})
+    }
+  }
 }
 
 async function withSaveFailureMetric<T>(
@@ -292,7 +397,7 @@ export async function saveTeams(
   region: string,
   page: number,
   metrics: MetricsRegistry | undefined,
-) {
+): Promise<{ vacatedSourcePages: number[] }> {
   const seenPlayers = new Set<number>()
   const playerRows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }> = []
   for (const r of rankings) {
@@ -338,9 +443,9 @@ export async function saveTeams(
     })
   }
 
-  await withSaveFailureMetric(metrics, '2v2', async () => {
+  return await withSaveFailureMetric(metrics, '2v2', async () => {
     await repo.batchUpsertPlaceholderPlayers(playerRows)
-    await repo.replaceRankPage2v2({
+    return await repo.replaceRankPage2v2({
       region,
       page,
       pageSize: 50,
