@@ -9,7 +9,6 @@ import {
 } from '@brawltome/identity'
 import { createMatchRepo } from '@brawltome/matchmaking'
 import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
-import { createRankingRepo } from '@brawltome/ranking'
 import {
   TIERED_TTL,
   checkRateLimit,
@@ -62,7 +61,6 @@ const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'backgroun
 
 const playerRepo = createPlayerRepo(db)
 const clanRepo = createClanRepo(db)
-const rankingRepo = createRankingRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
 const playerLinkRepo = createPlayerLinkRepo(db)
@@ -98,7 +96,6 @@ const sharedCtx = {
   clanQueue,
   playerRepo,
   clanRepo,
-  rankingRepo,
   userRepo,
   sessionRepo,
   playerLinkRepo,
