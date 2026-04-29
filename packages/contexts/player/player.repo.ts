@@ -337,12 +337,7 @@ export function createPlayerRepo(db: Database) {
           ),
         )
         .as('ranked')
-      return db
-        .select()
-        .from(ranked)
-        .orderBy(asc(ranked.rank))
-        .limit(opts.pageSize)
-        .offset(opts.offset)
+      return db.select().from(ranked).orderBy(asc(ranked.rank)).limit(opts.pageSize).offset(opts.offset)
     },
 
     async get3v3LeaderboardSweep(opts: {
@@ -418,7 +413,9 @@ export function createPlayerRepo(db: Database) {
           tier: playerRankedTeam.tier,
           wins: playerRankedTeam.wins,
           games: playerRankedTeam.games,
-          rank: sql<number>`row_number() over (order by ${playerRankedTeam.rating} desc, ${playerRankedTeam.wins} desc)`.as('rank'),
+          rank: sql<number>`row_number() over (order by ${playerRankedTeam.rating} desc, ${playerRankedTeam.wins} desc)`.as(
+            'rank',
+          ),
         })
         .from(playerRankedTeam)
         .where(
@@ -592,6 +589,8 @@ export function createPlayerRepo(db: Database) {
       teams: Array<{
         brawlhallaIdOne: number
         brawlhallaIdTwo: number
+        playerOneName: string
+        playerTwoName: string
         teamName: string
         rating: number
         peakRating: number
@@ -603,7 +602,7 @@ export function createPlayerRepo(db: Database) {
     ) {
       if (teams.length === 0) return
       const rows: Array<typeof playerRankedTeam.$inferInsert> = []
-      const placeholderIds = new Set<number>()
+      const idToName = new Map<number, string>()
       for (const t of teams) {
         const ownerIds =
           t.brawlhallaIdOne === t.brawlhallaIdTwo ? [t.brawlhallaIdOne] : [t.brawlhallaIdOne, t.brawlhallaIdTwo]
@@ -620,14 +619,25 @@ export function createPlayerRepo(db: Database) {
             games: t.wins + t.losses,
             region: t.region,
           })
-          placeholderIds.add(ownerId)
         }
+        // Last write wins per id (within this batch). Endpoint returns one username per row,
+        // so collisions on the same id pick whichever team appeared last on this page.
+        idToName.set(t.brawlhallaIdOne, t.playerOneName)
+        idToName.set(t.brawlhallaIdTwo, t.playerTwoName)
       }
-      const placeholders = [...placeholderIds].map((id) => ({ brawlhallaId: id, name: `Player ${id}` }))
+      const placeholders = [...idToName].map(([id, name]) => ({ brawlhallaId: id, name }))
+      // Refresh existing player names too: a player who only appears in 2v2 sweeps would
+      // otherwise be stuck on whatever name the previous sweep wrote (or stale from 1v1 if
+      // they used to play 1v1). On conflict, replace name with the value just inserted.
       await db
         .insert(player)
         .values(placeholders as (typeof player.$inferInsert)[])
-        .onConflictDoNothing()
+        .onConflictDoUpdate({
+          target: player.brawlhallaId,
+          set: {
+            name: sql`excluded.name`,
+          },
+        })
 
       await db
         .insert(playerRankedTeam)
@@ -666,10 +676,18 @@ export function createPlayerRepo(db: Database) {
     ) {
       if (rows.length === 0) return
       const placeholders = rows.map((r) => ({ brawlhallaId: r.brawlhallaId, name: r.name }))
+      // Solo 2v2 entries provide a fresh username per row; refresh the player.name on conflict
+      // so existing players (incl. legacy `Player {id}` placeholders from the 2v2 path) get
+      // their real names without waiting for the 1v1 sweep.
       await db
         .insert(player)
         .values(placeholders as (typeof player.$inferInsert)[])
-        .onConflictDoNothing()
+        .onConflictDoUpdate({
+          target: player.brawlhallaId,
+          set: {
+            name: sql`excluded.name`,
+          },
+        })
 
       await db
         .insert(playerRankedTeam)

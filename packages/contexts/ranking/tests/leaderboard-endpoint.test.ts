@@ -8,8 +8,12 @@ function mockFetch(impl: (url: string) => Promise<Response> | Response) {
 }
 
 describe('fetchLeaderboardPage', () => {
-  beforeEach(() => { globalThis.fetch = ORIGINAL_FETCH })
-  afterEach(() => { globalThis.fetch = ORIGINAL_FETCH })
+  beforeEach(() => {
+    globalThis.fetch = ORIGINAL_FETCH
+  })
+  afterEach(() => {
+    globalThis.fetch = ORIGINAL_FETCH
+  })
 
   it('builds the correct URL', async () => {
     let captured = ''
