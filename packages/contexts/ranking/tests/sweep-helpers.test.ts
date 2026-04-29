@@ -17,9 +17,9 @@ describe('normalizeRegion', () => {
 
 describe('resolveTier', () => {
   it('returns api tier verbatim when present', () => {
-    expect(resolveTier({ apiTier: 'Diamond', bestRating: 1500 })).toEqual({ tier: 'Diamond', fallback: null })
-    expect(resolveTier({ apiTier: 'Valhallan', bestRating: 2400 })).toEqual({ tier: 'Valhallan', fallback: null })
-    expect(resolveTier({ apiTier: 'Tin 1', bestRating: 100 })).toEqual({ tier: 'Tin 1', fallback: null })
+    expect(resolveTier({ apiTier: 'Diamond', bestRating: 1500 })).toEqual({ tier: 'Diamond', fallback: 'none' })
+    expect(resolveTier({ apiTier: 'Valhallan', bestRating: 2400 })).toEqual({ tier: 'Valhallan', fallback: 'none' })
+    expect(resolveTier({ apiTier: 'Tin 1', bestRating: 100 })).toEqual({ tier: 'Tin 1', fallback: 'none' })
   })
 
   it('returns Diamond when api tier missing AND best_rating >= 2000 ("ex-Valhallan")', () => {
@@ -28,8 +28,22 @@ describe('resolveTier', () => {
   })
 
   it('returns rating-bucket when api tier missing AND best_rating < 2000 (defensive, unobserved)', () => {
-    const r = resolveTier({ apiTier: undefined, bestRating: 1500 })
-    expect(r.fallback).toBe('unexpected_null')
-    expect(r.tier).toBeTruthy()
+    const cases: Array<[number, string]> = [
+      [1999, 'Platinum'],
+      [1700, 'Platinum'],
+      [1699, 'Gold'],
+      [1400, 'Gold'],
+      [1399, 'Silver'],
+      [1200, 'Silver'],
+      [1199, 'Bronze'],
+      [1000, 'Bronze'],
+      [999, 'Tin'],
+      [0, 'Tin'],
+    ]
+    for (const [bestRating, expectedTier] of cases) {
+      const r = resolveTier({ apiTier: undefined, bestRating })
+      expect(r.tier).toBe(expectedTier)
+      expect(r.fallback).toBe('unexpected_null')
+    }
   })
 })

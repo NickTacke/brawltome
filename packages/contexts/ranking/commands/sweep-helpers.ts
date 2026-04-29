@@ -3,7 +3,7 @@ export function normalizeRegion(region: string): string {
   return region === 'JPS' ? 'JPN' : region
 }
 
-export type TierFallbackKind = 'diamond' | 'unexpected_null' | null
+export type TierFallbackKind = 'none' | 'diamond' | 'unexpected_null'
 
 // Defensive rating-bucket fallback. Only fires when api tier is missing AND
 // best_rating < 2000, a case we have not observed in 5,000+ sampled rows per bracket.
@@ -20,7 +20,7 @@ export function resolveTier(input: { apiTier: string | undefined | null; bestRat
   tier: string
   fallback: TierFallbackKind
 } {
-  if (input.apiTier) return { tier: input.apiTier, fallback: null }
+  if (input.apiTier) return { tier: input.apiTier, fallback: 'none' }
   if (input.bestRating >= 2000) return { tier: 'Diamond', fallback: 'diamond' }
   return { tier: ratingBucket(input.bestRating), fallback: 'unexpected_null' }
 }
