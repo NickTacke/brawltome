@@ -654,6 +654,7 @@ export function createPlayerRepo(db: Database) {
             rankedGames: sql`excluded.ranked_games`,
             rankedWins: sql`excluded.ranked_wins`,
             syncedAt1v1: sql`excluded.synced_at_1v1`,
+            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player.valhallan_confirmed_at END`,
             lastUpdated: now,
           },
         })
@@ -814,6 +815,7 @@ export function createPlayerRepo(db: Database) {
             playerRankedTeam.region,
           ],
           set: {
+            teamName: sql`excluded.team_name`,
             rating: sql`excluded.rating`,
             peakRating: sql`excluded.peak_rating`,
             tier: sql`excluded.tier`,
