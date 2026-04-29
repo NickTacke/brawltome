@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SoloLeaderboardRow, TeamLeaderboardRow } from './LeaderboardRow'
 import { LeaderboardSkeletonRows } from './LeaderboardSkeleton'
 import { PaginationControls } from './PaginationControls'
-import { SortableHeader } from './SortableHeader'
 import {
   BRACKETS,
   type BracketId,
@@ -29,7 +28,6 @@ import {
   PAGE_SIZE,
   REGIONS,
   type RegionId,
-  type SortField,
   buildLeaderboardQueryString,
   isTeamEntry,
   parseLeaderboardSearchParams,
@@ -44,7 +42,7 @@ export function Leaderboard() {
     () => parseLeaderboardSearchParams(new URLSearchParams(searchParams.toString())),
     [searchParams],
   )
-  const { bracket, region, sortField, sortOrder, page } = filters
+  const { bracket, region, page } = filters
 
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -66,11 +64,11 @@ export function Leaderboard() {
     setError(null)
 
     trpc.leaderboard.get
-      .query({ bracket, region, page, pageSize: PAGE_SIZE, sort: sortField, order: sortOrder })
+      .query({ bracket, region, page, pageSize: PAGE_SIZE })
       .then((data) => {
         if (cancelled) return
         setEntries(data.entries as LeaderboardEntry[])
-        setFetchedKey(`${bracket}:${region}:${page}:${sortField}:${sortOrder}`)
+        setFetchedKey(`${bracket}:${region}:${page}`)
         setIsLoading(false)
       })
       .catch((err) => {
@@ -82,14 +80,9 @@ export function Leaderboard() {
     return () => {
       cancelled = true
     }
-  }, [bracket, region, page, sortField, sortOrder])
+  }, [bracket, region, page])
 
-  const handleHeaderSort = (key: SortField) => {
-    if (key === sortField) updateFilters({ sortOrder: sortOrder === 'desc' ? 'asc' : 'desc', page: 1 })
-    else updateFilters({ sortField: key, sortOrder: 'desc', page: 1 })
-  }
-
-  const currentKey = `${bracket}:${region}:${page}:${sortField}:${sortOrder}`
+  const currentKey = `${bracket}:${region}:${page}`
   const showLoading = isLoading || fetchedKey !== currentKey
 
   if (error) {
@@ -152,31 +145,10 @@ export function Leaderboard() {
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-20 text-center font-bold">Rank</TableHead>
               <TableHead className="font-bold">{bracket === '2v2' ? 'Team' : 'Player'}</TableHead>
-              <SortableHeader
-                label="Rating"
-                sortKey="rating"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={handleHeaderSort}
-                className="text-center"
-              />
+              <TableHead className="text-center font-bold">Rating</TableHead>
               <TableHead className="text-center font-bold">Win Rate</TableHead>
-              <SortableHeader
-                label="Wins"
-                sortKey="wins"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={handleHeaderSort}
-                className="text-center hidden sm:table-cell"
-              />
-              <SortableHeader
-                label="Games"
-                sortKey="games"
-                currentSort={sortField}
-                currentOrder={sortOrder}
-                onSort={handleHeaderSort}
-                className="text-center hidden sm:table-cell"
-              />
+              <TableHead className="text-center font-bold hidden sm:table-cell">Wins</TableHead>
+              <TableHead className="text-center font-bold hidden sm:table-cell">Games</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

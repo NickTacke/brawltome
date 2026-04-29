@@ -3,6 +3,8 @@ import { buildQueryString, parseEnum, parseInteger } from '../../lib/searchParam
 export const BRACKETS = [
   { id: '1v1', label: '1v1' },
   { id: '2v2', label: '2v2' },
+  { id: 'solo2v2', label: 'Solo 2v2' },
+  { id: '3v3', label: '3v3' },
 ] as const
 
 export const REGIONS = [
@@ -18,25 +20,18 @@ export const REGIONS = [
   { id: 'SA', label: 'South Africa' },
 ] as const
 
-export const SORT_FIELDS = ['rating', 'peakRating', 'wins', 'games'] as const
-export const SORT_ORDERS = ['asc', 'desc'] as const
-
 export type BracketId = (typeof BRACKETS)[number]['id']
 export type RegionId = (typeof REGIONS)[number]['id']
-export type SortField = (typeof SORT_FIELDS)[number]
-export type SortOrder = (typeof SORT_ORDERS)[number]
 
 export const BRACKET_IDS = BRACKETS.map((b) => b.id) as readonly BracketId[]
 export const REGION_IDS = REGIONS.map((r) => r.id) as readonly RegionId[]
 
 export const PAGE_SIZE = 20
-export const MAX_PAGE = 100
+export const MAX_PAGE = 1000
 
 export interface LeaderboardFilters {
   bracket: BracketId
   region: RegionId
-  sortField: SortField
-  sortOrder: SortOrder
   page: number
 }
 
@@ -52,7 +47,8 @@ export interface SoloLeaderboardEntry {
   rankedGames?: number
   wins?: number
   games?: number
-  rank?: number
+  losses?: number
+  rank: number
 }
 
 export interface TeamLeaderboardEntry {
@@ -80,8 +76,6 @@ export function parseLeaderboardSearchParams(params: URLSearchParams): Leaderboa
   return {
     bracket: parseEnum(params.get('bracket'), BRACKET_IDS, '1v1'),
     region: parseEnum(params.get('region'), REGION_IDS, 'all'),
-    sortField: parseEnum(params.get('sort'), SORT_FIELDS, 'rating'),
-    sortOrder: parseEnum(params.get('order'), SORT_ORDERS, 'desc'),
     page: parseInteger(params.get('page'), { min: 1, max: MAX_PAGE, default: 1 }),
   }
 }
@@ -90,8 +84,6 @@ export function buildLeaderboardQueryString(filters: LeaderboardFilters): string
   return buildQueryString({
     bracket: filters.bracket,
     region: filters.region,
-    sort: filters.sortField,
-    order: filters.sortOrder,
     page: filters.page,
   })
 }
