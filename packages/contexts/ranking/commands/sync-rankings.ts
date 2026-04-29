@@ -304,6 +304,7 @@ export async function sync2v2Page(
 }
 
 const TICK_BUDGET_MS = 30_000
+const MAX_DRAIN_PER_TICK = 3
 
 export async function drainResyncQueue(
   deps: JanitorDeps,
@@ -315,11 +316,18 @@ export async function drainResyncQueue(
   const queueKey = `resync:${bracket}:queue`
   // SPOP per iteration: each entry leaves the set only after we own it. A crash mid-loop
   // loses at most the in-flight entry, not the rest of the backlog. Budget guards (lock,
-  // tokens, wall clock) check FIRST so we don't pop entries we won't process.
+  // tokens, wall clock, BHAPI pause, per-tick cap) check FIRST so we don't pop entries we
+  // won't process.
+  let drained = 0
   while (true) {
     if (lockState.lost) break
     if (deps.bhapi.remainingTokens('background') < JANITOR_MIN_TOKENS) break
     if (performance.now() - tickStart > TICK_BUDGET_MS) break
+    // Don't queue up more 429s on top of an already-paused window.
+    if (deps.bhapi.pausedUntilMs > Date.now()) break
+    // Per-tick cap: leave background headroom for hot rotation + on-demand. Drain is best-effort
+    // catch-up; the cold cursor still covers everything within its cycle.
+    if (drained >= MAX_DRAIN_PER_TICK) break
 
     const member = await deps.redis.spop(queueKey)
     if (!member) break
@@ -331,6 +339,8 @@ export async function drainResyncQueue(
     const region = rawRegion === 'all' ? 'all' : (rawRegion.toLowerCase() as Region)
     const page = Number.parseInt(member.slice(sep + 1), 10)
     if (!Number.isFinite(page)) continue
+    // Count toward cap regardless of outcome — failed syncs still consumed a BHAPI call.
+    drained++
     try {
       if (bracket === '1v1') {
         await sync1v1Page(deps, playerRepo, region, page, page, null, lockState, { depth: 1 })
