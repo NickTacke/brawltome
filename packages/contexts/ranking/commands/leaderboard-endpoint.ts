@@ -37,7 +37,7 @@ export async function fetchLeaderboardPage(opts: { bracket: Bracket; page: numbe
   try {
     return await fetchOnce(url)
   } catch (firstErr) {
-    void firstErr
+    console.warn(`[sweep] page retry after error: ${(firstErr as Error).message} (${url})`)
     await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
     try {
       return await fetchOnce(url)
