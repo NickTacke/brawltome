@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import Redis from 'ioredis'
+import type { MetricsRegistry } from '@brawltome/shared'
 import type { PageResponse } from '../commands/leaderboard-endpoint'
-import { sweepBracket } from '../commands/sweep-leaderboards'
+import { startSweep, sweepBracket } from '../commands/sweep-leaderboards'
 
 interface FakeRepo {
   upsert1v1Calls: any[][]
@@ -330,5 +332,77 @@ describe('sweepBracket solo_2v2', () => {
     const row = repo.upsertSoloCalls.flat()[0]
     expect(row.brawlhallaId).toBe(300)
     expect(row.region).toBe('EU')
+  })
+})
+
+let redis: Redis
+beforeAll(() => {
+  redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
+})
+afterAll(async () => {
+  await redis.del('sweep:lock').catch(() => {})
+  await redis.quit()
+})
+
+const NULL_METRICS: MetricsRegistry = {
+  incrementQueue: async () => {},
+  snapshotQueue: async () => ({}),
+  snapshotAllQueues: async () => ({}),
+  setScalar: async () => {},
+  getScalar: async () => null,
+  incrementCounter: async () => {},
+  snapshotCounters: async () => ({}),
+}
+
+describe('startSweep', () => {
+  it('skips when another instance already holds the lock', async () => {
+    await redis.set('sweep:lock', 'other-instance', 'EX', 60)
+    let calls = 0
+    const stop = startSweep({
+      redis,
+      repo: {
+        sweepUpsert1v1: async () => {},
+        sweepUpsert3v3: async () => {},
+        sweepUpsert2v2: async () => {},
+        sweepUpsertSolo2v2: async () => {},
+      } as any,
+      metrics: NULL_METRICS,
+      fetchPage: async () => {
+        calls++
+        return { total_pages: 1, rankings: [] }
+      },
+      tickIntervalMs: 100,
+      sweepIntervalMs: 50,
+    })
+    await new Promise((r) => setTimeout(r, 250))
+    await stop()
+    await redis.del('sweep:lock')
+    expect(calls).toBe(0)
+  })
+
+  it('runs at least one sweep when the lock is free', async () => {
+    await redis.del('sweep:lock')
+    let calls = 0
+    const stop = startSweep({
+      redis,
+      repo: {
+        sweepUpsert1v1: async () => {},
+        sweepUpsert3v3: async () => {},
+        sweepUpsert2v2: async () => {},
+        sweepUpsertSolo2v2: async () => {},
+      } as any,
+      metrics: NULL_METRICS,
+      fetchPage: async () => {
+        calls++
+        return { total_pages: 1, rankings: [] }
+      },
+      tickIntervalMs: 50,
+      sweepIntervalMs: 200,
+    })
+    // Wait long enough for at least one sweep window.
+    await new Promise((r) => setTimeout(r, 250))
+    await stop()
+    // Each sweep fetches page 1 of 4 brackets = 4 calls per sweep; expect at least 4.
+    expect(calls).toBeGreaterThanOrEqual(4)
   })
 })
