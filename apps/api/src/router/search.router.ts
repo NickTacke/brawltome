@@ -4,9 +4,6 @@ import { publicProcedure, router } from '../trpc/trpc'
 
 export const searchRouter = router({
   local: publicProcedure.input(z.object({ query: z.string().min(2).max(100) })).query(async ({ ctx, input }) => {
-    return searchLocal(
-      { rankingRepo: ctx.rankingRepo, playerRepo: ctx.playerRepo, clanRepo: ctx.clanRepo },
-      input.query,
-    )
+    return searchLocal({ playerRepo: ctx.playerRepo, clanRepo: ctx.clanRepo }, input.query)
   }),
 })

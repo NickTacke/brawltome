@@ -1,6 +1,5 @@
 import type { ClanRepo } from '@brawltome/clan'
 import type { PlayerRepo } from '@brawltome/player'
-import type { RankingRepo } from '../ranking.repo'
 
 function sanitizeQuery(query: string): string {
   return query
@@ -9,25 +8,18 @@ function sanitizeQuery(query: string): string {
     .trim()
 }
 
-export async function searchLocal(
-  deps: { rankingRepo: RankingRepo; playerRepo: PlayerRepo; clanRepo: ClanRepo },
-  rawQuery: string,
-) {
+export async function searchLocal(deps: { playerRepo: PlayerRepo; clanRepo: ClanRepo }, rawQuery: string) {
   const query = sanitizeQuery(rawQuery)
   if (query.length < 2) return { players: [], clans: [] }
 
-  const blacklistSet = await deps.rankingRepo.getBlacklistedIds()
-
-  const playersByName = await deps.playerRepo.searchPlayersByName(query, blacklistSet)
+  const playersByName = await deps.playerRepo.searchPlayersByName(query)
 
   const aliasMatches = await deps.playerRepo.searchPlayersByAlias(query)
   const aliasByPlayerId = new Map<number, string>()
   for (const m of aliasMatches) {
     if (!aliasByPlayerId.has(m.brawlhallaId)) aliasByPlayerId.set(m.brawlhallaId, m.alias)
   }
-  const aliasIds = [...aliasByPlayerId.keys()].filter(
-    (id) => !blacklistSet.has(id) && !playersByName.some((p) => p.brawlhallaId === id),
-  )
+  const aliasIds = [...aliasByPlayerId.keys()].filter((id) => !playersByName.some((p) => p.brawlhallaId === id))
   const aliasOnlyIds = new Set(aliasIds)
 
   let playersByAlias: typeof playersByName = []
@@ -41,7 +33,7 @@ export async function searchLocal(
   const players = merged.map((p) => ({
     ...p,
     bestLegendNameKey: effective.get(p.brawlhallaId)?.legendNameKey ?? null,
-    // Only show 'matched alias' for players surfaced *only* via alias — name-matched players
+    // Only show 'matched alias' for players surfaced *only* via alias; name-matched players
     // shouldn't be labeled as alias matches even if they happen to have stale aliases.
     matchedAlias: aliasOnlyIds.has(p.brawlhallaId) ? (aliasByPlayerId.get(p.brawlhallaId) ?? null) : null,
   }))
