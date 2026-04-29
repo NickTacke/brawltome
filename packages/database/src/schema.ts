@@ -232,7 +232,6 @@ export const playerRankedTeam = pgTable(
     wins: integer('wins').notNull(),
     games: integer('games').notNull(),
     region: varchar('region', { length: 16 }).notNull(),
-    globalRank: integer('global_rank'),
     valhallanConfirmedAt: timestamp('valhallan_confirmed_at'),
     syncedAt: timestamp('synced_at').defaultNow().notNull(),
   },
@@ -243,27 +242,6 @@ export const playerRankedTeam = pgTable(
     index('idx_ranked_team_solo_region_rating_wins')
       .on(t.region, t.rating, t.wins)
       .where(sql`${t.brawlhallaIdTwo} = 0`),
-  ],
-)
-
-// ============================================================
-// Player Rank 1v1
-// ============================================================
-
-export const playerRank1v1 = pgTable(
-  'player_rank_1v1',
-  {
-    brawlhallaId: integer('brawlhalla_id')
-      .notNull()
-      .references(() => player.brawlhallaId, { onDelete: 'cascade' }),
-    region: varchar('region', { length: 16 }).notNull(),
-    rank: integer('rank').notNull(),
-    syncedAt: timestamp('synced_at').defaultNow().notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.brawlhallaId, t.region] }),
-    uniqueIndex('uq_player_rank_1v1_region_rank').on(t.region, t.rank),
-    index('idx_player_rank_1v1_synced_at').on(t.syncedAt),
   ],
 )
 
@@ -322,16 +300,6 @@ export const clanMember = pgTable(
   },
   (t) => [primaryKey({ columns: [t.clanId, t.brawlhallaId] })],
 )
-
-// ============================================================
-// Blacklist
-// ============================================================
-
-export const blacklist = pgTable('blacklist', {
-  brawlhallaId: integer('brawlhalla_id').primaryKey(),
-  reason: text('reason'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-})
 
 // ============================================================
 // Rating History
