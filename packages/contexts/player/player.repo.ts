@@ -601,6 +601,230 @@ export function createPlayerRepo(db: Database) {
         .then(() => {})
     },
 
+    async sweepUpsert1v1(
+      rows: Array<{
+        brawlhallaId: number
+        name: string
+        region: string
+        rating: number
+        peakRating: number
+        tier: string | null
+        wins: number
+        losses: number
+      }>,
+    ) {
+      if (rows.length === 0) return
+      const ids = rows.map((r) => r.brawlhallaId)
+      const existing = await db
+        .select({ brawlhallaId: player.brawlhallaId, name: player.name })
+        .from(player)
+        .where(inArray(player.brawlhallaId, ids))
+      const existingNames = new Map(existing.map((e) => [e.brawlhallaId, e.name]))
+      const aliases: Array<{ brawlhallaId: number; key: string; value: string }> = []
+      for (const r of rows) {
+        const old = existingNames.get(r.brawlhallaId)
+        if (old && old !== r.name) aliases.push({ brawlhallaId: r.brawlhallaId, key: old.toLowerCase(), value: old })
+      }
+      if (aliases.length > 0) await db.insert(playerAlias).values(aliases).onConflictDoNothing()
+
+      const now = new Date()
+      await db
+        .insert(player)
+        .values(
+          rows.map((r) => ({
+            brawlhallaId: r.brawlhallaId,
+            name: r.name,
+            region: r.region,
+            rating: r.rating,
+            peakRating: r.peakRating,
+            tier: r.tier,
+            rankedGames: r.wins + r.losses,
+            rankedWins: r.wins,
+            syncedAt1v1: now,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: player.brawlhallaId,
+          set: {
+            name: sql`excluded.name`,
+            region: sql`excluded.region`,
+            rating: sql`excluded.rating`,
+            peakRating: sql`excluded.peak_rating`,
+            tier: sql`excluded.tier`,
+            rankedGames: sql`excluded.ranked_games`,
+            rankedWins: sql`excluded.ranked_wins`,
+            syncedAt1v1: sql`excluded.synced_at_1v1`,
+            lastUpdated: now,
+          },
+        })
+    },
+
+    async sweepUpsert3v3(
+      rows: Array<{
+        brawlhallaId: number
+        name: string
+        region: string
+        rating: number
+        peakRating: number
+        tier: string | null
+        wins: number
+        losses: number
+      }>,
+    ) {
+      if (rows.length === 0) return
+      const now = new Date()
+      await db
+        .insert(player)
+        .values(
+          rows.map((r) => ({
+            brawlhallaId: r.brawlhallaId,
+            name: r.name,
+            region: r.region,
+            rating3v3: r.rating,
+            peakRating3v3: r.peakRating,
+            tier3v3: r.tier,
+            wins3v3: r.wins,
+            losses3v3: r.losses,
+            syncedAt3v3: now,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: player.brawlhallaId,
+          set: {
+            name: sql`excluded.name`,
+            region: sql`excluded.region`,
+            rating3v3: sql`excluded.rating_3v3`,
+            peakRating3v3: sql`excluded.peak_rating_3v3`,
+            tier3v3: sql`excluded.tier_3v3`,
+            wins3v3: sql`excluded.wins_3v3`,
+            losses3v3: sql`excluded.losses_3v3`,
+            syncedAt3v3: sql`excluded.synced_at_3v3`,
+            lastUpdated: now,
+          },
+        })
+    },
+
+    async sweepUpsert2v2(
+      teams: Array<{
+        brawlhallaIdOne: number
+        brawlhallaIdTwo: number
+        teamName: string
+        rating: number
+        peakRating: number
+        tier: string
+        wins: number
+        losses: number
+        region: string
+      }>,
+    ) {
+      if (teams.length === 0) return
+      const rows: Array<typeof playerRankedTeam.$inferInsert> = []
+      const placeholderIds = new Set<number>()
+      for (const t of teams) {
+        const ownerIds =
+          t.brawlhallaIdOne === t.brawlhallaIdTwo ? [t.brawlhallaIdOne] : [t.brawlhallaIdOne, t.brawlhallaIdTwo]
+        for (const ownerId of ownerIds) {
+          rows.push({
+            brawlhallaId: ownerId,
+            brawlhallaIdOne: t.brawlhallaIdOne,
+            brawlhallaIdTwo: t.brawlhallaIdTwo,
+            teamName: t.teamName,
+            rating: t.rating,
+            peakRating: t.peakRating,
+            tier: t.tier,
+            wins: t.wins,
+            games: t.wins + t.losses,
+            region: t.region,
+            globalRank: null,
+          })
+          placeholderIds.add(ownerId)
+        }
+      }
+      const placeholders = [...placeholderIds].map((id) => ({ brawlhallaId: id, name: `Player ${id}` }))
+      await db
+        .insert(player)
+        .values(placeholders as (typeof player.$inferInsert)[])
+        .onConflictDoNothing()
+
+      await db
+        .insert(playerRankedTeam)
+        .values(rows)
+        .onConflictDoUpdate({
+          target: [
+            playerRankedTeam.brawlhallaId,
+            playerRankedTeam.brawlhallaIdOne,
+            playerRankedTeam.brawlhallaIdTwo,
+            playerRankedTeam.region,
+          ],
+          set: {
+            teamName: sql`excluded.team_name`,
+            rating: sql`excluded.rating`,
+            peakRating: sql`excluded.peak_rating`,
+            tier: sql`excluded.tier`,
+            wins: sql`excluded.wins`,
+            games: sql`excluded.games`,
+            globalRank: sql`excluded.global_rank`,
+            syncedAt: sql`excluded.synced_at`,
+          },
+        })
+    },
+
+    async sweepUpsertSolo2v2(
+      rows: Array<{
+        brawlhallaId: number
+        name: string
+        teamName: string
+        rating: number
+        peakRating: number
+        tier: string
+        wins: number
+        losses: number
+        region: string
+      }>,
+    ) {
+      if (rows.length === 0) return
+      const placeholders = rows.map((r) => ({ brawlhallaId: r.brawlhallaId, name: r.name }))
+      await db
+        .insert(player)
+        .values(placeholders as (typeof player.$inferInsert)[])
+        .onConflictDoNothing()
+
+      await db
+        .insert(playerRankedTeam)
+        .values(
+          rows.map((r) => ({
+            brawlhallaId: r.brawlhallaId,
+            brawlhallaIdOne: r.brawlhallaId,
+            brawlhallaIdTwo: 0,
+            teamName: r.teamName,
+            rating: r.rating,
+            peakRating: r.peakRating,
+            tier: r.tier,
+            wins: r.wins,
+            games: r.wins + r.losses,
+            region: r.region,
+            globalRank: null,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [
+            playerRankedTeam.brawlhallaId,
+            playerRankedTeam.brawlhallaIdOne,
+            playerRankedTeam.brawlhallaIdTwo,
+            playerRankedTeam.region,
+          ],
+          set: {
+            rating: sql`excluded.rating`,
+            peakRating: sql`excluded.peak_rating`,
+            tier: sql`excluded.tier`,
+            wins: sql`excluded.wins`,
+            games: sql`excluded.games`,
+            globalRank: sql`excluded.global_rank`,
+            syncedAt: sql`excluded.synced_at`,
+          },
+        })
+    },
+
     async replaceRankPage1v1(args: {
       region: string
       page: number
