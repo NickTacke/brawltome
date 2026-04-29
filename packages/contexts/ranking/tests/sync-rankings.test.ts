@@ -357,6 +357,84 @@ describe('drainResyncQueue', () => {
     await redis.del(queueKey)
     expect(remaining).toEqual([])
   })
+
+  it('caps drain at MAX_DRAIN_PER_TICK regardless of remaining queue size', async () => {
+    const queueKey = 'resync:1v1:queue'
+    await redis.del(queueKey)
+    await redis.sadd(queueKey, 'US-E:5', 'EU:7', 'BRZ:9', 'AUS:11', 'JPN:13', 'SEA:15', 'ME:17')
+
+    const calls: string[] = []
+    const deps = {
+      db: {} as never,
+      bhapi: {
+        remainingTokens: () => 1000,
+        pausedUntilMs: 0,
+        async getRankings1v1(region: Region, page: number) {
+          calls.push(`${region}:${page}`)
+          return [{ ...SAMPLE }]
+        },
+        async getRankings2v2() {
+          return []
+        },
+      } as unknown as BhApiClient,
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics: NULL_METRICS,
+    }
+    const repo = makeFakeRepo()
+    ;(repo as unknown as { replaceRankPage1v1: () => Promise<{ vacatedSourcePages: number[] }> }).replaceRankPage1v1 =
+      async () => ({ vacatedSourcePages: [] })
+
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+    await drainResyncQueue(deps, repo, '1v1', lockState, performance.now())
+
+    expect(calls.length).toBe(3)
+    const remaining = await redis.smembers(queueKey)
+    await redis.del(queueKey)
+    expect(remaining.length).toBe(4)
+  })
+
+  it('breaks immediately when bhapi is paused', async () => {
+    const queueKey = 'resync:1v1:queue'
+    await redis.del(queueKey)
+    await redis.sadd(queueKey, 'US-E:5', 'EU:7', 'BRZ:9')
+
+    const calls: string[] = []
+    const deps = {
+      db: {} as never,
+      bhapi: {
+        remainingTokens: () => 1000,
+        // Paused 5 seconds into the future — drain must not call BHAPI.
+        pausedUntilMs: Date.now() + 5_000,
+        async getRankings1v1(region: Region, page: number) {
+          calls.push(`${region}:${page}`)
+          return [{ ...SAMPLE }]
+        },
+        async getRankings2v2() {
+          return []
+        },
+      } as unknown as BhApiClient,
+      redis,
+      rankedQueue: {} as never,
+      statsQueue: {} as never,
+      clanQueue: {} as never,
+      metrics: NULL_METRICS,
+    }
+    const repo = makeFakeRepo()
+    ;(repo as unknown as { replaceRankPage1v1: () => Promise<{ vacatedSourcePages: number[] }> }).replaceRankPage1v1 =
+      async () => ({ vacatedSourcePages: [] })
+
+    const lockState: LockState = { lost: false, value: 'test-lock' }
+    await drainResyncQueue(deps, repo, '1v1', lockState, performance.now())
+
+    expect(calls.length).toBe(0)
+    const remaining = await redis.smembers(queueKey)
+    await redis.del(queueKey)
+    // All entries left intact since drain bailed before SPOP.
+    expect(remaining.length).toBe(3)
+  })
 })
 
 describe('lockState abort', () => {
