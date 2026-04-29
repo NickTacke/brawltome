@@ -1,4 +1,6 @@
 import type { PlayerRepo } from '@brawltome/player'
+import type { MetricsRegistry } from '@brawltome/shared'
+import type { Redis } from 'ioredis'
 import { type Bracket, type PageEntry, type PageResponse, fetchLeaderboardPage } from './leaderboard-endpoint'
 import { type TierFallbackKind, normalizeRegion, resolveTier } from './sweep-helpers'
 
@@ -172,4 +174,127 @@ async function writePage(
     })
   await repo.sweepUpsertSolo2v2(rows)
   return rows.length
+}
+
+const LOCK_KEY = 'sweep:lock'
+const LOCK_TTL_SEC = 60
+const HEARTBEAT_INTERVAL_MS = 20_000
+const TICK_INTERVAL_MS = 60_000
+const SWEEP_INTERVAL_MS = 15 * 60_000
+
+const RENEW_LOCK_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`
+const RELEASE_LOCK_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`
+
+const BRACKETS: Bracket[] = ['1v1', '2v2', 'solo_2v2', '3v3']
+
+export interface StartSweepDeps {
+  redis: Redis
+  repo: PlayerRepo
+  metrics: MetricsRegistry
+  fetchPage?: (opts: { bracket: Bracket; page: number }) => Promise<PageResponse>
+  concurrency?: number
+  tickIntervalMs?: number
+  sweepIntervalMs?: number
+}
+
+export function startSweep(deps: StartSweepDeps): () => Promise<void> {
+  const tickInterval = deps.tickIntervalMs ?? TICK_INTERVAL_MS
+  const sweepInterval = deps.sweepIntervalMs ?? SWEEP_INTERVAL_MS
+
+  let stopped = false
+  let lastSweepStart = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let inFlight: Promise<void> | null = null
+
+  const schedule = () => {
+    if (stopped) return
+    timer = setTimeout(tick, tickInterval)
+  }
+
+  const tick = async () => {
+    if (stopped) return
+    if (Date.now() - lastSweepStart < sweepInterval) {
+      schedule()
+      return
+    }
+    const lockValue = await acquireLock(deps.redis)
+    if (!lockValue) {
+      schedule()
+      return
+    }
+    lastSweepStart = Date.now()
+    let lockLost = false
+    heartbeatTimer = setInterval(() => {
+      renewLock(deps.redis, lockValue)
+        .then((ok) => {
+          if (!ok) lockLost = true
+        })
+        .catch(() => {
+          lockLost = true
+        })
+    }, HEARTBEAT_INTERVAL_MS)
+
+    inFlight = (async () => {
+      try {
+        const sweepStart = performance.now()
+        for (const bracket of BRACKETS) {
+          if (lockLost || stopped) break
+          const r = await sweepBracket({
+            bracket,
+            repo: deps.repo,
+            fetchPage: deps.fetchPage,
+            concurrency: deps.concurrency,
+            onTierFallback: (kind) => {
+              const counter = kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
+              deps.metrics.incrementCounter(counter).catch(() => {})
+            },
+          })
+          await deps.metrics.incrementCounter(`sweep:${bracket}:pages_ok`).catch(() => {})
+          if (r.pagesSkipped > 0) await deps.metrics.incrementCounter(`sweep:${bracket}:pages_skipped`).catch(() => {})
+          if (r.pagesFailed > 0) await deps.metrics.incrementCounter(`sweep:${bracket}:pages_failed`).catch(() => {})
+          console.log(
+            `[sweep] ${bracket}: ${r.pagesOk} ok, ${r.pagesSkipped} skipped, ${r.pagesFailed} failed, ${r.rowsWritten} rows, ${r.durationMs.toFixed(0)}ms`,
+          )
+        }
+        const elapsed = performance.now() - sweepStart
+        console.log(`[sweep] cycle complete in ${(elapsed / 1000).toFixed(1)}s`)
+      } catch (err) {
+        console.error('[sweep] cycle error:', err)
+      } finally {
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer)
+          heartbeatTimer = null
+        }
+        if (!lockLost) await releaseLock(deps.redis, lockValue)
+      }
+    })()
+    await inFlight
+    inFlight = null
+    schedule()
+  }
+
+  schedule()
+
+  return async () => {
+    stopped = true
+    if (timer) clearTimeout(timer)
+    if (heartbeatTimer) clearInterval(heartbeatTimer)
+    if (inFlight) await inFlight.catch(() => {})
+  }
+}
+
+async function acquireLock(redis: Redis): Promise<string | null> {
+  const value = crypto.randomUUID()
+  const result = await redis.set(LOCK_KEY, value, 'EX', LOCK_TTL_SEC, 'NX')
+  return result === 'OK' ? value : null
+}
+
+async function renewLock(redis: Redis, value: string): Promise<boolean> {
+  const result = await redis.call('EVAL', RENEW_LOCK_SCRIPT, '1', LOCK_KEY, value, String(LOCK_TTL_SEC))
+  return result !== 0
+}
+
+async function releaseLock(redis: Redis, value: string): Promise<void> {
+  await redis.call('EVAL', RELEASE_LOCK_SCRIPT, '1', LOCK_KEY, value)
 }
