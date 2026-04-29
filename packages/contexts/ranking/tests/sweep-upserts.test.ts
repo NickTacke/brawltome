@@ -68,7 +68,7 @@ describe('sweepUpsert3v3', () => {
 })
 
 describe('sweepUpsert2v2', () => {
-  it('writes two rows per team (one per owner) without globalRank', async () => {
+  it('writes two rows per team (one per owner)', async () => {
     await repo.sweepUpsert2v2([
       {
         brawlhallaIdOne: 9_900_020,
@@ -85,7 +85,6 @@ describe('sweepUpsert2v2', () => {
     const rows = await db.select().from(playerRankedTeam).where(sql`${playerRankedTeam.brawlhallaIdOne} = 9900020`)
     expect(rows.length).toBe(2)
     expect(rows.every((r) => r.region === 'EU')).toBe(true)
-    expect(rows.every((r) => r.globalRank === null)).toBe(true)
   })
 })
 

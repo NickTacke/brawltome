@@ -184,7 +184,6 @@ export function createPlayerRepo(db: Database) {
         wins: number
         games: number
         region: string
-        globalRank: number
         valhallanConfirmedAt: Date | null
       }>,
     ) {
@@ -620,7 +619,6 @@ export function createPlayerRepo(db: Database) {
             wins: t.wins,
             games: t.wins + t.losses,
             region: t.region,
-            globalRank: null,
           })
           placeholderIds.add(ownerId)
         }
@@ -648,7 +646,6 @@ export function createPlayerRepo(db: Database) {
             tier: sql`excluded.tier`,
             wins: sql`excluded.wins`,
             games: sql`excluded.games`,
-            globalRank: sql`excluded.global_rank`,
             syncedAt: sql`excluded.synced_at`,
           },
         })
@@ -688,7 +685,6 @@ export function createPlayerRepo(db: Database) {
             wins: r.wins,
             games: r.wins + r.losses,
             region: r.region,
-            globalRank: null,
           })),
         )
         .onConflictDoUpdate({
@@ -705,7 +701,6 @@ export function createPlayerRepo(db: Database) {
             tier: sql`excluded.tier`,
             wins: sql`excluded.wins`,
             games: sql`excluded.games`,
-            globalRank: sql`excluded.global_rank`,
             syncedAt: sql`excluded.synced_at`,
           },
         })
