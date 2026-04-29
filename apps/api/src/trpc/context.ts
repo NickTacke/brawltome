@@ -3,7 +3,6 @@ import type { Database } from '@brawltome/database'
 import type { PlayerLinkRepo, Session, SessionRepo, UserRepo, UserWithPrimaryAccount } from '@brawltome/identity'
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { PlayerRepo } from '@brawltome/player'
-import type { RankingRepo } from '@brawltome/ranking'
 import type { MetricsRegistry, Queue, R2Client } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 
@@ -16,7 +15,6 @@ export interface Context {
   clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
   playerRepo: PlayerRepo
   clanRepo: ClanRepo
-  rankingRepo: RankingRepo
   userRepo: UserRepo
   sessionRepo: SessionRepo
   playerLinkRepo: PlayerLinkRepo

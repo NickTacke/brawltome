@@ -3,7 +3,6 @@ import {
   player,
   playerAlias,
   playerClan,
-  playerRank1v1,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
@@ -11,10 +10,8 @@ import {
   ratingHistory,
 } from '@brawltome/database'
 import { getLegendById } from '@brawltome/shared'
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, not, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
 import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
-
-const normalizeRegion = (region: string) => (region === 'all' ? 'all' : region.toUpperCase())
 
 export function createPlayerRepo(db: Database) {
   return {
@@ -314,155 +311,6 @@ export function createPlayerRepo(db: Database) {
       }
     },
 
-    get1v1Leaderboard(opts: {
-      region: string
-      sort: 'rating' | 'peakRating' | 'wins' | 'games'
-      order: 'asc' | 'desc'
-      pageSize: number
-      offset: number
-      blacklistSet: Set<number>
-    }) {
-      const sortColumn = {
-        rating: player.rating,
-        peakRating: player.peakRating,
-        wins: player.rankedWins,
-        games: player.rankedGames,
-      }[opts.sort]
-      const orderFn = opts.order === 'asc' ? asc : desc
-      return db
-        .select()
-        .from(player)
-        .where(
-          and(
-            gt(player.rating, 0),
-            opts.region !== 'all' ? eq(player.region, opts.region) : undefined,
-            opts.blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...opts.blacklistSet])) : undefined,
-          ),
-        )
-        .orderBy(orderFn(sortColumn))
-        .limit(opts.pageSize)
-        .offset(opts.offset)
-    },
-
-    get1v1LeaderboardByRank(opts: {
-      region: string
-      pageSize: number
-      offset: number
-      freshSince: Date
-      blacklistSet: Set<number>
-    }) {
-      return db
-        .select({
-          rank: playerRank1v1.rank,
-          syncedAt: playerRank1v1.syncedAt,
-          brawlhallaId: player.brawlhallaId,
-          name: player.name,
-          region: player.region,
-          rating: player.rating,
-          peakRating: player.peakRating,
-          tier: player.tier,
-          rankedGames: player.rankedGames,
-          rankedWins: player.rankedWins,
-          bestLegend: player.bestLegend,
-        })
-        .from(playerRank1v1)
-        .innerJoin(player, eq(playerRank1v1.brawlhallaId, player.brawlhallaId))
-        .where(
-          and(
-            eq(playerRank1v1.region, opts.region),
-            gt(playerRank1v1.syncedAt, opts.freshSince),
-            opts.blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...opts.blacklistSet])) : undefined,
-          ),
-        )
-        .orderBy(asc(playerRank1v1.rank))
-        .limit(opts.pageSize)
-        .offset(opts.offset)
-    },
-
-    get2v2Leaderboard(opts: {
-      region: string
-      sort: 'rating' | 'peakRating' | 'wins' | 'games'
-      order: 'asc' | 'desc'
-      pageSize: number
-      offset: number
-    }) {
-      const sortColumn = {
-        rating: playerRankedTeam.rating,
-        peakRating: playerRankedTeam.peakRating,
-        wins: playerRankedTeam.wins,
-        games: playerRankedTeam.games,
-      }[opts.sort]
-      const orderFn = opts.order === 'asc' ? asc : desc
-      const fetchLimit = (opts.offset + opts.pageSize) * 3
-
-      return db
-        .select()
-        .from(playerRankedTeam)
-        .where(
-          and(gt(playerRankedTeam.rating, 0), gt(playerRankedTeam.games, 0), eq(playerRankedTeam.region, opts.region)),
-        )
-        .orderBy(orderFn(sortColumn))
-        .limit(fetchLimit)
-    },
-
-    get2v2LeaderboardByRank(opts: {
-      region: string
-      pageSize: number
-      offset: number
-      freshSince: Date
-    }) {
-      const fetchLimit = (opts.offset + opts.pageSize) * 3
-      return db
-        .select()
-        .from(playerRankedTeam)
-        .where(
-          and(
-            gt(playerRankedTeam.globalRank, 0),
-            eq(playerRankedTeam.region, opts.region),
-            gt(playerRankedTeam.syncedAt, opts.freshSince),
-          ),
-        )
-        .orderBy(asc(playerRankedTeam.globalRank))
-        .limit(fetchLimit)
-    },
-
-    getSolo2v2Leaderboard(opts: {
-      region: string
-      sort: 'rating' | 'peakRating' | 'wins' | 'games'
-      order: 'asc' | 'desc'
-      pageSize: number
-      offset: number
-      blacklistSet: Set<number>
-    }) {
-      const sortColumn = {
-        rating: playerRankedTeam.rating,
-        peakRating: playerRankedTeam.peakRating,
-        wins: playerRankedTeam.wins,
-        games: playerRankedTeam.games,
-      }[opts.sort]
-      const orderFn = opts.order === 'asc' ? asc : desc
-      // Brawlhalla's API tie-breaks by wins desc; mirror that as a secondary ordering.
-      const orderClauses =
-        opts.sort === 'wins' ? [orderFn(sortColumn)] : [orderFn(sortColumn), desc(playerRankedTeam.wins)]
-      return db
-        .select()
-        .from(playerRankedTeam)
-        .where(
-          and(
-            gt(playerRankedTeam.rating, 0),
-            gt(playerRankedTeam.games, 0),
-            or(eq(playerRankedTeam.brawlhallaIdOne, 0), eq(playerRankedTeam.brawlhallaIdTwo, 0)),
-            eq(playerRankedTeam.region, opts.region),
-            opts.blacklistSet.size > 0
-              ? not(inArray(playerRankedTeam.brawlhallaId, [...opts.blacklistSet]))
-              : undefined,
-          ),
-        )
-        .orderBy(...orderClauses)
-        .limit(opts.pageSize)
-        .offset(opts.offset)
-    },
-
     async get1v1LeaderboardSweep(opts: {
       region: string
       pageSize: number
@@ -628,60 +476,6 @@ export function createPlayerRepo(db: Database) {
       })
     },
 
-    async batchUpsertPlayers(
-      rankings: Array<{
-        brawlhalla_id: number
-        name: string
-        rating: number
-        peak_rating: number
-        tier: string
-        games: number
-        wins: number
-        region: string
-        best_legend: number
-        best_legend_games: number
-        best_legend_wins: number
-      }>,
-    ) {
-      const now = new Date()
-      const rows = rankings.map((r) => ({
-        brawlhallaId: r.brawlhalla_id,
-        name: r.name ?? '',
-        region: r.region ?? null,
-        rating: r.rating ?? 0,
-        peakRating: r.peak_rating ?? 0,
-        tier: r.tier ?? null,
-        rankedGames: r.games ?? 0,
-        rankedWins: r.wins ?? 0,
-        bestLegend: r.best_legend ?? 0,
-        bestLegendGames: r.best_legend_games ?? 0,
-        bestLegendWins: r.best_legend_wins ?? 0,
-      }))
-
-      if (rows.length > 0) {
-        await db
-          .insert(player)
-          .values(rows as (typeof player.$inferInsert)[])
-          .onConflictDoUpdate({
-            target: player.brawlhallaId,
-            set: {
-              name: sql`excluded.name`,
-              region: sql`excluded.region`,
-              rating: sql`excluded.rating`,
-              peakRating: sql`excluded.peak_rating`,
-              tier: sql`excluded.tier`,
-              rankedGames: sql`excluded.ranked_games`,
-              rankedWins: sql`excluded.ranked_wins`,
-              bestLegend: sql`excluded.best_legend`,
-              bestLegendGames: sql`excluded.best_legend_games`,
-              bestLegendWins: sql`excluded.best_legend_wins`,
-              valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player.valhallan_confirmed_at END`,
-              lastUpdated: now,
-            },
-          })
-      }
-    },
-
     getExistingPlayerNames(ids: number[]) {
       return db.query.player
         .findMany({
@@ -689,26 +483,6 @@ export function createPlayerRepo(db: Database) {
           columns: { brawlhallaId: true, name: true },
         })
         .then((rows) => new Map(rows.map((p) => [p.brawlhallaId, p.name])))
-    },
-
-    batchInsertAliases(aliases: Array<{ brawlhallaId: number; key: string; value: string }>) {
-      if (aliases.length === 0) return Promise.resolve()
-      return db
-        .insert(playerAlias)
-        .values(aliases)
-        .onConflictDoNothing()
-        .then(() => {})
-    },
-
-    batchUpsertPlaceholderPlayers(
-      rows: Array<{ brawlhallaId: number; name: string; region: string | null; rating: number }>,
-    ) {
-      if (rows.length === 0) return Promise.resolve()
-      return db
-        .insert(player)
-        .values(rows as (typeof player.$inferInsert)[])
-        .onConflictDoNothing()
-        .then(() => {})
     },
 
     async sweepUpsert1v1(
@@ -935,174 +709,6 @@ export function createPlayerRepo(db: Database) {
             syncedAt: sql`excluded.synced_at`,
           },
         })
-    },
-
-    async replaceRankPage1v1(args: {
-      region: string
-      page: number
-      pageSize: number
-      entries: Array<{ brawlhallaId: number; rank: number }>
-    }): Promise<{ vacatedSourcePages: number[] }> {
-      const minRank = (args.page - 1) * args.pageSize + 1
-      const maxRank = args.page * args.pageSize
-      const region = normalizeRegion(args.region)
-      const batchIds = args.entries.map((e) => e.brawlhallaId)
-
-      return await db.transaction(async (tx) => {
-        const moverRows =
-          batchIds.length > 0
-            ? await tx
-                .select({ rank: playerRank1v1.rank })
-                .from(playerRank1v1)
-                .where(
-                  and(
-                    eq(playerRank1v1.region, region),
-                    inArray(playerRank1v1.brawlhallaId, batchIds),
-                    or(lt(playerRank1v1.rank, minRank), gt(playerRank1v1.rank, maxRank)),
-                  ),
-                )
-            : []
-        const vacatedSourcePages = [...new Set(moverRows.map((m) => Math.ceil(m.rank / args.pageSize)))]
-
-        await tx
-          .delete(playerRank1v1)
-          .where(
-            and(
-              eq(playerRank1v1.region, region),
-              batchIds.length > 0
-                ? or(
-                    and(gte(playerRank1v1.rank, minRank), lte(playerRank1v1.rank, maxRank)),
-                    inArray(playerRank1v1.brawlhallaId, batchIds),
-                  )
-                : and(gte(playerRank1v1.rank, minRank), lte(playerRank1v1.rank, maxRank)),
-            ),
-          )
-        if (args.entries.length > 0) {
-          await tx.insert(playerRank1v1).values(
-            args.entries.map((e) => ({
-              brawlhallaId: e.brawlhallaId,
-              region,
-              rank: e.rank,
-            })),
-          )
-        }
-
-        return { vacatedSourcePages }
-      })
-    },
-
-    async replaceRankPage2v2(args: {
-      region: string
-      page: number
-      pageSize: number
-      teams: Array<{
-        brawlhallaIdOne: number
-        brawlhallaIdTwo: number
-        teamName: string
-        rating: number
-        peakRating: number
-        tier: string
-        wins: number
-        games: number
-        globalRank: number
-      }>
-    }): Promise<{ vacatedSourcePages: number[] }> {
-      const minRank = (args.page - 1) * args.pageSize + 1
-      const maxRank = args.page * args.pageSize
-      const region = normalizeRegion(args.region)
-
-      const batchOwnerIds = new Set<number>()
-      for (const t of args.teams) {
-        batchOwnerIds.add(t.brawlhallaIdOne)
-        batchOwnerIds.add(t.brawlhallaIdTwo)
-      }
-      const ownerIdList = [...batchOwnerIds]
-
-      const rowsToInsert: Array<typeof playerRankedTeam.$inferInsert> = []
-      for (const t of args.teams) {
-        const ownerIds =
-          t.brawlhallaIdOne === t.brawlhallaIdTwo ? [t.brawlhallaIdOne] : [t.brawlhallaIdOne, t.brawlhallaIdTwo]
-        for (const ownerId of ownerIds) {
-          rowsToInsert.push({
-            brawlhallaId: ownerId,
-            brawlhallaIdOne: t.brawlhallaIdOne,
-            brawlhallaIdTwo: t.brawlhallaIdTwo,
-            teamName: t.teamName,
-            rating: t.rating,
-            peakRating: t.peakRating,
-            tier: t.tier,
-            wins: t.wins,
-            games: t.games,
-            region,
-            globalRank: t.globalRank,
-          })
-        }
-      }
-
-      return await db.transaction(async (tx) => {
-        const moverRows =
-          ownerIdList.length > 0
-            ? await tx
-                .select({
-                  one: playerRankedTeam.brawlhallaIdOne,
-                  two: playerRankedTeam.brawlhallaIdTwo,
-                  rank: playerRankedTeam.globalRank,
-                })
-                .from(playerRankedTeam)
-                .where(
-                  and(
-                    eq(playerRankedTeam.region, region),
-                    inArray(playerRankedTeam.brawlhallaId, ownerIdList),
-                    or(lt(playerRankedTeam.globalRank, minRank), gt(playerRankedTeam.globalRank, maxRank)),
-                  ),
-                )
-            : []
-        const teamSourcePages = new Set<number>()
-        const seenTeams = new Set<string>()
-        for (const r of moverRows) {
-          if (r.rank == null || r.rank <= 0) continue
-          const key = `${Math.min(r.one, r.two)}:${Math.max(r.one, r.two)}`
-          if (seenTeams.has(key)) continue
-          seenTeams.add(key)
-          teamSourcePages.add(Math.ceil(r.rank / args.pageSize))
-        }
-        const vacatedSourcePages = [...teamSourcePages]
-
-        await tx
-          .delete(playerRankedTeam)
-          .where(
-            and(
-              eq(playerRankedTeam.region, region),
-              gte(playerRankedTeam.globalRank, minRank),
-              lte(playerRankedTeam.globalRank, maxRank),
-            ),
-          )
-        if (rowsToInsert.length > 0) {
-          await tx
-            .insert(playerRankedTeam)
-            .values(rowsToInsert)
-            .onConflictDoUpdate({
-              target: [
-                playerRankedTeam.brawlhallaId,
-                playerRankedTeam.brawlhallaIdOne,
-                playerRankedTeam.brawlhallaIdTwo,
-                playerRankedTeam.region,
-              ],
-              set: {
-                teamName: sql`excluded.team_name`,
-                rating: sql`excluded.rating`,
-                peakRating: sql`excluded.peak_rating`,
-                tier: sql`excluded.tier`,
-                wins: sql`excluded.wins`,
-                games: sql`excluded.games`,
-                globalRank: sql`excluded.global_rank`,
-                syncedAt: sql`excluded.synced_at`,
-              },
-            })
-        }
-
-        return { vacatedSourcePages }
-      })
     },
 
     getEffectiveBestLegend(brawlhallaId: number) {
