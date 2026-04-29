@@ -20,7 +20,10 @@ export interface PageResponse {
 
 const BASE = 'https://api.brawlhalla.com/v1/leaderboard/ranked'
 const TIMEOUT_MS = 15_000
-const RETRY_DELAY_MS = 1000
+// Exponential backoff: 1s, 3s. Jitter spreads retries when 20 concurrent workers
+// stampede the same upstream 502 at the same instant.
+const RETRY_BACKOFFS_MS = [1000, 3000]
+const JITTER_MS = 300
 
 function buildUrl(bracket: Bracket, page: number): string {
   return `${BASE}?region=ALL&game_mode=${bracket}&page=${page}&max_results=50&leaderboard=prod`
@@ -32,19 +35,28 @@ async function fetchOnce(url: string): Promise<PageResponse> {
   return (await res.json()) as PageResponse
 }
 
+function jitter(baseMs: number): number {
+  return baseMs + (Math.random() * 2 - 1) * JITTER_MS
+}
+
 export async function fetchLeaderboardPage(opts: { bracket: Bracket; page: number }): Promise<PageResponse> {
   const url = buildUrl(opts.bracket, opts.page)
-  try {
-    return await fetchOnce(url)
-  } catch (firstErr) {
-    console.warn(`[sweep] page retry after error: ${(firstErr as Error).message} (${url})`)
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= RETRY_BACKOFFS_MS.length; attempt++) {
     try {
       return await fetchOnce(url)
-    } catch (secondErr) {
-      throw new Error(`fetchLeaderboardPage failed twice for ${url}: ${(secondErr as Error).message}`, {
-        cause: secondErr,
-      })
+    } catch (err) {
+      lastErr = err
+      if (attempt === RETRY_BACKOFFS_MS.length) break
+      const delay = jitter(RETRY_BACKOFFS_MS[attempt])
+      console.warn(
+        `[sweep] page retry ${attempt + 1}/${RETRY_BACKOFFS_MS.length} after error: ${(err as Error).message} (${url})`,
+      )
+      await new Promise((r) => setTimeout(r, delay))
     }
   }
+  throw new Error(
+    `fetchLeaderboardPage failed after ${RETRY_BACKOFFS_MS.length + 1} attempts for ${url}: ${(lastErr as Error).message}`,
+    { cause: lastErr },
+  )
 }
