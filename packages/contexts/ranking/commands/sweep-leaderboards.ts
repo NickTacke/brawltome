@@ -140,9 +140,15 @@ async function writePage(
         const region = normalizeRegion(e.region ?? '')
         const { tier, fallback } = resolveTier({ apiTier: e.tier, bestRating: e.best_rating })
         if (fallback !== 'none') onTierFallback(fallback)
+        const players = e.players as { id: number; username: string }[]
         return {
-          brawlhallaIdOne: e.players![0].id,
-          brawlhallaIdTwo: e.players![1].id,
+          brawlhallaIdOne: players[0].id,
+          brawlhallaIdTwo: players[1].id,
+          // Surfacing real usernames (vs the legacy `Player {id}` placeholder) is the only
+          // place 2v2-only players ever get a real name in the player table — 1v1/3v3 sweeps
+          // never see them.
+          playerOneName: players[0].username ?? `Player ${players[0].id}`,
+          playerTwoName: players[1].username ?? `Player ${players[1].id}`,
           teamName: '',
           rating: e.rating,
           peakRating: e.best_rating,
@@ -217,76 +223,96 @@ export function startSweep(deps: StartSweepDeps): () => Promise<void> {
 
   const tick = async () => {
     if (stopped) return
-    if (Date.now() - lastSweepStart < sweepInterval) {
-      schedule()
-      return
-    }
-    const lockValue = await acquireLock(deps.redis)
-    if (!lockValue) {
-      schedule()
-      return
-    }
-    lastSweepStart = Date.now()
-    let lockLost = false
-    // Any heartbeat failure (lock-not-ours OR Redis error) marks the lock lost. If Redis stays
-    // unreachable past LOCK_TTL_SEC the key TTL-expires and another instance can take it, so
-    // we must not assume we still own the lock during a transient outage.
-    heartbeatTimer = setInterval(() => {
-      renewLock(deps.redis, lockValue)
-        .then((ok) => {
-          if (ok) return
-          console.error('[sweep] lock lost during heartbeat')
-          lockLost = true
-          deps.metrics.incrementCounter('sweep:lock_lost_total').catch(() => {})
-        })
-        .catch((err) => {
-          console.error('[sweep] heartbeat error, treating lock as lost:', err)
-          lockLost = true
-          deps.metrics.incrementCounter('sweep:lock_lost_total').catch(() => {})
-        })
-    }, HEARTBEAT_INTERVAL_MS)
-
-    inFlight = (async () => {
-      try {
-        const sweepStart = performance.now()
-        for (const bracket of BRACKETS) {
-          if (lockLost || stopped) break
-          const r = await sweepBracket({
-            bracket,
-            repo: deps.repo,
-            fetchPage: deps.fetchPage,
-            concurrency: deps.concurrency,
-            onTierFallback: (kind) => {
-              const counter = kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
-              deps.metrics.incrementCounter(counter).catch(() => {})
-            },
-          })
-          await deps.metrics.incrementCounter(`sweep:${bracket}:pages_ok`).catch(() => {})
-          if (r.pagesSkipped > 0) await deps.metrics.incrementCounter(`sweep:${bracket}:pages_skipped`).catch(() => {})
-          if (r.pagesFailed > 0) await deps.metrics.incrementCounter(`sweep:${bracket}:pages_failed`).catch(() => {})
-          console.log(
-            `[sweep] ${bracket}: ${r.pagesOk} ok, ${r.pagesSkipped} skipped, ${r.pagesFailed} failed, ${r.rowsWritten} rows, ${r.durationMs.toFixed(0)}ms`,
-          )
-        }
-        const elapsed = performance.now() - sweepStart
-        console.log(`[sweep] cycle complete in ${(elapsed / 1000).toFixed(1)}s`)
-      } catch (err) {
-        console.error('[sweep] cycle error:', err)
-      } finally {
-        if (heartbeatTimer) {
-          clearInterval(heartbeatTimer)
-          heartbeatTimer = null
-        }
-        if (!lockLost) await releaseLock(deps.redis, lockValue)
-        else lastSweepStart = 0 // allow next tick to retry without waiting for the cadence
+    // Outer try/finally guarantees the loop reschedules itself on ANY thrown error
+    // (e.g. transient Redis outage in acquireLock/releaseLock). Without this, an
+    // unhandled throw from acquireLock would silently kill the worker until restart.
+    try {
+      if (Date.now() - lastSweepStart < sweepInterval) {
+        return
       }
-    })()
-    // Block re-scheduling until the in-flight sweep finishes. This guards against a tick firing
-    // while a sweep is still running on the same instance, without the await, we'd re-enter
-    // tick() with a stale lastSweepStart and could double-fire.
-    await inFlight
-    inFlight = null
-    schedule()
+      let lockValue: string | null = null
+      try {
+        lockValue = await acquireLock(deps.redis)
+      } catch (err) {
+        console.error('[sweep] acquireLock failed, will retry next tick:', err)
+        return
+      }
+      if (!lockValue) {
+        return
+      }
+      lastSweepStart = Date.now()
+      let lockLost = false
+      // Any heartbeat failure (lock-not-ours OR Redis error) marks the lock lost. If Redis stays
+      // unreachable past LOCK_TTL_SEC the key TTL-expires and another instance can take it, so
+      // we must not assume we still own the lock during a transient outage.
+      heartbeatTimer = setInterval(() => {
+        renewLock(deps.redis, lockValue)
+          .then((ok) => {
+            if (ok) return
+            console.error('[sweep] lock lost during heartbeat')
+            lockLost = true
+            deps.metrics.incrementCounter('sweep:lock_lost_total').catch(() => {})
+          })
+          .catch((err) => {
+            console.error('[sweep] heartbeat error, treating lock as lost:', err)
+            lockLost = true
+            deps.metrics.incrementCounter('sweep:lock_lost_total').catch(() => {})
+          })
+      }, HEARTBEAT_INTERVAL_MS)
+
+      inFlight = (async () => {
+        try {
+          const sweepStart = performance.now()
+          for (const bracket of BRACKETS) {
+            if (lockLost || stopped) break
+            const r = await sweepBracket({
+              bracket,
+              repo: deps.repo,
+              fetchPage: deps.fetchPage,
+              concurrency: deps.concurrency,
+              onTierFallback: (kind) => {
+                const counter = kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
+                deps.metrics.incrementCounter(counter).catch(() => {})
+              },
+            })
+            if (r.pagesOk > 0)
+              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_ok`, r.pagesOk).catch(() => {})
+            if (r.pagesSkipped > 0)
+              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_skipped`, r.pagesSkipped).catch(() => {})
+            if (r.pagesFailed > 0)
+              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_failed`, r.pagesFailed).catch(() => {})
+            console.log(
+              `[sweep] ${bracket}: ${r.pagesOk} ok, ${r.pagesSkipped} skipped, ${r.pagesFailed} failed, ${r.rowsWritten} rows, ${r.durationMs.toFixed(0)}ms`,
+            )
+          }
+          const elapsed = performance.now() - sweepStart
+          console.log(`[sweep] cycle complete in ${(elapsed / 1000).toFixed(1)}s`)
+        } catch (err) {
+          console.error('[sweep] cycle error:', err)
+        } finally {
+          if (heartbeatTimer) {
+            clearInterval(heartbeatTimer)
+            heartbeatTimer = null
+          }
+          if (!lockLost) {
+            try {
+              await releaseLock(deps.redis, lockValue)
+            } catch (err) {
+              console.error('[sweep] releaseLock failed (lock will TTL-expire):', err)
+            }
+          } else {
+            lastSweepStart = 0 // allow next tick to retry without waiting for the cadence
+          }
+        }
+      })()
+      // Block re-scheduling until the in-flight sweep finishes. This guards against a tick firing
+      // while a sweep is still running on the same instance, without the await, we'd re-enter
+      // tick() with a stale lastSweepStart and could double-fire.
+      await inFlight
+      inFlight = null
+    } finally {
+      schedule()
+    }
   }
 
   schedule()

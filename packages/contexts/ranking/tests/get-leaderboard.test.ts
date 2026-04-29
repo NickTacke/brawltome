@@ -14,31 +14,146 @@ beforeAll(async () => {
 
   // 1v1 fixtures
   await repo.sweepUpsert1v1([
-    { brawlhallaId: 9_910_001, name: 'Top', region: 'EU', rating: 2400, peakRating: 2400, tier: 'Valhallan', wins: 100, losses: 30 },
-    { brawlhallaId: 9_910_002, name: 'Mid', region: 'EU', rating: 2200, peakRating: 2300, tier: 'Diamond', wins: 80, losses: 40 },
-    { brawlhallaId: 9_910_003, name: 'Low', region: 'US-E', rating: 1500, peakRating: 1500, tier: 'Gold', wins: 30, losses: 30 },
-    { brawlhallaId: 9_910_004, name: 'Stale', region: 'EU', rating: 2000, peakRating: 2000, tier: 'Diamond', wins: 50, losses: 20 },
+    {
+      brawlhallaId: 9_910_001,
+      name: 'Top',
+      region: 'EU',
+      rating: 2400,
+      peakRating: 2400,
+      tier: 'Valhallan',
+      wins: 100,
+      losses: 30,
+    },
+    {
+      brawlhallaId: 9_910_002,
+      name: 'Mid',
+      region: 'EU',
+      rating: 2200,
+      peakRating: 2300,
+      tier: 'Diamond',
+      wins: 80,
+      losses: 40,
+    },
+    {
+      brawlhallaId: 9_910_003,
+      name: 'Low',
+      region: 'US-E',
+      rating: 1500,
+      peakRating: 1500,
+      tier: 'Gold',
+      wins: 30,
+      losses: 30,
+    },
+    {
+      brawlhallaId: 9_910_004,
+      name: 'Stale',
+      region: 'EU',
+      rating: 2000,
+      peakRating: 2000,
+      tier: 'Diamond',
+      wins: 50,
+      losses: 20,
+    },
     // Same rating as 9_910_002, fewer wins, must rank below.
-    { brawlhallaId: 9_910_005, name: 'Tied', region: 'EU', rating: 2200, peakRating: 2300, tier: 'Diamond', wins: 70, losses: 40 },
+    {
+      brawlhallaId: 9_910_005,
+      name: 'Tied',
+      region: 'EU',
+      rating: 2200,
+      peakRating: 2300,
+      tier: 'Diamond',
+      wins: 70,
+      losses: 40,
+    },
   ])
   // Make 9_910_004 stale.
-  await db.update(player).set({ syncedAt1v1: new Date(Date.now() - 60 * 60 * 1000) }).where(sql`${player.brawlhallaId} = 9910004`)
+  await db
+    .update(player)
+    .set({ syncedAt1v1: new Date(Date.now() - 60 * 60 * 1000) })
+    .where(sql`${player.brawlhallaId} = 9910004`)
 
   // 3v3 fixtures (subset of TEST_IDS)
   await repo.sweepUpsert3v3([
-    { brawlhallaId: 9_910_001, name: 'Top', region: 'EU', rating: 2100, peakRating: 2100, tier: 'Diamond', wins: 60, losses: 30 },
-    { brawlhallaId: 9_910_002, name: 'Mid', region: 'EU', rating: 1900, peakRating: 1900, tier: 'Platinum', wins: 50, losses: 25 },
+    {
+      brawlhallaId: 9_910_001,
+      name: 'Top',
+      region: 'EU',
+      rating: 2100,
+      peakRating: 2100,
+      tier: 'Diamond',
+      wins: 60,
+      losses: 30,
+    },
+    {
+      brawlhallaId: 9_910_002,
+      name: 'Mid',
+      region: 'EU',
+      rating: 1900,
+      peakRating: 1900,
+      tier: 'Platinum',
+      wins: 50,
+      losses: 25,
+    },
+    {
+      brawlhallaId: 9_910_003,
+      name: 'Low',
+      region: 'US-E',
+      rating: 2200,
+      peakRating: 2200,
+      tier: 'Diamond',
+      wins: 70,
+      losses: 30,
+    },
   ])
+  // Make 9_910_003's 3v3 row stale so the 3v3 freshness test actually exercises the filter.
+  await db
+    .update(player)
+    .set({ syncedAt3v3: new Date(Date.now() - 60 * 60 * 1000) })
+    .where(sql`${player.brawlhallaId} = 9910003`)
 
   // 2v2 team fixtures
   await repo.sweepUpsert2v2([
-    { brawlhallaIdOne: 9_911_001, brawlhallaIdTwo: 9_911_002, teamName: 'A', rating: 2000, peakRating: 2000, tier: 'Diamond', wins: 30, losses: 10, region: 'EU' },
-    { brawlhallaIdOne: 9_911_003, brawlhallaIdTwo: 9_911_004, teamName: 'B', rating: 1800, peakRating: 1900, tier: 'Platinum', wins: 25, losses: 15, region: 'US-E' },
+    {
+      brawlhallaIdOne: 9_911_001,
+      brawlhallaIdTwo: 9_911_002,
+      playerOneName: 'TeamA-One',
+      playerTwoName: 'TeamA-Two',
+      teamName: 'A',
+      rating: 2000,
+      peakRating: 2000,
+      tier: 'Diamond',
+      wins: 30,
+      losses: 10,
+      region: 'EU',
+    },
+    {
+      brawlhallaIdOne: 9_911_003,
+      brawlhallaIdTwo: 9_911_004,
+      playerOneName: 'TeamB-One',
+      playerTwoName: 'TeamB-Two',
+      teamName: 'B',
+      rating: 1800,
+      peakRating: 1900,
+      tier: 'Platinum',
+      wins: 25,
+      losses: 15,
+      region: 'US-E',
+    },
   ])
 
   // Solo 2v2 fixture
   await repo.sweepUpsertSolo2v2([
-    { brawlhallaId: 9_911_001, name: 'Top', teamName: '', rating: 1700, peakRating: 1700, tier: 'Platinum', wins: 20, losses: 10, region: 'EU' },
+    {
+      brawlhallaId: 9_911_001,
+      name: 'Top',
+      teamName: '',
+      rating: 1700,
+      peakRating: 1700,
+      tier: 'Platinum',
+      wins: 20,
+      losses: 10,
+      region: 'EU',
+    },
   ])
 })
 
@@ -75,7 +190,10 @@ describe('get3v3LeaderboardSweep', () => {
 describe('get2v2LeaderboardSweep', () => {
   it('returns one row per team (deduped) with computed rank', async () => {
     const rows = await repo.get2v2LeaderboardSweep({ region: 'all', pageSize: 10, offset: 0, freshSince: FRESH_30M() })
-    const teamIds = rows.filter((r: any) => TEAM_IDS.includes(r.brawlhalla_id_one ?? r.brawlhallaIdOne)).map((r: any) => r.brawlhalla_id_one ?? r.brawlhallaIdOne).sort()
+    const teamIds = rows
+      .filter((r: any) => TEAM_IDS.includes(r.brawlhalla_id_one ?? r.brawlhallaIdOne))
+      .map((r: any) => r.brawlhalla_id_one ?? r.brawlhallaIdOne)
+      .sort()
     // Both teams' "first owner" id should appear once each.
     expect(teamIds).toEqual([9_911_001, 9_911_003])
   })
@@ -83,7 +201,12 @@ describe('get2v2LeaderboardSweep', () => {
 
 describe('getSolo2v2LeaderboardSweep', () => {
   it('only returns rows where brawlhalla_id_two = 0', async () => {
-    const rows = await repo.getSolo2v2LeaderboardSweep({ region: 'all', pageSize: 10, offset: 0, freshSince: FRESH_30M() })
+    const rows = await repo.getSolo2v2LeaderboardSweep({
+      region: 'all',
+      pageSize: 10,
+      offset: 0,
+      freshSince: FRESH_30M(),
+    })
     expect(rows.some((r) => r.brawlhallaId === 9_911_001 && r.brawlhallaIdTwo === 0)).toBe(true)
     // None of the team-only rows should leak through.
     expect(rows.every((r) => r.brawlhallaIdTwo === 0)).toBe(true)

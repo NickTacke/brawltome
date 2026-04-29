@@ -3,10 +3,7 @@ import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGE_SIZE, STALE_RANK_MS 
 
 const MAX_PAGE = 1000
 
-export async function getLeaderboard(
-  deps: { playerRepo: PlayerRepo },
-  input: LeaderboardInput,
-) {
+export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: LeaderboardInput) {
   const page = Math.max(1, Math.min(input.page, MAX_PAGE))
   const pageSize = Math.max(1, Math.min(input.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
   const offset = (page - 1) * pageSize
@@ -33,7 +30,12 @@ export async function getLeaderboard(
   }
 
   if (input.bracket === 'solo2v2') {
-    const rows = await deps.playerRepo.getSolo2v2LeaderboardSweep({ region: input.region, pageSize, offset, freshSince })
+    const rows = await deps.playerRepo.getSolo2v2LeaderboardSweep({
+      region: input.region,
+      pageSize,
+      offset,
+      freshSince,
+    })
     const ids = rows.map((r) => r.brawlhallaId)
     const [nameMap, effective] = await Promise.all([
       deps.playerRepo.getPlayerNames(ids),

@@ -1,36 +1,50 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import Redis from 'ioredis'
+import type { PlayerRepo } from '@brawltome/player'
 import type { MetricsRegistry } from '@brawltome/shared'
+import Redis from 'ioredis'
 import type { PageResponse } from '../commands/leaderboard-endpoint'
 import { startSweep, sweepBracket } from '../commands/sweep-leaderboards'
 
-interface FakeRepo {
-  upsert1v1Calls: any[][]
-  upsert3v3Calls: any[][]
-  upsert2v2Calls: any[][]
-  upsertSoloCalls: any[][]
+type SweepRepo = Pick<PlayerRepo, 'sweepUpsert1v1' | 'sweepUpsert3v3' | 'sweepUpsert2v2' | 'sweepUpsertSolo2v2'>
+
+type Upsert1v1Rows = Parameters<SweepRepo['sweepUpsert1v1']>[0]
+type Upsert3v3Rows = Parameters<SweepRepo['sweepUpsert3v3']>[0]
+type Upsert2v2Rows = Parameters<SweepRepo['sweepUpsert2v2']>[0]
+type UpsertSolo2v2Rows = Parameters<SweepRepo['sweepUpsertSolo2v2']>[0]
+
+interface FakeRepo extends SweepRepo {
+  upsert1v1Calls: Upsert1v1Rows[]
+  upsert3v3Calls: Upsert3v3Rows[]
+  upsert2v2Calls: Upsert2v2Rows[]
+  upsertSoloCalls: UpsertSolo2v2Rows[]
 }
 
-function makeFakeRepo(): FakeRepo & {
-  sweepUpsert1v1: (r: any[]) => Promise<void>
-  sweepUpsert3v3: (r: any[]) => Promise<void>
-  sweepUpsert2v2: (r: any[]) => Promise<void>
-  sweepUpsertSolo2v2: (r: any[]) => Promise<void>
-} {
-  const f: any = { upsert1v1Calls: [], upsert3v3Calls: [], upsert2v2Calls: [], upsertSoloCalls: [] }
-  f.sweepUpsert1v1 = async (r: any[]) => {
-    f.upsert1v1Calls.push(r)
-  }
-  f.sweepUpsert3v3 = async (r: any[]) => {
-    f.upsert3v3Calls.push(r)
-  }
-  f.sweepUpsert2v2 = async (r: any[]) => {
-    f.upsert2v2Calls.push(r)
-  }
-  f.sweepUpsertSolo2v2 = async (r: any[]) => {
-    f.upsertSoloCalls.push(r)
+function makeFakeRepo(): FakeRepo {
+  const f: FakeRepo = {
+    upsert1v1Calls: [],
+    upsert3v3Calls: [],
+    upsert2v2Calls: [],
+    upsertSoloCalls: [],
+    sweepUpsert1v1: async (r) => {
+      f.upsert1v1Calls.push(r)
+    },
+    sweepUpsert3v3: async (r) => {
+      f.upsert3v3Calls.push(r)
+    },
+    sweepUpsert2v2: async (r) => {
+      f.upsert2v2Calls.push(r)
+    },
+    sweepUpsertSolo2v2: async (r) => {
+      f.upsertSoloCalls.push(r)
+    },
   }
   return f
+}
+
+// PlayerRepo type is huge — startSweep only ever calls the four sweep methods,
+// so cast through `unknown` to hand the test fake to the production code path.
+function asRepo(r: SweepRepo): PlayerRepo {
+  return r as unknown as PlayerRepo
 }
 
 function makeFakeFetcher(pagesByNumber: Map<number, PageResponse>) {
@@ -93,7 +107,7 @@ describe('sweepBracket 1v1', () => {
 
     const result = await sweepBracket({
       bracket: '1v1',
-      repo: repo as any,
+      repo: asRepo(repo),
       fetchPage: fakeFetcher.fetch,
       concurrency: 5,
       onTierFallback: () => {},
@@ -102,7 +116,12 @@ describe('sweepBracket 1v1', () => {
     expect(fakeFetcher.pagesFetched.sort()).toEqual([1, 2])
     expect(result.pagesOk).toBe(2)
     expect(result.pagesSkipped).toBe(0)
-    expect(repo.upsert1v1Calls.flat().map((r) => r.brawlhallaId).sort()).toEqual([1, 2])
+    expect(
+      repo.upsert1v1Calls
+        .flat()
+        .map((r) => r.brawlhallaId)
+        .sort(),
+    ).toEqual([1, 2])
   })
 
   it('normalizes JPS region to JPN', async () => {
@@ -130,7 +149,7 @@ describe('sweepBracket 1v1', () => {
     const repo = makeFakeRepo()
     await sweepBracket({
       bracket: '1v1',
-      repo: repo as any,
+      repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
       onTierFallback: () => {},
@@ -163,7 +182,7 @@ describe('sweepBracket 1v1', () => {
     const fallbacks: string[] = []
     await sweepBracket({
       bracket: '1v1',
-      repo: repo as any,
+      repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
       onTierFallback: (k) => fallbacks.push(k),
@@ -176,7 +195,7 @@ describe('sweepBracket 1v1', () => {
     const repo = makeFakeRepo()
     const result = await sweepBracket({
       bracket: '1v1',
-      repo: repo as any,
+      repo: asRepo(repo),
       fetchPage: async (opts) => {
         if (opts.page === 1) {
           return {
@@ -223,7 +242,7 @@ describe('sweepBracket 1v1', () => {
   })
 
   it('counts a failed page when repo write throws', async () => {
-    const repo: any = {
+    const repo: SweepRepo = {
       sweepUpsert1v1: async () => {
         throw new Error('db down')
       },
@@ -233,7 +252,7 @@ describe('sweepBracket 1v1', () => {
     }
     const result = await sweepBracket({
       bracket: '1v1',
-      repo,
+      repo: asRepo(repo),
       fetchPage: async () => ({
         total_pages: 1,
         rankings: [
@@ -260,7 +279,7 @@ describe('sweepBracket 1v1', () => {
 })
 
 describe('sweepBracket 2v2', () => {
-  it('passes both player ids and team rating to sweepUpsert2v2', async () => {
+  it('passes both player ids, usernames, and team rating to sweepUpsert2v2', async () => {
     const pages = new Map<number, PageResponse>([
       [
         1,
@@ -269,8 +288,8 @@ describe('sweepBracket 2v2', () => {
           rankings: [
             {
               players: [
-                { id: 100, username: 'A' },
-                { id: 200, username: 'B' },
+                { id: 100, username: 'Alpha' },
+                { id: 200, username: 'Beta' },
               ],
               rating: 1900,
               best_rating: 2000,
@@ -287,7 +306,7 @@ describe('sweepBracket 2v2', () => {
     const repo = makeFakeRepo()
     await sweepBracket({
       bracket: '2v2',
-      repo: repo as any,
+      repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
       onTierFallback: () => {},
@@ -295,6 +314,8 @@ describe('sweepBracket 2v2', () => {
     const team = repo.upsert2v2Calls.flat()[0]
     expect(team.brawlhallaIdOne).toBe(100)
     expect(team.brawlhallaIdTwo).toBe(200)
+    expect(team.playerOneName).toBe('Alpha')
+    expect(team.playerTwoName).toBe('Beta')
     expect(team.rating).toBe(1900)
   })
 })
@@ -324,7 +345,7 @@ describe('sweepBracket solo_2v2', () => {
     const repo = makeFakeRepo()
     await sweepBracket({
       bracket: 'solo_2v2',
-      repo: repo as any,
+      repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
       onTierFallback: () => {},
@@ -360,12 +381,7 @@ describe('startSweep', () => {
     let calls = 0
     const stop = startSweep({
       redis,
-      repo: {
-        sweepUpsert1v1: async () => {},
-        sweepUpsert3v3: async () => {},
-        sweepUpsert2v2: async () => {},
-        sweepUpsertSolo2v2: async () => {},
-      } as any,
+      repo: asRepo(makeFakeRepo()),
       metrics: NULL_METRICS,
       fetchPage: async () => {
         calls++
@@ -385,12 +401,7 @@ describe('startSweep', () => {
     let calls = 0
     const stop = startSweep({
       redis,
-      repo: {
-        sweepUpsert1v1: async () => {},
-        sweepUpsert3v3: async () => {},
-        sweepUpsert2v2: async () => {},
-        sweepUpsertSolo2v2: async () => {},
-      } as any,
+      repo: asRepo(makeFakeRepo()),
       metrics: NULL_METRICS,
       fetchPage: async () => {
         calls++
@@ -405,5 +416,45 @@ describe('startSweep', () => {
     // Each sweep fetches page 1 of 4 brackets = 4 calls per sweep; expect at least 4.
     expect(calls).toBeGreaterThanOrEqual(4)
     expect(calls).toBeLessThanOrEqual(12)
+  })
+
+  it('reschedules and recovers when redis throws inside acquireLock', async () => {
+    // Fail the first acquireLock call, then succeed (with a free lock) on the second.
+    // If tick() did not catch the throw, schedule() would never run and `calls` would stay 0.
+    await redis.del('sweep:lock').catch(() => {})
+    let setCalls = 0
+    const realRedis = redis
+    const fakeRedis = new Proxy(realRedis, {
+      get(target, prop, receiver) {
+        if (prop === 'set') {
+          return async (...args: unknown[]) => {
+            setCalls++
+            if (setCalls === 1) throw new Error('transient redis outage')
+            // biome-ignore lint/suspicious/noExplicitAny: forwarding to ioredis variadic set()
+            return (target.set as any)(...args)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    }) as Redis
+
+    let fetchCalls = 0
+    const stop = startSweep({
+      redis: fakeRedis,
+      repo: asRepo(makeFakeRepo()),
+      metrics: NULL_METRICS,
+      fetchPage: async () => {
+        fetchCalls++
+        return { total_pages: 1, rankings: [] }
+      },
+      tickIntervalMs: 50,
+      sweepIntervalMs: 50,
+    })
+    await new Promise((r) => setTimeout(r, 400))
+    await stop()
+    await redis.del('sweep:lock').catch(() => {})
+    // First tick threw inside acquireLock; subsequent ticks must still fire and run a sweep.
+    expect(setCalls).toBeGreaterThanOrEqual(2)
+    expect(fetchCalls).toBeGreaterThanOrEqual(4)
   })
 })

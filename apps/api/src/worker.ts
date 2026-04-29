@@ -231,9 +231,7 @@ Promise.all(starts).catch(console.error)
 
 const playerRepo = createPlayerRepo(db)
 const stopSweep =
-  process.env.DISABLE_JANITOR === '1'
-    ? async () => {}
-    : startSweep({ redis: newRedis(), repo: playerRepo, metrics })
+  process.env.DISABLE_JANITOR === '1' ? async () => {} : startSweep({ redis: newRedis(), repo: playerRepo, metrics })
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
