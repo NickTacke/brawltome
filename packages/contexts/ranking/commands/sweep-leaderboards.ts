@@ -20,7 +20,10 @@ export interface SweepBracketResult {
   durationMs: number
 }
 
-const DEFAULT_CONCURRENCY = 20
+// Concurrency 10 (down from 20) reduces upstream pressure — production traffic
+// produced clustered 502s at 20 even with retries. Sweep wall-clock is ~8-10min
+// at 10, still well under the 15min cadence.
+const DEFAULT_CONCURRENCY = 10
 
 export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracketResult> {
   const fetchPage = deps.fetchPage ?? fetchLeaderboardPage
