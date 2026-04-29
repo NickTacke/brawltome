@@ -225,13 +225,21 @@ export function startSweep(deps: StartSweepDeps): () => Promise<void> {
     }
     lastSweepStart = Date.now()
     let lockLost = false
+    // Any heartbeat failure (lock-not-ours OR Redis error) marks the lock lost. If Redis stays
+    // unreachable past LOCK_TTL_SEC the key TTL-expires and another instance can take it, so
+    // we must not assume we still own the lock during a transient outage.
     heartbeatTimer = setInterval(() => {
       renewLock(deps.redis, lockValue)
         .then((ok) => {
-          if (!ok) lockLost = true
-        })
-        .catch(() => {
+          if (ok) return
+          console.error('[sweep] lock lost during heartbeat')
           lockLost = true
+          deps.metrics.incrementCounter('sweep:lock_lost_total').catch(() => {})
+        })
+        .catch((err) => {
+          console.error('[sweep] heartbeat error, treating lock as lost:', err)
+          lockLost = true
+          deps.metrics.incrementCounter('sweep:lock_lost_total').catch(() => {})
         })
     }, HEARTBEAT_INTERVAL_MS)
 
@@ -267,8 +275,12 @@ export function startSweep(deps: StartSweepDeps): () => Promise<void> {
           heartbeatTimer = null
         }
         if (!lockLost) await releaseLock(deps.redis, lockValue)
+        else lastSweepStart = 0 // allow next tick to retry without waiting for the cadence
       }
     })()
+    // Block re-scheduling until the in-flight sweep finishes. This guards against a tick firing
+    // while a sweep is still running on the same instance, without the await, we'd re-enter
+    // tick() with a stale lastSweepStart and could double-fire.
     await inFlight
     inFlight = null
     schedule()

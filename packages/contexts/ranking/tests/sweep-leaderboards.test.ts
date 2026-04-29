@@ -404,5 +404,6 @@ describe('startSweep', () => {
     await stop()
     // Each sweep fetches page 1 of 4 brackets = 4 calls per sweep; expect at least 4.
     expect(calls).toBeGreaterThanOrEqual(4)
+    expect(calls).toBeLessThanOrEqual(12)
   })
 })
