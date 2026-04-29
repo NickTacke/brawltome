@@ -472,6 +472,128 @@ export function createPlayerRepo(db: Database) {
         .offset(opts.offset)
     },
 
+    async get1v1LeaderboardSweep(opts: {
+      region: string
+      pageSize: number
+      offset: number
+      freshSince: Date
+    }) {
+      const ranked = db
+        .select({
+          brawlhallaId: player.brawlhallaId,
+          name: player.name,
+          region: player.region,
+          rating: player.rating,
+          peakRating: player.peakRating,
+          tier: player.tier,
+          rankedGames: player.rankedGames,
+          rankedWins: player.rankedWins,
+          bestLegend: player.bestLegend,
+          rank: sql<number>`row_number() over (order by ${player.rating} desc, ${player.rankedWins} desc)`.as('rank'),
+        })
+        .from(player)
+        .where(
+          and(
+            gt(player.syncedAt1v1, opts.freshSince),
+            opts.region !== 'all' ? eq(player.region, opts.region) : undefined,
+          ),
+        )
+        .as('ranked')
+      return db
+        .select()
+        .from(ranked)
+        .orderBy(asc(ranked.rank))
+        .limit(opts.pageSize)
+        .offset(opts.offset)
+    },
+
+    async get3v3LeaderboardSweep(opts: {
+      region: string
+      pageSize: number
+      offset: number
+      freshSince: Date
+    }) {
+      const ranked = db
+        .select({
+          brawlhallaId: player.brawlhallaId,
+          name: player.name,
+          region: player.region,
+          rating: player.rating3v3,
+          peakRating: player.peakRating3v3,
+          tier: player.tier3v3,
+          wins: player.wins3v3,
+          losses: player.losses3v3,
+          rank: sql<number>`row_number() over (order by ${player.rating3v3} desc, ${player.wins3v3} desc)`.as('rank'),
+        })
+        .from(player)
+        .where(
+          and(
+            gt(player.syncedAt3v3, opts.freshSince),
+            opts.region !== 'all' ? eq(player.region, opts.region) : undefined,
+          ),
+        )
+        .as('ranked')
+      return db.select().from(ranked).orderBy(asc(ranked.rank)).limit(opts.pageSize).offset(opts.offset)
+    },
+
+    async get2v2LeaderboardSweep(opts: {
+      region: string
+      pageSize: number
+      offset: number
+      freshSince: Date
+    }) {
+      // Dedupe by canonical (least, greatest) pair, then compute rank by rating/wins.
+      // Two-row-per-team owner pattern means each team can show up twice — DISTINCT ON keeps one.
+      const result = await db.execute(sql`
+        WITH dedup AS (
+          SELECT DISTINCT ON (LEAST(brawlhalla_id_one, brawlhalla_id_two), GREATEST(brawlhalla_id_one, brawlhalla_id_two))
+            brawlhalla_id_one, brawlhalla_id_two, team_name, rating, peak_rating, tier, wins, games, region, synced_at
+          FROM player_ranked_team
+          WHERE synced_at > ${opts.freshSince.toISOString()}::timestamp
+            AND brawlhalla_id_two != 0 AND brawlhalla_id_one != 0
+            ${opts.region !== 'all' ? sql`AND region = ${opts.region}` : sql``}
+          ORDER BY LEAST(brawlhalla_id_one, brawlhalla_id_two), GREATEST(brawlhalla_id_one, brawlhalla_id_two), rating DESC
+        )
+        SELECT *, ROW_NUMBER() OVER (ORDER BY rating DESC, wins DESC) AS rank
+        FROM dedup
+        ORDER BY rank
+        LIMIT ${opts.pageSize}
+        OFFSET ${opts.offset}
+      `)
+      return Array.isArray(result) ? result : ((result as { rows?: any[] }).rows ?? [])
+    },
+
+    async getSolo2v2LeaderboardSweep(opts: {
+      region: string
+      pageSize: number
+      offset: number
+      freshSince: Date
+    }) {
+      const ranked = db
+        .select({
+          brawlhallaId: playerRankedTeam.brawlhallaId,
+          brawlhallaIdOne: playerRankedTeam.brawlhallaIdOne,
+          brawlhallaIdTwo: playerRankedTeam.brawlhallaIdTwo,
+          region: playerRankedTeam.region,
+          rating: playerRankedTeam.rating,
+          peakRating: playerRankedTeam.peakRating,
+          tier: playerRankedTeam.tier,
+          wins: playerRankedTeam.wins,
+          games: playerRankedTeam.games,
+          rank: sql<number>`row_number() over (order by ${playerRankedTeam.rating} desc, ${playerRankedTeam.wins} desc)`.as('rank'),
+        })
+        .from(playerRankedTeam)
+        .where(
+          and(
+            gt(playerRankedTeam.syncedAt, opts.freshSince),
+            eq(playerRankedTeam.brawlhallaIdTwo, 0),
+            opts.region !== 'all' ? eq(playerRankedTeam.region, opts.region) : undefined,
+          ),
+        )
+        .as('ranked')
+      return db.select().from(ranked).orderBy(asc(ranked.rank)).limit(opts.pageSize).offset(opts.offset)
+    },
+
     getPlayerNames(playerIds: number[]) {
       if (playerIds.length === 0) return Promise.resolve(new Map<number, string>())
       return db
