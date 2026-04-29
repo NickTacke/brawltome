@@ -13,6 +13,7 @@ export interface SweepBracketDeps {
 export interface SweepBracketResult {
   pagesOk: number
   pagesSkipped: number
+  pagesFailed: number
   rowsWritten: number
   durationMs: number
 }
@@ -27,6 +28,7 @@ export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracket
   const start = performance.now()
   let pagesOk = 0
   let pagesSkipped = 0
+  let pagesFailed = 0
   let rowsWritten = 0
 
   let firstPage: PageResponse
@@ -35,14 +37,22 @@ export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracket
   } catch (err) {
     console.error(`[sweep] ${deps.bracket}: failed to fetch page 1:`, err)
     pagesSkipped++
-    return { pagesOk, pagesSkipped, rowsWritten, durationMs: performance.now() - start }
+    return { pagesOk, pagesSkipped, pagesFailed, rowsWritten, durationMs: performance.now() - start }
   }
   const totalPages = firstPage.total_pages
-  const written = await writePage(deps.bracket, firstPage.rankings, deps.repo, onTierFallback)
-  pagesOk++
-  rowsWritten += written
+  try {
+    const written = await writePage(deps.bracket, firstPage.rankings, deps.repo, onTierFallback)
+    pagesOk++
+    rowsWritten += written
+  } catch (err) {
+    console.error(`[sweep] ${deps.bracket} page 1 write failed:`, err)
+    pagesFailed++
+  }
 
   const pageNumbers = Array.from({ length: Math.max(0, totalPages - 1) }, (_, i) => i + 2)
+  // Workers race on cursor++. Safe because JS is single-threaded and cursor++
+  // happens between awaits, so no two workers can read the same idx. Adding any
+  // await between cursor++ and pageNumbers[idx] would break this.
   let cursor = 0
   await Promise.all(
     Array.from({ length: concurrency }, async () => {
@@ -50,20 +60,27 @@ export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracket
         const idx = cursor++
         if (idx >= pageNumbers.length) return
         const page = pageNumbers[idx]
+        let res: PageResponse
         try {
-          const res = await fetchPage({ bracket: deps.bracket, page })
+          res = await fetchPage({ bracket: deps.bracket, page })
+        } catch (err) {
+          console.error(`[sweep] ${deps.bracket} page ${page} fetch skipped:`, err)
+          pagesSkipped++
+          continue
+        }
+        try {
           const w = await writePage(deps.bracket, res.rankings, deps.repo, onTierFallback)
           pagesOk++
           rowsWritten += w
         } catch (err) {
-          console.error(`[sweep] ${deps.bracket} page ${page} skipped:`, err)
-          pagesSkipped++
+          console.error(`[sweep] ${deps.bracket} page ${page} write failed:`, err)
+          pagesFailed++
         }
       }
     }),
   )
 
-  return { pagesOk, pagesSkipped, rowsWritten, durationMs: performance.now() - start }
+  return { pagesOk, pagesSkipped, pagesFailed, rowsWritten, durationMs: performance.now() - start }
 }
 
 async function writePage(
@@ -74,14 +91,29 @@ async function writePage(
 ): Promise<number> {
   if (entries.length === 0) return 0
   if (bracket === '1v1' || bracket === '3v3') {
-    const rows = entries.map((e) => {
+    type SoloRow = {
+      brawlhallaId: number
+      name: string
+      region: string
+      rating: number
+      peakRating: number
+      tier: string
+      wins: number
+      losses: number
+    }
+    const rows: SoloRow[] = []
+    for (const e of entries) {
       const id = e.id ?? e.players?.[0]?.id
+      if (id === undefined) {
+        console.warn(`[sweep] ${bracket} skipping entry with no id:`, JSON.stringify(e))
+        continue
+      }
       const name = e.username ?? e.players?.[0]?.username ?? `Player ${id}`
       const region = normalizeRegion(e.region ?? '')
       const { tier, fallback } = resolveTier({ apiTier: e.tier, bestRating: e.best_rating })
       if (fallback !== 'none') onTierFallback(fallback)
-      return {
-        brawlhallaId: id!,
+      rows.push({
+        brawlhallaId: id,
         name,
         region,
         rating: e.rating,
@@ -89,8 +121,8 @@ async function writePage(
         tier,
         wins: e.wins,
         losses: e.losses,
-      }
-    })
+      })
+    }
     if (bracket === '1v1') await repo.sweepUpsert1v1(rows)
     else await repo.sweepUpsert3v3(rows)
     return rows.length

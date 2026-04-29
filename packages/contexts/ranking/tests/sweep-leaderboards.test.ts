@@ -217,6 +217,43 @@ describe('sweepBracket 1v1', () => {
     })
     expect(result.pagesOk).toBe(2)
     expect(result.pagesSkipped).toBe(1)
+    expect(result.pagesFailed).toBe(0)
+  })
+
+  it('counts a failed page when repo write throws', async () => {
+    const repo: any = {
+      sweepUpsert1v1: async () => {
+        throw new Error('db down')
+      },
+      sweepUpsert3v3: async () => {},
+      sweepUpsert2v2: async () => {},
+      sweepUpsertSolo2v2: async () => {},
+    }
+    const result = await sweepBracket({
+      bracket: '1v1',
+      repo,
+      fetchPage: async () => ({
+        total_pages: 1,
+        rankings: [
+          {
+            id: 1,
+            username: 'A',
+            rating: 1,
+            best_rating: 1,
+            rank: 1,
+            wins: 0,
+            losses: 0,
+            region: 'EU',
+            tier: 'Tin 0',
+          } as never,
+        ],
+      }),
+      concurrency: 1,
+      onTierFallback: () => {},
+    })
+    expect(result.pagesOk).toBe(0)
+    expect(result.pagesSkipped).toBe(0)
+    expect(result.pagesFailed).toBe(1)
   })
 })
 
