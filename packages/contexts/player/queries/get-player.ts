@@ -3,9 +3,6 @@ import { type PlayerResult, enrichStatsLegend } from '../player'
 import type { PlayerRepo } from '../player.repo'
 
 export async function getPlayer(repo: PlayerRepo, brawlhallaId: number): Promise<PlayerResult | null> {
-  const blocked = await repo.isBlacklisted(brawlhallaId)
-  if (blocked) return null
-
   const p = await repo.findById(brawlhallaId)
   if (!p) return null
 

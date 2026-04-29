@@ -1,6 +1,5 @@
 import type { Database } from '@brawltome/database'
 import {
-  blacklist,
   player,
   playerAlias,
   playerClan,
@@ -48,14 +47,6 @@ export function createPlayerRepo(db: Database) {
         return { ...s, weaponOne: meta?.weaponOne ?? null, weaponTwo: meta?.weaponTwo ?? null }
       })
       return { ...p, statsLegends: enrichedLegends }
-    },
-
-    isBlacklisted(brawlhallaId: number) {
-      return db.query.blacklist
-        .findFirst({
-          where: eq(blacklist.brawlhallaId, brawlhallaId),
-        })
-        .then((b) => !!b)
     },
 
     getRatingHistory(brawlhallaId: number, limit = 365) {
@@ -612,12 +603,9 @@ export function createPlayerRepo(db: Database) {
         .then((rows) => new Map(rows.filter((r) => r.region).map((r) => [r.brawlhallaId, r.region as string])))
     },
 
-    searchPlayersByName(query: string, blacklistSet: Set<number>) {
+    searchPlayersByName(query: string) {
       return db.query.player.findMany({
-        where: and(
-          or(ilike(player.name, `${query}%`), ilike(player.name, `% | ${query}%`)),
-          blacklistSet.size > 0 ? not(inArray(player.brawlhallaId, [...blacklistSet])) : undefined,
-        ),
+        where: or(ilike(player.name, `${query}%`), ilike(player.name, `% | ${query}%`)),
         orderBy: [desc(player.rating), desc(player.viewCount)],
         limit: 50,
       })
