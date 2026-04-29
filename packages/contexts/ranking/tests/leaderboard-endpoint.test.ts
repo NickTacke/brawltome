@@ -40,9 +40,25 @@ describe('fetchLeaderboardPage', () => {
     expect(calls).toBe(2)
   })
 
-  it('throws after second consecutive failure', async () => {
-    mockFetch(() => new Response('boom', { status: 502 }))
+  it('throws after all retries exhausted', async () => {
+    let calls = 0
+    mockFetch(() => {
+      calls++
+      return new Response('boom', { status: 502 })
+    })
     await expect(fetchLeaderboardPage({ bracket: '1v1', page: 1 })).rejects.toThrow()
+    expect(calls).toBe(3) // initial + 2 retries
+  })
+
+  it('retries up to twice on persistent 5xx, then succeeds on third attempt', async () => {
+    let calls = 0
+    mockFetch(() => {
+      calls++
+      if (calls < 3) return new Response('boom', { status: 503 })
+      return new Response(JSON.stringify({ rankings: [], total_pages: 1 }), { status: 200 })
+    })
+    await fetchLeaderboardPage({ bracket: '1v1', page: 1 })
+    expect(calls).toBe(3)
   })
 
   it('treats network throws as retryable', async () => {
