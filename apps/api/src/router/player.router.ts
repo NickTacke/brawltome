@@ -15,9 +15,6 @@ export const playerRouter = router({
       const turnstileValid = await verifyTurnstile(turnstileToken, ctx.clientIp)
       if (!turnstileValid) return { isRefreshing: false }
 
-      const blocked = await ctx.playerRepo.isBlacklisted(brawlhallaId)
-      if (blocked) return { isRefreshing: false }
-
       const p = await ctx.playerRepo.findById(brawlhallaId)
 
       if (!p) {

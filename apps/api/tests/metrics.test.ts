@@ -56,4 +56,15 @@ describe('MetricsRegistry', () => {
     expect(snap.matchmaking_ingest_ok).toBe(2)
     expect(snap.matchmaking_ingest_rejected_tampered).toBe(1)
   })
+
+  it('incrementCounter accepts an optional delta', async () => {
+    const metrics = createMetricsRegistry(redis)
+    await metrics.incrementCounter('sweep:1v1:pages_ok', 7)
+    await metrics.incrementCounter('sweep:1v1:pages_ok', 3)
+    // Default delta still adds 1.
+    await metrics.incrementCounter('sweep:1v1:pages_ok')
+
+    const snap = await metrics.snapshotCounters()
+    expect(snap['sweep:1v1:pages_ok']).toBe(11)
+  })
 })
