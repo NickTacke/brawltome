@@ -60,16 +60,13 @@ export function Leaderboard() {
     [router, pathname, filters],
   )
 
-  // Reset the cached "last page" boundary whenever the user switches bracket or region —
-  // a different scope has a different total.
-  useEffect(() => {
-    setKnownLastPage(null)
-  }, [bracket, region])
-
   useEffect(() => {
     let cancelled = false
     setIsLoading(true)
     setError(null)
+    // Different bracket or region has a different total. Drop the cached "last page" boundary
+    // before firing the query so the pagination doesn't briefly show a stale max.
+    setKnownLastPage(null)
 
     trpc.leaderboard.get
       .query({ bracket, region, page, pageSize: PAGE_SIZE })
