@@ -8,9 +8,16 @@ interface PaginationControlsProps {
   isLoading: boolean
   onPageChange: (page: number) => void
   compact?: boolean
+  maxPage?: number
 }
 
-export function PaginationControls({ page, isLoading, onPageChange, compact = false }: PaginationControlsProps) {
+export function PaginationControls({
+  page,
+  isLoading,
+  onPageChange,
+  compact = false,
+  maxPage = MAX_PAGE,
+}: PaginationControlsProps) {
   return (
     <div className="flex items-center gap-2">
       <Button
@@ -30,7 +37,7 @@ export function PaginationControls({ page, isLoading, onPageChange, compact = fa
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               const val = Number.parseInt(e.currentTarget.value.trim(), 10)
-              if (!Number.isNaN(val) && val >= 1 && val <= MAX_PAGE) onPageChange(val)
+              if (!Number.isNaN(val) && val >= 1 && val <= maxPage) onPageChange(val)
               else {
                 onPageChange(1)
                 e.currentTarget.value = '1'
@@ -38,12 +45,12 @@ export function PaginationControls({ page, isLoading, onPageChange, compact = fa
             }
           }}
         />
-        <span className="text-sm text-muted-foreground font-mono">{compact ? `/${MAX_PAGE}` : `of ${MAX_PAGE}`}</span>
+        <span className="text-sm text-muted-foreground font-mono">{compact ? `/${maxPage}` : `of ${maxPage}`}</span>
       </div>
       <Button
         variant="outline"
         size="sm"
-        disabled={page >= MAX_PAGE || isLoading}
+        disabled={page >= maxPage || isLoading}
         onClick={() => onPageChange(page + 1)}
       >
         {compact ? '→' : 'Next →'}

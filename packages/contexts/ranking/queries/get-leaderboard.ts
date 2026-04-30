@@ -1,13 +1,16 @@
 import type { PlayerRepo } from '@brawltome/player'
 import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGE_SIZE, STALE_RANK_MS } from '../ranking'
 
-const MAX_PAGE = 1000
+const MAX_PAGE = 500
 
 export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: LeaderboardInput) {
   const page = Math.max(1, Math.min(input.page, MAX_PAGE))
   const pageSize = Math.max(1, Math.min(input.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
   const offset = (page - 1) * pageSize
   const freshSince = new Date(Date.now() - STALE_RANK_MS)
+
+  // A full page implies there's likely at least one more; cap forces hasMore=false at the boundary.
+  const computeHasMore = (count: number) => count === pageSize && page < MAX_PAGE
 
   if (input.bracket === '1v1') {
     const rows = await deps.playerRepo.get1v1LeaderboardSweep({ region: input.region, pageSize, offset, freshSince })
@@ -16,6 +19,7 @@ export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: Le
       entries: rows.map((r) => ({ ...r, bestLegendNameKey: effective.get(r.brawlhallaId)?.legendNameKey ?? null })),
       page,
       pageSize,
+      hasMore: computeHasMore(rows.length),
     }
   }
 
@@ -26,6 +30,7 @@ export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: Le
       entries: rows.map((r) => ({ ...r, bestLegendNameKey: effective.get(r.brawlhallaId)?.legendNameKey ?? null })),
       page,
       pageSize,
+      hasMore: computeHasMore(rows.length),
     }
   }
 
@@ -49,6 +54,7 @@ export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: Le
       })),
       page,
       pageSize,
+      hasMore: computeHasMore(rows.length),
     }
   }
 
@@ -89,5 +95,6 @@ export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: Le
     })),
     page,
     pageSize,
+    hasMore: computeHasMore(teams.length),
   }
 }

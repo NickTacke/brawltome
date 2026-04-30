@@ -6,8 +6,9 @@ import { type TierFallbackKind, normalizeRegion, resolveTier } from './sweep-hel
 
 export interface SweepBracketDeps {
   bracket: Bracket
+  region: string
   repo: PlayerRepo
-  fetchPage?: (opts: { bracket: Bracket; page: number }) => Promise<PageResponse>
+  fetchPage?: (opts: { bracket: Bracket; page: number; region: string }) => Promise<PageResponse>
   concurrency?: number
   onTierFallback?: (kind: Exclude<TierFallbackKind, 'none'>) => void
 }
@@ -25,6 +26,11 @@ export interface SweepBracketResult {
 // at 10, still well under the 15min cadence.
 const DEFAULT_CONCURRENCY = 10
 
+// Cap per-region pagination at 300 pages × 50 entries = 15k players. Even the
+// largest regions don't have more legitimate ranked players than this; smaller
+// regions naturally stop earlier via `total_pages`.
+const MAX_PAGES_PER_REGION = 300
+
 export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracketResult> {
   const fetchPage = deps.fetchPage ?? fetchLeaderboardPage
   const concurrency = deps.concurrency ?? DEFAULT_CONCURRENCY
@@ -38,19 +44,19 @@ export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracket
 
   let firstPage: PageResponse
   try {
-    firstPage = await fetchPage({ bracket: deps.bracket, page: 1 })
+    firstPage = await fetchPage({ bracket: deps.bracket, page: 1, region: deps.region })
   } catch (err) {
-    console.error(`[sweep] ${deps.bracket}: failed to fetch page 1:`, err)
+    console.error(`[sweep] ${deps.bracket} ${deps.region}: failed to fetch page 1:`, err)
     pagesSkipped++
     return { pagesOk, pagesSkipped, pagesFailed, rowsWritten, durationMs: performance.now() - start }
   }
-  const totalPages = firstPage.total_pages
+  const totalPages = Math.min(firstPage.total_pages, MAX_PAGES_PER_REGION)
   try {
     const written = await writePage(deps.bracket, firstPage.rankings, deps.repo, onTierFallback)
     pagesOk++
     rowsWritten += written
   } catch (err) {
-    console.error(`[sweep] ${deps.bracket} page 1 write failed:`, err)
+    console.error(`[sweep] ${deps.bracket} ${deps.region} page 1 write failed:`, err)
     pagesFailed++
   }
 
@@ -67,9 +73,9 @@ export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracket
         const page = pageNumbers[idx]
         let res: PageResponse
         try {
-          res = await fetchPage({ bracket: deps.bracket, page })
+          res = await fetchPage({ bracket: deps.bracket, page, region: deps.region })
         } catch (err) {
-          console.error(`[sweep] ${deps.bracket} page ${page} fetch skipped:`, err)
+          console.error(`[sweep] ${deps.bracket} ${deps.region} page ${page} fetch skipped:`, err)
           pagesSkipped++
           continue
         }
@@ -78,7 +84,7 @@ export async function sweepBracket(deps: SweepBracketDeps): Promise<SweepBracket
           pagesOk++
           rowsWritten += w
         } catch (err) {
-          console.error(`[sweep] ${deps.bracket} page ${page} write failed:`, err)
+          console.error(`[sweep] ${deps.bracket} ${deps.region} page ${page} write failed:`, err)
           pagesFailed++
         }
       }
@@ -199,12 +205,13 @@ const RENEW_LOCK_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return 
 const RELEASE_LOCK_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`
 
 const BRACKETS: Bracket[] = ['1v1', '2v2', 'solo_2v2', '3v3']
+const REGIONS: string[] = ['US-E', 'EU', 'SEA', 'BRZ', 'AUS', 'US-W', 'JPN', 'ME', 'SA']
 
 export interface StartSweepDeps {
   redis: Redis
   repo: PlayerRepo
   metrics: MetricsRegistry
-  fetchPage?: (opts: { bracket: Bracket; page: number }) => Promise<PageResponse>
+  fetchPage?: (opts: { bracket: Bracket; page: number; region: string }) => Promise<PageResponse>
   concurrency?: number
   tickIntervalMs?: number
   sweepIntervalMs?: number
@@ -269,25 +276,40 @@ export function startSweep(deps: StartSweepDeps): () => Promise<void> {
           const sweepStart = performance.now()
           for (const bracket of BRACKETS) {
             if (lockLost || stopped) break
-            const r = await sweepBracket({
-              bracket,
-              repo: deps.repo,
-              fetchPage: deps.fetchPage,
-              concurrency: deps.concurrency,
-              onTierFallback: (kind) => {
-                const counter = kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
-                deps.metrics.incrementCounter(counter).catch(() => {})
-              },
-            })
-            if (r.pagesOk > 0)
-              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_ok`, r.pagesOk).catch(() => {})
-            if (r.pagesSkipped > 0)
-              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_skipped`, r.pagesSkipped).catch(() => {})
-            if (r.pagesFailed > 0)
-              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_failed`, r.pagesFailed).catch(() => {})
-            console.log(
-              `[sweep] ${bracket}: ${r.pagesOk} ok, ${r.pagesSkipped} skipped, ${r.pagesFailed} failed, ${r.rowsWritten} rows, ${r.durationMs.toFixed(0)}ms`,
-            )
+            let bracketPagesOk = 0
+            let bracketPagesSkipped = 0
+            let bracketPagesFailed = 0
+            for (const region of REGIONS) {
+              if (lockLost || stopped) break
+              const r = await sweepBracket({
+                bracket,
+                region,
+                repo: deps.repo,
+                fetchPage: deps.fetchPage,
+                concurrency: deps.concurrency,
+                onTierFallback: (kind) => {
+                  const counter =
+                    kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
+                  deps.metrics.incrementCounter(counter).catch(() => {})
+                },
+              })
+              bracketPagesOk += r.pagesOk
+              bracketPagesSkipped += r.pagesSkipped
+              bracketPagesFailed += r.pagesFailed
+              console.log(
+                `[sweep] ${bracket} ${region}: ${r.pagesOk} ok, ${r.pagesSkipped} skipped, ${r.pagesFailed} failed, ${r.rowsWritten} rows, ${r.durationMs.toFixed(0)}ms`,
+              )
+            }
+            if (bracketPagesOk > 0)
+              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_ok`, bracketPagesOk).catch(() => {})
+            if (bracketPagesSkipped > 0)
+              await deps.metrics
+                .incrementCounter(`sweep:${bracket}:pages_skipped`, bracketPagesSkipped)
+                .catch(() => {})
+            if (bracketPagesFailed > 0)
+              await deps.metrics
+                .incrementCounter(`sweep:${bracket}:pages_failed`, bracketPagesFailed)
+                .catch(() => {})
           }
           const elapsed = performance.now() - sweepStart
           console.log(`[sweep] cycle complete in ${(elapsed / 1000).toFixed(1)}s`)

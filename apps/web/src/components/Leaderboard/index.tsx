@@ -25,6 +25,7 @@ import {
   type BracketId,
   type LeaderboardEntry,
   type LeaderboardFilters,
+  MAX_PAGE,
   PAGE_SIZE,
   REGIONS,
   type RegionId,
@@ -48,6 +49,7 @@ export function Leaderboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fetchedKey, setFetchedKey] = useState('')
+  const [knownLastPage, setKnownLastPage] = useState<number | null>(null)
 
   const updateFilters = useCallback(
     (next: Partial<LeaderboardFilters>) => {
@@ -57,6 +59,12 @@ export function Leaderboard() {
     },
     [router, pathname, filters],
   )
+
+  // Reset the cached "last page" boundary whenever the user switches bracket or region —
+  // a different scope has a different total.
+  useEffect(() => {
+    setKnownLastPage(null)
+  }, [bracket, region])
 
   useEffect(() => {
     let cancelled = false
@@ -69,6 +77,7 @@ export function Leaderboard() {
         if (cancelled) return
         setEntries(data.entries as LeaderboardEntry[])
         setFetchedKey(`${bracket}:${region}:${page}`)
+        setKnownLastPage(data.hasMore ? null : data.page)
         setIsLoading(false)
       })
       .catch((err) => {
@@ -84,6 +93,7 @@ export function Leaderboard() {
 
   const currentKey = `${bracket}:${region}:${page}`
   const showLoading = isLoading || fetchedKey !== currentKey
+  const effectiveMaxPage = knownLastPage ?? MAX_PAGE
 
   if (error) {
     return (
@@ -134,6 +144,7 @@ export function Leaderboard() {
             page={page}
             isLoading={showLoading}
             onPageChange={(p) => updateFilters({ page: p })}
+            maxPage={effectiveMaxPage}
             compact
           />
         </div>
@@ -174,7 +185,12 @@ export function Leaderboard() {
       </div>
 
       <div className="p-4 border-t border-border flex justify-center items-center bg-muted/20">
-        <PaginationControls page={page} isLoading={showLoading} onPageChange={(p) => updateFilters({ page: p })} />
+        <PaginationControls
+          page={page}
+          isLoading={showLoading}
+          onPageChange={(p) => updateFilters({ page: p })}
+          maxPage={effectiveMaxPage}
+        />
       </div>
     </Card>
   )

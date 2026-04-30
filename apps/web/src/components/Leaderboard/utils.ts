@@ -27,7 +27,7 @@ export const BRACKET_IDS = BRACKETS.map((b) => b.id) as readonly BracketId[]
 export const REGION_IDS = REGIONS.map((r) => r.id) as readonly RegionId[]
 
 export const PAGE_SIZE = 20
-export const MAX_PAGE = 1000
+export const MAX_PAGE = 500
 
 export interface LeaderboardFilters {
   bracket: BracketId
