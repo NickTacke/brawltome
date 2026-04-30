@@ -87,7 +87,6 @@ export async function processRefreshRanked(
           wins: t.wins,
           games: t.games,
           region: REGION_BY_ID[t.region] ?? String(t.region),
-          globalRank: t.global_rank,
           valhallanConfirmedAt: gracedTeam?.valhallanConfirmedAt ?? null,
         }
       }),

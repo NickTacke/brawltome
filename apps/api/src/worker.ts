@@ -3,8 +3,8 @@ import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
 import { createPlayerLinkRepo, resolveSteamLink } from '@brawltome/identity'
 import { backfillPending, createMatchRepo } from '@brawltome/matchmaking'
-import { processRefreshRanked, processRefreshStats } from '@brawltome/player'
-import { startJanitor } from '@brawltome/ranking'
+import { createPlayerRepo, processRefreshRanked, processRefreshStats } from '@brawltome/player'
+import { startSweep } from '@brawltome/ranking'
 import { type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
 import { createMetricsRegistry, createQueue, createR2Client, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
@@ -229,10 +229,9 @@ if (backfillQueue) starts.push(backfillQueue.start())
 if (simulateQueue) starts.push(simulateQueue.start())
 Promise.all(starts).catch(console.error)
 
-const stopJanitor =
-  process.env.DISABLE_JANITOR === '1'
-    ? async () => {}
-    : startJanitor({ db, bhapi, redis: newRedis(), rankedQueue, statsQueue, clanQueue, metrics })
+const playerRepo = createPlayerRepo(db)
+const stopSweep =
+  process.env.DISABLE_JANITOR === '1' ? async () => {} : startSweep({ redis: newRedis(), repo: playerRepo, metrics })
 
 process.on('SIGINT', async () => {
   console.log('Worker shutting down...')
@@ -244,7 +243,7 @@ process.on('SIGINT', async () => {
   steamLinkQueue.stop()
   backfillQueue?.stop()
   simulateQueue?.stop()
-  await stopJanitor()
+  await stopSweep()
   await metricsRedis.quit().catch(() => {})
   await bhapiRedis.quit().catch(() => {})
   console.log('Lock released. Goodbye.')
@@ -253,5 +252,5 @@ process.on('SIGINT', async () => {
 
 const matchmakingQueues = matchmakingLive ? ', match-backfill-parse(1), match-simulate(1)' : ''
 console.log(
-  `Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1)${matchmakingQueues}. Janitor active.`,
+  `Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1)${matchmakingQueues}. Sweep active.`,
 )

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   bigint,
   index,
@@ -40,6 +41,17 @@ export const player = pgTable(
     bestLegendGames: integer('best_legend_games').default(0),
     bestLegendWins: integer('best_legend_wins').default(0),
 
+    // 3v3 ranked
+    rating3v3: integer('rating_3v3').default(0).notNull(),
+    peakRating3v3: integer('peak_rating_3v3').default(0).notNull(),
+    tier3v3: varchar('tier_3v3', { length: 64 }),
+    wins3v3: integer('wins_3v3').default(0).notNull(),
+    losses3v3: integer('losses_3v3').default(0).notNull(),
+
+    // Sweep freshness
+    syncedAt1v1: timestamp('synced_at_1v1'),
+    syncedAt3v3: timestamp('synced_at_3v3'),
+
     // Stats (merged from playerStats)
     xp: integer('xp'),
     level: integer('level'),
@@ -77,6 +89,12 @@ export const player = pgTable(
     index('idx_player_region_peak_rating').on(t.region, t.peakRating),
     index('idx_player_region_wins').on(t.region, t.rankedWins),
     index('idx_player_region_games').on(t.region, t.rankedGames),
+    index('idx_player_rating_wins').on(t.rating, t.rankedWins),
+    index('idx_player_region_rating_wins').on(t.region, t.rating, t.rankedWins),
+    index('idx_player_rating_3v3_wins').on(t.rating3v3, t.wins3v3),
+    index('idx_player_region_rating_3v3_wins').on(t.region, t.rating3v3, t.wins3v3),
+    index('idx_player_synced_at_1v1').on(t.syncedAt1v1),
+    index('idx_player_synced_at_3v3').on(t.syncedAt3v3),
   ],
 )
 
@@ -214,7 +232,6 @@ export const playerRankedTeam = pgTable(
     wins: integer('wins').notNull(),
     games: integer('games').notNull(),
     region: varchar('region', { length: 16 }).notNull(),
-    globalRank: integer('global_rank'),
     valhallanConfirmedAt: timestamp('valhallan_confirmed_at'),
     syncedAt: timestamp('synced_at').defaultNow().notNull(),
   },
@@ -222,27 +239,9 @@ export const playerRankedTeam = pgTable(
     primaryKey({ columns: [t.brawlhallaId, t.brawlhallaIdOne, t.brawlhallaIdTwo, t.region] }),
     index('idx_ranked_team_rating').on(t.rating),
     index('idx_ranked_team_region_rating').on(t.region, t.rating),
-  ],
-)
-
-// ============================================================
-// Player Rank 1v1
-// ============================================================
-
-export const playerRank1v1 = pgTable(
-  'player_rank_1v1',
-  {
-    brawlhallaId: integer('brawlhalla_id')
-      .notNull()
-      .references(() => player.brawlhallaId, { onDelete: 'cascade' }),
-    region: varchar('region', { length: 16 }).notNull(),
-    rank: integer('rank').notNull(),
-    syncedAt: timestamp('synced_at').defaultNow().notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.brawlhallaId, t.region] }),
-    uniqueIndex('uq_player_rank_1v1_region_rank').on(t.region, t.rank),
-    index('idx_player_rank_1v1_synced_at').on(t.syncedAt),
+    index('idx_ranked_team_solo_region_rating_wins')
+      .on(t.region, t.rating, t.wins)
+      .where(sql`${t.brawlhallaIdTwo} = 0`),
   ],
 )
 
@@ -301,16 +300,6 @@ export const clanMember = pgTable(
   },
   (t) => [primaryKey({ columns: [t.clanId, t.brawlhallaId] })],
 )
-
-// ============================================================
-// Blacklist
-// ============================================================
-
-export const blacklist = pgTable('blacklist', {
-  brawlhallaId: integer('brawlhalla_id').primaryKey(),
-  reason: text('reason'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-})
 
 // ============================================================
 // Rating History
