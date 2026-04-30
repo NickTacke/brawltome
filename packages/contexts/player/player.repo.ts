@@ -508,6 +508,10 @@ export function createPlayerRepo(db: Database) {
       }>,
     ) {
       if (rows.length === 0) return
+      // Sort by primary key so concurrent batches acquire row locks in the same order
+      // (postgres locks rows in the VALUES list order). Eliminates deadlock cycles when
+      // multiple sweep workers upsert overlapping IDs.
+      rows.sort((a, b) => a.brawlhallaId - b.brawlhallaId)
       const ids = rows.map((r) => r.brawlhallaId)
       const existing = await db
         .select({ brawlhallaId: player.brawlhallaId, name: player.name })
@@ -519,7 +523,10 @@ export function createPlayerRepo(db: Database) {
         const old = existingNames.get(r.brawlhallaId)
         if (old && old !== r.name) aliases.push({ brawlhallaId: r.brawlhallaId, key: old.toLowerCase(), value: old })
       }
-      if (aliases.length > 0) await db.insert(playerAlias).values(aliases).onConflictDoNothing()
+      if (aliases.length > 0) {
+        aliases.sort((a, b) => a.brawlhallaId - b.brawlhallaId)
+        await db.insert(playerAlias).values(aliases).onConflictDoNothing()
+      }
 
       const now = new Date()
       await db
@@ -567,6 +574,8 @@ export function createPlayerRepo(db: Database) {
       }>,
     ) {
       if (rows.length === 0) return
+      // Sort by PK to keep concurrent batch lock-acquisition order consistent.
+      rows.sort((a, b) => a.brawlhallaId - b.brawlhallaId)
       const now = new Date()
       await db
         .insert(player)
@@ -640,6 +649,9 @@ export function createPlayerRepo(db: Database) {
         idToName.set(t.brawlhallaIdTwo, t.playerTwoName)
       }
       const placeholders = [...idToName].map(([id, name]) => ({ brawlhallaId: id, name }))
+      // Sort by PK so concurrent sweep workers acquire row locks in identical order,
+      // avoiding postgres deadlocks on the player table.
+      placeholders.sort((a, b) => a.brawlhallaId - b.brawlhallaId)
       // Refresh existing player names too: a player who only appears in 2v2 sweeps would
       // otherwise be stuck on whatever name the previous sweep wrote (or stale from 1v1 if
       // they used to play 1v1). On conflict, replace name with the value just inserted.
@@ -653,6 +665,14 @@ export function createPlayerRepo(db: Database) {
           },
         })
 
+      // Sort by composite PK (brawlhallaId, brawlhallaIdOne, brawlhallaIdTwo, region) so
+      // concurrent sweep workers lock rows in the same order across batches.
+      rows.sort((a, b) => {
+        if (a.brawlhallaId !== b.brawlhallaId) return a.brawlhallaId - b.brawlhallaId
+        if (a.brawlhallaIdOne !== b.brawlhallaIdOne) return a.brawlhallaIdOne - b.brawlhallaIdOne
+        if (a.brawlhallaIdTwo !== b.brawlhallaIdTwo) return a.brawlhallaIdTwo - b.brawlhallaIdTwo
+        return a.region < b.region ? -1 : a.region > b.region ? 1 : 0
+      })
       await db
         .insert(playerRankedTeam)
         .values(rows)
@@ -689,6 +709,10 @@ export function createPlayerRepo(db: Database) {
       }>,
     ) {
       if (rows.length === 0) return
+      // Sort by brawlhallaId so concurrent sweep workers acquire row locks consistently.
+      // For solo entries brawlhallaIdOne == brawlhallaId and brawlhallaIdTwo == 0, so
+      // brawlhallaId alone uniquely orders rows for both player and playerRankedTeam writes.
+      rows.sort((a, b) => a.brawlhallaId - b.brawlhallaId)
       const placeholders = rows.map((r) => ({ brawlhallaId: r.brawlhallaId, name: r.name }))
       // Solo 2v2 entries provide a fresh username per row; refresh the player.name on conflict
       // so existing players (incl. legacy `Player {id}` placeholders from the 2v2 path) get
