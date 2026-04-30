@@ -150,22 +150,42 @@ describe('sweepUpsert2v2', () => {
     expect(byId.get(9_900_021)).toBe('BetaName')
   })
 
-  it('refreshes name on conflict for an existing 2v2-only player', async () => {
+  it('does not overwrite a real name on conflict (only refreshes placeholders)', async () => {
+    // Seed an existing player with a real name (as if 1v1 sweep wrote it).
+    await db.insert(player).values({ brawlhallaId: 9_900_020, name: 'RealAlpha' }).onConflictDoNothing()
+    await db.insert(player).values({ brawlhallaId: 9_900_021, name: 'RealBeta' }).onConflictDoNothing()
+
+    // 2v2 sweep arrives with potentially-stale usernames from the team endpoint.
     await repo.sweepUpsert2v2([
       {
         brawlhallaIdOne: 9_900_020,
         brawlhallaIdTwo: 9_900_021,
-        playerOneName: 'OldAlpha',
-        playerTwoName: 'OldBeta',
+        playerOneName: 'StaleAlpha',
+        playerTwoName: 'StaleBeta',
         teamName: 'team',
-        rating: 1800,
-        peakRating: 1850,
+        rating: 1900,
+        peakRating: 1900,
         tier: 'Diamond',
-        wins: 40,
+        wins: 50,
         losses: 20,
         region: 'EU',
       },
     ])
+    const owners = await db
+      .select()
+      .from(player)
+      .where(inArray(player.brawlhallaId, [9_900_020, 9_900_021]))
+    const byId = new Map(owners.map((p) => [p.brawlhallaId, p.name]))
+    // Real names preserved, NOT overwritten by stale 2v2 usernames.
+    expect(byId.get(9_900_020)).toBe('RealAlpha')
+    expect(byId.get(9_900_021)).toBe('RealBeta')
+  })
+
+  it('refreshes name when the existing row is still a Player {id} placeholder', async () => {
+    // Seed the placeholder format that 2v2-only players would have.
+    await db.insert(player).values({ brawlhallaId: 9_900_020, name: 'Player 9900020' }).onConflictDoNothing()
+    await db.insert(player).values({ brawlhallaId: 9_900_021, name: 'Player 9900021' }).onConflictDoNothing()
+
     await repo.sweepUpsert2v2([
       {
         brawlhallaIdOne: 9_900_020,
