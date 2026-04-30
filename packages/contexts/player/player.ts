@@ -28,7 +28,7 @@ export type PlayerResult = InferSelectModel<typeof player> & {
   weaponStats: InferSelectModel<typeof playerWeaponStat>[]
   clan: InferSelectModel<typeof playerClan> | null
   rankedLegends: InferSelectModel<typeof playerRankedLegend>[]
-  rankedTeams: InferSelectModel<typeof playerRankedTeam>[]
+  rankedTeams: Array<InferSelectModel<typeof playerRankedTeam> & { teammateName: string | null }>
   ratingHistory: InferSelectModel<typeof ratingHistory>[]
   bestLegendNameKey: string | null
 }

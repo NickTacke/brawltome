@@ -133,12 +133,19 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
           const teammateHref = `/player/${teammateId}`
           const bannerUrl = getRankBanner(team.tier)
 
-          const teamNameParts = fixEncoding(team.teamName).split('+')
-          const teammateNameIndex = team.brawlhallaIdOne === Number.parseInt(id) ? 1 : 0
-          const teammateName =
-            teamNameParts[teammateNameIndex]?.trim() ||
-            teamNameParts.find((part: string) => part.trim() !== fixEncoding(player.name))?.trim() ||
-            fixEncoding(team.teamName)
+          // Prefer the enriched teammateName from the player table (set by getPlayer).
+          // Fall back to parsing the legacy teamName "PlayerOne+PlayerTwo" format for any
+          // pre-sweep rows that haven't been refreshed yet.
+          let teammateName = team.teammateName ? fixEncoding(team.teammateName) : ''
+          if (!teammateName && team.teamName) {
+            const teamNameParts = fixEncoding(team.teamName).split('+')
+            const teammateNameIndex = team.brawlhallaIdOne === idNumber ? 1 : 0
+            teammateName =
+              teamNameParts[teammateNameIndex]?.trim() ||
+              teamNameParts.find((part: string) => part.trim() !== fixEncoding(player.name))?.trim() ||
+              ''
+          }
+          if (!teammateName) teammateName = `Player ${teammateId}`
 
           return (
             <Link
