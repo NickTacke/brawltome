@@ -370,6 +370,9 @@ export function createPlayerRepo(db: Database) {
           tier: player.tier3v3,
           wins: player.wins3v3,
           losses: player.losses3v3,
+          // 3v3 has no stored `games` column — derive from wins+losses so the
+          // frontend's winrate calc has a non-zero denominator.
+          games: sql<number>`${player.wins3v3} + ${player.losses3v3}`.as('games'),
           rank: sql<number>`row_number() over (order by ${player.rating3v3} desc, ${player.wins3v3} desc)`.as('rank'),
         })
         .from(player)
@@ -655,16 +658,17 @@ export function createPlayerRepo(db: Database) {
       // Sort by PK so concurrent sweep workers acquire row locks in identical order,
       // avoiding postgres deadlocks on the player table.
       placeholders.sort((a, b) => a.brawlhallaId - b.brawlhallaId)
-      // Refresh existing player names too: a player who only appears in 2v2 sweeps would
-      // otherwise be stuck on whatever name the previous sweep wrote (or stale from 1v1 if
-      // they used to play 1v1). On conflict, replace name with the value just inserted.
+      // Only overwrite the player's name when the existing row is still a `Player {id}`
+      // placeholder. The 2v2 endpoint can return stale usernames (cached from team creation),
+      // so refreshing every name would clobber fresh names written by the 1v1 sweep or by
+      // /player/{id}/ranked enrichment.
       await db
         .insert(player)
         .values(placeholders as (typeof player.$inferInsert)[])
         .onConflictDoUpdate({
           target: player.brawlhallaId,
           set: {
-            name: sql`excluded.name`,
+            name: sql`CASE WHEN player.name = ('Player ' || player.brawlhalla_id::text) THEN excluded.name ELSE player.name END`,
           },
         })
 
