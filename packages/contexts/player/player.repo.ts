@@ -624,11 +624,13 @@ export function createPlayerRepo(db: Database) {
       }>,
     ) {
       if (teams.length === 0) return
+      const now = new Date()
       const rows: Array<typeof playerRankedTeam.$inferInsert> = []
       const idToName = new Map<number, string>()
       for (const t of teams) {
         const ownerIds =
           t.brawlhallaIdOne === t.brawlhallaIdTwo ? [t.brawlhallaIdOne] : [t.brawlhallaIdOne, t.brawlhallaIdTwo]
+        const valhallanConfirmedAt = t.tier.startsWith('Valhallan') ? now : null
         for (const ownerId of ownerIds) {
           rows.push({
             brawlhallaId: ownerId,
@@ -641,6 +643,7 @@ export function createPlayerRepo(db: Database) {
             wins: t.wins,
             games: t.wins + t.losses,
             region: t.region,
+            valhallanConfirmedAt,
           })
         }
         // Last write wins per id (within this batch). Endpoint returns one username per row,
@@ -691,6 +694,7 @@ export function createPlayerRepo(db: Database) {
             wins: sql`excluded.wins`,
             games: sql`excluded.games`,
             syncedAt: sql`excluded.synced_at`,
+            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
           },
         })
     },
@@ -727,6 +731,7 @@ export function createPlayerRepo(db: Database) {
           },
         })
 
+      const now = new Date()
       await db
         .insert(playerRankedTeam)
         .values(
@@ -741,6 +746,7 @@ export function createPlayerRepo(db: Database) {
             wins: r.wins,
             games: r.wins + r.losses,
             region: r.region,
+            valhallanConfirmedAt: r.tier.startsWith('Valhallan') ? now : null,
           })),
         )
         .onConflictDoUpdate({
@@ -758,6 +764,7 @@ export function createPlayerRepo(db: Database) {
             wins: sql`excluded.wins`,
             games: sql`excluded.games`,
             syncedAt: sql`excluded.synced_at`,
+            valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
           },
         })
     },
