@@ -135,12 +135,14 @@ async function writePage(
 
   if (bracket === '2v2') {
     const teams = entries
-      .filter((e) => e.players && e.players.length === 2)
+      .filter(
+        (e): e is PageEntry & { players: { id: number; username: string }[] } => e.players?.length === 2,
+      )
       .map((e) => {
         const region = normalizeRegion(e.region ?? '')
         const { tier, fallback } = resolveTier({ apiTier: e.tier, bestRating: e.best_rating })
         if (fallback !== 'none') onTierFallback(fallback)
-        const players = e.players as { id: number; username: string }[]
+        const players = e.players
         return {
           brawlhallaIdOne: players[0].id,
           brawlhallaIdTwo: players[1].id,
@@ -163,12 +165,14 @@ async function writePage(
   }
 
   const rows = entries
-    .filter((e) => e.players && e.players.length === 1)
+    .filter(
+      (e): e is PageEntry & { players: { id: number; username: string }[] } => e.players?.length === 1,
+    )
     .map((e) => {
       const region = normalizeRegion(e.region ?? '')
       const { tier, fallback } = resolveTier({ apiTier: e.tier, bestRating: e.best_rating })
       if (fallback !== 'none') onTierFallback(fallback)
-      const p = e.players![0]
+      const p = e.players[0]
       return {
         brawlhallaId: p.id,
         name: p.username,

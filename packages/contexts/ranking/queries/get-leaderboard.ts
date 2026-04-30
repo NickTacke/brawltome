@@ -42,10 +42,10 @@ export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: Le
       deps.playerRepo.getEffectiveBestLegendsBatch(ids),
     ])
     return {
-      entries: rows.map((r) => ({
-        ...r,
-        name: nameMap.get(r.brawlhallaId) ?? 'Unknown',
-        bestLegendNameKey: effective.get(r.brawlhallaId)?.legendNameKey ?? null,
+      entries: rows.map(({ brawlhallaIdOne: _one, brawlhallaIdTwo: _two, ...rest }) => ({
+        ...rest,
+        name: nameMap.get(rest.brawlhallaId) ?? 'Unknown',
+        bestLegendNameKey: effective.get(rest.brawlhallaId)?.legendNameKey ?? null,
       })),
       page,
       pageSize,
@@ -53,23 +53,12 @@ export async function getLeaderboard(deps: { playerRepo: PlayerRepo }, input: Le
   }
 
   // 2v2 — raw SQL result, snake_case columns
-  const teams = (await deps.playerRepo.get2v2LeaderboardSweep({
+  const teams = await deps.playerRepo.get2v2LeaderboardSweep({
     region: input.region,
     pageSize,
     offset,
     freshSince,
-  })) as Array<{
-    brawlhalla_id_one: number
-    brawlhalla_id_two: number
-    team_name: string
-    rating: number
-    peak_rating: number
-    tier: string
-    wins: number
-    games: number
-    region: string
-    rank: number
-  }>
+  })
 
   const playerIds = [...new Set(teams.flatMap((t) => [t.brawlhalla_id_one, t.brawlhalla_id_two]))]
   const isGlobalView = input.region === 'all'

@@ -96,7 +96,6 @@ interface TeamRowProps {
 
 export function TeamLeaderboardRow({ entry }: TeamRowProps) {
   const winrate = entry.games > 0 ? (entry.wins / entry.games) * 100 : 0
-  const isSoloQueue = entry.brawlhallaIdOne === 0 || entry.brawlhallaIdTwo === 0
   return (
     <TableRow
       key={`${entry.brawlhallaIdOne}-${entry.brawlhallaIdTwo}`}
@@ -106,30 +105,13 @@ export function TeamLeaderboardRow({ entry }: TeamRowProps) {
       <TableCell>
         <div className="flex flex-col">
           <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal leading-tight">
-            {isSoloQueue ? (
-              <>
-                <Link
-                  href={`/player/${entry.brawlhallaIdOne === 0 ? entry.brawlhallaIdTwo : entry.brawlhallaIdOne}`}
-                  prefetch={false}
-                  className="hover:text-primary"
-                >
-                  {fixEncoding(
-                    entry.brawlhallaIdOne === 0 ? entry.playerTwoName || 'Unknown' : entry.playerOneName || 'Unknown',
-                  )}
-                </Link>
-                <span className="text-muted-foreground font-normal text-sm"> (Solo Queue)</span>
-              </>
-            ) : (
-              <>
-                <Link href={`/player/${entry.brawlhallaIdOne}`} prefetch={false} className="hover:text-primary">
-                  {fixEncoding(entry.playerOneName || 'Unknown')}
-                </Link>
-                <span className="opacity-50"> + </span>
-                <Link href={`/player/${entry.brawlhallaIdTwo}`} prefetch={false} className="hover:text-primary">
-                  {fixEncoding(entry.playerTwoName || 'Unknown')}
-                </Link>
-              </>
-            )}
+            <Link href={`/player/${entry.brawlhallaIdOne}`} prefetch={false} className="hover:text-primary">
+              {fixEncoding(entry.playerOneName || 'Unknown')}
+            </Link>
+            <span className="opacity-50"> + </span>
+            <Link href={`/player/${entry.brawlhallaIdTwo}`} prefetch={false} className="hover:text-primary">
+              {fixEncoding(entry.playerTwoName || 'Unknown')}
+            </Link>
           </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground font-mono">
             <span>{entry.region}</span>
