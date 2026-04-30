@@ -25,8 +25,17 @@ const TIMEOUT_MS = 15_000
 const RETRY_BACKOFFS_MS = [1000, 3000]
 const JITTER_MS = 300
 
-function buildUrl(bracket: Bracket, page: number): string {
-  return `${BASE}?region=ALL&game_mode=${bracket}&page=${page}&max_results=50&leaderboard=prod`
+// Codebase uses 'JPN' for Japan; the upstream endpoint expects 'JPS' on the way out
+// (and returns 'JPS' on the way in, which `normalizeRegion` flips back to 'JPN').
+const REGION_TO_API: Record<string, string> = { JPN: 'JPS' }
+
+function regionToApi(region: string): string {
+  return REGION_TO_API[region] ?? region
+}
+
+function buildUrl(bracket: Bracket, page: number, region: string): string {
+  const apiRegion = regionToApi(region)
+  return `${BASE}?region=${apiRegion}&game_mode=${bracket}&page=${page}&max_results=50&leaderboard=prod`
 }
 
 async function fetchOnce(url: string): Promise<PageResponse> {
@@ -39,8 +48,12 @@ function jitter(baseMs: number): number {
   return baseMs + (Math.random() * 2 - 1) * JITTER_MS
 }
 
-export async function fetchLeaderboardPage(opts: { bracket: Bracket; page: number }): Promise<PageResponse> {
-  const url = buildUrl(opts.bracket, opts.page)
+export async function fetchLeaderboardPage(opts: {
+  bracket: Bracket
+  page: number
+  region: string
+}): Promise<PageResponse> {
+  const url = buildUrl(opts.bracket, opts.page, opts.region)
   let lastErr: unknown
   for (let attempt = 0; attempt <= RETRY_BACKOFFS_MS.length; attempt++) {
     try {

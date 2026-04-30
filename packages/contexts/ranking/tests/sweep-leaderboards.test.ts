@@ -51,7 +51,7 @@ function makeFakeFetcher(pagesByNumber: Map<number, PageResponse>) {
   const pageNumbersFetched: number[] = []
   return {
     pagesFetched: pageNumbersFetched,
-    fetch: async (opts: { bracket: string; page: number }) => {
+    fetch: async (opts: { bracket: string; page: number; region: string }) => {
       pageNumbersFetched.push(opts.page)
       const r = pagesByNumber.get(opts.page)
       if (!r) throw new Error(`fake fetcher: no page ${opts.page}`)
@@ -107,6 +107,7 @@ describe('sweepBracket 1v1', () => {
 
     const result = await sweepBracket({
       bracket: '1v1',
+      region: 'US-E',
       repo: asRepo(repo),
       fetchPage: fakeFetcher.fetch,
       concurrency: 5,
@@ -124,7 +125,42 @@ describe('sweepBracket 1v1', () => {
     ).toEqual([1, 2])
   })
 
-  it('normalizes JPS region to JPN', async () => {
+  it('passes the requested region through to fetchPage', async () => {
+    const seenRegions: string[] = []
+    const repo = makeFakeRepo()
+    await sweepBracket({
+      bracket: '1v1',
+      region: 'JPN',
+      repo: asRepo(repo),
+      fetchPage: async (opts) => {
+        seenRegions.push(opts.region)
+        return { total_pages: 1, rankings: [] }
+      },
+      concurrency: 1,
+      onTierFallback: () => {},
+    })
+    expect(seenRegions).toEqual(['JPN'])
+  })
+
+  it('caps total_pages at MAX_PAGES_PER_REGION', async () => {
+    const fetched: number[] = []
+    const repo = makeFakeRepo()
+    await sweepBracket({
+      bracket: '1v1',
+      region: 'US-E',
+      repo: asRepo(repo),
+      fetchPage: async (opts) => {
+        fetched.push(opts.page)
+        return { total_pages: 1000, rankings: [] }
+      },
+      concurrency: 1,
+      onTierFallback: () => {},
+    })
+    expect(fetched.length).toBe(300)
+    expect(Math.max(...fetched)).toBe(300)
+  })
+
+  it('normalizes JPS region to JPN on incoming data', async () => {
     const pages = new Map<number, PageResponse>([
       [
         1,
@@ -149,6 +185,7 @@ describe('sweepBracket 1v1', () => {
     const repo = makeFakeRepo()
     await sweepBracket({
       bracket: '1v1',
+      region: 'JPN',
       repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
@@ -182,6 +219,7 @@ describe('sweepBracket 1v1', () => {
     const fallbacks: string[] = []
     await sweepBracket({
       bracket: '1v1',
+      region: 'EU',
       repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
@@ -195,6 +233,7 @@ describe('sweepBracket 1v1', () => {
     const repo = makeFakeRepo()
     const result = await sweepBracket({
       bracket: '1v1',
+      region: 'EU',
       repo: asRepo(repo),
       fetchPage: async (opts) => {
         if (opts.page === 1) {
@@ -252,6 +291,7 @@ describe('sweepBracket 1v1', () => {
     }
     const result = await sweepBracket({
       bracket: '1v1',
+      region: 'EU',
       repo: asRepo(repo),
       fetchPage: async () => ({
         total_pages: 1,
@@ -306,6 +346,7 @@ describe('sweepBracket 2v2', () => {
     const repo = makeFakeRepo()
     await sweepBracket({
       bracket: '2v2',
+      region: 'EU',
       repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
@@ -345,6 +386,7 @@ describe('sweepBracket solo_2v2', () => {
     const repo = makeFakeRepo()
     await sweepBracket({
       bracket: 'solo_2v2',
+      region: 'EU',
       repo: asRepo(repo),
       fetchPage: makeFakeFetcher(pages).fetch,
       concurrency: 1,
@@ -396,7 +438,7 @@ describe('startSweep', () => {
     expect(calls).toBe(0)
   })
 
-  it('runs at least one sweep when the lock is free', async () => {
+  it('runs at least one sweep when the lock is free, iterating brackets x regions', async () => {
     await redis.del('sweep:lock')
     let calls = 0
     const stop = startSweep({
@@ -408,14 +450,13 @@ describe('startSweep', () => {
         return { total_pages: 1, rankings: [] }
       },
       tickIntervalMs: 50,
-      sweepIntervalMs: 200,
+      sweepIntervalMs: 500,
     })
-    // Wait long enough for at least one sweep window.
-    await new Promise((r) => setTimeout(r, 250))
+    // Wait long enough for at least one full sweep (4 brackets × 9 regions = 36 page-1 fetches).
+    await new Promise((r) => setTimeout(r, 400))
     await stop()
-    // Each sweep fetches page 1 of 4 brackets = 4 calls per sweep; expect at least 4.
-    expect(calls).toBeGreaterThanOrEqual(4)
-    expect(calls).toBeLessThanOrEqual(12)
+    // Each sweep fetches page 1 of (4 brackets × 9 regions) = 36 calls per sweep; expect at least 36.
+    expect(calls).toBeGreaterThanOrEqual(36)
   })
 
   it('reschedules and recovers when redis throws inside acquireLock', async () => {
@@ -450,11 +491,12 @@ describe('startSweep', () => {
       tickIntervalMs: 50,
       sweepIntervalMs: 50,
     })
-    await new Promise((r) => setTimeout(r, 400))
+    await new Promise((r) => setTimeout(r, 600))
     await stop()
     await redis.del('sweep:lock').catch(() => {})
     // First tick threw inside acquireLock; subsequent ticks must still fire and run a sweep.
     expect(setCalls).toBeGreaterThanOrEqual(2)
-    expect(fetchCalls).toBeGreaterThanOrEqual(4)
+    // Full cycle is 4 brackets × 9 regions = 36 page-1 fetches.
+    expect(fetchCalls).toBeGreaterThanOrEqual(36)
   })
 })
