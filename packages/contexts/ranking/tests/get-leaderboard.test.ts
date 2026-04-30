@@ -191,8 +191,8 @@ describe('get2v2LeaderboardSweep', () => {
   it('returns one row per team (deduped) with computed rank', async () => {
     const rows = await repo.get2v2LeaderboardSweep({ region: 'all', pageSize: 10, offset: 0, freshSince: FRESH_30M() })
     const teamIds = rows
-      .filter((r: any) => TEAM_IDS.includes(r.brawlhalla_id_one ?? r.brawlhallaIdOne))
-      .map((r: any) => r.brawlhalla_id_one ?? r.brawlhallaIdOne)
+      .filter((r) => TEAM_IDS.includes(r.brawlhalla_id_one))
+      .map((r) => r.brawlhalla_id_one)
       .sort()
     // Both teams' "first owner" id should appear once each.
     expect(teamIds).toEqual([9_911_001, 9_911_003])

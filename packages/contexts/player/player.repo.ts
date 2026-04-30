@@ -13,6 +13,20 @@ import { getLegendById } from '@brawltome/shared'
 import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
 import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
 
+export type Team2v2Row = {
+  brawlhalla_id_one: number
+  brawlhalla_id_two: number
+  team_name: string
+  rating: number
+  peak_rating: number
+  tier: string
+  wins: number
+  games: number
+  region: string
+  synced_at: Date
+  rank: number
+}
+
 export function createPlayerRepo(db: Database) {
   return {
     async findById(brawlhallaId: number) {
@@ -374,7 +388,7 @@ export function createPlayerRepo(db: Database) {
       pageSize: number
       offset: number
       freshSince: Date
-    }) {
+    }): Promise<Team2v2Row[]> {
       // Dedupe by canonical (least, greatest) pair, then compute rank by rating/wins.
       // Two-row-per-team owner pattern means each team can show up twice — DISTINCT ON keeps one.
       const result = await db.execute(sql`
@@ -393,7 +407,7 @@ export function createPlayerRepo(db: Database) {
         LIMIT ${opts.pageSize}
         OFFSET ${opts.offset}
       `)
-      return Array.isArray(result) ? result : ((result as { rows?: any[] }).rows ?? [])
+      return (Array.isArray(result) ? result : ((result as { rows?: Team2v2Row[] }).rows ?? [])) as Team2v2Row[]
     },
 
     async getSolo2v2LeaderboardSweep(opts: {
