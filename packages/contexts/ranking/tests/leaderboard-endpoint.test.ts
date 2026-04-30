@@ -27,15 +27,15 @@ describe('fetchLeaderboardPage', () => {
     )
   })
 
-  it('maps codebase JPN to upstream JPS in the URL', async () => {
+  it('passes JPN through unchanged in the URL', async () => {
     let captured = ''
     mockFetch((url) => {
       captured = url
       return new Response(JSON.stringify({ rankings: [], total_pages: 1 }), { status: 200 })
     })
     await fetchLeaderboardPage({ bracket: '1v1', page: 1, region: 'JPN' })
-    expect(captured).toContain('region=JPS')
-    expect(captured).not.toContain('region=JPN')
+    expect(captured).toContain('region=JPN')
+    expect(captured).not.toContain('region=JPS')
   })
 
   it('passes through other region codes unchanged', async () => {
