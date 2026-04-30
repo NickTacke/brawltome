@@ -141,9 +141,7 @@ async function writePage(
 
   if (bracket === '2v2') {
     const teams = entries
-      .filter(
-        (e): e is PageEntry & { players: { id: number; username: string }[] } => e.players?.length === 2,
-      )
+      .filter((e): e is PageEntry & { players: { id: number; username: string }[] } => e.players?.length === 2)
       .map((e) => {
         const region = normalizeRegion(e.region ?? '')
         const { tier, fallback } = resolveTier({ apiTier: e.tier, bestRating: e.best_rating })
@@ -171,9 +169,7 @@ async function writePage(
   }
 
   const rows = entries
-    .filter(
-      (e): e is PageEntry & { players: { id: number; username: string }[] } => e.players?.length === 1,
-    )
+    .filter((e): e is PageEntry & { players: { id: number; username: string }[] } => e.players?.length === 1)
     .map((e) => {
       const region = normalizeRegion(e.region ?? '')
       const { tier, fallback } = resolveTier({ apiTier: e.tier, bestRating: e.best_rating })
@@ -288,8 +284,7 @@ export function startSweep(deps: StartSweepDeps): () => Promise<void> {
                 fetchPage: deps.fetchPage,
                 concurrency: deps.concurrency,
                 onTierFallback: (kind) => {
-                  const counter =
-                    kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
+                  const counter = kind === 'diamond' ? 'sweep:tier_fallback_diamond' : 'sweep:tier_unexpected_null'
                   deps.metrics.incrementCounter(counter).catch(() => {})
                 },
               })
@@ -303,13 +298,9 @@ export function startSweep(deps: StartSweepDeps): () => Promise<void> {
             if (bracketPagesOk > 0)
               await deps.metrics.incrementCounter(`sweep:${bracket}:pages_ok`, bracketPagesOk).catch(() => {})
             if (bracketPagesSkipped > 0)
-              await deps.metrics
-                .incrementCounter(`sweep:${bracket}:pages_skipped`, bracketPagesSkipped)
-                .catch(() => {})
+              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_skipped`, bracketPagesSkipped).catch(() => {})
             if (bracketPagesFailed > 0)
-              await deps.metrics
-                .incrementCounter(`sweep:${bracket}:pages_failed`, bracketPagesFailed)
-                .catch(() => {})
+              await deps.metrics.incrementCounter(`sweep:${bracket}:pages_failed`, bracketPagesFailed).catch(() => {})
           }
           const elapsed = performance.now() - sweepStart
           console.log(`[sweep] cycle complete in ${(elapsed / 1000).toFixed(1)}s`)
