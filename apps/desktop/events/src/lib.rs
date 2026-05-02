@@ -44,6 +44,45 @@ pub enum GameEvent {
     OffsetsBroken(OffsetsBrokenPayload),
 }
 
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+
+#[derive(Debug, Clone)]
+pub struct DetectionConfig {
+    /// Process name to attach to (e.g. "Brawlhalla.exe").
+    pub target_process: String,
+    /// Base poll cadence in milliseconds. Implementations may adapt internally.
+    pub poll_interval_ms: u32,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DetectionError {
+    #[error("failed to start detection: {0}")]
+    StartFailed(String),
+}
+
+pub struct DetectionHandle {
+    pub stop_tx: oneshot::Sender<()>,
+    pub join: JoinHandle<()>,
+}
+
+impl DetectionHandle {
+    pub async fn stop(self) -> Result<(), DetectionError> {
+        let _ = self.stop_tx.send(());
+        self.join.await
+            .map_err(|e| DetectionError::StartFailed(format!("join failed: {e}")))?;
+        Ok(())
+    }
+}
+
+pub trait DetectionService: Send + Sync + 'static {
+    fn start(
+        &self,
+        config: DetectionConfig,
+        events: mpsc::Sender<GameEvent>,
+    ) -> Result<DetectionHandle, DetectionError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,5 +139,55 @@ mod tests {
         let json = serde_json::to_string(&original).unwrap();
         let parsed: GameEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, original);
+    }
+
+    #[tokio::test]
+    async fn fake_detection_service_emits_events() {
+        use tokio::sync::mpsc;
+
+        struct FakeDetection {
+            scripted: Vec<GameEvent>,
+        }
+
+        impl DetectionService for FakeDetection {
+            fn start(
+                &self,
+                _config: DetectionConfig,
+                events: mpsc::Sender<GameEvent>,
+            ) -> Result<DetectionHandle, DetectionError> {
+                let scripted = self.scripted.clone();
+                let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel();
+                let join = tokio::spawn(async move {
+                    for event in scripted {
+                        if stop_rx.try_recv().is_ok() { return; }
+                        let _ = events.send(event).await;
+                    }
+                });
+                Ok(DetectionHandle { stop_tx, join })
+            }
+        }
+
+        let (tx, mut rx) = mpsc::channel(32);
+        let svc = FakeDetection {
+            scripted: vec![
+                GameEvent::Scanning(ScanningPayload),
+                GameEvent::MatchEnded(MatchEndedPayload { local_player_bhid: 7 }),
+            ],
+        };
+        let handle = svc.start(
+            DetectionConfig {
+                target_process: "Test.exe".into(),
+                poll_interval_ms: 100,
+            },
+            tx,
+        ).expect("start should succeed");
+
+        let first = rx.recv().await.expect("first event");
+        assert_eq!(first, GameEvent::Scanning(ScanningPayload));
+
+        let second = rx.recv().await.expect("second event");
+        assert_eq!(second, GameEvent::MatchEnded(MatchEndedPayload { local_player_bhid: 7 }));
+
+        handle.stop().await.expect("stop should succeed");
     }
 }
