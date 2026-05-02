@@ -22,6 +22,32 @@ use tauri::{
 };
 use tokio::time::{sleep, Duration};
 
+#[cfg(target_os = "windows")]
+use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyMatchFound {
+    event: &'static str,
+    opponents: Vec<api_client::OpponentData>,
+    #[serde(rename = "isRanked")]
+    is_ranked: bool,
+    #[serde(rename = "localPlayerId")]
+    local_player_id: u32,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyMatchEnded {
+    event: &'static str,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyScanning {
+    event: &'static str,
+}
+
 /// Screen-space bounding box of interactive content, updated by the frontend.
 struct ContentBounds {
     x: AtomicI32,
@@ -203,10 +229,83 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Game detection wiring removed; full app-side wiring lands in Task B.2.
             #[cfg(target_os = "windows")]
             {
-                let _ = app;
+                let app_handle = app.handle().clone();
+                let api_url = std::env::var("BRAWLTOME_API_URL")
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_else(|_| "https://brawltome.app".into());
+                let api = std::sync::Arc::new(api_client::ApiClient::new(api_url));
+
+                let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
+
+                let svc = game_detection::WindowsDetectionService;
+                let _detection_handle = svc.start(
+                    DetectionConfig {
+                        target_process: "Brawlhalla.exe".into(),
+                        poll_interval_ms: 100,
+                    },
+                    event_tx,
+                ).expect("detection failed to start");
+
+                tauri::async_runtime::spawn(async move {
+                    use std::collections::HashMap;
+                    use tauri::Emitter;
+                    let mut opponent_cache: HashMap<u32, api_client::OpponentData> = HashMap::new();
+
+                    while let Some(event) = event_rx.recv().await {
+                        match event {
+                            GameEvent::Scanning(_) => {
+                                let _ = app_handle.emit("game-event", &LegacyScanning { event: "scanning" });
+                            }
+                            GameEvent::MatchEnded(p) => {
+                                opponent_cache.clear();
+                                let _ = app_handle.emit("game-event", &LegacyMatchEnded { event: "match_ended" });
+                                let _ = p; // local_player_bhid currently unused on the React side
+                            }
+                            GameEvent::MatchStarted(p) => {
+                                // Fetch opponent data for any BhIDs not already cached.
+                                let new_bhids: Vec<u32> = p.opponent_bhids.iter()
+                                    .filter(|bhid| !opponent_cache.contains_key(bhid))
+                                    .copied()
+                                    .collect();
+
+                                let mut fetches = Vec::new();
+                                for bhid in new_bhids {
+                                    let api = api.clone();
+                                    fetches.push(tokio::spawn(async move {
+                                        (bhid, api.fetch_opponent(bhid).await)
+                                    }));
+                                }
+                                for task in fetches {
+                                    match task.await {
+                                        Ok((bhid, Ok(data))) => { opponent_cache.insert(bhid, data); }
+                                        Ok((bhid, Err(e))) => log::warn!("Failed to fetch bhid {bhid}: {e}"),
+                                        Err(e) => log::warn!("Fetch task panicked: {e}"),
+                                    }
+                                }
+
+                                let opponents: Vec<api_client::OpponentData> = p.opponent_bhids.iter()
+                                    .filter_map(|bhid| opponent_cache.get(bhid).cloned())
+                                    .collect();
+
+                                if !opponents.is_empty() {
+                                    let is_ranked = opponents.len() == 1;
+                                    let _ = app_handle.emit("game-event", &LegacyMatchFound {
+                                        event: "match_found",
+                                        opponents,
+                                        is_ranked,
+                                        local_player_id: p.local_player_bhid,
+                                    });
+                                }
+                            }
+                            GameEvent::OffsetsBroken(_) => {
+                                // Not yet wired to React; logged for now.
+                                log::warn!("Memory offsets appear broken");
+                            }
+                        }
+                    }
+                });
             }
 
             Ok(())
