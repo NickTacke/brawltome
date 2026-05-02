@@ -1,5 +1,5 @@
 [workspace]
-members = ["app", "events"]
+members = ["app", "events", "detection"]
 resolver = "2"
 
 [workspace.package]
@@ -8,6 +8,7 @@ version = "0.1.0"
 
 [workspace.dependencies]
 brawltome-events = { path = "events" }
+brawltome-detection = { path = "detection" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }

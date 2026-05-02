@@ -196,16 +196,28 @@ dependencies = [
 name = "brawltome-desktop"
 version = "0.1.0"
 dependencies = [
+ "brawltome-detection",
  "brawltome-events",
  "env_logger",
  "log",
- "memchr",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-shell",
+ "tokio",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "brawltome-detection"
+version = "0.1.0"
+dependencies = [
+ "brawltome-events",
+ "log",
+ "memchr",
+ "serde",
  "tokio",
  "windows-sys 0.59.0",
 ]
