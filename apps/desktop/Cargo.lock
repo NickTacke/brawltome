@@ -196,6 +196,7 @@ dependencies = [
 name = "brawltome-desktop"
 version = "0.1.0"
 dependencies = [
+ "brawltome-events",
  "env_logger",
  "log",
  "memchr",
