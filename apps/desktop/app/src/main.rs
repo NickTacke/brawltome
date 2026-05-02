@@ -235,22 +235,24 @@ fn main() {
                 let api_url = std::env::var("BRAWLTOME_API_URL")
                     .map(|s| s.trim().to_string())
                     .unwrap_or_else(|_| "https://brawltome.app".into());
-                let api = std::sync::Arc::new(api_client::ApiClient::new(api_url));
-
-                let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
-
-                let svc = game_detection::WindowsDetectionService;
-                let _detection_handle = svc.start(
-                    DetectionConfig {
-                        target_process: "Brawlhalla.exe".into(),
-                        poll_interval_ms: 100,
-                    },
-                    event_tx,
-                ).expect("detection failed to start");
 
                 tauri::async_runtime::spawn(async move {
                     use std::collections::HashMap;
                     use tauri::Emitter;
+
+                    let api = std::sync::Arc::new(api_client::ApiClient::new(api_url));
+                    let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
+
+                    // Now inside Tokio runtime context, so the inner `tokio::spawn` in start() works.
+                    let svc = game_detection::WindowsDetectionService;
+                    let _detection_handle = svc.start(
+                        DetectionConfig {
+                            target_process: "Brawlhalla.exe".into(),
+                            poll_interval_ms: 100,
+                        },
+                        event_tx,
+                    ).expect("detection failed to start");
+
                     let mut opponent_cache: HashMap<u32, api_client::OpponentData> = HashMap::new();
 
                     while let Some(event) = event_rx.recv().await {
