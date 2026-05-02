@@ -1,0 +1,48 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-ci.yml'
+      - '.gitmodules'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-ci.yml'
+      - '.gitmodules'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Set up SSH agent for private detection submodule
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DETECTION_DEPLOY_KEY }}
+
+      - name: Add github.com to known hosts
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+
+      - name: Build workspace
+        working-directory: apps/desktop
+        run: cargo build --workspace
+
+      - name: Test workspace
+        working-directory: apps/desktop
+        run: cargo test --workspace
