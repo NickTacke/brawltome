@@ -29,8 +29,8 @@ jobs:
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Configure Git to use Windows-native ssh.exe so it can see the agent
-        shell: pwsh
-        run: git config --global core.sshCommand 'C:\Windows\System32\OpenSSH\ssh.exe'
+        shell: bash
+        run: git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"
 
       # Note: do NOT use `submodules: recursive` here. actions/checkout sets a
       # global url.insteadOf that rewrites git@github.com: -> https://github.com/,
