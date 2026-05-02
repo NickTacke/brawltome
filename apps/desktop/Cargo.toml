@@ -1,5 +1,5 @@
 [workspace]
-members = ["app"]
+members = ["app", "events"]
 resolver = "2"
 
 [workspace.package]
@@ -7,6 +7,7 @@ edition = "2021"
 version = "0.1.0"
 
 [workspace.dependencies]
+brawltome-events = { path = "events" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
