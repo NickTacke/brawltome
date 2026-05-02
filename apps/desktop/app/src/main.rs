@@ -1,16 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(target_os = "windows")]
-mod memory;
-
-#[cfg(target_os = "windows")]
 mod api_client;
-
-#[cfg(target_os = "windows")]
-mod scanner;
-
-#[cfg(target_os = "windows")]
-mod game_detection;
 
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
@@ -244,7 +235,7 @@ fn main() {
                     let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
 
                     // Now inside Tokio runtime context, so the inner `tokio::spawn` in start() works.
-                    let svc = game_detection::WindowsDetectionService;
+                    let svc = brawltome_detection::WindowsDetectionService;
                     let _detection_handle = svc.start(
                         DetectionConfig {
                             target_process: "Brawlhalla.exe".into(),
