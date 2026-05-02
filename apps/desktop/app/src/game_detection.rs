@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use serde::Serialize;
-use tauri::Emitter;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::{sleep, Duration};
 
 use windows_sys::Win32::Foundation::HANDLE;
 
-use crate::api_client::{ApiClient, OpponentData};
+use brawltome_events::{
+    DetectionConfig, DetectionError, DetectionHandle, DetectionService, GameEvent,
+    MatchEndedPayload, MatchStartedPayload, MatchType, ScanningPayload,
+};
+
 use crate::memory;
 use crate::scanner;
 
@@ -17,26 +19,6 @@ use crate::scanner;
 #[derive(Copy, Clone)]
 struct SendHandle(HANDLE);
 unsafe impl Send for SendHandle {}
-
-#[derive(Debug, Serialize, Clone)]
-struct MatchFoundPayload {
-    event: &'static str,
-    opponents: Vec<OpponentData>,
-    #[serde(rename = "isRanked")]
-    is_ranked: bool,
-    #[serde(rename = "localPlayerId")]
-    local_player_id: u32,
-}
-
-#[derive(Debug, Serialize, Clone)]
-struct MatchEndedPayload {
-    event: &'static str,
-}
-
-#[derive(Debug, Serialize, Clone)]
-struct ScanningPayload {
-    event: &'static str,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ScannerState {
@@ -65,8 +47,6 @@ const SCAN_INTERVAL_SCANNING: Duration = Duration::from_secs(3);
 const SCAN_INTERVAL_TRACKING: Duration = Duration::from_secs(10);
 const RECONNECT_DELAY: Duration = Duration::from_secs(3);
 const ADDR_RETRY_INTERVAL: Duration = Duration::from_secs(5);
-/// Delay before re-fetching opponent data (gives API time to refresh stale data)
-const REFETCH_DELAY: Duration = Duration::from_secs(2);
 
 struct CycleState {
     handle: SendHandle,
@@ -78,8 +58,6 @@ struct CycleState {
     players: std::collections::HashMap<u32, scanner::PlayerInfo>,
     opened: HashSet<u32>,
     stale_addrs: HashSet<usize>,
-    opponent_cache: std::collections::HashMap<u32, OpponentData>,
-    refetch_at: Option<tokio::time::Instant>,
     last_scan: tokio::time::Instant,
     last_addr_retry: tokio::time::Instant,
     scan_in_flight: bool,
@@ -99,8 +77,6 @@ impl CycleState {
             players: std::collections::HashMap::new(),
             opened: HashSet::new(),
             stale_addrs: HashSet::new(),
-            opponent_cache: std::collections::HashMap::new(),
-            refetch_at: None,
             last_scan: tokio::time::Instant::now() - SCAN_INTERVAL_SCANNING,
             last_addr_retry: tokio::time::Instant::now() - ADDR_RETRY_INTERVAL,
             scan_in_flight: false,
@@ -109,24 +85,21 @@ impl CycleState {
         }
     }
 
-    fn handle_state_transition(&mut self, cur_04c: u32, app: &tauri::AppHandle) {
+    async fn handle_state_transition(&mut self, cur_04c: u32, events: &mpsc::Sender<GameEvent>) {
         if scanner::is_menu(cur_04c) {
             if self.state != ScannerState::Idle {
                 if self.state == ScannerState::Scanning
                     || self.state == ScannerState::Tracking
                     || self.state == ScannerState::Paused
                 {
-                    let payload = MatchEndedPayload { event: "match_ended" };
-                    if let Err(e) = app.emit("game-event", &payload) {
-                        log::error!("Failed to emit match_ended: {e}");
-                    }
+                    let _ = events.send(GameEvent::MatchEnded(MatchEndedPayload {
+                        local_player_bhid: self.my_bhid,
+                    })).await;
                 }
                 self.stale_addrs = scanner::snapshot_stale(self.handle.0, self.my_bhid, &self.cache);
                 self.state = ScannerState::Idle;
                 self.players.clear();
                 self.opened.clear();
-                self.opponent_cache.clear();
-                self.refetch_at = None;
                 log::info!("Menu");
             }
         } else if scanner::is_ignored(cur_04c) {
@@ -141,7 +114,7 @@ impl CycleState {
                 self.state = ScannerState::Scanning;
                 self.players.clear();
                 self.opened.clear();
-                log::info!("Character select — pre-scanning to prime cache");
+                log::info!("Character select, pre-scanning to prime cache");
             }
         } else if scanner::is_active_game(cur_04c) {
             if self.state == ScannerState::Paused {
@@ -154,12 +127,12 @@ impl CycleState {
                 }
                 self.state = ScannerState::Scanning;
                 log::info!("Match detected, scanning...");
-                let _ = app.emit("game-event", &ScanningPayload { event: "scanning" });
+                let _ = events.send(GameEvent::Scanning(ScanningPayload)).await;
             }
         }
     }
 
-    async fn scan_and_track(&mut self, api: &Arc<ApiClient>, app: &tauri::AppHandle) {
+    async fn scan_and_track(&mut self, events: &mpsc::Sender<GameEvent>) {
         if self.scan_in_flight || self.state != ScannerState::Scanning {
             return;
         }
@@ -208,114 +181,64 @@ impl CycleState {
                 let has_new = !new_opponents.is_empty();
 
                 if has_new {
-                    let mut fetches = Vec::new();
                     for opp in &new_opponents {
-                        let api = Arc::clone(api);
-                        let bhid = opp.bhid;
-                        fetches.push(tokio::spawn(async move {
-                            api.fetch_opponent(bhid).await
-                        }));
-                    }
-
-                    for task in fetches {
-                        match task.await {
-                            Ok(Ok(data)) => { self.opponent_cache.insert(data.brawlhalla_id, data); }
-                            Ok(Err(e)) => log::warn!("Failed to fetch opponent: {e}"),
-                            Err(e) => log::warn!("Fetch task panicked: {e}"),
-                        }
-                    }
-
-                    for opp in new_opponents {
                         self.opened.insert(opp.bhid);
                     }
 
-                    self.refetch_at = Some(tokio::time::Instant::now() + REFETCH_DELAY);
-                }
-
-                let opponent_data: Vec<_> = opponents.iter()
-                    .filter_map(|p| self.opponent_cache.get(&p.bhid).cloned())
-                    .collect();
-
-                if !opponent_data.is_empty() {
-                    let mut st = self.detection.lock().await;
-                    st.match_active = true;
-                    st.local_player_id = self.my_bhid;
-
-                    let is_ranked = opponents.len() == 1;
-                    let payload = MatchFoundPayload {
-                        event: "match_found",
-                        opponents: opponent_data,
-                        is_ranked,
-                        local_player_id: self.my_bhid,
-                    };
-                    if let Err(e) = app.emit("game-event", &payload) {
-                        log::error!("Failed to emit match_found: {e}");
+                    {
+                        let mut st = self.detection.lock().await;
+                        st.match_active = true;
+                        st.local_player_id = self.my_bhid;
                     }
+
+                    let match_type = if opponents.len() == 1 { MatchType::Ranked1v1 } else { MatchType::Unknown };
+                    let opponent_bhids: Vec<u32> = opponents.iter().map(|p| p.bhid).collect();
+                    let _ = events.send(GameEvent::MatchStarted(MatchStartedPayload {
+                        match_type,
+                        local_player_bhid: self.my_bhid,
+                        opponent_bhids,
+                    })).await;
                 }
             }
         }
 
         self.scan_in_flight = false;
     }
+}
 
-    async fn refetch_and_emit(&mut self, api: &Arc<ApiClient>, app: &tauri::AppHandle) {
-        match self.refetch_at {
-            Some(at) if tokio::time::Instant::now() >= at => {}
-            _ => return,
-        }
+pub struct WindowsDetectionService;
 
-        self.refetch_at = None;
-        log::info!("Re-fetching opponent data after API refresh...");
-        let bhids: Vec<u32> = self.opponent_cache.keys().copied().collect();
-        let mut fetches = Vec::new();
-        for bhid in bhids {
-            let api = Arc::clone(api);
-            fetches.push(tokio::spawn(async move {
-                api.fetch_opponent(bhid).await
-            }));
-        }
-        for task in fetches {
-            match task.await {
-                Ok(Ok(data)) => { self.opponent_cache.insert(data.brawlhalla_id, data); }
-                Ok(Err(e)) => log::warn!("Re-fetch failed: {e}"),
-                Err(e) => log::warn!("Re-fetch task panicked: {e}"),
+impl DetectionService for WindowsDetectionService {
+    fn start(
+        &self,
+        config: DetectionConfig,
+        events: mpsc::Sender<GameEvent>,
+    ) -> Result<DetectionHandle, DetectionError> {
+        let (stop_tx, mut stop_rx) = oneshot::channel();
+        let join = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = &mut stop_rx => return,
+                    res = run_cycle(&config, &events) => {
+                        match res {
+                            Ok(()) => log::warn!("Detection cycle ended, restarting..."),
+                            Err(e) => log::error!("Detection error: {e}, restarting in 3s..."),
+                        }
+                        tokio::time::sleep(RECONNECT_DELAY).await;
+                    }
+                }
             }
-        }
-
-        let opponent_data: Vec<_> = self.opponent_cache.values().cloned().collect();
-        if !opponent_data.is_empty() {
-            let is_ranked = opponent_data.len() == 1;
-            let payload = MatchFoundPayload {
-                event: "match_found",
-                opponents: opponent_data,
-                is_ranked,
-                local_player_id: self.my_bhid,
-            };
-            if let Err(e) = app.emit("game-event", &payload) {
-                log::error!("Failed to emit refreshed data: {e}");
-            }
-        }
+        });
+        Ok(DetectionHandle { stop_tx, join })
     }
 }
 
-pub async fn run(app: tauri::AppHandle, api_url: String) {
-    let api = Arc::new(ApiClient::new(api_url));
-
-    loop {
-        match run_cycle(&app, Arc::clone(&api)).await {
-            Ok(()) => log::warn!("Detection cycle ended, restarting..."),
-            Err(e) => log::error!("Detection error: {e}, restarting in 3s..."),
-        }
-        sleep(RECONNECT_DELAY).await;
-    }
-}
-
-async fn attach_to_process() -> Result<(SendHandle, memory::RegionCache), String> {
+async fn attach_to_process(target_process: &str) -> Result<(SendHandle, memory::RegionCache), String> {
     let pid = loop {
-        match memory::find_process_id("Brawlhalla.exe") {
+        match memory::find_process_id(target_process) {
             Some(pid) => break pid,
             None => {
-                log::debug!("Waiting for Brawlhalla...");
+                log::debug!("Waiting for {target_process}...");
                 sleep(RECONNECT_DELAY).await;
             }
         }
@@ -327,7 +250,7 @@ async fn attach_to_process() -> Result<(SendHandle, memory::RegionCache), String
     let regions = memory::heap_regions(handle.0);
     let total = memory::region_stats(&regions);
     log::info!(
-        "Attached to Brawlhalla (PID: {pid}), {} regions, {:.1} MB total",
+        "Attached to {target_process} (PID: {pid}), {} regions, {:.1} MB total",
         regions.len(),
         total as f64 / 1048576.0,
     );
@@ -355,10 +278,10 @@ async fn find_local_player(handle: SendHandle, cache: &mut memory::RegionCache) 
 }
 
 async fn run_cycle(
-    app: &tauri::AppHandle,
-    api: Arc<ApiClient>,
+    config: &DetectionConfig,
+    events: &mpsc::Sender<GameEvent>,
 ) -> Result<(), String> {
-    let (handle, mut cache) = attach_to_process().await?;
+    let (handle, mut cache) = attach_to_process(&config.target_process).await?;
     let my_bhid = find_local_player(handle, &mut cache).await;
 
     let t = std::time::Instant::now();
@@ -387,7 +310,7 @@ async fn run_cycle(
                     if cur_04c != cycle.prev_04c {
                         cycle.prev_04c = cur_04c;
                         let prev_state = cycle.state;
-                        cycle.handle_state_transition(cur_04c, app);
+                        cycle.handle_state_transition(cur_04c, events).await;
                         if cycle.state == ScannerState::Scanning {
                             cycle.needs_region_refresh = true;
                         }
@@ -404,8 +327,7 @@ async fn run_cycle(
             }
         }
 
-        cycle.scan_and_track(&api, app).await;
-        cycle.refetch_and_emit(&api, app).await;
+        cycle.scan_and_track(events).await;
 
         sleep(POLL_INTERVAL).await;
     }
