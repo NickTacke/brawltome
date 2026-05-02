@@ -329,6 +329,6 @@ async fn run_cycle(
 
         cycle.scan_and_track(events).await;
 
-        sleep(POLL_INTERVAL).await;
+        sleep(Duration::from_millis(config.poll_interval_ms as u64)).await;
     }
 }
