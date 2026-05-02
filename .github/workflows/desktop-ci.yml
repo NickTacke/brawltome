@@ -28,16 +28,12 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Configure Git to use Windows-native ssh.exe so it can see the agent
-        shell: bash
-        run: git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"
-
       # Note: do NOT use `submodules: recursive` here. actions/checkout sets a
       # global url.insteadOf that rewrites git@github.com: -> https://github.com/,
       # which causes the SSH submodule URL to be fetched via HTTPS with the
       # GITHUB_TOKEN, which doesn't have access to the private detection repo.
-      # Instead, fetch submodules manually in the next step where the SSH agent
-      # and Windows OpenSSH command are properly wired up.
+      # Instead, fetch submodules manually in the next step. Git for Windows's
+      # bundled ssh sees webfactory's MSYS ssh-agent automatically.
       - uses: actions/checkout@v4
 
       - name: Initialize submodules with SSH agent
