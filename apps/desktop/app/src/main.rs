@@ -250,7 +250,13 @@ fn main() {
                         }
                     };
 
+                    /// Delay before refetching opponent data after a match starts.
+                    /// Gives the BrawlTome backend a moment to ingest fresh data
+                    /// from the prior match before we re-query.
+                    const REFETCH_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
                     let mut opponent_cache: HashMap<u32, api_client::OpponentData> = HashMap::new();
+                    let mut pending_refetch: Option<tokio::task::JoinHandle<()>> = None;
 
                     while let Some(event) = event_rx.recv().await {
                         match event {
@@ -258,11 +264,19 @@ fn main() {
                                 let _ = app_handle.emit("game-event", &LegacyScanning { event: "scanning" });
                             }
                             GameEvent::MatchEnded(p) => {
+                                if let Some(h) = pending_refetch.take() {
+                                    h.abort();
+                                }
                                 opponent_cache.clear();
                                 let _ = app_handle.emit("game-event", &LegacyMatchEnded { event: "match_ended" });
                                 let _ = p; // local_player_bhid currently unused on the React side
                             }
                             GameEvent::MatchStarted(p) => {
+                                // Cancel any pending refetch from a previous MatchStarted.
+                                if let Some(h) = pending_refetch.take() {
+                                    h.abort();
+                                }
+
                                 // Fetch opponent data for any BhIDs not already cached.
                                 let new_bhids: Vec<u32> = p.opponent_bhids.iter()
                                     .filter(|bhid| !opponent_cache.contains_key(bhid))
@@ -288,13 +302,14 @@ fn main() {
                                     .filter_map(|bhid| opponent_cache.get(bhid).cloned())
                                     .collect();
 
+                                let is_ranked = matches!(
+                                    p.match_type,
+                                    brawltome_events::MatchType::Ranked1v1
+                                        | brawltome_events::MatchType::Ranked2v2
+                                        | brawltome_events::MatchType::Ranked3v3
+                                );
+
                                 if !opponents.is_empty() {
-                                    let is_ranked = matches!(
-                                        p.match_type,
-                                        brawltome_events::MatchType::Ranked1v1
-                                            | brawltome_events::MatchType::Ranked2v2
-                                            | brawltome_events::MatchType::Ranked3v3
-                                    );
                                     let _ = app_handle.emit("game-event", &LegacyMatchFound {
                                         event: "match_found",
                                         opponents,
@@ -302,6 +317,47 @@ fn main() {
                                         local_player_id: p.local_player_bhid,
                                     });
                                 }
+
+                                // Schedule a refetch to pick up backend updates that arrived
+                                // after the initial fetch (e.g., the player's just-finished
+                                // prior match's stats taking a moment to ingest).
+                                let api_for_refetch = api.clone();
+                                let app_handle_for_refetch = app_handle.clone();
+                                let opponent_bhids = p.opponent_bhids.clone();
+                                let local_player_bhid = p.local_player_bhid;
+                                pending_refetch = Some(tokio::spawn(async move {
+                                    tokio::time::sleep(REFETCH_DELAY).await;
+
+                                    let mut fresh: HashMap<u32, api_client::OpponentData> = HashMap::new();
+                                    let mut fetches = Vec::new();
+                                    for bhid in &opponent_bhids {
+                                        let api = api_for_refetch.clone();
+                                        let bhid = *bhid;
+                                        fetches.push(tokio::spawn(async move {
+                                            (bhid, api.fetch_opponent(bhid).await)
+                                        }));
+                                    }
+                                    for task in fetches {
+                                        match task.await {
+                                            Ok((bhid, Ok(data))) => { fresh.insert(bhid, data); }
+                                            Ok((bhid, Err(e))) => log::warn!("Refetch failed for bhid {bhid}: {e}"),
+                                            Err(e) => log::warn!("Refetch task panicked: {e}"),
+                                        }
+                                    }
+
+                                    let opponents: Vec<api_client::OpponentData> = opponent_bhids.iter()
+                                        .filter_map(|bhid| fresh.get(bhid).cloned())
+                                        .collect();
+
+                                    if !opponents.is_empty() {
+                                        let _ = app_handle_for_refetch.emit("game-event", &LegacyMatchFound {
+                                            event: "match_found",
+                                            opponents,
+                                            is_ranked,
+                                            local_player_id: local_player_bhid,
+                                        });
+                                    }
+                                }));
                             }
                             GameEvent::OffsetsBroken(_) => {
                                 // Not yet wired to React; logged for now.
