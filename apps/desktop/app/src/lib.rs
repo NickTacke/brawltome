@@ -1,6 +1,7 @@
 //! BrawlTome desktop overlay library entrypoint.
 //! Tauri builder + plugin wiring + setup callback that wires the focused modules.
 
+#[cfg(target_os = "windows")]
 mod api_client;
 mod detection_bridge;
 mod overlay;

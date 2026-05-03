@@ -4,6 +4,7 @@
 #[cfg(target_os = "windows")]
 use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
 
+#[cfg(target_os = "windows")]
 use crate::api_client;
 
 #[cfg(target_os = "windows")]
