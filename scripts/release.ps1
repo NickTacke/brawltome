@@ -47,11 +47,17 @@ if (-not ($cargoContent -match '(?m)^version = "[^"]*"$')) {
 $cargoUpdated = $cargoContent -replace '(?m)^version = "[^"]*"$', "version = `"$Version`""
 Set-Content -Path $CargoToml -Value $cargoUpdated -NoNewline
 
-# Update tauri.conf.json "version"
-$confJson = Get-Content $TauriConf -Raw | ConvertFrom-Json
-$confJson.version = $Version
-# ConvertTo-Json with -Depth 20 to handle nested plugins.updater config
-$confJson | ConvertTo-Json -Depth 20 | Set-Content $TauriConf
+# Update tauri.conf.json "version" via targeted regex (NOT ConvertTo-Json,
+# which reformats indentation + reorders properties + corrupts the file).
+# -Encoding utf8 explicitly so Windows PowerShell 5.1 doesn't write a different
+# default encoding.
+$confContent = Get-Content $TauriConf -Raw
+if (-not ($confContent -match '"version"\s*:\s*"[^"]*"')) {
+    Write-Error "Could not find a '\"version\": \"...\"' line to replace in $TauriConf"
+    exit 1
+}
+$confUpdated = $confContent -replace '("version"\s*:\s*)"[^"]*"', "`$1`"$Version`""
+Set-Content -Path $TauriConf -Value $confUpdated -NoNewline -Encoding utf8
 
 Write-Host "Bumped version to $Version in:" -ForegroundColor Green
 Write-Host "  - $CargoToml"
