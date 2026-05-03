@@ -131,15 +131,24 @@ pub fn spawn(app: &tauri::AppHandle) {
                     }
 
                     // Schedule a refetch to pick up backend updates that arrived
-                    // after the initial fetch.
+                    // after the initial fetch. Seed `fresh` with the previously
+                    // cached opponents so a partial refetch failure preserves
+                    // what the user was already seeing instead of removing them.
                     let api_for_refetch = api.clone();
                     let app_handle_for_refetch = app_handle.clone();
                     let opponent_bhids = p.opponent_bhids.clone();
                     let local_player_bhid = p.local_player_bhid;
+                    let cached_opponents: HashMap<u32, api_client::OpponentData> = p
+                        .opponent_bhids
+                        .iter()
+                        .filter_map(|bhid| {
+                            opponent_cache.get(bhid).cloned().map(|data| (*bhid, data))
+                        })
+                        .collect();
                     pending_refetch = Some(tokio::spawn(async move {
                         tokio::time::sleep(REFETCH_DELAY).await;
 
-                        let mut fresh: HashMap<u32, api_client::OpponentData> = HashMap::new();
+                        let mut fresh = cached_opponents;
                         let mut fetches = Vec::new();
                         for bhid in &opponent_bhids {
                             let api = api_for_refetch.clone();

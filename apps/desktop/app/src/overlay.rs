@@ -3,6 +3,7 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
+#[cfg(target_os = "windows")]
 use tokio::time::{sleep, Duration};
 
 /// Screen-space bounding box of interactive content, updated by the frontend.
