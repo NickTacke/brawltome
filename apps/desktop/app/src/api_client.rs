@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-const DEFAULT_API_BASE: &str = "https://brawltome.app";
+const DEFAULT_API_BASE: &str = "https://api.brawltome.app";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
