@@ -1,16 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(target_os = "windows")]
-mod memory;
-
-#[cfg(target_os = "windows")]
 mod api_client;
-
-#[cfg(target_os = "windows")]
-mod scanner;
-
-#[cfg(target_os = "windows")]
-mod game_detection;
 
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
@@ -21,6 +12,32 @@ use tauri::{
     tray::TrayIconBuilder,
 };
 use tokio::time::{sleep, Duration};
+
+#[cfg(target_os = "windows")]
+use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyMatchFound {
+    event: &'static str,
+    opponents: Vec<api_client::OpponentData>,
+    #[serde(rename = "isRanked")]
+    is_ranked: bool,
+    #[serde(rename = "localPlayerId")]
+    local_player_id: u32,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyMatchEnded {
+    event: &'static str,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyScanning {
+    event: &'static str,
+}
 
 /// Screen-space bounding box of interactive content, updated by the frontend.
 struct ContentBounds {
@@ -203,15 +220,95 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Start game detection (Windows only)
             #[cfg(target_os = "windows")]
             {
-                let handle = app.handle().clone();
+                let app_handle = app.handle().clone();
                 let api_url = std::env::var("BRAWLTOME_API_URL")
                     .map(|s| s.trim().to_string())
                     .unwrap_or_else(|_| "https://brawltome.app".into());
+
                 tauri::async_runtime::spawn(async move {
-                    game_detection::run(handle, api_url).await;
+                    use std::collections::HashMap;
+                    use tauri::Emitter;
+
+                    let api = std::sync::Arc::new(api_client::ApiClient::new(api_url));
+                    let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
+
+                    // Now inside Tokio runtime context, so the inner `tokio::spawn` in start() works.
+                    let svc = brawltome_detection::WindowsDetectionService;
+                    let _detection_handle = match svc.start(
+                        DetectionConfig {
+                            target_process: "Brawlhalla.exe".into(),
+                            poll_interval_ms: 100,
+                        },
+                        event_tx,
+                    ) {
+                        Ok(handle) => handle,
+                        Err(err) => {
+                            log::error!("Detection failed to start: {err}");
+                            return;
+                        }
+                    };
+
+                    let mut opponent_cache: HashMap<u32, api_client::OpponentData> = HashMap::new();
+
+                    while let Some(event) = event_rx.recv().await {
+                        match event {
+                            GameEvent::Scanning(_) => {
+                                let _ = app_handle.emit("game-event", &LegacyScanning { event: "scanning" });
+                            }
+                            GameEvent::MatchEnded(p) => {
+                                opponent_cache.clear();
+                                let _ = app_handle.emit("game-event", &LegacyMatchEnded { event: "match_ended" });
+                                let _ = p; // local_player_bhid currently unused on the React side
+                            }
+                            GameEvent::MatchStarted(p) => {
+                                // Fetch opponent data for any BhIDs not already cached.
+                                let new_bhids: Vec<u32> = p.opponent_bhids.iter()
+                                    .filter(|bhid| !opponent_cache.contains_key(bhid))
+                                    .copied()
+                                    .collect();
+
+                                let mut fetches = Vec::new();
+                                for bhid in new_bhids {
+                                    let api = api.clone();
+                                    fetches.push(tokio::spawn(async move {
+                                        (bhid, api.fetch_opponent(bhid).await)
+                                    }));
+                                }
+                                for task in fetches {
+                                    match task.await {
+                                        Ok((bhid, Ok(data))) => { opponent_cache.insert(bhid, data); }
+                                        Ok((bhid, Err(e))) => log::warn!("Failed to fetch bhid {bhid}: {e}"),
+                                        Err(e) => log::warn!("Fetch task panicked: {e}"),
+                                    }
+                                }
+
+                                let opponents: Vec<api_client::OpponentData> = p.opponent_bhids.iter()
+                                    .filter_map(|bhid| opponent_cache.get(bhid).cloned())
+                                    .collect();
+
+                                if !opponents.is_empty() {
+                                    let is_ranked = matches!(
+                                        p.match_type,
+                                        brawltome_events::MatchType::Ranked1v1
+                                            | brawltome_events::MatchType::Ranked2v2
+                                            | brawltome_events::MatchType::Ranked3v3
+                                    );
+                                    let _ = app_handle.emit("game-event", &LegacyMatchFound {
+                                        event: "match_found",
+                                        opponents,
+                                        is_ranked,
+                                        local_player_id: p.local_player_bhid,
+                                    });
+                                }
+                            }
+                            GameEvent::OffsetsBroken(_) => {
+                                // Not yet wired to React; logged for now.
+                                log::warn!("Memory offsets appear broken");
+                            }
+                        }
+                    }
                 });
             }
 

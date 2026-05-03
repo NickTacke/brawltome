@@ -1,3 +1,4 @@
-core/target/
-core/gen/
+target/
+app/target/
+app/gen/
 dist/

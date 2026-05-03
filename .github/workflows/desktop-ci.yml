@@ -1,0 +1,55 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-ci.yml'
+      - '.gitmodules'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop-ci.yml'
+      - '.gitmodules'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Set up SSH agent for private detection submodule
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DETECTION_DEPLOY_KEY }}
+
+      - name: Add github.com to known hosts
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      # Note: do NOT use `submodules: recursive` here. actions/checkout sets a
+      # global url.insteadOf that rewrites git@github.com: -> https://github.com/,
+      # which causes the SSH submodule URL to be fetched via HTTPS with the
+      # GITHUB_TOKEN, which doesn't have access to the private detection repo.
+      # Instead, fetch submodules manually in the next step. Git for Windows's
+      # bundled ssh sees webfactory's MSYS ssh-agent automatically.
+      - uses: actions/checkout@v4
+
+      - name: Initialize submodules with SSH agent
+        shell: bash
+        run: git submodule update --init --recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+
+      - name: Build workspace
+        working-directory: apps/desktop
+        run: cargo build --workspace
+
+      - name: Test workspace
+        working-directory: apps/desktop
+        run: cargo test --workspace
