@@ -30,32 +30,41 @@ pub fn run() {
 
             detection_bridge::spawn(app.handle());
 
-            // Background update check on startup. Silent: download + queue install
-            // for next launch. Skipped in dev builds so cargo run doesn't try to
-            // update itself.
+            // Background update check on startup. Silent: download + install
+            // without UI. On Windows, Tauri exits the app to let the installer
+            // replace the running binary; on_before_exit logs the imminent quit
+            // so it isn't mysterious in beta-tester logs. Skipped in dev builds.
             #[cfg(not(debug_assertions))]
             {
                 use tauri_plugin_updater::UpdaterExt;
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    match app_handle.updater() {
-                        Ok(updater) => match updater.check().await {
-                            Ok(Some(update)) => {
-                                log::info!(
-                                    "Update available: {} -> {}",
-                                    update.current_version,
-                                    update.version
-                                );
-                                if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
-                                    log::warn!("Update install failed: {e}");
-                                } else {
-                                    log::info!("Update queued; will apply on next launch");
-                                }
+                    let updater = match app_handle
+                        .updater_builder()
+                        .on_before_exit(|| {
+                            log::info!("Update downloaded; app is about to quit so the installer can replace the running binary");
+                        })
+                        .build()
+                    {
+                        Ok(u) => u,
+                        Err(e) => {
+                            log::warn!("Updater not available: {e}");
+                            return;
+                        }
+                    };
+                    match updater.check().await {
+                        Ok(Some(update)) => {
+                            log::info!(
+                                "Update available: {} -> {}. App will quit and silently install when download completes.",
+                                update.current_version,
+                                update.version
+                            );
+                            if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+                                log::warn!("Update install failed: {e}");
                             }
-                            Ok(None) => log::debug!("No update available"),
-                            Err(e) => log::warn!("Update check failed: {e}"),
-                        },
-                        Err(e) => log::warn!("Updater not available: {e}"),
+                        }
+                        Ok(None) => log::debug!("No update available"),
+                        Err(e) => log::warn!("Update check failed: {e}"),
                     }
                 });
             }

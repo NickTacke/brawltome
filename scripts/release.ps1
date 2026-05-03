@@ -45,7 +45,7 @@ if (-not ($cargoContent -match '(?m)^version = "[^"]*"$')) {
     exit 1
 }
 $cargoUpdated = $cargoContent -replace '(?m)^version = "[^"]*"$', "version = `"$Version`""
-Set-Content -Path $CargoToml -Value $cargoUpdated -NoNewline
+Set-Content -Path $CargoToml -Value $cargoUpdated -NoNewline -Encoding utf8
 
 # Update tauri.conf.json "version" via targeted regex (NOT ConvertTo-Json,
 # which reformats indentation + reorders properties + corrupts the file).
