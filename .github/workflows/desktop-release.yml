@@ -56,7 +56,10 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          $bundleDir = "apps/desktop/app/target/release/bundle/nsis"
+          # Cargo workspaces output to the WORKSPACE target dir (apps/desktop/target),
+          # not per-package (apps/desktop/app/target). tauri-cli detects the workspace
+          # and follows that convention.
+          $bundleDir = "apps/desktop/target/release/bundle/nsis"
           $exe = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe" | Select-Object -First 1
           $sig = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe.sig" | Select-Object -First 1
           if (-not $exe) { Write-Error "No installer .exe found in $bundleDir"; exit 1 }
