@@ -1,0 +1,100 @@
+name: Desktop Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Set up SSH agent for private detection submodule
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DETECTION_DEPLOY_KEY }}
+
+      - name: Add github.com to known hosts
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize submodules with SSH agent
+        shell: bash
+        run: git submodule update --init --recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS deps
+        run: bun install --frozen-lockfile
+
+      - name: Build Tauri release bundle
+        working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run --filter @brawltome/desktop tauri build
+
+      - name: Locate built artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $bundleDir = "apps/desktop/app/target/release/bundle/nsis"
+          $exe = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe" | Select-Object -First 1
+          $sig = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe.sig" | Select-Object -First 1
+          if (-not $exe) { Write-Error "No installer .exe found in $bundleDir"; exit 1 }
+          if (-not $sig) { Write-Error "No installer .sig found in $bundleDir"; exit 1 }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "exe_path=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+          echo "sig_path=$($sig.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Rename installer to stable filename
+        shell: pwsh
+        run: |
+          Copy-Item "${{ steps.artifacts.outputs.exe_path }}" "apps/desktop/BrawlTome-Setup.exe"
+          Copy-Item "${{ steps.artifacts.outputs.sig_path }}" "apps/desktop/BrawlTome-Setup.exe.sig"
+
+      - name: Generate latest.json
+        shell: pwsh
+        run: |
+          $version = "${{ steps.artifacts.outputs.version }}"
+          $sig = (Get-Content "apps/desktop/BrawlTome-Setup.exe.sig" -Raw).Trim()
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/BrawlTome-Setup.exe"
+          $pubDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $latest = @{
+              version = $version
+              notes = "BrawlTome ${{ github.ref_name }}"
+              pub_date = $pubDate
+              platforms = @{
+                  "windows-x86_64" = @{
+                      signature = $sig
+                      url = $url
+                  }
+              }
+          }
+          $latest | ConvertTo-Json -Depth 5 | Set-Content -Path "apps/desktop/latest.json" -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/BrawlTome-Setup.exe
+            apps/desktop/BrawlTome-Setup.exe.sig
+            apps/desktop/latest.json
+          generate_release_notes: true
+          fail_on_unmatched_files: true
