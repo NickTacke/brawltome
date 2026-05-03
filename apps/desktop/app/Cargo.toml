@@ -3,6 +3,14 @@ name = "brawltome-desktop"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "brawltome_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "brawltome-desktop"
+path = "src/main.rs"
+
 [dependencies]
 brawltome-events.workspace = true
 brawltome-detection.workspace = true
