@@ -236,13 +236,19 @@ fn main() {
 
                     // Now inside Tokio runtime context, so the inner `tokio::spawn` in start() works.
                     let svc = brawltome_detection::WindowsDetectionService;
-                    let _detection_handle = svc.start(
+                    let _detection_handle = match svc.start(
                         DetectionConfig {
                             target_process: "Brawlhalla.exe".into(),
                             poll_interval_ms: 100,
                         },
                         event_tx,
-                    ).expect("detection failed to start");
+                    ) {
+                        Ok(handle) => handle,
+                        Err(err) => {
+                            log::error!("Detection failed to start: {err}");
+                            return;
+                        }
+                    };
 
                     let mut opponent_cache: HashMap<u32, api_client::OpponentData> = HashMap::new();
 
@@ -283,7 +289,12 @@ fn main() {
                                     .collect();
 
                                 if !opponents.is_empty() {
-                                    let is_ranked = opponents.len() == 1;
+                                    let is_ranked = matches!(
+                                        p.match_type,
+                                        brawltome_events::MatchType::Ranked1v1
+                                            | brawltome_events::MatchType::Ranked2v2
+                                            | brawltome_events::MatchType::Ranked3v3
+                                    );
                                     let _ = app_handle.emit("game-event", &LegacyMatchFound {
                                         event: "match_found",
                                         opponents,
