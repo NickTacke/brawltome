@@ -36,28 +36,39 @@ if (-not (Test-Path $TauriConf)) {
     exit 1
 }
 
-# Update Cargo.toml [workspace.package] version
-# The line we want is `version = "X.Y.Z"` under [workspace.package].
-# That is the only `^version = "..."$` line in the file (other crates use version.workspace = true).
+# Helper: write UTF-8 WITHOUT a byte-order mark.
+# Windows PowerShell 5.1's `Set-Content -Encoding utf8` writes UTF-8 WITH BOM
+# (uses the .NET Framework Encoding.UTF8). PowerShell 7+ added `utf8NoBOM` but
+# we can't rely on that. Use .NET directly with UTF8Encoding($false) for an
+# encoding that is consistent across PS 5.1 and 7+.
+function Write-Utf8NoBom {
+    param([string]$Path, [string]$Content)
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+# Update Cargo.toml [workspace.package] version.
+# `\s*$` instead of `$` so the regex tolerates CRLF line endings on Windows
+# (the \r between the closing quote and \n is whitespace).
+# This is the only `version = "..."` line in the file; other crates use
+# version.workspace = true.
 $cargoContent = Get-Content $CargoToml -Raw
-if (-not ($cargoContent -match '(?m)^version = "[^"]*"$')) {
-    Write-Error "Could not find a 'version = \"...\"' line to replace in $CargoToml"
+if (-not ($cargoContent -match '(?m)^version = "[^"]*"\s*$')) {
+    Write-Error "Could not find a version = `"...`" line to replace in $CargoToml"
     exit 1
 }
-$cargoUpdated = $cargoContent -replace '(?m)^version = "[^"]*"$', "version = `"$Version`""
-Set-Content -Path $CargoToml -Value $cargoUpdated -NoNewline -Encoding utf8
+$cargoUpdated = $cargoContent -replace '(?m)^version = "[^"]*"', "version = `"$Version`""
+Write-Utf8NoBom -Path $CargoToml -Content $cargoUpdated
 
 # Update tauri.conf.json "version" via targeted regex (NOT ConvertTo-Json,
 # which reformats indentation + reorders properties + corrupts the file).
-# -Encoding utf8 explicitly so Windows PowerShell 5.1 doesn't write a different
-# default encoding.
 $confContent = Get-Content $TauriConf -Raw
 if (-not ($confContent -match '"version"\s*:\s*"[^"]*"')) {
-    Write-Error "Could not find a '\"version\": \"...\"' line to replace in $TauriConf"
+    Write-Error "Could not find a `"version`": `"...`" line to replace in $TauriConf"
     exit 1
 }
 $confUpdated = $confContent -replace '("version"\s*:\s*)"[^"]*"', "`$1`"$Version`""
-Set-Content -Path $TauriConf -Value $confUpdated -NoNewline -Encoding utf8
+Write-Utf8NoBom -Path $TauriConf -Content $confUpdated
 
 Write-Host "Bumped version to $Version in:" -ForegroundColor Green
 Write-Host "  - $CargoToml"
