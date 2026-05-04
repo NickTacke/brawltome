@@ -36,13 +36,17 @@ pub fn prune_log_dir(log_dir: &std::path::Path, keep: usize) {
         if path.extension().and_then(|e| e.to_str()) != Some("log") {
             continue;
         }
-        let mtime = match entry.metadata().and_then(|m| m.modified()) {
-            Ok(t) => t
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
-            Err(_) => 0,
+        // Skip entries with unreadable mtime instead of treating them as
+        // epoch 0. Treating them as oldest would risk pruning a fresh log
+        // file whose metadata happened to be momentarily unreadable (e.g.,
+        // permissions race). Best-effort: leave such files alone.
+        let Ok(mtime_st) = entry.metadata().and_then(|m| m.modified()) else {
+            continue;
         };
+        let mtime = mtime_st
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         entries.push((path, mtime));
     }
 
@@ -105,5 +109,22 @@ mod tests {
         let mut want = vec![p("b.log"), p("d.log"), p("e.log")];
         want.sort();
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn ties_on_mtime_use_input_order_stably() {
+        // Three files with identical mtime, keep=1. Rust's sort_by is stable,
+        // so the FIRST entry in input order wins (becomes "newest" after the
+        // descending stable sort), and the rest are deleted. Pinning this
+        // behavior via test guards against accidental migration to an
+        // unstable sort, which would make tie-breaking non-deterministic
+        // and could silently regress which file survives.
+        let entries = vec![
+            (p("first.log"), 100),
+            (p("second.log"), 100),
+            (p("third.log"), 100),
+        ];
+        let got = paths_to_delete(entries, 1);
+        assert_eq!(got, vec![p("second.log"), p("third.log")]);
     }
 }

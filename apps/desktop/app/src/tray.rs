@@ -42,12 +42,11 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             }
             "open_logs" => {
                 if let Ok(log_dir) = app.path().app_log_dir() {
-                    if let Some(path_str) = log_dir.to_str() {
-                        // Opens the dir in Windows Explorer (or platform equivalent) via
-                        // the shell plugin. Errors are silently ignored: this is a UX
-                        // affordance, not a critical operation.
-                        let _ = app.shell().open(path_str, None);
-                    }
+                    // to_string_lossy keeps a best-effort path on systems
+                    // with non-UTF-8 user-profile names (rare on Windows
+                    // but possible). Errors silently ignored: this is a UX
+                    // affordance, not a critical operation.
+                    let _ = app.shell().open(log_dir.to_string_lossy().as_ref(), None);
                 }
             }
             "quit" => {
