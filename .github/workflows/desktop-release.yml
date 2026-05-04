@@ -27,6 +27,32 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
+      - name: Validate manual tag input resolves to an existing tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reject anything that isn't shaped like one of our release tags
+          # (vMAJOR.MINOR.PATCH, optional pre-release/build suffix). Stops a
+          # typo or branch name from being passed straight to checkout +
+          # softprops/action-gh-release, which would otherwise create a
+          # release from an unintended ref.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.+].+)?$ ]]; then
+            echo "Invalid tag format: $TAG (expected vMAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          # Confirm the tag exists on the remote (no checkout yet at this
+          # point, so go through the GitHub API). Stops workflow_dispatch
+          # from creating a release for a tag that was never pushed.
+          if ! gh api "repos/$REPO/git/ref/tags/$TAG" --silent 2>/dev/null; then
+            echo "Tag does not exist on $REPO: $TAG"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
