@@ -74,6 +74,29 @@ Write-Host "Bumped version to $Version in:" -ForegroundColor Green
 Write-Host "  - $CargoToml"
 Write-Host "  - $TauriConf"
 
+# Pre-flight: run the same build CI will run, with the same env vars.
+# Refuses to tag if the local build fails. Would have caught multiple
+# release-pipeline bugs we hit during v0.1.0 setup.
+Write-Host "Running pre-flight release build (this is what CI will run)..." -ForegroundColor Cyan
+$keyPath = "$HOME/.tauri/brawltome-updater.key"
+if (-not (Test-Path $keyPath)) {
+    Write-Error "Cannot find Ed25519 key at $keyPath. Required for pre-flight build."
+    exit 1
+}
+$keyBytes = [System.IO.File]::ReadAllBytes($keyPath)
+if ($keyBytes.Length -ge 3 -and $keyBytes[0] -eq 0xEF -and $keyBytes[1] -eq 0xBB -and $keyBytes[2] -eq 0xBF) {
+    $keyBytes = $keyBytes[3..($keyBytes.Length-1)]
+}
+$env:TAURI_SIGNING_PRIVATE_KEY = [System.Text.Encoding]::UTF8.GetString($keyBytes)
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+
+& bun run --filter @brawltome/desktop build
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Pre-flight build failed. Refusing to tag. Fix the build issue and re-run the release script."
+    exit 1
+}
+Write-Host "Pre-flight build succeeded." -ForegroundColor Green
+
 # Stage; commit only if there's actually a diff (handles the case where the
 # version is already what we want, e.g., cutting v0.1.0 when both files
 # already say 0.1.0). Tag points at HEAD either way.

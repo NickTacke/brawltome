@@ -23,26 +23,24 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let _tray = TrayIconBuilder::new()
         .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
         .menu(&menu)
-        .tooltip("BrawlTome Overlay")
-        .on_menu_event(move |app: &AppHandle, event| {
-            match event.id().as_ref() {
-                "toggle" => {
-                    if let Some(w) = app.get_webview_window("overlay") {
-                        if w.is_visible().unwrap_or(false) {
-                            let _ = w.set_ignore_cursor_events(true);
-                            let st: tauri::State<Arc<OverlayState>> = app.state();
-                            st.clickthrough.store(true, Ordering::Relaxed);
-                            let _ = w.hide();
-                        } else {
-                            let _ = w.show();
-                        }
+        .tooltip("BrawlTome")
+        .on_menu_event(move |app: &AppHandle, event| match event.id().as_ref() {
+            "toggle" => {
+                if let Some(w) = app.get_webview_window("overlay") {
+                    if w.is_visible().unwrap_or(false) {
+                        let _ = w.set_ignore_cursor_events(true);
+                        let st: tauri::State<Arc<OverlayState>> = app.state();
+                        st.clickthrough.store(true, Ordering::Relaxed);
+                        let _ = w.hide();
+                    } else {
+                        let _ = w.show();
                     }
                 }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
             }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
         })
         .build(app)?;
 

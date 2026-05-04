@@ -3,6 +3,12 @@ name: Desktop Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v0.1.0)'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -24,6 +30,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Initialize submodules with SSH agent
         shell: bash
@@ -55,7 +62,7 @@ jobs:
         id: artifacts
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          $version = "${{ github.event.inputs.tag || github.ref_name }}".TrimStart('v')
           # Cargo workspaces output to the WORKSPACE target dir (apps/desktop/target),
           # not per-package (apps/desktop/app/target). tauri-cli detects the workspace
           # and follows that convention.
@@ -79,11 +86,11 @@ jobs:
         run: |
           $version = "${{ steps.artifacts.outputs.version }}"
           $sig = (Get-Content "apps/desktop/BrawlTome-Setup.exe.sig" -Raw).Trim()
-          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/BrawlTome-Setup.exe"
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.tag || github.ref_name }}/BrawlTome-Setup.exe"
           $pubDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           $latest = @{
               version = $version
-              notes = "BrawlTome ${{ github.ref_name }}"
+              notes = "BrawlTome ${{ github.event.inputs.tag || github.ref_name }}"
               pub_date = $pubDate
               platforms = @{
                   "windows-x86_64" = @{
@@ -97,6 +104,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
             apps/desktop/BrawlTome-Setup.exe
             apps/desktop/BrawlTome-Setup.exe.sig
