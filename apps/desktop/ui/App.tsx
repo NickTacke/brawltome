@@ -3,8 +3,7 @@ import { StatusBadge } from './components/StatusBadge'
 import { useGameEvents } from './hooks/useGameEvents'
 
 export default function App() {
-  const { opponents, matchType, visible, scanning, refreshing, detectionStatus, localPlayerBhid } =
-    useGameEvents()
+  const { opponents, matchType, visible, scanning, refreshing, detectionStatus, localPlayerBhid } = useGameEvents()
 
   return (
     <div className="flex h-screen items-center justify-end p-4">
