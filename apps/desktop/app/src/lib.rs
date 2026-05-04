@@ -4,15 +4,46 @@
 #[cfg(target_os = "windows")]
 mod api_client;
 mod detection_bridge;
+mod log_prune;
 mod overlay;
 mod tray;
 
 use tauri::Manager;
 
-pub fn run() {
-    env_logger::init();
+/// Build the log plugin with our standard config: rotating per-launch files
+/// in the platform log dir, plus stdout + webview targets in dev only.
+fn build_log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use tauri_plugin_log::{Target, TargetKind};
 
+    // One log file per launch. Timestamp keeps filenames sortable and unique;
+    // colons are not legal on Windows so the format uses dashes.
+    let stamp = chrono::Utc::now().format("%Y-%m-%dT%H-%M-%SZ").to_string();
+    let file_name = format!("BrawlTome_{stamp}");
+
+    let mut builder = tauri_plugin_log::Builder::default()
+        .clear_targets()
+        .target(Target::new(TargetKind::LogDir { file_name: Some(file_name) }))
+        .level(if cfg!(debug_assertions) {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        });
+
+    // Stdout + webview console only in dev. Stdout is redundant on installed
+    // Windows builds (no console attached), and the webview console isn't
+    // useful when devtools is gated to debug builds.
+    if cfg!(debug_assertions) {
+        builder = builder
+            .target(Target::new(TargetKind::Stdout))
+            .target(Target::new(TargetKind::Webview));
+    }
+
+    builder.build()
+}
+
+pub fn run() {
     tauri::Builder::default()
+        .plugin(build_log_plugin())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -21,6 +52,13 @@ pub fn run() {
             detection_bridge::get_detection_state,
         ])
         .setup(|app| {
+            // Best-effort: keep the log dir bounded. Runs synchronously on
+            // startup; ~tens of ms even with 10+ files, so it's fine before
+            // the window is shown.
+            if let Ok(log_dir) = app.path().app_log_dir() {
+                log_prune::prune_log_dir(&log_dir, 10);
+            }
+
             overlay::position_overlay_window(app.handle())?;
 
             let overlay_state = overlay::OverlayState::new();
