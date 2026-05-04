@@ -6,8 +6,7 @@
 //! webview finishes loading, the early Attached/Ready emissions are otherwise
 //! lost).
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[cfg(target_os = "windows")]
 use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
@@ -17,22 +16,68 @@ use crate::api_client;
 
 /// Live snapshot of detection's lifecycle. Bridge writes; the React side reads
 /// once on mount via the `get_detection_state` Tauri command to recover from
-/// missed early events.
+/// missed early events. Behind a Mutex so the snapshot read returns a
+/// coherent view of all four fields rather than a cross-update tear (which
+/// could happen with separate Relaxed atomics under weak memory ordering on
+/// ARM).
+#[derive(Default)]
+struct DetectionStateInner {
+    attached: bool,
+    ready: bool,
+    bhid: Option<u32>,
+    match_active: bool,
+}
+
 pub struct DetectionState {
-    attached: AtomicBool,
-    ready: AtomicBool,
-    bhid: AtomicU32,
-    match_active: AtomicBool,
+    inner: Mutex<DetectionStateInner>,
 }
 
 impl DetectionState {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            attached: AtomicBool::new(false),
-            ready: AtomicBool::new(false),
-            bhid: AtomicU32::new(0),
-            match_active: AtomicBool::new(false),
+            inner: Mutex::new(DetectionStateInner::default()),
         })
+    }
+
+    fn snapshot(&self) -> DetectionStateSnapshot {
+        let inner = self.inner.lock().unwrap();
+        DetectionStateSnapshot {
+            attached: inner.attached,
+            ready: inner.ready,
+            bhid: inner.bhid,
+            match_active: inner.match_active,
+        }
+    }
+
+    fn on_attached(&self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.attached = true;
+        inner.ready = false;
+        inner.bhid = None;
+    }
+
+    fn on_detached(&self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.attached = false;
+        inner.ready = false;
+        inner.bhid = None;
+        inner.match_active = false;
+    }
+
+    fn on_ready(&self) {
+        self.inner.lock().unwrap().ready = true;
+    }
+
+    fn on_local_player_found(&self, bhid: u32) {
+        self.inner.lock().unwrap().bhid = Some(bhid);
+    }
+
+    fn on_match_started(&self) {
+        self.inner.lock().unwrap().match_active = true;
+    }
+
+    fn on_match_ended(&self) {
+        self.inner.lock().unwrap().match_active = false;
     }
 }
 
@@ -47,13 +92,7 @@ pub struct DetectionStateSnapshot {
 
 #[tauri::command]
 pub fn get_detection_state(state: tauri::State<'_, Arc<DetectionState>>) -> DetectionStateSnapshot {
-    let bhid = state.bhid.load(Ordering::Relaxed);
-    DetectionStateSnapshot {
-        attached: state.attached.load(Ordering::Relaxed),
-        ready: state.ready.load(Ordering::Relaxed),
-        bhid: if bhid == 0 { None } else { Some(bhid) },
-        match_active: state.match_active.load(Ordering::Relaxed),
-    }
+    state.snapshot()
 }
 
 #[cfg(target_os = "windows")]
@@ -153,16 +192,11 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                     let _ = app_handle.emit("game-event", &LegacyScanning { event: "scanning" });
                 }
                 GameEvent::Attached(_) => {
-                    state.attached.store(true, Ordering::Relaxed);
-                    state.ready.store(false, Ordering::Relaxed);
-                    state.bhid.store(0, Ordering::Relaxed);
+                    state.on_attached();
                     let _ = app_handle.emit("game-event", &LegacyAttached { event: "attached" });
                 }
                 GameEvent::Detached(_) => {
-                    state.attached.store(false, Ordering::Relaxed);
-                    state.ready.store(false, Ordering::Relaxed);
-                    state.bhid.store(0, Ordering::Relaxed);
-                    state.match_active.store(false, Ordering::Relaxed);
+                    state.on_detached();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
@@ -170,18 +204,18 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                     let _ = app_handle.emit("game-event", &LegacyDetached { event: "detached" });
                 }
                 GameEvent::Ready(_) => {
-                    state.ready.store(true, Ordering::Relaxed);
+                    state.on_ready();
                     let _ = app_handle.emit("game-event", &LegacyReady { event: "ready" });
                 }
                 GameEvent::LocalPlayerFound(p) => {
-                    state.bhid.store(p.bhid, Ordering::Relaxed);
+                    state.on_local_player_found(p.bhid);
                     let _ = app_handle.emit(
                         "game-event",
                         &LegacyLocalPlayerFound { event: "local_player_found", bhid: p.bhid },
                     );
                 }
                 GameEvent::MatchEnded(p) => {
-                    state.match_active.store(false, Ordering::Relaxed);
+                    state.on_match_ended();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
@@ -190,7 +224,7 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                     let _ = p; // local_player_bhid currently unused on the React side
                 }
                 GameEvent::MatchStarted(p) => {
-                    state.match_active.store(true, Ordering::Relaxed);
+                    state.on_match_started();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }

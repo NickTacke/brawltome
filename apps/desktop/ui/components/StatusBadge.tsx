@@ -35,7 +35,7 @@ export function StatusBadge({ status, bhid }: StatusBadgeProps) {
         backdropFilter: 'blur(12px)',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)',
         gap: 10,
-        animation: 'attachToastFadeIn 220ms ease-out forwards',
+        animation: 'attach-toast-fade-in 220ms ease-out forwards',
       }}
     >
       <img
