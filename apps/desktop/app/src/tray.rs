@@ -8,14 +8,17 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Manager,
 };
+use tauri_plugin_shell::ShellExt;
 
 use crate::overlay::OverlayState;
 
 pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItemBuilder::with_id("toggle", "Show/Hide").build(app)?;
+    let open_logs = MenuItemBuilder::with_id("open_logs", "Open log folder").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let menu = MenuBuilder::new(app)
         .item(&toggle)
+        .item(&open_logs)
         .separator()
         .item(&quit)
         .build()?;
@@ -35,6 +38,15 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
                     } else {
                         let _ = w.show();
                     }
+                }
+            }
+            "open_logs" => {
+                if let Ok(log_dir) = app.path().app_log_dir() {
+                    // to_string_lossy keeps a best-effort path on systems
+                    // with non-UTF-8 user-profile names (rare on Windows
+                    // but possible). Errors silently ignored: this is a UX
+                    // affordance, not a critical operation.
+                    let _ = app.shell().open(log_dir.to_string_lossy().as_ref(), None);
                 }
             }
             "quit" => {
