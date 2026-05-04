@@ -47,17 +47,11 @@ export function useGameEvents() {
       // snapshot's stale state could overwrite a live `detached` that
       // arrived in the meantime.
       const unlisten = await listen<GameEvent>('game-event', ({ payload }) => {
-        // Lifecycle events are the ones the snapshot tries to recover. Once
-        // we've seen any of them live, the snapshot is no longer authoritative
-        // and we skip applying it.
-        if (
-          payload.event === 'attached' ||
-          payload.event === 'local_player_found' ||
-          payload.event === 'ready' ||
-          payload.event === 'detached'
-        ) {
-          sawLifecycleEvent = true
-        }
+        // Any live event implies the Rust-side state has moved past the
+        // snapshot frame, including match_started / match_ended (which mutate
+        // the snapshot's matchActive field). Mark the flag for every event so
+        // the snapshot can never roll back a live update.
+        sawLifecycleEvent = true
 
         if (payload.event === 'scanning') {
           setScanning(true)

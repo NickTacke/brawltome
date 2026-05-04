@@ -91,7 +91,16 @@ $env:TAURI_SIGNING_PRIVATE_KEY = [System.Text.Encoding]::UTF8.GetString($keyByte
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 
 & bun run --filter @brawltome/desktop build
-if ($LASTEXITCODE -ne 0) {
+$buildExit = $LASTEXITCODE
+
+# Clear the signing key from this script's process env now that the build is
+# done. PowerShell process scope is bounded by the script, but defense in depth:
+# any further commands (logging, debugging) shouldn't see the key.
+$env:TAURI_SIGNING_PRIVATE_KEY = $null
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $null
+Remove-Variable keyBytes -ErrorAction SilentlyContinue
+
+if ($buildExit -ne 0) {
     Write-Error "Pre-flight build failed. Refusing to tag. Fix the build issue and re-run the release script."
     exit 1
 }
