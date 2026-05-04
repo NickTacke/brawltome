@@ -235,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "brawltome-desktop"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "brawltome-detection",
  "brawltome-events",
@@ -255,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "brawltome-detection"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "brawltome-events",
  "criterion",
@@ -268,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "brawltome-events"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "serde",
  "serde_json",
