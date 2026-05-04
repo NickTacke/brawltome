@@ -13,7 +13,7 @@ const STATUS_COLORS: Record<Exclude<DetectionStatus, 'idle'>, string> = {
 
 function labelFor(status: DetectionStatus, bhid: number | null): string {
   if (status === 'attaching') return 'Connecting...'
-  if (status === 'player_loaded') return bhid ? `Loaded (${bhid})` : 'Loading state...'
+  if (status === 'player_loaded') return bhid !== null ? `Loaded (${bhid})` : 'Loading state...'
   if (status === 'ready') return 'Ready'
   return ''
 }
