@@ -35,6 +35,31 @@ pub struct OffsetsBrokenPayload {
     pub detected_version: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AttachedPayload {
+    pub pid: u32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DetachReason {
+    ProcessGone,
+    HandleInvalid,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DetachedPayload {
+    pub reason: DetachReason,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReadyPayload;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocalPlayerFoundPayload {
+    pub bhid: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GameEvent {
@@ -42,6 +67,10 @@ pub enum GameEvent {
     MatchStarted(MatchStartedPayload),
     MatchEnded(MatchEndedPayload),
     OffsetsBroken(OffsetsBrokenPayload),
+    Attached(AttachedPayload),
+    Detached(DetachedPayload),
+    Ready(ReadyPayload),
+    LocalPlayerFound(LocalPlayerFoundPayload),
 }
 
 use tokio::sync::{mpsc, oneshot};
@@ -137,6 +166,61 @@ mod tests {
             local_player_bhid: 42,
         });
         let json = serde_json::to_string(&original).unwrap();
+        let parsed: GameEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn game_event_attached_serializes_with_type_tag() {
+        let event = GameEvent::Attached(AttachedPayload { pid: 1234 });
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(json, r#"{"type":"attached","pid":1234}"#);
+    }
+
+    #[test]
+    fn game_event_detached_serializes_with_type_tag_and_reason() {
+        let event = GameEvent::Detached(DetachedPayload { reason: DetachReason::ProcessGone });
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(json, r#"{"type":"detached","reason":"process_gone"}"#);
+    }
+
+    #[test]
+    fn game_event_attached_round_trips() {
+        let original = GameEvent::Attached(AttachedPayload { pid: 9999 });
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: GameEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn game_event_detached_handle_invalid_round_trips() {
+        let original = GameEvent::Detached(DetachedPayload { reason: DetachReason::HandleInvalid });
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: GameEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn game_event_ready_serializes_with_type_tag() {
+        let event = GameEvent::Ready(ReadyPayload);
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(json, r#"{"type":"ready"}"#);
+    }
+
+    #[test]
+    fn game_event_ready_round_trips() {
+        let original = GameEvent::Ready(ReadyPayload);
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: GameEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn game_event_local_player_found_round_trips() {
+        let original = GameEvent::LocalPlayerFound(LocalPlayerFoundPayload { bhid: 42 });
+        let json = serde_json::to_string(&original).unwrap();
+        assert!(json.contains(r#""type":"local_player_found""#), "got: {json}");
+        assert!(json.contains(r#""bhid":42"#), "got: {json}");
         let parsed: GameEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, original);
     }

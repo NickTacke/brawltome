@@ -18,6 +18,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             overlay::set_clickthrough,
             overlay::update_content_bounds,
+            detection_bridge::get_detection_state,
         ])
         .setup(|app| {
             overlay::position_overlay_window(app.handle())?;
@@ -28,7 +29,20 @@ pub fn run() {
 
             tray::install(app.handle())?;
 
-            detection_bridge::spawn(app.handle());
+            let detection_state = detection_bridge::DetectionState::new();
+            app.manage(detection_state.clone());
+            detection_bridge::spawn(app.handle(), detection_state);
+
+            // Open devtools automatically in dev builds. Tauri compiles devtools
+            // into debug builds only; this just auto-launches the panel so we
+            // don't have to right-click the (transparent, click-through) overlay
+            // to find it.
+            #[cfg(debug_assertions)]
+            {
+                if let Some(window) = app.get_webview_window("overlay") {
+                    window.open_devtools();
+                }
+            }
 
             // Background update check on startup. Silent: download + install
             // without UI. On Windows, Tauri exits the app to let the installer

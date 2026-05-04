@@ -1,11 +1,99 @@
 //! Bridge between detection's typed GameEvent channel and the Tauri-emit-to-React contract.
 //! Owns BhID enrichment via api_client and the 2s post-MatchStarted refetch.
+//! Also maintains a shared snapshot of lifecycle state so the frontend can
+//! query its current detection status on mount (Tauri events are not buffered
+//! for late subscribers; if the user opens Brawlhalla before BrawlTome's
+//! webview finishes loading, the early Attached/Ready emissions are otherwise
+//! lost).
+
+use std::sync::{Arc, Mutex};
 
 #[cfg(target_os = "windows")]
 use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
 
 #[cfg(target_os = "windows")]
 use crate::api_client;
+
+/// Live snapshot of detection's lifecycle. Bridge writes; the React side reads
+/// once on mount via the `get_detection_state` Tauri command to recover from
+/// missed early events. Behind a Mutex so the snapshot read returns a
+/// coherent view of all four fields rather than a cross-update tear (which
+/// could happen with separate Relaxed atomics under weak memory ordering on
+/// ARM).
+#[derive(Default)]
+struct DetectionStateInner {
+    attached: bool,
+    ready: bool,
+    bhid: Option<u32>,
+    match_active: bool,
+}
+
+pub struct DetectionState {
+    inner: Mutex<DetectionStateInner>,
+}
+
+impl DetectionState {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            inner: Mutex::new(DetectionStateInner::default()),
+        })
+    }
+
+    fn snapshot(&self) -> DetectionStateSnapshot {
+        let inner = self.inner.lock().unwrap();
+        DetectionStateSnapshot {
+            attached: inner.attached,
+            ready: inner.ready,
+            bhid: inner.bhid,
+            match_active: inner.match_active,
+        }
+    }
+
+    fn on_attached(&self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.attached = true;
+        inner.ready = false;
+        inner.bhid = None;
+    }
+
+    fn on_detached(&self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.attached = false;
+        inner.ready = false;
+        inner.bhid = None;
+        inner.match_active = false;
+    }
+
+    fn on_ready(&self) {
+        self.inner.lock().unwrap().ready = true;
+    }
+
+    fn on_local_player_found(&self, bhid: u32) {
+        self.inner.lock().unwrap().bhid = Some(bhid);
+    }
+
+    fn on_match_started(&self) {
+        self.inner.lock().unwrap().match_active = true;
+    }
+
+    fn on_match_ended(&self) {
+        self.inner.lock().unwrap().match_active = false;
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct DetectionStateSnapshot {
+    attached: bool,
+    ready: bool,
+    bhid: Option<u32>,
+    #[serde(rename = "matchActive")]
+    match_active: bool,
+}
+
+#[tauri::command]
+pub fn get_detection_state(state: tauri::State<'_, Arc<DetectionState>>) -> DetectionStateSnapshot {
+    state.snapshot()
+}
 
 #[cfg(target_os = "windows")]
 #[derive(serde::Serialize, Clone)]
@@ -30,11 +118,38 @@ struct LegacyScanning {
     event: &'static str,
 }
 
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyAttached {
+    event: &'static str,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyDetached {
+    event: &'static str,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyReady {
+    event: &'static str,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(serde::Serialize, Clone)]
+struct LegacyLocalPlayerFound {
+    event: &'static str,
+    bhid: u32,
+}
+
 /// Spawn the bridge task. Builds an ApiClient from BRAWLTOME_API_URL (default
 /// https://api.brawltome.app), starts WindowsDetectionService, and forwards
-/// enriched events to the React UI on the "game-event" Tauri channel.
+/// enriched events to the React UI on the "game-event" Tauri channel. Also
+/// updates the shared DetectionState so a late-mounting frontend can recover
+/// the current lifecycle status via `get_detection_state`.
 #[cfg(target_os = "windows")]
-pub fn spawn(app: &tauri::AppHandle) {
+pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
     let app_handle = app.clone();
     let api_url = std::env::var("BRAWLTOME_API_URL")
         .map(|s| s.trim().to_string())
@@ -76,7 +191,31 @@ pub fn spawn(app: &tauri::AppHandle) {
                 GameEvent::Scanning(_) => {
                     let _ = app_handle.emit("game-event", &LegacyScanning { event: "scanning" });
                 }
+                GameEvent::Attached(_) => {
+                    state.on_attached();
+                    let _ = app_handle.emit("game-event", &LegacyAttached { event: "attached" });
+                }
+                GameEvent::Detached(_) => {
+                    state.on_detached();
+                    if let Some(h) = pending_refetch.take() {
+                        h.abort();
+                    }
+                    opponent_cache.clear();
+                    let _ = app_handle.emit("game-event", &LegacyDetached { event: "detached" });
+                }
+                GameEvent::Ready(_) => {
+                    state.on_ready();
+                    let _ = app_handle.emit("game-event", &LegacyReady { event: "ready" });
+                }
+                GameEvent::LocalPlayerFound(p) => {
+                    state.on_local_player_found(p.bhid);
+                    let _ = app_handle.emit(
+                        "game-event",
+                        &LegacyLocalPlayerFound { event: "local_player_found", bhid: p.bhid },
+                    );
+                }
                 GameEvent::MatchEnded(p) => {
+                    state.on_match_ended();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
@@ -85,6 +224,7 @@ pub fn spawn(app: &tauri::AppHandle) {
                     let _ = p; // local_player_bhid currently unused on the React side
                 }
                 GameEvent::MatchStarted(p) => {
+                    state.on_match_started();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
@@ -189,4 +329,4 @@ pub fn spawn(app: &tauri::AppHandle) {
 
 /// No-op on non-Windows so call sites don't need cfg gating.
 #[cfg(not(target_os = "windows"))]
-pub fn spawn(_app: &tauri::AppHandle) {}
+pub fn spawn(_app: &tauri::AppHandle, _state: Arc<DetectionState>) {}
