@@ -2,6 +2,7 @@
 name = "brawltome-desktop"
 version.workspace = true
 edition.workspace = true
+default-run = "brawltome-desktop"
 
 [lib]
 name = "brawltome_desktop"
@@ -10,6 +11,35 @@ path = "src/lib.rs"
 [[bin]]
 name = "brawltome-desktop"
 path = "src/main.rs"
+
+# Dev-only research binaries. Not included in production builds. Each is
+# behind its own feature flag so a default cargo build does not pull them in.
+
+[[bin]]
+name = "pointer_scan"
+path = "src/bin/pointer_scan.rs"
+required-features = ["pointer-scan-tool"]
+
+[[bin]]
+name = "intmap_probe"
+path = "src/bin/intmap_probe.rs"
+required-features = ["intmap-probe-tool"]
+
+[[bin]]
+name = "dump_layout"
+path = "src/bin/dump_layout.rs"
+required-features = ["dump-layout-tool"]
+
+[[bin]]
+name = "login_probe"
+path = "src/bin/login_probe.rs"
+required-features = ["login-probe-tool"]
+
+[features]
+pointer-scan-tool = ["dep:minidump"]
+intmap-probe-tool = []
+dump-layout-tool = []
+login-probe-tool = []
 
 [dependencies]
 brawltome-events.workspace = true
@@ -24,6 +54,7 @@ reqwest = { version = "0.12", features = ["json"] }
 log.workspace = true
 tauri-plugin-log = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+minidump = { version = "0.21", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
