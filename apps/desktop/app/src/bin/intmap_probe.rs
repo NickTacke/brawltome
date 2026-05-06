@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use brawltome_detection::memory::{self, RegionCache};
-use brawltome_detection::scanner;
+use brawltome_detection::locate;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 
@@ -54,7 +54,7 @@ fn main() {
     let mut cache = RegionCache::new(regions);
     println!("Region cache built: {} regions", cache.regions.len());
 
-    let my_bhid = match scanner::find_my_bhid(handle, &mut cache) {
+    let my_bhid = match locate::find_my_bhid(handle, &mut cache) {
         Some(b) => b,
         None => {
             eprintln!("Local BhID not found (are you logged in?)");

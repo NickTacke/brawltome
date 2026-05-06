@@ -37,7 +37,7 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use brawltome_detection::memory::{self, RegionCache};
-use brawltome_detection::scanner;
+use brawltome_detection::{locate, scan};
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
@@ -89,7 +89,7 @@ fn main() {
     let mut cache = RegionCache::new(regions);
     println!("Region cache built: {} regions", cache.regions.len());
 
-    let my_bhid = match scanner::find_my_bhid(handle, &mut cache) {
+    let my_bhid = match locate::find_my_bhid(handle, &mut cache) {
         Some(b) => b,
         None => {
             eprintln!("Local BhID not found (are you logged in?)");
@@ -100,7 +100,7 @@ fn main() {
 
     let bhid_value_addr = locate_bhid_value(handle, my_bhid, &cache);
 
-    let addr_04c = scanner::find_04c_addr(handle, my_bhid, &cache);
+    let addr_04c = locate::find_04c_addr(handle, my_bhid, &cache);
     println!("04c address: {:?}", addr_04c.map(|a| format!("0x{:016x}", a)));
 
     // Pull atom-match addresses BEFORE get_players (which clears them via
@@ -112,7 +112,7 @@ fn main() {
     let atom_addrs = memory::scan_regions(handle, &regions, &atom_bytes);
     println!("IntMap atom matches: {}", atom_addrs.len());
 
-    let players = scanner::get_players(handle, my_bhid, &mut cache, &HashSet::new());
+    let players = scan::get_players(handle, my_bhid, &mut cache, &HashSet::new());
     println!("Players: {}", players.len());
     for (bhid, p) in &players {
         println!("  bhid={} slot={} name={:?}", bhid, p.slot, p.name);
