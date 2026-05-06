@@ -101,6 +101,10 @@ try {
     $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
 } finally {
     [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    # Dispose the SecureString to zero its encrypted pinned buffer instead of
+    # waiting for GC finalization. The BSTR cleanup above only handles the
+    # decrypted copy.
+    $securePass.Dispose()
 }
 
 & bun run --filter @brawltome/desktop build
