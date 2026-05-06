@@ -88,7 +88,24 @@ if ($keyBytes.Length -ge 3 -and $keyBytes[0] -eq 0xEF -and $keyBytes[1] -eq 0xBB
     $keyBytes = $keyBytes[3..($keyBytes.Length-1)]
 }
 $env:TAURI_SIGNING_PRIVATE_KEY = [System.Text.Encoding]::UTF8.GetString($keyBytes)
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+
+# If the key is password-protected, prompt for it. Empty = passwordless key.
+# The previous version hardcoded "" here, which caused tauri-bundler's signing
+# step to silently hang on stdin waiting for the password (no TTY = silent
+# hang). Symptom: "Finished 1 bundle at ..." prints, then nothing. Read-Host
+# -AsSecureString avoids echoing the password to the terminal; we convert to
+# plaintext only inside this process's env vars and clear them after.
+$securePass = Read-Host "Signing-key password (press Enter if none)" -AsSecureString
+$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass)
+try {
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+} finally {
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    # Dispose the SecureString to zero its encrypted pinned buffer instead of
+    # waiting for GC finalization. The BSTR cleanup above only handles the
+    # decrypted copy.
+    $securePass.Dispose()
+}
 
 & bun run --filter @brawltome/desktop build
 $buildExit = $LASTEXITCODE
