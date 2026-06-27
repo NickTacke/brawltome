@@ -25,6 +25,9 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
       return
     }
     const apiLegends = await bhapi.getAllLegends({ caller: 'background' })
+    if (apiLegends.length === 0) {
+      throw new Error('[game-data] legends API returned no legends; cannot initialize')
+    }
     for (const l of apiLegends) {
       await db
         .insert(legend)
@@ -43,7 +46,14 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
         })
         .onConflictDoNothing()
     }
-    return initGameData(db, bhapi)
+    const inserted = await db.query.legend.findMany()
+    if (inserted.length === 0) {
+      throw new Error('[game-data] legend insert produced no rows; cannot initialize')
+    }
+    legendCache = new Map(inserted.map((l) => [l.legendId, l]))
+    legendByKey = new Map(inserted.map((l) => [l.legendNameKey, l]))
+    console.log(`[game-data] loaded ${legendCache.size} legends`)
+    return
   }
 
   legendCache = new Map(dbLegends.map((l) => [l.legendId, l]))
