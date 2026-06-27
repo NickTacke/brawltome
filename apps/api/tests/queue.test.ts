@@ -253,6 +253,52 @@ describe('Queue priorityRatio fairness', () => {
   })
 })
 
+describe('Queue claimPending', () => {
+  it('processes reclaimed pending jobs on startup', async () => {
+    const results: number[] = []
+    const queueName = 'test-claim-pending'
+    const stream = `queue:${queueName}`
+    const group = `${queueName}-workers`
+
+    // Ensure group + stream exist before enqueueing
+    try {
+      await redis.xgroup('CREATE', stream, group, '0', 'MKSTREAM')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!msg.includes('BUSYGROUP')) throw err
+    }
+
+    // Enqueue a job directly into the stream
+    await redis.xadd(stream, '*', 'data', JSON.stringify({ value: 7 }))
+
+    // Read with a throwaway consumer — simulates a crashed worker that never acked
+    await redis.xreadgroup('GROUP', group, 'throwaway-consumer', 'COUNT', '1', 'STREAMS', stream, '>')
+
+    // Confirm the message is in the pending list
+    const pendingBefore = await redis.xpending(stream, group, '-', '+', '100')
+    expect(Array.isArray(pendingBefore) && pendingBefore.length).toBe(1)
+
+    // Start the queue with claimMinIdleMs=0 so it claims the pending message immediately
+    const queue = createQueue<{ value: number }>(
+      redis,
+      queueName,
+      async (data) => {
+        results.push(data.value)
+      },
+      { concurrency: 1, claimMinIdleMs: 0 },
+    )
+
+    queue.start()
+    await Bun.sleep(500)
+    queue.stop()
+
+    expect(results).toContain(7)
+
+    const pendingAfter = await redis.xpending(stream, group, '-', '+', '100')
+    expect(Array.isArray(pendingAfter) && pendingAfter.length).toBe(0)
+  })
+})
+
 describe('Dedup', () => {
   it('allows first call and blocks duplicate', async () => {
     const key = dedupKey('test-dedup', 123)
