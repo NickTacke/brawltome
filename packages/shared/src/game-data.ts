@@ -64,8 +64,12 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
     console.warn('[game-data] no legends available (API + DB empty); cache not initialized')
     return
   }
-  legendCache = new Map(dbLegends.map((l) => [l.legendId, l]))
-  legendByKey = new Map(dbLegends.map((l) => [l.legendNameKey, l]))
+  // Normalize the slug on load so avatars are correct even when the API refresh above failed
+  // (e.g. rate-limited during a multi-app restart) and we fell back to legend rows written by an
+  // older version that stored the raw uppercase v1 legend_name. legendSlug is idempotent.
+  const normalized = dbLegends.map((l) => ({ ...l, legendNameKey: legendSlug(l.legendId, l.legendNameKey) }))
+  legendCache = new Map(normalized.map((l) => [l.legendId, l]))
+  legendByKey = new Map(normalized.map((l) => [l.legendNameKey, l]))
   console.log(`[game-data] loaded ${legendCache.size} legends`)
 }
 
