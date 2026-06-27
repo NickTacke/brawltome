@@ -197,6 +197,7 @@ export interface BhV1StatsLegend {
   ko_weapon_one: number
   ko_weapon_two: number
   ko_gadgets: number
+  ko_thrown_item?: number
   time_held_weapon_one: number
   time_held_weapon_two: number
   xp?: number
@@ -284,10 +285,16 @@ export interface BhV1Guild {
   member_count?: number
 }
 
-export interface BhV1PlayerGuild {
-  brawlhalla_id: number
-  guild: BhV1Guild
+export interface BhV1GuildMembership {
+  guild_id: number
+  guild_name: string
+  personal_xp: number
+  personal_xp_this_week: number
+  personal_points: number
+  join_date: number
+  rank: string
 }
+export interface BhV1PlayerGuild { brawlhalla_id: number; guild: BhV1GuildMembership }
 
 export interface BhV1GuildMember {
   brawlhalla_id: number
