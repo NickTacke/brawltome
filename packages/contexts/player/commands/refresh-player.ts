@@ -1,6 +1,6 @@
-import type { BhApiClient } from '@brawltome/bhapi'
+import type { BhApiClient, BhV1PlayerStatsAll } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
-import { aggregateWeapons } from '@brawltome/shared'
+import { aggregateWeapons, getLegendById } from '@brawltome/shared'
 import { computeBestLegend, isValhallanGraced, shouldSnapshotRating } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
@@ -118,13 +118,44 @@ export async function processRefreshStats(
   brawlhallaId: number,
   caller: 'on-demand' | 'background' = 'background',
 ) {
-  const data = await bhapi.getPlayerStats(brawlhallaId, { caller })
+  const data = (await bhapi.getPlayerStatsV1(brawlhallaId, 'all', { caller })) as BhV1PlayerStatsAll | null
   if (!data) return
 
-  const parseDmg = (s: string): bigint => BigInt(s || '0')
+  const toBig = (n: number | undefined): bigint => BigInt(Math.trunc(n ?? 0))
 
   const filteredLegends = data.legends.filter((l) => l.legend_id !== 0)
-  const matchTimeTotal = filteredLegends.reduce((sum, l) => sum + l.matchtime, 0)
+  const matchTimeTotal = filteredLegends.reduce((s, l) => s + (l.match_time ?? 0), 0)
+
+  // Fetch guild before the transaction — no network calls inside DB transactions
+  const playerGuild = await bhapi.getPlayerGuildV1(brawlhallaId, { caller })
+  let clanData: {
+    clan_name: string
+    clan_id: number
+    clan_xp: number
+    clan_lifetime_xp: number
+    personal_xp: number
+  } | null = null
+  let updateClan: 'set' | 'clear' | 'skip'
+
+  if (playerGuild?.guild) {
+    const guildStats = await bhapi.getGuildStatsV1(playerGuild.guild.guild_id, { caller })
+    if (guildStats) {
+      clanData = {
+        clan_name: guildStats.name,
+        clan_id: playerGuild.guild.guild_id,
+        clan_xp: guildStats.xp,
+        clan_lifetime_xp: guildStats.legacy_xp + guildStats.xp,
+        personal_xp: playerGuild.guild.personal_xp,
+      }
+      updateClan = 'set'
+    } else {
+      // Guild uncached/404 — preserve existing clan row
+      updateClan = 'skip'
+    }
+  } else {
+    // Player has no guild — clear
+    updateClan = 'clear'
+  }
 
   const repo = createPlayerRepo(db)
   await repo.transaction(async (tx) => {
@@ -132,69 +163,75 @@ export async function processRefreshStats(
 
     await txRepo.updateStats(brawlhallaId, {
       name: data.name,
-      xp: data.xp,
-      level: data.level,
-      xpPercentage: data.xp_percentage,
+      xp: data.xp ?? 0,
+      level: data.level ?? 0,
+      xpPercentage: data.xp_percentage ?? 0,
       totalGames: data.games,
       totalWins: data.wins,
       matchTimeTotal,
-      damageBomb: parseDmg(data.damagebomb),
-      damageMine: parseDmg(data.damagemine),
-      damageSpikeball: parseDmg(data.damagespikeball),
-      damageSidekick: parseDmg(data.damagesidekick),
-      hitSnowball: data.hitsnowball,
-      koBomb: data.kobomb,
-      koMine: data.komine,
-      koSpikeball: data.kospikeball,
-      koSidekick: data.kosidekick,
-      koSnowball: data.kosnowball,
+      damageBomb: toBig(data.damage_bomb),
+      damageMine: toBig(data.damage_mine),
+      damageSpikeball: toBig(data.damage_spikeball),
+      damageSidekick: toBig(data.damage_sidekick),
+      hitSnowball: data.hit_snowball ?? 0,
+      koBomb: data.ko_bomb ?? 0,
+      koMine: data.ko_mine ?? 0,
+      koSpikeball: data.ko_spikeball ?? 0,
+      koSidekick: data.ko_sidekick ?? 0,
+      koSnowball: data.ko_snowball ?? 0,
     })
 
     await txRepo.replaceStatsLegends(
       brawlhallaId,
       filteredLegends.map((l) => ({
         legendId: l.legend_id,
-        legendNameKey: l.legend_name_key,
-        xp: l.xp,
-        level: l.level,
-        xpPercentage: l.xp_percentage,
-        games: l.games,
-        wins: l.wins,
-        matchTime: l.matchtime,
-        kos: l.kos,
-        teamKos: l.teamkos,
-        suicides: l.suicides,
-        falls: l.falls,
-        damageDealt: parseDmg(l.damagedealt),
-        damageTaken: parseDmg(l.damagetaken),
-        damageWeaponOne: parseDmg(l.damageweaponone),
-        damageWeaponTwo: parseDmg(l.damageweapontwo),
-        timeHeldWeaponOne: l.timeheldweaponone,
-        timeHeldWeaponTwo: l.timeheldweapontwo,
-        koWeaponOne: l.koweaponone,
-        koWeaponTwo: l.koweapontwo,
-        koUnarmed: l.kounarmed,
-        koThrownItem: l.kothrownitem,
-        koGadgets: l.kogadgets,
-        damageUnarmed: parseDmg(l.damageunarmed),
-        damageThrownItem: parseDmg(l.damagethrownitem),
-        damageGadgets: parseDmg(l.damagegadgets),
+        legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? '',
+        xp: l.xp ?? 0,
+        level: l.level ?? 0,
+        xpPercentage: l.xp_percentage ?? 0,
+        games: l.games ?? 0,
+        wins: l.wins ?? 0,
+        matchTime: l.match_time ?? 0,
+        kos: l.kos ?? 0,
+        teamKos: l.team_kos ?? 0,
+        suicides: l.suicides ?? 0,
+        falls: l.falls ?? 0,
+        damageDealt: toBig(l.damage_dealt),
+        damageTaken: toBig(l.damage_taken),
+        damageWeaponOne: toBig(l.damage_weapon_one),
+        damageWeaponTwo: toBig(l.damage_weapon_two),
+        timeHeldWeaponOne: l.time_held_weapon_one ?? 0,
+        timeHeldWeaponTwo: l.time_held_weapon_two ?? 0,
+        koWeaponOne: l.ko_weapon_one ?? 0,
+        koWeaponTwo: l.ko_weapon_two ?? 0,
+        koUnarmed: l.ko_unarmed ?? 0,
+        koThrownItem: l.ko_thrown_item ?? 0,
+        koGadgets: l.ko_gadgets ?? 0,
+        damageUnarmed: toBig(l.damage_unarmed),
+        damageThrownItem: toBig(l.damage_thrown_item),
+        damageGadgets: toBig(l.damage_gadgets),
       })),
     )
 
     const weapons = aggregateWeapons(
       filteredLegends.map((l) => ({
         legendId: l.legend_id,
-        damageWeaponOne: parseDmg(l.damageweaponone),
-        damageWeaponTwo: parseDmg(l.damageweapontwo),
-        timeHeldWeaponOne: l.timeheldweaponone,
-        timeHeldWeaponTwo: l.timeheldweapontwo,
-        koWeaponOne: l.koweaponone,
-        koWeaponTwo: l.koweapontwo,
+        damageWeaponOne: toBig(l.damage_weapon_one),
+        damageWeaponTwo: toBig(l.damage_weapon_two),
+        timeHeldWeaponOne: l.time_held_weapon_one ?? 0,
+        timeHeldWeaponTwo: l.time_held_weapon_two ?? 0,
+        koWeaponOne: l.ko_weapon_one ?? 0,
+        koWeaponTwo: l.ko_weapon_two ?? 0,
       })),
     )
 
     await txRepo.replaceWeaponStats(brawlhallaId, weapons)
-    await txRepo.upsertClan(brawlhallaId, data.clan ?? null)
+
+    if (updateClan === 'set') {
+      await txRepo.upsertClan(brawlhallaId, clanData)
+    } else if (updateClan === 'clear') {
+      await txRepo.upsertClan(brawlhallaId, null)
+    }
+    // 'skip' -> do nothing
   })
 }
