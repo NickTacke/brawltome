@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import { BhApiClient } from '../src/client'
+import { BhApiClient, RateLimitError } from '../src/client'
 
 let server: ReturnType<typeof Bun.serve>
 let lastUrl = ''
@@ -116,5 +116,35 @@ describe('fetch hardening', () => {
 
     expect(counters).toContain('bhapi:timeouts')
     expect(counters).not.toContain('bhapi:json_errors')
+  })
+
+  it('rejects with finite retryAfterMs when Retry-After is an HTTP-date (non-numeric)', async () => {
+    const rateLimit = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response('null', {
+          status: 429,
+          headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' },
+        })
+      },
+    })
+    try {
+      const client = new BhApiClient({
+        apiKey: 'test',
+        baseUrl: `http://localhost:${rateLimit.port}`,
+      })
+      await client.init()
+      let caught: unknown
+      try {
+        await client.getRankings1v1('us-e', 1)
+      } catch (err) {
+        caught = err
+      }
+      expect(caught).toBeInstanceOf(RateLimitError)
+      expect(Number.isFinite((caught as RateLimitError).retryAfterMs)).toBe(true)
+      expect((caught as RateLimitError).retryAfterMs).toBeGreaterThan(0)
+    } finally {
+      rateLimit.stop()
+    }
   })
 })
