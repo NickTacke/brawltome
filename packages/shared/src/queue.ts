@@ -116,7 +116,8 @@ export function createQueue<T>(
   async function start() {
     if (concurrency === 0) return
     await init()
-    await claimPending()
+    // Recover orphaned pending jobs in the background; do not block the read loop on it.
+    void claimPending()
 
     let consecutivePriority = 0
 
@@ -204,15 +205,22 @@ export function createQueue<T>(
       if (!Array.isArray(pending) || pending.length === 0) return
 
       for (const entry of pending) {
+        if (stopped) return
         const [id] = entry as [string, string, number, number]
         const claimed = await redis.xclaim(stream, group, consumer, String(claimMinIdleMs), id)
         if (!Array.isArray(claimed)) continue
         for (const [claimedId, fields] of claimed as [string, string[]][]) {
-          await processJob(claimedId, JSON.parse(fields[1]) as T, retries)
+          if (stopped) return
+          while (running >= concurrency && !stopped) await Bun.sleep(50)
+          if (stopped) return
+          running++
+          processJob(claimedId, JSON.parse(fields[1]) as T, retries).finally(() => {
+            running--
+          })
         }
       }
     } catch (err) {
-      console.warn(`[queue:${name}] claimPending error:`, err)
+      if (!stopped) console.warn(`[queue:${name}] claimPending error:`, err)
     }
   }
 
