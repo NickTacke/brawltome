@@ -4,7 +4,7 @@ import { aggregateWeapons, getLegendById } from '@brawltome/shared'
 import { computeBestLegend, isValhallanGraced, shouldSnapshotRating } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
-// ponytail: JPS is a live API quirk; only one remap needed
+// v1 emits region "JPS"; the app's internal convention is "JPN"
 const normRegion = (r: string): string => (r === 'JPS' ? 'JPN' : r)
 
 interface RefreshDeps {
