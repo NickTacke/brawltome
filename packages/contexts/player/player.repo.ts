@@ -174,6 +174,20 @@ export function createPlayerRepo(db: Database) {
       })
     },
 
+    getExistingRankedLegends(brawlhallaId: number) {
+      return db.query.playerRankedLegend.findMany({
+        where: eq(playerRankedLegend.brawlhallaId, brawlhallaId),
+        columns: { legendId: true, legendNameKey: true },
+      })
+    },
+
+    getExistingStatsLegends(brawlhallaId: number) {
+      return db.query.playerStatsLegend.findMany({
+        where: eq(playerStatsLegend.brawlhallaId, brawlhallaId),
+        columns: { legendId: true, legendNameKey: true },
+      })
+    },
+
     getExistingRankedTeams(brawlhallaId: number) {
       return db.query.playerRankedTeam.findMany({
         where: eq(playerRankedTeam.brawlhallaId, brawlhallaId),
