@@ -246,6 +246,53 @@ describe('processRefreshRanked (v1)', () => {
     expect(teams[0]?.teamName).toBe('A + B')
   })
 
+  it('preserves existing legendNameKey when legend_id is unresolvable after self-heal', async () => {
+    const PRES_ID = 990061
+    const UNRESOLVABLE_LEGEND_ID = 77
+
+    // Seed player and a ranked legend row with a known good key
+    await db.insert(player).values({ brawlhallaId: PRES_ID, name: 'presPlayer' }).onConflictDoNothing()
+    await db.insert(playerRankedLegend).values({
+      brawlhallaId: PRES_ID,
+      legendId: UNRESOLVABLE_LEGEND_ID,
+      legendNameKey: 'preserved_key',
+      rating: 1,
+      peakRating: 1,
+      tier: 'Tin 1',
+      wins: 0,
+      games: 1,
+    })
+
+    // API returns legend 77 but getAllLegendsV1 does NOT include it -> self-heal can't resolve
+    const unresolvableStub = {
+      getPlayerStatsV1: async () =>
+        ({
+          ...RANKED_FIXTURE,
+          brawlhalla_id: PRES_ID,
+          legends: [
+            { legend_id: UNRESOLVABLE_LEGEND_ID, games: 10, wins: 5, rating: 1000, peak_rating: 1100, tier: 'Tin 1' },
+          ],
+        }) as BhV1PlayerStatsRanked,
+      getPlayerTeamsV1: async () => null,
+      getAllLegendsV1: async (_opts?: unknown) => [], // empty -> self-heal finds nothing for 77
+    }
+
+    await processRefreshRanked({ db, bhapi: unresolvableStub as never }, PRES_ID)
+
+    const legends = await db.query.playerRankedLegend.findMany({
+      where: eq(playerRankedLegend.brawlhallaId, PRES_ID),
+    })
+    const row = legends.find((l) => l.legendId === UNRESOLVABLE_LEGEND_ID)
+    expect(row).toBeDefined()
+    expect(row?.legendNameKey).toBe('preserved_key')
+
+    // Cleanup
+    await db.delete(playerRankedLegend).where(eq(playerRankedLegend.brawlhallaId, PRES_ID))
+    await db.delete(ratingHistory).where(eq(ratingHistory.brawlhallaId, PRES_ID))
+    await db.delete(playerAlias).where(eq(playerAlias.brawlhallaId, PRES_ID))
+    await db.delete(player).where(eq(player.brawlhallaId, PRES_ID))
+  })
+
   it('teams null: preserves existing team row, still updates 1v1', async () => {
     await seedPlayer()
 
