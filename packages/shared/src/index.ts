@@ -9,6 +9,7 @@ export {
   initGameData,
   getLegendById,
   getLegendByKey,
+  legendSlug,
   normalizeWeaponName,
   aggregateWeapons,
   type LegendData,

@@ -49,6 +49,9 @@ export function enrichStatsLegend(
   const legendData = getLegendFn(legend.legendId)
   return {
     ...legend,
+    // Resolve the slug from the legend cache (single source of truth) so avatars stay correct even
+    // when the denormalized playerStatsLegend.legendNameKey was written from a stale/wrong cache.
+    legendNameKey: legendData?.legendNameKey ?? legend.legendNameKey,
     weaponOne: legendData ? normalizeFn(legendData.weaponOne) : null,
     weaponTwo: legendData ? normalizeFn(legendData.weaponTwo) : null,
     bioName: legendData?.bioName ?? null,
