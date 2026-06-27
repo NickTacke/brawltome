@@ -227,7 +227,10 @@ await initGameData(db, bhapi)
 const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]
 if (backfillQueue) starts.push(backfillQueue.start())
 if (simulateQueue) starts.push(simulateQueue.start())
-Promise.all(starts).catch(console.error)
+Promise.all(starts).catch((err) => {
+  console.error('[worker] a queue consumer failed to start, exiting:', err)
+  process.exit(1)
+})
 
 const playerRepo = createPlayerRepo(db)
 const stopSweep =
