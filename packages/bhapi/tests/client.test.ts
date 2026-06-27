@@ -18,6 +18,158 @@ afterAll(() => {
   server.stop()
 })
 
+// ── v1 fixtures ──────────────────────────────────────────────────────────────
+const PLAYER_ID = 5461700
+const GUILD_ID = 2616365
+
+const V1_STATS_ALL = {
+  brawlhalla_id: PLAYER_ID,
+  name: 'Lopes',
+  games: 100,
+  wins: 60,
+  damage_bomb: 10,
+  damage_mine: 0,
+  damage_spikeball: 0,
+  damage_sidekick: 0,
+  hit_snowball: 0,
+  ko_bomb: 1,
+  ko_mine: 0,
+  ko_sidekick: 0,
+  ko_snowball: 0,
+  ko_spikeball: 0,
+  region_ranks: [],
+  legends: [
+    {
+      legend_id: 3,
+      games: 50,
+      wins: 30,
+      damage_dealt: 1000,
+      damage_taken: 900,
+      kos: 40,
+      falls: 35,
+      suicides: 1,
+      team_kos: 0,
+      match_time: 3000,
+      damage_unarmed: 10,
+      damage_thrown_item: 5,
+      damage_weapon_one: 400,
+      damage_weapon_two: 300,
+      damage_gadgets: 20,
+      ko_unarmed: 1,
+      ko_weapon_one: 15,
+      ko_weapon_two: 12,
+      ko_gadgets: 1,
+      time_held_weapon_one: 1200,
+      time_held_weapon_two: 1500,
+    },
+  ],
+}
+
+const V1_STATS_RANKED = {
+  brawlhalla_id: PLAYER_ID,
+  name: 'Lopes',
+  games: 100,
+  wins: 60,
+  rating: 2700,
+  peak_rating: 2750,
+  tier: 'Valhallan',
+  region: 'BRZ',
+  region_ranks: [],
+  legends: [{ legend_id: 3, games: 50, wins: 30, rating: 2600, peak_rating: 2650, tier: 'Diamond' }],
+}
+
+const V1_TEAMS = {
+  brawlhalla_id: PLAYER_ID,
+  teams: {
+    ranked_2v2: [
+      {
+        brawlhalla_id_one: PLAYER_ID,
+        brawlhalla_id_two: 2467374,
+        username_one: 'Lopes',
+        username_two: 'Upyri',
+        rating: 1600,
+        peak_rating: 1700,
+        tier: 'Gold 4',
+        wins: 40,
+        games: 80,
+        region: 'BRZ',
+        region_ranks: [],
+        global_rank: 195136,
+      },
+    ],
+  },
+}
+
+const V1_GUILD_STATS = {
+  guild_id: GUILD_ID,
+  name: 'Test Guild',
+  create_date: 1660419655,
+  xp: 241855,
+  legacy_xp: 4620759,
+  notice: 'hi',
+  tags: ['Social'],
+  discord_invite_code: 'abc',
+  guild_points: 114953,
+  rank: 6184,
+  is_recruiting: true,
+  member_count: 3,
+}
+
+const V1_GUILD_MEMBERS = {
+  guild_id: GUILD_ID,
+  guild_members: [
+    { brawlhalla_id: PLAYER_ID, name: 'Lopes', rank: 'Leader', join_date: 1660419655, xp: 1000, guild_points: 50 },
+  ],
+}
+
+const V1_LEGENDS_PAGE_1 = {
+  legends: [
+    {
+      legend_id: 3,
+      legend_name: 'bodvar',
+      bio_name: 'Bödvar',
+      bio_aka: '',
+      bio_quote: '',
+      bio_quote_about_attrib: '',
+      bio_quote_from: '',
+      bio_quote_from_attrib: '',
+      bio_text: '',
+      bot_name: '',
+      weapon_one: 'Hammer',
+      weapon_two: 'Sword',
+      strength: 6,
+      dexterity: 6,
+      defense: 4,
+      speed: 4,
+    },
+  ],
+  total_pages: 2,
+}
+
+const V1_LEGENDS_PAGE_2 = {
+  legends: [
+    {
+      legend_id: 4,
+      legend_name: 'cassidy',
+      bio_name: 'Cassidy',
+      bio_aka: '',
+      bio_quote: '',
+      bio_quote_about_attrib: '',
+      bio_quote_from: '',
+      bio_quote_from_attrib: '',
+      bio_text: '',
+      bot_name: '',
+      weapon_one: 'Pistol',
+      weapon_two: 'Hammer',
+      strength: 4,
+      dexterity: 6,
+      defense: 4,
+      speed: 6,
+    },
+  ],
+  total_pages: 2,
+}
+
 describe('searchBySteamId', () => {
   it('encodes special characters in steamId', async () => {
     const client = new BhApiClient({
@@ -176,6 +328,139 @@ describe('fetch hardening', () => {
       expect((caught as RateLimitError).retryAfterMs).toBeGreaterThan(6_000)
     } finally {
       rateLimit.stop()
+    }
+  })
+})
+
+describe('v1 client', () => {
+  function makeV1Server() {
+    return Bun.serve({
+      port: 0,
+      fetch(req) {
+        const u = new URL(req.url)
+        const p = u.pathname
+        const mode = u.searchParams.get('mode')
+        const page = u.searchParams.get('page')
+
+        if (p === '/v1/player/stats' && mode === 'all') {
+          return new Response(JSON.stringify(V1_STATS_ALL), { headers: { 'content-type': 'application/json' } })
+        }
+        if (p === '/v1/player/stats' && mode === 'ranked_1v1') {
+          return new Response(JSON.stringify(V1_STATS_RANKED), { headers: { 'content-type': 'application/json' } })
+        }
+        if (p === '/v1/player/teams') {
+          return new Response(JSON.stringify(V1_TEAMS), { headers: { 'content-type': 'application/json' } })
+        }
+        if (p === '/v1/guild/stats') {
+          return new Response(JSON.stringify(V1_GUILD_STATS), { headers: { 'content-type': 'application/json' } })
+        }
+        if (p === '/v1/guild/members') {
+          return new Response(JSON.stringify(V1_GUILD_MEMBERS), { headers: { 'content-type': 'application/json' } })
+        }
+        if (p === '/v1/static/legends') {
+          const body = page === '2' ? V1_LEGENDS_PAGE_2 : V1_LEGENDS_PAGE_1
+          return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
+        }
+        return new Response(null, { status: 404 })
+      },
+    })
+  }
+
+  it('getPlayerStatsV1 mode=all returns damage fields as numbers + legends', async () => {
+    const v1 = makeV1Server()
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      await client.init()
+      const result = await client.getPlayerStatsV1(PLAYER_ID, 'all')
+      expect(result).not.toBeNull()
+      const stats = result as typeof V1_STATS_ALL
+      expect(typeof stats.damage_bomb).toBe('number')
+      expect(stats.legends).toHaveLength(1)
+      expect(typeof stats.legends[0].damage_dealt).toBe('number')
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('getPlayerStatsV1 mode=ranked_1v1 returns rating fields', async () => {
+    const v1 = makeV1Server()
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      await client.init()
+      const result = await client.getPlayerStatsV1(PLAYER_ID, 'ranked_1v1')
+      expect(result).not.toBeNull()
+      const ranked = result as typeof V1_STATS_RANKED
+      expect(ranked.rating).toBe(2700)
+      expect(ranked.tier).toBe('Valhallan')
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('getPlayerTeamsV1 returns teams.ranked_2v2[0].username_one', async () => {
+    const v1 = makeV1Server()
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      await client.init()
+      const result = await client.getPlayerTeamsV1(PLAYER_ID)
+      expect(result?.teams.ranked_2v2[0].username_one).toBe('Lopes')
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('getGuildStatsV1 returns legacy_xp', async () => {
+    const v1 = makeV1Server()
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      await client.init()
+      const result = await client.getGuildStatsV1(GUILD_ID)
+      expect(result?.legacy_xp).toBe(4620759)
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('getGuildMembersV1 returns guild_members[0].brawlhalla_id', async () => {
+    const v1 = makeV1Server()
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      await client.init()
+      const result = await client.getGuildMembersV1(GUILD_ID)
+      expect(result?.guild_members[0].brawlhalla_id).toBe(PLAYER_ID)
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('getAllLegendsV1 paginates and concatenates both pages', async () => {
+    const v1 = makeV1Server()
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      await client.init()
+      const legends = await client.getAllLegendsV1()
+      expect(legends).toHaveLength(2)
+      expect(legends[0].legend_name).toBe('bodvar')
+      expect(legends[1].legend_name).toBe('cassidy')
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('returns null on 404', async () => {
+    const notFound = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(null, { status: 404 })
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${notFound.port}` })
+      await client.init()
+      const result = await client.getPlayerStatsV1(PLAYER_ID)
+      expect(result).toBeNull()
+    } finally {
+      notFound.stop()
     }
   })
 })

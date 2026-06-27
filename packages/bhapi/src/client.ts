@@ -18,8 +18,17 @@ import type {
   BhApiRanking1v1,
   BhApiRanking2v2,
   BhApiSearchResult,
+  BhV1Guild,
+  BhV1GuildMembers,
+  BhV1Legend,
+  BhV1LegendsPage,
+  BhV1PlayerGuild,
+  BhV1PlayerStatsAll,
+  BhV1PlayerStatsRanked,
+  BhV1PlayerTeams,
   Bracket,
   Region,
+  V1Mode,
 } from './types'
 
 const BASE_URL = 'https://api.brawlhalla.com'
@@ -121,7 +130,26 @@ export class BhApiClient {
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
+    return this.sendRequest<T>(url, path, endpoint)
+  }
 
+  private async callV1<T>(endpoint: string, opts: CallOptions): Promise<T | null> {
+    const caller: Caller = opts.caller ?? 'background'
+    const path = endpoint.split('?')[0]
+
+    const waitMs = await this.queue.acquire(caller)
+    if (waitMs > 0) {
+      console.log(`[bhapi] ${path} queue wait: ${(waitMs / 1000).toFixed(1)}s (caller=${caller})`)
+    }
+
+    const remaining = this.remainingTokens(caller)
+    console.log(`[bhapi] v1 ${path} (${remaining} ${caller} tokens left)`)
+
+    const url = `${this.baseUrl}/v1${endpoint}`
+    return this.sendRequest<T>(url, path, endpoint)
+  }
+
+  private async sendRequest<T>(url: string, path: string, endpoint: string): Promise<T | null> {
     const fetchStart = Date.now()
     let res: Response
     try {
@@ -182,5 +210,45 @@ export class BhApiClient {
       await this.metrics?.incrementCounter('bhapi:json_errors')
       throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
+  }
+
+  async getPlayerStatsV1(
+    id: number,
+    mode: V1Mode = 'all',
+    opts: CallOptions = {},
+  ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
+    return this.callV1(`/player/stats?brawlhalla_id=${id}&mode=${mode}`, opts)
+  }
+
+  async getPlayerTeamsV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerTeams | null> {
+    return this.callV1(`/player/teams?brawlhalla_id=${id}`, opts)
+  }
+
+  async getPlayerGuildV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerGuild | null> {
+    return this.callV1(`/player/guild?brawlhalla_id=${id}`, opts)
+  }
+
+  async getGuildStatsV1(guildId: number, opts: CallOptions = {}): Promise<BhV1Guild | null> {
+    return this.callV1(`/guild/stats?guild_id=${guildId}`, opts)
+  }
+
+  async getGuildMembersV1(guildId: number, opts: CallOptions = {}): Promise<BhV1GuildMembers | null> {
+    return this.callV1(`/guild/members?guild_id=${guildId}`, opts)
+  }
+
+  async getAllLegendsV1(opts: CallOptions = {}): Promise<BhV1Legend[]> {
+    const first = await this.callV1<BhV1LegendsPage>('/static/legends?page=1&max_results=100', opts)
+    if (!first) return []
+    const all = [...first.legends]
+    for (let page = 2; page <= first.total_pages; page++) {
+      const next = await this.callV1<BhV1LegendsPage>(`/static/legends?page=${page}&max_results=100`, opts)
+      if (!next) {
+        throw new Error(
+          `Brawlhalla v1 legends pagination incomplete: page ${page} of ${first.total_pages} returned no data`,
+        )
+      }
+      all.push(...next.legends)
+    }
+    return all
   }
 }
