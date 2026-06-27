@@ -19,7 +19,6 @@ export async function processRefreshRanked(
 ) {
   const ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
   const teamsResp = await bhapi.getPlayerTeamsV1(brawlhallaId, { caller })
-  if (!ranked && !teamsResp) return
 
   if (ranked?.legends.some((l) => !getLegendById(l.legend_id))) {
     // A legend ID is missing from the cache (e.g. a newly released legend). Refresh
@@ -91,6 +90,11 @@ export async function processRefreshRanked(
           wins: ranked.wins,
         })
       }
+    } else {
+      // No ranked 1v1 this season (API 404): clear the stale rank + legends so the profile shows
+      // unranked, and stamp rankedLastUpdated so on-demand stops re-enqueuing it forever.
+      await txRepo.clearRanked(brawlhallaId)
+      await txRepo.replaceRankedLegends(brawlhallaId, [])
     }
 
     if (teamsResp) {
@@ -127,6 +131,9 @@ export async function processRefreshRanked(
           }
         }),
       )
+    } else {
+      // No current 2v2 teams (API 404): clear stale rows (matches v0's clear-on-empty behavior).
+      await txRepo.replaceRankedTeams(brawlhallaId, [])
     }
   })
 }

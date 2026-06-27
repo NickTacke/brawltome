@@ -16,6 +16,21 @@ export interface LegendData {
 let legendCache: Map<number, LegendData> = new Map()
 let legendByKey: Map<string, LegendData> = new Map()
 
+// v1's `legend_name` is an uppercase display string (e.g. "BÖDVAR", "LORD VRAXX"), but the app
+// and the avatar/icon assets key off the lowercase v0 `legend_name_key` slug. Stripping diacritics
+// and lowercasing reproduces that slug for every legend except Red Raptor, whose asset omits the space.
+const LEGEND_SLUG_OVERRIDES: Record<number, string> = { 17: 'redraptor' }
+
+export function legendSlug(legendId: number, legendName: string): string {
+  return (
+    LEGEND_SLUG_OVERRIDES[legendId] ??
+    legendName
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+  )
+}
+
 export async function initGameData(db: Database, bhapi?: BhApiClient) {
   if (bhapi) {
     try {
@@ -23,7 +38,7 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
       for (const l of apiLegends) {
         const values = {
           legendId: l.legend_id,
-          legendNameKey: l.legend_name,
+          legendNameKey: legendSlug(l.legend_id, l.legend_name),
           bioName: l.bio_name,
           bioAka: l.bio_aka,
           bioQuoteAboutAttrib: l.bio_quote_about_attrib,
