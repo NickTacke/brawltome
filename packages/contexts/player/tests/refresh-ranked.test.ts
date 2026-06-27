@@ -293,6 +293,48 @@ describe('processRefreshRanked (v1)', () => {
     await db.delete(player).where(eq(player.brawlhallaId, PRES_ID))
   })
 
+  it('skips legend row when no name can be resolved (brand-new unresolvable ID)', async () => {
+    const SKIP_ID = 990062
+    const NEW_LEGEND_ID = 88 // not in legend table, not in getAllLegendsV1 stub, no existing player row
+
+    await db.insert(player).values({ brawlhallaId: SKIP_ID, name: 'skipPlayer' }).onConflictDoNothing()
+
+    const skipStub = {
+      getPlayerStatsV1: async () =>
+        ({
+          ...RANKED_FIXTURE,
+          brawlhalla_id: SKIP_ID,
+          legends: [
+            // resolvable: bodvar (LEGEND_ID = 3) is in the legend table
+            { legend_id: LEGEND_ID, games: 10, wins: 5, rating: 1500, peak_rating: 1600, tier: 'Gold' },
+            // unresolvable: ID 88, no cache entry, no existing row
+            { legend_id: NEW_LEGEND_ID, games: 3, wins: 1, rating: 1000, peak_rating: 1100, tier: 'Tin 1' },
+          ],
+        }) as BhV1PlayerStatsRanked,
+      getPlayerTeamsV1: async () => null,
+      getAllLegendsV1: async (_opts?: unknown) => [], // empty -> self-heal finds nothing for 88
+    }
+
+    await processRefreshRanked({ db, bhapi: skipStub as never }, SKIP_ID)
+
+    const legends = await db.query.playerRankedLegend.findMany({
+      where: eq(playerRankedLegend.brawlhallaId, SKIP_ID),
+    })
+    // resolvable legend must be written with its real key
+    const bodvar = legends.find((l) => l.legendId === LEGEND_ID)
+    expect(bodvar).toBeDefined()
+    expect(bodvar?.legendNameKey).toBe('bodvar')
+    // unresolvable legend must NOT be inserted at all
+    const blank = legends.find((l) => l.legendId === NEW_LEGEND_ID)
+    expect(blank).toBeUndefined()
+
+    // Cleanup
+    await db.delete(playerRankedLegend).where(eq(playerRankedLegend.brawlhallaId, SKIP_ID))
+    await db.delete(ratingHistory).where(eq(ratingHistory.brawlhallaId, SKIP_ID))
+    await db.delete(playerAlias).where(eq(playerAlias.brawlhallaId, SKIP_ID))
+    await db.delete(player).where(eq(player.brawlhallaId, SKIP_ID))
+  })
+
   it('teams null: preserves existing team row, still updates 1v1', async () => {
     await seedPlayer()
 
