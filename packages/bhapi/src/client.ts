@@ -205,7 +205,11 @@ export class BhApiClient {
     }
   }
 
-  async getPlayerStatsV1(id: number, mode: V1Mode = 'all', opts: CallOptions = {}): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
+  async getPlayerStatsV1(
+    id: number,
+    mode: V1Mode = 'all',
+    opts: CallOptions = {},
+  ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
     return this.callV1(`/player/stats?brawlhalla_id=${id}&mode=${mode}`, opts)
   }
 
