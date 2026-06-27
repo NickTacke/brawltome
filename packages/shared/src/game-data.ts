@@ -1,4 +1,4 @@
-import type { BhApiClient } from '@brawltome/bhapi'
+import type { BhApiClient, BhV1Legend } from '@brawltome/bhapi'
 import { legend } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
 import { normalizeWeaponName } from './weapons'
@@ -24,7 +24,7 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
       console.warn('[game-data] no legends in DB and no bhapi client -- skipping init')
       return
     }
-    const apiLegends = await bhapi.getAllLegends({ caller: 'background' })
+    const apiLegends: BhV1Legend[] = await bhapi.getAllLegendsV1({ caller: 'background' })
     if (apiLegends.length === 0) {
       throw new Error('[game-data] legends API returned no legends; cannot initialize')
     }
@@ -33,16 +33,19 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
         .insert(legend)
         .values({
           legendId: l.legend_id,
-          legendNameKey: l.legend_name_key,
+          // ponytail: legend_name in v1 = legend_name_key in v0
+          legendNameKey: l.legend_name,
           bioName: l.bio_name,
           bioAka: l.bio_aka,
-          bioQuoteAboutAttrib: '',
+          // v1 provides the field; v0 hardcoded ''
+          bioQuoteAboutAttrib: l.bio_quote_about_attrib,
           weaponOne: l.weapon_one,
           weaponTwo: l.weapon_two,
-          strength: l.strength,
-          dexterity: l.dexterity,
-          defense: l.defense,
-          speed: l.speed,
+          // strength/dexterity/defense/speed are varchar columns; v1 sends numbers
+          strength: String(l.strength),
+          dexterity: String(l.dexterity),
+          defense: String(l.defense),
+          speed: String(l.speed),
         })
         .onConflictDoNothing()
     }

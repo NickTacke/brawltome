@@ -117,7 +117,9 @@ const V1_GUILD_STATS = {
 
 const V1_GUILD_MEMBERS = {
   guild_id: GUILD_ID,
-  guild_members: [{ brawlhalla_id: PLAYER_ID, name: 'Lopes', rank: 'Leader', join_date: 1660419655, xp: 1000, guild_points: 50 }],
+  guild_members: [
+    { brawlhalla_id: PLAYER_ID, name: 'Lopes', rank: 'Leader', join_date: 1660419655, xp: 1000, guild_points: 50 },
+  ],
 }
 
 const V1_LEGENDS_PAGE_1 = {
