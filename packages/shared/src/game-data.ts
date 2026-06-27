@@ -33,7 +33,7 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
         .insert(legend)
         .values({
           legendId: l.legend_id,
-          // ponytail: legend_name in v1 = legend_name_key in v0
+          // v1 renamed legend_name_key -> legend_name
           legendNameKey: l.legend_name,
           bioName: l.bio_name,
           bioAka: l.bio_aka,
