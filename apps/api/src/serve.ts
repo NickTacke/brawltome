@@ -25,6 +25,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
 import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
+import { internalSecretValid } from './auth/internal-secret'
 import { createAuthRoutes } from './auth/routes'
 import { readMatchmakingConfig } from './matchmaking-config'
 import { appRouter } from './router'
@@ -184,7 +185,7 @@ app.get('/health', (c) => c.json({ status: 'healthy' }))
 
 app.get('/internal/metrics', async (c) => {
   const secret = c.req.header('x-internal-secret')
-  if (!process.env.INTERNAL_API_SECRET || secret !== process.env.INTERNAL_API_SECRET) {
+  if (!internalSecretValid(secret, process.env.INTERNAL_API_SECRET)) {
     return c.json({ error: 'unauthorized' }, 401)
   }
 
