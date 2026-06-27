@@ -55,11 +55,15 @@ export async function processRefreshRanked(
         bestLegendWins: bestLegend.wins,
       })
 
+      const existingRankedKeys = new Map(
+        (await txRepo.getExistingRankedLegends(brawlhallaId)).map((r) => [r.legendId, r.legendNameKey]),
+      )
+
       await txRepo.replaceRankedLegends(
         brawlhallaId,
         ranked.legends.map((l) => ({
           legend_id: l.legend_id,
-          legend_name_key: getLegendById(l.legend_id)?.legendNameKey ?? '',
+          legend_name_key: getLegendById(l.legend_id)?.legendNameKey ?? existingRankedKeys.get(l.legend_id) ?? '',
           rating: l.rating,
           peak_rating: l.peak_rating,
           tier: l.tier,
@@ -199,11 +203,15 @@ export async function processRefreshStats(
       koSnowball: data.ko_snowball ?? 0,
     })
 
+    const existingStatsKeys = new Map(
+      (await txRepo.getExistingStatsLegends(brawlhallaId)).map((r) => [r.legendId, r.legendNameKey]),
+    )
+
     await txRepo.replaceStatsLegends(
       brawlhallaId,
       filteredLegends.map((l) => ({
         legendId: l.legend_id,
-        legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? '',
+        legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? existingStatsKeys.get(l.legend_id) ?? '',
         xp: l.xp ?? 0,
         level: l.level ?? 0,
         xpPercentage: l.xp_percentage ?? 0,

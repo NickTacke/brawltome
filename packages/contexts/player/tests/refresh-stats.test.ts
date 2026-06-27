@@ -221,6 +221,100 @@ afterAll(async () => {
   await db.delete(legend).where(inArray(legend.legendId, [LEGEND_ID_FULL, LEGEND_ID_SPARSE]))
 })
 
+describe('processRefreshStats - key preservation', () => {
+  const PRES_ID = 990051
+  const UNRESOLVABLE_LEGEND_ID = 77
+
+  afterAll(async () => {
+    await db.delete(playerClan).where(eq(playerClan.brawlhallaId, PRES_ID))
+    await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, PRES_ID))
+    await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, PRES_ID))
+    await db.delete(player).where(eq(player.brawlhallaId, PRES_ID))
+  })
+
+  it('preserves existing legendNameKey when legend_id is unresolvable after self-heal', async () => {
+    await db.insert(player).values({ brawlhallaId: PRES_ID, name: 'presStatsPlayer' }).onConflictDoNothing()
+    await db.insert(playerStatsLegend).values({
+      brawlhallaId: PRES_ID,
+      legendId: UNRESOLVABLE_LEGEND_ID,
+      legendNameKey: 'preserved_key',
+      xp: 0,
+      level: 0,
+      xpPercentage: 0,
+      games: 1,
+      wins: 0,
+      matchTime: 0,
+      kos: 0,
+      teamKos: 0,
+      suicides: 0,
+      falls: 0,
+      damageDealt: 0n,
+      damageTaken: 0n,
+      damageWeaponOne: 0n,
+      damageWeaponTwo: 0n,
+      timeHeldWeaponOne: 0,
+      timeHeldWeaponTwo: 0,
+      koWeaponOne: 0,
+      koWeaponTwo: 0,
+      koUnarmed: 0,
+      koThrownItem: 0,
+      koGadgets: 0,
+      damageUnarmed: 0n,
+      damageThrownItem: 0n,
+      damageGadgets: 0n,
+    })
+
+    const unresolvableStub = {
+      getPlayerStatsV1: async () =>
+        ({
+          ...STATS_FIXTURE,
+          brawlhalla_id: PRES_ID,
+          legends: [
+            {
+              legend_id: UNRESOLVABLE_LEGEND_ID,
+              games: 5,
+              wins: 2,
+              xp: 0,
+              level: 0,
+              xp_percentage: 0,
+              damage_dealt: 0,
+              damage_taken: 0,
+              kos: 0,
+              falls: 0,
+              suicides: 0,
+              team_kos: 0,
+              match_time: 0,
+              damage_unarmed: 0,
+              damage_thrown_item: 0,
+              damage_weapon_one: 0,
+              damage_weapon_two: 0,
+              damage_gadgets: 0,
+              ko_unarmed: 0,
+              ko_thrown_item: 0,
+              ko_weapon_one: 0,
+              ko_weapon_two: 0,
+              ko_gadgets: 0,
+              time_held_weapon_one: 0,
+              time_held_weapon_two: 0,
+            },
+          ],
+        }) as BhV1PlayerStatsAll,
+      getPlayerGuildV1: async () => null,
+      getGuildStatsV1: async () => null,
+      getAllLegendsV1: async (_opts?: unknown) => [], // empty -> self-heal finds nothing for 77
+    }
+
+    await processRefreshStats({ db, bhapi: unresolvableStub as never }, PRES_ID)
+
+    const rows = await db.query.playerStatsLegend.findMany({
+      where: eq(playerStatsLegend.brawlhallaId, PRES_ID),
+    })
+    const row = rows.find((r) => r.legendId === UNRESOLVABLE_LEGEND_ID)
+    expect(row).toBeDefined()
+    expect(row?.legendNameKey).toBe('preserved_key')
+  })
+})
+
 describe('processRefreshStats (v1)', () => {
   it('updates player name, games, wins, xp, level, damageBomb', async () => {
     const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
