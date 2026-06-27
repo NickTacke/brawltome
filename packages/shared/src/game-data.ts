@@ -1,4 +1,4 @@
-import type { BhApiClient, BhV1Legend } from '@brawltome/bhapi'
+import type { BhApiClient } from '@brawltome/bhapi'
 import { legend } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
 import { normalizeWeaponName } from './weapons'
@@ -17,48 +17,38 @@ let legendCache: Map<number, LegendData> = new Map()
 let legendByKey: Map<string, LegendData> = new Map()
 
 export async function initGameData(db: Database, bhapi?: BhApiClient) {
-  const dbLegends = await db.query.legend.findMany()
-
-  if (dbLegends.length === 0) {
-    if (!bhapi) {
-      console.warn('[game-data] no legends in DB and no bhapi client -- skipping init')
-      return
-    }
-    const apiLegends: BhV1Legend[] = await bhapi.getAllLegendsV1({ caller: 'background' })
-    if (apiLegends.length === 0) {
-      throw new Error('[game-data] legends API returned no legends; cannot initialize')
-    }
-    for (const l of apiLegends) {
-      await db
-        .insert(legend)
-        .values({
+  if (bhapi) {
+    try {
+      const apiLegends = await bhapi.getAllLegendsV1({ caller: 'background' })
+      for (const l of apiLegends) {
+        const values = {
           legendId: l.legend_id,
-          // v1 renamed legend_name_key -> legend_name
           legendNameKey: l.legend_name,
           bioName: l.bio_name,
           bioAka: l.bio_aka,
-          // v1 provides the field; v0 hardcoded ''
           bioQuoteAboutAttrib: l.bio_quote_about_attrib,
           weaponOne: l.weapon_one,
           weaponTwo: l.weapon_two,
-          // strength/dexterity/defense/speed are varchar columns; v1 sends numbers
           strength: String(l.strength),
           dexterity: String(l.dexterity),
           defense: String(l.defense),
           speed: String(l.speed),
-        })
-        .onConflictDoNothing()
+        }
+        const { legendId: _omit, ...updateSet } = values
+        await db.insert(legend).values(values).onConflictDoUpdate({ target: legend.legendId, set: updateSet })
+      }
+    } catch (err) {
+      // Best-effort refresh: if the legends API is unavailable or returns a partial
+      // page (getAllLegendsV1 throws), keep startup alive on the existing DB legends.
+      console.warn('[game-data] legend refresh failed; using existing DB legends:', err)
     }
-    const inserted = await db.query.legend.findMany()
-    if (inserted.length === 0) {
-      throw new Error('[game-data] legend insert produced no rows; cannot initialize')
-    }
-    legendCache = new Map(inserted.map((l) => [l.legendId, l]))
-    legendByKey = new Map(inserted.map((l) => [l.legendNameKey, l]))
-    console.log(`[game-data] loaded ${legendCache.size} legends`)
-    return
   }
 
+  const dbLegends = await db.query.legend.findMany()
+  if (dbLegends.length === 0) {
+    console.warn('[game-data] no legends available (API + DB empty); cache not initialized')
+    return
+  }
   legendCache = new Map(dbLegends.map((l) => [l.legendId, l]))
   legendByKey = new Map(dbLegends.map((l) => [l.legendNameKey, l]))
   console.log(`[game-data] loaded ${legendCache.size} legends`)
