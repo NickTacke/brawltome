@@ -116,7 +116,8 @@ export function createQueue<T>(
   async function start() {
     if (concurrency === 0) return
     await init()
-    await claimPending()
+    // Recover orphaned pending jobs in the background; do not block the read loop on it.
+    void claimPending()
 
     let consecutivePriority = 0
 
