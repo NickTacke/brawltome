@@ -10,6 +10,7 @@ export interface QueueOptions<T = unknown> {
   dedupKey?: (data: T) => string
   dedupTtlSec?: number
   priorityRatio?: number
+  claimMinIdleMs?: number
   metrics?: MetricsRegistry
 }
 
@@ -34,6 +35,7 @@ export function createQueue<T>(
     dedupKey,
     dedupTtlSec = 300,
     priorityRatio = Number.POSITIVE_INFINITY,
+    claimMinIdleMs = 30000,
     metrics,
   } = opts
   function dedupRedisKey(resolver: (data: T) => string, data: T): string {
@@ -203,7 +205,11 @@ export function createQueue<T>(
 
       for (const entry of pending) {
         const [id] = entry as [string, string, number, number]
-        await redis.xclaim(stream, group, consumer, '30000', id)
+        const claimed = await redis.xclaim(stream, group, consumer, String(claimMinIdleMs), id)
+        if (!Array.isArray(claimed)) continue
+        for (const [claimedId, fields] of claimed as [string, string[]][]) {
+          await processJob(claimedId, JSON.parse(fields[1]) as T, retries)
+        }
       }
     } catch (err) {
       console.warn(`[queue:${name}] claimPending error:`, err)
