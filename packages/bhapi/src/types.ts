@@ -294,7 +294,10 @@ export interface BhV1GuildMembership {
   join_date: number
   rank: string
 }
-export interface BhV1PlayerGuild { brawlhalla_id: number; guild: BhV1GuildMembership }
+export interface BhV1PlayerGuild {
+  brawlhalla_id: number
+  guild: BhV1GuildMembership
+}
 
 export interface BhV1GuildMember {
   brawlhalla_id: number
