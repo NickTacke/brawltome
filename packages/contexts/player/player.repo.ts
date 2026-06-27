@@ -132,6 +132,24 @@ export function createPlayerRepo(db: Database) {
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
+    // Player has no ranked 1v1 this season (API 404). Clear the rank/record so the profile shows
+    // unranked, and stamp rankedLastUpdated so it stops looking perpetually stale. bestLegend is
+    // intentionally kept as the profile's avatar identity (resolved from the legend cache at query time).
+    clearRanked(brawlhallaId: number) {
+      return db
+        .update(player)
+        .set({
+          rating: 0,
+          peakRating: 0,
+          tier: null,
+          rankedGames: 0,
+          rankedWins: 0,
+          rankedLastUpdated: new Date(),
+          lastUpdated: new Date(),
+        })
+        .where(eq(player.brawlhallaId, brawlhallaId))
+    },
+
     upsertAlias(brawlhallaId: number, oldName: string) {
       return db
         .insert(playerAlias)
