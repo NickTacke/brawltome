@@ -61,15 +61,17 @@ export async function processRefreshRanked(
 
       await txRepo.replaceRankedLegends(
         brawlhallaId,
-        ranked.legends.map((l) => ({
-          legend_id: l.legend_id,
-          legend_name_key: getLegendById(l.legend_id)?.legendNameKey ?? existingRankedKeys.get(l.legend_id) ?? '',
-          rating: l.rating,
-          peak_rating: l.peak_rating,
-          tier: l.tier,
-          wins: l.wins,
-          games: l.games,
-        })),
+        ranked.legends
+          .map((l) => ({
+            legend_id: l.legend_id,
+            legend_name_key: getLegendById(l.legend_id)?.legendNameKey ?? existingRankedKeys.get(l.legend_id) ?? '',
+            rating: l.rating,
+            peak_rating: l.peak_rating,
+            tier: l.tier,
+            wins: l.wins,
+            games: l.games,
+          }))
+          .filter((entry) => entry.legend_name_key !== ''),
       )
 
       const lastSnapshot = await txRepo.getLastRatingSnapshot(brawlhallaId)
@@ -209,34 +211,36 @@ export async function processRefreshStats(
 
     await txRepo.replaceStatsLegends(
       brawlhallaId,
-      filteredLegends.map((l) => ({
-        legendId: l.legend_id,
-        legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? existingStatsKeys.get(l.legend_id) ?? '',
-        xp: l.xp ?? 0,
-        level: l.level ?? 0,
-        xpPercentage: l.xp_percentage ?? 0,
-        games: l.games ?? 0,
-        wins: l.wins ?? 0,
-        matchTime: l.match_time ?? 0,
-        kos: l.kos ?? 0,
-        teamKos: l.team_kos ?? 0,
-        suicides: l.suicides ?? 0,
-        falls: l.falls ?? 0,
-        damageDealt: toBig(l.damage_dealt),
-        damageTaken: toBig(l.damage_taken),
-        damageWeaponOne: toBig(l.damage_weapon_one),
-        damageWeaponTwo: toBig(l.damage_weapon_two),
-        timeHeldWeaponOne: l.time_held_weapon_one ?? 0,
-        timeHeldWeaponTwo: l.time_held_weapon_two ?? 0,
-        koWeaponOne: l.ko_weapon_one ?? 0,
-        koWeaponTwo: l.ko_weapon_two ?? 0,
-        koUnarmed: l.ko_unarmed ?? 0,
-        koThrownItem: l.ko_thrown_item ?? 0,
-        koGadgets: l.ko_gadgets ?? 0,
-        damageUnarmed: toBig(l.damage_unarmed),
-        damageThrownItem: toBig(l.damage_thrown_item),
-        damageGadgets: toBig(l.damage_gadgets),
-      })),
+      filteredLegends
+        .map((l) => ({
+          legendId: l.legend_id,
+          legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? existingStatsKeys.get(l.legend_id) ?? '',
+          xp: l.xp ?? 0,
+          level: l.level ?? 0,
+          xpPercentage: l.xp_percentage ?? 0,
+          games: l.games ?? 0,
+          wins: l.wins ?? 0,
+          matchTime: l.match_time ?? 0,
+          kos: l.kos ?? 0,
+          teamKos: l.team_kos ?? 0,
+          suicides: l.suicides ?? 0,
+          falls: l.falls ?? 0,
+          damageDealt: toBig(l.damage_dealt),
+          damageTaken: toBig(l.damage_taken),
+          damageWeaponOne: toBig(l.damage_weapon_one),
+          damageWeaponTwo: toBig(l.damage_weapon_two),
+          timeHeldWeaponOne: l.time_held_weapon_one ?? 0,
+          timeHeldWeaponTwo: l.time_held_weapon_two ?? 0,
+          koWeaponOne: l.ko_weapon_one ?? 0,
+          koWeaponTwo: l.ko_weapon_two ?? 0,
+          koUnarmed: l.ko_unarmed ?? 0,
+          koThrownItem: l.ko_thrown_item ?? 0,
+          koGadgets: l.ko_gadgets ?? 0,
+          damageUnarmed: toBig(l.damage_unarmed),
+          damageThrownItem: toBig(l.damage_thrown_item),
+          damageGadgets: toBig(l.damage_gadgets),
+        }))
+        .filter((entry) => entry.legendNameKey !== ''),
     )
 
     const weapons = aggregateWeapons(

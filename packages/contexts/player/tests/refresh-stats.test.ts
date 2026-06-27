@@ -315,6 +315,78 @@ describe('processRefreshStats - key preservation', () => {
   })
 })
 
+describe('processRefreshStats - skip blank key', () => {
+  const SKIP_ID = 990052
+  const NEW_LEGEND_ID = 88 // not in legend table, not in getAllLegendsV1 stub, no existing player row
+
+  afterAll(async () => {
+    await db.delete(playerClan).where(eq(playerClan.brawlhallaId, SKIP_ID))
+    await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, SKIP_ID))
+    await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, SKIP_ID))
+    await db.delete(player).where(eq(player.brawlhallaId, SKIP_ID))
+  })
+
+  it('skips legend row when no name can be resolved (brand-new unresolvable ID)', async () => {
+    await db.insert(player).values({ brawlhallaId: SKIP_ID, name: 'skipStatsPlayer' }).onConflictDoNothing()
+
+    const skipStub = {
+      getPlayerStatsV1: async () =>
+        ({
+          ...STATS_FIXTURE,
+          brawlhalla_id: SKIP_ID,
+          legends: [
+            // resolvable: bodvar (LEGEND_ID_FULL = 3) is in the legend table
+            { ...STATS_FIXTURE.legends[0], legend_id: LEGEND_ID_FULL },
+            // unresolvable: ID 88, no cache entry, no existing row
+            {
+              legend_id: NEW_LEGEND_ID,
+              games: 3,
+              wins: 1,
+              xp: 0,
+              level: 0,
+              xp_percentage: 0,
+              damage_dealt: 0,
+              damage_taken: 0,
+              kos: 0,
+              falls: 0,
+              suicides: 0,
+              team_kos: 0,
+              match_time: 0,
+              damage_unarmed: 0,
+              damage_thrown_item: 0,
+              damage_weapon_one: 0,
+              damage_weapon_two: 0,
+              damage_gadgets: 0,
+              ko_unarmed: 0,
+              ko_thrown_item: 0,
+              ko_weapon_one: 0,
+              ko_weapon_two: 0,
+              ko_gadgets: 0,
+              time_held_weapon_one: 0,
+              time_held_weapon_two: 0,
+            },
+          ],
+        }) as BhV1PlayerStatsAll,
+      getPlayerGuildV1: async () => null,
+      getGuildStatsV1: async () => null,
+      getAllLegendsV1: async (_opts?: unknown) => [], // empty -> self-heal finds nothing for 88
+    }
+
+    await processRefreshStats({ db, bhapi: skipStub as never }, SKIP_ID)
+
+    const rows = await db.query.playerStatsLegend.findMany({
+      where: eq(playerStatsLegend.brawlhallaId, SKIP_ID),
+    })
+    // resolvable legend must be written with its real key
+    const bodvar = rows.find((r) => r.legendId === LEGEND_ID_FULL)
+    expect(bodvar).toBeDefined()
+    expect(bodvar?.legendNameKey).toBe('bodvar')
+    // unresolvable legend must NOT be inserted at all
+    const blank = rows.find((r) => r.legendId === NEW_LEGEND_ID)
+    expect(blank).toBeUndefined()
+  })
+})
+
 describe('processRefreshStats (v1)', () => {
   it('updates player name, games, wins, xp, level, damageBomb', async () => {
     const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
