@@ -10,7 +10,7 @@ import {
   ratingHistory,
 } from '@brawltome/database'
 import { initGameData } from '@brawltome/shared'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { processRefreshRanked } from '../commands/refresh-player'
 
 const TEST_ID = 990060
@@ -54,6 +54,46 @@ const TEAMS_FIXTURE: BhV1PlayerTeams = {
     ],
   },
 }
+
+// v1 legend shape returned by bhapi on a cache miss so initGameData can upsert + resolve
+const getAllLegendsV1 = async (_opts?: unknown) => [
+  {
+    legend_id: LEGEND_ID,
+    legend_name: 'bodvar',
+    bio_name: 'Bodvar',
+    bio_aka: '',
+    bio_quote: '',
+    bio_quote_about_attrib: '',
+    bio_quote_from: '',
+    bio_quote_from_attrib: '',
+    bio_text: '',
+    bot_name: '',
+    weapon_one: 'Hammer',
+    weapon_two: 'Sword',
+    strength: 6,
+    dexterity: 6,
+    defense: 4,
+    speed: 4,
+  },
+  {
+    legend_id: 4,
+    legend_name: 'cassidy',
+    bio_name: 'Cassidy',
+    bio_aka: '',
+    bio_quote: '',
+    bio_quote_about_attrib: '',
+    bio_quote_from: '',
+    bio_quote_from_attrib: '',
+    bio_text: '',
+    bot_name: '',
+    weapon_one: 'Pistol',
+    weapon_two: 'Hammer',
+    strength: 4,
+    dexterity: 6,
+    defense: 4,
+    speed: 6,
+  },
+]
 
 async function cleanPlayer() {
   await db.delete(ratingHistory).where(eq(ratingHistory.brawlhallaId, TEST_ID))
@@ -100,7 +140,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanPlayer()
-  await db.delete(legend).where(eq(legend.legendId, LEGEND_ID))
+  // legend 4 may be upserted by initGameData when the cache-miss guard triggers
+  await db.delete(legend).where(inArray(legend.legendId, [LEGEND_ID, 4]))
 })
 
 describe('processRefreshRanked (v1)', () => {
@@ -110,6 +151,7 @@ describe('processRefreshRanked (v1)', () => {
     const stub = {
       getPlayerStatsV1: async () => RANKED_FIXTURE,
       getPlayerTeamsV1: async () => TEAMS_FIXTURE,
+      getAllLegendsV1,
     }
     await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
 
@@ -133,6 +175,10 @@ describe('processRefreshRanked (v1)', () => {
     expect(bodvar).toBeDefined()
     expect(bodvar?.legendNameKey).toBe('bodvar')
     expect(bodvar?.rating).toBe(1750)
+    // legend 4 was not in cache at start; cache-miss guard must self-heal and resolve to 'cassidy'
+    const cassidy = legends.find((l) => l.legendId === 4)
+    expect(cassidy).toBeDefined()
+    expect(cassidy?.legendNameKey).toBe('cassidy')
 
     const teams = await db.query.playerRankedTeam.findMany({
       where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
@@ -166,6 +212,7 @@ describe('processRefreshRanked (v1)', () => {
     const stub = {
       getPlayerStatsV1: async () => jpsRanked,
       getPlayerTeamsV1: async () => jpsTeams,
+      getAllLegendsV1,
     }
     await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
 
@@ -184,6 +231,7 @@ describe('processRefreshRanked (v1)', () => {
     const stub = {
       getPlayerStatsV1: async () => null,
       getPlayerTeamsV1: async () => TEAMS_FIXTURE,
+      getAllLegendsV1,
     }
     await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
 
@@ -219,6 +267,7 @@ describe('processRefreshRanked (v1)', () => {
     const stub = {
       getPlayerStatsV1: async () => RANKED_FIXTURE,
       getPlayerTeamsV1: async () => null,
+      getAllLegendsV1,
     }
     await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
 
