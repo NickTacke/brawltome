@@ -1,6 +1,6 @@
 import type { BhApiClient, BhV1PlayerStatsAll, BhV1PlayerStatsRanked } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
-import { aggregateWeapons, getLegendById } from '@brawltome/shared'
+import { aggregateWeapons, getLegendById, initGameData } from '@brawltome/shared'
 import { computeBestLegend, isValhallanGraced, shouldSnapshotRating } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
@@ -20,6 +20,12 @@ export async function processRefreshRanked(
   const ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
   const teamsResp = await bhapi.getPlayerTeamsV1(brawlhallaId, { caller })
   if (!ranked && !teamsResp) return
+
+  if (ranked?.legends.some((l) => !getLegendById(l.legend_id))) {
+    // A legend ID is missing from the cache (e.g. a newly released legend). Refresh
+    // game data (upserts new legends from v1) so we resolve real keys instead of ''.
+    await initGameData(db, bhapi)
+  }
 
   const repo = createPlayerRepo(db)
   await repo.transaction(async (tx) => {
@@ -161,6 +167,12 @@ export async function processRefreshStats(
   } else {
     // Player has no guild — clear
     updateClan = 'clear'
+  }
+
+  if (filteredLegends.some((l) => !getLegendById(l.legend_id))) {
+    // A legend ID is missing from the cache (e.g. a newly released legend). Refresh
+    // game data (upserts new legends from v1) so we resolve real keys instead of ''.
+    await initGameData(db, bhapi)
   }
 
   const repo = createPlayerRepo(db)
