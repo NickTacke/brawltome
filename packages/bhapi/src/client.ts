@@ -141,8 +141,15 @@ export class BhApiClient {
     }
 
     if (res.status === 429) {
-      const parsed = Number.parseInt(res.headers.get('retry-after') ?? '', 10)
-      const retryAfter = Number.isFinite(parsed) && parsed > 0 ? parsed : 5
+      const retryAfterHeader = res.headers.get('retry-after') ?? ''
+      const parsed = Number.parseInt(retryAfterHeader, 10)
+      const parsedDateMs = Date.parse(retryAfterHeader)
+      const retryAfter =
+        Number.isFinite(parsed) && parsed > 0
+          ? parsed
+          : Number.isFinite(parsedDateMs) && parsedDateMs > Date.now()
+            ? Math.ceil((parsedDateMs - Date.now()) / 1000)
+            : 5
       console.warn(
         `[bhapi] ${path} -> 429 UNEXPECTED (${fetchMs}ms, retry-after: ${retryAfter}s) — queue should have prevented this`,
       )

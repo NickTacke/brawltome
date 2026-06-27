@@ -147,4 +147,35 @@ describe('fetch hardening', () => {
       rateLimit.stop()
     }
   })
+
+  it('HTTP-date Retry-After yields larger delay than the 5s fallback', async () => {
+    const futureDate = new Date(Date.now() + 5 * 60_000).toUTCString()
+    const rateLimit = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response('null', {
+          status: 429,
+          headers: { 'retry-after': futureDate },
+        })
+      },
+    })
+    try {
+      const client = new BhApiClient({
+        apiKey: 'test',
+        baseUrl: `http://localhost:${rateLimit.port}`,
+      })
+      await client.init()
+      let caught: unknown
+      try {
+        await client.getRankings1v1('us-e', 1)
+      } catch (err) {
+        caught = err
+      }
+      expect(caught).toBeInstanceOf(RateLimitError)
+      // ~5 min future date => retryAfter ~300s => pauseMs ~301000ms, well above 5s fallback (6000ms)
+      expect((caught as RateLimitError).retryAfterMs).toBeGreaterThan(6_000)
+    } finally {
+      rateLimit.stop()
+    }
+  })
 })
