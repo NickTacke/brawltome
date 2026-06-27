@@ -235,7 +235,12 @@ export class BhApiClient {
     const all = [...first.legends]
     for (let page = 2; page <= first.total_pages; page++) {
       const next = await this.callV1<BhV1LegendsPage>(`/static/legends?page=${page}&max_results=100`, opts)
-      if (next) all.push(...next.legends)
+      if (!next) {
+        throw new Error(
+          `Brawlhalla v1 legends pagination incomplete: page ${page} of ${first.total_pages} returned no data`,
+        )
+      }
+      all.push(...next.legends)
     }
     return all
   }
