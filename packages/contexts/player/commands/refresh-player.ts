@@ -1,4 +1,4 @@
-import type { BhApiClient, BhV1PlayerStatsAll, BhV1PlayerStatsRanked } from '@brawltome/bhapi'
+import type { BhApiClient, BhV1PlayerStatsAll, BhV1PlayerStatsRanked, BhV1PlayerTeams } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
 import { aggregateWeapons, getLegendById, initGameData } from '@brawltome/shared'
 import { computeBestLegend, hasStoredRankedRecord, isValhallanGraced, shouldSnapshotRating } from '../player'
@@ -38,7 +38,12 @@ export async function processRefreshRanked(
     ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
   }
 
-  const teamsResp = await bhapi.getPlayerTeamsV1(brawlhallaId, { caller })
+  let teamsResp: BhV1PlayerTeams | null = null
+  try {
+    teamsResp = await bhapi.getPlayerTeamsV1(brawlhallaId, { caller })
+  } catch (error) {
+    console.warn(`[player-refresh] teams unavailable for player ${brawlhallaId}; preserving last-known teams`, error)
+  }
 
   if (ranked?.legends.some((l) => !getLegendById(l.legend_id))) {
     // A legend ID is missing from the cache (e.g. a newly released legend). Refresh
