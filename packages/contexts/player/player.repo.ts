@@ -132,9 +132,8 @@ export function createPlayerRepo(db: Database) {
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
-    // Player has no ranked 1v1 this season (API 404). Clear the rank/record so the profile shows
-    // unranked, and stamp rankedLastUpdated so it stops looking perpetually stale. bestLegend is
-    // intentionally kept as the profile's avatar identity (resolved from the legend cache at query time).
+    // Called only after lifetime stats corroborate that ranked 404 means unranked this season.
+    // Keep bestLegend as the profile avatar identity and stamp freshness to stop re-enqueueing.
     clearRanked(brawlhallaId: number) {
       return db
         .update(player)
@@ -202,7 +201,13 @@ export function createPlayerRepo(db: Database) {
     getExistingStatsLegends(brawlhallaId: number) {
       return db.query.playerStatsLegend.findMany({
         where: eq(playerStatsLegend.brawlhallaId, brawlhallaId),
-        columns: { legendId: true, legendNameKey: true },
+        columns: {
+          legendId: true,
+          legendNameKey: true,
+          xp: true,
+          level: true,
+          xpPercentage: true,
+        },
       })
     },
 
@@ -263,9 +268,9 @@ export function createPlayerRepo(db: Database) {
       brawlhallaId: number,
       data: {
         name: string
-        xp: number
-        level: number
-        xpPercentage: number
+        xp?: number
+        level?: number
+        xpPercentage?: number
         totalGames: number
         totalWins: number
         matchTimeTotal: number

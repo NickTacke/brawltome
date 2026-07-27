@@ -8,17 +8,15 @@ import {
   getCurrentUser,
 } from '@brawltome/identity'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, createPlayerRepo, getPlayer } from '@brawltome/player'
+import { createPlayerRepo, getPlayer } from '@brawltome/player'
 import {
   TIERED_TTL,
   checkRateLimit,
   createMetricsRegistry,
   createQueue,
   createR2Client,
-  dedupKey,
   getLegendById,
   initGameData,
-  tryDedup,
 } from '@brawltome/shared'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
@@ -251,14 +249,12 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
   if (rateLimit.allowed) {
     const rankedStale = !p.rankedLastUpdated || now - p.rankedLastUpdated.getTime() > ttl.ranked
     if (rankedStale) {
-      const canDedup = await tryDedup(redis, dedupKey('ranked', bhid), DEDUP_TTL_RANKED_SEC)
-      if (canDedup) await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
+      await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
     }
 
     const statsStale = !p.statsLastUpdated || now - p.statsLastUpdated.getTime() > ttl.stats
     if (statsStale) {
-      const canDedup = await tryDedup(redis, dedupKey('stats', bhid), DEDUP_TTL_STATS_SEC)
-      if (canDedup) await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
+      await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
     }
   }
 

@@ -1,5 +1,5 @@
-import { DEDUP_TTL_RANKED_SEC, DEDUP_TTL_STATS_SEC, discoverPlayer, getPlayer, isStale } from '@brawltome/player'
-import { TIERED_TTL, checkRateLimit, dedupKey, tryDedup, verifyTurnstile } from '@brawltome/shared'
+import { discoverPlayer, getPlayer, isStale } from '@brawltome/player'
+import { TIERED_TTL, checkRateLimit, verifyTurnstile } from '@brawltome/shared'
 import { z } from 'zod'
 import { internalProcedure, router } from '../trpc/trpc'
 
@@ -40,21 +40,18 @@ export const playerRouter = router({
       if (process.env.DISABLE_VIEW_REFRESH !== '1') {
         const ttl = TIERED_TTL.hot
 
-        if (isStale(p.rankedLastUpdated, ttl.ranked)) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh', ctx.metrics)
-          if (refreshLimit.allowed) {
-            const canDedup = await tryDedup(ctx.redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-            if (canDedup) await ctx.rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' })
-            isRefreshing = true
-          }
-        }
+        const rankedStale = isStale(p.rankedLastUpdated, ttl.ranked)
+        const statsStale = isStale(p.statsLastUpdated, ttl.stats)
 
-        if (isStale(p.statsLastUpdated, ttl.stats)) {
+        if (rankedStale || statsStale) {
           const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh', ctx.metrics)
           if (refreshLimit.allowed) {
-            const canDedup = await tryDedup(ctx.redis, dedupKey('stats', brawlhallaId), DEDUP_TTL_STATS_SEC)
-            if (canDedup) await ctx.statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' })
-            isRefreshing = true
+            if (rankedStale) {
+              isRefreshing = (await ctx.rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' })) || isRefreshing
+            }
+            if (statsStale) {
+              isRefreshing = (await ctx.statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' })) || isRefreshing
+            }
           }
         }
       }

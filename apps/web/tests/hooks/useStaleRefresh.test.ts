@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { computeRefreshState } from '../../src/hooks/useStaleRefresh'
+import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '../../src/lib/player-refresh'
 
 describe('computeRefreshState', () => {
   it('returns idle when not yet started', () => {
@@ -30,5 +31,67 @@ describe('computeRefreshState', () => {
     expect(computeRefreshState({ startedAt: 1000, now: 1000, maxRefreshMs: 30_000 })).toEqual({
       isRefreshing: true,
     })
+  })
+})
+
+describe('player refresh sections', () => {
+  it('starts a stats-only refresh when ranked data is still fresh', () => {
+    const now = Date.UTC(2026, 0, 1, 12)
+    const pending = getPendingPlayerSections(
+      {
+        rankedLastUpdated: new Date(now - 30 * 60_000),
+        statsLastUpdated: new Date(now - 7 * 60 * 60_000),
+      },
+      now,
+    )
+
+    expect(pending).toEqual({ ranked: false, stats: true })
+  })
+
+  it('does not finish a stats refresh when only ranked freshness advances', () => {
+    const initial = {
+      rankedLastUpdated: new Date(1_000),
+      statsLastUpdated: new Date(1_000),
+    }
+    const next = {
+      rankedLastUpdated: new Date(2_000),
+      statsLastUpdated: new Date(1_000),
+    }
+
+    expect(hasCompletedPlayerRefresh(initial, next, { ranked: false, stats: true })).toBe(false)
+  })
+
+  it('requires every pending section to advance', () => {
+    const initial = {
+      rankedLastUpdated: new Date(1_000),
+      statsLastUpdated: new Date(1_000),
+    }
+    const pending = { ranked: true, stats: true }
+
+    expect(
+      hasCompletedPlayerRefresh(
+        initial,
+        { rankedLastUpdated: new Date(2_000), statsLastUpdated: new Date(1_000) },
+        pending,
+      ),
+    ).toBe(false)
+    expect(
+      hasCompletedPlayerRefresh(
+        initial,
+        { rankedLastUpdated: new Date(2_000), statsLastUpdated: new Date(2_000) },
+        pending,
+      ),
+    ).toBe(true)
+  })
+
+  it('requires authoritative ranked and stats timestamps for discovery', () => {
+    const pending = getPendingPlayerSections(null, Date.UTC(2026, 0, 1))
+
+    expect(hasCompletedPlayerRefresh(null, { rankedLastUpdated: new Date(), statsLastUpdated: null }, pending)).toBe(
+      false,
+    )
+    expect(
+      hasCompletedPlayerRefresh(null, { rankedLastUpdated: new Date(), statsLastUpdated: new Date() }, pending),
+    ).toBe(true)
   })
 })

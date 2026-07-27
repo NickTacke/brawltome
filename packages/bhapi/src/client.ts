@@ -1,4 +1,5 @@
 import { type Caller, RequestQueue, type RequestQueuePersistence } from './request-queue'
+import { validatePlayerGuild, validatePlayerStats, validatePlayerTeams } from './v1-validation'
 
 export class RateLimitError extends Error {
   constructor(
@@ -26,7 +27,6 @@ import type {
   BhV1PlayerStatsAll,
   BhV1PlayerStatsRanked,
   BhV1PlayerTeams,
-  Bracket,
   Region,
   V1Mode,
 } from './types'
@@ -146,10 +146,15 @@ export class BhApiClient {
     console.log(`[bhapi] v1 ${path} (${remaining} ${caller} tokens left)`)
 
     const url = `${this.baseUrl}/v1${endpoint}`
-    return this.sendRequest<T>(url, path, endpoint)
+    return this.sendRequest<T>(url, path, endpoint, true)
   }
 
-  private async sendRequest<T>(url: string, path: string, endpoint: string): Promise<T | null> {
+  private async sendRequest<T>(
+    url: string,
+    path: string,
+    endpoint: string,
+    rejectNullPayload = false,
+  ): Promise<T | null> {
     const fetchStart = Date.now()
     let res: Response
     try {
@@ -198,8 +203,9 @@ export class BhApiClient {
       console.log(`[bhapi] ${path} -> 200 SLOW (${fetchMs}ms)`)
     }
 
+    let payload: unknown
     try {
-      return (await res.json()) as T
+      payload = await res.json()
     } catch (err) {
       // AbortSignal.timeout() also aborts the response body stream, so a body-read
       // timeout surfaces here as AbortError/TimeoutError. Route it to the timeout counter.
@@ -210,6 +216,13 @@ export class BhApiClient {
       await this.metrics?.incrementCounter('bhapi:json_errors')
       throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
+
+    if (rejectNullPayload && payload === null) {
+      await this.metrics?.incrementCounter('bhapi:payload_errors')
+      throw new Error(`Invalid payload from Brawlhalla API for ${endpoint}: expected an object`)
+    }
+
+    return payload as T
   }
 
   async getPlayerStatsV1(
@@ -217,15 +230,19 @@ export class BhApiClient {
     mode: V1Mode = 'all',
     opts: CallOptions = {},
   ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
-    return this.callV1(`/player/stats?brawlhalla_id=${id}&mode=${mode}`, opts)
+    const modeQuery = mode === 'all' ? '' : `&mode=${mode}`
+    const payload = await this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
+    return payload === null ? null : validatePlayerStats(payload, id, mode)
   }
 
   async getPlayerTeamsV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerTeams | null> {
-    return this.callV1(`/player/teams?brawlhalla_id=${id}`, opts)
+    const payload = await this.callV1<unknown>(`/player/teams?brawlhalla_id=${id}`, opts)
+    return payload === null ? null : validatePlayerTeams(payload, id)
   }
 
   async getPlayerGuildV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerGuild | null> {
-    return this.callV1(`/player/guild?brawlhalla_id=${id}`, opts)
+    const payload = await this.callV1<unknown>(`/player/guild?brawlhalla_id=${id}`, opts)
+    return payload === null ? null : validatePlayerGuild(payload, id)
   }
 
   async getGuildStatsV1(guildId: number, opts: CallOptions = {}): Promise<BhV1Guild | null> {

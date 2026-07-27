@@ -20,6 +20,13 @@ export async function processRefreshRanked(
   const ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
   const teamsResp = await bhapi.getPlayerTeamsV1(brawlhallaId, { caller })
 
+  if (!ranked) {
+    const lifetimeStats = await bhapi.getPlayerStatsV1(brawlhallaId, 'all', { caller })
+    if (!lifetimeStats) {
+      throw new Error(`Ranked absence could not be corroborated for player ${brawlhallaId}`)
+    }
+  }
+
   if (ranked?.legends.some((l) => !getLegendById(l.legend_id))) {
     // A legend ID is missing from the cache (e.g. a newly released legend). Refresh
     // game data (upserts new legends from v1) so we resolve real keys instead of ''.
@@ -91,8 +98,7 @@ export async function processRefreshRanked(
         })
       }
     } else {
-      // No ranked 1v1 this season (API 404): clear the stale rank + legends so the profile shows
-      // unranked, and stamp rankedLastUpdated so on-demand stops re-enqueuing it forever.
+      // Lifetime stats corroborated the player above, so ranked 404 means unranked this season.
       await txRepo.clearRanked(brawlhallaId)
       await txRepo.replaceRankedLegends(brawlhallaId, [])
     }
@@ -131,9 +137,6 @@ export async function processRefreshRanked(
           }
         }),
       )
-    } else {
-      // No current 2v2 teams (API 404): clear stale rows (matches v0's clear-on-empty behavior).
-      await txRepo.replaceRankedTeams(brawlhallaId, [])
     }
   })
 }
@@ -144,7 +147,7 @@ export async function processRefreshStats(
   caller: 'on-demand' | 'background' = 'background',
 ) {
   const data = (await bhapi.getPlayerStatsV1(brawlhallaId, 'all', { caller })) as BhV1PlayerStatsAll | null
-  if (!data) return
+  if (!data) throw new Error(`Brawlhalla lifetime stats unavailable for player ${brawlhallaId}`)
 
   const toBig = (n: number | undefined): bigint => BigInt(Math.trunc(n ?? 0))
 
@@ -160,7 +163,6 @@ export async function processRefreshStats(
     clan_lifetime_xp: number
     personal_xp: number
   } | null = null
-  let updateClan: 'set' | 'clear' | 'skip'
 
   if (playerGuild?.guild) {
     const guildStats = await bhapi.getGuildStatsV1(playerGuild.guild.guild_id, { caller })
@@ -172,14 +174,7 @@ export async function processRefreshStats(
         clan_lifetime_xp: guildStats.legacy_xp + guildStats.xp,
         personal_xp: playerGuild.guild.personal_xp,
       }
-      updateClan = 'set'
-    } else {
-      // Guild uncached/404 — preserve existing clan row
-      updateClan = 'skip'
     }
-  } else {
-    // Player has no guild — clear
-    updateClan = 'clear'
   }
 
   if (filteredLegends.some((l) => !getLegendById(l.legend_id))) {
@@ -194,9 +189,9 @@ export async function processRefreshStats(
 
     await txRepo.updateStats(brawlhallaId, {
       name: data.name,
-      xp: data.xp ?? 0,
-      level: data.level ?? 0,
-      xpPercentage: data.xp_percentage ?? 0,
+      ...(data.xp !== undefined ? { xp: data.xp } : {}),
+      ...(data.level !== undefined ? { level: data.level } : {}),
+      ...(data.xp_percentage !== undefined ? { xpPercentage: data.xp_percentage } : {}),
       totalGames: data.games,
       totalWins: data.wins,
       matchTimeTotal,
@@ -212,41 +207,44 @@ export async function processRefreshStats(
       koSnowball: data.ko_snowball ?? 0,
     })
 
-    const existingStatsKeys = new Map(
-      (await txRepo.getExistingStatsLegends(brawlhallaId)).map((r) => [r.legendId, r.legendNameKey]),
+    const existingStatsLegends = new Map(
+      (await txRepo.getExistingStatsLegends(brawlhallaId)).map((legend) => [legend.legendId, legend]),
     )
 
     await txRepo.replaceStatsLegends(
       brawlhallaId,
       filteredLegends
-        .map((l) => ({
-          legendId: l.legend_id,
-          legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? existingStatsKeys.get(l.legend_id) ?? '',
-          xp: l.xp ?? 0,
-          level: l.level ?? 0,
-          xpPercentage: l.xp_percentage ?? 0,
-          games: l.games ?? 0,
-          wins: l.wins ?? 0,
-          matchTime: l.match_time ?? 0,
-          kos: l.kos ?? 0,
-          teamKos: l.team_kos ?? 0,
-          suicides: l.suicides ?? 0,
-          falls: l.falls ?? 0,
-          damageDealt: toBig(l.damage_dealt),
-          damageTaken: toBig(l.damage_taken),
-          damageWeaponOne: toBig(l.damage_weapon_one),
-          damageWeaponTwo: toBig(l.damage_weapon_two),
-          timeHeldWeaponOne: l.time_held_weapon_one ?? 0,
-          timeHeldWeaponTwo: l.time_held_weapon_two ?? 0,
-          koWeaponOne: l.ko_weapon_one ?? 0,
-          koWeaponTwo: l.ko_weapon_two ?? 0,
-          koUnarmed: l.ko_unarmed ?? 0,
-          koThrownItem: l.ko_thrown_item ?? 0,
-          koGadgets: l.ko_gadgets ?? 0,
-          damageUnarmed: toBig(l.damage_unarmed),
-          damageThrownItem: toBig(l.damage_thrown_item),
-          damageGadgets: toBig(l.damage_gadgets),
-        }))
+        .map((l) => {
+          const existing = existingStatsLegends.get(l.legend_id)
+          return {
+            legendId: l.legend_id,
+            legendNameKey: getLegendById(l.legend_id)?.legendNameKey ?? existing?.legendNameKey ?? '',
+            xp: l.xp ?? existing?.xp ?? 0,
+            level: l.level ?? existing?.level ?? 0,
+            xpPercentage: l.xp_percentage ?? existing?.xpPercentage ?? 0,
+            games: l.games ?? 0,
+            wins: l.wins ?? 0,
+            matchTime: l.match_time ?? 0,
+            kos: l.kos ?? 0,
+            teamKos: l.team_kos ?? 0,
+            suicides: l.suicides ?? 0,
+            falls: l.falls ?? 0,
+            damageDealt: toBig(l.damage_dealt),
+            damageTaken: toBig(l.damage_taken),
+            damageWeaponOne: toBig(l.damage_weapon_one),
+            damageWeaponTwo: toBig(l.damage_weapon_two),
+            timeHeldWeaponOne: l.time_held_weapon_one ?? 0,
+            timeHeldWeaponTwo: l.time_held_weapon_two ?? 0,
+            koWeaponOne: l.ko_weapon_one ?? 0,
+            koWeaponTwo: l.ko_weapon_two ?? 0,
+            koUnarmed: l.ko_unarmed ?? 0,
+            koThrownItem: l.ko_thrown_item ?? 0,
+            koGadgets: l.ko_gadgets ?? 0,
+            damageUnarmed: toBig(l.damage_unarmed),
+            damageThrownItem: toBig(l.damage_thrown_item),
+            damageGadgets: toBig(l.damage_gadgets),
+          }
+        })
         .filter((entry) => entry.legendNameKey !== ''),
     )
 
@@ -264,11 +262,6 @@ export async function processRefreshStats(
 
     await txRepo.replaceWeaponStats(brawlhallaId, weapons)
 
-    if (updateClan === 'set') {
-      await txRepo.upsertClan(brawlhallaId, clanData)
-    } else if (updateClan === 'clear') {
-      await txRepo.upsertClan(brawlhallaId, null)
-    }
-    // 'skip' -> do nothing
+    if (clanData) await txRepo.upsertClan(brawlhallaId, clanData)
   })
 }
