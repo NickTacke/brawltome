@@ -11,8 +11,6 @@ import type {
 import type { LegendData } from '@brawltome/shared'
 import type { InferSelectModel } from 'drizzle-orm'
 
-export const DEDUP_TTL_RANKED_SEC = 3600
-export const DEDUP_TTL_STATS_SEC = 43200
 export const DISCOVERY_MIN_TOKENS = 50
 export const VALHALLAN_GRACE_MS = 3 * 60 * 60 * 1000
 
@@ -39,6 +37,15 @@ export function isValhallanGraced(tier: string | null, confirmedAt: Date | null)
 
 export function isStale(lastUpdated: Date | null, ttlMs: number): boolean {
   return !lastUpdated || Date.now() - lastUpdated.getTime() > ttlMs
+}
+
+export function hasStoredRankedRecord(state: {
+  rating: number
+  rankedGames: number
+  tier: string | null
+  rankedLegendCount: number
+}): boolean {
+  return state.rating > 0 || state.rankedGames > 0 || state.tier !== null || state.rankedLegendCount > 0
 }
 
 export function enrichStatsLegend(

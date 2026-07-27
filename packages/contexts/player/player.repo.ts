@@ -98,6 +98,13 @@ export function createPlayerRepo(db: Database) {
       })
     },
 
+    getExistingRankedState(brawlhallaId: number) {
+      return db.query.player.findFirst({
+        where: eq(player.brawlhallaId, brawlhallaId),
+        columns: { rating: true, rankedGames: true, tier: true },
+      })
+    },
+
     updateRanked(
       brawlhallaId: number,
       data: {
@@ -132,21 +139,10 @@ export function createPlayerRepo(db: Database) {
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
-    // Player has no ranked 1v1 this season (API 404). Clear the rank/record so the profile shows
-    // unranked, and stamp rankedLastUpdated so it stops looking perpetually stale. bestLegend is
-    // intentionally kept as the profile's avatar identity (resolved from the legend cache at query time).
-    clearRanked(brawlhallaId: number) {
+    markRankedChecked(brawlhallaId: number) {
       return db
         .update(player)
-        .set({
-          rating: 0,
-          peakRating: 0,
-          tier: null,
-          rankedGames: 0,
-          rankedWins: 0,
-          rankedLastUpdated: new Date(),
-          lastUpdated: new Date(),
-        })
+        .set({ rankedLastUpdated: new Date(), lastUpdated: new Date() })
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
@@ -202,7 +198,13 @@ export function createPlayerRepo(db: Database) {
     getExistingStatsLegends(brawlhallaId: number) {
       return db.query.playerStatsLegend.findMany({
         where: eq(playerStatsLegend.brawlhallaId, brawlhallaId),
-        columns: { legendId: true, legendNameKey: true },
+        columns: {
+          legendId: true,
+          legendNameKey: true,
+          xp: true,
+          level: true,
+          xpPercentage: true,
+        },
       })
     },
 
@@ -263,9 +265,9 @@ export function createPlayerRepo(db: Database) {
       brawlhallaId: number,
       data: {
         name: string
-        xp: number
-        level: number
-        xpPercentage: number
+        xp?: number
+        level?: number
+        xpPercentage?: number
         totalGames: number
         totalWins: number
         matchTimeTotal: number

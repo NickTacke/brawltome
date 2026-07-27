@@ -333,6 +333,8 @@ describe('fetch hardening', () => {
 })
 
 describe('v1 client', () => {
+  let requestedStatsMode: string | null | undefined
+
   function makeV1Server() {
     return Bun.serve({
       port: 0,
@@ -342,7 +344,8 @@ describe('v1 client', () => {
         const mode = u.searchParams.get('mode')
         const page = u.searchParams.get('page')
 
-        if (p === '/v1/player/stats' && mode === 'all') {
+        if (p === '/v1/player/stats') requestedStatsMode = mode
+        if (p === '/v1/player/stats' && (mode === null || mode === 'all')) {
           return new Response(JSON.stringify(V1_STATS_ALL), { headers: { 'content-type': 'application/json' } })
         }
         if (p === '/v1/player/stats' && mode === 'ranked_1v1') {
@@ -372,6 +375,7 @@ describe('v1 client', () => {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
       await client.init()
       const result = await client.getPlayerStatsV1(PLAYER_ID, 'all')
+      expect(requestedStatsMode).toBeNull()
       expect(result).not.toBeNull()
       const stats = result as typeof V1_STATS_ALL
       expect(typeof stats.damage_bomb).toBe('number')
@@ -397,6 +401,22 @@ describe('v1 client', () => {
     }
   })
 
+  it('rejects teams for a different player', async () => {
+    const mismatchedTeams = Bun.serve({
+      port: 0,
+      fetch() {
+        return Response.json({ ...V1_TEAMS, brawlhalla_id: PLAYER_ID + 1 })
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedTeams.port}` })
+      await client.init()
+      expect(client.getPlayerTeamsV1(PLAYER_ID)).rejects.toThrow('player ID')
+    } finally {
+      mismatchedTeams.stop()
+    }
+  })
+
   it('getPlayerTeamsV1 returns teams.ranked_2v2[0].username_one', async () => {
     const v1 = makeV1Server()
     try {
@@ -406,6 +426,22 @@ describe('v1 client', () => {
       expect(result?.teams.ranked_2v2[0].username_one).toBe('Lopes')
     } finally {
       v1.stop()
+    }
+  })
+
+  it('rejects guild membership for a different player', async () => {
+    const mismatchedGuild = Bun.serve({
+      port: 0,
+      fetch() {
+        return Response.json({ brawlhalla_id: PLAYER_ID + 1, guild: {} })
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedGuild.port}` })
+      await client.init()
+      expect(client.getPlayerGuildV1(PLAYER_ID)).rejects.toThrow('player ID')
+    } finally {
+      mismatchedGuild.stop()
     }
   })
 
@@ -444,6 +480,55 @@ describe('v1 client', () => {
       expect(legends[1].legend_name).toBe('cassidy')
     } finally {
       v1.stop()
+    }
+  })
+
+  it('rejects stats without a legends array', async () => {
+    const malformedStats = Bun.serve({
+      port: 0,
+      fetch() {
+        const { legends: _, ...withoutLegends } = V1_STATS_ALL
+        return Response.json(withoutLegends)
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${malformedStats.port}` })
+      await client.init()
+      expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('legends')
+    } finally {
+      malformedStats.stop()
+    }
+  })
+
+  it('rejects stats for a different player', async () => {
+    const mismatchedPlayer = Bun.serve({
+      port: 0,
+      fetch() {
+        return Response.json({ ...V1_STATS_ALL, brawlhalla_id: PLAYER_ID + 1 })
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedPlayer.port}` })
+      await client.init()
+      expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('player ID')
+    } finally {
+      mismatchedPlayer.stop()
+    }
+  })
+
+  it('rejects a successful null payload', async () => {
+    const nullPayload = Bun.serve({
+      port: 0,
+      fetch() {
+        return Response.json(null)
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${nullPayload.port}` })
+      await client.init()
+      expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('Invalid payload')
+    } finally {
+      nullPayload.stop()
     }
   })
 
