@@ -268,6 +268,43 @@ describe('processRefreshRanked (v1)', () => {
     expect(teams[0]?.teamName).toBe('Known + Team')
   })
 
+  it('ranked null marks an empty ranked record fresh and processes explicit teams', async () => {
+    await seedPlayer()
+    await db.insert(playerRankedTeam).values({
+      brawlhallaId: TEST_ID,
+      brawlhallaIdOne: TEST_ID,
+      brawlhallaIdTwo: 77777,
+      teamName: 'Old + Team',
+      rating: 1500,
+      peakRating: 1600,
+      tier: 'Silver',
+      wins: 5,
+      games: 10,
+      region: 'EU',
+      valhallanConfirmedAt: null,
+    })
+
+    let rankedRequests = 0
+    const stub = {
+      getPlayerStatsV1: async () => {
+        rankedRequests++
+        return null
+      },
+      getPlayerTeamsV1: async () => ({ brawlhalla_id: TEST_ID, teams: { ranked_2v2: [] } }),
+    }
+    await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
+
+    expect(rankedRequests).toBe(2)
+    const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
+    expect(row?.rating).toBe(0)
+    expect(row?.rankedLastUpdated).not.toBeNull()
+
+    const teams = await db.query.playerRankedTeam.findMany({
+      where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
+    })
+    expect(teams).toHaveLength(0)
+  })
+
   it('preserves existing legendNameKey when legend_id is unresolvable after self-heal', async () => {
     const PRES_ID = 990061
     const UNRESOLVABLE_LEGEND_ID = 77

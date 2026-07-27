@@ -98,6 +98,13 @@ export function createPlayerRepo(db: Database) {
       })
     },
 
+    getExistingRankedState(brawlhallaId: number) {
+      return db.query.player.findFirst({
+        where: eq(player.brawlhallaId, brawlhallaId),
+        columns: { rating: true, rankedGames: true, tier: true },
+      })
+    },
+
     updateRanked(
       brawlhallaId: number,
       data: {
@@ -129,6 +136,13 @@ export function createPlayerRepo(db: Database) {
           rankedLastUpdated: new Date(),
           lastUpdated: new Date(),
         })
+        .where(eq(player.brawlhallaId, brawlhallaId))
+    },
+
+    markRankedChecked(brawlhallaId: number) {
+      return db
+        .update(player)
+        .set({ rankedLastUpdated: new Date(), lastUpdated: new Date() })
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
