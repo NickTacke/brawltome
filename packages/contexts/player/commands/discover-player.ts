@@ -1,8 +1,7 @@
 import type { Database } from '@brawltome/database'
 import type { MetricsRegistry, Queue } from '@brawltome/shared'
-import { checkRateLimit, dedupKey, tryDedup } from '@brawltome/shared'
+import { checkRateLimit } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
-import { DEDUP_TTL_RANKED_SEC } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
 interface DiscoverDeps {
@@ -26,12 +25,9 @@ export async function discoverPlayer(deps: DiscoverDeps, brawlhallaId: number): 
   const repo = createPlayerRepo(db)
   await repo.createPlaceholder(brawlhallaId)
 
-  const canDedup = await tryDedup(redis, dedupKey('ranked', brawlhallaId), DEDUP_TTL_RANKED_SEC)
-  if (!canDedup) return { isRefreshing: true }
-
   console.log(`[discover] enqueuing ${brawlhallaId} via priority queue`)
-  await rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' }, true)
-  await statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' }, true)
+  const rankedAccepted = await rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' }, true)
+  const statsAccepted = await statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' }, true)
 
-  return { isRefreshing: true }
+  return { isRefreshing: rankedAccepted || statsAccepted }
 }

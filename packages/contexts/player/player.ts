@@ -11,8 +11,6 @@ import type {
 import type { LegendData } from '@brawltome/shared'
 import type { InferSelectModel } from 'drizzle-orm'
 
-export const DEDUP_TTL_RANKED_SEC = 3600
-export const DEDUP_TTL_STATS_SEC = 43200
 export const DISCOVERY_MIN_TOKENS = 50
 export const VALHALLAN_GRACE_MS = 3 * 60 * 60 * 1000
 

@@ -4,8 +4,8 @@ import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
+import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '@/lib/player-refresh'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
-import { TIERED_TTL } from '@brawltome/shared/constants'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
@@ -15,17 +15,6 @@ import { ProfileSections } from './ProfileSections'
 interface PlayerProfileProps {
   initialData: PlayerData | null
   id: string
-}
-
-const getTimestamp = (data: PlayerData | null): number => {
-  if (!data) return 0
-  return new Date(data.statsLastUpdated ?? data.rankedLastUpdated ?? 0).getTime() || 0
-}
-
-const isInitialDataStale = (data: PlayerData | null): boolean => {
-  if (!data) return true
-  if (!data.rankedLastUpdated) return true
-  return Date.now() - new Date(data.rankedLastUpdated).getTime() > TIERED_TTL.hot.ranked
 }
 
 const deriveDisplayLists = (player: PlayerData) => {
@@ -42,20 +31,14 @@ const deriveDisplayLists = (player: PlayerData) => {
 }
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
-  const isDiscovery = initialData === null
   const [turnstileError, setTurnstileError] = useState(false)
   const tokenHandled = useRef(false)
 
-  const queryFn = useCallback(() => getPlayerAction(Number(id)), [id])
-  const shouldStart = useCallback((data: PlayerData | null) => isInitialDataStale(data), [])
-  const isDone = useCallback(
-    (_prev: PlayerData | null, next: PlayerData | null) => {
-      if (!next) return false
-      if (isDiscovery) return next.rating !== 0 || (next.statsLegends?.length ?? 0) > 0
-      return getTimestamp(next) !== 0 && getTimestamp(next) !== getTimestamp(initialData)
-    },
-    [isDiscovery, initialData],
-  )
+  const pendingSections = useMemo(() => getPendingPlayerSections(initialData), [initialData])
+  const queryFn = () => getPlayerAction(Number(id))
+  const shouldStart = () => pendingSections.ranked || pendingSections.stats
+  const isDone = (_prev: PlayerData | null, next: PlayerData | null) =>
+    hasCompletedPlayerRefresh(initialData, next, pendingSections)
 
   const {
     data: player,

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import type { BhV1PlayerStatsRanked, BhV1PlayerTeams } from '@brawltome/bhapi'
+import type { BhV1PlayerStatsAll, BhV1PlayerStatsRanked, BhV1PlayerTeams } from '@brawltome/bhapi'
 import {
   db,
   legend,
@@ -31,6 +31,25 @@ const RANKED_FIXTURE: BhV1PlayerStatsRanked = {
     { legend_id: LEGEND_ID, games: 80, wins: 40, rating: 1750, peak_rating: 1850, tier: 'Diamond' },
     { legend_id: 4, games: 20, wins: 10, rating: 1600, peak_rating: 1700, tier: 'Platinum' },
   ],
+}
+
+const LIFETIME_FIXTURE: BhV1PlayerStatsAll = {
+  brawlhalla_id: TEST_ID,
+  name: 'TestRankedPlayer',
+  games: 100,
+  wins: 50,
+  damage_bomb: 0,
+  damage_mine: 0,
+  damage_spikeball: 0,
+  damage_sidekick: 0,
+  hit_snowball: 0,
+  ko_bomb: 0,
+  ko_mine: 0,
+  ko_sidekick: 0,
+  ko_snowball: 0,
+  ko_spikeball: 0,
+  region_ranks: [],
+  legends: [],
 }
 
 const TEAMS_FIXTURE: BhV1PlayerTeams = {
@@ -229,7 +248,7 @@ describe('processRefreshRanked (v1)', () => {
     await seedPlayer({ rating: 999 })
 
     const stub = {
-      getPlayerStatsV1: async () => null,
+      getPlayerStatsV1: async (_id: number, mode: string) => (mode === 'all' ? LIFETIME_FIXTURE : null),
       getPlayerTeamsV1: async () => TEAMS_FIXTURE,
       getAllLegendsV1,
     }
@@ -249,7 +268,7 @@ describe('processRefreshRanked (v1)', () => {
     expect(teams[0]?.teamName).toBe('A + B')
   })
 
-  it('ranked + teams both null: clears 1v1 and teams, stamps rankedLastUpdated (fully unranked)', async () => {
+  it('ranked null plus explicit empty teams clears stale ranked data', async () => {
     await seedPlayer({ rating: 999 })
     await db.insert(playerRankedTeam).values({
       brawlhallaId: TEST_ID,
@@ -266,8 +285,8 @@ describe('processRefreshRanked (v1)', () => {
     })
 
     const stub = {
-      getPlayerStatsV1: async () => null,
-      getPlayerTeamsV1: async () => null,
+      getPlayerStatsV1: async (_id: number, mode: string) => (mode === 'all' ? LIFETIME_FIXTURE : null),
+      getPlayerTeamsV1: async () => ({ brawlhalla_id: TEST_ID, teams: { ranked_2v2: [] } }),
       getAllLegendsV1,
     }
     await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
@@ -371,10 +390,10 @@ describe('processRefreshRanked (v1)', () => {
     await db.delete(player).where(eq(player.brawlhallaId, SKIP_ID))
   })
 
-  it('teams null: clears stale team row (no current 2v2), still updates 1v1', async () => {
+  it('teams null preserves the last-known team while still updating 1v1', async () => {
     await seedPlayer()
 
-    // Pre-seed a stale team row that must be cleared when the API reports no current 2v2
+    // Pre-seed a team row that must survive an ambiguous 404.
     await db.insert(playerRankedTeam).values({
       brawlhallaId: TEST_ID,
       brawlhallaIdOne: TEST_ID,
@@ -400,10 +419,10 @@ describe('processRefreshRanked (v1)', () => {
     const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
     expect(row?.rating).toBe(1800)
 
-    // Stale team must be cleared (matches v0's clear-on-empty)
     const teams = await db.query.playerRankedTeam.findMany({
       where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
     })
-    expect(teams).toHaveLength(0)
+    expect(teams).toHaveLength(1)
+    expect(teams[0]?.teamName).toBe('Pre + Seeded')
   })
 })
