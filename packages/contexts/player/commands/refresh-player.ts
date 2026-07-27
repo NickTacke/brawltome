@@ -1,7 +1,7 @@
 import type { BhApiClient, BhV1PlayerStatsAll, BhV1PlayerStatsRanked } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
 import { aggregateWeapons, getLegendById, initGameData } from '@brawltome/shared'
-import { computeBestLegend, isValhallanGraced, shouldSnapshotRating } from '../player'
+import { computeBestLegend, hasStoredRankedRecord, isValhallanGraced, shouldSnapshotRating } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
 // v1 emits region "JPS"; the app's internal convention is "JPN"
@@ -17,8 +17,26 @@ export async function processRefreshRanked(
   brawlhallaId: number,
   caller: 'on-demand' | 'background' = 'background',
 ) {
-  const ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
-  if (!ranked) throw new Error(`Brawlhalla ranked stats unavailable for player ${brawlhallaId}`)
+  let ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
+  const repo = createPlayerRepo(db)
+
+  if (!ranked) {
+    const [state, rankedLegends] = await Promise.all([
+      repo.getExistingRankedState(brawlhallaId),
+      repo.getExistingRankedLegends(brawlhallaId),
+    ])
+    if (
+      !state ||
+      hasStoredRankedRecord({
+        ...state,
+        rankedLegendCount: rankedLegends.length,
+      })
+    ) {
+      throw new Error(`Brawlhalla ranked stats unavailable for player ${brawlhallaId}`)
+    }
+
+    ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
+  }
 
   const teamsResp = await bhapi.getPlayerTeamsV1(brawlhallaId, { caller })
 
@@ -28,68 +46,71 @@ export async function processRefreshRanked(
     await initGameData(db, bhapi)
   }
 
-  const repo = createPlayerRepo(db)
   await repo.transaction(async (tx) => {
     const txRepo = createPlayerRepo(tx as unknown as Database)
 
-    const existing = await txRepo.getExistingPlayerMeta(brawlhallaId)
+    if (ranked) {
+      const existing = await txRepo.getExistingPlayerMeta(brawlhallaId)
 
-    if (existing && ranked.name && existing.name !== ranked.name) {
-      await txRepo.upsertAlias(brawlhallaId, existing.name)
-    }
+      if (existing && ranked.name && existing.name !== ranked.name) {
+        await txRepo.upsertAlias(brawlhallaId, existing.name)
+      }
 
-    const bestLegend = computeBestLegend(ranked.legends)
-    const graced = isValhallanGraced(existing?.tier ?? null, existing?.valhallanConfirmedAt ?? null)
-    const tier = graced ? existing?.tier : ranked.tier
+      const bestLegend = computeBestLegend(ranked.legends)
+      const graced = isValhallanGraced(existing?.tier ?? null, existing?.valhallanConfirmedAt ?? null)
+      const tier = graced ? existing?.tier : ranked.tier
 
-    await txRepo.updateRanked(brawlhallaId, {
-      name: ranked.name || undefined,
-      region: normRegion(ranked.region),
-      rating: ranked.rating,
-      peakRating: ranked.peak_rating,
-      tier: tier ?? null,
-      rankedGames: ranked.games,
-      rankedWins: ranked.wins,
-      bestLegend: bestLegend.id,
-      bestLegendGames: bestLegend.games,
-      bestLegendWins: bestLegend.wins,
-    })
-
-    const existingRankedKeys = new Map(
-      (await txRepo.getExistingRankedLegends(brawlhallaId)).map((r) => [r.legendId, r.legendNameKey]),
-    )
-
-    await txRepo.replaceRankedLegends(
-      brawlhallaId,
-      ranked.legends
-        .map((l) => ({
-          legend_id: l.legend_id,
-          legend_name_key: getLegendById(l.legend_id)?.legendNameKey ?? existingRankedKeys.get(l.legend_id) ?? '',
-          rating: l.rating,
-          peak_rating: l.peak_rating,
-          tier: l.tier,
-          wins: l.wins,
-          games: l.games,
-        }))
-        .filter((entry) => entry.legend_name_key !== ''),
-    )
-
-    const lastSnapshot = await txRepo.getLastRatingSnapshot(brawlhallaId)
-    if (
-      shouldSnapshotRating(
-        ranked.rating,
-        lastSnapshot ? { rating: lastSnapshot.rating, games: lastSnapshot.games } : null,
-        ranked.games,
-      )
-    ) {
-      await txRepo.insertRatingSnapshot({
-        brawlhallaId,
+      await txRepo.updateRanked(brawlhallaId, {
+        name: ranked.name || undefined,
+        region: normRegion(ranked.region),
         rating: ranked.rating,
         peakRating: ranked.peak_rating,
-        tier: ranked.tier,
-        games: ranked.games,
-        wins: ranked.wins,
+        tier: tier ?? null,
+        rankedGames: ranked.games,
+        rankedWins: ranked.wins,
+        bestLegend: bestLegend.id,
+        bestLegendGames: bestLegend.games,
+        bestLegendWins: bestLegend.wins,
       })
+
+      const existingRankedKeys = new Map(
+        (await txRepo.getExistingRankedLegends(brawlhallaId)).map((r) => [r.legendId, r.legendNameKey]),
+      )
+
+      await txRepo.replaceRankedLegends(
+        brawlhallaId,
+        ranked.legends
+          .map((l) => ({
+            legend_id: l.legend_id,
+            legend_name_key: getLegendById(l.legend_id)?.legendNameKey ?? existingRankedKeys.get(l.legend_id) ?? '',
+            rating: l.rating,
+            peak_rating: l.peak_rating,
+            tier: l.tier,
+            wins: l.wins,
+            games: l.games,
+          }))
+          .filter((entry) => entry.legend_name_key !== ''),
+      )
+
+      const lastSnapshot = await txRepo.getLastRatingSnapshot(brawlhallaId)
+      if (
+        shouldSnapshotRating(
+          ranked.rating,
+          lastSnapshot ? { rating: lastSnapshot.rating, games: lastSnapshot.games } : null,
+          ranked.games,
+        )
+      ) {
+        await txRepo.insertRatingSnapshot({
+          brawlhallaId,
+          rating: ranked.rating,
+          peakRating: ranked.peak_rating,
+          tier: ranked.tier,
+          games: ranked.games,
+          wins: ranked.wins,
+        })
+      }
+    } else {
+      await txRepo.markRankedChecked(brawlhallaId)
     }
 
     if (teamsResp) {

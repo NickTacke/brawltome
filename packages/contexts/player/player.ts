@@ -39,6 +39,15 @@ export function isStale(lastUpdated: Date | null, ttlMs: number): boolean {
   return !lastUpdated || Date.now() - lastUpdated.getTime() > ttlMs
 }
 
+export function hasStoredRankedRecord(state: {
+  rating: number
+  rankedGames: number
+  tier: string | null
+  rankedLegendCount: number
+}): boolean {
+  return state.rating > 0 || state.rankedGames > 0 || state.tier !== null || state.rankedLegendCount > 0
+}
+
 export function enrichStatsLegend(
   legend: InferSelectModel<typeof playerStatsLegend>,
   getLegendFn: (id: number) => LegendData | undefined,
