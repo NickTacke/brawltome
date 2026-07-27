@@ -10,14 +10,11 @@ describe('player refresh availability', () => {
     )
   })
 
-  it('preserves ranked data when player existence cannot be corroborated', async () => {
-    const bhapi = {
-      getPlayerStatsV1: async () => null,
-      getPlayerTeamsV1: async () => null,
-    }
+  it('rejects ambiguous ranked absence before persistence', async () => {
+    const bhapi = { getPlayerStatsV1: async () => null }
 
     expect(processRefreshRanked({ db: {} as never, bhapi: bhapi as never }, 123)).rejects.toThrow(
-      'could not be corroborated',
+      'ranked stats unavailable',
     )
   })
 })

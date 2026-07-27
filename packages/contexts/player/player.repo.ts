@@ -132,23 +132,6 @@ export function createPlayerRepo(db: Database) {
         .where(eq(player.brawlhallaId, brawlhallaId))
     },
 
-    // Called only after lifetime stats corroborate that ranked 404 means unranked this season.
-    // Keep bestLegend as the profile avatar identity and stamp freshness to stop re-enqueueing.
-    clearRanked(brawlhallaId: number) {
-      return db
-        .update(player)
-        .set({
-          rating: 0,
-          peakRating: 0,
-          tier: null,
-          rankedGames: 0,
-          rankedWins: 0,
-          rankedLastUpdated: new Date(),
-          lastUpdated: new Date(),
-        })
-        .where(eq(player.brawlhallaId, brawlhallaId))
-    },
-
     upsertAlias(brawlhallaId: number, oldName: string) {
       return db
         .insert(playerAlias)
