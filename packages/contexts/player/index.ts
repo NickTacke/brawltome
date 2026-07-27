@@ -8,8 +8,6 @@ export { processRefreshRanked, processRefreshStats } from './commands/refresh-pl
 export { discoverPlayer } from './commands/discover-player'
 export { createPlayerRepo, type PlayerRepo } from './player.repo'
 export {
-  DEDUP_TTL_RANKED_SEC,
-  DEDUP_TTL_STATS_SEC,
   DISCOVERY_MIN_TOKENS,
   VALHALLAN_GRACE_MS,
   isValhallanGraced,

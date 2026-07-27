@@ -196,6 +196,23 @@ describe('processRefreshRanked (v1)', () => {
     expect(snapshots[0]?.rating).toBe(1800)
   })
 
+  it('persists valid ranked data when the optional teams request fails', async () => {
+    await seedPlayer()
+
+    const stub = {
+      getPlayerStatsV1: async () => RANKED_FIXTURE,
+      getPlayerTeamsV1: async () => {
+        throw new Error('teams unavailable')
+      },
+      getAllLegendsV1,
+    }
+    await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
+
+    const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
+    expect(row?.rating).toBe(1800)
+    expect(row?.rankedLastUpdated).not.toBeNull()
+  })
+
   it('region normalization: JPS -> JPN for 1v1 and team', async () => {
     await seedPlayer()
 
@@ -225,37 +242,13 @@ describe('processRefreshRanked (v1)', () => {
     expect(teams[0]?.region).toBe('JPN')
   })
 
-  it('ranked_1v1 null: clears stale 1v1 (unranked) + stamps timestamp, still writes team', async () => {
-    await seedPlayer({ rating: 999 })
-
-    const stub = {
-      getPlayerStatsV1: async () => null,
-      getPlayerTeamsV1: async () => TEAMS_FIXTURE,
-      getAllLegendsV1,
-    }
-    await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
-
-    const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
-    // no ranked 1v1 this season -> rank cleared, timestamp advanced
-    expect(row?.rating).toBe(0)
-    expect(row?.tier).toBeNull()
-    expect(row?.rankedLastUpdated).not.toBeNull()
-    expect(Date.now() - new Date(row?.rankedLastUpdated ?? 0).getTime()).toBeLessThan(60_000)
-
-    const teams = await db.query.playerRankedTeam.findMany({
-      where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
-    })
-    expect(teams).toHaveLength(1)
-    expect(teams[0]?.teamName).toBe('A + B')
-  })
-
-  it('ranked + teams both null: clears 1v1 and teams, stamps rankedLastUpdated (fully unranked)', async () => {
+  it('ranked null rejects and preserves last-known ranked data', async () => {
     await seedPlayer({ rating: 999 })
     await db.insert(playerRankedTeam).values({
       brawlhallaId: TEST_ID,
       brawlhallaIdOne: TEST_ID,
       brawlhallaIdTwo: 77777,
-      teamName: 'Stale + Team',
+      teamName: 'Known + Team',
       rating: 1500,
       peakRating: 1600,
       tier: 'Silver',
@@ -267,11 +260,60 @@ describe('processRefreshRanked (v1)', () => {
 
     const stub = {
       getPlayerStatsV1: async () => null,
-      getPlayerTeamsV1: async () => null,
-      getAllLegendsV1,
+      getPlayerTeamsV1: async () => {
+        throw new Error('teams must not be fetched after ambiguous ranked absence')
+      },
+    }
+
+    let caught: unknown
+    try {
+      await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toContain('ranked stats unavailable')
+
+    const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
+    expect(row?.rating).toBe(999)
+    expect(row?.rankedLastUpdated).toBeNull()
+
+    const teams = await db.query.playerRankedTeam.findMany({
+      where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
+    })
+    expect(teams).toHaveLength(1)
+    expect(teams[0]?.teamName).toBe('Known + Team')
+  })
+
+  it('ranked null marks an empty ranked record fresh when the optional teams request fails', async () => {
+    await seedPlayer()
+    await db.insert(playerRankedTeam).values({
+      brawlhallaId: TEST_ID,
+      brawlhallaIdOne: TEST_ID,
+      brawlhallaIdTwo: 77777,
+      teamName: 'Old + Team',
+      rating: 1500,
+      peakRating: 1600,
+      tier: 'Silver',
+      wins: 5,
+      games: 10,
+      region: 'EU',
+      valhallanConfirmedAt: null,
+    })
+
+    let rankedRequests = 0
+    const stub = {
+      getPlayerStatsV1: async () => {
+        rankedRequests++
+        return null
+      },
+      getPlayerTeamsV1: async () => {
+        throw new Error('teams unavailable')
+      },
     }
     await processRefreshRanked({ db, bhapi: stub as never }, TEST_ID)
 
+    expect(rankedRequests).toBe(2)
     const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
     expect(row?.rating).toBe(0)
     expect(row?.rankedLastUpdated).not.toBeNull()
@@ -279,7 +321,8 @@ describe('processRefreshRanked (v1)', () => {
     const teams = await db.query.playerRankedTeam.findMany({
       where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
     })
-    expect(teams).toHaveLength(0)
+    expect(teams).toHaveLength(1)
+    expect(teams[0]?.teamName).toBe('Old + Team')
   })
 
   it('preserves existing legendNameKey when legend_id is unresolvable after self-heal', async () => {
@@ -371,10 +414,10 @@ describe('processRefreshRanked (v1)', () => {
     await db.delete(player).where(eq(player.brawlhallaId, SKIP_ID))
   })
 
-  it('teams null: clears stale team row (no current 2v2), still updates 1v1', async () => {
+  it('teams null preserves the last-known team while still updating 1v1', async () => {
     await seedPlayer()
 
-    // Pre-seed a stale team row that must be cleared when the API reports no current 2v2
+    // Pre-seed a team row that must survive an ambiguous 404.
     await db.insert(playerRankedTeam).values({
       brawlhallaId: TEST_ID,
       brawlhallaIdOne: TEST_ID,
@@ -400,10 +443,10 @@ describe('processRefreshRanked (v1)', () => {
     const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
     expect(row?.rating).toBe(1800)
 
-    // Stale team must be cleared (matches v0's clear-on-empty)
     const teams = await db.query.playerRankedTeam.findMany({
       where: eq(playerRankedTeam.brawlhallaId, TEST_ID),
     })
-    expect(teams).toHaveLength(0)
+    expect(teams).toHaveLength(1)
+    expect(teams[0]?.teamName).toBe('Pre + Seeded')
   })
 })

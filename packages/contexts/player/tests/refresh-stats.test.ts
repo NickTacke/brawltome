@@ -232,15 +232,18 @@ describe('processRefreshStats - key preservation', () => {
     await db.delete(player).where(eq(player.brawlhallaId, PRES_ID))
   })
 
-  it('preserves existing legendNameKey when legend_id is unresolvable after self-heal', async () => {
-    await db.insert(player).values({ brawlhallaId: PRES_ID, name: 'presStatsPlayer' }).onConflictDoNothing()
+  it('preserves existing legend metadata and progress when sparse fields are omitted', async () => {
+    await db
+      .insert(player)
+      .values({ brawlhallaId: PRES_ID, name: 'presStatsPlayer', xp: 9000, level: 12, xpPercentage: 0.4 })
+      .onConflictDoNothing()
     await db.insert(playerStatsLegend).values({
       brawlhallaId: PRES_ID,
       legendId: UNRESOLVABLE_LEGEND_ID,
       legendNameKey: 'preserved_key',
-      xp: 0,
-      level: 0,
-      xpPercentage: 0,
+      xp: 4321,
+      level: 9,
+      xpPercentage: 0.25,
       games: 1,
       wins: 0,
       matchTime: 0,
@@ -269,14 +272,14 @@ describe('processRefreshStats - key preservation', () => {
         ({
           ...STATS_FIXTURE,
           brawlhalla_id: PRES_ID,
+          xp: undefined,
+          level: undefined,
+          xp_percentage: undefined,
           legends: [
             {
               legend_id: UNRESOLVABLE_LEGEND_ID,
               games: 5,
               wins: 2,
-              xp: 0,
-              level: 0,
-              xp_percentage: 0,
               damage_dealt: 0,
               damage_taken: 0,
               kos: 0,
@@ -312,6 +315,14 @@ describe('processRefreshStats - key preservation', () => {
     const row = rows.find((r) => r.legendId === UNRESOLVABLE_LEGEND_ID)
     expect(row).toBeDefined()
     expect(row?.legendNameKey).toBe('preserved_key')
+    expect(row?.xp).toBe(4321)
+    expect(row?.level).toBe(9)
+    expect(row?.xpPercentage).toBe(0.25)
+
+    const preservedPlayer = await db.query.player.findFirst({ where: eq(player.brawlhallaId, PRES_ID) })
+    expect(preservedPlayer?.xp).toBe(9000)
+    expect(preservedPlayer?.level).toBe(12)
+    expect(preservedPlayer?.xpPercentage).toBe(0.4)
   })
 })
 

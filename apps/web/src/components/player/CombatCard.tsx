@@ -16,7 +16,8 @@ export function CombatCard({ player }: CombatCardProps) {
   const totalGames = player.totalGames ?? 0
   const totalWins = player.totalWins ?? 0
   const overallWinrate = totalGames > 0 ? (totalWins / totalGames) * 100 : 0
-  const level = player.level ?? 0
+  const level = player.level
+  const hasXp = player.xp !== null && player.xp !== undefined
 
   return (
     <Card className="bg-linear-to-br from-card to-background border-border">
@@ -48,7 +49,9 @@ export function CombatCard({ player }: CombatCardProps) {
               <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
                 Account Level
               </div>
-              {level >= 100 ? (
+              {level === null || level === undefined ? (
+                <div className="text-lg font-bold text-muted-foreground mt-1">Unavailable</div>
+              ) : level >= 100 && hasXp ? (
                 (() => {
                   const totalXp = parseNum(player.xp)
                   const vLevel = getVirtualLevel(totalXp)
@@ -81,7 +84,9 @@ export function CombatCard({ player }: CombatCardProps) {
                 <>
                   <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{level}</div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {player.xpPercentage ? Math.floor(player.xpPercentage * 100) : 0}% to next level
+                    {player.xpPercentage === null || player.xpPercentage === undefined
+                      ? 'Progress unavailable'
+                      : `${Math.floor(player.xpPercentage * 100)}% to next level`}
                   </div>
                 </>
               )}
@@ -109,7 +114,8 @@ export function CombatCard({ player }: CombatCardProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-lg font-bold text-foreground">
-                {formatNum(player.xp)} <span className="text-xs text-muted-foreground font-normal">XP</span>
+                {hasXp ? formatNum(player.xp) : 'Unavailable'}{' '}
+                <span className="text-xs text-muted-foreground font-normal">XP</span>
               </div>
             </div>
           </div>
