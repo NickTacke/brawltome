@@ -1,6 +1,11 @@
 import postgres, { type Sql } from 'postgres'
 import type { Account, AccountsStore } from './accounts'
 import {
+  type V2AuthCutoverFinalization,
+  finalizeV2AuthCutover,
+  v2AuthCutoverIsFinalized,
+} from './finalize-v2-auth-cutover'
+import {
   ensureV2UserIdentity,
   extendV2Session,
   importValidV2Session,
@@ -44,11 +49,13 @@ WHERE sessions.id = $1`
 
 export function createPostgresAccountsStore(connectionString: string): {
   store: AccountsStore
+  finalizeV2AuthCutover: () => Promise<V2AuthCutoverFinalization>
   close: () => Promise<void>
 } {
   const client = postgres(connectionString)
   return {
     store: postgresAccountsStore(client),
+    finalizeV2AuthCutover: () => finalizeV2AuthCutover(client),
     close: () => client.end(),
   }
 }
@@ -137,15 +144,16 @@ function postgresAccountsStore(client: Sql): AccountsStore {
       return client.begin(async (transaction) => {
         const rows = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
         const current = rows[0]
+        const cutoverFinalized = await v2AuthCutoverIsFinalized(transaction)
         if (current) {
-          if (current.imported_from_v2 && !(await validV2SessionExists(transaction, id))) {
+          if (current.imported_from_v2 && !cutoverFinalized && !(await validV2SessionExists(transaction, id))) {
             await transaction.unsafe('DELETE FROM accounts.sessions WHERE id = $1', [id])
             return null
           }
           return mapSessionAccount(current)
         }
 
-        if (!(await importValidV2Session(transaction, id))) return null
+        if (cutoverFinalized || !(await importValidV2Session(transaction, id))) return null
 
         const importedRows = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
         return importedRows[0] ? mapSessionAccount(importedRows[0]) : null

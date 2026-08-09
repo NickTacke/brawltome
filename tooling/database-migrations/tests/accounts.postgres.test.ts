@@ -89,6 +89,9 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         }
 
         expect(await runtime.accounts.authenticate(conflictingRawToken)).toEqual({ status: 'anonymous' })
+        await expect(runtime.finalizeV2AuthCutover({ legacyWritersQuiesced: true })).rejects.toThrow(
+          'belongs to conflicting Accounts users',
+        )
         expect(await runtime.accounts.authenticate(results[0].sessionToken)).toMatchObject({
           status: 'signedIn',
           account: { id: accountId },
@@ -100,31 +103,64 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         await client`INSERT INTO public.player_link (user_id, steam_id) VALUES (${accountId}, 'steam-fresh')`
-        const [{ user_count, identity_count, session_count, legacy_user_count, player_link_count }] = await client<
-          {
-            user_count: number
-            identity_count: number
-            session_count: number
-            legacy_user_count: number
-            player_link_count: number
-          }[]
-        >`
-          SELECT
-            (SELECT count(*)::int FROM accounts.users) AS user_count,
-            (SELECT count(*)::int FROM accounts.oauth_identities) AS identity_count,
-            (SELECT count(*)::int FROM accounts.sessions) AS session_count,
-            (SELECT count(*)::int FROM public."user" WHERE id = ${accountId}) AS legacy_user_count,
-            (SELECT count(*)::int FROM public.player_link WHERE user_id = ${accountId}) AS player_link_count
-        `
-        expect({ user_count, identity_count, session_count, legacy_user_count, player_link_count }).toEqual({
+        const [{ user_count, identity_count, session_count, legacy_user_count, player_link_count, cutover_count }] =
+          await client<
+            {
+              user_count: number
+              identity_count: number
+              session_count: number
+              legacy_user_count: number
+              player_link_count: number
+              cutover_count: number
+            }[]
+          >`
+            SELECT
+              (SELECT count(*)::int FROM accounts.users) AS user_count,
+              (SELECT count(*)::int FROM accounts.oauth_identities) AS identity_count,
+              (SELECT count(*)::int FROM accounts.sessions) AS session_count,
+              (SELECT count(*)::int FROM public."user" WHERE id = ${accountId}) AS legacy_user_count,
+              (SELECT count(*)::int FROM public.player_link WHERE user_id = ${accountId}) AS player_link_count,
+              (SELECT count(*)::int FROM accounts.v2_auth_cutover) AS cutover_count
+          `
+        expect({
+          user_count,
+          identity_count,
+          session_count,
+          legacy_user_count,
+          player_link_count,
+          cutover_count,
+        }).toEqual({
           user_count: 1,
           identity_count: 1,
           session_count: 8,
           legacy_user_count: 1,
           player_link_count: 1,
+          cutover_count: 0,
         })
+        await client`DELETE FROM public.session WHERE user_id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
+        await client`DELETE FROM public.oauth_account WHERE user_id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
+        await client`DELETE FROM public."user" WHERE id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
       } finally {
         await client.end()
+      }
+
+      const concurrentRuntime = createPostgresAccounts(databaseUrl.toString())
+      try {
+        const [signIn, finalization] = await Promise.all([
+          concurrentRuntime.accounts.signInWithDiscord({
+            providerAccountId: 'discord-concurrent',
+            displayName: 'Concurrent Ada',
+            avatarHash: null,
+          }),
+          concurrentRuntime.finalizeV2AuthCutover({ legacyWritersQuiesced: true }),
+        ])
+        expect(finalization.finalizedSessions).toBeGreaterThanOrEqual(0)
+        expect(await concurrentRuntime.accounts.authenticate(signIn.sessionToken)).toMatchObject({
+          status: 'signedIn',
+          account: { id: signIn.account.id, displayName: 'Concurrent Ada' },
+        })
+      } finally {
+        await concurrentRuntime.close()
       }
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
@@ -156,6 +192,9 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       const expiredId = createHash('sha256').update('expired-v2-token').digest('hex')
       const lateRawToken = 'post-migration-v2-token'
       const lateSessionId = createHash('sha256').update(lateRawToken).digest('hex')
+      const unreconciledAccountId = '7802b6d1-c270-4672-8764-9ba242f94955'
+      const unreconciledRawToken = 'unreconciled-v2-token'
+      const unreconciledSessionId = createHash('sha256').update(unreconciledRawToken).digest('hex')
       try {
         await legacy.unsafe(`
           SET TIME ZONE 'America/Los_Angeles';
@@ -211,7 +250,9 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await legacy.end()
       }
 
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
+        globalMigrationInventory.length,
+      )
       expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(0)
 
       const lateLegacy = postgres(databaseUrl.toString(), { max: 1 })
@@ -244,6 +285,17 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await lateLegacy.unsafe(
           `INSERT INTO public.session VALUES ($1, $2, '2099-10-11 12:13:14.789', '2026-08-10 03:04:11.789')`,
           [lateSessionId, accountId],
+        )
+        await lateLegacy.unsafe(`INSERT INTO public."user" VALUES ($1, '2026-08-10 04:00:00', '2026-08-10 04:00:01')`, [
+          unreconciledAccountId,
+        ])
+        await lateLegacy.unsafe(
+          `INSERT INTO public.oauth_account VALUES ('discord', 'discord-unreconciled', $1, 'Unreconciled Ada', NULL, NULL, '2026-08-10 04:00:02', '2026-08-10 04:00:03')`,
+          [unreconciledAccountId],
+        )
+        await lateLegacy.unsafe(
+          `INSERT INTO public.session VALUES ($1, $2, '2099-10-11 13:00:00', '2026-08-10 04:00:04')`,
+          [unreconciledSessionId, unreconciledAccountId],
         )
       } finally {
         await lateLegacy.end()
@@ -392,10 +444,85 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         const legacy = postgres(databaseUrl.toString(), { max: 1 })
         try {
           await legacy`DELETE FROM public.session WHERE id = ${futureSessionId}`
+          const [{ unreconciled_count }] = await legacy<{ unreconciled_count: number }[]>`
+            SELECT count(*)::int AS unreconciled_count
+            FROM accounts.sessions
+            WHERE id = ${unreconciledSessionId}
+          `
+          expect(unreconciled_count).toBe(0)
+          await legacy`
+            UPDATE accounts.oauth_identities
+            SET display_name = 'Canonical Ada', updated_at = '2100-01-01T00:00:00Z'
+            WHERE provider = 'discord' AND provider_account_id = 'discord-42'
+          `
         } finally {
           await legacy.end()
         }
+
+        const rejectedFinalization = revocationRuntime.finalizeV2AuthCutover({
+          legacyWritersQuiesced: false,
+        } as never)
+        await expect(rejectedFinalization).rejects.toThrow('Legacy auth writers must be quiescent')
+        expect(await revocationRuntime.accounts.authenticate(lateRawToken)).toMatchObject({ status: 'signedIn' })
+
+        const finalization = await revocationRuntime.finalizeV2AuthCutover({ legacyWritersQuiesced: true })
+        expect(finalization).toEqual({ finalizedSessions: 2 })
         expect(await revocationRuntime.accounts.authenticate(futureRawToken)).toEqual({ status: 'anonymous' })
+
+        const retirement = postgres(databaseUrl.toString(), { max: 1 })
+        try {
+          const [beforeRetirement] = await retirement<
+            {
+              imported_from_v2: boolean
+              legacy_session_count: number
+              unreconciled_session_count: number
+              revoked_session_count: number
+              display_name: string
+            }[]
+          >`
+            SELECT imported_from_v2,
+                   (SELECT count(*)::int FROM public.session WHERE id = ${lateSessionId}) AS legacy_session_count,
+                   (SELECT count(*)::int FROM accounts.sessions WHERE id = ${unreconciledSessionId}) AS unreconciled_session_count,
+                   (SELECT count(*)::int FROM accounts.sessions WHERE id = ${futureSessionId}) AS revoked_session_count,
+                   (SELECT display_name FROM accounts.oauth_identities WHERE provider = 'discord' AND provider_account_id = 'discord-42') AS display_name
+            FROM accounts.sessions
+            WHERE id = ${lateSessionId}
+          `
+          expect(beforeRetirement).toEqual({
+            imported_from_v2: false,
+            legacy_session_count: 1,
+            unreconciled_session_count: 1,
+            revoked_session_count: 0,
+            display_name: 'Canonical Ada',
+          })
+          await retirement.unsafe('DROP TABLE public.session')
+        } finally {
+          await retirement.end()
+        }
+
+        expect(await revocationRuntime.accounts.authenticate(lateRawToken)).toMatchObject({
+          status: 'signedIn',
+          account: { displayName: 'Canonical Ada' },
+        })
+        expect(await revocationRuntime.accounts.authenticate(unreconciledRawToken)).toMatchObject({
+          status: 'signedIn',
+          account: { id: unreconciledAccountId, displayName: 'Unreconciled Ada' },
+        })
+        expect(await revocationRuntime.finalizeV2AuthCutover({ legacyWritersQuiesced: true })).toEqual({
+          finalizedSessions: 0,
+        })
+
+        const canonical = postgres(databaseUrl.toString(), { max: 1 })
+        try {
+          const [{ session_count }] = await canonical<{ session_count: number }[]>`
+            SELECT count(*)::int AS session_count
+            FROM accounts.sessions
+            WHERE id = ${lateSessionId}
+          `
+          expect(session_count).toBe(1)
+        } finally {
+          await canonical.end()
+        }
       } finally {
         await revocationRuntime.close()
       }

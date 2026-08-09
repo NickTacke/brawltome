@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "migrate": "bun run src/cli.ts",
+    "finalize:accounts-v2-auth": "bun run src/finalize-accounts-v2-auth-cutover.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
