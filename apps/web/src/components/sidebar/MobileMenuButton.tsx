@@ -5,12 +5,8 @@ import { Menu } from 'lucide-react'
 
 import { useSidebar } from './SidebarProvider'
 
-/**
- * Inline hamburger button for the top of the home page on mobile. Scrolls with
- * content (not fixed). Matches the NavBar hamburger on sub-pages for visual
- * consistency across the app.
- */
-export function MobileFloatingMenuButton() {
+/** Shell-owned mobile menu trigger. It stays in content flow rather than floating. */
+export function MobileMenuButton() {
   const { open, isMobileOpen } = useSidebar()
 
   return (
@@ -20,7 +16,7 @@ export function MobileFloatingMenuButton() {
       onClick={open}
       aria-label="Open menu"
       aria-expanded={isMobileOpen}
-      aria-controls="mobile-menu"
+      aria-controls={isMobileOpen ? 'mobile-menu' : undefined}
       className="md:hidden"
     >
       <Menu className="h-5 w-5" />

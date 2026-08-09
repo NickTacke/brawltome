@@ -257,6 +257,13 @@
         "typescript": "^5.7.0",
       },
     },
+    "tooling/launch-parity": {
+      "name": "@brawltome/launch-parity",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
@@ -340,6 +347,8 @@
     "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
 
     "@brawltome/identity": ["@brawltome/identity@workspace:packages/contexts/identity"],
+
+    "@brawltome/launch-parity": ["@brawltome/launch-parity@workspace:tooling/launch-parity"],
 
     "@brawltome/matchmaking": ["@brawltome/matchmaking@workspace:packages/contexts/matchmaking"],
 

@@ -47,6 +47,17 @@ export function AppSidebar() {
         className="bg-sidebar border-sidebar-border text-sidebar-foreground flex h-full flex-col overflow-hidden border-r"
         style={{ width: SIDEBAR_WIDTH }}
       >
+        <div className="px-2 pt-2">
+          <WithTooltip label="BrawlTome">
+            <Link
+              href="/"
+              aria-label="BrawlTome home"
+              className="flex h-10 w-10 items-center justify-center rounded-lg transition-opacity hover:opacity-80"
+            >
+              <img src="/images/logo.png" alt="" className="h-8 w-8" />
+            </Link>
+          </WithTooltip>
+        </div>
         <nav className="flex-1 overflow-y-auto px-2 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navItems.map((item) => {
             const isActive = item.href === pathname
