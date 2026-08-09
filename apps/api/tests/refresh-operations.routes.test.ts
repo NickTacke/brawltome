@@ -42,6 +42,7 @@ describe('Refresh Operations internal producer', () => {
       {
         dedupeKey: 'proof:one',
         operationKey: 'effect:one',
+        workClass: 'interactive',
         payload: { value: 'once' },
         provenance: { source: 'internal-api', requestedBy: 'integration' },
         maxAttempts: undefined,

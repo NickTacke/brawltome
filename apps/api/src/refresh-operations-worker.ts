@@ -1,9 +1,10 @@
-import type { FencedResult, OperationLease } from '@brawltome/refresh-operations'
+import type { AdmissionConfig, FencedResult, OperationLease } from '@brawltome/refresh-operations'
 import type { PostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 
 type ProofWorkerOptions = {
   leaseMs: number
   retryDelayMs: number
+  admission: AdmissionConfig
   executeEffect?: (lease: OperationLease) => Promise<FencedResult>
 }
 
@@ -12,7 +13,7 @@ export async function runOneProofOperation(
   workerId: string,
   options: ProofWorkerOptions,
 ): Promise<boolean> {
-  const lease = await operations.claim(workerId, options.leaseMs)
+  const lease = await operations.claim(workerId, options.leaseMs, options.admission)
   if (!lease) return false
 
   try {
