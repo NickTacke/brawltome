@@ -12,6 +12,7 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/contexts/player/package.json packages/contexts/player/
 COPY packages/contexts/clan/package.json packages/contexts/clan/
 COPY packages/contexts/ranking/package.json packages/contexts/ranking/
+COPY packages/contexts/refresh-operations/package.json packages/contexts/refresh-operations/
 COPY packages/contexts/identity/package.json packages/contexts/identity/
 COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
 COPY packages/replay-format/package.json packages/replay-format/
@@ -39,6 +40,11 @@ FROM base AS worker
 COPY --from=build /app .
 USER bun
 CMD ["bun", "run", "apps/api/src/worker.ts"]
+
+FROM base AS operations-worker
+COPY --from=build /app .
+USER bun
+CMD ["bun", "run", "apps/api/src/operations-worker.ts"]
 
 FROM base AS discord-bot
 COPY --from=build /app .

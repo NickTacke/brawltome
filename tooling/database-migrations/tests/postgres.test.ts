@@ -22,7 +22,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         migratePostgres(databaseUrl.toString(), globalMigrationInventory),
         migratePostgres(databaseUrl.toString(), globalMigrationInventory),
       ])
-      expect(applications.sort()).toEqual([0, 1])
+      expect(applications.sort()).toEqual([0, 2])
       expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(0)
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
@@ -46,17 +46,18 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         const [schema] = await client<{ exists: boolean }[]>`
           SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'players') AS exists
         `
+        const [refreshOperationsSchema] = await client<{ exists: boolean }[]>`
+          SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'refresh_operations') AS exists
+        `
         const [rollbackProbe] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.rollback_probe')::text AS table_name
         `
 
-        expect(history.map(({ identity, checksum }) => ({ identity, checksum: checksum.trim() }))).toEqual([
-          {
-            identity: 'players/0001',
-            checksum: globalMigrationInventory[0].checksum,
-          },
-        ])
+        expect(history.map(({ identity, checksum }) => ({ identity, checksum: checksum.trim() }))).toEqual(
+          globalMigrationInventory.map(({ identity, checksum }) => ({ identity, checksum })),
+        )
         expect(schema.exists).toBe(true)
+        expect(refreshOperationsSchema.exists).toBe(true)
         expect(rollbackProbe.table_name).toBeNull()
       } finally {
         await client.end()

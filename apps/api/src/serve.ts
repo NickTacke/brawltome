@@ -10,6 +10,7 @@ import {
 import { createMatchRepo } from '@brawltome/matchmaking'
 import { createPlayerRepo } from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
+import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import {
   TIERED_TTL,
   checkRateLimit,
@@ -31,10 +32,13 @@ import { readMatchmakingConfig } from './matchmaking-config'
 import { appRouter } from './router'
 import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createMatchmakingRoutes } from './routes/matchmaking.routes'
+import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
 }
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) throw new Error('DATABASE_URL is required')
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
@@ -63,6 +67,7 @@ const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'backgroun
 
 const playerRepo = createPlayerRepo(db)
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(db)
+const refreshOperations = createPostgresRefreshOperations(databaseUrl)
 const clanRepo = createClanRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
@@ -135,6 +140,7 @@ app.use(
 
 app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, playerLinkRepo, steamLinkQueue, config: authConfig }))
 app.route('/internal/contracts', createContractProofRoutes())
+app.route('/internal/operations', createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET))
 
 app.route(
   '/api/matches',

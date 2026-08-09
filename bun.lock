@@ -20,6 +20,7 @@
         "@brawltome/matchmaking": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",
+        "@brawltome/refresh-operations": "workspace:*",
         "@brawltome/replay-format": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
@@ -27,6 +28,7 @@
         "drizzle-orm": "^0.39.0",
         "hono": "^4.7.0",
         "ioredis": "^5.8.0",
+        "postgres": "^3.4.0",
         "superjson": "^2.2.6",
         "zod": "^3.24.0",
       },
@@ -168,6 +170,15 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/contexts/refresh-operations": {
+      "name": "@brawltome/refresh-operations",
+      "dependencies": {
+        "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/contracts": {
       "name": "@brawltome/contracts",
       "dependencies": {
@@ -250,6 +261,7 @@
       "name": "@brawltome/database-migrations",
       "dependencies": {
         "@brawltome/player": "workspace:*",
+        "@brawltome/refresh-operations": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -355,6 +367,8 @@
     "@brawltome/player": ["@brawltome/player@workspace:packages/contexts/player"],
 
     "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/contexts/ranking"],
+
+    "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/contexts/refresh-operations"],
 
     "@brawltome/replay-format": ["@brawltome/replay-format@workspace:packages/replay-format"],
 
