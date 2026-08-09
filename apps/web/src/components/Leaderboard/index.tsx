@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@brawltome/ui'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SoloLeaderboardRow, TeamLeaderboardRow } from './LeaderboardRow'
 import { LeaderboardSkeletonRows } from './LeaderboardSkeleton'
 import { PaginationControls } from './PaginationControls'
@@ -30,8 +30,10 @@ import {
   REGIONS,
   type RegionId,
   buildLeaderboardQueryString,
+  displayedSoloStanding,
   isTeamEntry,
   parseLeaderboardSearchParams,
+  snapshotNotice,
 } from './utils'
 
 export function Leaderboard() {
@@ -50,6 +52,9 @@ export function Leaderboard() {
   const [error, setError] = useState<string | null>(null)
   const [fetchedKey, setFetchedKey] = useState('')
   const [knownLastPage, setKnownLastPage] = useState<number | null>(null)
+  const [snapshotStatus, setSnapshotStatus] = useState<'fresh' | 'stale' | 'unavailable' | null>(null)
+  const [observedAt, setObservedAt] = useState<string | null>(null)
+  const snapshotRef = useRef<{ scopeKey: string; snapshotId: string } | null>(null)
 
   const updateFilters = useCallback(
     (next: Partial<LeaderboardFilters>) => {
@@ -62,24 +67,57 @@ export function Leaderboard() {
 
   useEffect(() => {
     let cancelled = false
+    const scopeKey = `${bracket}:${region}`
+    const scopeChanged = snapshotRef.current?.scopeKey !== scopeKey
     setIsLoading(true)
     setError(null)
-    // Different bracket or region has a different total. Drop the cached "last page" boundary
-    // before firing the query so the pagination doesn't briefly show a stale max.
     setKnownLastPage(null)
+    if (scopeChanged) {
+      snapshotRef.current = null
+      setEntries([])
+      setSnapshotStatus(null)
+      setObservedAt(null)
+    }
 
-    trpc.leaderboard.get
-      .query({ bracket, region, page, pageSize: PAGE_SIZE })
+    const request =
+      bracket === '1v1'
+        ? trpc.leaderboard.oneVsOne.query({
+            bracket,
+            region,
+            page,
+            pageSize: PAGE_SIZE,
+            snapshotId: snapshotRef.current?.snapshotId,
+          })
+        : trpc.leaderboard.get.query({ bracket, region, page, pageSize: PAGE_SIZE })
+
+    request
       .then((data) => {
         if (cancelled) return
-        setEntries(data.entries as LeaderboardEntry[])
+        if ('status' in data) {
+          setSnapshotStatus(data.status)
+          if (data.status === 'unavailable') {
+            snapshotRef.current = null
+            setEntries([])
+            setObservedAt(null)
+            setKnownLastPage(data.page)
+          } else {
+            snapshotRef.current = { scopeKey, snapshotId: data.snapshotId }
+            setEntries(data.entries.map((entry) => ({ ...entry, rank: entry.standing })))
+            setObservedAt(data.observedAt)
+            setKnownLastPage(data.hasMore ? null : data.page)
+          }
+        } else {
+          setSnapshotStatus(null)
+          setObservedAt(null)
+          setEntries(data.entries as LeaderboardEntry[])
+          setKnownLastPage(data.hasMore ? null : data.page)
+        }
         setFetchedKey(`${bracket}:${region}:${page}`)
-        setKnownLastPage(data.hasMore ? null : data.page)
         setIsLoading(false)
       })
       .catch((err) => {
         if (cancelled) return
-        setError(err.message)
+        setError(err instanceof Error ? err.message : 'Unknown transport failure')
         setIsLoading(false)
       })
 
@@ -94,8 +132,11 @@ export function Leaderboard() {
 
   if (error) {
     return (
-      <Card className="w-full max-w-4xl mx-auto mt-12 bg-destructive/10 border-destructive text-destructive-foreground p-6 text-center">
-        Error loading leaderboard: {error}
+      <Card
+        role="alert"
+        className="w-full max-w-4xl mx-auto mt-12 bg-destructive/10 border-destructive text-destructive-foreground p-6 text-center"
+      >
+        Unable to load leaderboard data: {error}
       </Card>
     )
   }
@@ -147,6 +188,15 @@ export function Leaderboard() {
         </div>
       </div>
 
+      {snapshotNotice(snapshotStatus) && (
+        <output
+          className={`block px-6 py-3 border-b text-sm ${snapshotStatus === 'stale' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-border bg-muted/30 text-muted-foreground'}`}
+        >
+          <span className="font-semibold">{snapshotNotice(snapshotStatus)}</span>
+          {observedAt && <span className="ml-2">Observed {new Date(observedAt).toLocaleString()}.</span>}
+        </output>
+      )}
+
       <div className="overflow-x-auto">
         <Table>
           <TableHeader className="bg-muted/50">
@@ -162,13 +212,19 @@ export function Leaderboard() {
           <TableBody>
             {showLoading ? (
               <LeaderboardSkeletonRows />
+            ) : snapshotStatus === 'unavailable' ? (
+              <TableRow className="border-border hover:bg-transparent">
+                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  {snapshotNotice('unavailable')}
+                </TableCell>
+              </TableRow>
             ) : entries.length > 0 ? (
               entries.map((entry, i) => {
                 if (isTeamEntry(entry)) {
                   return <TeamLeaderboardRow key={`${entry.brawlhallaIdOne}-${entry.brawlhallaIdTwo}`} entry={entry} />
                 }
-                const globalRank = (page - 1) * PAGE_SIZE + i + 1
-                return <SoloLeaderboardRow key={entry.brawlhallaId} entry={entry} rank={globalRank} />
+                const standing = displayedSoloStanding(bracket, entry, page, i)
+                return <SoloLeaderboardRow key={entry.brawlhallaId} entry={entry} rank={standing} />
               })
             ) : (
               <TableRow className="border-border hover:bg-transparent">

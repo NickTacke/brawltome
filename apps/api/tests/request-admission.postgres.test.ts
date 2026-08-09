@@ -279,7 +279,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     await operations.close()
   })
 
-  test('dispatches proof and interactive kinds through one fair claimant', async () => {
+  test('dispatches proof, interactive, and leaderboard kinds through one fair claimant', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = createPostgresRequestAdmission(connectionString, {
       authenticatedIpLimit: 120,
@@ -302,18 +302,56 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    const leaderboard = await operations.accept({
+      kind: 'leaderboard-1v1',
+      dedupeKey: `dispatch-leaderboard:${randomUUID()}`,
+      operationKey: `dispatch-leaderboard:${randomUUID()}`,
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 60_000 },
+      provenance: { source: 'integration-test' },
+    })
     const options = {
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
       executeSection: async () => undefined,
+      leaderboardSource: {
+        async fetchPage({ region }: { region: 'US-E' | 'EU' | 'SEA' | 'BRZ' | 'AUS' | 'US-W' | 'JPN' | 'ME' | 'SA' }) {
+          return {
+            rankings: [
+              {
+                id: 1,
+                username: `${region} Player`,
+                rating: 2_000,
+                best_rating: 2_100,
+                rank: 1,
+                wins: 20,
+                losses: 10,
+                region,
+                tier: 'Diamond',
+              },
+            ],
+            totalPages: 1,
+          }
+        },
+      },
+      ranking: {
+        async publish1v1Generation() {
+          return 'published' as const
+        },
+        async record1v1CollectionFailure() {
+          return 'recorded' as const
+        },
+      },
     }
 
     expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)
     expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)
+    expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)
     expect((await operations.inspect(proof.operationId)).operation.status).toBe('succeeded')
     expect((await operations.inspect(reserved.operationId)).operation.status).toBe('succeeded')
+    expect((await operations.inspect(leaderboard.operationId)).operation.status).toBe('succeeded')
     await admission.close()
     await operations.close()
   })

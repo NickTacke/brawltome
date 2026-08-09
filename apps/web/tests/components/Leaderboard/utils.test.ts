@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test'
-import { buildLeaderboardQueryString, parseLeaderboardSearchParams } from '../../../src/components/Leaderboard/utils'
+import {
+  buildLeaderboardQueryString,
+  displayedSoloStanding,
+  parseLeaderboardSearchParams,
+  snapshotNotice,
+} from '../../../src/components/Leaderboard/utils'
 
 describe('parseLeaderboardSearchParams', () => {
   it('returns defaults for empty params', () => {
@@ -57,6 +62,32 @@ describe('parseLeaderboardSearchParams', () => {
   it('ignores legacy sort and order params', () => {
     const result = parseLeaderboardSearchParams(new URLSearchParams('sort=wins&order=asc'))
     expect(result).toEqual({ bracket: '1v1', region: 'all', page: 1 })
+  })
+})
+
+describe('validated snapshot presentation', () => {
+  const entry = {
+    brawlhallaId: 42,
+    name: 'Ada',
+    region: 'EU',
+    rating: 2100,
+    peakRating: 2200,
+    tier: null,
+    wins: 20,
+    losses: 10,
+    rank: 73,
+    sourceRank: 7,
+  }
+
+  it('renders the published 1v1 standing rather than deriving rank from page position', () => {
+    expect(displayedSoloStanding('1v1', entry, 3, 4)).toBe(73)
+    expect(displayedSoloStanding('3v3', entry, 3, 4)).toBe(45)
+  })
+
+  it('distinguishes stale retained rows from first-publication unavailability', () => {
+    expect(snapshotNotice('stale')).toBe('Update delayed. Showing the last validated standings.')
+    expect(snapshotNotice('unavailable')).toContain('first validated collection')
+    expect(snapshotNotice('fresh')).toBeNull()
   })
 })
 

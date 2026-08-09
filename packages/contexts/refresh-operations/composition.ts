@@ -2,6 +2,7 @@ import { initializeRefreshOperations } from './migrations/0001-initialize-operat
 import { addSchedulingAndAdmission } from './migrations/0002-add-scheduling-and-admission'
 import { addInteractiveRefreshReservations } from './migrations/0003-interactive-refresh-reservations'
 import { addInteractiveRefreshCheckpoints } from './migrations/0004-add-interactive-checkpoints'
+import { addLeaderboardOperationKind } from './migrations/0005-add-leaderboard-kind'
 
 export { createPostgresRefreshOperations, type PostgresRefreshOperations } from './postgres'
 
@@ -10,4 +11,5 @@ export const refreshOperationsMigrationInventory = [
   addSchedulingAndAdmission,
   addInteractiveRefreshReservations,
   addInteractiveRefreshCheckpoints,
+  addLeaderboardOperationKind,
 ] as const

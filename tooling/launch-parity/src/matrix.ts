@@ -127,6 +127,40 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ['apps/web/src/app/page.tsx', 'apps/web/src/components/Leaderboard/index.tsx'],
     'Needs a signed-out browser assertion with deterministic leaderboard data.',
   ),
+  {
+    id: 'ranking.immutable-1v1-publication',
+    area: 'shell-navigation',
+    requirement: 'Home reads one immutable validated 1v1 generation and retains the last valid generation as stale.',
+    sourceIssue: '#201',
+    status: 'verified',
+    destinations: ['/'],
+    implementation: [
+      'packages/contexts/ranking/leaderboard.ts',
+      'packages/contexts/ranking/postgres.ts',
+      'apps/api/src/router/leaderboard.router.ts',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/ranking-snapshots.postgres.test.ts',
+        assertion:
+          'PostgreSQL proves atomic publication, lease fencing, restart, immutability, Global parity, and stale retention.',
+      },
+    ],
+  },
+  {
+    id: 'ranking.home-snapshot-states',
+    area: 'shell-navigation',
+    requirement:
+      'Home distinguishes validated fresh, retained stale, first-publication unavailable, and transport failure states.',
+    sourceIssue: '#201',
+    status: 'implemented',
+    destinations: ['/'],
+    implementation: ['apps/web/src/components/Leaderboard/index.tsx', 'apps/web/src/components/Leaderboard/utils.ts'],
+    evidence: [],
+    verificationGap:
+      'Needs a rendered browser assertion covering fresh-to-stale, scope changes, first-publication unavailable, and transport failure.',
+  },
   ...[
     ['matches', 'Matches'],
     ['learn', 'Learn'],

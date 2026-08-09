@@ -5,6 +5,7 @@ import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
 import { createPlayerRepo, playerMigrationInventory } from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
+import { createPostgresRanking, rankingMigrationInventory } from '@brawltome/ranking/composition'
 import {
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
@@ -93,6 +94,7 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
   authenticatedIpLimit: authenticatedRefreshIpLimit,
   sourceLimits: { 'brawlhalla-v0': 180 },
 })
+const ranking = createPostgresRanking(databaseUrl)
 const clanRepo = createClanRepo(db)
 const playerLinkRepo = createPlayerLinkRepo(db)
 const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
@@ -116,6 +118,7 @@ const postgresReadiness = createPostgresReadiness(databaseUrl, [
   ...refreshOperationsMigrationInventory,
   ...requestAdmissionMigrationInventory,
   ...accountsMigrationInventory,
+  ...rankingMigrationInventory,
 ])
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -143,6 +146,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'operations-postgres', close: refreshOperations.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
+    { name: 'ranking-postgres', close: ranking.close },
     { name: 'database-postgres', close: closeDatabase },
     {
       name: 'redis',
@@ -172,6 +176,7 @@ const sharedCtx = {
   refreshOperations,
   requestAdmission,
   verifyRefreshChallenge: verifyTurnstileResult,
+  rankingQueries: ranking.queries,
   clanRepo,
   accounts,
   playerLinkRepo,

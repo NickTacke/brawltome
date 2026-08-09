@@ -49,6 +49,7 @@ export interface SoloLeaderboardEntry {
   games?: number
   losses?: number
   rank: number
+  sourceRank?: number
 }
 
 export interface TeamLeaderboardEntry {
@@ -86,6 +87,21 @@ export function buildLeaderboardQueryString(filters: LeaderboardFilters): string
     region: filters.region,
     page: filters.page,
   })
+}
+
+export function displayedSoloStanding(
+  bracket: BracketId,
+  entry: SoloLeaderboardEntry,
+  page: number,
+  index: number,
+): number {
+  return bracket === '1v1' ? entry.rank : (page - 1) * PAGE_SIZE + index + 1
+}
+
+export function snapshotNotice(status: 'fresh' | 'stale' | 'unavailable' | null): string | null {
+  if (status === 'stale') return 'Update delayed. Showing the last validated standings.'
+  if (status === 'unavailable') return 'Leaderboard unavailable until the first validated collection succeeds.'
+  return null
 }
 
 export function getRankStyle(rank: number): string {

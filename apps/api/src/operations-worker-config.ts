@@ -2,6 +2,8 @@ import {
   type AdmissionConfig,
   type BackgroundWorkClass,
   type WorkClass,
+  maxLeaderboardIntervalMs,
+  minLeaderboardIntervalMs,
   validateAdmissionConfig,
 } from '@brawltome/refresh-operations'
 
@@ -9,6 +11,14 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
   const parsed = value === undefined ? fallback : Number(value)
   if (!Number.isInteger(parsed) || parsed <= 0 || parsed > maximum) {
     throw new Error(`${name} must be a positive integer no greater than ${maximum}`)
+  }
+  return parsed
+}
+
+function boundedInteger(value: string | undefined, fallback: number, name: string, minimum: number, maximum: number) {
+  const parsed = value === undefined ? fallback : Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
   }
   return parsed
 }
@@ -78,6 +88,17 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       'OPERATIONS_SCHEDULE_BATCH_SIZE',
       1_000,
     ),
+    leaderboard: {
+      pageDepth: positiveInteger(env.LEADERBOARD_PAGE_DEPTH, 1, 'LEADERBOARD_PAGE_DEPTH', 20),
+      intervalMs: boundedInteger(
+        env.LEADERBOARD_INTERVAL_MS,
+        15 * 60 * 1000,
+        'LEADERBOARD_INTERVAL_MS',
+        minLeaderboardIntervalMs,
+        maxLeaderboardIntervalMs,
+      ),
+      firstDueAt: '2020-01-01T00:00:00.000Z',
+    },
     admission: validateAdmissionConfig(admission),
   }
 }

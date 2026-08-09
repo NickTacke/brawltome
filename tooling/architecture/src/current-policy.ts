@@ -45,7 +45,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/identity': ['.', './composition'],
     '@brawltome/matchmaking': ['.'],
     '@brawltome/player': ['.', './composition'],
-    '@brawltome/ranking': ['.'],
+    '@brawltome/ranking': ['.', './composition'],
     '@brawltome/request-admission': ['.', './composition'],
     '@brawltome/refresh-operations': ['.', './composition'],
   },

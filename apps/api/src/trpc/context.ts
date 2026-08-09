@@ -5,6 +5,7 @@ import type { PlayerLinkRepo } from '@brawltome/identity'
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { PlayerReferenceQueries } from '@brawltome/player'
 import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
+import type { RankingQueries } from '@brawltome/ranking'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { MetricsRegistry, Queue, R2Client } from '@brawltome/shared'
@@ -23,6 +24,7 @@ export interface Context {
   requestAdmission: ActorAdmission
   refreshTrust: { trusted: boolean; grant(): void }
   verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
+  rankingQueries: RankingQueries
   clanRepo: ClanRepo
   accounts: Accounts
   playerLinkRepo: PlayerLinkRepo

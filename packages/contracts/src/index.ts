@@ -16,6 +16,21 @@ export {
 } from './contract-proof'
 export { generateContractOpenApi, serializeContractOpenApi } from './openapi'
 export {
+  leaderboard1v1EntrySchema,
+  leaderboard1v1InputSchema,
+  leaderboard1v1OutputSchema,
+  leaderboardRegionSchema,
+  leaderboardRegions,
+  leaderboardScopeSchema,
+  leaderboardScopes,
+  parseLeaderboard1v1Output,
+  type Leaderboard1v1Entry,
+  type Leaderboard1v1Input,
+  type Leaderboard1v1Output,
+  type LeaderboardRegion,
+  type LeaderboardScope,
+} from './leaderboard'
+export {
   brawlhallaIdSchema,
   nullablePlayerReferenceSchema,
   parsePlayerReferenceOutput,

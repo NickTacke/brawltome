@@ -9,6 +9,11 @@ describe('operations worker configuration', () => {
       pollMs: 1_000,
       retryDelayMs: 1_000,
       scheduleBatchSize: 100,
+      leaderboard: {
+        pageDepth: 1,
+        intervalMs: 15 * 60 * 1000,
+        firstDueAt: '2020-01-01T00:00:00.000Z',
+      },
       admission: {
         totalConcurrency: 8,
         interactiveReservation: 2,
@@ -31,6 +36,10 @@ describe('operations worker configuration', () => {
     })
     for (const value of ['0', '-1', 'NaN', '1.5', '999999999']) {
       expect(() => readOperationsWorkerConfig({ OPERATIONS_LEASE_MS: value })).toThrow('OPERATIONS_LEASE_MS')
+    }
+    expect(() => readOperationsWorkerConfig({ LEADERBOARD_PAGE_DEPTH: '21' })).toThrow('LEADERBOARD_PAGE_DEPTH')
+    for (const value of ['0', '59999', '60000.5', '86400001']) {
+      expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }
   })
 

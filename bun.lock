@@ -178,6 +178,7 @@
         "@brawltome/shared": "workspace:*",
         "drizzle-orm": "^0.39.0",
         "ioredis": "^5.8.0",
+        "postgres": "^3.4.0",
       },
       "devDependencies": {
         "typescript": "^5.7.0",
@@ -284,6 +285,7 @@
       "dependencies": {
         "@brawltome/accounts": "workspace:*",
         "@brawltome/player": "workspace:*",
+        "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
         "postgres": "^3.4.0",
       },

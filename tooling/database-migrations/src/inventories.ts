@@ -1,5 +1,6 @@
 import { accountsMigrationInventory } from '@brawltome/accounts/composition'
 import { playerMigrationInventory } from '@brawltome/player/composition'
+import { rankingMigrationInventory } from '@brawltome/ranking/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
 import type { Migration } from './plan'
@@ -9,4 +10,5 @@ export const globalMigrationInventory: readonly Migration[] = [
   ...refreshOperationsMigrationInventory,
   ...requestAdmissionMigrationInventory,
   ...accountsMigrationInventory,
+  ...rankingMigrationInventory,
 ]
