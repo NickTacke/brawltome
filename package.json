@@ -1,7 +1,7 @@
 {
   "name": "brawltome",
   "private": true,
-  "workspaces": ["apps/*", "packages/*", "packages/contexts/*"],
+  "workspaces": ["apps/*", "packages/*", "packages/contexts/*", "tooling/*"],
   "scripts": {
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",
@@ -15,6 +15,7 @@
     "lint:fix": "biome check --fix .",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "architecture:check": "bun run --filter @brawltome/architecture check",
     "db:generate": "bun run --filter @brawltome/database generate",
     "db:migrate": "bun run --filter @brawltome/database migrate",
     "db:push": "bun run --filter @brawltome/database push"
