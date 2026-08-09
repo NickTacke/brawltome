@@ -195,6 +195,7 @@
       "dependencies": {
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/database": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "drizzle-orm": "^0.39.0",
         "ioredis": "^5.8.0",
       },
