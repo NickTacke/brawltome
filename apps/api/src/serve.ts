@@ -27,6 +27,7 @@ import { internalSecretValid } from './auth/internal-secret'
 import { createAuthRoutes } from './auth/routes'
 import { readMatchmakingConfig } from './matchmaking-config'
 import { appRouter } from './router'
+import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
@@ -129,6 +130,7 @@ app.use(
 )
 
 app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, playerLinkRepo, steamLinkQueue, config: authConfig }))
+app.route('/internal/contracts', createContractProofRoutes())
 
 app.route(
   '/api/matches',

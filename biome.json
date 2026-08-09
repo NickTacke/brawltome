@@ -25,10 +25,12 @@
     "ignore": [
       "node_modules",
       "dist",
+      "target",
       ".next",
       "drizzle",
       "research",
       "packages/game-data/src/generated",
+      "packages/contracts/openapi",
       "apps/web/next-env.d.ts"
     ]
   }

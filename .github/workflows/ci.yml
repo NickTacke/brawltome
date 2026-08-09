@@ -12,6 +12,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run architecture:check
 
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - run: bun install --frozen-lockfile
+      - run: bun run contracts:check
+
   check:
     runs-on: ubuntu-latest
     services:

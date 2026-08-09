@@ -15,6 +15,7 @@
   "dependencies": {
     "@brawltome/bhapi": "workspace:*",
     "@brawltome/clan": "workspace:*",
+    "@brawltome/contracts": "workspace:*",
     "@brawltome/database": "workspace:*",
     "@brawltome/game-data": "workspace:*",
     "@brawltome/identity": "workspace:*",
