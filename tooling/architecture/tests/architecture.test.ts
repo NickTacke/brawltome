@@ -112,6 +112,16 @@ describe('V3 dependency architecture', () => {
     expect(rulesFor(local)).not.toContain('unresolved-alias')
   })
 
+  it('enforces workspace-specific role restrictions for narrow tooling', () => {
+    const fixture = withImport('@fixture/api', '@fixture/game-data', { dependency: '@fixture/game-data' })
+    const restrictedPolicy = {
+      ...policy,
+      workspaceRoleDependencies: { '@fixture/api': ['capability' as const] },
+    }
+
+    expect(checkArchitecture(fixture, restrictedPolicy).violations.map(({ rule }) => rule)).toContain('role-dependency')
+  })
+
   it('does not grant legacy workspaces unrestricted dependencies', () => {
     const fixture = withImport('@fixture/players', '@fixture/api', { dependency: '@fixture/api' })
     const legacyPolicy = {

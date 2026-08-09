@@ -235,7 +235,8 @@ function checkDependencyRule(
     }
   }
 
-  const roleIsForbidden = !allowedRoleDependencies[importerRole].includes(dependencyRole)
+  const allowedRoles = policy.workspaceRoleDependencies[importer.name] ?? allowedRoleDependencies[importerRole]
+  const roleIsForbidden = !allowedRoles.includes(dependencyRole)
   const contractDependencyIsForbidden =
     importerRole === 'contracts' && !policy.contractsDependencies.includes(dependency.name)
   if (roleIsForbidden || contractDependencyIsForbidden) {

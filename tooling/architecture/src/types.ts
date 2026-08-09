@@ -49,6 +49,7 @@ export interface ArchitecturePolicy {
   compositionImporters: string[]
   contractsDependencies: string[]
   localImportAliases: Record<string, string[]>
+  workspaceRoleDependencies: Record<string, WorkspaceRole[]>
   exceptions: TemporaryArchitectureException[]
 }
 

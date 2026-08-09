@@ -16,11 +16,18 @@ COPY packages/contexts/identity/package.json packages/contexts/identity/
 COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
 COPY packages/replay-format/package.json packages/replay-format/
 COPY packages/game-data/package.json packages/game-data/
+COPY packages/contracts/package.json packages/contracts/
+COPY tooling/database-migrations/package.json tooling/database-migrations/
 RUN bun install
 
 FROM base AS build
 COPY --from=install /app/node_modules node_modules
 COPY . .
+
+FROM base AS migration
+COPY --from=build /app .
+USER bun
+CMD ["bun", "run", "db:migrate"]
 
 FROM base AS api
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*

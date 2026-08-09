@@ -8,6 +8,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/web': 'application',
     '@brawltome/bhapi': 'adapter',
     '@brawltome/database': 'adapter',
+    '@brawltome/database-migrations': 'tooling',
     '@brawltome/game-data': 'foundation',
     '@brawltome/replay-format': 'legacy',
     '@brawltome/shared': 'legacy',
@@ -27,6 +28,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/web': [],
     '@brawltome/bhapi': ['.'],
     '@brawltome/database': ['.'],
+    '@brawltome/database-migrations': [],
     '@brawltome/game-data': ['.', './reference-data'],
     '@brawltome/replay-format': ['.'],
     '@brawltome/shared': ['.', './constants', './weapons'],
@@ -36,7 +38,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/contracts': ['.'],
     '@brawltome/identity': ['.'],
     '@brawltome/matchmaking': ['.'],
-    '@brawltome/player': ['.'],
+    '@brawltome/player': ['.', './composition'],
     '@brawltome/ranking': ['.'],
   },
   capabilityDependencies: {
@@ -45,11 +47,14 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/player': [],
     '@brawltome/ranking': [],
   },
-  compositionImporters: ['@brawltome/api'],
+  compositionImporters: ['@brawltome/api', '@brawltome/database-migrations'],
   contractsDependencies: ['@brawltome/game-data'],
   localImportAliases: {
     '@brawltome/desktop': ['@/'],
     '@brawltome/web': ['@/'],
+  },
+  workspaceRoleDependencies: {
+    '@brawltome/database-migrations': ['capability'],
   },
   exceptions: [
     {
