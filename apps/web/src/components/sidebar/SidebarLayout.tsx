@@ -5,8 +5,8 @@ import type { ReactNode } from 'react'
 
 import { CommandPalette } from '@/components/CommandPalette'
 import { AppSidebar } from './AppSidebar'
-import { MobileFloatingMenuButton } from './MobileFloatingMenuButton'
 import { MobileMenu } from './MobileMenu'
+import { MobileMenuButton } from './MobileMenuButton'
 
 export function SidebarLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -16,9 +16,7 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
     <>
       <CommandPalette />
 
-      {/* Mobile chrome: menu self-gates on isMobileOpen. The home-page
-          hamburger is rendered inline below, inside the home content branch,
-          so it scrolls with page content instead of floating. */}
+      {/* Mobile chrome is shell-owned so every route exposes exactly one menu trigger. */}
       <MobileMenu />
 
       {/* Fixed desktop sidebar - does not affect content flow. h-dvh gives the
@@ -33,16 +31,14 @@ export function SidebarLayout({ children }: { children: ReactNode }) {
           (search + leaderboard centered within the remaining area); all other
           pages use the shared max-w-6xl content wrapper. */}
       <div className="md:pl-[57px]">
+        <div className={isHome ? 'flex pl-5 pt-5 md:hidden' : 'mx-auto flex max-w-6xl px-6 pt-5 md:hidden'}>
+          <MobileMenuButton />
+        </div>
         {isHome ? (
-          <>
-            <div className="flex pl-5 pt-5 md:hidden">
-              <MobileFloatingMenuButton />
-            </div>
-            {children}
-          </>
+          children
         ) : (
           <main className="min-h-screen">
-            <div className="mx-auto max-w-6xl px-6 pt-10 pb-6 sm:pt-12">{children}</div>
+            <div className="mx-auto max-w-6xl px-6 pt-4 pb-6 sm:pt-6 md:pt-10">{children}</div>
           </main>
         )}
       </div>

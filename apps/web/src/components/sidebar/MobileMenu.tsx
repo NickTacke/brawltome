@@ -89,6 +89,7 @@ export function MobileMenu() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    onClick={close}
                     className={`flex items-center gap-4 border-b border-white/[0.06] py-4 text-2xl font-bold tracking-tight transition-colors ${
                       isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                     } ${showWipOpacity ? 'opacity-60' : ''}`}
@@ -118,6 +119,7 @@ export function MobileMenu() {
         <div className="flex items-center justify-between gap-3">
           <Link
             href="/account"
+            onClick={close}
             className="text-muted-foreground hover:bg-white/[0.04] hover:text-foreground inline-flex items-center gap-2.5 rounded-xl px-1.5 py-2.5 text-base font-medium transition-colors"
           >
             {user?.avatarUrl ? (

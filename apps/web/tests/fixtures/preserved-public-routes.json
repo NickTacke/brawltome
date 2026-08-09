@@ -1,0 +1,15 @@
+[
+  { "rowId": "route.home", "destination": "/", "page": "apps/web/src/app/page.tsx" },
+  {
+    "rowId": "route.player-id",
+    "destination": "/player/:id",
+    "page": "apps/web/src/app/player/[id]/page.tsx"
+  },
+  {
+    "rowId": "route.clan-id",
+    "destination": "/clan/:id",
+    "page": "apps/web/src/app/clan/[id]/page.tsx"
+  },
+  { "rowId": "route.account", "destination": "/account", "page": "apps/web/src/app/account/page.tsx" },
+  { "rowId": "route.stats", "destination": "/stats", "page": "apps/web/src/app/stats/page.tsx" }
+]
