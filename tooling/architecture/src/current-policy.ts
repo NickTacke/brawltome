@@ -21,6 +21,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/matchmaking': 'legacy',
     '@brawltome/player': 'capability',
     '@brawltome/ranking': 'capability',
+    '@brawltome/refresh-operations': 'capability',
   },
   allowedExports: {
     '@brawltome/api': ['.'],
@@ -42,12 +43,14 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/matchmaking': ['.'],
     '@brawltome/player': ['.', './composition'],
     '@brawltome/ranking': ['.'],
+    '@brawltome/refresh-operations': ['.', './composition'],
   },
   capabilityDependencies: {
     '@brawltome/clan': [],
     '@brawltome/identity': [],
     '@brawltome/player': [],
     '@brawltome/ranking': [],
+    '@brawltome/refresh-operations': [],
   },
   compositionImporters: ['@brawltome/api', '@brawltome/database-migrations'],
   contractsDependencies: ['@brawltome/game-data'],
