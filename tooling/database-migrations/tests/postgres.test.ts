@@ -22,7 +22,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         migratePostgres(databaseUrl.toString(), globalMigrationInventory),
         migratePostgres(databaseUrl.toString(), globalMigrationInventory),
       ])
-      expect(applications.sort()).toEqual([0, 2])
+      expect(applications.sort()).toEqual([0, globalMigrationInventory.length])
       expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(0)
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'

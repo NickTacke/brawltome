@@ -64,6 +64,7 @@ export function createRefreshOperationRoutes(producer: ProofOperationProducer, e
     const result = await producer.accept({
       dedupeKey: parsed.data.dedupeKey,
       operationKey: parsed.data.operationKey,
+      workClass: 'interactive',
       payload: { value: parsed.data.value },
       provenance: { source: 'internal-api', requestedBy: parsed.data.requestedBy },
       maxAttempts: parsed.data.maxAttempts,
