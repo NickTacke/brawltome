@@ -1,75 +1,74 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
-import type { SessionRepo, UserRepo, UserWithPrimaryAccount } from '@brawltome/identity'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
+import type { Account, Accounts, DiscordSignInProfile } from '@brawltome/accounts'
+import type { PlayerLinkRepo } from '@brawltome/identity'
 import { Hono } from 'hono'
-import { createAuthRoutes } from '../../src/auth/routes'
+import { type CreateAuthRoutesDeps, createAuthRoutes } from '../../src/auth/routes'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
-function makeUser(): UserWithPrimaryAccount {
-  const now = new Date()
-  return {
-    id: 'user-1',
-    createdAt: now,
-    updatedAt: now,
-    primaryAccount: {
-      userId: 'user-1',
-      provider: 'discord',
-      providerAccountId: 'discord-42',
-      username: 'coolguy',
-      avatarHash: 'abc',
-      refreshToken: null,
-      createdAt: now,
-      updatedAt: now,
-    },
-  }
+const account: Account = {
+  id: '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295',
+  displayName: 'coolguy',
+  avatarUrl: 'https://cdn.discordapp.com/avatars/discord-42/abc.png',
+  createdAt: new Date('2026-08-09T18:42:01.000Z'),
 }
 
 function makeFakes() {
-  const users: UserWithPrimaryAccount[] = []
-  const sessions: Array<{ id: string; userId: string; expiresAt: Date; createdAt: Date }> = []
-
-  const userRepo: UserRepo = {
-    async findByDiscordId() {
+  const profiles: DiscordSignInProfile[] = []
+  const sessions = new Set<string>()
+  const accounts: Accounts = {
+    async signInWithDiscord(profile) {
+      profiles.push(profile)
+      sessions.add('raw-session-token')
+      return {
+        account: { ...account, displayName: profile.displayName },
+        sessionToken: 'raw-session-token',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      }
+    },
+    async authenticate(sessionToken) {
+      return sessionToken && sessions.has(sessionToken)
+        ? {
+            status: 'signedIn',
+            account,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            extended: false,
+          }
+        : { status: 'anonymous' }
+    },
+    async signOut(sessionToken) {
+      sessions.delete(sessionToken)
+    },
+  }
+  const playerLinkRepo: PlayerLinkRepo = {
+    async findByUserId() {
       return null
     },
-    async findById(id) {
-      return users.find((u) => u.id === id) ?? null
+    async findByBrawlhallaId() {
+      return null
     },
-    async upsertDiscordUser(profile) {
-      let u = users[0]
-      if (!u) {
-        u = makeUser()
-        u.primaryAccount.providerAccountId = profile.discordId
-        u.primaryAccount.username = profile.username
-        u.primaryAccount.avatarHash = profile.avatarHash
-        users.push(u)
+    async createPending({ userId, steamId }) {
+      return {
+        userId,
+        brawlhallaId: null,
+        steamId,
+        linkedVia: 'steam',
+        status: 'pending',
+        linkedAt: new Date(),
       }
-      return u
     },
+    async resolve() {},
+    async setStatus() {},
+    async deleteByUserId() {},
   }
-  const sessionRepo: SessionRepo = {
-    async create(row) {
-      const full = { ...row, createdAt: new Date() }
-      sessions.push(full)
-      return full
-    },
-    async findById(id) {
-      return sessions.find((s) => s.id === id) ?? null
-    },
-    async deleteById(id) {
-      const i = sessions.findIndex((s) => s.id === id)
-      if (i >= 0) sessions.splice(i, 1)
-    },
-    async extend() {},
-    async deleteExpired() {
-      return 0
-    },
-  }
+  const steamLinkQueue = {
+    async enqueue() {},
+  } as unknown as CreateAuthRoutesDeps['steamLinkQueue']
 
-  return { userRepo, sessionRepo, users, sessions }
+  return { accounts, playerLinkRepo, steamLinkQueue, profiles, sessions }
 }
 
 function buildApp(fakes: ReturnType<typeof makeFakes>) {
@@ -77,13 +76,16 @@ function buildApp(fakes: ReturnType<typeof makeFakes>) {
   app.route(
     '/auth',
     createAuthRoutes({
-      userRepo: fakes.userRepo,
-      sessionRepo: fakes.sessionRepo,
+      accounts: fakes.accounts,
+      playerLinkRepo: fakes.playerLinkRepo,
+      steamLinkQueue: fakes.steamLinkQueue,
       config: {
         discordClientId: 'cid',
         discordClientSecret: 'csecret',
         discordRedirectUri: 'http://localhost:3000/auth/discord/callback',
         webOrigin: 'http://localhost:3001',
+        steamReturnUrl: 'http://localhost:3000/auth/steam/callback',
+        steamRealm: 'http://localhost:3000',
       },
     }),
   )
@@ -92,8 +94,7 @@ function buildApp(fakes: ReturnType<typeof makeFakes>) {
 
 describe('GET /auth/discord/login', () => {
   it('sets a state cookie and redirects to discord', async () => {
-    const fakes = makeFakes()
-    const app = buildApp(fakes)
+    const app = buildApp(makeFakes())
 
     const res = await app.request('/auth/discord/login')
     expect(res.status).toBe(302)
@@ -103,8 +104,6 @@ describe('GET /auth/discord/login', () => {
     expect(setCookie).toContain('brawltome_oauth_state=')
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('SameSite=Lax')
-
-    // state param in the redirect must match the cookie value
     const state = new URL(location).searchParams.get('state')
     expect(state).toBeTruthy()
     expect(setCookie).toContain(`brawltome_oauth_state=${state}`)
@@ -112,28 +111,31 @@ describe('GET /auth/discord/login', () => {
 })
 
 describe('GET /auth/discord/callback', () => {
-  it('errors redirects when state is missing or mismatched', async () => {
-    const fakes = makeFakes()
-    const app = buildApp(fakes)
-
+  it('error redirects when state is missing or mismatched', async () => {
+    const app = buildApp(makeFakes())
     const res = await app.request('/auth/discord/callback?code=x&state=wrong', {
       headers: { cookie: 'brawltome_oauth_state=expected' },
     })
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/account?error=state')
+
+    const multibyte = await app.request(`/auth/discord/callback?code=x&state=${encodeURIComponent('éééééééé')}`, {
+      headers: { cookie: 'brawltome_oauth_state=expected' },
+    })
+    expect(multibyte.status).toBe(302)
+    expect(multibyte.headers.get('location')).toBe('http://localhost:3001/account?error=state')
   })
 
-  it('exchanges code, upserts user, creates session, sets cookie, and redirects', async () => {
+  it('maps the verified Discord profile through Accounts and preserves the session cookie', async () => {
     const fakes = makeFakes()
     const app = buildApp(fakes)
-
     globalThis.fetch = mock(async (url) => {
-      const u = String(url)
-      if (u.includes('/oauth2/token')) {
+      const value = String(url)
+      if (value.includes('/oauth2/token')) {
         return new Response(JSON.stringify({ access_token: 'at' }), { status: 200 })
       }
-      if (u.includes('/users/@me')) {
-        return new Response(JSON.stringify({ id: 'discord-42', username: 'coolguy', avatar: 'abc' }), { status: 200 })
+      if (value.includes('/users/@me')) {
+        return new Response(JSON.stringify({ id: '42', username: 'coolguy', avatar: 'abc' }), { status: 200 })
       }
       return new Response('not mocked', { status: 500 })
     }) as unknown as typeof fetch
@@ -141,23 +143,18 @@ describe('GET /auth/discord/callback', () => {
     const res = await app.request('/auth/discord/callback?code=the-code&state=expected', {
       headers: { cookie: 'brawltome_oauth_state=expected' },
     })
+
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/')
-
-    // Session cookie set
     const setCookie = res.headers.get('set-cookie') ?? ''
-    expect(setCookie).toContain('brawltome_session=')
+    expect(setCookie).toContain('brawltome_session=raw-session-token')
     expect(setCookie).toContain('HttpOnly')
-
-    // User + session created
-    expect(fakes.users).toHaveLength(1)
-    expect(fakes.sessions).toHaveLength(1)
+    expect(setCookie).toContain('Max-Age=2592000')
+    expect(fakes.profiles).toEqual([{ providerAccountId: '42', displayName: 'coolguy', avatarHash: 'abc' }])
   })
 
   it('redirects to the discord error state on upstream failure', async () => {
-    const fakes = makeFakes()
-    const app = buildApp(fakes)
-
+    const app = buildApp(makeFakes())
     globalThis.fetch = mock(async () => new Response('nope', { status: 400 })) as unknown as typeof fetch
 
     const res = await app.request('/auth/discord/callback?code=x&state=expected', {
@@ -169,32 +166,42 @@ describe('GET /auth/discord/callback', () => {
 })
 
 describe('POST /auth/signout', () => {
-  it('deletes the session and clears the cookie', async () => {
+  it('revokes the session through Accounts and clears the cookie', async () => {
     const fakes = makeFakes()
+    fakes.sessions.add('raw-token')
     const app = buildApp(fakes)
-    const { hashSessionToken } = await import('@brawltome/identity')
-    const raw = 'raw-token'
-    fakes.sessions.push({
-      id: hashSessionToken(raw),
-      userId: 'user-1',
-      expiresAt: new Date(Date.now() + 1_000_000),
-      createdAt: new Date(),
-    })
 
     const res = await app.request('/auth/signout', {
       method: 'POST',
-      headers: { cookie: `brawltome_session=${raw}`, origin: 'http://localhost:3001' },
+      headers: { cookie: 'brawltome_session=raw-token', origin: 'http://localhost:3001' },
     })
+
     expect(res.status).toBe(204)
-    expect(fakes.sessions).toHaveLength(0)
+    expect(fakes.sessions.has('raw-token')).toBe(false)
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toContain('brawltome_session=')
     expect(setCookie).toContain('Max-Age=0')
   })
 
-  it('returns 204 even when there is no cookie', async () => {
+  it('returns failure and preserves the cookie when revocation fails', async () => {
     const fakes = makeFakes()
+    fakes.accounts.signOut = async () => {
+      throw new Error('database unavailable')
+    }
     const app = buildApp(fakes)
+
+    const res = await app.request('/auth/signout', {
+      method: 'POST',
+      headers: { cookie: 'brawltome_session=raw-token', origin: 'http://localhost:3001' },
+    })
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'signout_failed' })
+    expect(res.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('returns 204 when there is no cookie', async () => {
+    const app = buildApp(makeFakes())
     const res = await app.request('/auth/signout', {
       method: 'POST',
       headers: { origin: 'http://localhost:3001' },
@@ -202,20 +209,14 @@ describe('POST /auth/signout', () => {
     expect(res.status).toBe(204)
   })
 
-  it('rejects requests from a disallowed origin', async () => {
-    const fakes = makeFakes()
-    const app = buildApp(fakes)
-    const res = await app.request('/auth/signout', {
+  it('rejects requests from a disallowed or missing origin', async () => {
+    const app = buildApp(makeFakes())
+    const disallowed = await app.request('/auth/signout', {
       method: 'POST',
       headers: { origin: 'http://evil.example.com' },
     })
-    expect(res.status).toBe(403)
-  })
-
-  it('rejects requests with no origin header', async () => {
-    const fakes = makeFakes()
-    const app = buildApp(fakes)
-    const res = await app.request('/auth/signout', { method: 'POST' })
-    expect(res.status).toBe(403)
+    const missing = await app.request('/auth/signout', { method: 'POST' })
+    expect(disallowed.status).toBe(403)
+    expect(missing.status).toBe(403)
   })
 })

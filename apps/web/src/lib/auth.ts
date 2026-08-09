@@ -1,5 +1,6 @@
 'use client'
 
+import { type AccountViewContract, parseAccountViewOutput } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
 import { trpc } from './trpc'
 
@@ -12,30 +13,37 @@ export interface PlayerLinkInfo {
   linkedAt: Date
 }
 
-export interface Me {
-  id: string
-  username: string
-  avatarUrl: string | null
-  createdAt: string
-  playerLink: PlayerLinkInfo | null
+const ACCOUNT_KEY = ['account', 'current'] as const
+const PLAYER_LINK_KEY = ['identity', 'playerLink'] as const
+
+export function parseAccountResponse(value: unknown): AccountViewContract {
+  return parseAccountViewOutput(value)
 }
 
-const ME_KEY = ['identity', 'me'] as const
-
-export function useMe() {
+export function useAccount() {
   const query = useQuery({
-    queryKey: ME_KEY,
-    queryFn: async (): Promise<Me | null> => {
-      return (await trpc.identity.me.query()) as Me | null
+    queryKey: ACCOUNT_KEY,
+    queryFn: async () => parseAccountResponse(await trpc.account.current.query()),
+    staleTime: 5 * 60 * 1000,
+  })
+  const view = query.data
+  return {
+    account: view?.status === 'signedIn' ? view.account : null,
+    isLoading: query.isLoading,
+  }
+}
+
+export function usePlayerLink() {
+  const query = useQuery({
+    queryKey: PLAYER_LINK_KEY,
+    queryFn: async (): Promise<PlayerLinkInfo | null> => {
+      const legacyIdentity = await trpc.identity.me.query()
+      return legacyIdentity?.playerLink ?? null
     },
     staleTime: 5 * 60 * 1000,
-    refetchInterval: (query) => {
-      const data = query.state.data as Me | null | undefined
-      if (data?.playerLink?.status === 'pending') return 2_000
-      return false
-    },
+    refetchInterval: (query) => (query.state.data?.status === 'pending' ? 2_000 : false),
   })
-  return { user: query.data ?? null, isLoading: query.isLoading }
+  return { playerLink: query.data ?? null, isLoading: query.isLoading }
 }
 
 export function signIn(): void {
@@ -47,11 +55,16 @@ export function linkSteam(): void {
 }
 
 export async function signOut(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  await fetch(`${apiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
-  await queryClient.invalidateQueries({ queryKey: ME_KEY })
+  const response = await fetch(`${apiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
+  if (!response.ok) throw new Error(`Sign-out failed with status ${response.status}`)
+
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ACCOUNT_KEY }),
+    queryClient.invalidateQueries({ queryKey: PLAYER_LINK_KEY }),
+  ])
 }
 
 export async function unlinkPlayer(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
   await trpc.identity.unlinkPlayer.mutate()
-  await queryClient.invalidateQueries({ queryKey: ME_KEY })
+  await queryClient.invalidateQueries({ queryKey: PLAYER_LINK_KEY })
 }

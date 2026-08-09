@@ -1,41 +1,23 @@
-import { db, oauthAccount, user } from '@brawltome/database'
-import { SESSION_TTL_MS, createSessionRepo, generateSessionToken, hashSessionToken } from '@brawltome/identity'
-import { and, eq } from 'drizzle-orm'
+import { createPostgresAccounts } from '@brawltome/accounts/composition'
 
 if (process.env.NODE_ENV === 'production' || process.env.ALLOW_TEST_SESSION_MINT !== 'true') {
   console.error('Refusing to mint a test session without ALLOW_TEST_SESSION_MINT=true in non-production.')
   process.exit(1)
 }
 
-const TEST_DISCORD_ID = 'test-ingest-user'
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) throw new Error('DATABASE_URL is required')
 
-async function ensureUser(): Promise<string> {
-  const existing = await db.query.oauthAccount.findFirst({
-    where: and(eq(oauthAccount.provider, 'discord'), eq(oauthAccount.providerAccountId, TEST_DISCORD_ID)),
-  })
-  if (existing) return existing.userId
-
-  const [newUser] = await db.insert(user).values({}).returning()
-  await db.insert(oauthAccount).values({
-    provider: 'discord',
-    providerAccountId: TEST_DISCORD_ID,
-    userId: newUser.id,
-    username: 'test-ingest',
+const runtime = createPostgresAccounts(connectionString)
+try {
+  const result = await runtime.accounts.signInWithDiscord({
+    providerAccountId: 'test-ingest-user',
+    displayName: 'test-ingest',
     avatarHash: null,
-    refreshToken: null,
   })
-  return newUser.id
+  console.log(`userId=${result.account.id}`)
+  console.log(`cookie=brawltome_session=${result.sessionToken}`)
+  console.log(`rawToken=${result.sessionToken}`)
+} finally {
+  await runtime.close()
 }
-
-const userId = await ensureUser()
-const sessionRepo = createSessionRepo(db)
-const rawToken = generateSessionToken()
-const id = hashSessionToken(rawToken)
-const expiresAt = new Date(Date.now() + SESSION_TTL_MS)
-await sessionRepo.create({ id, userId, expiresAt })
-
-console.log(`userId=${userId}`)
-console.log(`cookie=brawltome_session=${rawToken}`)
-console.log(`rawToken=${rawToken}`)
-
-process.exit(0)

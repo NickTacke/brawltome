@@ -1,6 +1,6 @@
 'use client'
 
-import { signIn, useMe } from '@/lib/auth'
+import { signIn, useAccount } from '@/lib/auth'
 import { Skeleton } from '@brawltome/ui'
 import { Monitor, Rss, Trophy, UserPlus } from 'lucide-react'
 import Image from 'next/image'
@@ -91,13 +91,13 @@ function SignedOutState({ error }: { error: string | null }) {
 }
 
 function AccountPageInner() {
-  const { user, isLoading } = useMe()
+  const { account, isLoading } = useAccount()
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
 
   if (isLoading) return <LoadingState />
-  if (!user) return <SignedOutState error={error} />
-  return <SignedInState user={user} />
+  if (!account) return <SignedOutState error={error} />
+  return <SignedInState account={account} />
 }
 
 export default function AccountPage() {

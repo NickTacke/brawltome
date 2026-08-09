@@ -1,14 +1,14 @@
-// identityRouter now transitively imports @brawltome/database via unlinkPlayer
 process.env.DATABASE_URL ??= 'postgres://unused:unused@localhost:5432/unused'
 
 import { describe, expect, it, mock } from 'bun:test'
-import type { PlayerLinkRepo, UserWithPrimaryAccount } from '@brawltome/identity'
+import type { Account } from '@brawltome/accounts'
+import type { PlayerLinkRepo } from '@brawltome/identity'
 import { initTRPC } from '@trpc/server'
 import superjson from 'superjson'
 import { identityRouter } from '../../src/router/identity.router'
 
 interface TestContext {
-  user: UserWithPrimaryAccount | null
+  account: Account | null
   playerLinkRepo: PlayerLinkRepo
 }
 
@@ -33,55 +33,34 @@ function mockPlayerLinkRepo(): PlayerLinkRepo {
   }
 }
 
-function makeUser(): UserWithPrimaryAccount {
-  const now = new Date()
+function makeAccount(): Account {
   return {
-    id: 'user-1',
-    createdAt: now,
-    updatedAt: now,
-    primaryAccount: {
-      userId: 'user-1',
-      provider: 'discord',
-      providerAccountId: 'discord-42',
-      username: 'coolguy',
-      avatarHash: 'abc',
-      refreshToken: null,
-      createdAt: now,
-      updatedAt: now,
-    },
+    id: '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295',
+    displayName: 'coolguy',
+    avatarUrl: 'https://cdn.discordapp.com/avatars/discord-42/abc.png',
+    createdAt: new Date('2026-08-09T18:42:01.000Z'),
   }
 }
 
-describe('identity.me', () => {
+describe('identity.me V2 compatibility', () => {
   it('returns null for anonymous callers', async () => {
-    const ctx = { user: null, playerLinkRepo: mockPlayerLinkRepo() }
-    const result = await (caller(ctx) as { me: () => Promise<unknown> }).me()
+    const result = await (
+      caller({ account: null, playerLinkRepo: mockPlayerLinkRepo() }) as { me: () => Promise<unknown> }
+    ).me()
     expect(result).toBeNull()
   })
 
-  it('returns the serialized user for signed-in callers', async () => {
-    const user = makeUser()
-    const ctx = { user, playerLinkRepo: mockPlayerLinkRepo() }
-    const result = (await (caller(ctx) as { me: () => Promise<unknown> }).me()) as {
-      id: string
-      username: string
-      avatarUrl: string | null
-      playerLink: unknown
-    } | null
-    expect(result).not.toBeNull()
-    expect(result?.id).toBe('user-1')
-    expect(result?.username).toBe('coolguy')
-    expect(result?.avatarUrl).toBe('https://cdn.discordapp.com/avatars/discord-42/abc.png')
-    expect(result?.playerLink).toBeNull()
-  })
+  it('preserves the legacy shape from the safe Accounts principal', async () => {
+    const account = makeAccount()
+    const result = (await (
+      caller({ account, playerLinkRepo: mockPlayerLinkRepo() }) as { me: () => Promise<unknown> }
+    ).me()) as { id: string; username: string; avatarUrl: string | null; playerLink: unknown } | null
 
-  it('returns a null avatarUrl when the account has no avatarHash', async () => {
-    const user = makeUser()
-    user.primaryAccount.avatarHash = null
-    const ctx = { user, playerLinkRepo: mockPlayerLinkRepo() }
-    const result = (await (caller(ctx) as { me: () => Promise<unknown> }).me()) as {
-      avatarUrl: string | null
-    } | null
-    expect(result?.avatarUrl).toBeNull()
+    expect(result).toMatchObject({
+      id: account.id,
+      username: 'coolguy',
+      avatarUrl: 'https://cdn.discordapp.com/avatars/discord-42/abc.png',
+      playerLink: null,
+    })
   })
 })

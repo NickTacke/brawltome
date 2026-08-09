@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 
-import { useMe } from '@/lib/auth'
+import { useAccount } from '@/lib/auth'
 import { navItems } from './nav-items'
 import { socialLinks } from './social-links'
 
@@ -39,7 +39,7 @@ function WithTooltip({
  */
 export function AppSidebar() {
   const pathname = usePathname()
-  const { user } = useMe()
+  const { account } = useAccount()
 
   return (
     <TooltipProvider>
@@ -112,16 +112,16 @@ export function AppSidebar() {
           </div>
 
           <div className="border-sidebar-border border-t pt-2 pb-1">
-            <WithTooltip label={user ? user.username : 'Sign in'}>
+            <WithTooltip label={account ? account.displayName : 'Sign in'}>
               <Link
                 href="/account"
-                aria-label={user ? 'Account' : 'Sign in'}
+                aria-label={account ? 'Account' : 'Sign in'}
                 aria-current={pathname === '/account' ? 'page' : undefined}
                 className="group flex w-10 items-center rounded-lg"
               >
                 <div className="bg-sidebar-accent text-muted-foreground border-sidebar group-hover:brightness-150 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 transition-all">
-                  {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  {account?.avatarUrl ? (
+                    <img src={account.avatarUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <User className="h-6 w-6" weight="Linear" />
                   )}

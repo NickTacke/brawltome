@@ -11,6 +11,7 @@
     "apps/api": {
       "name": "@brawltome/api",
       "dependencies": {
+        "@brawltome/accounts": "workspace:*",
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/clan": "workspace:*",
         "@brawltome/contracts": "workspace:*",
@@ -73,6 +74,7 @@
     "apps/web": {
       "name": "@brawltome/web",
       "dependencies": {
+        "@brawltome/contracts": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "@brawltome/ui": "workspace:*",
         "@heroicons/react": "^2.2.0",
@@ -107,6 +109,16 @@
         "ioredis": "^5.8.0",
       },
       "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/contexts/accounts": {
+      "name": "@brawltome/accounts",
+      "dependencies": {
+        "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
         "typescript": "^5.7.0",
       },
     },
@@ -270,6 +282,7 @@
     "tooling/database-migrations": {
       "name": "@brawltome/database-migrations",
       "dependencies": {
+        "@brawltome/accounts": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
         "postgres": "^3.4.0",
@@ -347,6 +360,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@1.9.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-tlbhLk+WXZmgwoIKwHIHEBZUwxml7bRJgk0X2sPyNR3S93cdRq6XulAZRQJ17FYGGzWne0fgrXBKpl7l4M87Hg=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@1.9.4", "", { "os": "win32", "cpu": "x64" }, "sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA=="],
+
+    "@brawltome/accounts": ["@brawltome/accounts@workspace:packages/contexts/accounts"],
 
     "@brawltome/api": ["@brawltome/api@workspace:apps/api"],
 

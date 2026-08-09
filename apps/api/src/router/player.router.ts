@@ -77,8 +77,8 @@ async function requestPlayerRefresh(
     }
 
     let actor: Parameters<Context['requestAdmission']['admitActor']>[0]
-    if (ctx.user) {
-      actor = { kind: 'authenticated', accountId: ctx.user.id, ip: ctx.clientIp }
+    if (ctx.account) {
+      actor = { kind: 'authenticated', accountId: ctx.account.id, ip: ctx.clientIp }
     } else {
       if (!ctx.refreshTrust.trusted) {
         if (!input.turnstileToken) {
@@ -99,7 +99,7 @@ async function requestPlayerRefresh(
       operationKey: dedupeKey,
       brawlhallaId: input.id,
       staleSections,
-      provenance: { source: 'interactive-api', requestedBy: ctx.user?.id },
+      provenance: { source: 'interactive-api', requestedBy: ctx.account?.id },
       reservationTtlSeconds: 30,
     })
     if (reserved.outcome === 'already-active') {

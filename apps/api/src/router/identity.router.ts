@@ -3,19 +3,15 @@ import { protectedProcedure, publicProcedure, router } from '../trpc/trpc'
 
 export const identityRouter = router({
   me: publicProcedure.query(async ({ ctx }) => {
-    if (!ctx.user) return null
-    const { primaryAccount } = ctx.user
-    const avatarUrl = primaryAccount.avatarHash
-      ? `https://cdn.discordapp.com/avatars/${primaryAccount.providerAccountId}/${primaryAccount.avatarHash}.png`
-      : null
+    if (!ctx.account) return null
 
-    const link = await ctx.playerLinkRepo.findByUserId(ctx.user.id)
+    const link = await ctx.playerLinkRepo.findByUserId(ctx.account.id)
 
     return {
-      id: ctx.user.id,
-      username: primaryAccount.username,
-      avatarUrl,
-      createdAt: ctx.user.createdAt,
+      id: ctx.account.id,
+      username: ctx.account.displayName,
+      avatarUrl: ctx.account.avatarUrl,
+      createdAt: ctx.account.createdAt,
       playerLink: link
         ? {
             brawlhallaId: link.brawlhallaId,
@@ -28,7 +24,7 @@ export const identityRouter = router({
   }),
 
   unlinkPlayer: protectedProcedure.mutation(async ({ ctx }) => {
-    await unlinkPlayer({ playerLinkRepo: ctx.playerLinkRepo }, ctx.user.id)
+    await unlinkPlayer({ playerLinkRepo: ctx.playerLinkRepo }, ctx.account.id)
     return { success: true }
   }),
 })

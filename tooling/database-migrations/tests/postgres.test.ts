@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
-import { globalMigrationInventory } from '../src/inventories'
 import { type Migration, checksumSql } from '../src/plan'
 import { migratePostgres } from '../src/postgres'
 
@@ -48,6 +47,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   })
 
   test('serializes fresh runners, applies once, reruns as a no-op, and rolls back failures', async () => {
+    const { globalMigrationInventory } = await import('../src/inventories')
     const databaseName = `brawltome_migrations_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'

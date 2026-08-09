@@ -1,4 +1,13 @@
 export {
+  accountSchema,
+  accountViewSchema,
+  anonymousAccountViewSchema,
+  parseAccountViewOutput,
+  signedInAccountViewSchema,
+  type AccountContract,
+  type AccountViewContract,
+} from './account'
+export {
   contractProofEventSchema,
   contractProofSchema,
   createContractProof,

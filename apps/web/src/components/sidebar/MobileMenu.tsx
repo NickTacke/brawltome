@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 
-import { useMe } from '@/lib/auth'
+import { useAccount } from '@/lib/auth'
 import { useSidebar } from './SidebarProvider'
 import { navItems } from './nav-items'
 import { socialLinks } from './social-links'
@@ -18,7 +18,7 @@ import { socialLinks } from './social-links'
 export function MobileMenu() {
   const { isMobileOpen, close } = useSidebar()
   const pathname = usePathname()
-  const { user } = useMe()
+  const { account } = useAccount()
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   // Body scroll lock while open. iOS Safari still scrolls the document behind
@@ -122,12 +122,12 @@ export function MobileMenu() {
             onClick={close}
             className="text-muted-foreground hover:bg-white/[0.04] hover:text-foreground inline-flex items-center gap-2.5 rounded-xl px-1.5 py-2.5 text-base font-medium transition-colors"
           >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+            {account?.avatarUrl ? (
+              <img src={account.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
             ) : (
               <User className="h-5 w-5" weight="Linear" />
             )}
-            {user ? user.username : 'Sign in'}
+            {account ? account.displayName : 'Sign in'}
           </Link>
 
           <div className="flex items-center gap-1">

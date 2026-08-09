@@ -1,6 +1,7 @@
+import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
-import type { PlayerLinkRepo, Session, SessionRepo, UserRepo, UserWithPrimaryAccount } from '@brawltome/identity'
+import type { PlayerLinkRepo } from '@brawltome/identity'
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { PlayerReferenceQueries } from '@brawltome/player'
 import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
@@ -23,15 +24,13 @@ export interface Context {
   refreshTrust: { trusted: boolean; grant(): void }
   verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
   clanRepo: ClanRepo
-  userRepo: UserRepo
-  sessionRepo: SessionRepo
+  accounts: Accounts
   playerLinkRepo: PlayerLinkRepo
   steamLinkQueue: Queue<{ userId: string; steamId: string; caller: 'background' }>
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined
-  user: UserWithPrimaryAccount | null
-  session: Session | null
+  account: Account | null
   matchRepo: MatchRepo | null
   r2: R2Client | null
   matchmakingEnabled: boolean
