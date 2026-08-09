@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/accounts": "workspace:*",
     "@brawltome/player": "workspace:*",
     "@brawltome/request-admission": "workspace:*",
     "@brawltome/refresh-operations": "workspace:*",

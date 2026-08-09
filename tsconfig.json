@@ -11,6 +11,7 @@
     "sourceMap": true,
     "jsx": "react-jsx",
     "paths": {
+      "@brawltome/accounts": ["./packages/contexts/accounts/index.ts"],
       "@brawltome/database": ["./packages/database/src/index.ts"],
       "@brawltome/bhapi": ["./packages/bhapi/src/index.ts"],
       "@brawltome/ui": ["./packages/ui/src/index.ts"],

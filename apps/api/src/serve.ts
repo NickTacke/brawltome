@@ -1,12 +1,7 @@
+import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts/composition'
 import { createClanRepo } from '@brawltome/clan'
 import { closeDatabase, db } from '@brawltome/database'
-import {
-  SESSION_TTL_MS,
-  createPlayerLinkRepo,
-  createSessionRepo,
-  createUserRepo,
-  getCurrentUser,
-} from '@brawltome/identity'
+import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
 import { createPlayerRepo, playerMigrationInventory } from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
@@ -33,7 +28,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
 import { createDatabasePlayerReferenceQueries } from './adapters/player-reference.database'
-import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
+import { SESSION_COOKIE, SESSION_COOKIE_TTL_SEC, buildSessionCookie, parseCookies } from './auth/cookies'
 import { internalSecretValid } from './auth/internal-secret'
 import {
   REFRESH_TRUST_COOKIE,
@@ -66,6 +61,8 @@ if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimi
   throw new Error('AUTHENTICATED_REFRESH_IP_LIMIT must be a positive integer')
 }
 
+const accountsRuntime = createPostgresAccounts(databaseUrl)
+const { accounts } = accountsRuntime
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
 
@@ -97,8 +94,6 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
   sourceLimits: { 'brawlhalla-v0': 180 },
 })
 const clanRepo = createClanRepo(db)
-const userRepo = createUserRepo(db)
-const sessionRepo = createSessionRepo(db)
 const playerLinkRepo = createPlayerLinkRepo(db)
 const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
   redis,
@@ -120,6 +115,7 @@ const postgresReadiness = createPostgresReadiness(databaseUrl, [
   ...playerMigrationInventory,
   ...refreshOperationsMigrationInventory,
   ...requestAdmissionMigrationInventory,
+  ...accountsMigrationInventory,
 ])
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -146,6 +142,7 @@ const lifecycle = createRuntimeLifecycle({
     },
     { name: 'operations-postgres', close: refreshOperations.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
+    { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'database-postgres', close: closeDatabase },
     {
       name: 'redis',
@@ -176,8 +173,7 @@ const sharedCtx = {
   requestAdmission,
   verifyRefreshChallenge: verifyTurnstileResult,
   clanRepo,
-  userRepo,
-  sessionRepo,
+  accounts,
   playerLinkRepo,
   steamLinkQueue,
   matchRepo,
@@ -209,7 +205,7 @@ app.use(
   }),
 )
 
-app.route('/auth', createAuthRoutes({ userRepo, sessionRepo, playerLinkRepo, steamLinkQueue, config: authConfig }))
+app.route('/auth', createAuthRoutes({ accounts, playerLinkRepo, steamLinkQueue, config: authConfig }))
 app.route('/internal/contracts', createContractProofRoutes())
 app.route('/internal/operations', createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET))
 
@@ -220,7 +216,7 @@ app.route(
     r2,
     redis,
     metrics,
-    getUserFromCookie: { userRepo, sessionRepo },
+    accounts,
     enabled: matchmakingLive,
   }),
 )
@@ -244,12 +240,12 @@ app.use(
 
       const cookies = parseCookies(c.req.header('cookie'))
       const rawToken = cookies[SESSION_COOKIE] ?? null
-      const current = await getCurrentUser({ userRepo, sessionRepo }, rawToken)
+      const authentication = await accounts.authenticate(rawToken)
       const refreshTrustToken = cookies[REFRESH_TRUST_COOKIE]
       const refreshTrusted = verifyRefreshTrust(refreshTrustToken, refreshTrustSecret)
 
-      if (current?.extended && rawToken) {
-        c.header('Set-Cookie', buildSessionCookie(rawToken, SESSION_TTL_MS / 1000), { append: true })
+      if (authentication.status === 'signedIn' && authentication.extended && rawToken) {
+        c.header('Set-Cookie', buildSessionCookie(rawToken, SESSION_COOKIE_TTL_SEC), { append: true })
       }
 
       return {
@@ -257,12 +253,11 @@ app.use(
         clientIp,
         isBot,
         internalSecret,
-        user: current?.user ?? null,
-        session: current?.session ?? null,
+        account: authentication.status === 'signedIn' ? authentication.account : null,
         refreshTrust: {
           trusted: refreshTrusted,
           grant: () => {
-            if (!refreshTrusted && !current?.user) {
+            if (!refreshTrusted && authentication.status !== 'signedIn') {
               c.header('Set-Cookie', buildRefreshTrustCookie(issueRefreshTrust(refreshTrustSecret)), { append: true })
             }
           },

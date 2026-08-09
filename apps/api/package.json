@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/accounts": "workspace:*",
     "@brawltome/bhapi": "workspace:*",
     "@brawltome/clan": "workspace:*",
     "@brawltome/contracts": "workspace:*",

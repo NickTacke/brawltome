@@ -4,28 +4,28 @@ import superjson from 'superjson'
 import { createProtectedMiddleware } from '../../src/trpc/trpc'
 
 interface TestCtx {
-  user: { id: string } | null
+  account: { id: string } | null
 }
 
 const t = initTRPC.context<TestCtx>().create({ transformer: superjson })
 const middleware = createProtectedMiddleware()
 const procedure = t.procedure.use(middleware)
-const router = t.router({ test: procedure.query(({ ctx }) => ctx.user.id) })
+const router = t.router({ test: procedure.query(({ ctx }) => ctx.account.id) })
 const caller = t.createCallerFactory(router)
 
 describe('protectedProcedure', () => {
-  it('allows requests with a user', async () => {
-    const result = await caller({ user: { id: 'u1' } }).test()
+  it('allows requests with an authenticated account', async () => {
+    const result = await caller({ account: { id: 'u1' } }).test()
     expect(result).toBe('u1')
   })
 
   it('rejects anonymous requests with UNAUTHORIZED', async () => {
     try {
-      await caller({ user: null }).test()
+      await caller({ account: null }).test()
       throw new Error('should have thrown')
-    } catch (e) {
-      expect(e).toBeInstanceOf(TRPCError)
-      expect((e as TRPCError).code).toBe('UNAUTHORIZED')
+    } catch (error) {
+      expect(error).toBeInstanceOf(TRPCError)
+      expect((error as TRPCError).code).toBe('UNAUTHORIZED')
     }
   })
 })

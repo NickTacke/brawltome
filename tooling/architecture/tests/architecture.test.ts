@@ -166,7 +166,7 @@ describe('V3 dependency architecture', () => {
         'v2-clan-shared-package',
         'v2-discord-api-router-app-import',
         'v2-discord-api-router-undeclared',
-        'v2-identity-database-adapter',
+        'v2-identity-player-link-database-adapter',
         'v2-matchmaking-database-adapter',
         'v2-matchmaking-replay-package',
         'v2-matchmaking-shared-package',

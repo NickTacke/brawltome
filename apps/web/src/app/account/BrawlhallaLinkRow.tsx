@@ -7,9 +7,10 @@ import { useState } from 'react'
 
 interface BrawlhallaLinkRowProps {
   link: PlayerLinkInfo | null
+  loading?: boolean
 }
 
-export function BrawlhallaLinkRow({ link }: BrawlhallaLinkRowProps) {
+export function BrawlhallaLinkRow({ link, loading = false }: BrawlhallaLinkRowProps) {
   const queryClient = useQueryClient()
   const [pending, setPending] = useState(false)
 
@@ -22,6 +23,23 @@ export function BrawlhallaLinkRow({ link }: BrawlhallaLinkRowProps) {
     } finally {
       setPending(false)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-white/[0.06] p-2">
+            <Gamepad2 className="text-muted-foreground h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">Brawlhalla</p>
+            <p className="text-muted-foreground text-xs">Loading linked player...</p>
+          </div>
+        </div>
+        <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+      </div>
+    )
   }
 
   if (!link) {

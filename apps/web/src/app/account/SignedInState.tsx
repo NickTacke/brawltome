@@ -1,36 +1,41 @@
 'use client'
 
-import { type Me, signOut } from '@/lib/auth'
+import { signOut, usePlayerLink } from '@/lib/auth'
+import type { AccountContract } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link2, Users } from 'lucide-react'
 import { BrawlhallaLinkRow } from './BrawlhallaLinkRow'
 import { DiscordIcon } from './DiscordIcon'
 
 interface SignedInStateProps {
-  user: Me
+  account: AccountContract
 }
 
-export function SignedInState({ user }: SignedInStateProps) {
+export function SignedInState({ account }: SignedInStateProps) {
   const queryClient = useQueryClient()
-  const memberSince = new Date(user.createdAt).toLocaleDateString('en-US', {
+  const { playerLink, isLoading: playerLinkLoading } = usePlayerLink()
+  const memberSince = new Date(account.createdAt).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
   })
 
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col gap-6 px-6 py-12">
-      {/* Profile */}
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
         <div className="flex items-center gap-4">
-          {user.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover ring-2 ring-white/[0.08]" />
+          {account.avatarUrl ? (
+            <img
+              src={account.avatarUrl}
+              alt=""
+              className="h-16 w-16 rounded-full object-cover ring-2 ring-white/[0.08]"
+            />
           ) : (
             <div className="bg-muted flex h-16 w-16 items-center justify-center rounded-full ring-2 ring-white/[0.08]">
               <Users className="text-muted-foreground h-7 w-7" />
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold tracking-tight">{user.username}</h1>
+            <h1 className="truncate text-xl font-bold tracking-tight">{account.displayName}</h1>
             <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
               <DiscordIcon className="h-3.5 w-3.5" />
               <span>Connected via Discord</span>
@@ -40,11 +45,10 @@ export function SignedInState({ user }: SignedInStateProps) {
         </div>
       </div>
 
-      {/* Linked Accounts */}
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
         <h2 className="text-sm font-semibold">Linked Accounts</h2>
         <div className="mt-4 space-y-3">
-          <BrawlhallaLinkRow link={user.playerLink} />
+          <BrawlhallaLinkRow link={playerLink} loading={playerLinkLoading} />
           <div className="border-border/50 border-t" />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -63,7 +67,6 @@ export function SignedInState({ user }: SignedInStateProps) {
         </div>
       </div>
 
-      {/* Following / Followers */}
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
         <div className="flex items-center gap-4">
           <div className="text-center">
@@ -81,7 +84,6 @@ export function SignedInState({ user }: SignedInStateProps) {
         </p>
       </div>
 
-      {/* Sign out */}
       <button
         type="button"
         onClick={() => signOut(queryClient)}

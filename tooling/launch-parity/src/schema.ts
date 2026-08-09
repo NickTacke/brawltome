@@ -1,5 +1,10 @@
 export type ParityStatus = 'planned' | 'implemented' | 'verified' | 'waived'
-export type ParityArea = 'shell-navigation' | 'placeholder' | 'preserved-public-route' | 'refresh-admission'
+export type ParityArea =
+  | 'account-authentication'
+  | 'shell-navigation'
+  | 'placeholder'
+  | 'preserved-public-route'
+  | 'refresh-admission'
 export type EvidenceKind = 'unit' | 'integration' | 'browser' | 'manual' | 'external'
 
 export type ParityEvidence = {

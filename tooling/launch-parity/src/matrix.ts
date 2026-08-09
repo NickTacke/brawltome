@@ -1,5 +1,24 @@
 import type { ParityArea, ParityRow } from './schema'
 
+function verifiedAccount(
+  id: string,
+  requirement: string,
+  destinations: string[],
+  implementation: string[],
+  evidence: ParityRow['evidence'],
+): ParityRow {
+  return {
+    id,
+    area: 'account-authentication',
+    requirement,
+    sourceIssue: '#203',
+    status: 'verified',
+    destinations,
+    implementation,
+    evidence,
+  }
+}
+
 function implemented(
   id: string,
   area: ParityArea,
@@ -22,6 +41,53 @@ function implemented(
 }
 
 export const launchParityMatrix: readonly ParityRow[] = [
+  verifiedAccount(
+    'account.canonical-view',
+    'Anonymous and signed-in web account identity uses the canonical Accounts contract.',
+    ['/account'],
+    ['packages/contracts/src/account.ts', 'apps/api/src/router/account.router.ts', 'apps/web/src/lib/auth.ts'],
+    [
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/account.test.ts',
+        assertion: 'Strict anonymous and signed-in account contracts reject persistence details.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/lib/auth.test.ts',
+        assertion: 'Web parses the canonical account response rather than an inferred identity shape.',
+      },
+    ],
+  ),
+  verifiedAccount(
+    'account.sign-in-sign-out',
+    'Discord sign-in and origin-protected sign-out pass through Accounts while preserving session cookies.',
+    ['/auth/discord/login', '/auth/discord/callback', '/auth/signout'],
+    ['packages/contexts/accounts/src/accounts.ts', 'apps/api/src/auth/routes.ts'],
+    [
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/identity/auth-routes.test.ts',
+        assertion: 'OAuth callback and sign-out delegate through Accounts and preserve cookie behavior.',
+      },
+    ],
+  ),
+  {
+    id: 'account.v2-session-migration',
+    area: 'account-authentication',
+    requirement: 'Valid V2 OAuth identities and sessions retain their identifiers and authenticate after migration.',
+    sourceIssue: '#203',
+    status: 'implemented',
+    destinations: [],
+    implementation: [
+      'packages/contexts/accounts/migrations/0001-initialize-and-import-v2.ts',
+      'packages/contexts/accounts/src/v2-compatibility.ts',
+      'tooling/database-migrations/src/inventories.ts',
+    ],
+    evidence: [],
+    verificationGap:
+      'Service-backed evidence requires DATABASE_URL and runs in the PostgreSQL-enabled CI check job, not this database-less parity job.',
+  },
   implemented(
     'shell.desktop-rail',
     'shell-navigation',

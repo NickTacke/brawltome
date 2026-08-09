@@ -1,6 +1,5 @@
+import type { Accounts } from '@brawltome/accounts'
 import { knownHeroIds, knownLevelIds } from '@brawltome/game-data'
-import type { GetCurrentUserDeps } from '@brawltome/identity'
-import { getCurrentUser } from '@brawltome/identity'
 import { type IngestDeps, IngestError, type MatchRepo, ingestReplay } from '@brawltome/matchmaking'
 import { ParseBoundsError, type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
 import { type MetricsRegistry, type R2Client, checkRateLimit } from '@brawltome/shared'
@@ -25,7 +24,7 @@ export interface MatchmakingRoutesDeps {
   r2: R2Client | null
   redis: Redis
   metrics: MetricsRegistry
-  getUserFromCookie: GetCurrentUserDeps
+  accounts: Accounts
   enabled: boolean
 }
 
@@ -52,10 +51,10 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
     async (c) => {
       const cookies = parseCookies(c.req.header('cookie') ?? '')
       const token = cookies[SESSION_COOKIE]
-      const current = await getCurrentUser(deps.getUserFromCookie, token ?? null)
-      if (!current) return c.json({ code: 'unauthorized' }, 401)
+      const authentication = await deps.accounts.authenticate(token ?? null)
+      if (authentication.status === 'anonymous') return c.json({ code: 'unauthorized' }, 401)
 
-      const userId = current.user.id
+      const userId = authentication.account.id
 
       const rl = await checkRateLimit(deps.redis, `user:${userId}`, 'ingest', deps.metrics)
       if (!rl.allowed) {
