@@ -6,6 +6,7 @@ import {
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
+import { createPostgresReadiness } from '../src/postgres-readiness'
 import { runOneProofOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
@@ -51,6 +52,20 @@ beforeAll(async () => {
   const setup = postgres(connectionString, { max: 1 })
   try {
     for (const migration of refreshOperationsMigrationInventory) await setup.unsafe(migration.sql)
+    await setup.unsafe(`
+      CREATE SCHEMA brawltome_migrations;
+      CREATE TABLE brawltome_migrations.history (
+        ordinal integer PRIMARY KEY,
+        identity text NOT NULL UNIQUE,
+        checksum char(64) NOT NULL
+      );
+    `)
+    for (const [ordinal, migration] of refreshOperationsMigrationInventory.entries()) {
+      await setup`
+        INSERT INTO brawltome_migrations.history (ordinal, identity, checksum)
+        VALUES (${ordinal}, ${migration.identity}, ${migration.checksum})
+      `
+    }
   } finally {
     await setup.end()
   }
@@ -76,6 +91,58 @@ async function expire(operationId: string) {
 }
 
 describe('durable Refresh Operations', () => {
+  test('checks PostgreSQL and exact runtime schema without applying changes', async () => {
+    const readiness = createPostgresReadiness(connectionString, refreshOperationsMigrationInventory)
+    await readiness.check()
+
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      await control`
+        UPDATE brawltome_migrations.history
+        SET checksum = ${'0'.repeat(64)}
+        WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+      `
+      await expect(readiness.check()).rejects.toThrow('schema checksum mismatch')
+      await control`
+        UPDATE brawltome_migrations.history
+        SET checksum = ${refreshOperationsMigrationInventory[0].checksum}
+        WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+      `
+      await readiness.check()
+    } finally {
+      await control.end()
+      await readiness.close()
+    }
+  })
+
+  test('renews an active lease until its durable effect and completion commit', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const accepted = await operations.accept({
+      dedupeKey: `renew:${randomUUID()}`,
+      operationKey: `renew-effect:${randomUUID()}`,
+      workClass: 'interactive',
+      payload: { value: 'renewed' },
+      provenance: { source: 'integration-test', requestedBy: 'issue-214' },
+    })
+
+    await runOneProofOperation(operations, 'renewing-worker', {
+      leaseMs: 1_000,
+      renewEveryMs: 100,
+      retryDelayMs: 1,
+      admission: testAdmission,
+      executeEffect: async (lease) => {
+        await Bun.sleep(1_200)
+        return operations.commitProofEffect(lease)
+      },
+    })
+
+    const state = await operations.inspect(accepted.operationId)
+    expect(state.operation.status).toBe('succeeded')
+    expect(state.effects).toHaveLength(1)
+    expect(state.attempts.map(({ outcome }) => outcome)).toEqual(['succeeded'])
+    await operations.close()
+  })
+
   test('deduplicates acceptance, notifies, and reconciles a final-attempt crash after one effect', async () => {
     const producer = createPostgresRefreshOperations(connectionString)
     let notifiedOperationId = ''

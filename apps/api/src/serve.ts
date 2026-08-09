@@ -1,5 +1,5 @@
 import { createClanRepo } from '@brawltome/clan'
-import { db } from '@brawltome/database'
+import { closeDatabase, db } from '@brawltome/database'
 import {
   SESSION_TTL_MS,
   createPlayerLinkRepo,
@@ -8,9 +8,12 @@ import {
   getCurrentUser,
 } from '@brawltome/identity'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import { createPlayerRepo } from '@brawltome/player/composition'
+import { createPlayerRepo, playerMigrationInventory } from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
-import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
+import {
+  createPostgresRefreshOperations,
+  refreshOperationsMigrationInventory,
+} from '@brawltome/refresh-operations/composition'
 import {
   TIERED_TTL,
   checkRateLimit,
@@ -28,11 +31,15 @@ import { createDatabasePlayerReferenceQueries } from './adapters/player-referenc
 import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
 import { internalSecretValid } from './auth/internal-secret'
 import { createAuthRoutes } from './auth/routes'
+import { createHealthRoutes } from './health-routes'
 import { readMatchmakingConfig } from './matchmaking-config'
+import { createPostgresReadiness } from './postgres-readiness'
 import { appRouter } from './router'
 import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
+import { readRuntimeConfig } from './runtime-config'
+import { createRuntimeLifecycle } from './runtime-lifecycle'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
@@ -42,8 +49,6 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required')
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
-
-await initGameData(db)
 
 // API only enqueues -- concurrency 0 means no consumer loop
 const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
@@ -88,6 +93,44 @@ const matchmakingConfig = readMatchmakingConfig()
 const r2 = createR2Client(matchmakingConfig.r2)
 const matchmakingLive = matchmakingConfig.enabled && !!r2
 const matchRepo = matchmakingLive ? createMatchRepo(db) : null
+const postgresReadiness = createPostgresReadiness(databaseUrl, [
+  ...playerMigrationInventory,
+  ...refreshOperationsMigrationInventory,
+])
+let gameDataReady = false
+const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
+const lifecycle = createRuntimeLifecycle({
+  ...readRuntimeConfig(process.env),
+  readinessProbes: [
+    { name: 'postgres-schema', check: postgresReadiness.check },
+    {
+      name: 'game-data',
+      check: async () => {
+        if (!gameDataReady) throw new Error('game data is not initialized')
+      },
+    },
+  ],
+  stopAdmission: () => {
+    void server.current?.stop(false)
+  },
+  closers: [
+    {
+      name: 'api-server',
+      close: async () => {
+        await server.current?.stop(true)
+      },
+    },
+    { name: 'operations-postgres', close: refreshOperations.close },
+    { name: 'database-postgres', close: closeDatabase },
+    {
+      name: 'redis',
+      close: async () => {
+        await redis.quit()
+      },
+    },
+    { name: 'readiness-postgres', close: postgresReadiness.close },
+  ],
+})
 
 console.log(
   `[api] matchmaking: ${matchmakingLive ? 'ENABLED' : 'disabled'}${
@@ -191,7 +234,7 @@ app.use(
   }),
 )
 
-app.get('/health', (c) => c.json({ status: 'healthy' }))
+app.route('/health', createHealthRoutes(lifecycle))
 
 app.get('/internal/metrics', async (c) => {
   const secret = c.req.header('x-internal-secret')
@@ -288,10 +331,52 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
 })
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
-
-export default {
+server.current = Bun.serve({
   port,
-  fetch: app.fetch,
+  fetch: async (request) => {
+    const pathname = new URL(request.url).pathname
+    if (pathname.startsWith('/health/')) return app.fetch(request)
+
+    const finishWork = lifecycle.startWork()
+    if (!finishWork) {
+      return Response.json({ error: 'service_unavailable' }, { status: 503, headers: { 'retry-after': '1' } })
+    }
+    try {
+      return await app.fetch(request)
+    } finally {
+      finishWork()
+    }
+  },
+})
+lifecycle.markReady()
+
+async function initializeGameData(): Promise<void> {
+  while (!lifecycle.signal.aborted && !gameDataReady) {
+    const finishWork = lifecycle.startWork()
+    if (!finishWork) return
+    try {
+      await initGameData(db)
+      gameDataReady = true
+    } catch (error) {
+      console.error('[api] game data initialization failed; runtime remains unready', error)
+    } finally {
+      finishWork()
+    }
+    if (!gameDataReady) await Bun.sleep(1_000)
+  }
 }
+void initializeGameData()
+
+let shutdownRequested = false
+function requestShutdown(): void {
+  if (shutdownRequested) return
+  shutdownRequested = true
+  lifecycle.beginShutdown()
+  void lifecycle.shutdown().then(({ drained, cleanupCompleted, errors }) => {
+    if (!drained || !cleanupCompleted) process.exit(1)
+    if (errors.length > 0) process.exitCode = 1
+  })
+}
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 
 console.log(`API server running on port ${port}`)

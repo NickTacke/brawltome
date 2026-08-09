@@ -47,7 +47,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     maintenance: 1,
   }
   const admission: AdmissionConfig = {
-    totalConcurrency: positiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, 8, 'OPERATIONS_TOTAL_CONCURRENCY', 10_000),
+    totalConcurrency: positiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, 8, 'OPERATIONS_TOTAL_CONCURRENCY', 32),
     interactiveReservation: positiveInteger(
       env.OPERATIONS_INTERACTIVE_RESERVATION,
       2,

@@ -31,19 +31,15 @@ USER bun
 CMD ["bun", "run", "db:migrate"]
 
 FROM base AS api
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app .
 USER bun
+STOPSIGNAL SIGTERM
 CMD ["bun", "run", "apps/api/src/serve.ts"]
-
-FROM base AS worker
-COPY --from=build /app .
-USER bun
-CMD ["bun", "run", "apps/api/src/worker.ts"]
 
 FROM base AS operations-worker
 COPY --from=build /app .
 USER bun
+STOPSIGNAL SIGTERM
 CMD ["bun", "run", "apps/api/src/operations-worker.ts"]
 
 FROM base AS discord-bot
