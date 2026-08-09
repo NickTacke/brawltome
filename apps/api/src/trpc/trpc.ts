@@ -42,6 +42,7 @@ const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
 const protectedMiddleware = createProtectedMiddleware()
 
 export const router = t.router
+export const mergeRouters = t.mergeRouters
 export const publicProcedure = t.procedure
 export const createInternalProcedure = (expectedSecret: string) =>
   t.procedure.use(createInternalMiddleware(expectedSecret))

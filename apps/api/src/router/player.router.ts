@@ -1,11 +1,12 @@
-import { discoverPlayer, getPlayer, isStale } from '@brawltome/player'
+import { discoverPlayer, getV2PlayerProfile, isStale } from '@brawltome/player/v2-compatibility'
 import { TIERED_TTL, checkRateLimit, verifyTurnstile } from '@brawltome/shared'
 import { z } from 'zod'
-import { internalProcedure, router } from '../trpc/trpc'
+import { internalProcedure, mergeRouters, router } from '../trpc/trpc'
+import { createPlayerReferenceRouter } from './player-reference.router'
 
-export const playerRouter = router({
+const v2PlayerRouter = router({
   byId: internalProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
-    return getPlayer(ctx.playerRepo, input.id)
+    return getV2PlayerProfile(ctx.playerRepo, input.id)
   }),
   refresh: internalProcedure
     .input(z.object({ id: z.number().int().positive(), turnstileToken: z.string() }))
@@ -59,3 +60,5 @@ export const playerRouter = router({
       return { isRefreshing }
     }),
 })
+
+export const playerRouter = mergeRouters(createPlayerReferenceRouter(), v2PlayerRouter)

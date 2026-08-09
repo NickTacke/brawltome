@@ -1,4 +1,5 @@
 import { PlayerProfile } from '@/components/player/PlayerProfile'
+import { loadPlayerWithReference } from '@/lib/player-reference'
 import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
 import type { Metadata } from 'next'
@@ -10,18 +11,14 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
-const getPlayer = cache(async (id: number) => {
-  try {
-    const trpc = await getServerTrpc()
-    return await trpc.player.byId.query({ id })
-  } catch {
-    return null
-  }
+const getPlayerPageData = cache(async (id: number) => {
+  const trpc = await getServerTrpc()
+  return loadPlayerWithReference(trpc, id)
 })
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
-  const player = await getPlayer(Number(id))
+  const { player } = await getPlayerPageData(Number(id))
 
   if (!player) return { title: 'Player Not Found' }
 
@@ -75,7 +72,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function Page({ params }: PageProps) {
   const { id } = await params
-  const initialData = await getPlayer(Number(id))
+  const { player: initialData } = await getPlayerPageData(Number(id))
 
   return (
     <div className="space-y-8">

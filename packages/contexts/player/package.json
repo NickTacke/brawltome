@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./composition": "./composition.ts"
+    "./composition": "./composition.ts",
+    "./v2-compatibility": "./v2-compatibility.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

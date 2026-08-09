@@ -171,6 +171,7 @@ describe('V3 dependency architecture', () => {
         'v2-matchmaking-replay-package',
         'v2-matchmaking-shared-package',
         'v2-player-bhapi-adapter',
+        'v2-player-compatibility-export',
         'v2-player-database-adapter',
         'v2-player-shared-package',
         'v2-ranking-bhapi-adapter',

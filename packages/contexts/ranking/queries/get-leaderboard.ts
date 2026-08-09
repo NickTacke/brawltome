@@ -1,4 +1,4 @@
-import type { PlayerRepo } from '@brawltome/player'
+import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
 import { DEFAULT_PAGE_SIZE, type LeaderboardInput, MAX_PAGE_SIZE, STALE_RANK_MS } from '../ranking'
 
 const MAX_PAGE = 500
