@@ -81,12 +81,15 @@ export const launchParityMatrix: readonly ParityRow[] = [
     destinations: [],
     implementation: [
       'packages/contexts/accounts/migrations/0001-initialize-and-import-v2.ts',
+      'packages/contexts/accounts/migrations/0002-add-v2-auth-cutover-state.ts',
       'packages/contexts/accounts/src/v2-compatibility.ts',
+      'packages/contexts/accounts/src/finalize-v2-auth-cutover.ts',
       'tooling/database-migrations/src/inventories.ts',
+      'tooling/database-migrations/src/finalize-accounts-v2-auth-cutover.ts',
     ],
     evidence: [],
     verificationGap:
-      'Service-backed evidence requires DATABASE_URL and runs in the PostgreSQL-enabled CI check job, not this database-less parity job.',
+      'Service-backed migration, cutover finalization, and legacy-table retirement evidence requires DATABASE_URL and runs in the PostgreSQL-enabled CI check job, not this database-less parity job.',
   },
   implemented(
     'shell.desktop-rail',
