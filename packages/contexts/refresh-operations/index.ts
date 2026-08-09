@@ -19,6 +19,10 @@ export const backgroundWorkClasses = [
 
 export type BackgroundWorkClass = (typeof backgroundWorkClasses)[number]
 
+export const minLeaderboardIntervalMs = 60_000
+export const maxLeaderboardIntervalMs = 24 * 60 * 60 * 1000
+export const maxLeaderboardPageDepth = 20
+
 export type OperationProvenance = {
   source: string
   requestedBy?: string
@@ -52,7 +56,33 @@ export function validateAdmissionConfig(config: AdmissionConfig): AdmissionConfi
   return config
 }
 
+export type LeaderboardOperationPayload = {
+  pageDepth: number
+  intervalMs: number
+}
+
+export function validateLeaderboardOperationPayload(payload: LeaderboardOperationPayload): LeaderboardOperationPayload {
+  if (
+    !Number.isSafeInteger(payload.pageDepth) ||
+    payload.pageDepth < 1 ||
+    payload.pageDepth > maxLeaderboardPageDepth
+  ) {
+    throw new Error(`leaderboard pageDepth must be an integer between 1 and ${maxLeaderboardPageDepth}`)
+  }
+  if (
+    !Number.isSafeInteger(payload.intervalMs) ||
+    payload.intervalMs < minLeaderboardIntervalMs ||
+    payload.intervalMs > maxLeaderboardIntervalMs
+  ) {
+    throw new Error(
+      `leaderboard intervalMs must be an integer between ${minLeaderboardIntervalMs} and ${maxLeaderboardIntervalMs}`,
+    )
+  }
+  return payload
+}
+
 export type AcceptProofOperation = {
+  kind?: 'proof'
   dedupeKey: string
   operationKey: string
   workClass: WorkClass
@@ -61,12 +91,25 @@ export type AcceptProofOperation = {
   maxAttempts?: number
 }
 
+export type AcceptLeaderboardOperation = {
+  kind: 'leaderboard-1v1'
+  dedupeKey: string
+  operationKey: string
+  workClass: 'leaderboard'
+  payload: LeaderboardOperationPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type AcceptOperation = AcceptProofOperation | AcceptLeaderboardOperation
+
 export type AcceptOperationResult = {
   outcome: 'accepted' | 'already-active'
   operationId: string
 }
 
 export type CreateProofSchedule = {
+  kind?: 'proof'
   scheduleKey: string
   operationKeyPrefix: string
   workClass: WorkClass
@@ -77,8 +120,22 @@ export type CreateProofSchedule = {
   maxAttempts?: number
 }
 
+export type CreateLeaderboardSchedule = {
+  kind: 'leaderboard-1v1'
+  scheduleKey: string
+  operationKeyPrefix: string
+  workClass: 'leaderboard'
+  intervalMs: number
+  firstDueAt: string
+  payload: LeaderboardOperationPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type CreateSchedule = CreateProofSchedule | CreateLeaderboardSchedule
+
 export type CreateScheduleResult = {
-  outcome: 'created' | 'already-exists'
+  outcome: 'created' | 'already-exists' | 'reconciled'
   scheduleId: string
 }
 
@@ -115,25 +172,25 @@ export interface InteractiveRefreshOperations {
   rejectExpiredInteractiveRefresh(operationId: string): Promise<TransitionResult>
 }
 
-type OperationLeaseBase = {
+type LeaseFields = {
   operationId: string
   operationKey: string
-  workClass: WorkClass
   provenance: OperationProvenance
   leaseOwner: string
   leaseToken: number
   attemptNumber: number
   maxAttempts: number
+  scheduleWindowAt: string | null
 }
 
-export type OperationLease = OperationLeaseBase &
-  (
-    | { kind: 'proof'; payload: { value: string } }
-    | {
-        kind: 'interactive-player-refresh'
-        payload: { brawlhallaId: number; staleSections: ('ranked' | 'stats')[] }
-      }
-  )
+export type OperationLease =
+  | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
+  | (LeaseFields & {
+      kind: 'interactive-player-refresh'
+      workClass: 'interactive'
+      payload: { brawlhallaId: number; staleSections: ('ranked' | 'stats')[] }
+    })
+  | (LeaseFields & { kind: 'leaderboard-1v1'; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
 
 export type OperationFailure = {
   code: string

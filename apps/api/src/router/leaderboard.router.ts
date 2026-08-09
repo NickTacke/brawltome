@@ -1,8 +1,21 @@
+import { leaderboard1v1InputSchema } from '@brawltome/contracts'
 import { getLeaderboard } from '@brawltome/ranking'
 import { z } from 'zod'
+import { mapLeaderboard1v1Output } from '../mappers/leaderboard.mapper'
 import { publicProcedure, router } from '../trpc/trpc'
 
 export const leaderboardRouter = router({
+  oneVsOne: publicProcedure.input(leaderboard1v1InputSchema).query(async ({ ctx, input }) => {
+    return mapLeaderboard1v1Output(
+      await ctx.rankingQueries.get1v1({
+        region: input.region,
+        page: input.page,
+        pageSize: input.pageSize,
+        snapshotId: input.snapshotId,
+      }),
+    )
+  }),
+
   get: publicProcedure
     .input(
       z
@@ -12,9 +25,7 @@ export const leaderboardRouter = router({
           page: z.number().int().min(1).max(500),
           pageSize: z.number().int().min(1).max(100).optional(),
         })
-        .passthrough(), // accept legacy ?sort=...&order=... silently
+        .passthrough(),
     )
-    .query(async ({ ctx, input }) => {
-      return getLeaderboard({ playerRepo: ctx.playerRepo }, input)
-    }),
+    .query(async ({ ctx, input }) => getLeaderboard({ playerRepo: ctx.playerRepo }, input)),
 })

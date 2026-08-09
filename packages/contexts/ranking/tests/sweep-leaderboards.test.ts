@@ -441,22 +441,24 @@ describe('startSweep', () => {
   it('runs at least one sweep when the lock is free, iterating brackets x regions', async () => {
     await redis.del('sweep:lock')
     let calls = 0
+    const brackets = new Set<string>()
     const stop = startSweep({
       redis,
       repo: asRepo(makeFakeRepo()),
       metrics: NULL_METRICS,
-      fetchPage: async () => {
+      fetchPage: async ({ bracket }) => {
         calls++
+        brackets.add(bracket)
         return { total_pages: 1, rankings: [] }
       },
       tickIntervalMs: 50,
       sweepIntervalMs: 500,
     })
-    // Wait long enough for at least one full sweep (4 brackets × 9 regions = 36 page-1 fetches).
+    // Wait long enough for at least one legacy-mode sweep (3 brackets × 9 regions = 27 page-1 fetches).
     await new Promise((r) => setTimeout(r, 400))
     await stop()
-    // Each sweep fetches page 1 of (4 brackets × 9 regions) = 36 calls per sweep; expect at least 36.
-    expect(calls).toBeGreaterThanOrEqual(36)
+    expect(calls).toBeGreaterThanOrEqual(27)
+    expect(brackets).toEqual(new Set(['2v2', 'solo_2v2', '3v3']))
   })
 
   it('reschedules and recovers when redis throws inside acquireLock', async () => {
@@ -496,7 +498,7 @@ describe('startSweep', () => {
     await redis.del('sweep:lock').catch(() => {})
     // First tick threw inside acquireLock; subsequent ticks must still fire and run a sweep.
     expect(setCalls).toBeGreaterThanOrEqual(2)
-    // Full cycle is 4 brackets × 9 regions = 36 page-1 fetches.
-    expect(fetchCalls).toBeGreaterThanOrEqual(36)
+    // Full legacy cycle is 3 brackets × 9 regions = 27 page-1 fetches.
+    expect(fetchCalls).toBeGreaterThanOrEqual(27)
   })
 })

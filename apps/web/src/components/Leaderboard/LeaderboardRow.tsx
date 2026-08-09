@@ -11,15 +11,18 @@ interface SoloRowProps {
 }
 
 export function SoloLeaderboardRow({ entry, rank }: SoloRowProps) {
-  const wins = entry.rankedWins ?? entry.wins ?? 0
-  const games = entry.rankedGames ?? entry.games ?? 0
-  const winrate = games > 0 ? (wins / games) * 100 : 0
+  const wins = entry.rankedWins ?? entry.wins
+  const games = entry.rankedGames ?? entry.games
+  const winrate = wins !== undefined && games !== undefined && games > 0 ? (wins / games) * 100 : null
   const href = `/player/${entry.brawlhallaId}`
   return (
     <TableRow className="border-border cursor-pointer transition-colors group h-16">
       <TableCell className={`p-0 text-center ${getRankStyle(rank)}`}>
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          #{rank}
+        <Link href={href} prefetch={false} className="flex w-full h-full p-4 flex-col items-center">
+          <span>#{rank}</span>
+          {entry.sourceRank !== undefined && entry.sourceRank !== rank && (
+            <span className="text-[10px] font-normal text-muted-foreground">Source #{entry.sourceRank}</span>
+          )}
         </Link>
       </TableCell>
       <TableCell className="p-0">
@@ -70,20 +73,20 @@ export function SoloLeaderboardRow({ entry, rank }: SoloRowProps) {
       <TableCell className="p-0 text-center">
         <Link href={href} prefetch={false} className="block w-full h-full p-4">
           <div
-            className={`font-bold ${winrate >= 60 ? 'text-success' : winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`font-bold ${winrate !== null && winrate >= 60 ? 'text-success' : winrate !== null && winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}
           >
-            {winrate.toFixed(1)}%
+            {winrate === null ? '---' : `${winrate.toFixed(1)}%`}
           </div>
         </Link>
       </TableCell>
       <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
         <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          {wins}
+          {wins ?? '---'}
         </Link>
       </TableCell>
       <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
         <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          {games}
+          {games ?? '---'}
         </Link>
       </TableCell>
     </TableRow>
@@ -130,7 +133,7 @@ export function TeamLeaderboardRow({ entry }: TeamRowProps) {
         <div className="flex flex-col items-center">
           <span className="font-black text-foreground text-lg tracking-tight">{entry.rating}</span>
           <span className="text-[10px] text-muted-foreground uppercase font-bold">
-            Peak: {entry.peakRating || '---'}
+            Peak: {entry.peakRating ?? '---'}
           </span>
         </div>
       </TableCell>

@@ -200,7 +200,7 @@ const SWEEP_INTERVAL_MS = 15 * 60_000
 const RENEW_LOCK_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`
 const RELEASE_LOCK_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`
 
-const BRACKETS: Bracket[] = ['1v1', '2v2', 'solo_2v2', '3v3']
+const BRACKETS: Bracket[] = ['2v2', 'solo_2v2', '3v3']
 const REGIONS: string[] = ['US-E', 'EU', 'SEA', 'BRZ', 'AUS', 'US-W', 'JPN', 'ME', 'SA']
 
 export interface StartSweepDeps {

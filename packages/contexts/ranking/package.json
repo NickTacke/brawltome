@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./composition": "./composition.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -13,7 +14,8 @@
     "@brawltome/shared": "workspace:*",
     "@brawltome/bhapi": "workspace:*",
     "drizzle-orm": "^0.39.0",
-    "ioredis": "^5.8.0"
+    "ioredis": "^5.8.0",
+    "postgres": "^3.4.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

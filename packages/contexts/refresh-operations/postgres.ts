@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
+  type AcceptOperation,
   type AcceptOperationResult,
-  type AcceptProofOperation,
   type AdmissionConfig,
   type BackgroundWorkClass,
-  type CreateProofSchedule,
+  type CreateLeaderboardSchedule,
+  type CreateSchedule,
   type CreateScheduleResult,
   type FencedResult,
   type InteractivePlayerRefreshReservation,
@@ -16,6 +17,7 @@ import {
   type WorkClass,
   backgroundWorkClasses,
   validateAdmissionConfig,
+  validateLeaderboardOperationPayload,
   workClasses,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
@@ -26,8 +28,8 @@ const utcDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
 
 type OperationRow = {
   id: string
-  operation_key: string
   kind: OperationLease['kind']
+  operation_key: string
   work_class: WorkClass
   payload: OperationLease['payload']
   provenance: { source: string; requestedBy?: string }
@@ -36,18 +38,20 @@ type OperationRow = {
   attempt_count: number
   max_attempts: number
   status: string
+  scheduled_window_at: Date | null
 }
 
 type ScheduleRow = {
   id: string
   schedule_key: string
+  kind: 'proof' | 'leaderboard-1v1'
   work_class: WorkClass
   interval_ms: string | number
   first_due_at: Date
   next_window_number: string | number
   next_due_at: Date
   operation_key_prefix: string
-  payload: { value: string }
+  payload: { value: string } | { pageDepth: number; intervalMs: number }
   provenance: { source: string; requestedBy?: string }
   max_attempts: number
   materialized_at: Date
@@ -60,18 +64,30 @@ type AdmissionCreditRow = {
 }
 
 function toLease(row: OperationRow): OperationLease {
-  return {
+  const common = {
     operationId: row.id,
     operationKey: row.operation_key,
-    kind: row.kind,
-    workClass: row.work_class,
-    payload: row.payload,
     provenance: row.provenance,
     leaseOwner: row.lease_owner,
     leaseToken: Number(row.lease_token),
     attemptNumber: row.attempt_count,
     maxAttempts: row.max_attempts,
-  } as OperationLease
+    scheduleWindowAt: row.scheduled_window_at?.toISOString() ?? null,
+  }
+  if (row.kind === 'leaderboard-1v1') {
+    if (row.work_class !== 'leaderboard' || !('pageDepth' in row.payload)) {
+      throw new Error('invalid durable leaderboard operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (row.kind === 'interactive-player-refresh') {
+    if (row.work_class !== 'interactive' || !('brawlhallaId' in row.payload)) {
+      throw new Error('invalid durable interactive player refresh operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (!('value' in row.payload)) throw new Error('invalid durable proof operation')
+  return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
 }
 
 function parseFirstDueAt(value: string): Date {
@@ -87,7 +103,11 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-function validateSchedule(input: CreateProofSchedule): Date {
+function operationKind(input: { kind?: 'proof' | 'leaderboard-1v1' }): 'proof' | 'leaderboard-1v1' {
+  return input.kind ?? 'proof'
+}
+
+function validateSchedule(input: CreateSchedule): Date {
   if (!input.scheduleKey || input.scheduleKey.length > 200) {
     throw new Error('scheduleKey must contain between 1 and 200 characters')
   }
@@ -96,6 +116,12 @@ function validateSchedule(input: CreateProofSchedule): Date {
   }
   if (!Number.isSafeInteger(input.intervalMs) || input.intervalMs <= 0) {
     throw new Error('intervalMs must be a positive safe integer')
+  }
+  if (operationKind(input) === 'leaderboard-1v1') {
+    const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
+    if (payload.intervalMs !== input.intervalMs) {
+      throw new Error('leaderboard payload intervalMs must match the schedule intervalMs')
+    }
   }
   return parseFirstDueAt(input.firstDueAt)
 }
@@ -316,7 +342,12 @@ export function createPostgresRefreshOperations(
       return updated ? 'transitioned' : 'lease-lost'
     },
 
-    async accept(input: AcceptProofOperation): Promise<AcceptOperationResult> {
+    async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
+      const kind = operationKind(input)
+      if (kind === 'leaderboard-1v1') {
+        if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
+        validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
+      }
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
@@ -325,7 +356,7 @@ export function createPostgresRefreshOperations(
             INSERT INTO refresh_operations.operations
               (id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
             VALUES
-              (${operationId}, 'proof', ${input.dedupeKey}, ${input.operationKey}, ${input.workClass},
+              (${operationId}, ${kind}, ${input.dedupeKey}, ${input.operationKey}, ${input.workClass},
                ${sql.json(input.payload)}, ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
             ON CONFLICT (kind, dedupe_key) WHERE status IN ('pending', 'leased')
             DO NOTHING
@@ -338,7 +369,7 @@ export function createPostgresRefreshOperations(
 
           const [active] = await sql<{ id: string }[]>`
             SELECT id FROM refresh_operations.operations
-            WHERE kind = 'proof' AND dedupe_key = ${input.dedupeKey} AND status IN ('pending', 'leased')
+            WHERE kind = ${kind} AND dedupe_key = ${input.dedupeKey} AND status IN ('pending', 'leased')
           `
           return active ? { outcome: 'already-active' as const, operationId: active.id } : null
         })
@@ -346,15 +377,16 @@ export function createPostgresRefreshOperations(
       }
     },
 
-    async createSchedule(input: CreateProofSchedule): Promise<CreateScheduleResult> {
+    async createSchedule(input: CreateSchedule): Promise<CreateScheduleResult> {
       const firstDueAt = validateSchedule(input)
+      const kind = operationKind(input)
       const scheduleId = randomUUID()
       const [created] = await client<{ id: string }[]>`
         INSERT INTO refresh_operations.schedules
           (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
            operation_key_prefix, payload, provenance, max_attempts)
         VALUES
-          (${scheduleId}, ${input.scheduleKey}, 'proof', ${input.workClass}, ${input.intervalMs},
+          (${scheduleId}, ${input.scheduleKey}, ${kind}, ${input.workClass}, ${input.intervalMs},
            ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${client.json(input.payload)},
            ${client.json(input.provenance)}, ${input.maxAttempts ?? 3})
         ON CONFLICT (schedule_key) DO NOTHING
@@ -364,7 +396,8 @@ export function createPostgresRefreshOperations(
 
       const [existing] = await client<{ id: string; matches: boolean }[]>`
         SELECT id,
-          work_class = ${input.workClass}
+          kind = ${kind}
+          AND work_class = ${input.workClass}
           AND interval_ms = ${input.intervalMs}
           AND first_due_at = ${firstDueAt}
           AND operation_key_prefix = ${input.operationKeyPrefix}
@@ -378,6 +411,49 @@ export function createPostgresRefreshOperations(
       return { outcome: 'already-exists', scheduleId: existing.id }
     },
 
+    async reconcileLeaderboardSchedule(input: CreateLeaderboardSchedule): Promise<CreateScheduleResult> {
+      const firstDueAt = validateSchedule(input)
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
+        const [existing] = await sql<{ id: string; matches: boolean }[]>`
+          SELECT id,
+            kind = 'leaderboard-1v1'
+            AND work_class = 'leaderboard'
+            AND interval_ms = ${input.intervalMs}
+            AND first_due_at = ${firstDueAt}
+            AND operation_key_prefix = ${input.operationKeyPrefix}
+            AND payload = ${sql.json(input.payload)}::jsonb
+            AND provenance = ${sql.json(input.provenance)}::jsonb
+            AND max_attempts = ${input.maxAttempts ?? 3} AS matches
+          FROM refresh_operations.schedules
+          WHERE schedule_key = ${input.scheduleKey}
+          FOR UPDATE
+        `
+        if (existing?.matches) return { outcome: 'already-exists' as const, scheduleId: existing.id }
+        if (existing) {
+          await sql`
+            UPDATE refresh_operations.schedules
+            SET enabled = false,
+                schedule_key = schedule_key || ':retired:' || id::text,
+                updated_at = clock_timestamp()
+            WHERE id = ${existing.id}
+          `
+        }
+        const scheduleId = randomUUID()
+        await sql`
+          INSERT INTO refresh_operations.schedules
+            (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
+             operation_key_prefix, payload, provenance, max_attempts)
+          VALUES
+            (${scheduleId}, ${input.scheduleKey}, 'leaderboard-1v1', 'leaderboard', ${input.intervalMs},
+             ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${sql.json(input.payload)},
+             ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
+        `
+        return { outcome: existing ? ('reconciled' as const) : ('created' as const), scheduleId }
+      })
+    },
+
     async materializeDueSchedules(limit = 100): Promise<MaterializeSchedulesResult> {
       if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
         throw new Error('schedule materialization limit must be an integer between 1 and 1000')
@@ -388,7 +464,7 @@ export function createPostgresRefreshOperations(
           SELECT clock_timestamp() AS materialized_at
         `
         const schedules = await sql<ScheduleRow[]>`
-          SELECT id, schedule_key, work_class, interval_ms, first_due_at, next_window_number,
+          SELECT id, schedule_key, kind, work_class, interval_ms, first_due_at, next_window_number,
                  next_due_at, operation_key_prefix, payload, provenance, max_attempts,
                  ${clock.materialized_at}::timestamptz AS materialized_at,
                  floor(
@@ -417,7 +493,7 @@ export function createPostgresRefreshOperations(
             INSERT INTO refresh_operations.operations
               (id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts, available_at)
             VALUES
-              (${operationId}, 'proof', ${`schedule:${windowIdentity}`},
+              (${operationId}, ${schedule.kind}, ${`schedule:${windowIdentity}`},
                ${`${schedule.operation_key_prefix}:${schedule.id}:${firstWindowNumber}`}, ${schedule.work_class},
                ${sql.json(schedule.payload)}, ${sql.json(schedule.provenance)}, ${schedule.max_attempts},
                ${materializedAt})
@@ -523,24 +599,38 @@ export function createPostgresRefreshOperations(
           if (!selectedClass) return { kind: 'empty' as const }
 
           const [candidate] = await sql<OperationRow[]>`
-            SELECT id, operation_key, kind, work_class, payload, provenance, lease_owner, lease_token,
-                   attempt_count, max_attempts, status
-            FROM refresh_operations.operations
-            WHERE work_class = ${selectedClass}
-              AND ((status = 'pending' AND available_at <= clock_timestamp())
-                OR (status = 'leased' AND lease_expires_at <= clock_timestamp()))
+            SELECT operation.id, operation.kind, operation.operation_key, operation.work_class,
+                   operation.payload, operation.provenance, operation.lease_owner, operation.lease_token,
+                   operation.attempt_count, operation.max_attempts, operation.status,
+                   (
+                     SELECT occurrence.window_due_at
+                       + (occurrence.missed_window_count * schedule.interval_ms) * interval '1 millisecond'
+                     FROM refresh_operations.schedule_occurrences occurrence
+                     JOIN refresh_operations.schedules schedule ON schedule.id = occurrence.schedule_id
+                     WHERE occurrence.operation_id = operation.id
+                   ) AS scheduled_window_at
+            FROM refresh_operations.operations operation
+            WHERE operation.work_class = ${selectedClass}
+              AND ((operation.status = 'pending' AND operation.available_at <= clock_timestamp())
+                OR (operation.status = 'leased' AND operation.lease_expires_at <= clock_timestamp()))
               ${kindFilter}
-            ORDER BY available_at, created_at, id
-            FOR UPDATE SKIP LOCKED
+            ORDER BY operation.available_at, operation.created_at, operation.id
+            FOR UPDATE OF operation SKIP LOCKED
             LIMIT 1
           `
           if (!candidate) return { kind: 'retry' as const }
 
           if (candidate.status === 'leased') {
-            const [effect] = await sql<{ operation_id: string }[]>`
-              SELECT operation_id FROM refresh_operations.proof_effects
-              WHERE operation_id = ${candidate.id}
-            `
+            const [effect] =
+              candidate.kind === 'proof'
+                ? await sql<{ operation_id: string }[]>`
+                    SELECT operation_id FROM refresh_operations.proof_effects
+                    WHERE operation_id = ${candidate.id}
+                  `
+                : await sql<{ operation_id: string }[]>`
+                    SELECT operation_id FROM refresh_operations.leaderboard_effects
+                    WHERE operation_id = ${candidate.id}
+                  `
             if (effect) {
               await sql`
                 UPDATE refresh_operations.attempts
@@ -582,7 +672,7 @@ export function createPostgresRefreshOperations(
                 lease_token = lease_token + 1, attempt_count = attempt_count + 1,
                 updated_at = clock_timestamp()
             WHERE id = ${candidate.id}
-            RETURNING id, operation_key, kind, work_class, payload, provenance, lease_owner, lease_token,
+            RETURNING id, kind, operation_key, work_class, payload, provenance, lease_owner, lease_token,
                       attempt_count, max_attempts, status
           `
           await sql`
@@ -599,7 +689,10 @@ export function createPostgresRefreshOperations(
               `
             }
           }
-          return { kind: 'leased' as const, lease: toLease(leased) }
+          return {
+            kind: 'leased' as const,
+            lease: toLease({ ...leased, scheduled_window_at: candidate.scheduled_window_at }),
+          }
         })
         if (result.kind === 'leased') return result.lease
         if (result.kind === 'empty') return null
@@ -670,12 +763,13 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async commitProofEffect(lease: OperationLease): Promise<FencedResult> {
+    async commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult> {
+      if (lease.kind !== 'proof') throw new Error('commitProofEffect requires a proof operation')
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         const [owned] = await sql<{ id: string; operation_key: string; payload: { value: string } }[]>`
           SELECT id, operation_key, payload FROM refresh_operations.operations
-          WHERE id = ${lease.operationId} AND status = 'leased'
+          WHERE id = ${lease.operationId} AND kind = 'proof' AND status = 'leased'
             AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
             AND lease_expires_at > clock_timestamp()
           FOR UPDATE
@@ -762,7 +856,10 @@ export function createPostgresRefreshOperations(
       const effects = await client`
         SELECT * FROM refresh_operations.proof_effects WHERE operation_id = ${operationId}
       `
-      return { operation, attempts, effects }
+      const leaderboardEffects = await client`
+        SELECT * FROM refresh_operations.leaderboard_effects WHERE operation_id = ${operationId}
+      `
+      return { operation, attempts, effects, leaderboardEffects }
     },
 
     async inspectSchedule(scheduleId: string) {
