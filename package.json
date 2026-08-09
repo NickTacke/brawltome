@@ -19,7 +19,7 @@
     "contracts:generate": "bun run --filter @brawltome/contracts generate",
     "contracts:check": "bun run contracts:generate && git diff --exit-code -- packages/contracts/openapi packages/contracts/rust/src/generated.rs && bun run --filter @brawltome/contracts test && cargo test --locked --manifest-path packages/contracts/rust/Cargo.toml",
     "db:generate": "bun run --filter @brawltome/database generate",
-    "db:migrate": "bun run --filter @brawltome/database migrate",
+    "db:migrate": "bun run --filter @brawltome/database migrate && bun run --filter @brawltome/database-migrations migrate",
     "db:push": "bun run --filter @brawltome/database push"
   },
   "devDependencies": {

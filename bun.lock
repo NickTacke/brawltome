@@ -13,6 +13,7 @@
       "dependencies": {
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/clan": "workspace:*",
+        "@brawltome/contracts": "workspace:*",
         "@brawltome/database": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "@brawltome/identity": "workspace:*",
@@ -245,6 +246,17 @@
         "@types/bun": "latest",
       },
     },
+    "tooling/database-migrations": {
+      "name": "@brawltome/database-migrations",
+      "dependencies": {
+        "@brawltome/player": "workspace:*",
+        "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
@@ -318,6 +330,8 @@
     "@brawltome/contracts": ["@brawltome/contracts@workspace:packages/contracts"],
 
     "@brawltome/database": ["@brawltome/database@workspace:packages/database"],
+
+    "@brawltome/database-migrations": ["@brawltome/database-migrations@workspace:tooling/database-migrations"],
 
     "@brawltome/desktop": ["@brawltome/desktop@workspace:apps/desktop"],
 

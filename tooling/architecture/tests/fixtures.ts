@@ -26,6 +26,7 @@ export const policy: ArchitecturePolicy = {
   localImportAliases: {
     '@fixture/web': ['@/'],
   },
+  workspaceRoleDependencies: {},
   exceptions: [],
 }
 
