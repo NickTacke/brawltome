@@ -1,4 +1,14 @@
 export type { Hurtbox, Legend, LevelMeta, Power, WeaponName } from './src/types'
+export {
+  aggregateWeapons,
+  createLegendReferenceIndex,
+  legendSlug,
+  normalizeWeaponName,
+  type LegendReference,
+  type LegendReferenceIndex,
+  type LegendWeaponStats,
+  type WeaponAggregate,
+} from './src/reference-data'
 
 import { hurtboxes } from './src/generated/hurtboxes'
 import { legends } from './src/generated/legends'
