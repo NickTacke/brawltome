@@ -39,10 +39,11 @@ export function createProtectedMiddleware() {
 }
 
 const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
-const internalMiddleware = createInternalMiddleware(internalSecret)
 const protectedMiddleware = createProtectedMiddleware()
 
 export const router = t.router
 export const publicProcedure = t.procedure
-export const internalProcedure = t.procedure.use(internalMiddleware)
+export const createInternalProcedure = (expectedSecret: string) =>
+  t.procedure.use(createInternalMiddleware(expectedSecret))
+export const internalProcedure = createInternalProcedure(internalSecret)
 export const protectedProcedure = t.procedure.use(protectedMiddleware)

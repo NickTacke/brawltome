@@ -1,0 +1,9 @@
+{
+  "count": 1,
+  "requiredNullable": "present",
+  "occurredAt": "2026-08-09 12:34:56",
+  "event": {
+    "kind": "ready",
+    "attempt": 1
+  }
+}

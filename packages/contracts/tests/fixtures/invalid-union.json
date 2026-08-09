@@ -1,0 +1,8 @@
+{
+  "count": 1,
+  "requiredNullable": "present",
+  "occurredAt": "2026-08-09T12:34:56Z",
+  "event": {
+    "kind": "unknown"
+  }
+}
