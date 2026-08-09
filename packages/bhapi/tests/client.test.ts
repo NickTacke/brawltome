@@ -469,15 +469,26 @@ describe('v1 client', () => {
     }
   })
 
-  it('getAllLegendsV1 paginates and concatenates both pages', async () => {
+  it('admits every paginated V1 HTTP request at the request boundary', async () => {
     const v1 = makeV1Server()
+    const admitted: Array<{ domain: string; path: string }> = []
     try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
+      const client = new BhApiClient({
+        apiKey: 'test',
+        baseUrl: `http://localhost:${v1.port}`,
+        beforeRequest: async (request) => {
+          admitted.push(request)
+        },
+      })
       await client.init()
       const legends = await client.getAllLegendsV1()
       expect(legends).toHaveLength(2)
       expect(legends[0].legend_name).toBe('bodvar')
       expect(legends[1].legend_name).toBe('cassidy')
+      expect(admitted).toEqual([
+        { domain: 'brawlhalla-v1', path: '/static/legends' },
+        { domain: 'brawlhalla-v1', path: '/static/legends' },
+      ])
     } finally {
       v1.stop()
     }

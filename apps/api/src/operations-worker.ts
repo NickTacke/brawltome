@@ -1,24 +1,51 @@
 import { hostname } from 'node:os'
+import { BhApiClient } from '@brawltome/bhapi'
+import { closeDatabase, db } from '@brawltome/database'
+import {
+  createPlayerRepo,
+  playerMigrationInventory,
+  processRefreshRanked,
+  processRefreshStats,
+} from '@brawltome/player/composition'
 import {
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
+import {
+  createPostgresRequestAdmission,
+  requestAdmissionMigrationInventory,
+} from '@brawltome/request-admission/composition'
 import { Hono } from 'hono'
 import { createHealthRoutes } from './health-routes'
 import { readOperationsWorkerConfig } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
 import { createPostgresReadiness } from './postgres-readiness'
+import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
 import { readHealthPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL is required')
+const apiKey = process.env.BRAWLHALLA_API_KEY
+if (!apiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 
 const workerConfig = readOperationsWorkerConfig(process.env)
 const operations = createPostgresRefreshOperations(connectionString, {
   executionConcurrency: workerConfig.admission.totalConcurrency,
 })
-const postgresReadiness = createPostgresReadiness(connectionString, refreshOperationsMigrationInventory)
+const requestAdmission = createPostgresRequestAdmission(connectionString, {
+  authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
+  sourceLimits: {
+    'brawlhalla-v0': 180,
+    'brawlhalla-v1': Number(process.env.BRAWLHALLA_V1_REQUEST_LIMIT ?? 180),
+  },
+})
+const playerRepo = createPlayerRepo(db)
+const postgresReadiness = createPostgresReadiness(connectionString, [
+  ...playerMigrationInventory,
+  ...refreshOperationsMigrationInventory,
+  ...requestAdmissionMigrationInventory,
+])
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
 let listener: Awaited<ReturnType<typeof operations.listen>> | undefined
@@ -40,6 +67,8 @@ const lifecycle = createRuntimeLifecycle({
         await listener?.unlisten()
       },
     },
+    { name: 'request-admission-postgres', close: requestAdmission.close },
+    { name: 'database-postgres', close: closeDatabase },
     { name: 'operations-postgres', close: operations.close },
     { name: 'readiness-postgres', close: postgresReadiness.close },
   ],
@@ -68,9 +97,28 @@ try {
     lifecycle,
     workerId,
     config: workerConfig,
+    reconcile: () => reconcileInteractiveAdmissions(operations, requestAdmission),
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
     },
+    runOne: (repository, slotWorkerId, common) =>
+      runOneRefreshOperation(repository, slotWorkerId, {
+        ...common,
+        sourceAdmission: requestAdmission,
+        executeSection: async (lease, section, admitSourceCall) => {
+          await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
+          const admittedBhapi = new BhApiClient({
+            apiKey,
+            beforeRequest: ({ domain }) => admitSourceCall(domain),
+          })
+          const effect = { operationId: lease.operationId, section, leaseToken: lease.leaseToken }
+          if (section === 'ranked') {
+            await processRefreshRanked({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', effect)
+          } else {
+            await processRefreshStats({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', effect)
+          }
+        },
+      }),
   })
 } catch (error) {
   console.error('[operations-worker] fatal runtime failure', error)

@@ -1,4 +1,10 @@
-export { BhApiClient, RateLimitError, type BhApiClientOptions, type CallOptions } from './client'
+export {
+  BhApiClient,
+  RateLimitError,
+  type BhApiClientOptions,
+  type BhApiSourceDomain,
+  type CallOptions,
+} from './client'
 export {
   RequestQueue,
   type Caller,

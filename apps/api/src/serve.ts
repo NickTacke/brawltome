@@ -15,6 +15,10 @@ import {
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
 import {
+  createPostgresRequestAdmission,
+  requestAdmissionMigrationInventory,
+} from '@brawltome/request-admission/composition'
+import {
   TIERED_TTL,
   checkRateLimit,
   createMetricsRegistry,
@@ -22,6 +26,7 @@ import {
   createR2Client,
   getLegendById,
   initGameData,
+  verifyTurnstileResult,
 } from '@brawltome/shared'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
@@ -30,6 +35,12 @@ import Redis from 'ioredis'
 import { createDatabasePlayerReferenceQueries } from './adapters/player-reference.database'
 import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
 import { internalSecretValid } from './auth/internal-secret'
+import {
+  REFRESH_TRUST_COOKIE,
+  buildRefreshTrustCookie,
+  issueRefreshTrust,
+  verifyRefreshTrust,
+} from './auth/refresh-trust-cookie'
 import { createAuthRoutes } from './auth/routes'
 import { createHealthRoutes } from './health-routes'
 import { readMatchmakingConfig } from './matchmaking-config'
@@ -46,6 +57,14 @@ if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length <
 }
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
+const refreshTrustSecret = process.env.REFRESH_TRUST_COOKIE_SECRET
+if (!refreshTrustSecret || Buffer.byteLength(refreshTrustSecret) < 32) {
+  throw new Error('REFRESH_TRUST_COOKIE_SECRET must be set and at least 32 bytes')
+}
+const authenticatedRefreshIpLimit = Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120)
+if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimit < 1) {
+  throw new Error('AUTHENTICATED_REFRESH_IP_LIMIT must be a positive integer')
+}
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
 const metrics = createMetricsRegistry(redis)
@@ -73,6 +92,10 @@ const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'backgroun
 const playerRepo = createPlayerRepo(db)
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(db)
 const refreshOperations = createPostgresRefreshOperations(databaseUrl)
+const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
+  authenticatedIpLimit: authenticatedRefreshIpLimit,
+  sourceLimits: { 'brawlhalla-v0': 180 },
+})
 const clanRepo = createClanRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
@@ -96,6 +119,7 @@ const matchRepo = matchmakingLive ? createMatchRepo(db) : null
 const postgresReadiness = createPostgresReadiness(databaseUrl, [
   ...playerMigrationInventory,
   ...refreshOperationsMigrationInventory,
+  ...requestAdmissionMigrationInventory,
 ])
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -121,6 +145,7 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'operations-postgres', close: refreshOperations.close },
+    { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'database-postgres', close: closeDatabase },
     {
       name: 'redis',
@@ -147,6 +172,9 @@ const sharedCtx = {
   clanQueue,
   playerRepo,
   playerReferenceQueries,
+  refreshOperations,
+  requestAdmission,
+  verifyRefreshChallenge: verifyTurnstileResult,
   clanRepo,
   userRepo,
   sessionRepo,
@@ -217,6 +245,8 @@ app.use(
       const cookies = parseCookies(c.req.header('cookie'))
       const rawToken = cookies[SESSION_COOKIE] ?? null
       const current = await getCurrentUser({ userRepo, sessionRepo }, rawToken)
+      const refreshTrustToken = cookies[REFRESH_TRUST_COOKIE]
+      const refreshTrusted = verifyRefreshTrust(refreshTrustToken, refreshTrustSecret)
 
       if (current?.extended && rawToken) {
         c.header('Set-Cookie', buildSessionCookie(rawToken, SESSION_TTL_MS / 1000), { append: true })
@@ -229,6 +259,14 @@ app.use(
         internalSecret,
         user: current?.user ?? null,
         session: current?.session ?? null,
+        refreshTrust: {
+          trusted: refreshTrusted,
+          grant: () => {
+            if (!refreshTrusted && !current?.user) {
+              c.header('Set-Cookie', buildRefreshTrustCookie(issueRefreshTrust(refreshTrustSecret)), { append: true })
+            }
+          },
+        },
       } as unknown as Record<string, unknown>
     },
   }),

@@ -136,6 +136,7 @@ function apiEnvironment(port: number): Record<string, string> {
     DATABASE_URL: connectionString,
     REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
     INTERNAL_API_SECRET: 'runtime-process-test-secret-32-characters',
+    REFRESH_TRUST_COOKIE_SECRET: 'runtime-process-refresh-trust-secret-32-characters',
     PORT: String(port),
     RUNTIME_SHUTDOWN_DEADLINE_MS: '2000',
     RUNTIME_CLEANUP_RESERVE_MS: '500',
@@ -145,6 +146,7 @@ function apiEnvironment(port: number): Record<string, string> {
 function workerEnvironment(port: number, deadlineMs: number): Record<string, string> {
   return {
     DATABASE_URL: connectionString,
+    BRAWLHALLA_API_KEY: 'runtime-process-test-api-key',
     HEALTH_PORT: String(port),
     OPERATIONS_LEASE_MS: '5000',
     OPERATIONS_POLL_MS: '25',

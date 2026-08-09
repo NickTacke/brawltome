@@ -27,6 +27,7 @@
       "dist",
       "target",
       ".next",
+      ".pi-subagents",
       "drizzle",
       "research",
       "packages/game-data/src/generated",

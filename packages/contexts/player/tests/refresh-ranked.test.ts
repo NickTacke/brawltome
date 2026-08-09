@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { randomUUID } from 'node:crypto'
 import type { BhV1PlayerStatsRanked, BhV1PlayerTeams } from '@brawltome/bhapi'
 import {
   db,
@@ -145,6 +146,30 @@ afterAll(async () => {
 })
 
 describe('processRefreshRanked (v1)', () => {
+  it('commits one Players-owned effect for repeated operation delivery', async () => {
+    await seedPlayer()
+    const effect = { operationId: randomUUID(), section: 'ranked' as const, leaseToken: 1 }
+    const first = {
+      getPlayerStatsV1: async () => RANKED_FIXTURE,
+      getPlayerTeamsV1: async () => TEAMS_FIXTURE,
+      getAllLegendsV1,
+    }
+    await processRefreshRanked({ db, bhapi: first as never }, TEST_ID, 'on-demand', effect)
+
+    const repeated = {
+      ...first,
+      getPlayerStatsV1: async () => ({ ...RANKED_FIXTURE, rating: 999 }),
+    }
+    await processRefreshRanked({ db, bhapi: repeated as never }, TEST_ID, 'on-demand', {
+      ...effect,
+      leaseToken: 2,
+    })
+
+    const row = await db.query.player.findFirst({ where: eq(player.brawlhallaId, TEST_ID) })
+    expect(row?.rating).toBe(RANKED_FIXTURE.rating)
+    expect(await db.query.ratingHistory.findMany({ where: eq(ratingHistory.brawlhallaId, TEST_ID) })).toHaveLength(1)
+  })
+
   it('full refresh: writes 1v1 + legends + team + rating snapshot', async () => {
     await seedPlayer()
 

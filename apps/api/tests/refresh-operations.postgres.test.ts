@@ -7,7 +7,7 @@ import {
 } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
 import { createPostgresReadiness } from '../src/postgres-readiness'
-import { runOneProofOperation } from '../src/refresh-operations-worker'
+import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
 const baseUrl = process.env.DATABASE_URL
@@ -125,7 +125,7 @@ describe('durable Refresh Operations', () => {
       provenance: { source: 'integration-test', requestedBy: 'issue-214' },
     })
 
-    await runOneProofOperation(operations, 'renewing-worker', {
+    await runOneRefreshOperation(operations, 'renewing-worker', {
       leaseMs: 1_000,
       renewEveryMs: 100,
       retryDelayMs: 1,
@@ -185,7 +185,7 @@ describe('durable Refresh Operations', () => {
     expect(afterTerminal).toMatchObject({ outcome: 'accepted' })
     expect(afterTerminal.operationId).not.toBe(lease.operationId)
     expect(
-      await runOneProofOperation(worker, 'worker-c', {
+      await runOneRefreshOperation(worker, 'worker-c', {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
@@ -220,7 +220,7 @@ describe('durable Refresh Operations', () => {
       provenance: { source: 'integration-test' },
     })
     expect(
-      await runOneProofOperation(operations, 'worker-c', {
+      await runOneRefreshOperation(operations, 'worker-c', {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
@@ -233,6 +233,81 @@ describe('durable Refresh Operations', () => {
     })
     expect(conflictState.effects).toHaveLength(0)
     expect((await operations.inspect(accepted.operationId)).effects).toHaveLength(1)
+    await operations.close()
+  })
+
+  test('checkpoints completed interactive sections across lease expiry', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const reserved = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: `interactive:${randomUUID()}`,
+      operationKey: `interactive:${randomUUID()}`,
+      brawlhallaId: 42,
+      staleSections: ['ranked', 'stats'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+    expect(await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)).toBe(
+      'transitioned',
+    )
+    const first = requireLease(
+      await operations.claim('interactive-a', 1_000, testAdmission, 'interactive-player-refresh'),
+    )
+    if (first.kind !== 'interactive-player-refresh') throw new Error('Expected interactive lease')
+    expect(await operations.beginInteractiveSection(first, 'ranked')).toBe('execute')
+    expect(await operations.commitInteractiveSection(first, 'ranked')).toBe('transitioned')
+    await expire(first.operationId)
+
+    const retry = requireLease(
+      await operations.claim('interactive-b', 1_000, testAdmission, 'interactive-player-refresh'),
+    )
+    if (retry.kind !== 'interactive-player-refresh') throw new Error('Expected interactive retry lease')
+    expect(retry.leaseToken).toBeGreaterThan(first.leaseToken)
+    expect(await operations.beginInteractiveSection(retry, 'ranked')).toBe('already-applied')
+    expect(await operations.beginInteractiveSection(retry, 'stats')).toBe('execute')
+    expect(await operations.commitInteractiveSection(first, 'stats')).toBe('lease-lost')
+    expect(await operations.commitInteractiveSection(retry, 'stats')).toBe('transitioned')
+    expect(await operations.complete(retry)).toBe('transitioned')
+    await operations.close()
+  })
+
+  test('counts cross-kind leases against shared total concurrency', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const admission = {
+      ...testAdmission,
+      totalConcurrency: 2,
+      interactiveReservation: 1,
+      classConcurrency: { ...testAdmission.classConcurrency, interactive: 2 },
+    } as const
+    await operations.configureAdmission(admission)
+    await operations.accept({
+      dedupeKey: `cross-kind-proof:${randomUUID()}`,
+      operationKey: `cross-kind-proof:${randomUUID()}`,
+      workClass: 'interactive',
+      payload: { value: 'proof' },
+      provenance: { source: 'integration-test' },
+    })
+    const reserved = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: `cross-kind-interactive:${randomUUID()}`,
+      operationKey: `cross-kind-interactive:${randomUUID()}`,
+      brawlhallaId: 42,
+      staleSections: ['ranked'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+
+    const proof = requireLease(await operations.claim('cross-kind-proof', 10_000, admission, 'proof'))
+    const interactive = requireLease(
+      await operations.claim('cross-kind-interactive', 10_000, admission, 'interactive-player-refresh'),
+    )
+    expect(proof.kind).toBe('proof')
+    expect(interactive.kind).toBe('interactive-player-refresh')
+    expect(await operations.claim('cross-kind-blocked', 10_000, admission)).toBeNull()
+    await operations.complete(proof)
+    await operations.complete(interactive)
+    await operations.configureAdmission(testAdmission)
     await operations.close()
   })
 
@@ -255,7 +330,7 @@ describe('durable Refresh Operations', () => {
 
     const worker = createPostgresRefreshOperations(connectionString)
     expect(
-      await runOneProofOperation(worker, 'poll-worker', {
+      await runOneRefreshOperation(worker, 'poll-worker', {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
@@ -280,8 +355,8 @@ describe('durable Refresh Operations', () => {
       admission: testAdmission,
       executeEffect: failEffect,
     }
-    expect(await runOneProofOperation(worker, 'worker-a', options)).toBe(true)
-    expect(await runOneProofOperation(worker, 'worker-b', options)).toBe(true)
+    expect(await runOneRefreshOperation(worker, 'worker-a', options)).toBe(true)
+    expect(await runOneRefreshOperation(worker, 'worker-b', options)).toBe(true)
 
     const state = await worker.inspect(poison.operationId)
     expect(state.operation).toMatchObject({

@@ -4,6 +4,8 @@ import type { PlayerLinkRepo, Session, SessionRepo, UserRepo, UserWithPrimaryAcc
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { PlayerReferenceQueries } from '@brawltome/player'
 import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
+import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
+import type { ActorAdmission } from '@brawltome/request-admission'
 import type { MetricsRegistry, Queue, R2Client } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 
@@ -16,6 +18,10 @@ export interface Context {
   clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
   playerRepo: PlayerRepo
   playerReferenceQueries: PlayerReferenceQueries
+  refreshOperations: InteractiveRefreshOperations
+  requestAdmission: ActorAdmission
+  refreshTrust: { trusted: boolean; grant(): void }
+  verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
   clanRepo: ClanRepo
   userRepo: UserRepo
   sessionRepo: SessionRepo

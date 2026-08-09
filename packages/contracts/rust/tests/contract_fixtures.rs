@@ -3,7 +3,7 @@ use std::net::TcpListener;
 
 use brawltome_contracts::generated::Client;
 use brawltome_contracts::generated::types::{
-    ContractProof, ContractProofEvent, GetContractProofXInternalSecret,
+    ContractProof, ContractProofEvent, GetContractProofXInternalSecret, RefreshOutcome,
 };
 
 const VALID_PRESENT: &str = include_str!("../../tests/fixtures/valid-present.json");
@@ -18,6 +18,14 @@ const INVALID_DATE_TIME: &str = include_str!("../../tests/fixtures/invalid-date-
 const INVALID_OFFSET_DATE_TIME: &str =
     include_str!("../../tests/fixtures/invalid-offset-date-time.json");
 const INVALID_UNION: &str = include_str!("../../tests/fixtures/invalid-union.json");
+const REFRESH_OUTCOMES: [&str; 6] = [
+    include_str!("../../tests/fixtures/refresh-accepted.json"),
+    include_str!("../../tests/fixtures/refresh-already-refreshing.json"),
+    include_str!("../../tests/fixtures/refresh-not-needed.json"),
+    include_str!("../../tests/fixtures/refresh-verification-required.json"),
+    include_str!("../../tests/fixtures/refresh-rate-limited.json"),
+    include_str!("../../tests/fixtures/refresh-temporarily-unavailable.json"),
+];
 
 #[test]
 fn accepts_optional_nullable_zero_datetime_and_union_variants() {
@@ -70,6 +78,22 @@ fn rejects_missing_nullable_out_of_range_datetime_and_unknown_union() {
             "accepted invalid {name} fixture"
         );
     }
+}
+
+#[test]
+fn generated_refresh_outcomes_preserve_all_six_semantic_variants() {
+    for fixture in REFRESH_OUTCOMES {
+        let wire: serde_json::Value = serde_json::from_str(fixture).expect("valid refresh fixture");
+        let outcome: RefreshOutcome = serde_json::from_value(wire.clone()).expect("generated refresh outcome");
+        assert_eq!(serde_json::to_value(outcome).expect("serialize refresh outcome"), wire);
+    }
+
+    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[0]).unwrap(), RefreshOutcome::Accepted { .. }));
+    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[1]).unwrap(), RefreshOutcome::AlreadyRefreshing { .. }));
+    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[2]).unwrap(), RefreshOutcome::NotNeeded { .. }));
+    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[3]).unwrap(), RefreshOutcome::VerificationRequired { .. }));
+    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[4]).unwrap(), RefreshOutcome::RateLimited { .. }));
+    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[5]).unwrap(), RefreshOutcome::TemporarilyUnavailable { .. }));
 }
 
 #[tokio::test]
