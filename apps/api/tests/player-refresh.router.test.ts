@@ -53,7 +53,9 @@ function harness(
   const context = {
     internalSecret: secret,
     clientIp: '203.0.113.42',
-    user: options.authenticated ? { id: 'account-42' } : null,
+    account: options.authenticated
+      ? { id: 'account-42', displayName: 'Ada', avatarUrl: null, createdAt: new Date('2026-01-01T00:00:00.000Z') }
+      : null,
     playerReferenceQueries,
     playerRepo: { findById: async () => (options.player === undefined ? stalePlayer : options.player) },
     refreshOperations: operations,
