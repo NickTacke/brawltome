@@ -344,6 +344,656 @@ pub mod types {
                 })
         }
     }
+    ///`PlayerRefreshResponse`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "player",
+    ///    "refresh"
+    ///  ],
+    ///  "properties": {
+    ///    "player": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "brawlhallaId",
+    ///        "name"
+    ///      ],
+    ///      "properties": {
+    ///        "brawlhallaId": {
+    ///          "type": "integer",
+    ///          "maximum": 2147483647.0,
+    ///          "exclusiveMinimum": 0.0
+    ///        },
+    ///        "name": {
+    ///          "type": "string"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "refresh": {
+    ///      "$ref": "#/components/schemas/RefreshOutcome"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRefreshResponse {
+        pub player: ::std::option::Option<PlayerRefreshResponsePlayer>,
+        pub refresh: RefreshOutcome,
+    }
+    ///`PlayerRefreshResponsePlayer`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "name"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "name": {
+    ///      "type": "string"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRefreshResponsePlayer {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        pub name: ::std::string::String,
+    }
+    ///`RefreshNoRetryGuidance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "kind"
+    ///  ],
+    ///  "properties": {
+    ///    "kind": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "none"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct RefreshNoRetryGuidance {
+        pub kind: RefreshNoRetryGuidanceKind,
+    }
+    ///`RefreshNoRetryGuidanceKind`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "none"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum RefreshNoRetryGuidanceKind {
+        #[serde(rename = "none")]
+        None,
+    }
+    impl ::std::fmt::Display for RefreshNoRetryGuidanceKind {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::None => f.write_str("none"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for RefreshNoRetryGuidanceKind {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "none" => Ok(Self::None),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for RefreshNoRetryGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for RefreshNoRetryGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for RefreshNoRetryGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`RefreshOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "oneOf": [
+    ///    {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "operationId",
+    ///        "outcome",
+    ///        "retry"
+    ///      ],
+    ///      "properties": {
+    ///        "operationId": {
+    ///          "type": "string",
+    ///          "format": "uuid"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "accepted"
+    ///          ]
+    ///        },
+    ///        "retry": {
+    ///          "$ref": "#/components/schemas/RefreshPollGuidance"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "operationId",
+    ///        "outcome",
+    ///        "retry"
+    ///      ],
+    ///      "properties": {
+    ///        "operationId": {
+    ///          "type": "string",
+    ///          "format": "uuid"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "alreadyRefreshing"
+    ///          ]
+    ///        },
+    ///        "retry": {
+    ///          "$ref": "#/components/schemas/RefreshPollGuidance"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "retry"
+    ///      ],
+    ///      "properties": {
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "notNeeded"
+    ///          ]
+    ///        },
+    ///        "retry": {
+    ///          "$ref": "#/components/schemas/RefreshNoRetryGuidance"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "retry"
+    ///      ],
+    ///      "properties": {
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "verificationRequired"
+    ///          ]
+    ///        },
+    ///        "retry": {
+    ///          "$ref": "#/components/schemas/RefreshVerifyGuidance"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "retry"
+    ///      ],
+    ///      "properties": {
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "rateLimited"
+    ///          ]
+    ///        },
+    ///        "retry": {
+    ///          "$ref": "#/components/schemas/RefreshRetryAfterGuidance"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "retry"
+    ///      ],
+    ///      "properties": {
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "temporarilyUnavailable"
+    ///          ]
+    ///        },
+    ///        "retry": {
+    ///          "$ref": "#/components/schemas/RefreshRetryAfterGuidance"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    }
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(tag = "outcome", deny_unknown_fields)]
+    pub enum RefreshOutcome {
+        #[serde(rename = "accepted")]
+        Accepted {
+            #[serde(rename = "operationId")]
+            operation_id: ::uuid::Uuid,
+            retry: RefreshPollGuidance,
+        },
+        #[serde(rename = "alreadyRefreshing")]
+        AlreadyRefreshing {
+            #[serde(rename = "operationId")]
+            operation_id: ::uuid::Uuid,
+            retry: RefreshPollGuidance,
+        },
+        #[serde(rename = "notNeeded")]
+        NotNeeded { retry: RefreshNoRetryGuidance },
+        #[serde(rename = "verificationRequired")]
+        VerificationRequired { retry: RefreshVerifyGuidance },
+        #[serde(rename = "rateLimited")]
+        RateLimited { retry: RefreshRetryAfterGuidance },
+        #[serde(rename = "temporarilyUnavailable")]
+        TemporarilyUnavailable { retry: RefreshRetryAfterGuidance },
+    }
+    ///`RefreshPollGuidance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "afterSeconds",
+    ///    "kind"
+    ///  ],
+    ///  "properties": {
+    ///    "afterSeconds": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 86400.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "kind": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "poll"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct RefreshPollGuidance {
+        #[serde(rename = "afterSeconds")]
+        pub after_seconds: ::std::num::NonZeroU32,
+        pub kind: RefreshPollGuidanceKind,
+    }
+    ///`RefreshPollGuidanceKind`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "poll"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum RefreshPollGuidanceKind {
+        #[serde(rename = "poll")]
+        Poll,
+    }
+    impl ::std::fmt::Display for RefreshPollGuidanceKind {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Poll => f.write_str("poll"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for RefreshPollGuidanceKind {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "poll" => Ok(Self::Poll),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for RefreshPollGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for RefreshPollGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for RefreshPollGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`RefreshRetryAfterGuidance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "afterSeconds",
+    ///    "kind"
+    ///  ],
+    ///  "properties": {
+    ///    "afterSeconds": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 86400.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "kind": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "after"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct RefreshRetryAfterGuidance {
+        #[serde(rename = "afterSeconds")]
+        pub after_seconds: ::std::num::NonZeroU32,
+        pub kind: RefreshRetryAfterGuidanceKind,
+    }
+    ///`RefreshRetryAfterGuidanceKind`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "after"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum RefreshRetryAfterGuidanceKind {
+        #[serde(rename = "after")]
+        After,
+    }
+    impl ::std::fmt::Display for RefreshRetryAfterGuidanceKind {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::After => f.write_str("after"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for RefreshRetryAfterGuidanceKind {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "after" => Ok(Self::After),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for RefreshRetryAfterGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for RefreshRetryAfterGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for RefreshRetryAfterGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`RefreshVerifyGuidance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "kind"
+    ///  ],
+    ///  "properties": {
+    ///    "kind": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "verify"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct RefreshVerifyGuidance {
+        pub kind: RefreshVerifyGuidanceKind,
+    }
+    ///`RefreshVerifyGuidanceKind`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "verify"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum RefreshVerifyGuidanceKind {
+        #[serde(rename = "verify")]
+        Verify,
+    }
+    impl ::std::fmt::Display for RefreshVerifyGuidanceKind {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Verify => f.write_str("verify"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for RefreshVerifyGuidanceKind {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "verify" => Ok(Self::Verify),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for RefreshVerifyGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for RefreshVerifyGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for RefreshVerifyGuidanceKind {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
 }
 #[derive(Clone, Debug)]
 /**Client for BrawlTome Internal Contracts

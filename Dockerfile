@@ -12,6 +12,7 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/contexts/player/package.json packages/contexts/player/
 COPY packages/contexts/clan/package.json packages/contexts/clan/
 COPY packages/contexts/ranking/package.json packages/contexts/ranking/
+COPY packages/contexts/request-admission/package.json packages/contexts/request-admission/
 COPY packages/contexts/refresh-operations/package.json packages/contexts/refresh-operations/
 COPY packages/contexts/identity/package.json packages/contexts/identity/
 COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/

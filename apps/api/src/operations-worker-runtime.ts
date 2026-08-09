@@ -1,6 +1,6 @@
 import type { AdmissionConfig } from '@brawltome/refresh-operations'
 import type { PostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
-import { runOneProofOperation } from './refresh-operations-worker'
+import { runOneRefreshOperation } from './refresh-operations-worker'
 import type { RuntimeLifecycle } from './runtime-lifecycle'
 
 type WorkerConfig = {
@@ -20,7 +20,8 @@ type OperationsWorkerDependencies = {
   config: WorkerConfig
   logger?: WorkerLogger
   ensureListener?: (onWakeup: () => void) => Promise<void>
-  runOne?: typeof runOneProofOperation
+  reconcile?: () => Promise<number>
+  runOne?: typeof runOneRefreshOperation
 }
 
 function createWakeupWaiter(intervalMs: number, signal: AbortSignal) {
@@ -55,7 +56,8 @@ export async function runOperationsWorker({
   config,
   logger = console,
   ensureListener,
-  runOne = runOneProofOperation,
+  reconcile,
+  runOne = runOneRefreshOperation,
 }: OperationsWorkerDependencies): Promise<void> {
   const wakeup = createWakeupWaiter(config.pollMs, lifecycle.signal)
   let admissionInitialization: Promise<void> | undefined
@@ -110,12 +112,13 @@ export async function runOperationsWorker({
   async function scheduleLoop(): Promise<void> {
     while (!lifecycle.signal.aborted) {
       if (!(await prepare())) continue
-      const created = await runTracked(async () => {
+      const active = await runTracked(async () => {
         const result = await operations.materializeDueSchedules(config.scheduleBatchSize)
-        return result.occurrencesCreated > 0
+        const reconciled = !lifecycle.signal.aborted && reconcile ? await reconcile() : 0
+        return result.occurrencesCreated > 0 || reconciled > 0
       })
-      if (created === null) return
-      if (!created) await wakeup.wait()
+      if (active === null) return
+      if (!active) await wakeup.wait()
     }
   }
 

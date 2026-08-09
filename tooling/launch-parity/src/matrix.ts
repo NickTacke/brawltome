@@ -103,4 +103,37 @@ export const launchParityMatrix: readonly ParityRow[] = [
       'Needs deterministic route-level browser evidence before parity can be verified.',
     ),
   ),
+  {
+    id: 'refresh.interactive-player',
+    area: 'refresh-admission',
+    requirement:
+      'Interactive player refreshes preserve cache, deduplicate before PostgreSQL actor/source admission, and return canonical outcomes.',
+    sourceIssue: '#191',
+    status: 'verified',
+    destinations: ['/player/:id'],
+    implementation: [
+      'packages/contracts/src/refresh-outcome.ts',
+      'packages/contexts/request-admission/postgres.ts',
+      'packages/contexts/refresh-operations/postgres.ts',
+      'apps/api/src/router/player.router.ts',
+      'apps/api/src/auth/refresh-trust-cookie.ts',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/refresh-outcome.test.ts',
+        assertion: 'All six canonical outcomes and retry guidance validate.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/api/tests/request-admission.postgres.test.ts',
+        assertion: 'Real PostgreSQL concurrency preserves dedup and quota invariants.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/api/tests/player-refresh.router.test.ts',
+        assertion: 'Cached data, authenticated bypass, semantic outcomes, and V2 compatibility hold.',
+      },
+    ],
+  },
 ]

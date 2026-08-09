@@ -1,6 +1,7 @@
 import type { BhApiClient, BhV1PlayerStatsAll, BhV1PlayerStatsRanked, BhV1PlayerTeams } from '@brawltome/bhapi'
 import type { Database } from '@brawltome/database'
 import { aggregateWeapons, getLegendById, initGameData } from '@brawltome/shared'
+import { sql } from 'drizzle-orm'
 import { computeBestLegend, hasStoredRankedRecord, isValhallanGraced, shouldSnapshotRating } from '../player'
 import { createPlayerRepo } from '../player.repo'
 
@@ -12,10 +13,29 @@ interface RefreshDeps {
   bhapi: BhApiClient
 }
 
+export type PlayerRefreshEffect = {
+  operationId: string
+  section: 'ranked' | 'stats'
+  leaseToken: number
+}
+
+async function claimRefreshEffect(db: Database, effect: PlayerRefreshEffect | undefined): Promise<boolean> {
+  if (!effect) return true
+  const result = await db.execute(sql`
+    INSERT INTO players.interactive_refresh_effects (operation_id, section, lease_token)
+    VALUES (${effect.operationId}::uuid, ${effect.section}, ${effect.leaseToken})
+    ON CONFLICT (operation_id, section) DO NOTHING
+    RETURNING operation_id
+  `)
+  const rows = Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+  return rows.length === 1
+}
+
 export async function processRefreshRanked(
   { db, bhapi }: RefreshDeps,
   brawlhallaId: number,
   caller: 'on-demand' | 'background' = 'background',
+  effect?: PlayerRefreshEffect,
 ) {
   let ranked = (await bhapi.getPlayerStatsV1(brawlhallaId, 'ranked_1v1', { caller })) as BhV1PlayerStatsRanked | null
   const repo = createPlayerRepo(db)
@@ -52,7 +72,9 @@ export async function processRefreshRanked(
   }
 
   await repo.transaction(async (tx) => {
-    const txRepo = createPlayerRepo(tx as unknown as Database)
+    const transaction = tx as unknown as Database
+    if (!(await claimRefreshEffect(transaction, effect))) return
+    const txRepo = createPlayerRepo(transaction)
 
     if (ranked) {
       const existing = await txRepo.getExistingPlayerMeta(brawlhallaId)
@@ -160,6 +182,7 @@ export async function processRefreshStats(
   { db, bhapi }: RefreshDeps,
   brawlhallaId: number,
   caller: 'on-demand' | 'background' = 'background',
+  effect?: PlayerRefreshEffect,
 ) {
   const data = (await bhapi.getPlayerStatsV1(brawlhallaId, 'all', { caller })) as BhV1PlayerStatsAll | null
   if (!data) throw new Error(`Brawlhalla lifetime stats unavailable for player ${brawlhallaId}`)
@@ -200,7 +223,9 @@ export async function processRefreshStats(
 
   const repo = createPlayerRepo(db)
   await repo.transaction(async (tx) => {
-    const txRepo = createPlayerRepo(tx as unknown as Database)
+    const transaction = tx as unknown as Database
+    if (!(await claimRefreshEffect(transaction, effect))) return
+    const txRepo = createPlayerRepo(transaction)
 
     await txRepo.updateStats(brawlhallaId, {
       name: data.name,

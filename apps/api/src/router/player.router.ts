@@ -1,64 +1,177 @@
-import { discoverPlayer, getV2PlayerProfile, isStale } from '@brawltome/player/v2-compatibility'
-import { TIERED_TTL, checkRateLimit, verifyTurnstile } from '@brawltome/shared'
+import {
+  type PlayerRefreshInputContract,
+  type PlayerRefreshResponseContract,
+  playerRefreshInputSchema,
+  playerRefreshResponseSchema,
+} from '@brawltome/contracts'
+import { getV2PlayerProfile, isStale } from '@brawltome/player/v2-compatibility'
+import { TIERED_TTL } from '@brawltome/shared'
 import { z } from 'zod'
+import type { Context } from '../trpc/context'
 import { internalProcedure, mergeRouters, router } from '../trpc/trpc'
 import { createPlayerReferenceRouter } from './player-reference.router'
 
-const v2PlayerRouter = router({
-  byId: internalProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
-    return getV2PlayerProfile(ctx.playerRepo, input.id)
-  }),
-  refresh: internalProcedure
-    .input(z.object({ id: z.number().int().positive(), turnstileToken: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const { id: brawlhallaId, turnstileToken } = input
+const v2RefreshInputSchema = z.object({ id: z.number().int().positive(), turnstileToken: z.string() }).strict()
+const temporarilyUnavailable = {
+  outcome: 'temporarilyUnavailable' as const,
+  retry: { kind: 'after' as const, afterSeconds: 30 },
+}
 
-      const turnstileValid = await verifyTurnstile(turnstileToken, ctx.clientIp)
-      if (!turnstileValid) return { isRefreshing: false }
+function timestamp(value: Date | string | null | undefined): number {
+  if (!value) return 0
+  const milliseconds = new Date(value).getTime()
+  return Number.isFinite(milliseconds) ? milliseconds : 0
+}
 
-      const p = await ctx.playerRepo.findById(brawlhallaId)
+async function requestPlayerRefresh(
+  ctx: Context,
+  input: PlayerRefreshInputContract,
+): Promise<PlayerRefreshResponseContract> {
+  const player = await ctx.playerReferenceQueries.byId(input.id)
+  const stored = await ctx.playerRepo.findById(input.id)
+  const rankedStale = !stored || isStale(stored.rankedLastUpdated, TIERED_TTL.hot.ranked)
+  const statsStale = !stored || isStale(stored.statsLastUpdated, TIERED_TTL.hot.stats)
+  if (!rankedStale && !statsStale) {
+    return { player, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
+  }
 
-      if (!p) {
-        if (ctx.isBot) return { isRefreshing: false }
-        return discoverPlayer(
-          {
-            db: ctx.db,
-            redis: ctx.redis,
-            rankedQueue: ctx.rankedQueue,
-            statsQueue: ctx.statsQueue,
-            clientIp: ctx.clientIp,
-            metrics: ctx.metrics,
-          },
-          brawlhallaId,
-        )
-      }
+  const staleSections = [rankedStale ? ('ranked' as const) : null, statsStale ? ('stats' as const) : null].filter(
+    (section): section is 'ranked' | 'stats' => section !== null,
+  )
+  const dedupeKey = [
+    'player',
+    input.id,
+    `ranked:${timestamp(stored?.rankedLastUpdated)}`,
+    `stats:${timestamp(stored?.statsLastUpdated)}`,
+  ].join(':')
 
-      if (ctx.isBot) return { isRefreshing: false }
-
-      await ctx.playerRepo.incrementViewCount(brawlhallaId)
-
-      let isRefreshing = false
-      if (process.env.DISABLE_VIEW_REFRESH !== '1') {
-        const ttl = TIERED_TTL.hot
-
-        const rankedStale = isStale(p.rankedLastUpdated, ttl.ranked)
-        const statsStale = isStale(p.statsLastUpdated, ttl.stats)
-
-        if (rankedStale || statsStale) {
-          const refreshLimit = await checkRateLimit(ctx.redis, ctx.clientIp, 'refresh', ctx.metrics)
-          if (refreshLimit.allowed) {
-            if (rankedStale) {
-              isRefreshing = (await ctx.rankedQueue.enqueue({ brawlhallaId, caller: 'on-demand' })) || isRefreshing
-            }
-            if (statsStale) {
-              isRefreshing = (await ctx.statsQueue.enqueue({ brawlhallaId, caller: 'on-demand' })) || isRefreshing
-            }
+  try {
+    const active = await ctx.refreshOperations.findActiveInteractivePlayerRefresh(dedupeKey)
+    if (active) {
+      if (active.awaitingAdmission) {
+        if (await ctx.requestAdmission.hasActorReservation(active.operationId)) {
+          await ctx.refreshOperations.activateAdmittedInteractiveRefresh(active.operationId)
+        } else if (active.reservationExpired) {
+          await ctx.refreshOperations.rejectExpiredInteractiveRefresh(active.operationId)
+        } else {
+          return {
+            player,
+            refresh: {
+              outcome: 'alreadyRefreshing',
+              operationId: active.operationId,
+              retry: { kind: 'poll', afterSeconds: 2 },
+            },
           }
         }
       }
+      if (!active.reservationExpired || (await ctx.requestAdmission.hasActorReservation(active.operationId))) {
+        return {
+          player,
+          refresh: {
+            outcome: 'alreadyRefreshing',
+            operationId: active.operationId,
+            retry: { kind: 'poll', afterSeconds: 2 },
+          },
+        }
+      }
+    }
 
-      return { isRefreshing }
+    let actor: Parameters<Context['requestAdmission']['admitActor']>[0]
+    if (ctx.user) {
+      actor = { kind: 'authenticated', accountId: ctx.user.id, ip: ctx.clientIp }
+    } else {
+      if (!ctx.refreshTrust.trusted) {
+        if (!input.turnstileToken) {
+          return { player, refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } } }
+        }
+        const verification = await ctx.verifyRefreshChallenge(input.turnstileToken, ctx.clientIp)
+        if (verification === 'unavailable') return { player, refresh: temporarilyUnavailable }
+        if (verification === 'invalid') {
+          return { player, refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } } }
+        }
+        ctx.refreshTrust.grant()
+      }
+      actor = { kind: 'verified-anonymous', ip: ctx.clientIp }
+    }
+
+    const reserved = await ctx.refreshOperations.reserveInteractivePlayerRefresh({
+      dedupeKey,
+      operationKey: dedupeKey,
+      brawlhallaId: input.id,
+      staleSections,
+      provenance: { source: 'interactive-api', requestedBy: ctx.user?.id },
+      reservationTtlSeconds: 30,
+    })
+    if (reserved.outcome === 'already-active') {
+      return {
+        player,
+        refresh: {
+          outcome: 'alreadyRefreshing',
+          operationId: reserved.operationId,
+          retry: { kind: 'poll', afterSeconds: 2 },
+        },
+      }
+    }
+
+    const actorAdmission = await ctx.requestAdmission.admitActor(actor, reserved.operationId)
+    if (actorAdmission.outcome === 'rate-limited') {
+      await ctx.refreshOperations.rejectInteractiveRefresh(
+        reserved.operationId,
+        reserved.reservationToken,
+        'actor_rate_limited',
+      )
+      return {
+        player,
+        refresh: {
+          outcome: 'rateLimited',
+          retry: { kind: 'after', afterSeconds: actorAdmission.retryAfterSeconds },
+        },
+      }
+    }
+
+    const activated = await ctx.refreshOperations.activateInteractiveRefresh(
+      reserved.operationId,
+      reserved.reservationToken,
+    )
+    if (activated === 'lease-lost') return { player, refresh: temporarilyUnavailable }
+    return {
+      player,
+      refresh: {
+        outcome: 'accepted',
+        operationId: reserved.operationId,
+        retry: { kind: 'poll', afterSeconds: 2 },
+      },
+    }
+  } catch {
+    return { player, refresh: temporarilyUnavailable }
+  }
+}
+
+export function createCanonicalPlayerRefreshRouter(procedure = internalProcedure) {
+  return router({
+    requestRefresh: procedure
+      .input(playerRefreshInputSchema)
+      .output(playerRefreshResponseSchema)
+      .mutation(({ ctx, input }) => requestPlayerRefresh(ctx, input)),
+  })
+}
+
+export function createV2PlayerRefreshRouter(procedure = internalProcedure) {
+  return router({
+    byId: procedure.input(z.object({ id: z.number().int().positive() })).query(({ ctx, input }) => {
+      return getV2PlayerProfile(ctx.playerRepo, input.id)
     }),
-})
+    refresh: procedure.input(v2RefreshInputSchema).mutation(async ({ ctx, input }) => {
+      const result = await requestPlayerRefresh(ctx, input)
+      return {
+        isRefreshing: result.refresh.outcome === 'accepted' || result.refresh.outcome === 'alreadyRefreshing',
+      }
+    }),
+  })
+}
 
-export const playerRouter = mergeRouters(createPlayerReferenceRouter(), v2PlayerRouter)
+export const playerRouter = mergeRouters(
+  createPlayerReferenceRouter(),
+  createCanonicalPlayerRefreshRouter(),
+  createV2PlayerRefreshRouter(),
+)

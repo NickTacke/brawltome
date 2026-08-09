@@ -17,6 +17,7 @@ const requiredRowIds = [
   'route.clan-id',
   'route.account',
   'route.stats',
+  'refresh.interactive-player',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],

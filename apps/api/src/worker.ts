@@ -1,4 +1,5 @@
-import { BhApiClient } from '@brawltome/bhapi'
+import { randomUUID } from 'node:crypto'
+import { BhApiClient, RateLimitError } from '@brawltome/bhapi'
 import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
 import { createPlayerLinkRepo, resolveSteamLink } from '@brawltome/identity'
@@ -6,6 +7,7 @@ import { backfillPending, createMatchRepo } from '@brawltome/matchmaking'
 import { createPlayerRepo, processRefreshRanked, processRefreshStats } from '@brawltome/player/composition'
 import { startSweep } from '@brawltome/ranking'
 import { type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
+import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
 import { createMetricsRegistry, createQueue, createR2Client, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
 import { readMatchmakingConfig } from './matchmaking-config'
@@ -19,6 +21,16 @@ if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length <
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
 }
 
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) throw new Error('DATABASE_URL is required')
+const requestAdmission = createPostgresRequestAdmission(connectionString, {
+  authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
+  sourceLimits: {
+    'brawlhalla-v0': 180,
+    'brawlhalla-v1': Number(process.env.BRAWLHALLA_V1_REQUEST_LIMIT ?? 180),
+  },
+})
+
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379'
 // Each blocking consumer needs its own connection to avoid XREADGROUP serialization
 const newRedis = () => new Redis(redisUrl)
@@ -29,6 +41,15 @@ const bhapi = new BhApiClient({
   apiKey,
   persistence: { redis: bhapiRedis, keyPrefix: 'bhapi' },
   metrics,
+  beforeRequest: async ({ domain }) => {
+    const result = await requestAdmission.admitSource({ domain, reservationKey: randomUUID(), units: 1 })
+    if (result.outcome === 'rate-limited') {
+      throw new RateLimitError(
+        `${domain} PostgreSQL source admission is rate limited`,
+        result.retryAfterSeconds * 1_000,
+      )
+    }
+  },
 })
 const deps = { db, bhapi }
 const playerLinkRepo = createPlayerLinkRepo(db)
@@ -236,7 +257,10 @@ const playerRepo = createPlayerRepo(db)
 const stopSweep =
   process.env.DISABLE_JANITOR === '1' ? async () => {} : startSweep({ redis: newRedis(), repo: playerRepo, metrics })
 
-process.on('SIGINT', async () => {
+let shutdownStarted = false
+async function shutdownWorker(): Promise<void> {
+  if (shutdownStarted) return
+  shutdownStarted = true
   console.log('Worker shutting down...')
   bhapiMetricsStopped = true
   if (bhapiMetricsTimer) clearTimeout(bhapiMetricsTimer)
@@ -249,9 +273,11 @@ process.on('SIGINT', async () => {
   await stopSweep()
   await metricsRedis.quit().catch(() => {})
   await bhapiRedis.quit().catch(() => {})
+  await requestAdmission.close().catch(() => {})
   console.log('Lock released. Goodbye.')
   process.exit(0)
-})
+}
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void shutdownWorker())
 
 const matchmakingQueues = matchmakingLive ? ', match-backfill-parse(1), match-simulate(1)' : ''
 console.log(

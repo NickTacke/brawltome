@@ -22,6 +22,7 @@
         "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
         "@brawltome/replay-format": "workspace:*",
+        "@brawltome/request-admission": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
         "@trpc/server": "^11.0.0",
@@ -172,6 +173,15 @@
     },
     "packages/contexts/refresh-operations": {
       "name": "@brawltome/refresh-operations",
+      "dependencies": {
+        "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/contexts/request-admission": {
+      "name": "@brawltome/request-admission",
       "dependencies": {
         "postgres": "^3.4.0",
       },
@@ -371,6 +381,8 @@
     "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/contexts/refresh-operations"],
 
     "@brawltome/replay-format": ["@brawltome/replay-format@workspace:packages/replay-format"],
+
+    "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/contexts/request-admission"],
 
     "@brawltome/shared": ["@brawltome/shared@workspace:packages/shared"],
 

@@ -5,10 +5,11 @@ import type { ReactNode } from 'react'
 
 interface LookupStateProps {
   errored: boolean
+  message: string | null
   turnstile: ReactNode
 }
 
-export function LookupState({ errored, turnstile }: LookupStateProps) {
+export function LookupState({ errored, message, turnstile }: LookupStateProps) {
   return (
     <div>
       <NavBar showBack />
@@ -18,7 +19,7 @@ export function LookupState({ errored, turnstile }: LookupStateProps) {
         role="status"
         aria-live="polite"
       >
-        {!errored && (
+        {!errored && !message && (
           <>
             <div
               className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4"
@@ -28,6 +29,7 @@ export function LookupState({ errored, turnstile }: LookupStateProps) {
           </>
         )}
         {errored && <p>Player not found.</p>}
+        {!errored && message && <p>{message}</p>}
         {turnstile}
       </div>
     </div>

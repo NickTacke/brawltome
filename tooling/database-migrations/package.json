@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@brawltome/player": "workspace:*",
+    "@brawltome/request-admission": "workspace:*",
     "@brawltome/refresh-operations": "workspace:*",
     "postgres": "^3.4.0"
   },

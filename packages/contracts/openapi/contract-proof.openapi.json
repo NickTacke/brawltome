@@ -83,6 +83,244 @@
             "type": "object"
           }
         ]
+      },
+      "PlayerRefreshResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "player": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "brawlhallaId": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "brawlhallaId",
+              "name"
+            ],
+            "type": "object"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshOutcome"
+          }
+        },
+        "required": [
+          "player",
+          "refresh"
+        ],
+        "type": "object"
+      },
+      "RefreshNoRetryGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "none"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "RefreshOutcome": {
+        "discriminator": {
+          "propertyName": "outcome"
+        },
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "accepted"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshPollGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "operationId",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "alreadyRefreshing"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshPollGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "operationId",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "notNeeded"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshNoRetryGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "verificationRequired"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshVerifyGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "rateLimited"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshRetryAfterGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "temporarilyUnavailable"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshRetryAfterGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "RefreshPollGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "afterSeconds": {
+            "format": "int32",
+            "maximum": 86400,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "poll"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "afterSeconds"
+        ],
+        "type": "object"
+      },
+      "RefreshRetryAfterGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "afterSeconds": {
+            "format": "int32",
+            "maximum": 86400,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "after"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "afterSeconds"
+        ],
+        "type": "object"
+      },
+      "RefreshVerifyGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "verify"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
       }
     }
   },

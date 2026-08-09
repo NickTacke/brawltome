@@ -38,6 +38,8 @@ export interface BhApiMetricsSink {
   incrementCounter(key: string): Promise<void>
 }
 
+export type BhApiSourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
+
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
@@ -45,6 +47,7 @@ export interface BhApiClientOptions {
   baseUrl?: string
   fetchTimeoutMs?: number
   metrics?: BhApiMetricsSink
+  beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
 }
 
 export interface CallOptions {
@@ -57,12 +60,14 @@ export class BhApiClient {
   private readonly queue: RequestQueue
   private readonly fetchTimeoutMs: number
   private readonly metrics?: BhApiMetricsSink
+  private readonly beforeRequest?: BhApiClientOptions['beforeRequest']
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.baseUrl = opts.baseUrl ?? BASE_URL
     this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
     this.metrics = opts.metrics
+    this.beforeRequest = opts.beforeRequest
     this.queue = new RequestQueue({
       minSpacingMs: 150,
       sustainedLimit: 180,
@@ -130,7 +135,7 @@ export class BhApiClient {
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
-    return this.sendRequest<T>(url, path, endpoint)
+    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v0')
   }
 
   private async callV1<T>(endpoint: string, opts: CallOptions): Promise<T | null> {
@@ -146,15 +151,17 @@ export class BhApiClient {
     console.log(`[bhapi] v1 ${path} (${remaining} ${caller} tokens left)`)
 
     const url = `${this.baseUrl}/v1${endpoint}`
-    return this.sendRequest<T>(url, path, endpoint, true)
+    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true)
   }
 
   private async sendRequest<T>(
     url: string,
     path: string,
     endpoint: string,
+    domain: BhApiSourceDomain,
     rejectNullPayload = false,
   ): Promise<T | null> {
+    await this.beforeRequest?.({ domain, path })
     const fetchStart = Date.now()
     let res: Response
     try {

@@ -1,10 +1,13 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi'
 import { contractProofSchema } from './contract-proof'
+import { playerRefreshResponseSchema, refreshOutcomeSchema } from './refresh-outcome'
 import { z } from './zod'
 
 export function generateContractOpenApi() {
   const registry = new OpenAPIRegistry()
   const responseSchema = registry.register('ContractProof', contractProofSchema)
+  registry.register('RefreshOutcome', refreshOutcomeSchema)
+  registry.register('PlayerRefreshResponse', playerRefreshResponseSchema)
 
   registry.registerPath({
     method: 'get',

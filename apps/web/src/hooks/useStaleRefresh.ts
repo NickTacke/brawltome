@@ -34,6 +34,7 @@ interface UseStaleRefreshOptions<T> {
   queryFn: () => Promise<T>
   shouldStart: (data: T) => boolean
   isDone: (prev: T, next: T) => boolean
+  startSignal?: boolean
   pollMs?: number
   maxRefreshMs?: number
 }
@@ -63,7 +64,7 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
   isDoneRef.current = opts.isDone
 
   useEffect(() => {
-    if (!shouldStartRef.current(initialDataRef.current)) return
+    if (opts.startSignal === false || !shouldStartRef.current(initialDataRef.current)) return
     const start = Date.now()
     setStartedAt(start)
     setNow(start)
@@ -105,7 +106,7 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
       cancelled = true
       if (timeoutId) clearTimeout(timeoutId)
     }
-  }, [])
+  }, [opts.startSignal])
 
   const { isRefreshing } = computeRefreshState({
     startedAt,

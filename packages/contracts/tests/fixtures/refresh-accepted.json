@@ -1,0 +1,5 @@
+{
+  "outcome": "accepted",
+  "operationId": "2ef5a585-e8b9-46df-8f95-53d03af42d11",
+  "retry": { "kind": "poll", "afterSeconds": 2 }
+}

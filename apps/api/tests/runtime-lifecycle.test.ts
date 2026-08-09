@@ -174,6 +174,56 @@ describe('runtime lifecycle', () => {
     expect(claims).toBe(1)
   })
 
+  test('tracks reconciliation through drain and starts none after shutdown', async () => {
+    const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 200, cleanupReserveMs: 40 })
+    lifecycle.markReady()
+    let reconciliations = 0
+    let startReconciliation: (() => void) | undefined
+    let finishReconciliation: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      startReconciliation = resolve
+    })
+    const activeReconciliation = new Promise<void>((resolve) => {
+      finishReconciliation = resolve
+    })
+    const worker = runOperationsWorker({
+      operations: {
+        configureAdmission: async () => undefined,
+        materializeDueSchedules: async () => ({ occurrencesCreated: 0 }),
+      } as never,
+      lifecycle,
+      workerId: 'reconciliation-worker',
+      config: {
+        leaseMs: 30,
+        pollMs: 1,
+        retryDelayMs: 1,
+        scheduleBatchSize: 1,
+        admission: testAdmission,
+      },
+      reconcile: async () => {
+        reconciliations++
+        startReconciliation?.()
+        await activeReconciliation
+        return 0
+      },
+      runOne: async () => false,
+    })
+
+    await started
+    let shutdownSettled = false
+    const shutdown = lifecycle.shutdown().then((result) => {
+      shutdownSettled = true
+      return result
+    })
+    await Bun.sleep(5)
+    expect(shutdownSettled).toBe(false)
+    expect(reconciliations).toBe(1)
+    finishReconciliation?.()
+    await worker
+    expect(await shutdown).toMatchObject({ drained: true, cleanupCompleted: true })
+    expect(reconciliations).toBe(1)
+  })
+
   test('polls for work when PostgreSQL listener registration fails', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
     lifecycle.markReady()
