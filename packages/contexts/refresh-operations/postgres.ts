@@ -142,8 +142,20 @@ function chooseBackgroundClass(
   return { selected, nextCredits }
 }
 
-export function createPostgresRefreshOperations(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresRefreshOperations(
+  connectionString: string,
+  options: { executionConcurrency?: number } = {},
+) {
+  const executionConcurrency = options.executionConcurrency
+  if (executionConcurrency !== undefined && (!Number.isInteger(executionConcurrency) || executionConcurrency <= 0)) {
+    throw new Error('executionConcurrency must be a positive integer')
+  }
+  const client =
+    executionConcurrency === undefined
+      ? postgres(connectionString)
+      : postgres(connectionString, { max: executionConcurrency + 2 })
+  const renewalClient =
+    executionConcurrency === undefined ? client : postgres(connectionString, { max: executionConcurrency })
 
   return {
     async configureAdmission(admission: AdmissionConfig): Promise<void> {
@@ -457,6 +469,19 @@ export function createPostgresRefreshOperations(connectionString: string) {
       }
     },
 
+    async renew(lease: OperationLease, leaseMs: number): Promise<'renewed' | 'lease-lost'> {
+      const renewed = await renewalClient<{ id: string }[]>`
+        UPDATE refresh_operations.operations
+        SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
+            updated_at = clock_timestamp()
+        WHERE id = ${lease.operationId} AND status = 'leased'
+          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
+          AND lease_expires_at > clock_timestamp()
+        RETURNING id
+      `
+      return renewed[0] ? 'renewed' : 'lease-lost'
+    },
+
     async commitProofEffect(lease: OperationLease): Promise<FencedResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
@@ -572,7 +597,11 @@ export function createPostgresRefreshOperations(connectionString: string) {
     },
 
     async close() {
-      await client.end()
+      if (renewalClient === client) {
+        await client.end()
+        return
+      }
+      await Promise.all([client.end(), renewalClient.end()])
     },
   }
 }

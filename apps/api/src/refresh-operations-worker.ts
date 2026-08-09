@@ -5,7 +5,39 @@ type ProofWorkerOptions = {
   leaseMs: number
   retryDelayMs: number
   admission: AdmissionConfig
+  renewEveryMs?: number
   executeEffect?: (lease: OperationLease) => Promise<FencedResult>
+}
+
+function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, intervalMs)
+    signal.addEventListener('abort', done, { once: true })
+  })
+}
+
+async function renewLease(
+  operations: PostgresRefreshOperations,
+  lease: OperationLease,
+  leaseMs: number,
+  intervalMs: number,
+  signal: AbortSignal,
+): Promise<void> {
+  while (!signal.aborted) {
+    await waitForRenewal(intervalMs, signal)
+    if (signal.aborted) return
+    try {
+      if ((await operations.renew(lease, leaseMs)) === 'lease-lost') return
+    } catch {
+      return
+    }
+  }
 }
 
 export async function runOneProofOperation(
@@ -16,6 +48,9 @@ export async function runOneProofOperation(
   const lease = await operations.claim(workerId, options.leaseMs, options.admission)
   if (!lease) return false
 
+  const renewal = new AbortController()
+  const renewEveryMs = options.renewEveryMs ?? Math.max(1, Math.floor(options.leaseMs / 3))
+  const renewalLoop = renewLease(operations, lease, options.leaseMs, renewEveryMs, renewal.signal)
   try {
     const effect = options.executeEffect
       ? await options.executeEffect(lease)
@@ -40,6 +75,9 @@ export async function runOneProofOperation(
       },
       options.retryDelayMs,
     )
+  } finally {
+    renewal.abort()
+    await renewalLoop
   }
   return true
 }

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "bun run --watch src/serve.ts",
-    "dev:worker": "bun run --watch src/worker.ts",
+    "dev:v2-compatibility-worker": "bun run --watch src/worker.ts",
     "dev:operations-worker": "bun run --watch src/operations-worker.ts",
     "build": "bun build src/serve.ts src/operations-worker.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit"

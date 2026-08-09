@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readOperationsWorkerConfig } from '../src/operations-worker-config'
+import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
 
 describe('operations worker configuration', () => {
   test('uses conservative runtime defaults and rejects unsafe values', () => {
@@ -34,6 +35,9 @@ describe('operations worker configuration', () => {
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_TOTAL_CONCURRENCY: '33' })).toThrow(
+      'OPERATIONS_TOTAL_CONCURRENCY',
+    )
     expect(() =>
       readOperationsWorkerConfig({
         OPERATIONS_TOTAL_CONCURRENCY: '4',
@@ -49,5 +53,19 @@ describe('operations worker configuration', () => {
     expect(() => readOperationsWorkerConfig({ OPERATIONS_MAINTENANCE_WEIGHT: '0' })).toThrow(
       'OPERATIONS_MAINTENANCE_WEIGHT',
     )
+  })
+
+  test('uses a validated 60-second shutdown deadline', () => {
+    expect(readRuntimeConfig({})).toEqual({ shutdownDeadlineMs: 60_000, cleanupReserveMs: 5_000 })
+    expect(readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '10000', RUNTIME_CLEANUP_RESERVE_MS: '1000' })).toEqual({
+      shutdownDeadlineMs: 10_000,
+      cleanupReserveMs: 1_000,
+    })
+    expect(() => readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '999' })).toThrow('RUNTIME_SHUTDOWN_DEADLINE_MS')
+    expect(() =>
+      readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '10000', RUNTIME_CLEANUP_RESERVE_MS: '10000' }),
+    ).toThrow('RUNTIME_CLEANUP_RESERVE_MS')
+    expect(readHealthPort(undefined, 3001)).toBe(3001)
+    expect(() => readHealthPort('70000', 3001)).toThrow('HEALTH_PORT')
   })
 })
