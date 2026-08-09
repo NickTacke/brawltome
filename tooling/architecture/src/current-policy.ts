@@ -60,6 +60,16 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
   },
   exceptions: [
     {
+      id: 'v2-player-compatibility-export',
+      rule: 'package-export',
+      importer: '@brawltome/player',
+      files: ['packages/contexts/player/package.json'],
+      importPath: './v2-compatibility',
+      reason: 'Existing API and Rankings callers still require the frozen V2 profile graph and repository port.',
+      issue: '#227',
+      expiresWhen: 'All V2 player profile and repository callers migrate to narrow capability interfaces.',
+    },
+    {
       id: 'v2-api-router-export',
       rule: 'package-export',
       importer: '@brawltome/api',

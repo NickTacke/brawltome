@@ -1,5 +1,5 @@
 import type { ClanRepo } from '@brawltome/clan'
-import type { PlayerRepo } from '@brawltome/player'
+import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
 
 function sanitizeQuery(query: string): string {
   return query

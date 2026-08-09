@@ -8,7 +8,8 @@ import {
   getCurrentUser,
 } from '@brawltome/identity'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import { createPlayerRepo, getPlayer } from '@brawltome/player'
+import { createPlayerRepo } from '@brawltome/player/composition'
+import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
 import {
   TIERED_TTL,
   checkRateLimit,
@@ -22,6 +23,7 @@ import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import Redis from 'ioredis'
+import { createDatabasePlayerReferenceQueries } from './adapters/player-reference.database'
 import { SESSION_COOKIE, buildSessionCookie, parseCookies } from './auth/cookies'
 import { internalSecretValid } from './auth/internal-secret'
 import { createAuthRoutes } from './auth/routes'
@@ -60,6 +62,7 @@ const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'backgroun
 )
 
 const playerRepo = createPlayerRepo(db)
+const playerReferenceQueries = createDatabasePlayerReferenceQueries(db)
 const clanRepo = createClanRepo(db)
 const userRepo = createUserRepo(db)
 const sessionRepo = createSessionRepo(db)
@@ -95,6 +98,7 @@ const sharedCtx = {
   statsQueue,
   clanQueue,
   playerRepo,
+  playerReferenceQueries,
   clanRepo,
   userRepo,
   sessionRepo,
@@ -220,7 +224,7 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
 
   const rateLimit = await checkRateLimit(redis, clientIp, 'overlay', metrics)
 
-  const p = await getPlayer(playerRepo, bhid)
+  const p = await getV2PlayerProfile(playerRepo, bhid)
   if (!p) {
     await playerRepo.createPlaceholder(bhid)
 

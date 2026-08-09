@@ -1,6 +1,6 @@
 'use client'
 
-// biome-ignore lint/suspicious/noExplicitAny: dynamic API response
+// biome-ignore lint/suspicious/noExplicitAny: isolated V2 compatibility response
 export type PlayerData = any
 
 export const getRankBanner = (tier?: string | null) => {

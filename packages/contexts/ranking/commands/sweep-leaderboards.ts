@@ -1,4 +1,4 @@
-import type { PlayerRepo } from '@brawltome/player'
+import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
 import type { MetricsRegistry } from '@brawltome/shared'
 import type { Redis } from 'ioredis'
 import { type Bracket, type PageEntry, type PageResponse, fetchLeaderboardPage } from './leaderboard-endpoint'

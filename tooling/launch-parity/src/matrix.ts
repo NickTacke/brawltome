@@ -78,18 +78,28 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ),
   ),
   ...[
-    ['home', '/', 'apps/web/src/app/page.tsx'],
-    ['player-id', '/player/:id', 'apps/web/src/app/player/[id]/page.tsx'],
-    ['clan-id', '/clan/:id', 'apps/web/src/app/clan/[id]/page.tsx'],
-    ['account', '/account', 'apps/web/src/app/account/page.tsx'],
-    ['stats', '/stats', 'apps/web/src/app/stats/page.tsx'],
-  ].map(([id, destination, implementation]) =>
+    { id: 'home', destination: '/', implementation: ['apps/web/src/app/page.tsx'] },
+    {
+      id: 'player-id',
+      destination: '/player/:id',
+      implementation: [
+        'packages/contracts/src/player-reference.ts',
+        'packages/contexts/player/reference.ts',
+        'apps/api/src/router/player-reference.router.ts',
+        'apps/web/src/lib/player-reference.ts',
+        'apps/web/src/app/player/[id]/page.tsx',
+      ],
+    },
+    { id: 'clan-id', destination: '/clan/:id', implementation: ['apps/web/src/app/clan/[id]/page.tsx'] },
+    { id: 'account', destination: '/account', implementation: ['apps/web/src/app/account/page.tsx'] },
+    { id: 'stats', destination: '/stats', implementation: ['apps/web/src/app/stats/page.tsx'] },
+  ].map(({ id, destination, implementation }) =>
     implemented(
       `route.${id}`,
       'preserved-public-route',
       `${destination} remains available at its established public URL.`,
       [destination],
-      [implementation],
+      implementation,
       'Needs deterministic route-level browser evidence before parity can be verified.',
     ),
   ),

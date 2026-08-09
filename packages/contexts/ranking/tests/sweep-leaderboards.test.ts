@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import type { PlayerRepo } from '@brawltome/player'
+import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
 import type { MetricsRegistry } from '@brawltome/shared'
 import Redis from 'ioredis'
 import type { PageResponse } from '../commands/leaderboard-endpoint'
