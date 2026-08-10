@@ -197,9 +197,13 @@ describe('Statistics durable production worker', () => {
       operations = createPostgresRefreshOperations(connectionString)
       statistics = createPostgresStatistics(connectionString)
       await reconcileStatisticsCohort(statistics, operations, {
-        getLeaderboard: async () => {
-          throw new Error('existing cohort reconciliation must not read a newer Ranking generation')
-        },
+        getLeaderboard: async (input) => ({
+          status: 'unavailable',
+          reason: 'not_yet_published',
+          mode: input.mode,
+          page: input.page,
+          pageSize: input.pageSize ?? 50,
+        }),
       })
 
       const options = () => ({
@@ -286,6 +290,10 @@ describe('Statistics durable production worker', () => {
           WHERE domain = 'brawlhalla-v1'
         `
         expect(reservationsAfterReplay.count).toBe('3')
+        const [sourceAttempts] = await sql<{ count: string }[]>`
+          SELECT count(*)::text AS count FROM statistics.collection_attempts
+        `
+        expect(sourceAttempts.count).toBe('3')
       } finally {
         await sql.end()
       }

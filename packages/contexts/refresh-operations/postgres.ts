@@ -26,6 +26,7 @@ import {
   type ReconcilePrimaryMonitoringResult,
   type ReserveInteractiveRefreshResult,
   type ReserveStatisticsCollection,
+  type ReserveStatisticsPublication,
   type StatisticsCollectionKind,
   type TransitionResult,
   type WorkClass,
@@ -192,6 +193,12 @@ function toLease(row: OperationRow): OperationLease {
   if (isStatisticsCollectionKind(row.kind)) {
     if (row.work_class !== 'global-statistics' || !('cohortId' in row.payload) || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable statistics collection operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (row.kind === 'statistics-publication') {
+    if (row.work_class !== 'global-statistics' || !('generationId' in row.payload) || !('product' in row.payload)) {
+      throw new Error('invalid durable statistics publication operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -415,6 +422,20 @@ export function createPostgresRefreshOperations(
       `
       if (!target) {
         return { outcome: 'not-found', disposition: null, actionId: null, replayOperationId: null }
+      }
+      if (isStatisticsCollectionKind(target.kind)) {
+        await sql`
+          SELECT id FROM refresh_operations.operations
+          WHERE id = ${target.effect_operation_id}
+          FOR UPDATE
+        `
+        const [sealed] = await sql<{ sealed: boolean }[]>`
+          SELECT EXISTS (
+            SELECT 1 FROM refresh_operations.statistics_collection_seals seal
+            WHERE seal.collection_operation_id = ${target.effect_operation_id}
+          ) AS sealed
+        `
+        if (sealed?.sealed) throw new Error('Statistics collection replay is sealed by publication validation')
       }
 
       const [existing] = await sql<
@@ -729,7 +750,7 @@ export function createPostgresRefreshOperations(
         WHERE kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
           AND status = 'awaiting_binding'
         ORDER BY created_at, id
-        LIMIT 2000
+        LIMIT 500
       `
       return rows.map((row) => row.id)
     },
@@ -753,6 +774,84 @@ export function createPostgresRefreshOperations(
           SELECT status FROM refresh_operations.operations
           WHERE id = ${operationId}
             AND kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
+        `
+        return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
+          ? ('transitioned' as const)
+          : ('lease-lost' as const)
+      })
+    },
+
+    async reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult> {
+      if (input.dedupeKey !== input.operationKey) {
+        throw new Error('statistics publication dedupeKey must equal its stable operationKey')
+      }
+      if (input.workClass !== 'global-statistics') {
+        throw new Error('statistics publication requires global-statistics work class')
+      }
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.generationId)
+      ) {
+        throw new Error('statistics publication generationId must be a UUID')
+      }
+      if (input.payload.product !== 'ranked' && input.payload.product !== 'lifetime') {
+        throw new Error('statistics publication product is unsupported')
+      }
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 210))`
+        const [existing] = await sql<{ id: string; matches: boolean }[]>`
+          SELECT id, kind = 'statistics-publication'
+            AND dedupe_key = ${input.dedupeKey}
+            AND work_class = 'global-statistics'
+            AND payload = ${sql.json(input.payload)}::jsonb
+            AND provenance = ${sql.json(input.provenance)}::jsonb
+            AND max_attempts = ${input.maxAttempts ?? 3} AS matches
+          FROM refresh_operations.operations
+          WHERE operation_key = ${input.operationKey} AND kind = 'statistics-publication'
+            AND replayed_from_operation_id IS NULL
+          FOR UPDATE
+        `
+        if (existing) {
+          if (!existing.matches) throw new Error('statistics publication operation key has a different definition')
+          return { outcome: 'already-active' as const, operationId: existing.id }
+        }
+        const operationId = randomUUID()
+        await sql`
+          INSERT INTO refresh_operations.operations
+            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
+             max_attempts, status)
+          VALUES (${operationId}, ${operationId}, 'statistics-publication', ${input.dedupeKey},
+             ${input.operationKey}, 'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
+             ${input.maxAttempts ?? 3}, 'awaiting_binding')
+        `
+        return { outcome: 'accepted' as const, operationId }
+      })
+    },
+
+    async listAwaitingStatisticsPublications(): Promise<string[]> {
+      const rows = await client<{ id: string }[]>`
+        SELECT id FROM refresh_operations.operations
+        WHERE kind = 'statistics-publication' AND status = 'awaiting_binding'
+        ORDER BY created_at, id LIMIT 100
+      `
+      return rows.map(({ id }) => id)
+    },
+
+    async activateStatisticsPublication(operationId: string): Promise<TransitionResult> {
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [updated] = await sql<{ id: string }[]>`
+          UPDATE refresh_operations.operations SET status = 'pending', updated_at = clock_timestamp()
+          WHERE id = ${operationId} AND kind = 'statistics-publication' AND status = 'awaiting_binding'
+          RETURNING id
+        `
+        if (updated) {
+          await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+          return 'transitioned' as const
+        }
+        const [existing] = await sql<{ status: string }[]>`
+          SELECT status FROM refresh_operations.operations
+          WHERE id = ${operationId} AND kind = 'statistics-publication'
         `
         return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
           ? ('transitioned' as const)
@@ -1247,7 +1346,12 @@ export function createPostgresRefreshOperations(
                   SELECT operation_id FROM refresh_operations.statistics_collection_effects
                   WHERE operation_id = ${candidate.effect_operation_id}
                 `
-              : []
+              : candidate.kind === 'statistics-publication'
+                ? await sql<{ operation_id: string }[]>`
+                    SELECT operation_id FROM refresh_operations.statistics_publication_effects
+                    WHERE operation_id = ${candidate.effect_operation_id}
+                  `
+                : []
             const [interactiveEffect] =
               candidate.kind === 'interactive-player-refresh' || candidate.kind === 'clan-refresh'
                 ? await sql<{ complete: boolean }[]>`
@@ -1528,6 +1632,40 @@ export function createPostgresRefreshOperations(
       })
     },
 
+    async defer(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult> {
+      if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0) {
+        throw new Error('source admission retry delay must be a non-negative safe integer')
+      }
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [owned] = await sql<{ attempt_count: number }[]>`
+          SELECT attempt_count FROM refresh_operations.operations
+          WHERE id = ${lease.operationId} AND status = 'leased'
+            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
+            AND lease_expires_at > clock_timestamp()
+          FOR UPDATE
+        `
+        if (!owned || owned.attempt_count !== lease.attemptNumber) return 'lease-lost' as const
+        const [removed] = await sql<{ operation_id: string }[]>`
+          DELETE FROM refresh_operations.attempts
+          WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
+            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
+          RETURNING operation_id
+        `
+        if (!removed) return 'lease-lost' as const
+        await sql`
+          UPDATE refresh_operations.operations
+          SET status = 'pending', attempt_count = attempt_count - 1,
+              lease_owner = NULL, lease_expires_at = NULL,
+              available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
+              last_error = ${sql.json(failure)},
+              updated_at = clock_timestamp()
+          WHERE id = ${lease.operationId}
+        `
+        return 'transitioned' as const
+      })
+    },
+
     async complete(lease: OperationLease): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
@@ -1639,75 +1777,82 @@ export function createPostgresRefreshOperations(
           interactiveEffects,
           leaderboardEffects,
           statisticsEffects,
+          statisticsPublicationEffects,
           scheduleRows,
           actionRows,
         ] = await Promise.all([
-            sql<
-              {
-                attempt_number: number
-                lease_token: string | number
-                lease_owner: string
-                started_at: Date
-                finished_at: Date | null
-                outcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_expired' | null
-                error: OperationFailure | null
-              }[]
-            >`
+          sql<
+            {
+              attempt_number: number
+              lease_token: string | number
+              lease_owner: string
+              started_at: Date
+              finished_at: Date | null
+              outcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_expired' | null
+              error: OperationFailure | null
+            }[]
+          >`
           SELECT attempt_number, lease_token, lease_owner, started_at, finished_at, outcome, error
           FROM refresh_operations.attempts
           WHERE operation_id = ${operationId}
           ORDER BY attempt_number
         `,
-            sql<{ operation_key: string; effect_value: { value: string }; created_at: Date }[]>`
+          sql<{ operation_key: string; effect_value: { value: string }; created_at: Date }[]>`
           SELECT operation_key, effect_value, created_at
           FROM refresh_operations.proof_effects
           WHERE operation_id = ${row.effect_operation_id}
           ORDER BY created_at
         `,
-            sql<
-              {
-                section: 'ranked' | 'stats' | 'profile' | 'roster'
-                lease_token: string | number
-                completed_at: Date
-              }[]
-            >`
+          sql<
+            {
+              section: 'ranked' | 'stats' | 'profile' | 'roster'
+              lease_token: string | number
+              completed_at: Date
+            }[]
+          >`
           SELECT section, lease_token, completed_at
           FROM refresh_operations.interactive_refresh_effects
           WHERE operation_id = ${row.effect_operation_id}
           ORDER BY section
         `,
-            sql<{ operation_key: string; lease_token: string | number; created_at: Date }[]>`
+          sql<{ operation_key: string; lease_token: string | number; created_at: Date }[]>`
           SELECT operation_key, lease_token, created_at
           FROM refresh_operations.leaderboard_effects
           WHERE operation_id = ${row.effect_operation_id}
           ORDER BY created_at
         `,
-            sql<
-              {
-                operation_key: string
-                kind: StatisticsCollectionKind
-                lease_token: string | number
-                created_at: Date
-              }[]
-            >`
+          sql<
+            {
+              operation_key: string
+              kind: StatisticsCollectionKind
+              lease_token: string | number
+              created_at: Date
+            }[]
+          >`
           SELECT operation_key, kind, lease_token, created_at
           FROM refresh_operations.statistics_collection_effects
           WHERE operation_id = ${row.effect_operation_id}
           ORDER BY created_at
         `,
-            sql<
-              {
-                schedule_id: string
-                schedule_key: string
-                first_window_number: string | number
-                last_window_number: string | number
-                window_due_at: Date
-                materialized_at: Date
-                lateness_ms: string | number
-                missed_window_count: string | number
-                catch_up: boolean
-              }[]
-            >`
+          sql<{ operation_key: string; lease_token: string | number; created_at: Date }[]>`
+          SELECT operation_key, lease_token, created_at
+          FROM refresh_operations.statistics_publication_effects
+          WHERE operation_id = ${row.effect_operation_id}
+          ORDER BY created_at
+        `,
+          sql<
+            {
+              schedule_id: string
+              schedule_key: string
+              first_window_number: string | number
+              last_window_number: string | number
+              window_due_at: Date
+              materialized_at: Date
+              lateness_ms: string | number
+              missed_window_count: string | number
+              catch_up: boolean
+            }[]
+          >`
           SELECT occurrence.schedule_id, schedule.schedule_key, occurrence.first_window_number,
                  occurrence.last_window_number, occurrence.window_due_at, occurrence.materialized_at,
                  occurrence.lateness_ms, occurrence.missed_window_count, occurrence.catch_up
@@ -1717,23 +1862,23 @@ export function createPostgresRefreshOperations(
           JOIN refresh_operations.schedules schedule ON schedule.id = occurrence.schedule_id
           WHERE operation.id = ${operationId}
         `,
-            sql<
-              {
-                id: string
-                target_operation_id: string
-                disposition: DeadLetterDisposition
-                actor_id: string
-                reason: string
-                occurred_at: Date
-                replay_operation_id: string | null
-              }[]
-            >`
+          sql<
+            {
+              id: string
+              target_operation_id: string
+              disposition: DeadLetterDisposition
+              actor_id: string
+              reason: string
+              occurred_at: Date
+              replay_operation_id: string | null
+            }[]
+          >`
           SELECT id, target_operation_id, disposition, actor_id, reason, occurred_at, replay_operation_id
           FROM refresh_operations.dead_letter_actions
           WHERE target_operation_id = ${operationId}
           ORDER BY occurred_at, id
         `,
-          ])
+        ])
         const schedule = scheduleRows[0]
         return {
           operation: {
@@ -1770,6 +1915,11 @@ export function createPostgresRefreshOperations(
           statisticsEffects: statisticsEffects.map((effect) => ({
             operationKey: effect.operation_key,
             kind: effect.kind,
+            leaseToken: Number(effect.lease_token),
+            createdAt: effect.created_at.toISOString(),
+          })),
+          statisticsPublicationEffects: statisticsPublicationEffects.map((effect) => ({
+            operationKey: effect.operation_key,
             leaseToken: Number(effect.lease_token),
             createdAt: effect.created_at.toISOString(),
           })),
@@ -1847,6 +1997,8 @@ export function createPostgresRefreshOperations(
         'discovery-reconciliation',
         'ranked-player-pulse',
         ...leaderboardOperationKinds,
+        ...statisticsCollectionKinds,
+        'statistics-publication',
       ]
       const latenessByKind = new Map(scheduleLateness.map((row) => [row.kind, Number(row.lateness_ms)]))
       return {

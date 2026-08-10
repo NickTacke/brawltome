@@ -409,6 +409,62 @@ describe('refresh operations worker source retry', () => {
     expect(failed).toBe(false)
   })
 
+  test('defers Statistics source admission without consuming its execution attempt', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'statistics:cohort:42:ranked',
+      kind: 'statistics-ranked-collection',
+      workClass: 'global-statistics',
+      payload: { cohortId: crypto.randomUUID(), brawlhallaId: 42 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 3,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    let deferredMs: number | undefined
+    let failed = false
+    let recorded = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
+        deferredMs = retryDelayMs
+        return 'transitioned' as const
+      },
+      complete: async () => 'transitioned' as const,
+      fail: async () => {
+        failed = true
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: { admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }) },
+      statistics: {
+        preflightCollection: async () => 'missing',
+        preflightCollectionAttempt: async () => 'allowed',
+        recordCollectionAttempt: async () => {
+          recorded = true
+          return 'recorded'
+        },
+      } as never,
+      executeStatisticsCollection: async () => {
+        throw new Error('rate-limited work must not call the source')
+      },
+    })
+
+    expect(deferredMs).toBe(37_000)
+    expect(failed).toBe(false)
+    expect(recorded).toBe(false)
+  })
+
   test('preserves source admission Retry-After for clan failures', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),

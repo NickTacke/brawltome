@@ -26,6 +26,7 @@ const freshProfile = (observedAt: Date) => ({
     ratingHistory: [],
     observedRatingDirection: null,
   },
+  sparsePulse: null,
 })
 
 describe('desktop ranked lookup route', () => {
@@ -44,13 +45,13 @@ describe('desktop ranked lookup route', () => {
           calls.reserve++
           throw new Error('fresh cache must not reserve work')
         },
-      },
+      } as never,
       requestAdmission: {
         admitActor: async () => {
           calls.admit++
           throw new Error('fresh cache must not consume admission')
         },
-      },
+      } as never,
     })
 
     const response = await app.request('/opponent/42', {
@@ -115,12 +116,12 @@ describe('desktop ranked lookup route', () => {
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('fresh ranked data must not request refresh')
         },
-      },
+      } as never,
       requestAdmission: {
         admitActor: async () => {
           throw new Error('fresh ranked data must not consume admission')
         },
-      },
+      } as never,
     })
 
     const body = await (await app.request('/opponent/42')).json()
@@ -144,12 +145,12 @@ describe('desktop ranked lookup route', () => {
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('failed reads must not request refresh')
         },
-      },
+      } as never,
       requestAdmission: {
         admitActor: async () => {
           throw new Error('failed reads must not consume admission')
         },
-      },
+      } as never,
     })
 
     const response = await app.request('/opponent/42')
@@ -179,12 +180,12 @@ describe('desktop ranked lookup route', () => {
           awaitingAdmission: false,
           reservationExpired: false,
         }),
-      },
+      } as never,
       requestAdmission: {
         admitActor: async () => {
           throw new Error('deduplicated work must not consume admission')
         },
-      },
+      } as never,
     })
     const activeBody = await (await active.request('/opponent/42')).json()
     expect(activeBody).toMatchObject({
@@ -206,10 +207,10 @@ describe('desktop ranked lookup route', () => {
           rejected = true
           return 'transitioned' as const
         },
-      },
+      } as never,
       requestAdmission: {
         admitActor: async () => ({ outcome: 'rate-limited' as const, retryAfterSeconds: 77 }),
-      },
+      } as never,
     })
     const limitedBody = await (await limited.request('/opponent/42')).json()
     expect(limitedBody).toMatchObject({
@@ -225,8 +226,8 @@ describe('desktop ranked lookup route', () => {
         reserveInteractivePlayerRefresh: async () => {
           throw new Error('operations unavailable')
         },
-      },
-      requestAdmission: { admitActor: async () => ({ outcome: 'admitted' as const }) },
+      } as never,
+      requestAdmission: { admitActor: async () => ({ outcome: 'admitted' as const }) } as never,
     })
     const temporaryBody = await (await temporary.request('/opponent/42')).json()
     expect(temporaryBody).toMatchObject({
@@ -255,7 +256,7 @@ describe('desktop ranked lookup route', () => {
         activateAdmittedInteractiveRefresh: async () => 'transitioned' as const,
         rejectInteractiveRefresh: async () => 'transitioned' as const,
         rejectExpiredInteractiveRefresh: async () => 'transitioned' as const,
-      },
+      } as never,
       requestAdmission: {
         admitActor: async (actor: unknown, reservationKey?: string) => {
           calls.actor = actor

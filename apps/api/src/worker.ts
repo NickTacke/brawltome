@@ -9,6 +9,7 @@ import { createPostgresRequestAdmission } from '@brawltome/request-admission/com
 import { createMetricsRegistry, createQueue, createR2Client, initGameData } from '@brawltome/shared'
 import Redis from 'ioredis'
 import { readMatchmakingConfig } from './matchmaking-config'
+import { readBrawlhallaV1RequestLimit } from './operations-worker-config'
 
 const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) {
@@ -25,7 +26,7 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
   authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
   sourceLimits: {
     'brawlhalla-v0': 180,
-    'brawlhalla-v1': Number(process.env.BRAWLHALLA_V1_REQUEST_LIMIT ?? 180),
+    'brawlhalla-v1': readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT),
   },
 })
 

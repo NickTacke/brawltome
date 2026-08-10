@@ -28,6 +28,7 @@ const requiredRowIds = [
   'discord.status-command',
   'discord.lifecycle-expiry',
   'discord.smoke-procedures',
+  'statistics.full-launch-cohort-validation',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],
