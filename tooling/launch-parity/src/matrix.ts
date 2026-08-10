@@ -108,6 +108,44 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   },
   {
+    id: 'account.saved-players',
+    area: 'account-authentication',
+    requirement:
+      'Signed-in users privately save, remove, find, and manually order Saved Players with canonical observation scope and freshness.',
+    sourceIssue: '#205',
+    status: 'verified',
+    destinations: ['/account', '/player/[id]'],
+    implementation: [
+      'packages/contexts/accounts/src/accounts.ts',
+      'packages/contexts/accounts/src/postgres-store.ts',
+      'packages/contexts/accounts/migrations/0005-add-saved-players.ts',
+      'packages/contracts/src/account.ts',
+      'apps/api/src/router/account.router.ts',
+      'apps/web/src/app/account/SavedPlayersSection.tsx',
+      'apps/web/src/components/player/PlayerProfile/SavedPlayerButton.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/saved-players.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL proves private account visibility, bounded idempotent save/remove, and atomic stable order under concurrency.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/account.router.test.ts',
+        assertion:
+          'Protected procedures derive account identity from the session and reject public identity injection and unknown players.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/account/SavedPlayersSection.test.tsx',
+        assertion:
+          'Saved Players UI exposes accessible controls and canonical complete-ranked, sparse-pulse, freshness, and coverage disclosures.',
+      },
+    ],
+  },
+  {
     id: 'account.v2-session-migration',
     area: 'account-authentication',
     requirement: 'Valid V2 OAuth identities and sessions retain their identifiers and authenticate after migration.',

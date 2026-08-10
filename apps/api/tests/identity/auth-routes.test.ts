@@ -69,6 +69,16 @@ function makeFakes() {
     async getPrimaryPlayerVerificationState() {
       return { primaryPlayer: null, attempts: [] }
     },
+    async getSavedPlayers() {
+      return []
+    },
+    async savePlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, savedAt: new Date() }
+    },
+    async removeSavedPlayer() {},
+    async reorderSavedPlayers() {
+      return []
+    },
   }
   const requestAdmission = {
     async admitActor(actor: unknown, reservationKey?: string) {

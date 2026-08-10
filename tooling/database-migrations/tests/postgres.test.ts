@@ -55,12 +55,13 @@ const deployedMonitoringGlobalHistory = [
 ] as const
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories append-only capabilities through fixed Statistics cohort collection', () => {
+  test('inventories append-only capabilities through Saved Players', () => {
     expect(accountsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'accounts/0001',
       'accounts/0002',
       'accounts/0003',
       'accounts/0004',
+      'accounts/0005',
     ])
     expect(playerMigrationInventory.map(({ identity }) => identity)).toEqual([
       'players/0001',
@@ -120,6 +121,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       refreshOperationsMigrationInventory[12],
       statisticsMigrationInventory[0],
       refreshOperationsMigrationInventory[13],
+      accountsMigrationInventory[4],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -141,7 +143,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
-  test('preserves the deployed 28-row monitoring history and appends Discovery then Statistics capabilities', async () => {
+  test('preserves the deployed 28-row monitoring history and appends later capabilities', async () => {
     expect(
       globalMigrationInventory
         .slice(0, deployedMonitoringGlobalHistory.length)
@@ -151,13 +153,14 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedGlobalHistory).toHaveLength(25)
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
-    expect(globalMigrationInventory).toHaveLength(33)
+    expect(globalMigrationInventory).toHaveLength(34)
     expect(globalMigrationInventory.slice(deployedMonitoringGlobalHistory.length)).toEqual([
       clanMigrationInventory[1],
       discoveryMigrationInventory[1],
       refreshOperationsMigrationInventory[12],
       statisticsMigrationInventory[0],
       refreshOperationsMigrationInventory[13],
+      accountsMigrationInventory[4],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -170,7 +173,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(5)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(6)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

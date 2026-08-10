@@ -3,6 +3,8 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SESSION_EXTEND_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
 
+export const MAX_SAVED_PLAYERS = 100
+
 export interface Account {
   id: string
   displayName: string
@@ -29,6 +31,13 @@ export class InvalidAccountPreferencesError extends Error {
   constructor() {
     super('Invalid account preferences')
     this.name = 'InvalidAccountPreferencesError'
+  }
+}
+
+export class InvalidSavedPlayerError extends Error {
+  constructor(message = 'Invalid Saved Player') {
+    super(message)
+    this.name = 'InvalidSavedPlayerError'
   }
 }
 
@@ -94,6 +103,12 @@ export interface PrimaryPlayerEvidence extends PrimaryPlayerReference {
   source: 'brawlhalla-v0-steam-search'
 }
 
+export interface SavedPlayer {
+  brawlhallaId: number
+  order: number
+  savedAt: Date
+}
+
 export interface Accounts {
   signInWithDiscord(profile: DiscordSignInProfile): Promise<AccountSignIn>
   authenticate(sessionToken: string | null): Promise<AccountAuthentication>
@@ -110,6 +125,10 @@ export interface Accounts {
     resolver: { resolve(steamId: string): Promise<PrimaryPlayerEvidence | null> },
   ): Promise<PrimaryPlayerVerificationAttempt>
   getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
+  getSavedPlayers(accountId: string): Promise<SavedPlayer[]>
+  savePlayer(accountId: string, brawlhallaId: number): Promise<SavedPlayer>
+  removeSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
+  reorderSavedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<SavedPlayer[]>
 }
 
 export interface AccountsStore {
@@ -137,6 +156,10 @@ export interface AccountsStore {
   }): Promise<PrimaryPlayerVerificationAttempt>
   getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
   readPrimaryMonitoringSnapshot(): Promise<PrimaryMonitoringSnapshot>
+  getSavedPlayers(accountId: string): Promise<SavedPlayer[]>
+  savePlayer(accountId: string, brawlhallaId: number): Promise<SavedPlayer>
+  removeSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
+  reorderSavedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<SavedPlayer[]>
 }
 
 interface CreateAccountsOptions {
@@ -211,6 +234,34 @@ export function createAccounts({
     getPrimaryPlayerVerificationState(accountId) {
       return store.getPrimaryPlayerVerificationState(accountId)
     },
+
+    getSavedPlayers(accountId) {
+      return store.getSavedPlayers(accountId)
+    },
+
+    savePlayer(accountId, brawlhallaId) {
+      requireBrawlhallaId(brawlhallaId)
+      return store.savePlayer(accountId, brawlhallaId)
+    },
+
+    removeSavedPlayer(accountId, brawlhallaId) {
+      requireBrawlhallaId(brawlhallaId)
+      return store.removeSavedPlayer(accountId, brawlhallaId)
+    },
+
+    reorderSavedPlayers(accountId, orderedBrawlhallaIds) {
+      if (new Set(orderedBrawlhallaIds).size !== orderedBrawlhallaIds.length) {
+        throw new InvalidSavedPlayerError('Saved Player order contains duplicate players')
+      }
+      for (const brawlhallaId of orderedBrawlhallaIds) requireBrawlhallaId(brawlhallaId)
+      return store.reorderSavedPlayers(accountId, orderedBrawlhallaIds)
+    },
+  }
+}
+
+function requireBrawlhallaId(value: number): void {
+  if (!Number.isInteger(value) || value < 1 || value > 2_147_483_647) {
+    throw new InvalidSavedPlayerError('Invalid Brawlhalla player ID')
   }
 }
 

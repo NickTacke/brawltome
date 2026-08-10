@@ -3,10 +3,13 @@ import {
   type Account,
   type AccountPreferences,
   type AccountsStore,
+  InvalidSavedPlayerError,
   LEADERBOARD_BRACKETS,
   LEADERBOARD_REGIONS,
+  MAX_SAVED_PLAYERS,
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
+  type SavedPlayer,
 } from './accounts'
 import {
   type V2AuthCutoverFinalization,
@@ -61,6 +64,12 @@ interface PrimaryPlayerRow {
   player_name: string | null
   verified_at: Date
   verification_attempt_id: string
+}
+
+interface SavedPlayerRow {
+  brawlhalla_id: number
+  position: number
+  saved_at: Date
 }
 
 const sessionAccountQuery = `SELECT
@@ -398,6 +407,98 @@ function postgresAccountsStore(client: Sql): AccountsStore {
         }
       })
     },
+
+    getSavedPlayers(accountId) {
+      return readSavedPlayers(client, accountId)
+    },
+
+    async savePlayer(accountId, brawlhallaId) {
+      return client.begin(async (transaction) => {
+        await lockSavedPlayers(transaction, accountId)
+        const savedPlayers = await readSavedPlayers(transaction, accountId)
+        const existing = savedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
+        if (existing) return existing
+        if (savedPlayers.length >= MAX_SAVED_PLAYERS) {
+          throw new InvalidSavedPlayerError(`Saved Players cannot exceed ${MAX_SAVED_PLAYERS}`)
+        }
+        const [savedPlayer] = await transaction.unsafe<SavedPlayerRow[]>(
+          `INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
+           VALUES ($1, $2, $3)
+           RETURNING brawlhalla_id::int, position, saved_at`,
+          [accountId, brawlhallaId, savedPlayers.length],
+        )
+        if (!savedPlayer) throw new Error('Failed to save player')
+        return mapSavedPlayer(savedPlayer)
+      })
+    },
+
+    async removeSavedPlayer(accountId, brawlhallaId) {
+      await client.begin(async (transaction) => {
+        await lockSavedPlayers(transaction, accountId)
+        const [removed] = await transaction.unsafe<{ position: number }[]>(
+          `DELETE FROM accounts.saved_players
+           WHERE account_id = $1 AND brawlhalla_id = $2
+           RETURNING position`,
+          [accountId, brawlhallaId],
+        )
+        if (!removed) return
+        await transaction.unsafe(
+          `UPDATE accounts.saved_players
+           SET position = position - 1
+           WHERE account_id = $1 AND position > $2`,
+          [accountId, removed.position],
+        )
+      })
+    },
+
+    async reorderSavedPlayers(accountId, orderedBrawlhallaIds) {
+      return client.begin(async (transaction) => {
+        await lockSavedPlayers(transaction, accountId)
+        const current = await readSavedPlayers(transaction, accountId)
+        const currentIds = current.map(({ brawlhallaId }) => brawlhallaId).sort((left, right) => left - right)
+        const requestedIds = [...orderedBrawlhallaIds].sort((left, right) => left - right)
+        if (
+          currentIds.length !== requestedIds.length ||
+          currentIds.some((brawlhallaId, index) => brawlhallaId !== requestedIds[index])
+        ) {
+          throw new InvalidSavedPlayerError('Saved Player order must contain the complete collection')
+        }
+        await transaction.unsafe(
+          `UPDATE accounts.saved_players saved
+           SET position = requested.position
+           FROM (
+             SELECT brawlhalla_id, ordinality::int - 1 AS position
+             FROM unnest($2::bigint[]) WITH ORDINALITY AS ordered(brawlhalla_id, ordinality)
+           ) requested
+           WHERE saved.account_id = $1 AND saved.brawlhalla_id = requested.brawlhalla_id`,
+          [accountId, orderedBrawlhallaIds],
+        )
+        return readSavedPlayers(transaction, accountId)
+      })
+    },
+  }
+}
+
+async function lockSavedPlayers(transaction: TransactionSql, accountId: string): Promise<void> {
+  await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`saved-players:${accountId}`])
+}
+
+async function readSavedPlayers(client: Sql | TransactionSql, accountId: string): Promise<SavedPlayer[]> {
+  const rows = await client.unsafe<SavedPlayerRow[]>(
+    `SELECT brawlhalla_id::int, position, saved_at
+     FROM accounts.saved_players
+     WHERE account_id = $1
+     ORDER BY position, brawlhalla_id`,
+    [accountId],
+  )
+  return rows.map(mapSavedPlayer)
+}
+
+function mapSavedPlayer({ brawlhalla_id, position, saved_at }: SavedPlayerRow): SavedPlayer {
+  return {
+    brawlhallaId: brawlhalla_id,
+    order: position,
+    savedAt: saved_at,
   }
 }
 
