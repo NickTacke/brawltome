@@ -20,6 +20,7 @@ import {
 import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
+import { createPostgresStatistics } from '@brawltome/statistics/composition'
 import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
@@ -32,6 +33,8 @@ import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refres
 import { readHealthPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { runtimeMigrationInventory } from './runtime-migration-inventory'
+import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
+import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
 
 const connectionString = process.env.DATABASE_URL
@@ -56,6 +59,7 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
 })
 const playerRepo = createPlayerRepo(db)
 const ranking = createPostgresRanking(connectionString)
+const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
@@ -92,6 +96,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'database-postgres', close: closeDatabase },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
+    { name: 'statistics-postgres', close: statistics.close },
     { name: 'clans-postgres', close: clans.close },
     { name: 'discovery-postgres', close: discovery.close },
     { name: 'players-discovery-source-postgres', close: playerDiscoverySource.close },
@@ -187,8 +192,15 @@ try {
           if (reconciliation.outcome === 'accepted') reconciledDiscovery++
         }
       }
+      const reconciledStatistics = await reconcileStatisticsCohort(statistics, operations, ranking.queries)
       if (leaderboardSchedulesReconciled) {
-        return interactiveAdmissions + reconciledDiscovery + primaryMonitoring.created + primaryMonitoring.retired
+        return (
+          interactiveAdmissions +
+          reconciledDiscovery +
+          reconciledStatistics +
+          primaryMonitoring.created +
+          primaryMonitoring.retired
+        )
       }
       let reconciledSchedules = 0
       for (const definition of leaderboardSchedules) {
@@ -199,6 +211,7 @@ try {
       return (
         interactiveAdmissions +
         reconciledDiscovery +
+        reconciledStatistics +
         reconciledSchedules +
         primaryMonitoring.created +
         primaryMonitoring.retired
@@ -238,6 +251,9 @@ try {
         },
         ranking,
         leaderboardSource: { fetchPage: fetchLeaderboardPage },
+        statistics,
+        executeStatisticsCollection: (lease) =>
+          collectStatisticsEvidence(new BhApiClient({ apiKey, telemetry }), lease),
         executePlayerProjection: async (lease) => {
           await discovery.deliverPendingPlayers(
             playerDiscoverySource,

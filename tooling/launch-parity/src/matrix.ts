@@ -531,4 +531,41 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'statistics.eu-diamond-cohort-tracer',
+    area: 'global-statistics',
+    requirement:
+      'Global Statistics deterministically selects and durably collects exactly the EU Diamond+ launch cohort cell from one immutable Ranking generation.',
+    sourceIssue: '#209',
+    status: 'verified',
+    destinations: ['operations-worker'],
+    implementation: [
+      'packages/contexts/statistics/cohort.ts',
+      'packages/contexts/statistics/postgres.ts',
+      'packages/contexts/statistics/source.ts',
+      'apps/api/src/statistics-cohort-reconciliation.ts',
+      'apps/api/src/statistics-collection-source.ts',
+      'apps/api/src/refresh-operations-worker.ts',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/statistics/tests/cohort.test.ts',
+        assertion:
+          'Known SHA-256 answers prove rating-derived deterministic selection, version salting, the 750 cap, and the 125-player evidence boundary.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/statistics-cohort.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL proves immutable-generation restart, concurrent reconciliation, independent bounded operations, active fences, and post-effect crash recovery.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/statistics-worker.postgres.test.ts',
+        assertion:
+          'The production worker admits each ranked/lifetime V1 attempt independently across restart and never calls team or guild endpoints.',
+      },
+    ],
+  },
 ]

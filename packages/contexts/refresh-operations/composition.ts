@@ -11,6 +11,7 @@ import { addPlayerDiscoveryProjection } from './migrations/0010-add-player-disco
 import { addRankedPlayerPulseOperation } from './migrations/0011-add-ranked-player-pulse'
 import { addPrimaryPlayerMonitoring } from './migrations/0012-add-primary-player-monitoring'
 import { addDiscoveryOperations } from './migrations/0013-add-discovery-operations'
+import { addStatisticsCollection } from './migrations/0014-add-statistics-collection'
 
 export {
   createPostgresDeadLetterOperations,
@@ -33,4 +34,5 @@ export const refreshOperationsMigrationInventory = [
   addRankedPlayerPulseOperation,
   addPrimaryPlayerMonitoring,
   addDiscoveryOperations,
+  addStatisticsCollection,
 ] as const

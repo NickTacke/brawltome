@@ -5,6 +5,7 @@ import { playerMigrationInventory } from '@brawltome/player/composition'
 import { rankingMigrationInventory } from '@brawltome/ranking/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
+import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
 
 export const runtimeMigrationInventory = [
   ...playerMigrationInventory.slice(0, 3),
@@ -29,4 +30,6 @@ export const runtimeMigrationInventory = [
   clanMigrationInventory[1],
   discoveryMigrationInventory[1],
   refreshOperationsMigrationInventory[12],
+  statisticsMigrationInventory[0],
+  refreshOperationsMigrationInventory[13],
 ] as const

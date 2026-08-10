@@ -26,6 +26,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/ranking': 'capability',
     '@brawltome/request-admission': 'capability',
     '@brawltome/refresh-operations': 'capability',
+    '@brawltome/statistics': 'capability',
   },
   allowedExports: {
     '@brawltome/api': ['.'],
@@ -52,6 +53,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/ranking': ['.', './composition'],
     '@brawltome/request-admission': ['.', './composition'],
     '@brawltome/refresh-operations': ['.', './composition'],
+    '@brawltome/statistics': ['.', './composition'],
   },
   capabilityDependencies: {
     '@brawltome/accounts': [],
@@ -62,6 +64,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/ranking': [],
     '@brawltome/request-admission': [],
     '@brawltome/refresh-operations': [],
+    '@brawltome/statistics': [],
   },
   compositionImporters: ['@brawltome/api', '@brawltome/database-migrations'],
   contractsDependencies: ['@brawltome/game-data'],
