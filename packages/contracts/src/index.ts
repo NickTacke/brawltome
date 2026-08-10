@@ -31,6 +31,15 @@ export {
   parseContractProofOutput,
   type ContractProof,
 } from './contract-proof'
+export {
+  discoveryClanHitSchema,
+  discoveryPlayerHitSchema,
+  discoverySearchInputSchema,
+  discoverySearchOutputSchema,
+  type DiscoveryClanHitContract,
+  type DiscoveryPlayerHitContract,
+  type DiscoverySearchOutputContract,
+} from './discovery'
 export { generateContractOpenApi, serializeContractOpenApi } from './openapi'
 export {
   fixedTwoVsTwoIdentitySchema,
@@ -78,6 +87,7 @@ export {
   brawlhallaIdSchema,
   nullablePlayerReferenceSchema,
   parsePlayerReferenceOutput,
+  playerNameSchema,
   playerReferenceByIdInputSchema,
   playerReferenceSchema,
   type PlayerReferenceContract,

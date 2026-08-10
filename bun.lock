@@ -16,6 +16,7 @@
         "@brawltome/clan": "workspace:*",
         "@brawltome/contracts": "workspace:*",
         "@brawltome/database": "workspace:*",
+        "@brawltome/discovery": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "@brawltome/identity": "workspace:*",
         "@brawltome/matchmaking": "workspace:*",
@@ -125,13 +126,19 @@
     "packages/contexts/clan": {
       "name": "@brawltome/clan",
       "dependencies": {
-        "@brawltome/bhapi": "workspace:*",
-        "@brawltome/database": "workspace:*",
-        "@brawltome/shared": "workspace:*",
-        "drizzle-orm": "^0.39.0",
-        "ioredis": "^5.8.0",
+        "postgres": "^3.4.8",
       },
       "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/contexts/discovery": {
+      "name": "@brawltome/discovery",
+      "dependencies": {
+        "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
         "typescript": "^5.7.0",
       },
     },
@@ -165,6 +172,7 @@
         "@brawltome/shared": "workspace:*",
         "drizzle-orm": "^0.39.0",
         "ioredis": "^5.8.0",
+        "postgres": "^3.4.7",
       },
       "devDependencies": {
         "typescript": "^5.7.0",
@@ -284,9 +292,12 @@
       "name": "@brawltome/database-migrations",
       "dependencies": {
         "@brawltome/accounts": "workspace:*",
+        "@brawltome/clan": "workspace:*",
+        "@brawltome/discovery": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
+        "@brawltome/request-admission": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -382,6 +393,8 @@
     "@brawltome/desktop": ["@brawltome/desktop@workspace:apps/desktop"],
 
     "@brawltome/discord-bot": ["@brawltome/discord-bot@workspace:apps/discord-bot"],
+
+    "@brawltome/discovery": ["@brawltome/discovery@workspace:packages/contexts/discovery"],
 
     "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
 

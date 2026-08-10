@@ -2,6 +2,7 @@
 
 import { navItems } from '@/components/sidebar/nav-items'
 import { trpc } from '@/lib/trpc'
+import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
 import { Avatar, AvatarFallback, AvatarImage, Card } from '@brawltome/ui'
 import { Shield } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -17,17 +18,8 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [debouncedQuery] = useDebounce(query, 200)
-  const [playerResults, setPlayerResults] = useState<
-    Array<{
-      brawlhallaId: number
-      name: string
-      region: string | null
-      rating: number
-      bestLegendNameKey?: string | null
-      matchedAlias?: string | null
-    }>
-  >([])
-  const [clanResults, setClanResults] = useState<Array<{ clanId: number; clanName: string }>>([])
+  const [playerResults, setPlayerResults] = useState<DiscoveryPlayerHitContract[]>([])
+  const [clanResults, setClanResults] = useState<DiscoveryClanHitContract[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -250,7 +242,7 @@ export function CommandPalette() {
                         {cmd.matchedAlias ? `Matched alias: ${cmd.matchedAlias}` : (cmd.region ?? 'Unknown')}
                       </div>
                     </div>
-                    <div className="text-sm font-mono text-primary shrink-0">{cmd.rating ?? 0}</div>
+                    <div className="text-sm font-mono text-primary shrink-0">{cmd.rating ?? 'Unavailable'}</div>
                   </>
                 )}
                 {cmd.kind === 'clan' && (

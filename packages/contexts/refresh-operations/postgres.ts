@@ -120,6 +120,12 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+  if (row.kind === 'player-discovery-projection') {
+    if (row.work_class !== 'projection' || !('batchSize' in row.payload)) {
+      throw new Error('invalid durable player discovery projection operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
   if (row.kind === 'interactive-player-refresh') {
     if (row.work_class !== 'interactive' || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable interactive player refresh operation')
@@ -182,7 +188,9 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-function operationKind(input: { kind?: 'proof' | LeaderboardOperationKind }): 'proof' | LeaderboardOperationKind {
+function operationKind(input: {
+  kind?: 'proof' | LeaderboardOperationKind | 'player-discovery-projection'
+}): 'proof' | LeaderboardOperationKind | 'player-discovery-projection' {
   return input.kind ?? 'proof'
 }
 
@@ -257,7 +265,10 @@ function chooseBackgroundClass(
 
 export function createPostgresRefreshOperations(
   connectionString: string,
-  options: { executionConcurrency?: number } = {},
+  options: {
+    executionConcurrency?: number
+    playerProjectionEffectState?: (operationId: string) => Promise<'none' | 'applied' | 'acknowledged'>
+  } = {},
 ) {
   const executionConcurrency = options.executionConcurrency
   if (executionConcurrency !== undefined && (!Number.isInteger(executionConcurrency) || executionConcurrency <= 0)) {
@@ -565,6 +576,13 @@ export function createPostgresRefreshOperations(
       if (isLeaderboardKind(kind)) {
         if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
         validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
+      }
+      if (kind === 'player-discovery-projection') {
+        const { batchSize } = input.payload as { batchSize: number }
+        if (input.workClass !== 'projection') throw new Error('player discovery requires projection work class')
+        if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 1_000) {
+          throw new Error('player discovery batchSize must be between 1 and 1000')
+        }
       }
       for (;;) {
         const result = await client.begin(async (transaction) => {
@@ -874,7 +892,16 @@ export function createPostgresRefreshOperations(
                     WHERE operation.id = ${candidate.id}
                   `
                 : []
-            if (proofEffect || leaderboardEffect || interactiveEffect?.complete) {
+            const playerProjectionEffect =
+              candidate.kind === 'player-discovery-projection'
+                ? await options.playerProjectionEffectState?.(candidate.id)
+                : 'none'
+            if (
+              proofEffect ||
+              leaderboardEffect ||
+              interactiveEffect?.complete ||
+              playerProjectionEffect === 'acknowledged'
+            ) {
               await sql`
                 UPDATE refresh_operations.attempts
                 SET finished_at = clock_timestamp(), outcome = 'succeeded'
@@ -896,7 +923,7 @@ export function createPostgresRefreshOperations(
               WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
                 AND finished_at IS NULL
             `
-            if (candidate.attempt_count >= candidate.max_attempts) {
+            if (candidate.attempt_count >= candidate.max_attempts && playerProjectionEffect !== 'applied') {
               await sql`
                 UPDATE refresh_operations.operations
                 SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
@@ -1056,6 +1083,40 @@ export function createPostgresRefreshOperations(
         return existing?.operation_id === owned.effect_operation_id && existing.matches_payload
           ? ('already-applied' as const)
           : ('effect-conflict' as const)
+      })
+    },
+
+    async retryAppliedPlayerProjection(
+      lease: Extract<OperationLease, { kind: 'player-discovery-projection' }>,
+      retryDelayMs: number,
+    ): Promise<TransitionResult> {
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [updated] = await sql<{ id: string }[]>`
+          UPDATE refresh_operations.operations
+          SET status = 'pending', lease_owner = NULL, lease_expires_at = NULL,
+              available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
+              last_error = ${sql.json({
+                code: 'player_projection_acknowledgment_pending',
+                message: 'Projection applied; owner acknowledgment remains pending',
+              })},
+              updated_at = clock_timestamp()
+          WHERE id = ${lease.operationId} AND kind = 'player-discovery-projection' AND status = 'leased'
+            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
+            AND lease_expires_at > clock_timestamp()
+          RETURNING id
+        `
+        if (!updated) return 'lease-lost' as const
+        await sql`
+          UPDATE refresh_operations.attempts
+          SET finished_at = clock_timestamp(), outcome = 'retry',
+              error = ${sql.json({
+                code: 'player_projection_acknowledgment_pending',
+                message: 'Projection applied; owner acknowledgment remains pending',
+              })}
+          WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
+        `
+        return 'transitioned' as const
       })
     },
 

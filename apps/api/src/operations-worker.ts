@@ -1,12 +1,15 @@
+import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { BhApiClient } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
+import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
 import {
   createPlayerRepo,
   createPostgresCareerPlayers,
+  createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
@@ -14,6 +17,7 @@ import {
 import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
+import { serve } from 'bun'
 import { Hono } from 'hono'
 import { createHealthRoutes } from './health-routes'
 import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from './operations-worker-config'
@@ -30,8 +34,10 @@ const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 
 const workerConfig = readOperationsWorkerConfig(process.env)
+const discovery = createPostgresDiscovery(connectionString)
 const operations = createPostgresRefreshOperations(connectionString, {
   executionConcurrency: workerConfig.admission.totalConcurrency,
+  playerProjectionEffectState: discovery.playerProjectionEffectState,
 })
 const requestAdmission = createPostgresRequestAdmission(connectionString, {
   authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
@@ -47,11 +53,12 @@ const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
 const clans = createPostgresClans(connectionString)
+const playerDiscoverySource = createPostgresPlayerDiscoverySource(connectionString)
 const postgresReadiness = createPostgresReadiness(connectionString, runtimeMigrationInventory)
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
 let listener: Awaited<ReturnType<typeof operations.listen>> | undefined
-const healthServer = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
+const healthServer = { current: undefined as ReturnType<typeof serve> | undefined }
 
 const lifecycle = createRuntimeLifecycle({
   ...runtimeConfig,
@@ -76,13 +83,15 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'clans-postgres', close: clans.close },
+    { name: 'discovery-postgres', close: discovery.close },
+    { name: 'players-discovery-source-postgres', close: playerDiscoverySource.close },
     { name: 'readiness-postgres', close: postgresReadiness.close },
   ],
 })
 
 const health = new Hono()
 health.route('/health', createHealthRoutes(lifecycle))
-healthServer.current = Bun.serve({ port: readHealthPort(process.env.HEALTH_PORT, 3001), fetch: health.fetch })
+healthServer.current = serve({ port: readHealthPort(process.env.HEALTH_PORT, 3001), fetch: health.fetch })
 lifecycle.markReady()
 
 let shutdownRequested = false
@@ -107,14 +116,26 @@ try {
     config: workerConfig,
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
-      if (leaderboardSchedulesReconciled) return interactiveAdmissions
-      let reconciled = 0
+      let reconciledProjection = 0
+      if ((await playerDiscoverySource.lag()) > 0) {
+        const projection = await operations.accept({
+          kind: 'player-discovery-projection',
+          dedupeKey: 'discovery:players:pending',
+          operationKey: `discovery:players:${randomUUID()}`,
+          workClass: 'projection',
+          payload: { batchSize: 500 },
+          provenance: { source: 'projection-reconciliation', requestedBy: 'issue-199' },
+        })
+        reconciledProjection = projection.outcome === 'accepted' ? 1 : 0
+      }
+      if (leaderboardSchedulesReconciled) return interactiveAdmissions + reconciledProjection
+      let reconciledSchedules = 0
       for (const definition of leaderboardSchedules) {
         const schedule = await operations.reconcileLeaderboardSchedule(definition)
-        if (schedule.outcome !== 'already-exists') reconciled++
+        if (schedule.outcome !== 'already-exists') reconciledSchedules++
       }
       leaderboardSchedulesReconciled = true
-      return interactiveAdmissions + reconciled
+      return interactiveAdmissions + reconciledProjection + reconciledSchedules
     },
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
@@ -125,6 +146,10 @@ try {
         sourceAdmission: requestAdmission,
         ranking,
         leaderboardSource: { fetchPage: fetchLeaderboardPage },
+        executePlayerProjection: async (lease) => {
+          await discovery.deliverPendingPlayers(playerDiscoverySource, lease.payload.batchSize, lease.operationId)
+        },
+        playerProjectionEffectState: discovery.playerProjectionEffectState,
         executeSection: async (lease, section, admitSourceCall) => {
           await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
           const admittedBhapi = new BhApiClient({

@@ -201,8 +201,6 @@ describe('V3 dependency architecture', () => {
         'v2-player-database-adapter',
         'v2-player-shared-package',
         'v2-ranking-bhapi-adapter',
-        'v2-ranking-clan-capability-edge',
-        'v2-ranking-clan-undeclared',
         'v2-ranking-database-adapter',
         'v2-ranking-player-capability-edge',
         'v2-ranking-player-undeclared',

@@ -19,6 +19,7 @@
     "@brawltome/clan": "workspace:*",
     "@brawltome/contracts": "workspace:*",
     "@brawltome/database": "workspace:*",
+    "@brawltome/discovery": "workspace:*",
     "@brawltome/game-data": "workspace:*",
     "@brawltome/identity": "workspace:*",
     "@brawltome/matchmaking": "workspace:*",

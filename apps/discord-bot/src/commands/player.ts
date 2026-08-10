@@ -221,11 +221,9 @@ function getPlayersFromMessage(
     const options: SelectOption[] = 'data' in select ? (select.data as { options?: SelectOption[] }).options || [] : []
 
     return options.map((opt) => {
-      // Parse description: "1847 • Platinum 3" or just take as-is
       const desc = opt.description || ''
-      const parts = desc.split(' • ')
-      const rating = Number.parseInt(parts[0], 10) || 0
-      const tier = parts[1] || parts[0] || 'Unranked'
+      const ratingValue = Number.parseInt(desc.split(' • ')[0], 10)
+      const rating = Number.isNaN(ratingValue) ? null : ratingValue
 
       // Extract legend name from emoji (e.g., "avatar_bodvar" -> "bodvar")
       let bestLegendNameKey: string | null = null
@@ -238,10 +236,9 @@ function getPlayersFromMessage(
         name: opt.label,
         region: '' as string | null,
         rating,
-        tier,
-        rankedGames: 0,
-        rankedWins: 0,
+        viewCount: 0,
         bestLegendNameKey,
+        matchedAlias: null,
       }
     }) as SearchResponse['players']
   } catch {
@@ -250,11 +247,10 @@ function getPlayersFromMessage(
         brawlhallaId: selectedId,
         name: 'Unknown',
         region: '' as string | null,
-        rating: 0,
-        tier: 'Unknown',
-        rankedGames: 0,
-        rankedWins: 0,
+        rating: null,
+        viewCount: 0,
         bestLegendNameKey: null,
+        matchedAlias: null,
       },
     ] as SearchResponse['players']
   }

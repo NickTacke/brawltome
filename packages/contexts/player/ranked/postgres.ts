@@ -256,6 +256,9 @@ export function createPostgresRankedPlayers(
 
         const [clock] = await sql<{ observed_at: Date }[]>`SELECT clock_timestamp() AS observed_at`
         const observedAt = clock.observed_at
+        const [previous] = await sql<{ player_name: string | null }[]>`
+          SELECT player_name FROM players.ranked_profiles WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+        `
         const one = snapshot.oneVsOne
         await sql`
           INSERT INTO players.ranked_profiles
@@ -282,6 +285,14 @@ export function createPostgresRankedPlayers(
             ranked_main_legend_id = EXCLUDED.ranked_main_legend_id,
             ranked_main_legend_name_key = EXCLUDED.ranked_main_legend_name_key
         `
+        if (previous?.player_name && previous.player_name !== snapshot.name) {
+          await sql`
+            INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
+            VALUES (${snapshot.brawlhallaId}, ${previous.player_name.toLowerCase()}, ${previous.player_name}, ${observedAt})
+            ON CONFLICT (brawlhalla_id, normalized_alias) DO UPDATE
+            SET display_alias = EXCLUDED.display_alias, observed_at = EXCLUDED.observed_at
+          `
+        }
 
         await Promise.all([
           sql`DELETE FROM players.ranked_legends WHERE brawlhalla_id = ${snapshot.brawlhallaId}`,

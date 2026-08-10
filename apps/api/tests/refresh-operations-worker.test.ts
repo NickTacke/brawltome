@@ -23,9 +23,98 @@ const admission: AdmissionConfig = {
 }
 
 describe('refresh operations worker source retry', () => {
+  test('executes player projection work through the durable projection class', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      operationKey: 'discovery:players:test',
+      kind: 'player-discovery-projection',
+      workClass: 'projection',
+      payload: { batchSize: 100 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    let executed = false
+    let completed = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      executePlayerProjection: async (claimed) => {
+        expect(claimed).toBe(lease)
+        executed = true
+      },
+    })
+
+    expect(executed).toBe(true)
+    expect(completed).toBe(true)
+  })
+
+  test('retries projection reconciliation failures without consuming the final attempt', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      operationKey: 'discovery:players:failed-reconciliation',
+      kind: 'player-discovery-projection',
+      workClass: 'projection',
+      payload: { batchSize: 100 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 1,
+      scheduleWindowAt: null,
+    }
+    let retried = false
+    let failed = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => 'transitioned' as const,
+      retryAppliedPlayerProjection: async () => {
+        retried = true
+        return 'transitioned' as const
+      },
+      fail: async () => {
+        failed = true
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      executePlayerProjection: async () => {
+        throw new Error('owner acknowledgment failed')
+      },
+      playerProjectionEffectState: async () => {
+        throw new Error('receipt lookup unavailable')
+      },
+    })
+
+    expect(retried).toBe(true)
+    expect(failed).toBe(false)
+  })
+
   test('preserves source admission Retry-After for clan failures', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
       operationKey: 'clan:77',
       kind: 'clan-refresh',
       workClass: 'interactive',
@@ -73,6 +162,7 @@ describe('refresh operations worker source retry', () => {
   test('revokes active clan authority and skips publication completion after renewal loss', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
       operationKey: 'clan:renewal-loss',
       kind: 'clan-refresh',
       workClass: 'interactive',
@@ -127,6 +217,7 @@ describe('refresh operations worker source retry', () => {
   test('prefers the maximum retry-aware failure after an earlier generic section failure', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
       operationKey: 'clan:78',
       kind: 'clan-refresh',
       workClass: 'interactive',

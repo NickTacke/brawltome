@@ -323,11 +323,11 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
-  test('admits exactly the four operation kinds under shared cross-kind concurrency', async () => {
+  test('admits exactly the five operation kinds under shared cross-kind concurrency', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = {
       ...testAdmission,
-      totalConcurrency: 4,
+      totalConcurrency: 5,
       interactiveReservation: 1,
       classConcurrency: { ...testAdmission.classConcurrency, interactive: 3 },
     } as const
@@ -350,6 +350,17 @@ describe('durable Refresh Operations', () => {
         operationKey: `cross-kind-leaderboard:${randomUUID()}`,
         workClass: 'leaderboard',
         payload: { pageDepth: 1, intervalMs: 60_000 },
+        provenance: { source: 'integration-test' },
+      }),
+    )
+    await settleWithin(
+      'accept player discovery projection',
+      operations.accept({
+        kind: 'player-discovery-projection',
+        dedupeKey: `cross-kind-player-discovery:${randomUUID()}`,
+        operationKey: `cross-kind-player-discovery:${randomUUID()}`,
+        workClass: 'projection',
+        payload: { batchSize: 100 },
         provenance: { source: 'integration-test' },
       }),
     )
@@ -401,9 +412,21 @@ describe('durable Refresh Operations', () => {
           operations.claim('cross-kind-leaderboard', 10_000, admission, 'leaderboard-1v1'),
         ),
       ),
+      requireLease(
+        await settleWithin(
+          'player discovery claim',
+          operations.claim('cross-kind-player-discovery', 10_000, admission, 'player-discovery-projection'),
+        ),
+      ),
     ]
     expect(new Set(leases.map(({ kind }) => kind))).toEqual(
-      new Set<OperationLease['kind']>(['proof', 'interactive-player-refresh', 'leaderboard-1v1', 'clan-refresh']),
+      new Set<OperationLease['kind']>([
+        'proof',
+        'interactive-player-refresh',
+        'leaderboard-1v1',
+        'clan-refresh',
+        'player-discovery-projection',
+      ]),
     )
     expect(await operations.claim('cross-kind-blocked', 10_000, admission)).toBeNull()
 

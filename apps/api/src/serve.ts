@@ -1,6 +1,7 @@
 import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
+import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
 import {
@@ -84,6 +85,7 @@ const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
 const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
 })
+const discovery = createPostgresDiscovery(databaseUrl)
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(
   db,
   (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
@@ -139,6 +141,7 @@ const lifecycle = createRuntimeLifecycle({
     },
     { name: 'operations-postgres', close: refreshOperations.close },
     { name: 'clans-postgres', close: clanRepo.close },
+    { name: 'discovery-postgres', close: discovery.close },
     { name: 'players-ranked-postgres', close: rankedPlayerQueries.close },
     { name: 'players-career-postgres', close: careerPlayerQueries.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
@@ -169,6 +172,7 @@ const sharedCtx = {
   statsQueue,
   playerRepo,
   playerReferenceQueries,
+  discoveryQueries: discovery,
   rankedPlayerQueries,
   careerPlayerQueries,
   refreshOperations,
