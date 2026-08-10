@@ -65,6 +65,10 @@ export const leaderboardOperationKinds = [
 ] as const
 export type LeaderboardOperationKind = (typeof leaderboardOperationKinds)[number]
 
+export const discoveryProjectionKinds = ['player-discovery-projection', 'clan-discovery-projection'] as const
+export type DiscoveryProjectionKind = (typeof discoveryProjectionKinds)[number]
+export type DiscoveryOwner = 'player' | 'clan'
+
 export type LeaderboardOperationPayload = {
   pageDepth: number
   intervalMs: number
@@ -120,8 +124,8 @@ export type AcceptLeaderboardOperation = {
   maxAttempts?: number
 }
 
-export type AcceptPlayerDiscoveryProjection = {
-  kind: 'player-discovery-projection'
+export type AcceptDiscoveryProjection = {
+  kind: DiscoveryProjectionKind
   dedupeKey: string
   operationKey: string
   workClass: 'projection'
@@ -130,11 +134,22 @@ export type AcceptPlayerDiscoveryProjection = {
   maxAttempts?: number
 }
 
+export type AcceptDiscoveryReconciliation = {
+  kind: 'discovery-reconciliation'
+  dedupeKey: string
+  operationKey: string
+  workClass: 'projection'
+  payload: { owner: DiscoveryOwner }
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
 export type AcceptOperation =
   | AcceptProofOperation
   | AcceptRankedPlayerPulseOperation
   | AcceptLeaderboardOperation
-  | AcceptPlayerDiscoveryProjection
+  | AcceptDiscoveryProjection
+  | AcceptDiscoveryReconciliation
 
 export type AcceptOperationResult = {
   outcome: 'accepted' | 'already-active'
@@ -280,6 +295,16 @@ export type OperationLease =
       kind: 'player-discovery-projection'
       workClass: 'projection'
       payload: { batchSize: number }
+    })
+  | (LeaseFields & {
+      kind: 'clan-discovery-projection'
+      workClass: 'projection'
+      payload: { batchSize: number }
+    })
+  | (LeaseFields & {
+      kind: 'discovery-reconciliation'
+      workClass: 'projection'
+      payload: { owner: DiscoveryOwner }
     })
   | (LeaseFields & {
       kind: 'clan-refresh'
@@ -436,8 +461,9 @@ export interface RefreshOperationWorker {
     section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<TransitionResult>
   commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult>
-  retryAppliedPlayerProjection(
-    lease: Extract<OperationLease, { kind: 'player-discovery-projection' }>,
+  discoveryLeaseActive(lease: Extract<OperationLease, { workClass: 'projection' }>): Promise<boolean>
+  retryAppliedDiscoveryProjection(
+    lease: Extract<OperationLease, { payload: { batchSize: number } }>,
     retryDelayMs: number,
   ): Promise<TransitionResult>
   complete(lease: OperationLease): Promise<TransitionResult>

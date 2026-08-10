@@ -19,7 +19,8 @@ type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' 
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
-type PlayerProjectionLease = Extract<OperationLease, { kind: 'player-discovery-projection' }>
+type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
+type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
@@ -48,8 +49,14 @@ type RunOneRefreshOperationOptions = {
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
   leaderboardSource?: LeaderboardPageSource
-  executePlayerProjection?(lease: PlayerProjectionLease): Promise<void>
-  playerProjectionEffectState?(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
+  executePlayerProjection?(lease: ProjectionLease): Promise<void>
+  executeClanProjection?(lease: ProjectionLease): Promise<void>
+  executeDiscoveryReconciliation?(lease: ReconciliationLease): Promise<void>
+  projectionEffectState?(
+    kind: ProjectionLease['kind'],
+    effectOperationId: string,
+  ): Promise<'none' | 'applied' | 'acknowledged'>
+  playerProjectionEffectState?(effectOperationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   telemetry?: Telemetry
 }
 
@@ -273,13 +280,25 @@ async function executeInteractive(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
-async function executePlayerProjection(
+async function executeDiscoveryProjection(
   operations: RefreshOperationWorker,
-  lease: PlayerProjectionLease,
+  lease: ProjectionLease,
   options: RunOneRefreshOperationOptions,
 ): Promise<AttemptExecutionOutcome> {
-  if (!options.executePlayerProjection) throw new Error('Player discovery projection executor is unavailable')
-  await options.executePlayerProjection(lease)
+  const execute =
+    lease.kind === 'player-discovery-projection' ? options.executePlayerProjection : options.executeClanProjection
+  if (!execute) throw new Error('Discovery projection executor is unavailable')
+  await execute(lease)
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
+async function executeDiscoveryReconciliation(
+  operations: RefreshOperationWorker,
+  lease: ReconciliationLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.executeDiscoveryReconciliation) throw new Error('Discovery reconciliation executor is unavailable')
+  await options.executeDiscoveryReconciliation(lease)
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -406,8 +425,10 @@ export async function runOneRefreshOperation(
       if (lease.kind === 'proof') attemptOutcome = await executeProof(operations, lease, options)
       else if (lease.kind === 'interactive-player-refresh' || lease.kind === 'clan-refresh') {
         attemptOutcome = await executeInteractive(operations, lease, options, clanAuthority, authorityLost)
-      } else if (lease.kind === 'player-discovery-projection') {
-        attemptOutcome = await executePlayerProjection(operations, lease, options)
+      } else if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {
+        attemptOutcome = await executeDiscoveryProjection(operations, lease, options)
+      } else if (lease.kind === 'discovery-reconciliation') {
+        attemptOutcome = await executeDiscoveryReconciliation(operations, lease, options)
       } else if (lease.kind === 'ranked-player-pulse') {
         attemptOutcome = await executeRankedPulse(operations, lease, options)
       } else {
@@ -420,12 +441,16 @@ export async function runOneRefreshOperation(
         failureCategory = 'lease_lost'
         return true
       }
-      if (lease.kind === 'player-discovery-projection' && options.playerProjectionEffectState) {
+      if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {
         let effectState: 'none' | 'applied' | 'acknowledged'
         try {
-          effectState = await options.playerProjectionEffectState(lease.operationId)
+          effectState = options.projectionEffectState
+            ? await options.projectionEffectState(lease.kind, lease.effectOperationId)
+            : lease.kind === 'player-discovery-projection' && options.playerProjectionEffectState
+              ? await options.playerProjectionEffectState(lease.effectOperationId)
+              : 'none'
         } catch {
-          const transition = await operations.retryAppliedPlayerProjection(lease, options.retryDelayMs)
+          const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
           attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
           failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'execution'
           return true
@@ -437,7 +462,7 @@ export async function runOneRefreshOperation(
           return true
         }
         if (effectState === 'applied') {
-          const transition = await operations.retryAppliedPlayerProjection(lease, options.retryDelayMs)
+          const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
           attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
           failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'execution'
           return true
@@ -456,9 +481,13 @@ export async function runOneRefreshOperation(
                 ? 'clan_refresh_failed'
                 : lease.kind === 'player-discovery-projection'
                   ? 'player_discovery_projection_failed'
-                  : lease.kind === 'ranked-player-pulse'
-                    ? 'ranked_player_pulse_failed'
-                    : 'leaderboard_collection_failed'
+                  : lease.kind === 'clan-discovery-projection'
+                    ? 'clan_discovery_projection_failed'
+                    : lease.kind === 'discovery-reconciliation'
+                      ? 'discovery_reconciliation_failed'
+                      : lease.kind === 'ranked-player-pulse'
+                        ? 'ranked_player_pulse_failed'
+                        : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'

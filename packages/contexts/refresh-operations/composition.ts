@@ -10,6 +10,7 @@ import { addLeaderboardOperationModes } from './migrations/0009-add-leaderboard-
 import { addPlayerDiscoveryProjection } from './migrations/0010-add-player-discovery-projection'
 import { addRankedPlayerPulseOperation } from './migrations/0011-add-ranked-player-pulse'
 import { addPrimaryPlayerMonitoring } from './migrations/0012-add-primary-player-monitoring'
+import { addDiscoveryOperations } from './migrations/0013-add-discovery-operations'
 
 export {
   createPostgresDeadLetterOperations,
@@ -31,4 +32,5 @@ export const refreshOperationsMigrationInventory = [
   addPlayerDiscoveryProjection,
   addRankedPlayerPulseOperation,
   addPrimaryPlayerMonitoring,
+  addDiscoveryOperations,
 ] as const

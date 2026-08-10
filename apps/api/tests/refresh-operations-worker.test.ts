@@ -289,6 +289,78 @@ describe('refresh operations worker source retry', () => {
     expect(completed).toBe(true)
   })
 
+  test('executes clan projection and owner reconciliation before the leaderboard fallback', async () => {
+    const common = {
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      workClass: 'projection' as const,
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    const leases: OperationLease[] = [
+      {
+        ...common,
+        operationId: crypto.randomUUID(),
+        operationKey: 'discovery:clans:test',
+        kind: 'clan-discovery-projection',
+        payload: { batchSize: 100 },
+      },
+      {
+        ...common,
+        operationId: crypto.randomUUID(),
+        operationKey: 'discovery:reconcile:clan',
+        kind: 'discovery-reconciliation',
+        payload: { owner: 'clan' },
+      },
+    ]
+    const operationIds = leases.map(({ operationId }) => operationId)
+    const executed: string[] = []
+    const sink = createMemorySink()
+    const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+    const operations = {
+      claim: async () => leases.shift() ?? null,
+      renew: async () => 'renewed' as const,
+      complete: async () => 'transitioned' as const,
+      fail: async () => 'transitioned' as const,
+    }
+
+    const executors = {
+      executeClanProjection: async (lease: Extract<OperationLease, { kind: 'clan-discovery-projection' }>) => {
+        executed.push(lease.kind)
+      },
+      executeDiscoveryReconciliation: async (lease: Extract<OperationLease, { kind: 'discovery-reconciliation' }>) => {
+        executed.push(`${lease.kind}:${lease.payload.owner}`)
+      },
+    }
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      telemetry,
+      ...executors,
+    })
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      telemetry,
+      ...executors,
+    })
+    await telemetry.flush(50)
+
+    expect(executed).toEqual(['clan-discovery-projection', 'discovery-reconciliation:clan'])
+    expect(sink.records.some(({ attributes }) => attributes?.kind === 'clan-discovery-projection')).toBe(true)
+    expect(sink.records.some(({ attributes }) => attributes?.kind === 'discovery-reconciliation')).toBe(true)
+    const metrics = JSON.stringify(telemetry.metrics.snapshot())
+    expect(metrics).toContain('clan-discovery-projection')
+    expect(metrics).toContain('discovery-reconciliation')
+    for (const operationId of operationIds) expect(metrics).not.toContain(operationId)
+  })
+
   test('retries projection reconciliation failures without consuming the final attempt', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
@@ -311,7 +383,7 @@ describe('refresh operations worker source retry', () => {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       complete: async () => 'transitioned' as const,
-      retryAppliedPlayerProjection: async () => {
+      retryAppliedDiscoveryProjection: async () => {
         retried = true
         return 'transitioned' as const
       },

@@ -9,6 +9,10 @@ describe('operations worker configuration', () => {
       pollMs: 1_000,
       retryDelayMs: 1_000,
       scheduleBatchSize: 100,
+      discovery: {
+        projectionBatchSize: 500,
+        reconciliationIntervalMs: 60 * 60 * 1000,
+      },
       leaderboard: {
         pageDepth: 1,
         intervalMs: 15 * 60 * 1000,
@@ -38,6 +42,12 @@ describe('operations worker configuration', () => {
       expect(() => readOperationsWorkerConfig({ OPERATIONS_LEASE_MS: value })).toThrow('OPERATIONS_LEASE_MS')
     }
     expect(() => readOperationsWorkerConfig({ LEADERBOARD_PAGE_DEPTH: '21' })).toThrow('LEADERBOARD_PAGE_DEPTH')
+    expect(() => readOperationsWorkerConfig({ DISCOVERY_PROJECTION_BATCH_SIZE: '1001' })).toThrow(
+      'DISCOVERY_PROJECTION_BATCH_SIZE',
+    )
+    expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_INTERVAL_MS: '59999' })).toThrow(
+      'DISCOVERY_RECONCILIATION_INTERVAL_MS',
+    )
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }

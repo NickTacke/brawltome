@@ -17,6 +17,7 @@ export type { PlayerReference, PlayerReferenceQueries } from './reference'
 export type {
   PlayerDiscoveryEvent,
   PlayerDiscoveryFact,
+  PlayerDiscoverySnapshot,
   PlayerDiscoverySource,
 } from './discovery-facts'
 export type { SteamPlayerEvidence, SteamPlayerEvidenceResolver } from './verification'

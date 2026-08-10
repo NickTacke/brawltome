@@ -3,7 +3,7 @@ import { hostname } from 'node:os'
 import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { BhApiClient, RateLimitError } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
-import { createPostgresClans } from '@brawltome/clan/composition'
+import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
@@ -62,6 +62,7 @@ const rankedPlayers = createPostgresRankedPlayers(connectionString, {
 })
 const clans = createPostgresClans(connectionString)
 const playerDiscoverySource = createPostgresPlayerDiscoverySource(connectionString)
+const clanDiscoverySource = createPostgresClanDiscoverySource(connectionString)
 const postgresReadiness = createPostgresReadiness(connectionString, runtimeMigrationInventory)
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
@@ -94,6 +95,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'clans-postgres', close: clans.close },
     { name: 'discovery-postgres', close: discovery.close },
     { name: 'players-discovery-source-postgres', close: playerDiscoverySource.close },
+    { name: 'clans-discovery-source-postgres', close: clanDiscoverySource.close },
     { name: 'readiness-postgres', close: postgresReadiness.close },
     { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],
@@ -149,20 +151,44 @@ try {
       const primaryMonitoring = await operations.reconcilePrimaryMonitoring(
         await accounts.primaryMonitoring.readSnapshot(),
       )
-      let reconciledProjection = 0
-      if ((await playerDiscoverySource.lag()) > 0) {
-        const projection = await operations.accept({
-          kind: 'player-discovery-projection',
-          dedupeKey: 'discovery:players:pending',
-          operationKey: `discovery:players:${randomUUID()}`,
-          workClass: 'projection',
-          payload: { batchSize: 500 },
-          provenance: { source: 'projection-reconciliation', requestedBy: 'issue-199' },
-        })
-        reconciledProjection = projection.outcome === 'accepted' ? 1 : 0
+      let reconciledDiscovery = 0
+      for (const definition of [
+        {
+          owner: 'player' as const,
+          kind: 'player-discovery-projection' as const,
+          source: playerDiscoverySource,
+        },
+        {
+          owner: 'clan' as const,
+          kind: 'clan-discovery-projection' as const,
+          source: clanDiscoverySource,
+        },
+      ]) {
+        if ((await definition.source.lag()) > 0) {
+          const projection = await operations.accept({
+            kind: definition.kind,
+            dedupeKey: `discovery:${definition.owner}:pending`,
+            operationKey: `discovery:${definition.owner}:${randomUUID()}`,
+            workClass: 'projection',
+            payload: { batchSize: workerConfig.discovery.projectionBatchSize },
+            provenance: { source: 'projection-delivery', requestedBy: 'issue-200' },
+          })
+          if (projection.outcome === 'accepted') reconciledDiscovery++
+        }
+        if (await discovery.reconciliationDue(definition.owner, workerConfig.discovery.reconciliationIntervalMs)) {
+          const reconciliation = await operations.accept({
+            kind: 'discovery-reconciliation',
+            dedupeKey: `discovery:${definition.owner}:reconciliation`,
+            operationKey: `discovery:${definition.owner}:reconciliation:${randomUUID()}`,
+            workClass: 'projection',
+            payload: { owner: definition.owner },
+            provenance: { source: 'owner-fact-reconciliation', requestedBy: 'issue-200' },
+          })
+          if (reconciliation.outcome === 'accepted') reconciledDiscovery++
+        }
       }
       if (leaderboardSchedulesReconciled) {
-        return interactiveAdmissions + reconciledProjection + primaryMonitoring.created + primaryMonitoring.retired
+        return interactiveAdmissions + reconciledDiscovery + primaryMonitoring.created + primaryMonitoring.retired
       }
       let reconciledSchedules = 0
       for (const definition of leaderboardSchedules) {
@@ -172,7 +198,7 @@ try {
       leaderboardSchedulesReconciled = true
       return (
         interactiveAdmissions +
-        reconciledProjection +
+        reconciledDiscovery +
         reconciledSchedules +
         primaryMonitoring.created +
         primaryMonitoring.retired
@@ -213,9 +239,36 @@ try {
         ranking,
         leaderboardSource: { fetchPage: fetchLeaderboardPage },
         executePlayerProjection: async (lease) => {
-          await discovery.deliverPendingPlayers(playerDiscoverySource, lease.payload.batchSize, lease.operationId)
+          await discovery.deliverPendingPlayers(
+            playerDiscoverySource,
+            lease.payload.batchSize,
+            lease.effectOperationId,
+            () => operations.discoveryLeaseActive(lease),
+          )
         },
-        playerProjectionEffectState: discovery.playerProjectionEffectState,
+        executeClanProjection: async (lease) => {
+          await discovery.deliverPendingClans(
+            clanDiscoverySource,
+            lease.payload.batchSize,
+            lease.effectOperationId,
+            () => operations.discoveryLeaseActive(lease),
+          )
+        },
+        executeDiscoveryReconciliation: async (lease) => {
+          if (lease.payload.owner === 'player') {
+            await discovery.reconcilePlayers(playerDiscoverySource, lease.effectOperationId, () =>
+              operations.discoveryLeaseActive(lease),
+            )
+          } else {
+            await discovery.reconcileClans(clanDiscoverySource, lease.effectOperationId, () =>
+              operations.discoveryLeaseActive(lease),
+            )
+          }
+        },
+        projectionEffectState: (kind, effectOperationId) =>
+          kind === 'player-discovery-projection'
+            ? discovery.playerProjectionEffectState(effectOperationId)
+            : discovery.clanProjectionEffectState(effectOperationId),
         isPrimaryMonitoringTarget: async (lease) => {
           const snapshot = await accounts.primaryMonitoring.readSnapshot()
           return snapshot.targets.some(

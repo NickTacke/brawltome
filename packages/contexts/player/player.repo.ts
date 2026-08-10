@@ -9,7 +9,7 @@ import {
   ratingHistory,
 } from '@brawltome/database'
 import { getLegendById } from '@brawltome/shared'
-import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm'
 import {
   getCareerMainLegend,
   getEffectiveBestLegend,
@@ -462,23 +462,6 @@ export function createPlayerRepo(db: Database) {
         .from(player)
         .where(inArray(player.brawlhallaId, playerIds))
         .then((rows) => new Map(rows.filter((r) => r.region).map((r) => [r.brawlhallaId, r.region as string])))
-    },
-
-    searchPlayersByName(query: string) {
-      return db.query.player.findMany({
-        where: or(ilike(player.name, `${query}%`), ilike(player.name, `% | ${query}%`)),
-        orderBy: [desc(player.rating), desc(player.viewCount)],
-        limit: 50,
-      })
-    },
-
-    searchPlayersByAlias(query: string) {
-      return db
-        .select({ brawlhallaId: playerAlias.brawlhallaId, alias: playerAlias.value })
-        .from(playerAlias)
-        .where(ilike(playerAlias.key, `${query.toLowerCase()}%`))
-        .orderBy(asc(playerAlias.brawlhallaId), desc(playerAlias.createdAt))
-        .limit(50)
     },
 
     getPlayersByIds(ids: number[]) {
