@@ -65,7 +65,12 @@ const soloQueueSchema = rankedValuesSchema
   })
   .strict()
 
-const ratingHistorySchema = rankedValuesSchema.extend({ recordedAt: utcDateTime }).strict()
+const ratingHistorySchema = rankedValuesSchema
+  .extend({
+    source: z.enum(['v0-player-snapshot', 'legacy-v2']),
+    recordedAt: utcDateTime,
+  })
+  .strict()
 
 const observedRatingDirectionSchema = z
   .object({

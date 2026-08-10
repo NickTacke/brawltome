@@ -74,6 +74,17 @@ afterAll(async () => {
 const playerResults = async (discovery: ReturnType<typeof createPostgresDiscovery>, query: string) =>
   (await discovery.search(query)).players
 
+async function enqueueImportedPlayers(client: ReturnType<typeof postgres>, brawlhallaIds: number[]): Promise<void> {
+  const [state] = await client<{ source_version: string }[]>`
+    UPDATE players.discovery_state SET source_version = source_version + 1
+    WHERE singleton RETURNING source_version
+  `
+  await client`
+    INSERT INTO players.discovery_outbox (brawlhalla_id, source_version)
+    SELECT identity, ${state.source_version}::bigint FROM unnest(${brawlhallaIds}::integer[]) AS identity
+  `
+}
+
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
   interactiveReservation: 1,
@@ -103,18 +114,20 @@ describe('Players to Discovery projection delivery', () => {
       playerProjectionEffectState: discovery.playerProjectionEffectState,
     })
     try {
+      const archiveChecksum = 'a'.repeat(64)
       await control`
-        INSERT INTO public.player (brawlhalla_id, name, region, rating, view_count)
-        VALUES (10, 'Legacy | Player', 'US-E', 1700, 9)
+        INSERT INTO players.legacy_discovery_profiles
+          (brawlhalla_id, player_name, region, rating, view_count, observed_at, archive_checksum)
+        VALUES
+          (10, 'Legacy | Player', 'US-E', 1700, 9, now(), ${archiveChecksum}),
+          (11, 'Legacy Zero', 'US-W', NULL, 0, now(), ${archiveChecksum})
       `
       await control`
-        INSERT INTO public.player (brawlhalla_id, name, region, rating, view_count)
-        VALUES (11, 'Legacy Zero', 'US-W', 0, -3)
+        INSERT INTO players.legacy_discovery_aliases
+          (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
+        VALUES (10, 'former', 'Former', now(), ${archiveChecksum})
       `
-      await control`
-        INSERT INTO public.player_alias (brawlhalla_id, key, value)
-        VALUES (10, 'former', 'Former')
-      `
+      await enqueueImportedPlayers(control, [10, 11])
       await control`
         INSERT INTO players.ranked_profiles
           (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
@@ -162,7 +175,8 @@ describe('Players to Discovery projection delivery', () => {
       await expect(discovery.deliverPendingPlayers(source, 100)).resolves.toMatchObject({ appliedEvents: 0 })
       expect(await source.lag()).toBe(0)
 
-      await control`UPDATE public.player SET view_count = 99 WHERE brawlhalla_id = 10`
+      await control`UPDATE players.legacy_discovery_profiles SET view_count = 99 WHERE brawlhalla_id = 10`
+      await enqueueImportedPlayers(control, [10])
       expect(await source.lag()).toBe(1)
       await discovery.rebuildPlayersFrom(source)
       await expect(playerResults(discovery, 'canonical')).resolves.toEqual([
@@ -172,7 +186,8 @@ describe('Players to Discovery projection delivery', () => {
       await discovery.deliverPendingPlayers(source, 100)
       expect(await source.lag()).toBe(0)
 
-      await control`UPDATE public.player SET view_count = 100 WHERE brawlhalla_id = 10`
+      await control`UPDATE players.legacy_discovery_profiles SET view_count = 100 WHERE brawlhalla_id = 10`
+      await enqueueImportedPlayers(control, [10])
       const finalAttempt = await operations.accept({
         ...operationInput,
         dedupeKey: `discovery:players:final-attempt:${randomUUID()}`,
@@ -195,7 +210,8 @@ describe('Players to Discovery projection delivery', () => {
       expect(await operations.claim('recovery-worker', 10_000, admission, 'player-discovery-projection')).toBeNull()
       expect((await operations.inspect(finalAttempt.operationId)).operation.status).toBe('succeeded')
 
-      await control`UPDATE public.player SET view_count = 101 WHERE brawlhalla_id = 10`
+      await control`UPDATE players.legacy_discovery_profiles SET view_count = 101 WHERE brawlhalla_id = 10`
+      await enqueueImportedPlayers(control, [10])
       const failedAcknowledgment = await operations.accept({
         ...operationInput,
         dedupeKey: `discovery:players:failed-ack:${randomUUID()}`,

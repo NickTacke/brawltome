@@ -14,6 +14,7 @@ describe('ranked freshness', () => {
 
 describe('observed rating direction', () => {
   const point = (rating: number, games: number, recordedAt: string) => ({
+    source: 'v0-player-snapshot' as const,
     rating,
     peakRating: rating,
     tier: 'Gold 1',

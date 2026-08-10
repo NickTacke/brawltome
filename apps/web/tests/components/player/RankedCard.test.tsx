@@ -30,6 +30,7 @@ const currentSeason: PlayerRankedProfileContract = {
     soloQueue: [],
     ratingHistory: [
       {
+        source: 'v0-player-snapshot',
         rating: 0,
         peakRating: 782,
         tier: 'Tin 0',
@@ -38,6 +39,7 @@ const currentSeason: PlayerRankedProfileContract = {
         recordedAt: '2026-08-10T10:00:00Z',
       },
       {
+        source: 'legacy-v2',
         rating: 50,
         peakRating: 782,
         tier: 'Tin 0',
@@ -70,7 +72,7 @@ describe('RankedCard', () => {
     expect(html).not.toContain('0.00%')
     expect(html).toContain('BrawlTome-observed direction')
     expect(html).toContain('Down 50 rating')
-    expect(html).toContain('up to 365 retained BrawlTome complete-ranked observations')
+    expect(html).toContain('up to 365 retained BrawlTome rating observations')
     expect(html).toContain('Sparse pulse overlays are excluded')
     expect(html).toContain('at least one supported 1v1 or fixed-team scalar')
     expect(html).toContain('Career-derived main legend')
