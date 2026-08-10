@@ -113,8 +113,10 @@ export async function runOperationsWorker({
     while (!lifecycle.signal.aborted) {
       if (!(await prepare())) continue
       const active = await runTracked(async () => {
-        const result = await operations.materializeDueSchedules(config.scheduleBatchSize)
         const reconciled = !lifecycle.signal.aborted && reconcile ? await reconcile() : 0
+        const result = lifecycle.signal.aborted
+          ? { occurrencesCreated: 0 }
+          : await operations.materializeDueSchedules(config.scheduleBatchSize)
         return result.occurrencesCreated > 0 || reconciled > 0
       })
       if (active === null) return

@@ -62,6 +62,17 @@ export interface PrimaryPlayer extends PrimaryPlayerReference {
   verifiedAt: Date
 }
 
+export interface PrimaryMonitoringTarget {
+  assignmentId: string
+  brawlhallaId: number
+  verifiedAt: Date
+}
+
+export interface PrimaryMonitoringSnapshot {
+  observedAt: Date
+  targets: PrimaryMonitoringTarget[]
+}
+
 export type PrimaryPlayerVerificationStatus = 'pending' | 'failed' | 'conflict' | 'verified'
 
 export interface PrimaryPlayerVerificationAttempt {
@@ -125,6 +136,7 @@ export interface AccountsStore {
     completedAt: Date
   }): Promise<PrimaryPlayerVerificationAttempt>
   getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
+  readPrimaryMonitoringSnapshot(): Promise<PrimaryMonitoringSnapshot>
 }
 
 interface CreateAccountsOptions {

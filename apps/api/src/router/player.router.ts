@@ -51,7 +51,7 @@ async function requestPlayerRefresh(
   ].join(':')
 
   try {
-    const active = await ctx.refreshOperations.findActiveInteractivePlayerRefresh(dedupeKey)
+    const active = await ctx.refreshOperations.findActiveInteractivePlayerRefresh(dedupeKey, input.id)
     if (active) {
       if (active.awaitingAdmission) {
         if (await ctx.requestAdmission.hasActorReservation(active.operationId)) {

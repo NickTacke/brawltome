@@ -42,8 +42,14 @@ const deployedGlobalHistory = [
   ['accounts/0004', 'fb0dd41d2bb7175980963b13c4e809617cdd267dfe72170df594665ced443f33'],
 ] as const
 
+const deployedPulseGlobalHistory = [
+  ...deployedGlobalHistory,
+  ['players/0006', '8416e791b342e49758d657379e2943e08b55d3d3295652ea3175908fa5eb81d6'],
+  ['refresh-operations/0011', '538e16caf6c1ae189d2610648055c26964f153d66c4d2502611848fdfeaf7443'],
+] as const
+
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories Accounts 0001 through 0004, Players 0001 through 0006, and Refresh Operations 0001 through 0011', () => {
+  test('inventories Accounts 0001 through 0004, Players 0001 through 0006, and Refresh Operations 0001 through 0012', () => {
     expect(accountsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'accounts/0001',
       'accounts/0002',
@@ -70,6 +76,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0009',
       'refresh-operations/0010',
       'refresh-operations/0011',
+      'refresh-operations/0012',
     ])
   })
 
@@ -96,6 +103,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[3],
       playerMigrationInventory[5],
       refreshOperationsMigrationInventory[10],
+      refreshOperationsMigrationInventory[11],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -117,18 +125,18 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
-  test('preserves the deployed 25-row global history and upgrades it to 27 rows', async () => {
+  test('preserves the deployed 27-row pulse global history and upgrades it by appending monitoring', async () => {
     expect(
       globalMigrationInventory
-        .slice(0, deployedGlobalHistory.length)
+        .slice(0, deployedPulseGlobalHistory.length)
         .map(({ identity, checksum }) => [identity, checksum]),
-    ).toEqual(deployedGlobalHistory.map((entry) => [...entry]))
-    const oldGlobalInventory = globalMigrationInventory.slice(0, deployedGlobalHistory.length)
+    ).toEqual(deployedPulseGlobalHistory.map((entry) => [...entry]))
+    const oldGlobalInventory = globalMigrationInventory.slice(0, deployedPulseGlobalHistory.length)
     expect(deployedGlobalHistory).toHaveLength(25)
-    expect(globalMigrationInventory).toHaveLength(27)
-    expect(globalMigrationInventory.slice(deployedGlobalHistory.length)).toEqual([
-      playerMigrationInventory[5],
-      refreshOperationsMigrationInventory[10],
+    expect(deployedPulseGlobalHistory).toHaveLength(27)
+    expect(globalMigrationInventory).toHaveLength(28)
+    expect(globalMigrationInventory.slice(deployedPulseGlobalHistory.length)).toEqual([
+      refreshOperationsMigrationInventory[11],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -141,9 +149,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
-        globalMigrationInventory.length - oldGlobalInventory.length,
-      )
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(1)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -196,7 +202,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(9)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(
+        refreshOperationsMigrationInventory.length - 2,
+      )
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const history = await client<{ identity: string }[]>`
@@ -213,6 +221,55 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       await admin.end()
     }
   })
+
+  test('backfills active player resource identity when adding Primary monitoring', async () => {
+    const databaseName = `bt_primary_upgrade_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 11))).toBe(11)
+      const client = postgres(databaseUrl.toString(), { max: 1 })
+      try {
+        const operationIds = [randomUUID(), randomUUID()]
+        for (const [index, operationId] of operationIds.entries()) {
+          await client`
+            INSERT INTO refresh_operations.operations
+              (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
+               status, max_attempts, reservation_token, reservation_expires_at)
+            VALUES
+              (${operationId}, ${operationId}, 'interactive-player-refresh', ${`legacy-dedupe-${index}`},
+               ${`legacy-operation-${index}`}, 'interactive',
+               ${client.json({ brawlhallaId: 42, staleSections: ['ranked', 'stats'] })},
+               ${client.json({ source: 'migration-test' })}, 'awaiting_admission', 3, ${randomUUID()},
+               clock_timestamp() + interval '1 minute')
+          `
+        }
+        expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(1)
+        const operations = await client<{ resource_key: string; status: string; error_code: string | null }[]>`
+          SELECT resource_key, status, last_error->>'code' AS error_code
+          FROM refresh_operations.operations
+          WHERE id IN ${client(operationIds)}
+          ORDER BY status
+        `
+        expect(
+          operations.map(({ resource_key, status, error_code }) => ({ resource_key, status, error_code })),
+        ).toEqual([
+          { resource_key: 'player:42', status: 'awaiting_admission', error_code: null },
+          { resource_key: 'player:42', status: 'dead_letter', error_code: 'superseded_player_refresh' },
+        ])
+      } finally {
+        await client.end()
+      }
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  }, 15_000)
 
   test('appends the active lease fence after an applied leaderboard prefix', async () => {
     const databaseName = `brawltome_lease_fence_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
