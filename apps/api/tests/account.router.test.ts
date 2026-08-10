@@ -10,6 +10,7 @@ import {
 import {
   accountPreferencesSchema,
   accountViewSchema,
+  playerShortcutsSchema,
   primaryPlayerVerificationStateSchema,
   savedPlayersSchema,
 } from '@brawltome/contracts'
@@ -66,10 +67,20 @@ const accounts = {
     return []
   },
   async savePlayer(_accountId, brawlhallaId) {
-    return { brawlhallaId, order: 0, savedAt: new Date('2026-08-10T10:03:00.000Z') }
+    return { brawlhallaId, order: 0, pinOrder: null, savedAt: new Date('2026-08-10T10:03:00.000Z') }
   },
   async removeSavedPlayer() {},
   async reorderSavedPlayers() {
+    return []
+  },
+  async getPlayerShortcuts() {
+    return { primaryPlayer: null, pinnedPlayers: [] }
+  },
+  async pinSavedPlayer(_accountId, brawlhallaId) {
+    return { brawlhallaId, order: 0, pinnedAt: new Date('2026-08-10T10:04:00.000Z') }
+  },
+  async unpinSavedPlayer() {},
+  async reorderPinnedPlayers() {
     return []
   },
 } satisfies Accounts
@@ -84,6 +95,13 @@ const account: Account = {
 function makeAccounts() {
   let preferences: AccountPreferences = { ...DEFAULT_ACCOUNT_PREFERENCES }
   let savedPlayers: SavedPlayer[] = []
+  let pinnedIds: number[] = []
+  const updatePinOrder = () => {
+    savedPlayers = savedPlayers.map((player) => ({
+      ...player,
+      pinOrder: pinnedIds.indexOf(player.brawlhallaId) < 0 ? null : pinnedIds.indexOf(player.brawlhallaId),
+    }))
+  }
   const service: Accounts = {
     async signInWithDiscord() {
       throw new Error('Not used')
@@ -117,6 +135,7 @@ function makeAccounts() {
       const savedPlayer = {
         brawlhallaId,
         order: savedPlayers.length,
+        pinOrder: null,
         savedAt: new Date('2026-08-10T10:03:00.000Z'),
       }
       savedPlayers = [...savedPlayers, savedPlayer]
@@ -126,6 +145,8 @@ function makeAccounts() {
       savedPlayers = savedPlayers
         .filter((savedPlayer) => savedPlayer.brawlhallaId !== brawlhallaId)
         .map((savedPlayer, order) => ({ ...savedPlayer, order }))
+      pinnedIds = pinnedIds.filter((id) => id !== brawlhallaId)
+      updatePinOrder()
     },
     async reorderSavedPlayers(_accountId, orderedBrawlhallaIds) {
       savedPlayers = orderedBrawlhallaIds.map((brawlhallaId, order) => ({
@@ -133,6 +154,30 @@ function makeAccounts() {
         order,
       }))
       return savedPlayers
+    },
+    async getPlayerShortcuts() {
+      return {
+        primaryPlayer: null,
+        pinnedPlayers: pinnedIds.map((brawlhallaId, order) => ({
+          brawlhallaId,
+          order,
+          pinnedAt: new Date('2026-08-10T10:04:00.000Z'),
+        })),
+      }
+    },
+    async pinSavedPlayer(_accountId, brawlhallaId) {
+      if (!pinnedIds.includes(brawlhallaId)) pinnedIds.push(brawlhallaId)
+      updatePinOrder()
+      return { brawlhallaId, order: pinnedIds.indexOf(brawlhallaId), pinnedAt: new Date('2026-08-10T10:04:00.000Z') }
+    },
+    async unpinSavedPlayer(_accountId, brawlhallaId) {
+      pinnedIds = pinnedIds.filter((id) => id !== brawlhallaId)
+      updatePinOrder()
+    },
+    async reorderPinnedPlayers(_accountId, orderedBrawlhallaIds) {
+      pinnedIds = [...orderedBrawlhallaIds]
+      updatePinOrder()
+      return (await service.getPlayerShortcuts(_accountId)).pinnedPlayers
     },
   }
   return service
@@ -224,6 +269,83 @@ describe('account.current', () => {
   })
 })
 
+describe('account.playerShortcuts', () => {
+  test('returns Primary first as You-ready data followed by ordered pins with effective-main facts', async () => {
+    const shortcutAccounts: Accounts = {
+      ...makeAccounts(),
+      async getPlayerShortcuts() {
+        return {
+          primaryPlayer: { brawlhallaId: 42, name: 'Stored Ada', verifiedAt: new Date('2026-08-10T10:02:00Z') },
+          pinnedPlayers: [
+            { brawlhallaId: 44, order: 0, pinnedAt: new Date('2026-08-10T10:03:00Z') },
+            { brawlhallaId: 43, order: 1, pinnedAt: new Date('2026-08-10T10:04:00Z') },
+          ],
+        }
+      },
+    }
+    const shortcutContext = context(account, shortcutAccounts)
+    shortcutContext.rankedPlayerQueries.byId = async (id) => ({
+      brawlhallaId: id,
+      checkedAt: new Date('2026-08-10T10:00:00.000Z'),
+      lastSuccessAt: new Date('2026-08-10T10:00:00.000Z'),
+      freshness: 'fresh',
+      freshForSeconds: 3_600,
+      sparsePulse: null,
+      snapshot: {
+        oneVsOne: {
+          rating: 1_700,
+          peakRating: 1_700,
+          tier: 'Platinum',
+          wins: 1,
+          games: 2,
+          region: 'US-E',
+          globalRank: null,
+          regionRank: null,
+        },
+        rankedLegends: [],
+        mainLegend:
+          id === 43
+            ? null
+            : {
+                legendId: id,
+                legendNameKey: id === 42 ? 'bodvar' : 'orion',
+                source: id === 42 ? 'current-season' : 'career',
+              },
+        fixedTeams: [],
+        soloQueue: [],
+        ratingHistory: [],
+        observedRatingDirection: null,
+      },
+    })
+    const api = caller(shortcutContext) as { playerShortcuts: () => Promise<unknown> }
+
+    expect(playerShortcutsSchema.parse(await api.playerShortcuts())).toEqual({
+      primary: {
+        brawlhallaId: 42,
+        name: 'Player 42',
+        mainLegend: { legendNameKey: 'bodvar', source: 'current-season' },
+      },
+      pins: [
+        {
+          brawlhallaId: 44,
+          name: 'Player 44',
+          mainLegend: { legendNameKey: 'orion', source: 'career' },
+        },
+        { brawlhallaId: 43, name: 'Player 43', mainLegend: null },
+      ],
+    })
+  })
+
+  test('rejects anonymous shortcut reads and pin mutations without disclosing state', async () => {
+    const api = caller(context(null)) as {
+      playerShortcuts: () => Promise<unknown>
+      pinSavedPlayer: (input: unknown) => Promise<unknown>
+    }
+    await expect(api.playerShortcuts()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(api.pinSavedPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+})
+
 describe('account.savedPlayers', () => {
   test('returns canonical Player Profile facts for session-owned bookmarks only', async () => {
     const accountService = makeAccounts()
@@ -239,6 +361,7 @@ describe('account.savedPlayers', () => {
       {
         brawlhallaId: 42,
         order: 0,
+        pinOrder: null,
         savedAt: '2026-08-10T10:03:00.000Z',
         player: { brawlhallaId: 42, name: 'Player 42' },
         currentSeason: {
@@ -270,6 +393,34 @@ describe('account.savedPlayers', () => {
     ])
     expect(await api.removeSavedPlayer({ brawlhallaId: 43 })).toHaveLength(1)
     expect(await api.removeSavedPlayer({ brawlhallaId: 43 })).toHaveLength(1)
+  })
+
+  test('pins, unpins, and independently reorders the authenticated Saved Player subset', async () => {
+    const api = caller(context(account)) as {
+      savePlayer: (input: unknown) => Promise<unknown>
+      pinSavedPlayer: (input: unknown) => Promise<unknown>
+      unpinSavedPlayer: (input: unknown) => Promise<unknown>
+      reorderPinnedPlayers: (input: unknown) => Promise<unknown>
+    }
+    await api.savePlayer({ brawlhallaId: 42 })
+    await api.savePlayer({ brawlhallaId: 43 })
+    await api.pinSavedPlayer({ brawlhallaId: 42 })
+    const pinned = savedPlayersSchema.parse(await api.pinSavedPlayer({ brawlhallaId: 43 }))
+    expect(pinned.map(({ brawlhallaId, pinOrder }) => ({ brawlhallaId, pinOrder }))).toEqual([
+      { brawlhallaId: 42, pinOrder: 0 },
+      { brawlhallaId: 43, pinOrder: 1 },
+    ])
+
+    const reordered = savedPlayersSchema.parse(await api.reorderPinnedPlayers({ brawlhallaIds: [43, 42] }))
+    expect(reordered.map(({ brawlhallaId, pinOrder }) => ({ brawlhallaId, pinOrder }))).toEqual([
+      { brawlhallaId: 42, pinOrder: 1 },
+      { brawlhallaId: 43, pinOrder: 0 },
+    ])
+    const unpinned = savedPlayersSchema.parse(await api.unpinSavedPlayer({ brawlhallaId: 43 }))
+    expect(unpinned.map(({ brawlhallaId, pinOrder }) => ({ brawlhallaId, pinOrder }))).toEqual([
+      { brawlhallaId: 42, pinOrder: 0 },
+      { brawlhallaId: 43, pinOrder: null },
+    ])
   })
 
   test('rejects anonymous access, client-supplied account identity, and unknown players', async () => {

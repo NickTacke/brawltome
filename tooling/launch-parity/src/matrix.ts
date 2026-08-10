@@ -146,6 +146,52 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   },
   {
+    id: 'account.pinned-player-shortcuts',
+    area: 'account-authentication',
+    requirement:
+      'Signed-in navigation shows Primary first as You and up to four manually ordered Saved Player pins identically on desktop and mobile.',
+    sourceIssue: '#206',
+    status: 'verified',
+    destinations: ['/account', '/player/[id]'],
+    implementation: [
+      'packages/contexts/accounts/migrations/0006-add-pinned-player-shortcuts.ts',
+      'packages/contexts/accounts/src/accounts.ts',
+      'packages/contexts/accounts/src/postgres-store.ts',
+      'packages/contracts/src/account.ts',
+      'apps/api/src/router/account.router.ts',
+      'apps/web/src/lib/playerShortcuts.ts',
+      'apps/web/src/components/sidebar/AppSidebar.tsx',
+      'apps/web/src/components/sidebar/MobileMenu.tsx',
+      'apps/web/src/app/account/SavedPlayersSection.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/pinned-shortcuts.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL proves pin membership, maximum, stable order, isolation, idempotence, concurrency, cascading removal, and Primary transition semantics.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/account.router.test.ts',
+        assertion:
+          'Protected canonical output keeps Primary structurally first, preserves pin order, maps effective-main facts, and rejects anonymous disclosure.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/lib/player-shortcuts.test.ts',
+        assertion:
+          'One private navigation contract derives You, ordered pins, effective-main avatars, fallback labels, and All Saved Players for both layouts.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/account/SavedPlayersSection.test.tsx',
+        assertion:
+          'Account pin toggles and independent ordering controls have explicit accessible names and disabled states.',
+      },
+    ],
+  },
+  {
     id: 'account.v2-session-migration',
     area: 'account-authentication',
     requirement: 'Valid V2 OAuth identities and sessions retain their identifiers and authenticate after migration.',

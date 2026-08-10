@@ -5,8 +5,10 @@ import {
   accountPreferencesSchema,
   accountViewSchema,
   parseAccountViewOutput,
+  parsePlayerShortcutsOutput,
   parsePrimaryPlayerVerificationStateOutput,
   parseSavedPlayersOutput,
+  pinnedPlayerOrderInputSchema,
   savedPlayerOrderInputSchema,
 } from '../src/account'
 
@@ -89,6 +91,7 @@ describe('savedPlayersSchema', () => {
       {
         brawlhallaId: 42,
         order: 0,
+        pinOrder: 0,
         savedAt: '2026-08-10T09:00:00.000Z',
         player: { brawlhallaId: 42, name: 'Ada' },
         currentSeason: {
@@ -125,6 +128,38 @@ describe('savedPlayersSchema', () => {
     expect(() =>
       savedPlayerOrderInputSchema.parse({ accountId: signedInView.account.id, brawlhallaIds: [42] }),
     ).toThrow()
+  })
+})
+
+describe('playerShortcutsSchema', () => {
+  test('keeps Primary structurally first and publishes only effective-main avatar facts', () => {
+    const shortcuts = {
+      primary: {
+        brawlhallaId: 42,
+        name: 'Ada',
+        mainLegend: { legendNameKey: 'bodvar', source: 'current-season' as const },
+      },
+      pins: [
+        {
+          brawlhallaId: 43,
+          name: 'Lin',
+          mainLegend: { legendNameKey: 'orion', source: 'career' as const },
+        },
+      ],
+    }
+
+    expect(parsePlayerShortcutsOutput(shortcuts)).toEqual(shortcuts)
+    expect(() => parsePlayerShortcutsOutput({ ...shortcuts, accountId: signedInView.account.id })).toThrow()
+    expect(() => parsePlayerShortcutsOutput({ ...shortcuts, pins: [...shortcuts.pins, shortcuts.primary] })).toThrow()
+    expect(() =>
+      parsePlayerShortcutsOutput({ ...shortcuts, pins: Array.from({ length: 5 }, () => shortcuts.pins[0]) }),
+    ).toThrow()
+  })
+
+  test('bounds a duplicate-free complete pin order payload', () => {
+    expect(pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
+    expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
+    expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [1, 2, 3, 4, 5] })).toThrow()
   })
 })
 

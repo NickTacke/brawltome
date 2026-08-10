@@ -1,7 +1,7 @@
 'use client'
 
-import type { SavedPlayerContract, SavedPlayersContract } from '@brawltome/contracts'
-import { ArrowDown, ArrowUp, Bookmark, Trash2 } from 'lucide-react'
+import { MAX_PINNED_PLAYERS, type SavedPlayerContract, type SavedPlayersContract } from '@brawltome/contracts'
+import { ArrowDown, ArrowUp, Bookmark, Pin, PinOff, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import type { RefObject } from 'react'
 
@@ -11,8 +11,12 @@ interface SavedPlayersSectionProps {
   error?: boolean
   headingRef?: RefObject<HTMLHeadingElement | null>
   pendingPlayerId: number | null
+  primaryPlayerId?: number | null
+  primaryPlayerUnavailable?: boolean
   onRemove: (brawlhallaId: number) => void
   onMove: (fromIndex: number, toIndex: number) => void
+  onTogglePin: (brawlhallaId: number, pinned: boolean) => void
+  onMovePin: (fromIndex: number, toIndex: number) => void
 }
 
 function playerLabel(savedPlayer: SavedPlayerContract): string {
@@ -111,9 +115,14 @@ export function SavedPlayersSection({
   error = false,
   headingRef,
   pendingPlayerId,
+  primaryPlayerId = null,
+  primaryPlayerUnavailable = false,
   onRemove,
   onMove,
+  onTogglePin,
+  onMovePin,
 }: SavedPlayersSectionProps) {
+  const pinnedCount = savedPlayers.filter(({ pinOrder }) => pinOrder !== null).length
   return (
     <section
       aria-labelledby="saved-players-heading"
@@ -126,8 +135,14 @@ export function SavedPlayersSection({
         </h2>
       </div>
       <p className="text-muted-foreground mt-2 text-xs">
-        Private bookmarks visible only to you. Saving a player does not claim ownership or create a public follow.
+        Private bookmarks visible only to you. Saving a player does not claim ownership or create a public follow. Pin
+        up to {MAX_PINNED_PLAYERS} shortcuts.
       </p>
+      {!loading && !error && savedPlayers.length > 0 && (
+        <p className="text-muted-foreground mt-1 text-xs">
+          {pinnedCount} of {MAX_PINNED_PLAYERS} shortcuts pinned.
+        </p>
+      )}
 
       {loading ? (
         <output className="text-muted-foreground mt-4 block text-sm">Loading Saved Players...</output>
@@ -142,9 +157,12 @@ export function SavedPlayersSection({
           {savedPlayers.map((savedPlayer, index) => {
             const label = playerLabel(savedPlayer)
             const pending = pendingPlayerId !== null
+            const pinned = savedPlayer.pinOrder !== null
+            const pinOrder = savedPlayer.pinOrder
+            const isPrimary = savedPlayer.brawlhallaId === primaryPlayerId
             return (
               <li key={savedPlayer.brawlhallaId} className="rounded-lg border border-white/[0.06] bg-black/10 p-4">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3">
                   <div className="min-w-0">
                     <Link
                       href={`/player/${savedPlayer.brawlhallaId}`}
@@ -155,25 +173,75 @@ export function SavedPlayersSection({
                     </Link>
                     <p className="text-muted-foreground mt-0.5 text-xs font-mono">ID {savedPlayer.brawlhallaId}</p>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      aria-label={`Move ${label} up`}
-                      disabled={index === 0 || pending}
-                      onClick={() => onMove(index, index - 1)}
-                      className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
-                    >
-                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Move ${label} down`}
-                      disabled={index === savedPlayers.length - 1 || pending}
-                      onClick={() => onMove(index, index + 1)}
-                      className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
-                    >
-                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                  <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                    {isPrimary ? (
+                      <span className="text-muted-foreground self-center px-2 text-xs">Shown as You</span>
+                    ) : primaryPlayerUnavailable ? (
+                      <span className="text-muted-foreground self-center px-2 text-xs">Pinning unavailable</span>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label={pinned ? `Unpin ${label} from shortcuts` : `Pin ${label} to shortcuts`}
+                        aria-pressed={pinned}
+                        disabled={pending || (!pinned && pinnedCount >= MAX_PINNED_PLAYERS)}
+                        onClick={() => onTogglePin(savedPlayer.brawlhallaId, pinned)}
+                        className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                      >
+                        {pinned ? (
+                          <PinOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Pin className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
+                    {pinOrder !== null && (
+                      <fieldset className="flex items-center gap-1 border-0 p-0">
+                        <legend className="text-muted-foreground mr-1 text-[10px] font-medium uppercase">
+                          Shortcut order for {label}
+                        </legend>
+                        <button
+                          type="button"
+                          aria-label={`Move ${label} up in pinned shortcuts`}
+                          disabled={pinOrder === 0 || pending}
+                          onClick={() => onMovePin(pinOrder, pinOrder - 1)}
+                          className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                        >
+                          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Move ${label} down in pinned shortcuts`}
+                          disabled={pinOrder === pinnedCount - 1 || pending}
+                          onClick={() => onMovePin(pinOrder, pinOrder + 1)}
+                          className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </fieldset>
+                    )}
+                    <fieldset className="flex items-center gap-1 border-0 p-0">
+                      <legend className="text-muted-foreground mr-1 text-[10px] font-medium uppercase">
+                        Saved order for {label}
+                      </legend>
+                      <button
+                        type="button"
+                        aria-label={`Move ${label} up in Saved Players`}
+                        disabled={index === 0 || pending}
+                        onClick={() => onMove(index, index - 1)}
+                        className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                      >
+                        <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move ${label} down in Saved Players`}
+                        disabled={index === savedPlayers.length - 1 || pending}
+                        onClick={() => onMove(index, index + 1)}
+                        className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                      >
+                        <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </fieldset>
                     <button
                       type="button"
                       aria-label={`Remove ${label} from Saved Players`}

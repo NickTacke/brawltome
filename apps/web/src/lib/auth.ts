@@ -61,7 +61,7 @@ export function usePrimaryPlayer() {
     staleTime: 5 * 60 * 1000,
     refetchInterval: (query) => (query.state.data?.attempts[0]?.status === 'pending' ? 2_000 : false),
   })
-  return { state: query.data ?? null, isLoading: query.isLoading }
+  return { state: query.data ?? null, isLoading: query.isLoading, isError: query.isError }
 }
 
 function authUrl(path: '/auth/discord/login' | '/auth/steam/link'): string {
@@ -96,6 +96,7 @@ export async function signOut(queryClient: ReturnType<typeof useQueryClient>): P
 
   queryClient.removeQueries({ queryKey: ACCOUNT_PREFERENCES_KEY })
   queryClient.removeQueries({ queryKey: ['account', 'savedPlayers'] })
+  queryClient.removeQueries({ queryKey: ['account', 'playerShortcuts'] })
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ACCOUNT_KEY }),
     queryClient.invalidateQueries({ queryKey: PRIMARY_PLAYER_KEY }),

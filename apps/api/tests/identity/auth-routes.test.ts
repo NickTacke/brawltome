@@ -73,10 +73,20 @@ function makeFakes() {
       return []
     },
     async savePlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, savedAt: new Date() }
+      return { brawlhallaId, order: 0, pinOrder: null, savedAt: new Date() }
     },
     async removeSavedPlayer() {},
     async reorderSavedPlayers() {
+      return []
+    },
+    async getPlayerShortcuts() {
+      return { primaryPlayer: null, pinnedPlayers: [] }
+    },
+    async pinSavedPlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, pinnedAt: new Date() }
+    },
+    async unpinSavedPlayer() {},
+    async reorderPinnedPlayers() {
       return []
     },
   }

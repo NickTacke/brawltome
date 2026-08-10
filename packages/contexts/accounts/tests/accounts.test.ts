@@ -76,10 +76,20 @@ function makeStore() {
       return []
     },
     async savePlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, savedAt: now }
+      return { brawlhallaId, order: 0, pinOrder: null, savedAt: now }
     },
     async removeSavedPlayer() {},
     async reorderSavedPlayers() {
+      return []
+    },
+    async getPlayerShortcuts() {
+      return { primaryPlayer: null, pinnedPlayers: [] }
+    },
+    async pinSavedPlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, pinnedAt: now }
+    },
+    async unpinSavedPlayer() {},
+    async reorderPinnedPlayers() {
       return []
     },
   }
