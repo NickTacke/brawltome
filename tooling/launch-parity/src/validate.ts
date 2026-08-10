@@ -33,10 +33,11 @@ const requiredRowIds = [
   'desktop.api-failure',
   'desktop.opponent-presentation-performance',
   'desktop.updater-install',
+  'statistics.current-season-legend-meta',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],
-  ['/stats', 'soon'],
+  ['/stats', 'live'],
   ['/matches', 'soon'],
   ['/learn', 'soon'],
   ['/tournaments', 'soon'],

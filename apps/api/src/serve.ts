@@ -18,6 +18,7 @@ import {
   initGameData,
   verifyTurnstileResult,
 } from '@brawltome/shared'
+import { createPostgresStatistics } from '@brawltome/statistics/composition'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
@@ -98,6 +99,7 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
   sourceLimits: { 'brawlhalla-v0': 180 },
 })
 const ranking = createPostgresRanking(databaseUrl)
+const statistics = createPostgresStatistics(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
 const matchmakingConfig = readMatchmakingConfig()
 const r2 = createR2Client(matchmakingConfig.r2)
@@ -136,6 +138,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'ranking-postgres', close: ranking.close },
+    { name: 'statistics-postgres', close: statistics.close },
     { name: 'database-postgres', close: closeDatabase },
     {
       name: 'redis',
@@ -171,6 +174,7 @@ const sharedCtx = {
   verifyRefreshChallenge: (token: string, remoteIp: string) =>
     observeSourceCall(telemetry, 'turnstile', () => verifyTurnstileResult(token, remoteIp)),
   rankingQueries: ranking.queries,
+  statisticsQueries: statistics,
   clanRepo,
   accounts,
   matchRepo,

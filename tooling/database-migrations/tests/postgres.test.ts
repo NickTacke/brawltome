@@ -106,8 +106,13 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0013',
       'refresh-operations/0014',
       'refresh-operations/0015',
+      'refresh-operations/0016',
     ])
-    expect(statisticsMigrationInventory.map(({ identity }) => identity)).toEqual(['statistics/0001', 'statistics/0002'])
+    expect(statisticsMigrationInventory.map(({ identity }) => identity)).toEqual([
+      'statistics/0001',
+      'statistics/0002',
+      'statistics/0003',
+    ])
   })
 
   test('preserves the complete pre-Clans global history as an applied prefix', async () => {
@@ -146,6 +151,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       clanMigrationInventory[2],
       rankingMigrationInventory[2],
       accountsMigrationInventory[5],
+      statisticsMigrationInventory[2],
+      refreshOperationsMigrationInventory[15],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -178,7 +185,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(40)
+    expect(globalMigrationInventory).toHaveLength(42)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -186,6 +193,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       clanMigrationInventory[2],
       rankingMigrationInventory[2],
       accountsMigrationInventory[5],
+      statisticsMigrationInventory[2],
+      refreshOperationsMigrationInventory[15],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -198,7 +207,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(6)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(8)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

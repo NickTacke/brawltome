@@ -6,6 +6,7 @@ import { leaderboardRouter } from './leaderboard.router'
 import { matchmakingRouter } from './matchmaking.router'
 import { playerRouter } from './player.router'
 import { searchRouter } from './search.router'
+import { statisticsRouter } from './statistics.router'
 import { statusRouter } from './status.router'
 
 export const appRouter = router({
@@ -16,6 +17,7 @@ export const appRouter = router({
   clan: clanRouter,
   search: searchRouter,
   leaderboard: leaderboardRouter,
+  statistics: statisticsRouter,
   matchmaking: matchmakingRouter,
 })
 

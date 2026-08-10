@@ -117,6 +117,17 @@ export {
   type PlayerReferenceContract,
 } from './player-reference'
 export {
+  legendMetaBracketSchema,
+  legendMetaBrackets,
+  legendMetaInputSchema,
+  legendMetaOutputSchema,
+  legendMetaRegionSchema,
+  legendMetaRegions,
+  parseLegendMetaOutput,
+  type LegendMetaInput,
+  type LegendMetaOutput,
+} from './statistics'
+export {
   discordPlayerRefreshInputSchema,
   discordUserIdSchema,
   parsePlayerRefreshResponseOutput,
