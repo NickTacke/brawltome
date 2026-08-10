@@ -21,6 +21,7 @@ const requiredRowIds = [
   'refresh.interactive-player',
   'player.current-season-ranked',
   'player.canonical-profile',
+  'statistics.eu-diamond-cohort-tracer',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],

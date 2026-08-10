@@ -7,6 +7,7 @@ import { playerMigrationInventory } from '@brawltome/player/composition'
 import { rankingMigrationInventory } from '@brawltome/ranking/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
+import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
 import postgres from 'postgres'
 import { globalMigrationInventory } from '../src/inventories'
 import { type Migration, checksumSql } from '../src/plan'
@@ -54,7 +55,7 @@ const deployedMonitoringGlobalHistory = [
 ] as const
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories append-only capabilities through cross-kind Discovery', () => {
+  test('inventories append-only capabilities through fixed Statistics cohort collection', () => {
     expect(accountsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'accounts/0001',
       'accounts/0002',
@@ -85,7 +86,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0011',
       'refresh-operations/0012',
       'refresh-operations/0013',
+      'refresh-operations/0014',
     ])
+    expect(statisticsMigrationInventory.map(({ identity }) => identity)).toEqual(['statistics/0001'])
   })
 
   test('preserves the complete pre-Clans global history as an applied prefix', async () => {
@@ -115,6 +118,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       clanMigrationInventory[1],
       discoveryMigrationInventory[1],
       refreshOperationsMigrationInventory[12],
+      statisticsMigrationInventory[0],
+      refreshOperationsMigrationInventory[13],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -136,7 +141,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
-  test('preserves the deployed 28-row monitoring history and appends Discovery capabilities', async () => {
+  test('preserves the deployed 28-row monitoring history and appends Discovery then Statistics capabilities', async () => {
     expect(
       globalMigrationInventory
         .slice(0, deployedMonitoringGlobalHistory.length)
@@ -146,11 +151,13 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedGlobalHistory).toHaveLength(25)
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
-    expect(globalMigrationInventory).toHaveLength(31)
+    expect(globalMigrationInventory).toHaveLength(33)
     expect(globalMigrationInventory.slice(deployedMonitoringGlobalHistory.length)).toEqual([
       clanMigrationInventory[1],
       discoveryMigrationInventory[1],
       refreshOperationsMigrationInventory[12],
+      statisticsMigrationInventory[0],
+      refreshOperationsMigrationInventory[13],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -163,7 +170,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(3)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(5)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -394,6 +401,11 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             'refresh_operations.commit_interactive_section_if_owned(uuid,text,bigint,text)'
           )::text AS function_name
         `
+        const [statisticsEffectFence] = await client<{ function_name: string | null }[]>`
+          SELECT to_regprocedure(
+            'refresh_operations.record_statistics_collection_effect(uuid,text,text,text,bigint)'
+          )::text AS function_name
+        `
         const [rollbackProbe] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.rollback_probe')::text AS table_name
         `
@@ -412,6 +424,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(rankedPulseState.table_name).toBe('players.ranked_v1_pulse_state')
         expect(activeLeaseFence.function_name).toContain('acquire_active_lease')
         expect(interactiveSectionFence.function_name).toContain('commit_interactive_section_if_owned')
+        expect(statisticsEffectFence.function_name).toContain('record_statistics_collection_effect')
         expect(rollbackProbe.table_name).toBeNull()
       } finally {
         await client.end()

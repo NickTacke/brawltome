@@ -469,6 +469,58 @@ describe('dead-letter operations', () => {
     await operations.close()
   })
 
+  test('replays a reserved Statistics collection with stable effect identity', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const cohortId = randomUUID()
+    const operationKey = `statistics:${cohortId}:42:ranked`
+    const reserved = await operations.reserveStatisticsCollection({
+      kind: 'statistics-ranked-collection',
+      dedupeKey: operationKey,
+      operationKey,
+      workClass: 'global-statistics',
+      payload: { cohortId, brawlhallaId: 42 },
+      provenance: { source: 'statistics-cohort-reconciliation', requestedBy: 'issue-209' },
+      maxAttempts: 1,
+    })
+    expect(await operations.claim('premature-statistics-worker', 10_000, admission)).toBeNull()
+    expect(await operations.activateStatisticsCollection(reserved.operationId)).toBe('transitioned')
+    const original = requireLease(
+      await operations.claim('statistics-original', 10_000, admission, 'statistics-ranked-collection'),
+    )
+    const effectSql = postgres(connectionString, { max: 1 })
+    const [effect] = await effectSql<{ result: string }[]>`
+      SELECT refresh_operations.record_statistics_collection_effect(
+        ${original.operationId}, ${original.operationKey}, ${original.kind},
+        ${original.leaseOwner}, ${original.leaseToken}
+      ) AS result
+    `
+    expect(effect.result).toBe('applied')
+    await effectSql.end()
+    await operations.fail(original, { code: 'source_failed', message: 'repairable', retryable: false }, 0)
+    expect((await operations.inspectDeadLetter(original.operationId))?.statisticsEffects).toEqual([
+      expect.objectContaining({ operationKey, kind: 'statistics-ranked-collection' }),
+    ])
+
+    const replayed = await operations.replayDeadLetter({
+      operationId: original.operationId,
+      actorId: 'operator:statistics',
+      reason: 'Statistics source repaired',
+    })
+    if (replayed.outcome !== 'replayed') throw new Error('Expected Statistics replay')
+    const successor = requireLease(
+      await operations.claim('statistics-replay', 10_000, admission, 'statistics-ranked-collection'),
+    )
+    expect(successor).toMatchObject({
+      operationId: replayed.replayOperationId,
+      effectOperationId: original.effectOperationId,
+      operationKey,
+      kind: 'statistics-ranked-collection',
+      payload: original.payload,
+      attemptNumber: 1,
+    })
+    await operations.close()
+  })
+
   test('makes audit actions append-only in PostgreSQL', async () => {
     const { operations, operationId } = await createDeadLetter()
     await operations.discardDeadLetter({

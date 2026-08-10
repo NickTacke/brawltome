@@ -1,4 +1,13 @@
 export type { Hurtbox, Legend, LevelMeta, Power, WeaponName } from './src/types'
+
+export const CURRENT_ONE_VS_ONE_PLATINUM_MIN_RATING = 1680
+export const CURRENT_ONE_VS_ONE_DIAMOND_MIN_RATING = 2000
+export type CurrentOneVsOneBracket = 'Platinum' | 'Diamond+'
+
+export function currentOneVsOneBracket(rating: number): CurrentOneVsOneBracket | null {
+  if (!Number.isSafeInteger(rating) || rating < CURRENT_ONE_VS_ONE_PLATINUM_MIN_RATING) return null
+  return rating < CURRENT_ONE_VS_ONE_DIAMOND_MIN_RATING ? 'Platinum' : 'Diamond+'
+}
 export {
   aggregateWeapons,
   createLegendReferenceIndex,

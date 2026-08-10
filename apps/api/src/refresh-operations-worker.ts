@@ -12,6 +12,7 @@ import type {
   RefreshOperationWorker,
 } from '@brawltome/refresh-operations'
 import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/request-admission'
+import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
 import { type Telemetry, observeSourceCall } from '@brawltome/telemetry'
 
 type ProofLease = Extract<OperationLease, { kind: 'proof' }>
@@ -21,6 +22,7 @@ type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
 type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
 type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
+type StatisticsLease = Extract<OperationLease, { workClass: 'global-statistics' }>
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
@@ -49,6 +51,8 @@ type RunOneRefreshOperationOptions = {
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
   leaderboardSource?: LeaderboardPageSource
+  statistics?: Pick<StatisticsTracer, 'preflightCollection' | 'commitObservation'>
+  executeStatisticsCollection?(lease: StatisticsLease): Promise<RankedEvidence | LifetimeEvidence>
   executePlayerProjection?(lease: ProjectionLease): Promise<void>
   executeClanProjection?(lease: ProjectionLease): Promise<void>
   executeDiscoveryReconciliation?(lease: ReconciliationLease): Promise<void>
@@ -323,6 +327,72 @@ async function executeRankedPulse(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
+async function executeStatistics(
+  operations: RefreshOperationWorker,
+  lease: StatisticsLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.statistics || !options.executeStatisticsCollection || !options.sourceAdmission) {
+    const transition = await operations.fail(
+      lease,
+      { code: 'statistics_executor_unavailable', message: 'Statistics executor is not configured', retryable: false },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+  const authorization = {
+    operationId: lease.operationId,
+    effectOperationId: lease.effectOperationId,
+    operationKey: lease.operationKey,
+    kind: lease.kind,
+    leaseOwner: lease.leaseOwner,
+    leaseToken: lease.leaseToken,
+    cohortId: lease.payload.cohortId,
+    brawlhallaId: lease.payload.brawlhallaId,
+  }
+  const preflight = await options.statistics.preflightCollection(authorization)
+  if (preflight === 'already-applied') {
+    return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+  }
+  if (preflight === 'effect-conflict') {
+    const transition = await operations.fail(
+      lease,
+      { code: 'statistics_effect_conflict', message: 'Statistics effect identity conflicts', retryable: false },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  const admission = await options.sourceAdmission.admitSource({
+    domain: 'brawlhalla-v1',
+    reservationKey: `${lease.operationId}:${lease.attemptNumber}:${lease.kind}`,
+    units: 1,
+  })
+  if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
+  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+  const evidence = await options.executeStatisticsCollection(lease)
+  const committed =
+    lease.kind === 'statistics-ranked-collection'
+      ? await options.statistics.commitObservation({
+          authorization: { ...authorization, kind: lease.kind },
+          evidence: evidence as RankedEvidence,
+        })
+      : await options.statistics.commitObservation({
+          authorization: { ...authorization, kind: lease.kind },
+          evidence: evidence as LifetimeEvidence,
+        })
+  if (committed === 'lease-lost') return 'lease_lost'
+  if (committed === 'effect-conflict') {
+    const transition = await operations.fail(
+      lease,
+      { code: 'statistics_effect_conflict', message: 'Statistics effect identity conflicts', retryable: false },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -431,6 +501,8 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeDiscoveryReconciliation(operations, lease, options)
       } else if (lease.kind === 'ranked-player-pulse') {
         attemptOutcome = await executeRankedPulse(operations, lease, options)
+      } else if (lease.workClass === 'global-statistics') {
+        attemptOutcome = await executeStatistics(operations, lease, options)
       } else {
         attemptOutcome = await executeLeaderboard(operations, lease, options)
       }
@@ -487,7 +559,10 @@ export async function runOneRefreshOperation(
                       ? 'discovery_reconciliation_failed'
                       : lease.kind === 'ranked-player-pulse'
                         ? 'ranked_player_pulse_failed'
-                        : 'leaderboard_collection_failed'
+                        : lease.kind === 'statistics-ranked-collection' ||
+                            lease.kind === 'statistics-lifetime-collection'
+                          ? 'statistics_collection_failed'
+                          : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'

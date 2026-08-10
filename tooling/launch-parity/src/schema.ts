@@ -7,6 +7,7 @@ export type ParityArea =
   | 'refresh-admission'
   | 'player-profile'
   | 'operator-operations'
+  | 'global-statistics'
 export type EvidenceKind = 'unit' | 'integration' | 'browser' | 'manual' | 'external'
 
 export type ParityEvidence = {

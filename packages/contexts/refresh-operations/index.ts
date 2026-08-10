@@ -69,6 +69,10 @@ export const discoveryProjectionKinds = ['player-discovery-projection', 'clan-di
 export type DiscoveryProjectionKind = (typeof discoveryProjectionKinds)[number]
 export type DiscoveryOwner = 'player' | 'clan'
 
+export const statisticsCollectionKinds = ['statistics-ranked-collection', 'statistics-lifetime-collection'] as const
+export type StatisticsCollectionKind = (typeof statisticsCollectionKinds)[number]
+export type StatisticsCollectionPayload = { cohortId: string; brawlhallaId: number }
+
 export type LeaderboardOperationPayload = {
   pageDepth: number
   intervalMs: number
@@ -140,6 +144,16 @@ export type AcceptDiscoveryReconciliation = {
   operationKey: string
   workClass: 'projection'
   payload: { owner: DiscoveryOwner }
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type ReserveStatisticsCollection = {
+  kind: StatisticsCollectionKind
+  dedupeKey: string
+  operationKey: string
+  workClass: 'global-statistics'
+  payload: StatisticsCollectionPayload
   provenance: OperationProvenance
   maxAttempts?: number
 }
@@ -251,6 +265,12 @@ export type ActiveInteractiveRefresh = {
   reservationExpired: boolean
 }
 
+export interface StatisticsCollectionOperations {
+  reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult>
+  listAwaitingStatisticsCollections(): Promise<string[]>
+  activateStatisticsCollection(operationId: string): Promise<TransitionResult>
+}
+
 export interface InteractiveRefreshOperations {
   findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number): Promise<ActiveInteractiveRefresh | null>
   findActiveInteractiveClanRefresh(dedupeKey: string): Promise<ActiveInteractiveRefresh | null>
@@ -315,6 +335,11 @@ export type OperationLease =
       kind: 'ranked-player-pulse'
       workClass: 'primary-monitoring'
       payload: { brawlhallaId: number }
+    })
+  | (LeaseFields & {
+      kind: StatisticsCollectionKind
+      workClass: 'global-statistics'
+      payload: StatisticsCollectionPayload
     })
   | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
 
@@ -393,6 +418,12 @@ export type DeadLetterInspection = {
   }[]
   leaderboardEffects: {
     operationKey: string
+    leaseToken: number
+    createdAt: string
+  }[]
+  statisticsEffects: {
+    operationKey: string
+    kind: StatisticsCollectionKind
     leaseToken: number
     createdAt: string
   }[]
