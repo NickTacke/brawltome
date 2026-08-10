@@ -2,6 +2,7 @@ import { initializePlayersSchema } from './migrations/0001-initialize-schema'
 import { addInteractiveRefreshEffects } from './migrations/0002-add-interactive-refresh-effects'
 import { addCanonicalRankedState } from './migrations/0003-add-canonical-ranked-state'
 import { addCanonicalCareerState } from './migrations/0004-add-canonical-career-state'
+import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
 
 export { discoverPlayer } from './commands/discover-player'
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
@@ -19,6 +20,10 @@ export {
 } from './ranked/postgres'
 export { refreshCanonicalRankedPlayer, type V0RankedSource } from './ranked/refresh'
 export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
+export {
+  createPostgresPlayerDiscoverySource,
+  type PostgresPlayerDiscoverySource,
+} from './discovery-postgres'
 export { createPlayerRepo } from './player.repo'
 
 export const playerMigrationInventory = [
@@ -26,4 +31,5 @@ export const playerMigrationInventory = [
   addInteractiveRefreshEffects,
   addCanonicalRankedState,
   addCanonicalCareerState,
+  addDiscoveryFacts,
 ] as const

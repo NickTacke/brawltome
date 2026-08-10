@@ -17,6 +17,7 @@ type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
+type PlayerProjectionLease = Extract<OperationLease, { kind: 'player-discovery-projection' }>
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
@@ -42,6 +43,8 @@ type RunOneRefreshOperationOptions = {
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
   leaderboardSource?: LeaderboardPageSource
+  executePlayerProjection?(lease: PlayerProjectionLease): Promise<void>
+  playerProjectionEffectState?(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
 }
 
 type ActiveClanAuthority = { lease: ClanLease; section: 'profile' | 'roster' } | null
@@ -251,6 +254,16 @@ async function executeInteractive(
   await operations.complete(lease)
 }
 
+async function executePlayerProjection(
+  operations: RefreshOperationWorker,
+  lease: PlayerProjectionLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<void> {
+  if (!options.executePlayerProjection) throw new Error('Player discovery projection executor is unavailable')
+  await options.executePlayerProjection(lease)
+  await operations.complete(lease)
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -325,11 +338,30 @@ export async function runOneRefreshOperation(
     if (lease.kind === 'proof') await executeProof(operations, lease, options)
     else if (lease.kind === 'interactive-player-refresh' || lease.kind === 'clan-refresh') {
       await executeInteractive(operations, lease, options, clanAuthority, authorityLost)
+    } else if (lease.kind === 'player-discovery-projection') {
+      await executePlayerProjection(operations, lease, options)
     } else {
       await executeLeaderboard(operations, lease, options)
     }
   } catch (error) {
     if (error instanceof LeaderboardLeaseLostError) return true
+    if (lease.kind === 'player-discovery-projection' && options.playerProjectionEffectState) {
+      let effectState: 'none' | 'applied' | 'acknowledged'
+      try {
+        effectState = await options.playerProjectionEffectState(lease.operationId)
+      } catch {
+        await operations.retryAppliedPlayerProjection(lease, options.retryDelayMs)
+        return true
+      }
+      if (effectState === 'acknowledged') {
+        await operations.complete(lease)
+        return true
+      }
+      if (effectState === 'applied') {
+        await operations.retryAppliedPlayerProjection(lease, options.retryDelayMs)
+        return true
+      }
+    }
     const sourceRetryMs = sourceRetryAfterMs(error)
     const retryDelayMs = sourceRetryMs ?? options.retryDelayMs
     const fallbackCode =
@@ -341,7 +373,9 @@ export async function runOneRefreshOperation(
             ? 'interactive_player_refresh_failed'
             : lease.kind === 'clan-refresh'
               ? 'clan_refresh_failed'
-              : 'leaderboard_collection_failed'
+              : lease.kind === 'player-discovery-projection'
+                ? 'player_discovery_projection_failed'
+                : 'leaderboard_collection_failed'
     await operations.fail(lease, failureDetails(error, fallbackCode), retryDelayMs)
   } finally {
     renewal.abort()

@@ -1,6 +1,7 @@
 import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
+import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { PlayerLinkRepo } from '@brawltome/identity'
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
@@ -19,6 +20,7 @@ export interface Context {
   statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   playerRepo: PlayerRepo
   playerReferenceQueries: PlayerReferenceQueries
+  discoveryQueries: DiscoveryQueries
   rankedPlayerQueries: RankedPlayerQueries
   careerPlayerQueries: CareerPlayerQueries
   refreshOperations: InteractiveRefreshOperations

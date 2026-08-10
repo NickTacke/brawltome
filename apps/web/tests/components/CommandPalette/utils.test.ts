@@ -27,8 +27,18 @@ describe('buildCommands', () => {
     const result = buildCommands({
       isSearchMode: true,
       navItems: NAV_ITEMS,
-      playerResults: [{ brawlhallaId: 1, name: 'Alice', region: 'us-e', rating: 1500, bestLegendNameKey: 'bodvar' }],
-      clanResults: [{ clanId: 99, clanName: 'Test Clan' }],
+      playerResults: [
+        {
+          brawlhallaId: 1,
+          name: 'Alice',
+          region: 'us-e',
+          rating: 1500,
+          viewCount: 1,
+          bestLegendNameKey: 'bodvar',
+          matchedAlias: null,
+        },
+      ],
+      clanResults: [{ clanId: 99, clanName: 'Test Clan', clanXp: '10', memberCount: 1 }],
     })
     expect(result).toHaveLength(2)
     expect(result[0].kind).toBe('player')
@@ -53,8 +63,18 @@ describe('buildCommands', () => {
     const result = buildCommands({
       isSearchMode: true,
       navItems: NAV_ITEMS,
-      playerResults: [{ brawlhallaId: 1, name: 'Alice', region: null, rating: 0 }],
-      clanResults: [{ clanId: 99, clanName: 'Clan' }],
+      playerResults: [
+        {
+          brawlhallaId: 1,
+          name: 'Alice',
+          region: null,
+          rating: null,
+          viewCount: 0,
+          bestLegendNameKey: null,
+          matchedAlias: null,
+        },
+      ],
+      clanResults: [{ clanId: 99, clanName: 'Clan', clanXp: '0', memberCount: 0 }],
     })
     expect(result.map((c) => c.kind)).toEqual(['player', 'clan'])
   })

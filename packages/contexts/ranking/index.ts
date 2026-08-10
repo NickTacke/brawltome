@@ -7,7 +7,6 @@ export {
   type PublishedLeaderboardRow,
   type RankingQueries,
 } from './leaderboard'
-export { searchLocal } from './queries/search-local'
 export {
   leaderboardModes,
   regionalLeaderboardScopes,

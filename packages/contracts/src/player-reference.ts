@@ -1,7 +1,7 @@
 import { z } from './zod'
 
 export const brawlhallaIdSchema = z.number().int().positive().max(2_147_483_647)
-const playerNameSchema = z
+export const playerNameSchema = z
   .string()
   .refine((name) => [...name].length <= 256, 'Player name must contain at most 256 Unicode characters')
   .refine((name) => /[^\p{Separator}\p{Format}]/u.test(name), 'Player name must contain a visible character')

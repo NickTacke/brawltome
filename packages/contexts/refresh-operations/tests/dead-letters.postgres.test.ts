@@ -280,7 +280,7 @@ describe('dead-letter operations', () => {
     await operations.close()
   })
 
-  test('preserves clan and leaderboard kinds, payloads, and effect identity on replay', async () => {
+  test('preserves clan, leaderboard, and projection kinds, payloads, and effect identity on replay', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const leaderboard = await operations.accept({
       kind: 'leaderboard-1v1',
@@ -351,6 +351,45 @@ describe('dead-letter operations', () => {
     })
     expect(clanSuccessor.leaseToken).toBeGreaterThan(clanLease.leaseToken)
     await operations.complete(clanSuccessor)
+
+    const projection = await operations.accept({
+      kind: 'player-discovery-projection',
+      dedupeKey: `player-discovery-dead-letter:${randomUUID()}`,
+      operationKey: `player-discovery-effect:${randomUUID()}`,
+      workClass: 'projection',
+      payload: { batchSize: 100 },
+      provenance: { source: 'integration-test', requestedBy: 'issue-199' },
+      maxAttempts: 1,
+    })
+    const projectionLease = requireLease(
+      await operations.claim('player-discovery-original', 10_000, admission, 'player-discovery-projection'),
+    )
+    expect(projectionLease.operationId).toBe(projection.operationId)
+    await operations.fail(
+      projectionLease,
+      { code: 'projection_repairable', message: 'projection repairable', retryable: false },
+      0,
+    )
+    const projectionReplay = await operations.replayDeadLetter({
+      operationId: projectionLease.operationId,
+      actorId: 'operator:player-discovery',
+      reason: 'projection source repaired',
+    })
+    if (projectionReplay.outcome !== 'replayed') throw new Error('Expected player discovery replay')
+    const projectionSuccessor = requireLease(
+      await operations.claim('player-discovery-replay', 10_000, admission, 'player-discovery-projection'),
+    )
+    expect(projectionSuccessor).toMatchObject({
+      operationId: projectionReplay.replayOperationId,
+      effectOperationId: projectionLease.effectOperationId,
+      kind: 'player-discovery-projection',
+      workClass: 'projection',
+      payload: projectionLease.payload,
+      provenance: projectionLease.provenance,
+      attemptNumber: 1,
+    })
+    expect(projectionSuccessor.leaseToken).toBeGreaterThan(projectionLease.leaseToken)
+    await operations.complete(projectionSuccessor)
     await operations.close()
   })
 

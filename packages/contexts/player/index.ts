@@ -14,3 +14,8 @@ export {
   rankedFreshness,
 } from './ranked/model'
 export type { PlayerReference, PlayerReferenceQueries } from './reference'
+export type {
+  PlayerDiscoveryEvent,
+  PlayerDiscoveryFact,
+  PlayerDiscoverySource,
+} from './discovery-facts'

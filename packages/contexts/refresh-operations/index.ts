@@ -109,7 +109,17 @@ export type AcceptLeaderboardOperation = {
   maxAttempts?: number
 }
 
-export type AcceptOperation = AcceptProofOperation | AcceptLeaderboardOperation
+export type AcceptPlayerDiscoveryProjection = {
+  kind: 'player-discovery-projection'
+  dedupeKey: string
+  operationKey: string
+  workClass: 'projection'
+  payload: { batchSize: number }
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type AcceptOperation = AcceptProofOperation | AcceptLeaderboardOperation | AcceptPlayerDiscoveryProjection
 
 export type AcceptOperationResult = {
   outcome: 'accepted' | 'already-active'
@@ -209,6 +219,11 @@ export type OperationLease =
       kind: 'interactive-player-refresh'
       workClass: 'interactive'
       payload: { brawlhallaId: number; staleSections: ('ranked' | 'stats')[] }
+    })
+  | (LeaseFields & {
+      kind: 'player-discovery-projection'
+      workClass: 'projection'
+      payload: { batchSize: number }
     })
   | (LeaseFields & {
       kind: 'clan-refresh'
@@ -359,6 +374,10 @@ export interface RefreshOperationWorker {
     section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<TransitionResult>
   commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult>
+  retryAppliedPlayerProjection(
+    lease: Extract<OperationLease, { kind: 'player-discovery-projection' }>,
+    retryDelayMs: number,
+  ): Promise<TransitionResult>
   complete(lease: OperationLease): Promise<TransitionResult>
   fail(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>
 }
