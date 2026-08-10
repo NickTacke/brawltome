@@ -990,4 +990,37 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'clan-ranking.v2-migration',
+    area: 'operator-operations',
+    requirement:
+      'Clans owns reconciled V2 identities, rosters, and memberships, while Rankings promotes only immutable mode and region sets that pass repository-provable completeness, ordering, contestant identity, cardinality, and immutability gates.',
+    sourceIssue: '#223',
+    status: 'implemented',
+    destinations: ['bun run --filter @brawltome/database-migrations import:clans-rankings'],
+    implementation: [
+      'packages/contexts/clan/migrations/0003-add-v2-import-evidence.ts',
+      'packages/contexts/clan/legacy-import.ts',
+      'packages/contexts/ranking/migrations/0003-add-v2-legacy-import.ts',
+      'packages/contexts/ranking/legacy-import.ts',
+      'tooling/database-migrations/src/import-clans.ts',
+      'tooling/database-migrations/src/inventories.ts',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/clans-rankings.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves checksummed raw archives, owner provenance, every ranking gate, immutable accepted snapshots, durable rejected sets, frozen-source blocking, crash resume, concurrency, and repeat safety.',
+      },
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/postgres.test.ts',
+        assertion:
+          'The 37-row history through full cohort validation remains an exact prefix before Clans/0003 and Rankings/0003 append once.',
+      },
+    ],
+    verificationGap:
+      'Repository fixtures cannot prove upstream V2 collection completeness. Two consecutive production-shaped restore rehearsals, storage headroom, elapsed duration, external backup restoration, and operator cutover evidence remain launch gates.',
+  },
 ]

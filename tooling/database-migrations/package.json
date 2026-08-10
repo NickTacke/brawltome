@@ -6,6 +6,7 @@
     "migrate": "bun run src/cli.ts",
     "finalize:accounts-v2-auth": "bun run src/finalize-accounts-v2-auth-cutover.ts",
     "import:clans": "bun run src/import-clans.ts",
+    "import:clans-rankings": "bun run src/import-clans-rankings.ts",
     "import:players": "bun run src/import-players.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"

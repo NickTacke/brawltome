@@ -25,9 +25,10 @@ type SnapshotRow = {
   observed_at: Date
   published_at: Date
   expected_next_publication_at: Date
-  page_depth: number
-  source: 'brawlhalla-v1-ranked-leaderboard'
+  page_depth: number | null
+  source: 'brawlhalla-v1-ranked-leaderboard' | 'v2-legacy'
   source_contract_version: 1
+  provenance: Record<string, unknown>
   row_count: number
   latest_failure_at: Date | null
 }
@@ -101,6 +102,36 @@ function publishedIdentity(row: StandingRow): PublishedLeaderboardIdentity {
   throw new Error('stored leaderboard identity is unsupported')
 }
 
+function publishedProvenance(
+  snapshot: SnapshotRow,
+): Extract<LeaderboardView, { status: 'fresh' | 'stale' }>['provenance'] {
+  if (snapshot.source === 'brawlhalla-v1-ranked-leaderboard') {
+    if (snapshot.page_depth === null) throw new Error('stored V1 leaderboard provenance has no page depth')
+    return {
+      source: snapshot.source,
+      contractVersion: snapshot.source_contract_version,
+      pageDepth: snapshot.page_depth,
+    }
+  }
+  const sourceChecksum = snapshot.provenance.sourceChecksum
+  const importedAt = snapshot.provenance.importedAt
+  if (
+    typeof sourceChecksum !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(sourceChecksum) ||
+    typeof importedAt !== 'string' ||
+    snapshot.provenance.completeness !== 'frozen-repository-rows'
+  ) {
+    throw new Error('stored legacy leaderboard provenance is invalid')
+  }
+  return {
+    source: snapshot.source,
+    contractVersion: snapshot.source_contract_version,
+    sourceChecksum,
+    importedAt,
+    completeness: 'frozen-repository-rows',
+  }
+}
+
 export function createPostgresRanking(connectionString: string) {
   const client = postgres(connectionString)
 
@@ -151,7 +182,7 @@ export function createPostgresRanking(connectionString: string) {
       SELECT snapshot.id AS snapshot_id, snapshot.generation_id, snapshot.mode, snapshot.scope,
              generation.observed_at, generation.published_at, generation.expected_next_publication_at,
              generation.page_depth, generation.source, generation.source_contract_version,
-             snapshot.row_count,
+             generation.provenance, snapshot.row_count,
              (
                SELECT max(failure.checked_at)
                FROM rankings.collection_failures failure
@@ -206,11 +237,7 @@ export function createPostgresRanking(connectionString: string) {
       observedAt: snapshot.observed_at.toISOString(),
       publishedAt: snapshot.published_at.toISOString(),
       expectedNextPublicationAt: snapshot.expected_next_publication_at.toISOString(),
-      provenance: {
-        source: snapshot.source,
-        contractVersion: snapshot.source_contract_version,
-        pageDepth: snapshot.page_depth,
-      },
+      provenance: publishedProvenance(snapshot),
       page,
       pageSize,
       hasMore: offset + entries.length < snapshot.row_count,
@@ -275,11 +302,16 @@ export function createPostgresRanking(connectionString: string) {
         await sql`
           INSERT INTO rankings.generations
             (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
-             expected_next_publication_at, page_depth, source, source_contract_version, finalized)
+             expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
           VALUES
             (${generationId}, ${effectOperationId}, ${candidate.operationKey}, ${candidate.mode},
              ${candidate.observedAt}, ${candidate.scheduleWindowAt}, ${candidate.expectedNextPublicationAt},
-             ${candidate.pageDepth}, 'brawlhalla-v1-ranked-leaderboard', 1, false)
+             ${candidate.pageDepth}, 'brawlhalla-v1-ranked-leaderboard', 1, false,
+             ${sql.json({
+               source: 'brawlhalla-v1-ranked-leaderboard',
+               contractVersion: 1,
+               pageDepth: candidate.pageDepth,
+             })})
         `
         for (const scope of requiredScopes) {
           const rows = candidate.snapshots.get(scope)
