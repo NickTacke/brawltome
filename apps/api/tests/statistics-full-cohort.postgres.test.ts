@@ -62,7 +62,7 @@ afterAll(async () => {
   if (!admin) return
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
-})
+}, 30_000)
 
 function snapshots(generation: number): CohortCandidateSnapshot[] {
   return launchCohortRegions.map((region, regionIndex) => {
@@ -142,7 +142,24 @@ async function seedTerminalProduct(
          lease_token, observed_at, evidence_version, evidence)
       SELECT collection.cohort_id, collection.brawlhalla_id, collection.product,
              operation.effect_operation_id, operation.operation_key, 1,
-             generation.observation_window_starts_at + interval '2 hours', 1, '{}'::jsonb
+             generation.observation_window_starts_at + interval '2 hours', 1,
+             CASE WHEN ${product} = 'ranked' THEN jsonb_build_object(
+               'brawlhallaId', member.brawlhalla_id,
+               'games', 10,
+               'wins', 5,
+               'rating', member.source_rating,
+               'peakRating', member.source_rating,
+               'tier', 'Observed',
+               'region', cohort.region,
+               'legends', jsonb_build_array(jsonb_build_object(
+                 'legendId', 3,
+                 'games', 10,
+                 'wins', 5,
+                 'rating', member.source_rating,
+                 'peakRating', member.source_rating,
+                 'tier', 'Observed'
+               ))
+             ) ELSE '{}'::jsonb END
       FROM statistics.collection_operations collection
       JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
       JOIN statistics.cohort_members member
@@ -190,6 +207,97 @@ async function bindPublication(
   expect(await statistics.recordPublicationOperation(intent, reserved.operationId)).toBe('recorded')
   expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
   return reserved.operationId
+}
+
+async function bindLegendMetaPublication(
+  statistics: ReturnType<typeof createPostgresStatistics>,
+  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  generationId: string,
+  maxAttempts = 3,
+) {
+  const intent = (await statistics.legendMetaPublicationIntents()).find(
+    (candidate) => candidate.generationId === generationId,
+  )
+  if (!intent) throw new Error('missing Legend Meta publication intent')
+  const reserved = await operations.reserveStatisticsLegendMetaPublication({
+    kind: intent.kind,
+    dedupeKey: intent.operationKey,
+    operationKey: intent.operationKey,
+    workClass: 'global-statistics',
+    payload: { generationId },
+    provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
+    maxAttempts,
+  })
+  await statistics.recordLegendMetaPublicationOperation(intent, reserved.operationId)
+  expect(await operations.activateStatisticsLegendMetaPublication(reserved.operationId)).toBe('transitioned')
+  return reserved.operationId
+}
+
+async function bindPublicationFixture(
+  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  generationId: string,
+  product: 'ranked' | 'lifetime',
+) {
+  const operationKey = `statistics:${generationId}:publication:${product}`
+  const reserved = await operations.reserveStatisticsPublication({
+    kind: 'statistics-publication',
+    dedupeKey: operationKey,
+    operationKey,
+    workClass: 'global-statistics',
+    payload: { generationId, product },
+    provenance: { source: 'statistics-publication-ordering-fixture', requestedBy: 'issue-211' },
+    maxAttempts: 1,
+  })
+  const sql = postgres(connectionString, { max: 1 })
+  try {
+    await sql`
+      INSERT INTO statistics.publication_operations (generation_id, product, operation_id)
+      VALUES (${generationId}, ${product}, ${reserved.operationId})
+    `
+  } finally {
+    await sql.end()
+  }
+  return reserved.operationId
+}
+
+async function insertAcceptedPublicationFixture(input: {
+  generationId: string
+  operationId: string
+  product: 'ranked' | 'lifetime'
+  templateGenerationId: string
+}) {
+  const sql = postgres(connectionString, { max: 1 })
+  try {
+    await sql`
+      INSERT INTO statistics.publication_decisions
+        (id, generation_id, product, effect_operation_id, operation_key, lease_token,
+         decision, reasons, progress, observation_window, capacity_envelope)
+      SELECT ${randomUUID()}, ${input.generationId}, ${input.product}, ${input.operationId},
+             ${`statistics:${input.generationId}:publication:${input.product}`}, 1,
+             'accepted', '[]'::jsonb, progress, observation_window, capacity_envelope
+      FROM statistics.publication_decisions
+      WHERE generation_id = ${input.templateGenerationId} AND product = ${input.product}
+    `
+  } finally {
+    await sql.end()
+  }
+}
+
+function legendMetaAuthorization(
+  lease: Extract<
+    Awaited<ReturnType<ReturnType<typeof createPostgresRefreshOperations>['claim']>>,
+    { kind: 'statistics-legend-meta-publication' }
+  >,
+) {
+  return {
+    operationId: lease.operationId,
+    effectOperationId: lease.effectOperationId,
+    operationKey: lease.operationKey,
+    kind: lease.kind,
+    leaseOwner: lease.leaseOwner,
+    leaseToken: lease.leaseToken,
+    generationId: lease.payload.generationId,
+  }
 }
 
 function publicationAuthorization(
@@ -437,10 +545,112 @@ describe('Statistics full launch cohort publication', () => {
         sourceAttempts: 2_250,
         successes: 2_142,
       })
+
+      const legendMetaOperationId = await bindLegendMetaPublication(statistics, operations, first.generationId, 2)
+      const expiredLegendMeta = await operations.claim(
+        'expired-legend-meta',
+        20,
+        admission,
+        'statistics-legend-meta-publication',
+      )
+      if (!expiredLegendMeta || expiredLegendMeta.kind !== 'statistics-legend-meta-publication') {
+        throw new Error('Legend Meta publication lease missing')
+      }
+      await Bun.sleep(35)
+      const replacementLegendMeta = await operations.claim(
+        'replacement-legend-meta',
+        10_000,
+        admission,
+        'statistics-legend-meta-publication',
+      )
+      if (!replacementLegendMeta || replacementLegendMeta.kind !== 'statistics-legend-meta-publication') {
+        throw new Error('replacement Legend Meta publication lease missing')
+      }
+      expect((await statistics.buildAndPublishLegendMeta(legendMetaAuthorization(expiredLegendMeta))).result).toBe(
+        'lease-lost',
+      )
+      const concurrentLegendMeta = await Promise.all([
+        statistics.buildAndPublishLegendMeta(legendMetaAuthorization(replacementLegendMeta)),
+        concurrent.buildAndPublishLegendMeta(legendMetaAuthorization(replacementLegendMeta)),
+      ])
+      expect(concurrentLegendMeta.map(({ result }) => result).sort()).toEqual(['already-applied', 'applied'])
+      expect(concurrentLegendMeta.find(({ result }) => result === 'applied')?.decision).toMatchObject({
+        generationId: first.generationId,
+        outcome: 'accepted',
+        reasons: [],
+      })
+      const recoveryControl = postgres(connectionString, { max: 1 })
+      await recoveryControl`
+        UPDATE refresh_operations.operations
+        SET lease_expires_at = clock_timestamp() - interval '1 millisecond'
+        WHERE id = ${legendMetaOperationId}
+      `
+      await recoveryControl.end()
+      expect(
+        await operations.claim('legend-meta-effect-recovery', 10_000, admission, 'statistics-legend-meta-publication'),
+      ).toBeNull()
+      expect((await operations.inspect(legendMetaOperationId)).operation).toMatchObject({
+        status: 'succeeded',
+        attempt_count: 2,
+      })
+
+      const allLegendMeta = await statistics.getLegendMeta({ region: 'all', bracket: 'all' })
+      expect(allLegendMeta).toMatchObject({
+        status: 'fresh',
+        generationId: first.generationId,
+        methodologyVersion: 'current-season-legend-meta-v1',
+        season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
+        slice: {
+          selectedPlayers: 2_250,
+          observedPlayers: 2_142,
+          observedLegendGames: 21_420,
+          coverage: { numerator: 2_142, denominator: 2_250, basisPoints: 9_520 },
+        },
+      })
+      if (allLegendMeta.status === 'unavailable') throw new Error('Legend Meta publication missing')
+      expect(allLegendMeta.slice.rows.find(({ legend }) => legend.legendId === 3)).toMatchObject({
+        rank: 1,
+        eligible: true,
+        playerCount: 2_142,
+        gameCount: 21_420,
+        winCount: 10_710,
+        medianRating: 1_902,
+        pickShare: { numerator: 21_420, denominator: 21_420, basisPoints: 10_000 },
+        adoption: { numerator: 2_142, denominator: 2_142, basisPoints: 10_000 },
+        winRate: { numerator: 10_710, denominator: 21_420, basisPoints: 5_000 },
+      })
+      const euPlatinum = await statistics.getLegendMeta({ region: 'EU', bracket: 'Platinum' })
+      expect(euPlatinum).toMatchObject({
+        status: 'fresh',
+        slice: {
+          selectedPlayers: 125,
+          observedPlayers: 119,
+          observedLegendGames: 1_190,
+          coverage: { numerator: 119, denominator: 125, basisPoints: 9_520 },
+        },
+      })
+      const overdueStatistics = createPostgresStatistics(connectionString, {
+        now: () => new Date('2100-01-01T00:00:00.000Z'),
+      })
+      try {
+        await expect(overdueStatistics.getLegendMeta({ region: 'all', bracket: 'all' })).resolves.toMatchObject({
+          status: 'stale',
+          staleReason: 'publication-overdue',
+          generationId: first.generationId,
+        })
+      } finally {
+        await overdueStatistics.close()
+      }
+
       for (const statement of [
         "UPDATE statistics.publication_decisions SET decision = 'rejected'",
         'DELETE FROM statistics.publication_decisions',
         'TRUNCATE statistics.publication_decisions',
+        "UPDATE statistics.legend_meta_publication_decisions SET decision = 'rejected'",
+        'DELETE FROM statistics.legend_meta_publication_decisions',
+        'TRUNCATE statistics.legend_meta_publication_decisions',
+        'DELETE FROM statistics.legend_meta_publication_operations',
+        'TRUNCATE statistics.legend_meta_publication_operations, statistics.legend_meta_publication_decisions',
       ]) {
         const mutation = Bun.spawn(['psql', connectionString, '-v', 'ON_ERROR_STOP=1', '-c', statement], {
           stdout: 'pipe',
@@ -476,6 +686,66 @@ describe('Statistics full launch cohort publication', () => {
       })
       expect(publication?.latestDecision.reasons).toContainEqual({ code: 'overall-coverage-below-95-percent' })
 
+      const secondLifetimeOperationId = await bindPublicationFixture(operations, second.generationId, 'lifetime')
+      await insertAcceptedPublicationFixture({
+        generationId: second.generationId,
+        operationId: secondLifetimeOperationId,
+        product: 'lifetime',
+        templateGenerationId: first.generationId,
+      })
+
+      const third = await statistics.reconcileLaunchCohort(snapshots(3))
+      const thirdRankedOperationId = await bindPublicationFixture(operations, third.generationId, 'ranked')
+      await insertAcceptedPublicationFixture({
+        generationId: third.generationId,
+        operationId: thirdRankedOperationId,
+        product: 'ranked',
+        templateGenerationId: first.generationId,
+      })
+      await bindLegendMetaPublication(statistics, operations, third.generationId)
+      const acceptedThirdLegendMeta = await operations.claim(
+        'accepted-third-legend-meta',
+        10_000,
+        admission,
+        'statistics-legend-meta-publication',
+      )
+      if (!acceptedThirdLegendMeta || acceptedThirdLegendMeta.kind !== 'statistics-legend-meta-publication') {
+        throw new Error('third Legend Meta publication lease missing')
+      }
+      expect(
+        await statistics.buildAndPublishLegendMeta(legendMetaAuthorization(acceptedThirdLegendMeta)),
+      ).toMatchObject({
+        result: 'applied',
+        decision: { generationId: third.generationId, outcome: 'accepted' },
+      })
+      await operations.complete(acceptedThirdLegendMeta)
+
+      await bindLegendMetaPublication(statistics, operations, second.generationId)
+      const rejectedLegendMeta = await operations.claim(
+        'rejected-legend-meta',
+        10_000,
+        admission,
+        'statistics-legend-meta-publication',
+      )
+      if (!rejectedLegendMeta || rejectedLegendMeta.kind !== 'statistics-legend-meta-publication') {
+        throw new Error('rejected Legend Meta publication lease missing')
+      }
+      expect(await statistics.buildAndPublishLegendMeta(legendMetaAuthorization(rejectedLegendMeta))).toMatchObject({
+        result: 'applied',
+        decision: {
+          generationId: second.generationId,
+          outcome: 'rejected',
+          reasons: [{ code: 'ranked-publication-rejected' }],
+          snapshotId: null,
+        },
+      })
+      await operations.complete(rejectedLegendMeta)
+      await expect(statistics.getLegendMeta({ region: 'all', bracket: 'all' })).resolves.toMatchObject({
+        status: 'fresh',
+        staleReason: null,
+        generationId: third.generationId,
+      })
+
       const control = postgres(connectionString, { max: 1 })
       await control`
         UPDATE refresh_operations.operations
@@ -503,15 +773,15 @@ describe('Statistics full launch cohort publication', () => {
           statistics,
         }),
       ).toBe(true)
-      expect((await statistics.getLaunchCohort(second.generationId))?.decisions).toHaveLength(1)
+      expect((await statistics.getLaunchCohort(second.generationId))?.decisions).toHaveLength(2)
 
       await statistics.close()
       statistics = createPostgresStatistics(connectionString)
-      expect((await statistics.getPublication('ranked'))?.active?.generationId).toBe(first.generationId)
+      expect((await statistics.getPublication('ranked'))?.active?.generationId).toBe(third.generationId)
     } finally {
       await statistics.close()
       await concurrent.close()
       await operations.close()
     }
-  }, 60_000)
+  }, 75_000)
 })

@@ -74,6 +74,8 @@ export type StatisticsCollectionKind = (typeof statisticsCollectionKinds)[number
 export type StatisticsCollectionPayload = { cohortId: string; brawlhallaId: number }
 export type StatisticsPublicationKind = 'statistics-publication'
 export type StatisticsPublicationPayload = { generationId: string; product: 'ranked' | 'lifetime' }
+export type StatisticsLegendMetaPublicationKind = 'statistics-legend-meta-publication'
+export type StatisticsLegendMetaPublicationPayload = { generationId: string }
 
 export type LeaderboardOperationPayload = {
   pageDepth: number
@@ -166,6 +168,16 @@ export type ReserveStatisticsPublication = {
   operationKey: string
   workClass: 'global-statistics'
   payload: StatisticsPublicationPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type ReserveStatisticsLegendMetaPublication = {
+  kind: StatisticsLegendMetaPublicationKind
+  dedupeKey: string
+  operationKey: string
+  workClass: 'global-statistics'
+  payload: StatisticsLegendMetaPublicationPayload
   provenance: OperationProvenance
   maxAttempts?: number
 }
@@ -284,6 +296,9 @@ export interface StatisticsOperations {
   reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult>
   listAwaitingStatisticsPublications(): Promise<string[]>
   activateStatisticsPublication(operationId: string): Promise<TransitionResult>
+  reserveStatisticsLegendMetaPublication(input: ReserveStatisticsLegendMetaPublication): Promise<AcceptOperationResult>
+  listAwaitingStatisticsLegendMetaPublications(): Promise<string[]>
+  activateStatisticsLegendMetaPublication(operationId: string): Promise<TransitionResult>
 }
 
 export type StatisticsCollectionOperations = StatisticsOperations
@@ -362,6 +377,11 @@ export type OperationLease =
       kind: StatisticsPublicationKind
       workClass: 'global-statistics'
       payload: StatisticsPublicationPayload
+    })
+  | (LeaseFields & {
+      kind: StatisticsLegendMetaPublicationKind
+      workClass: 'global-statistics'
+      payload: StatisticsLegendMetaPublicationPayload
     })
   | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
 

@@ -123,10 +123,13 @@ describe('Statistics immutable Ranking adapter', () => {
       collectionIntents: async () => [],
       boundPublicationOperationIds: async () => [],
       publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
     } as unknown as StatisticsTracer
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
     const ranking: RankingQueries = {
       async getLeaderboard(input) {
@@ -162,10 +165,13 @@ describe('Statistics immutable Ranking adapter', () => {
       collectionIntents: async () => [],
       boundPublicationOperationIds: async () => [],
       publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
     } as unknown as StatisticsTracer
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
     const ranking: RankingQueries = {
       async getLeaderboard(input) {
@@ -222,6 +228,8 @@ describe('Statistics immutable Ranking adapter', () => {
         return [...operationIds]
       },
       publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
     } as unknown as StatisticsTracer
     const operations = {
       listAwaitingStatisticsCollections: async () => awaitingCollections,
@@ -238,6 +246,7 @@ describe('Statistics immutable Ranking adapter', () => {
         activatedPublications++
         return 'transitioned' as const
       },
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
     const ranking: RankingQueries = {
       async getLeaderboard() {
@@ -250,6 +259,60 @@ describe('Statistics immutable Ranking adapter', () => {
     expect(publicationBindingLookups).toBe(100)
     expect(activatedCollections).toBe(1_000)
     expect(activatedPublications).toBe(100)
+  })
+
+  test('reserves and binds Legend Meta only after an immutable ranked decision exists', async () => {
+    const calls: unknown[] = []
+    const intent = {
+      generationId,
+      kind: 'statistics-legend-meta-publication' as const,
+      operationKey: `statistics:${generationId}:legend-meta`,
+    }
+    const statistics = {
+      reconciliationState: async () => ({
+        legacyCohortExists: true,
+        launch: { generationId, sourceGenerationId: generationId, decisionCount: 1, cohortIds: [] },
+      }),
+      boundCollectionOperationIds: async () => [],
+      collectionIntents: async () => [],
+      boundPublicationOperationIds: async () => [],
+      publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [intent],
+      recordLegendMetaPublicationOperation: async (recordedIntent: unknown, operationId: string) => {
+        calls.push({ recordedIntent, operationId })
+      },
+    } as unknown as StatisticsTracer
+    const operations = {
+      listAwaitingStatisticsCollections: async () => [],
+      listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
+      reserveStatisticsLegendMetaPublication: async (input: unknown) => {
+        calls.push(input)
+        return { outcome: 'accepted' as const, operationId: '30000000-0000-4000-8000-000000000001' }
+      },
+      activateStatisticsLegendMetaPublication: async (operationId: string) => {
+        calls.push({ activated: operationId })
+        return 'transitioned' as const
+      },
+    } as unknown as StatisticsOperations
+    const ranking: RankingQueries = {
+      async getLeaderboard() {
+        throw new Error('an active generation must not reload Ranking snapshots')
+      },
+    }
+
+    expect(await reconcileStatisticsCohort(statistics, operations, ranking)).toBe(1)
+    expect(calls).toContainEqual({
+      kind: 'statistics-legend-meta-publication',
+      dedupeKey: intent.operationKey,
+      operationKey: intent.operationKey,
+      workClass: 'global-statistics',
+      payload: { generationId },
+      provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
+      maxAttempts: 3,
+    })
+    expect(calls).toContainEqual({ activated: '30000000-0000-4000-8000-000000000001' })
   })
 
   test('returns no cohort before Rankings publishes the EU snapshot', async () => {

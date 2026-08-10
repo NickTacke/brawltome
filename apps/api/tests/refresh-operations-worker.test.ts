@@ -570,6 +570,55 @@ describe('refresh operations worker source retry', () => {
     expect(committed).toBe(false)
   })
 
+  test('dispatches the fenced Legend Meta publication without treating it as source collection', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'statistics:10000000-0000-4000-8000-000000000001:legend-meta',
+      kind: 'statistics-legend-meta-publication',
+      workClass: 'global-statistics',
+      payload: { generationId: '10000000-0000-4000-8000-000000000001' },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    let built = false
+    let completed = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    expect(
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        statistics: {
+          preflightLegendMetaPublication: async () => 'missing' as const,
+          buildAndPublishLegendMeta: async () => {
+            built = true
+            return { result: 'applied' as const, decision: null }
+          },
+        } as never,
+        executeStatisticsCollection: async () => {
+          throw new Error('Legend Meta publication must not call the Statistics source collector')
+        },
+      }),
+    ).toBe(true)
+    expect(built).toBe(true)
+    expect(completed).toBe(true)
+  })
+
   test('prefers the maximum retry-aware failure after an earlier generic section failure', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),

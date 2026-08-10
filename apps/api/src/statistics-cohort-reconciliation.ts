@@ -147,5 +147,27 @@ export async function reconcileStatisticsCohort(
     }
     if (accepted.outcome === 'accepted') reconciled++
   }
+
+  const awaitingLegendMeta = await operations.listAwaitingStatisticsLegendMetaPublications()
+  const boundLegendMeta = new Set(await statistics.boundLegendMetaPublicationOperationIds(awaitingLegendMeta))
+  for (const operationId of awaitingLegendMeta) {
+    if (boundLegendMeta.has(operationId)) await operations.activateStatisticsLegendMetaPublication(operationId)
+  }
+  for (const intent of await statistics.legendMetaPublicationIntents()) {
+    const accepted = await operations.reserveStatisticsLegendMetaPublication({
+      kind: intent.kind,
+      dedupeKey: intent.operationKey,
+      operationKey: intent.operationKey,
+      workClass: 'global-statistics',
+      payload: { generationId: intent.generationId },
+      provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
+      maxAttempts: 3,
+    })
+    await statistics.recordLegendMetaPublicationOperation(intent, accepted.operationId)
+    if ((await operations.activateStatisticsLegendMetaPublication(accepted.operationId)) !== 'transitioned') {
+      throw new Error('reserved Legend Meta publication could not be activated after owner binding')
+    }
+    if (accepted.outcome === 'accepted') reconciled++
+  }
   return reconciled
 }

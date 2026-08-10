@@ -13,6 +13,7 @@ import { addPrimaryPlayerMonitoring } from './migrations/0012-add-primary-player
 import { addDiscoveryOperations } from './migrations/0013-add-discovery-operations'
 import { addStatisticsCollection } from './migrations/0014-add-statistics-collection'
 import { addStatisticsPublication } from './migrations/0015-add-statistics-publication'
+import { addLegendMetaPublication } from './migrations/0016-add-legend-meta-publication'
 
 export {
   createPostgresDeadLetterOperations,
@@ -37,4 +38,5 @@ export const refreshOperationsMigrationInventory = [
   addDiscoveryOperations,
   addStatisticsCollection,
   addStatisticsPublication,
+  addLegendMetaPublication,
 ] as const

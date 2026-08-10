@@ -154,6 +154,8 @@ describe('durable Refresh Operations', () => {
       'clans/0003',
       'rankings/0003',
       'accounts/0006',
+      'statistics/0003',
+      'refresh-operations/0016',
     ])
   })
 

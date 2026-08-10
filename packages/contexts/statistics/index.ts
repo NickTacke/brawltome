@@ -4,6 +4,12 @@ import type {
   LaunchCohortCapacityEnvelope,
   LaunchCohortRegion,
 } from './cohort'
+import type {
+  LegendMetaArtifact,
+  LegendMetaArtifactSlice,
+  LegendMetaFilterBracket,
+  LegendMetaFilterRegion,
+} from './legend-meta'
 import type { CellCollectionProgress, PublicationDecisionEvidence, PublicationProduct } from './publication'
 import type { LifetimeEvidence, RankedEvidence } from './source'
 
@@ -33,6 +39,22 @@ export {
   selectLaunchCohortCell,
 } from './cohort'
 export {
+  LEGEND_META_METHODOLOGY_DISCLOSURE,
+  LEGEND_META_METHODOLOGY_VERSION,
+  LEGEND_META_MINIMUM_GAMES,
+  LEGEND_META_MINIMUM_PLAYERS,
+  type ExactRatio,
+  type LegendMetaArtifact,
+  type LegendMetaArtifactSlice,
+  type LegendMetaFilterBracket,
+  type LegendMetaFilterRegion,
+  type LegendMetaLegend,
+  type LegendMetaObservedPlayer,
+  type LegendMetaRow,
+  type WilsonInterval,
+  buildLegendMetaArtifact,
+} from './legend-meta'
+export {
   type AuditedCellCollectionProgress,
   type CellCollectionProgress,
   type PublicationDecisionEvidence,
@@ -44,6 +66,7 @@ export {
 export type CollectionProduct = PublicationProduct
 export type StatisticsCollectionKind = 'statistics-ranked-collection' | 'statistics-lifetime-collection'
 export type StatisticsPublicationKind = 'statistics-publication'
+export type StatisticsLegendMetaPublicationKind = 'statistics-legend-meta-publication'
 
 export type CollectionAuthorization = {
   operationId: string
@@ -67,6 +90,16 @@ export type PublicationAuthorization = {
   leaseToken: number
   generationId: string
   product: PublicationProduct
+}
+
+export type LegendMetaPublicationAuthorization = {
+  operationId: string
+  effectOperationId: string
+  operationKey: string
+  kind: StatisticsLegendMetaPublicationKind
+  leaseOwner: string
+  leaseToken: number
+  generationId: string
 }
 
 export type CollectionObservation =
@@ -95,6 +128,12 @@ export type PublicationIntent = {
   generationId: string
   product: PublicationProduct
   kind: StatisticsPublicationKind
+  operationKey: string
+}
+
+export type LegendMetaPublicationIntent = {
+  generationId: string
+  kind: StatisticsLegendMetaPublicationKind
   operationKey: string
 }
 
@@ -175,6 +214,47 @@ export type PublicationStatus = {
   stale: boolean
 }
 
+export type LegendMetaPublicationReason =
+  | { code: 'ranked-publication-rejected' }
+  | { code: 'duplicate-player-across-cells' }
+  | { code: 'unknown-legend'; legendId: number }
+  | { code: 'invalid-ranked-observation' }
+
+export type LegendMetaPublicationDecisionAudit = {
+  decisionId: string
+  generationId: string
+  effectOperationId: string
+  operationKey: string
+  outcome: 'accepted' | 'rejected'
+  reasons: LegendMetaPublicationReason[]
+  decidedAt: string
+  snapshotId: string | null
+}
+
+export type LegendMetaUnavailable = {
+  status: 'unavailable'
+  reason: 'not-yet-published'
+  region: LegendMetaFilterRegion
+  bracket: LegendMetaFilterBracket
+}
+
+export type LegendMetaAvailable = Omit<LegendMetaArtifact, 'slices'> & {
+  status: 'fresh' | 'stale'
+  staleReason: 'latest-build-failed' | 'publication-overdue' | null
+  region: LegendMetaFilterRegion
+  bracket: LegendMetaFilterBracket
+  slice: LegendMetaArtifactSlice
+}
+
+export type LegendMetaQueryResult = LegendMetaUnavailable | LegendMetaAvailable
+
+export interface StatisticsQueries {
+  getLegendMeta(input: {
+    region: LegendMetaFilterRegion
+    bracket: LegendMetaFilterBracket
+  }): Promise<LegendMetaQueryResult>
+}
+
 export type StatisticsReconciliationState = {
   legacyCohortExists: boolean
   launch: {
@@ -195,6 +275,7 @@ export type CollectionAttemptResult =
 export type CollectionAttemptPreflightResult = 'allowed' | 'capacity-exceeded' | 'effect-conflict' | 'lease-lost'
 export type CollectionPreflightResult = 'missing' | 'already-applied' | 'effect-conflict'
 export type PublicationCommitResult = CollectionCommitResult | 'collection-active'
+export type LegendMetaPublicationCommitResult = CollectionCommitResult | 'prerequisite-missing'
 
 export interface LegacyCohortReconciliation {
   reconcileCohort(snapshot: CohortCandidateSnapshot): Promise<CohortAudit>
@@ -229,7 +310,20 @@ export interface StatisticsPublicationStore {
   getPublication(product: PublicationProduct): Promise<PublicationStatus | null>
 }
 
+export interface StatisticsLegendMetaPublicationStore {
+  legendMetaPublicationIntents(): Promise<LegendMetaPublicationIntent[]>
+  boundLegendMetaPublicationOperationIds(operationIds: readonly string[]): Promise<string[]>
+  recordLegendMetaPublicationOperation(intent: LegendMetaPublicationIntent, operationId: string): Promise<void>
+  preflightLegendMetaPublication(authorization: LegendMetaPublicationAuthorization): Promise<CollectionPreflightResult>
+  buildAndPublishLegendMeta(authorization: LegendMetaPublicationAuthorization): Promise<{
+    result: LegendMetaPublicationCommitResult
+    decision: LegendMetaPublicationDecisionAudit | null
+  }>
+}
+
 export type StatisticsTracer = LegacyCohortReconciliation &
   LaunchCohortReconciliation &
   StatisticsCollectionStore &
-  StatisticsPublicationStore
+  StatisticsPublicationStore &
+  StatisticsLegendMetaPublicationStore &
+  StatisticsQueries

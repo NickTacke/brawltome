@@ -1069,4 +1069,49 @@ export const launchParityMatrix: readonly ParityRow[] = [
     verificationGap:
       'Repository fixtures cannot prove upstream V2 collection completeness. Two consecutive production-shaped restore rehearsals, storage headroom, elapsed duration, external backup restoration, and operator cutover evidence remain launch gates.',
   },
+  {
+    id: 'statistics.current-season-legend-meta',
+    area: 'global-statistics',
+    requirement:
+      'Statistics publishes and renders immutable Current Season Legend Meta with exact observed formulas, eligibility, uncertainty, independent filters, methodology, and prior-valid stale behavior.',
+    sourceIssue: '#211',
+    status: 'verified',
+    destinations: ['/stats', 'statistics.legendMeta', 'operations-worker'],
+    implementation: [
+      'packages/contexts/statistics/legend-meta.ts',
+      'packages/contexts/statistics/postgres.ts',
+      'packages/contexts/statistics/migrations/0003-add-legend-meta-publications.ts',
+      'packages/contexts/refresh-operations/migrations/0016-add-legend-meta-publication.ts',
+      'packages/contracts/src/statistics.ts',
+      'apps/api/src/router/statistics.router.ts',
+      'apps/web/src/components/statistics/LegendMetaView.tsx',
+      'apps/web/src/app/stats/page.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/statistics/tests/legend-meta.test.ts',
+        assertion:
+          'Hand-worked fixtures prove exact rational formulas, median, Wilson interval, 30-player/200-game eligibility, zero and missing semantics, deduplication, and all 30 filter slices.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/statistics-full-cohort.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves immutable artifact decisions, concurrent fencing, replay identity, last-valid failed-build retention, overdue staleness, and filtered reads.',
+      },
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/statistics.test.ts',
+        assertion:
+          'The canonical contract rejects invented percentages, ranks, trends, missing-value zeros, malformed uncertainty, and unsupported filters.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/statistics/LegendMeta.test.tsx',
+        assertion:
+          'Static rendering proves labeled filters, semantic responsive table structure, announced stale retention, explicit insufficiency, methodology, and non-causal language.',
+      },
+    ],
+  },
 ]

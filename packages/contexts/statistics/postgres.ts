@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { legendSlug, legends as referenceLegends } from '@brawltome/game-data'
 import postgres from 'postgres'
 import {
   type CohortCandidateSnapshot,
@@ -25,6 +26,13 @@ import type {
   CollectionProduct,
   LaunchCellAudit,
   LaunchCohortAudit,
+  LegendMetaAvailable,
+  LegendMetaPublicationAuthorization,
+  LegendMetaPublicationCommitResult,
+  LegendMetaPublicationDecisionAudit,
+  LegendMetaPublicationIntent,
+  LegendMetaPublicationReason,
+  LegendMetaQueryResult,
   ProductCollectionProgressAudit,
   PublicationAuthorization,
   PublicationCommitResult,
@@ -33,6 +41,12 @@ import type {
   PublicationStatus,
   StatisticsTracer,
 } from './index'
+import {
+  type LegendMetaArtifact,
+  LegendMetaBuildError,
+  type LegendMetaCell,
+  buildLegendMetaArtifact,
+} from './legend-meta'
 import { type CellCollectionProgress, validatePublicationDecision } from './publication'
 import { validateLifetimeEvidence, validateRankedEvidence } from './source'
 
@@ -97,6 +111,24 @@ type DecisionRow = {
   decided_at: Date
 }
 
+type LegendMetaDecisionRow = {
+  id: string
+  generation_id: string
+  effect_operation_id: string
+  operation_key: string
+  decision: 'accepted' | 'rejected'
+  reasons: LegendMetaPublicationReason[]
+  artifact: LegendMetaArtifact | null
+  decided_at: Date
+}
+
+type LegendMetaSelectionRow = {
+  latest_id: string | null
+  latest_decision: 'accepted' | 'rejected' | null
+  active_id: string | null
+  active_artifact: LegendMetaArtifact | null
+}
+
 function productFromKind(kind: CollectionAuthorization['kind']): CollectionProduct {
   return kind === 'statistics-ranked-collection' ? 'ranked' : 'lifetime'
 }
@@ -111,6 +143,10 @@ function collectionOperationKey(cohortId: string, brawlhallaId: number, product:
 
 function publicationOperationKey(generationId: string, product: CollectionProduct): string {
   return `statistics:${generationId}:publication:${product}`
+}
+
+function legendMetaPublicationOperationKey(generationId: string): string {
+  return `statistics:${generationId}:legend-meta`
 }
 
 function capacityEnvelope(row: GenerationRow): LaunchCohortCapacityEnvelope {
@@ -155,6 +191,19 @@ function decisionAudit(row: DecisionRow): PublicationDecisionAudit {
   }
 }
 
+function legendMetaDecisionAudit(row: LegendMetaDecisionRow): LegendMetaPublicationDecisionAudit {
+  return {
+    decisionId: row.id,
+    generationId: row.generation_id,
+    effectOperationId: row.effect_operation_id,
+    operationKey: row.operation_key,
+    outcome: row.decision,
+    reasons: row.reasons,
+    decidedAt: row.decided_at.toISOString(),
+    snapshotId: row.artifact?.snapshotId ?? null,
+  }
+}
+
 function summarizeProgress(
   product: CollectionProduct,
   cells: CellCollectionProgress[],
@@ -175,8 +224,26 @@ function jsonValue(value: unknown): postgres.JSONValue {
   return JSON.parse(serialized) as postgres.JSONValue
 }
 
-export function createPostgresStatistics(connectionString: string) {
+const legendMetaReferences = referenceLegends
+  .filter(({ heroId, displayName, isActive }) => heroId > 2 && isActive && /\S/u.test(displayName))
+  .map(({ heroId, displayName }) => ({
+    legendId: heroId,
+    name: displayName,
+    slug: legendSlug(heroId, displayName),
+  }))
+
+function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
+  if (error instanceof LegendMetaBuildError) {
+    return error.code === 'unknown-legend'
+      ? { code: error.code, legendId: error.legendId as number }
+      : { code: error.code }
+  }
+  return { code: 'invalid-ranked-observation' }
+}
+
+export function createPostgresStatistics(connectionString: string, options: { now?: () => Date } = {}) {
   const client = postgres(connectionString)
+  const now = options.now ?? (() => new Date())
 
   async function members(sql: typeof client, cohortIds: readonly string[]): Promise<MemberRow[]> {
     if (cohortIds.length === 0) return []
@@ -946,6 +1013,275 @@ export function createPostgresStatistics(connectionString: string) {
         if (!inserted) throw new Error('Statistics publication decision was not inserted')
         return { result: 'applied', decision: decisionAudit(inserted) }
       })
+    },
+
+    async legendMetaPublicationIntents(): Promise<LegendMetaPublicationIntent[]> {
+      const rows = await client<{ generation_id: string }[]>`
+        SELECT ranked.generation_id
+        FROM statistics.publication_decisions ranked
+        LEFT JOIN statistics.legend_meta_publication_operations legend_meta
+          ON legend_meta.generation_id = ranked.generation_id
+        WHERE ranked.product = 'ranked' AND legend_meta.operation_id IS NULL
+        ORDER BY ranked.decided_at, ranked.generation_id
+      `
+      return rows.map(({ generation_id }) => ({
+        generationId: generation_id,
+        kind: 'statistics-legend-meta-publication',
+        operationKey: legendMetaPublicationOperationKey(generation_id),
+      }))
+    },
+
+    async boundLegendMetaPublicationOperationIds(operationIds): Promise<string[]> {
+      if (operationIds.length > 100) {
+        throw new Error('Statistics Legend Meta binding lookup is limited to 100 operations')
+      }
+      if (operationIds.length === 0) return []
+      const rows = await client<{ operation_id: string }[]>`
+        SELECT operation_id FROM statistics.legend_meta_publication_operations
+        WHERE operation_id = ANY(${operationIds}::uuid[])
+        ORDER BY operation_id
+      `
+      return rows.map(({ operation_id }) => operation_id)
+    },
+
+    async recordLegendMetaPublicationOperation(intent, operationId): Promise<void> {
+      if (
+        intent.kind !== 'statistics-legend-meta-publication' ||
+        intent.operationKey !== legendMetaPublicationOperationKey(intent.generationId)
+      ) {
+        throw new Error('Legend Meta publication intent does not match the fixed operation identity')
+      }
+      await client`
+        INSERT INTO statistics.legend_meta_publication_operations (generation_id, operation_id)
+        VALUES (${intent.generationId}, ${operationId})
+        ON CONFLICT (generation_id) DO NOTHING
+      `
+      const [recorded] = await client<{ operation_id: string }[]>`
+        SELECT operation_id FROM statistics.legend_meta_publication_operations
+        WHERE generation_id = ${intent.generationId}
+      `
+      if (recorded?.operation_id !== operationId) {
+        throw new Error('Legend Meta publication operation identity conflicts')
+      }
+    },
+
+    async preflightLegendMetaPublication(authorization): Promise<CollectionPreflightResult> {
+      const [identity] = await client<
+        {
+          bound_operation_id: string
+          decision_effect_operation_id: string | null
+          decision_operation_key: string | null
+          effect_operation_id: string | null
+          effect_operation_key: string | null
+        }[]
+      >`
+        SELECT publication.operation_id AS bound_operation_id,
+               decision.effect_operation_id AS decision_effect_operation_id,
+               decision.operation_key AS decision_operation_key,
+               effect.operation_id AS effect_operation_id, effect.operation_key AS effect_operation_key
+        FROM statistics.legend_meta_publication_operations publication
+        LEFT JOIN statistics.legend_meta_publication_decisions decision
+          ON decision.generation_id = publication.generation_id
+        LEFT JOIN refresh_operations.statistics_legend_meta_publication_effects effect
+          ON effect.operation_id = ${authorization.effectOperationId}
+          OR effect.operation_key = ${authorization.operationKey}
+        WHERE publication.generation_id = ${authorization.generationId}
+      `
+      if (!identity || identity.bound_operation_id !== authorization.effectOperationId) return 'effect-conflict'
+      if (!identity.decision_effect_operation_id && !identity.effect_operation_id) return 'missing'
+      return identity.decision_effect_operation_id === authorization.effectOperationId &&
+        identity.decision_operation_key === authorization.operationKey &&
+        identity.effect_operation_id === authorization.effectOperationId &&
+        identity.effect_operation_key === authorization.operationKey
+        ? 'already-applied'
+        : 'effect-conflict'
+    },
+
+    async buildAndPublishLegendMeta(authorization: LegendMetaPublicationAuthorization): Promise<{
+      result: LegendMetaPublicationCommitResult
+      decision: LegendMetaPublicationDecisionAudit | null
+    }> {
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [bound] = await sql<{ operation_id: string }[]>`
+          SELECT operation_id FROM statistics.legend_meta_publication_operations
+          WHERE generation_id = ${authorization.generationId} FOR SHARE
+        `
+        if (bound?.operation_id !== authorization.effectOperationId) {
+          return { result: 'effect-conflict', decision: null }
+        }
+        const [effect] = await sql<{ result: LegendMetaPublicationCommitResult }[]>`
+          SELECT refresh_operations.record_statistics_legend_meta_publication_effect(
+            ${authorization.operationId}, ${authorization.operationKey},
+            ${authorization.leaseOwner}, ${authorization.leaseToken}
+          ) AS result
+        `
+        const result = effect?.result ?? 'lease-lost'
+        const [existing] = await sql<LegendMetaDecisionRow[]>`
+          SELECT id, generation_id, effect_operation_id, operation_key, decision,
+                 reasons, artifact, decided_at
+          FROM statistics.legend_meta_publication_decisions
+          WHERE generation_id = ${authorization.generationId}
+        `
+        if (result === 'lease-lost' || result === 'effect-conflict' || result === 'prerequisite-missing') {
+          return { result, decision: null }
+        }
+        if (result === 'already-applied') {
+          return existing &&
+            existing.effect_operation_id === authorization.effectOperationId &&
+            existing.operation_key === authorization.operationKey
+            ? { result: 'already-applied', decision: legendMetaDecisionAudit(existing) }
+            : { result: 'effect-conflict', decision: null }
+        }
+        if (existing) throw new Error('Legend Meta decision exists without its durable effect')
+
+        const [rankedDecision] = await sql<{ decision: 'accepted' | 'rejected' }[]>`
+          SELECT decision FROM statistics.publication_decisions
+          WHERE generation_id = ${authorization.generationId} AND product = 'ranked'
+        `
+        if (!rankedDecision) return { result: 'prerequisite-missing', decision: null }
+
+        let reasons: LegendMetaPublicationReason[] = []
+        let artifact: LegendMetaArtifact | null = null
+        if (rankedDecision.decision === 'rejected') {
+          reasons = [{ code: 'ranked-publication-rejected' }]
+        } else {
+          const [generation] = await sql<GenerationRow[]>`
+            SELECT * FROM statistics.cohort_generations WHERE id = ${authorization.generationId}
+          `
+          if (!generation) throw new Error('Legend Meta generation disappeared')
+          const cohortRows = await sql<
+            {
+              id: string
+              region: LaunchCohortRegion
+              bracket: 'Platinum' | 'Diamond+'
+              selected_players: number
+            }[]
+          >`
+            SELECT id, region, bracket, selected_players
+            FROM statistics.cohorts WHERE generation_id = ${authorization.generationId}
+            ORDER BY region, bracket
+          `
+          const [duplicateMember] = await sql<{ brawlhalla_id: string | number }[]>`
+            SELECT member.brawlhalla_id
+            FROM statistics.cohort_members member
+            JOIN statistics.cohorts cohort ON cohort.id = member.cohort_id
+            WHERE cohort.generation_id = ${authorization.generationId}
+            GROUP BY member.brawlhalla_id HAVING count(*) > 1
+            LIMIT 1
+          `
+          const observations = await sql<{ cohort_id: string; brawlhalla_id: string | number; evidence: unknown }[]>`
+            SELECT observation.cohort_id, observation.brawlhalla_id, observation.evidence
+            FROM statistics.observations observation
+            JOIN statistics.cohorts cohort ON cohort.id = observation.cohort_id
+            WHERE cohort.generation_id = ${authorization.generationId}
+              AND observation.product = 'ranked'
+            ORDER BY observation.cohort_id, observation.brawlhalla_id
+          `
+          try {
+            if (duplicateMember) {
+              throw new LegendMetaBuildError('duplicate-player-across-cells')
+            }
+            const observationsByCohort = new Map<string, LegendMetaCell['observations']>()
+            for (const row of observations) {
+              const brawlhallaId = Number(row.brawlhalla_id)
+              const evidence = validateRankedEvidence(row.evidence, brawlhallaId)
+              const current = observationsByCohort.get(row.cohort_id) ?? []
+              observationsByCohort.set(row.cohort_id, [
+                ...current,
+                {
+                  brawlhallaId,
+                  rating: evidence.rating,
+                  legends: evidence.legends.map(({ legendId, games, wins }) => ({ legendId, games, wins })),
+                },
+              ])
+            }
+            const publishedAt = now().toISOString()
+            artifact = buildLegendMetaArtifact({
+              snapshotId: randomUUID(),
+              generationId: generation.id,
+              cohortMethodologyVersion: generation.methodology_version,
+              sourceGenerationId: generation.source_generation_id,
+              sourceObservedAt: generation.source_observed_at.toISOString(),
+              observationWindow: {
+                startsAt: generation.observation_window_starts_at.toISOString(),
+                endsAt: generation.observation_window_ends_at.toISOString(),
+              },
+              publishedAt,
+              legends: legendMetaReferences,
+              cells: cohortRows.map((cohort) => ({
+                region: cohort.region,
+                bracket: cohort.bracket,
+                selectedPlayers: cohort.selected_players,
+                observations: observationsByCohort.get(cohort.id) ?? [],
+              })),
+            })
+          } catch (error) {
+            reasons = [legendMetaBuildFailure(error)]
+          }
+        }
+
+        const decision = artifact ? 'accepted' : 'rejected'
+        const [inserted] = await sql<LegendMetaDecisionRow[]>`
+          INSERT INTO statistics.legend_meta_publication_decisions
+            (id, generation_id, effect_operation_id, operation_key, lease_token,
+             decision, reasons, artifact)
+          VALUES (${randomUUID()}, ${authorization.generationId}, ${authorization.effectOperationId},
+            ${authorization.operationKey}, ${authorization.leaseToken}, ${decision},
+            ${sql.json(jsonValue(reasons))}, ${artifact ? sql.json(jsonValue(artifact)) : null})
+          RETURNING id, generation_id, effect_operation_id, operation_key, decision,
+                    reasons, artifact, decided_at
+        `
+        if (!inserted) throw new Error('Legend Meta publication decision was not inserted')
+        return { result: 'applied', decision: legendMetaDecisionAudit(inserted) }
+      })
+    },
+
+    async getLegendMeta(input): Promise<LegendMetaQueryResult> {
+      const [selection] = await client<LegendMetaSelectionRow[]>`
+        WITH latest AS (
+          SELECT decision.id, decision.decision
+          FROM statistics.legend_meta_publication_decisions decision
+          JOIN statistics.cohort_generations generation ON generation.id = decision.generation_id
+          ORDER BY generation.created_at DESC, generation.id DESC
+          LIMIT 1
+        ), active AS (
+          SELECT decision.id, decision.artifact
+          FROM statistics.legend_meta_publication_decisions decision
+          JOIN statistics.cohort_generations generation ON generation.id = decision.generation_id
+          WHERE decision.decision = 'accepted'
+          ORDER BY generation.created_at DESC, generation.id DESC
+          LIMIT 1
+        )
+        SELECT latest.id AS latest_id, latest.decision AS latest_decision,
+               active.id AS active_id, active.artifact AS active_artifact
+        FROM latest FULL OUTER JOIN active ON true
+      `
+      if (!selection?.active_id) {
+        return { status: 'unavailable', reason: 'not-yet-published', ...input }
+      }
+      if (!selection.active_artifact) throw new Error('accepted Legend Meta publication is missing its artifact')
+      const slice = selection.active_artifact.slices.find(
+        ({ region, bracket }) => region === input.region && bracket === input.bracket,
+      )
+      if (!slice) throw new Error(`Legend Meta artifact is missing ${input.region}/${input.bracket}`)
+      const latestBuildFailed = selection.latest_decision === 'rejected' && selection.latest_id !== selection.active_id
+      const publicationOverdue = now().getTime() > Date.parse(selection.active_artifact.expectedNextPublicationAt)
+      const staleReason = latestBuildFailed
+        ? ('latest-build-failed' as const)
+        : publicationOverdue
+          ? ('publication-overdue' as const)
+          : null
+      const { slices: _slices, ...artifact } = selection.active_artifact
+      const result: LegendMetaAvailable = {
+        ...artifact,
+        status: staleReason ? 'stale' : 'fresh',
+        staleReason,
+        region: input.region,
+        bracket: input.bracket,
+        slice,
+      }
+      return result
     },
 
     getCohort: () => auditLegacy(client),

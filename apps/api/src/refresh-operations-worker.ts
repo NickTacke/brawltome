@@ -28,6 +28,7 @@ type StatisticsCollectionLease = Extract<
   { kind: 'statistics-ranked-collection' | 'statistics-lifetime-collection' }
 >
 type StatisticsPublicationLease = Extract<StatisticsLease, { kind: 'statistics-publication' }>
+type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'statistics-legend-meta-publication' }>
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
@@ -64,6 +65,8 @@ type RunOneRefreshOperationOptions = {
     | 'commitObservation'
     | 'preflightPublication'
     | 'validateAndPublish'
+    | 'preflightLegendMetaPublication'
+    | 'buildAndPublishLegendMeta'
   >
   executeStatisticsCollection?(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
   executePlayerProjection?(lease: ProjectionLease): Promise<void>
@@ -512,6 +515,78 @@ async function executeStatisticsPublication(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
+async function executeStatisticsLegendMetaPublication(
+  operations: RefreshOperationWorker,
+  lease: StatisticsLegendMetaPublicationLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.statistics) {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'statistics_executor_unavailable',
+        message: 'Statistics executor is not configured',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+  const authorization = {
+    operationId: lease.operationId,
+    effectOperationId: lease.effectOperationId,
+    operationKey: lease.operationKey,
+    kind: lease.kind,
+    leaseOwner: lease.leaseOwner,
+    leaseToken: lease.leaseToken,
+    generationId: lease.payload.generationId,
+  }
+  const preflight = await options.statistics.preflightLegendMetaPublication(authorization)
+  if (preflight === 'already-applied') {
+    return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+  }
+  if (preflight === 'effect-conflict') {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'statistics_legend_meta_effect_conflict',
+        message: 'Statistics Legend Meta publication identity conflicts',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  const published = await options.statistics.buildAndPublishLegendMeta(authorization)
+  if (published.result === 'lease-lost') return 'lease_lost'
+  if (published.result === 'prerequisite-missing') {
+    const transition = await operations.defer(
+      lease,
+      {
+        code: 'statistics_legend_meta_prerequisite_missing',
+        message: 'Statistics ranked validation decision is not available yet',
+        retryable: true,
+      },
+      options.retryDelayMs,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'retry'
+  }
+  if (published.result === 'effect-conflict') {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'statistics_legend_meta_effect_conflict',
+        message: 'Statistics Legend Meta publication identity conflicts',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -622,6 +697,8 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeRankedPulse(operations, lease, options)
       } else if (lease.kind === 'statistics-publication') {
         attemptOutcome = await executeStatisticsPublication(operations, lease, options)
+      } else if (lease.kind === 'statistics-legend-meta-publication') {
+        attemptOutcome = await executeStatisticsLegendMetaPublication(operations, lease, options)
       } else if (lease.workClass === 'global-statistics') {
         attemptOutcome = await executeStatisticsCollection(operations, lease, options)
       } else {
@@ -698,7 +775,9 @@ export async function runOneRefreshOperation(
                           ? 'statistics_collection_failed'
                           : lease.kind === 'statistics-publication'
                             ? 'statistics_publication_failed'
-                            : 'leaderboard_collection_failed'
+                            : lease.kind === 'statistics-legend-meta-publication'
+                              ? 'statistics_legend_meta_publication_failed'
+                              : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'
