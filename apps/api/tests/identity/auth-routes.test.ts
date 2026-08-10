@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import type { Account, Accounts, DiscordSignInProfile } from '@brawltome/accounts'
-import type { PlayerLinkRepo } from '@brawltome/identity'
 import { Hono } from 'hono'
 import { type CreateAuthRoutesDeps, createAuthRoutes } from '../../src/auth/routes'
 
@@ -19,6 +18,11 @@ const account: Account = {
 function makeFakes() {
   const profiles: DiscordSignInProfile[] = []
   const sessions = new Set<string>()
+  const verificationAttempts: unknown[] = []
+  const queuedVerifications: unknown[] = []
+  const actorAdmissions: unknown[] = []
+  let admissionOutcome: 'admitted' | 'rate-limited' = 'admitted'
+  let operationOutcome: 'accepted' | 'already-active' = 'accepted'
   const accounts: Accounts = {
     async signInWithDiscord(profile) {
       profiles.push(profile)
@@ -42,33 +46,57 @@ function makeFakes() {
     async signOut(sessionToken) {
       sessions.delete(sessionToken)
     },
-  }
-  const playerLinkRepo: PlayerLinkRepo = {
-    async findByUserId() {
-      return null
-    },
-    async findByBrawlhallaId() {
-      return null
-    },
-    async createPending({ userId, steamId }) {
+    async beginPrimaryPlayerVerification(input) {
+      verificationAttempts.push(input)
       return {
-        userId,
-        brawlhallaId: null,
-        steamId,
-        linkedVia: 'steam',
+        id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
         status: 'pending',
-        linkedAt: new Date(),
+        startedAt: new Date(),
+        completedAt: null,
+        player: null,
       }
     },
-    async resolve() {},
-    async setStatus() {},
-    async deleteByUserId() {},
+    async resolvePrimaryPlayerVerification() {
+      throw new Error('not used')
+    },
+    async getPrimaryPlayerVerificationState() {
+      return { primaryPlayer: null, attempts: [] }
+    },
   }
-  const steamLinkQueue = {
-    async enqueue() {},
-  } as unknown as CreateAuthRoutesDeps['steamLinkQueue']
+  const requestAdmission = {
+    async admitActor(actor: unknown, reservationKey?: string) {
+      actorAdmissions.push({ actor, reservationKey })
+      return admissionOutcome === 'admitted'
+        ? ({ outcome: 'admitted' } as const)
+        : ({ outcome: 'rate-limited', retryAfterSeconds: 60 } as const)
+    },
+    async hasActorReservation() {
+      return false
+    },
+  }
+  const verificationOperations: CreateAuthRoutesDeps['verificationOperations'] = {
+    async accept(input) {
+      queuedVerifications.push(input)
+      return { outcome: operationOutcome, operationId: 'operation-1' }
+    },
+  }
 
-  return { accounts, playerLinkRepo, steamLinkQueue, profiles, sessions }
+  return {
+    accounts,
+    requestAdmission,
+    verificationOperations,
+    profiles,
+    sessions,
+    verificationAttempts,
+    queuedVerifications,
+    actorAdmissions,
+    setAdmissionOutcome(outcome: 'admitted' | 'rate-limited') {
+      admissionOutcome = outcome
+    },
+    setOperationOutcome(outcome: 'accepted' | 'already-active') {
+      operationOutcome = outcome
+    },
+  }
 }
 
 function buildApp(fakes: ReturnType<typeof makeFakes>) {
@@ -77,8 +105,8 @@ function buildApp(fakes: ReturnType<typeof makeFakes>) {
     '/auth',
     createAuthRoutes({
       accounts: fakes.accounts,
-      playerLinkRepo: fakes.playerLinkRepo,
-      steamLinkQueue: fakes.steamLinkQueue,
+      requestAdmission: fakes.requestAdmission,
+      verificationOperations: fakes.verificationOperations,
       config: {
         discordClientId: 'cid',
         discordClientSecret: 'csecret',
@@ -162,6 +190,135 @@ describe('GET /auth/discord/callback', () => {
     })
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/account?error=discord')
+  })
+})
+
+function steamCallbackUrl(state: string): URL {
+  const callback = new URL('http://localhost/auth/steam/callback')
+  const claimedId = 'https://steamcommunity.com/openid/id/76561198000000000'
+  callback.searchParams.set('state', state)
+  callback.searchParams.set('openid.ns', 'http://specs.openid.net/auth/2.0')
+  callback.searchParams.set('openid.mode', 'id_res')
+  callback.searchParams.set('openid.signed', 'op_endpoint,claimed_id,identity,return_to,response_nonce')
+  callback.searchParams.set('openid.op_endpoint', 'https://steamcommunity.com/openid/login')
+  callback.searchParams.set('openid.return_to', `http://localhost:3000/auth/steam/callback?state=${state}`)
+  callback.searchParams.set('openid.claimed_id', claimedId)
+  callback.searchParams.set('openid.identity', claimedId)
+  callback.searchParams.set('openid.response_nonce', `${new Date().toISOString().slice(0, 19)}Znonce`)
+  return callback
+}
+
+describe('GET /auth/steam/callback', () => {
+  it('uses authenticated account admission without Turnstile and queues one privacy-safe attempt', async () => {
+    const fakes = makeFakes()
+    fakes.sessions.add('raw-session-token')
+    const app = buildApp(fakes)
+    const start = await app.request('/auth/steam/link', {
+      headers: { cookie: 'brawltome_session=raw-session-token' },
+    })
+    const stateCookie = start.headers.get('set-cookie') ?? ''
+    const state = /brawltome_steam_state=([^;]+)/.exec(stateCookie)?.[1]
+    if (!state) throw new Error('Expected Steam state cookie')
+    globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
+
+    const response = await app.request(steamCallbackUrl(state).toString(), {
+      headers: {
+        cookie: `brawltome_session=raw-session-token; brawltome_steam_state=${state}`,
+        'cf-connecting-ip': '203.0.113.10',
+      },
+    })
+
+    expect(response.headers.get('location')).toBe('http://localhost:3001/account')
+    expect(fakes.actorAdmissions).toEqual([
+      {
+        actor: { kind: 'authenticated', accountId: account.id, ip: '203.0.113.10' },
+        reservationKey: expect.stringMatching(/^primary-player:[a-f0-9]{64}$/),
+      },
+    ])
+    expect(fakes.verificationAttempts).toEqual([
+      {
+        accountId: account.id,
+        steamId: '76561198000000000',
+        idempotencyKey: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+    ])
+    expect(fakes.queuedVerifications).toEqual([
+      {
+        kind: 'proof',
+        dedupeKey: 'primary-player:5f689990-dc60-4d70-bd1c-7b49b89786b7',
+        operationKey: 'primary-player:5f689990-dc60-4d70-bd1c-7b49b89786b7',
+        workClass: 'interactive',
+        payload: { value: '5f689990-dc60-4d70-bd1c-7b49b89786b7' },
+        provenance: { source: 'steam-openid', requestedBy: account.id },
+        maxAttempts: 3,
+      },
+    ])
+  })
+
+  it('treats an already-active durable verification as an idempotent success', async () => {
+    const fakes = makeFakes()
+    fakes.sessions.add('raw-session-token')
+    fakes.setOperationOutcome('already-active')
+    const app = buildApp(fakes)
+    const start = await app.request('/auth/steam/link', {
+      headers: { cookie: 'brawltome_session=raw-session-token' },
+    })
+    const state = /brawltome_steam_state=([^;]+)/.exec(start.headers.get('set-cookie') ?? '')?.[1]
+    if (!state) throw new Error('Expected Steam state cookie')
+    globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
+
+    const response = await app.request(steamCallbackUrl(state).toString(), {
+      headers: { cookie: `brawltome_session=raw-session-token; brawltome_steam_state=${state}` },
+    })
+
+    expect(response.headers.get('location')).toBe('http://localhost:3001/account')
+    expect(fakes.queuedVerifications).toHaveLength(1)
+  })
+
+  it('rejects a signed Steam response that is not bound to the current callback state', async () => {
+    const fakes = makeFakes()
+    fakes.sessions.add('raw-session-token')
+    const app = buildApp(fakes)
+    const start = await app.request('/auth/steam/link', {
+      headers: { cookie: 'brawltome_session=raw-session-token' },
+    })
+    const state = /brawltome_steam_state=([^;]+)/.exec(start.headers.get('set-cookie') ?? '')?.[1]
+    if (!state) throw new Error('Expected Steam state cookie')
+    const replay = steamCallbackUrl(state)
+    replay.searchParams.set('openid.return_to', 'http://localhost:3000/auth/steam/callback?state=captured-old-state')
+    globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
+
+    const response = await app.request(replay.toString(), {
+      headers: { cookie: `brawltome_session=raw-session-token; brawltome_steam_state=${state}` },
+    })
+
+    expect(response.headers.get('location')).toBe('http://localhost:3001/account?error=steam')
+    expect(fakes.actorAdmissions).toEqual([])
+    expect(fakes.verificationAttempts).toEqual([])
+  })
+
+  it('remains account and IP rate-limited without creating an attempt', async () => {
+    const fakes = makeFakes()
+    fakes.sessions.add('raw-session-token')
+    fakes.setAdmissionOutcome('rate-limited')
+    const app = buildApp(fakes)
+    const start = await app.request('/auth/steam/link', {
+      headers: { cookie: 'brawltome_session=raw-session-token' },
+    })
+    const state = /brawltome_steam_state=([^;]+)/.exec(start.headers.get('set-cookie') ?? '')?.[1]
+    if (!state) throw new Error('Expected Steam state cookie')
+    globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
+
+    const response = await app.request(steamCallbackUrl(state).toString(), {
+      headers: {
+        cookie: `brawltome_session=raw-session-token; brawltome_steam_state=${state}`,
+        'cf-connecting-ip': '203.0.113.10',
+      },
+    })
+
+    expect(response.headers.get('location')).toBe('http://localhost:3001/account?error=rate_limited')
+    expect(fakes.verificationAttempts).toEqual([])
+    expect(fakes.queuedVerifications).toEqual([])
   })
 })
 

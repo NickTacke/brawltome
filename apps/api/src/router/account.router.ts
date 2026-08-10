@@ -1,5 +1,5 @@
-import { accountPreferencesSchema, accountViewSchema } from '@brawltome/contracts'
-import { toAccountPreferences, toAccountView } from '../mappers/account.mapper'
+import { accountPreferencesSchema, accountViewSchema, primaryPlayerVerificationStateSchema } from '@brawltome/contracts'
+import { toAccountPreferences, toAccountView, toPrimaryPlayerVerificationState } from '../mappers/account.mapper'
 import { protectedProcedure, publicProcedure, router } from '../trpc/trpc'
 
 export const accountRouter = router({
@@ -15,4 +15,9 @@ export const accountRouter = router({
       const preferences = await ctx.accounts.updatePreferences(ctx.account.id, input)
       return toAccountPreferences(preferences)
     }),
+  primaryPlayer: protectedProcedure
+    .output(primaryPlayerVerificationStateSchema)
+    .query(async ({ ctx }) =>
+      toPrimaryPlayerVerificationState(await ctx.accounts.getPrimaryPlayerVerificationState(ctx.account.id)),
+    ),
 })

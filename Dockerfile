@@ -9,12 +9,12 @@ COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/shared/package.json packages/shared/
 COPY packages/ui/package.json packages/ui/
+COPY packages/contexts/accounts/package.json packages/contexts/accounts/
 COPY packages/contexts/player/package.json packages/contexts/player/
 COPY packages/contexts/clan/package.json packages/contexts/clan/
 COPY packages/contexts/ranking/package.json packages/contexts/ranking/
 COPY packages/contexts/request-admission/package.json packages/contexts/request-admission/
 COPY packages/contexts/refresh-operations/package.json packages/contexts/refresh-operations/
-COPY packages/contexts/identity/package.json packages/contexts/identity/
 COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
 COPY packages/replay-format/package.json packages/replay-format/
 COPY packages/game-data/package.json packages/game-data/

@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { accountPreferencesSchema, accountViewSchema, parseAccountViewOutput } from '../src/account'
+import {
+  type PrimaryPlayerVerificationStateContract,
+  accountPreferencesSchema,
+  accountViewSchema,
+  parseAccountViewOutput,
+  parsePrimaryPlayerVerificationStateOutput,
+} from '../src/account'
 
 const signedInView = {
   status: 'signedIn' as const,
@@ -71,5 +77,62 @@ describe('accountViewSchema', () => {
       }),
     ).toThrow()
     expect(() => accountViewSchema.parse({ status: 'anonymous', session: { id: 'secret' } })).toThrow()
+  })
+})
+
+describe('primaryPlayerVerificationStateSchema', () => {
+  test('exposes ownership and immutable attempt history without proof subjects', () => {
+    const state: PrimaryPlayerVerificationStateContract = {
+      primaryPlayer: {
+        brawlhallaId: 42,
+        name: 'Ada',
+        verifiedAt: '2026-08-10T10:02:00.000Z',
+      },
+      attempts: [
+        {
+          id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
+          status: 'verified',
+          startedAt: '2026-08-10T10:00:00.000Z',
+          completedAt: '2026-08-10T10:02:00.000Z',
+          player: { brawlhallaId: 42, name: 'Ada' },
+        },
+        {
+          id: '96750f84-193c-42e4-a02e-b955af34d397',
+          status: 'conflict',
+          startedAt: '2026-08-09T10:00:00.000Z',
+          completedAt: '2026-08-09T10:02:00.000Z',
+          player: null,
+        },
+      ],
+    }
+
+    expect(parsePrimaryPlayerVerificationStateOutput(state)).toEqual(state)
+    expect(() =>
+      parsePrimaryPlayerVerificationStateOutput({
+        ...state,
+        attempts: [{ ...state.attempts[0], steamId: 'private-proof-subject' }],
+      }),
+    ).toThrow()
+  })
+
+  test('rejects impossible pending and verified states', () => {
+    const base = {
+      id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
+      startedAt: '2026-08-10T10:00:00.000Z',
+      completedAt: '2026-08-10T10:02:00.000Z',
+      player: null,
+    }
+    expect(() =>
+      parsePrimaryPlayerVerificationStateOutput({
+        primaryPlayer: null,
+        attempts: [{ ...base, status: 'pending' }],
+      }),
+    ).toThrow()
+    expect(() =>
+      parsePrimaryPlayerVerificationStateOutput({
+        primaryPlayer: null,
+        attempts: [{ ...base, status: 'verified' }],
+      }),
+    ).toThrow()
   })
 })

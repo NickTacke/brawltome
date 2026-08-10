@@ -73,6 +73,41 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   ),
   {
+    id: 'account.primary-player-verification',
+    area: 'account-authentication',
+    requirement:
+      'Authenticated Steam proof creates auditable attempts; only conflict-free canonical Players evidence establishes one Primary Player.',
+    sourceIssue: '#204',
+    status: 'verified',
+    destinations: ['/account', '/auth/steam/link', '/auth/steam/callback'],
+    implementation: [
+      'packages/contexts/accounts/src/accounts.ts',
+      'packages/contexts/accounts/src/postgres-store.ts',
+      'packages/contexts/accounts/migrations/0004-add-primary-player-verification.ts',
+      'packages/contexts/player/verification.ts',
+      'apps/api/src/auth/routes.ts',
+      'apps/api/src/router/account.router.ts',
+      'apps/web/src/app/account/BrawlhallaLinkRow.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/primary-player.postgres.test.ts',
+        assertion: 'Real PostgreSQL races preserve every attempt and allow at most one owner per account and player.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/identity/auth-routes.test.ts',
+        assertion: 'Authenticated Steam verification bypasses Turnstile while retaining account and IP admission.',
+      },
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/account.test.ts',
+        assertion: 'Canonical ownership history rejects private Steam proof subjects and impossible attempt states.',
+      },
+    ],
+  },
+  {
     id: 'account.v2-session-migration',
     area: 'account-authentication',
     requirement: 'Valid V2 OAuth identities and sessions retain their identifiers and authenticate after migration.',

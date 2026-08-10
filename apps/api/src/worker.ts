@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BhApiClient, RateLimitError } from '@brawltome/bhapi'
 import { db } from '@brawltome/database'
-import { resolveSteamLink } from '@brawltome/identity'
-import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { backfillPending, createMatchRepo } from '@brawltome/matchmaking'
 import { createPlayerRepo, processRefreshRanked, processRefreshStats } from '@brawltome/player/composition'
 import { startSweep } from '@brawltome/ranking'
@@ -52,7 +50,6 @@ const bhapi = new BhApiClient({
   },
 })
 const deps = { db, bhapi }
-const playerLinkRepo = createPlayerLinkRepo(db)
 
 const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
   newRedis(),
@@ -90,25 +87,6 @@ const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'ba
     maxDepth: 2000,
     dedupKey: (d) => String(d.brawlhallaId),
     priorityRatio: 3,
-    metrics,
-  },
-)
-
-const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
-  newRedis(),
-  'resolve-steam',
-  async (data) => {
-    const start = performance.now()
-    console.log(`[queue] resolve-steam START: userId=${data.userId}`)
-    await resolveSteamLink({ playerLinkRepo, bhapi }, data)
-    console.log(`[queue] resolve-steam DONE: userId=${data.userId} (${(performance.now() - start).toFixed(0)}ms)`)
-  },
-  {
-    concurrency: 1,
-    retries: 2,
-    backoffMs: 1000,
-    maxDepth: 500,
-    dedupKey: (d) => `${d.userId}:${d.steamId}`,
     metrics,
   },
 )
@@ -225,7 +203,7 @@ bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
 console.log('Worker starting...')
 await bhapi.init()
 await initGameData(db, bhapi)
-const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start(), steamLinkQueue.start()]
+const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start()]
 if (backfillQueue) starts.push(backfillQueue.start())
 if (simulateQueue) starts.push(simulateQueue.start())
 Promise.all(starts).catch((err) => {
@@ -246,7 +224,6 @@ async function shutdownWorker(): Promise<void> {
   if (bhapiMetricsTimer) clearTimeout(bhapiMetricsTimer)
   rankedQueue.stop()
   statsQueue.stop()
-  steamLinkQueue.stop()
   backfillQueue?.stop()
   simulateQueue?.stop()
   await stopSweep()
@@ -259,6 +236,4 @@ async function shutdownWorker(): Promise<void> {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void shutdownWorker())
 
 const matchmakingQueues = matchmakingLive ? ', match-backfill-parse(1), match-simulate(1)' : ''
-console.log(
-  `Worker running. Queues: refresh-ranked(3), refresh-stats(2), resolve-steam(1)${matchmakingQueues}. Sweep active.`,
-)
+console.log(`Worker running. Queues: refresh-ranked(3), refresh-stats(2)${matchmakingQueues}. Sweep active.`)

@@ -19,3 +19,4 @@ export type {
   PlayerDiscoveryFact,
   PlayerDiscoverySource,
 } from './discovery-facts'
+export type { SteamPlayerEvidence, SteamPlayerEvidenceResolver } from './verification'

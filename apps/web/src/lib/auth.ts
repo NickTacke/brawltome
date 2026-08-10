@@ -3,26 +3,21 @@
 import {
   type AccountPreferencesContract,
   type AccountViewContract,
+  type PrimaryPlayerVerificationStateContract,
   accountPreferencesSchema,
   parseAccountViewOutput,
+  parsePrimaryPlayerVerificationStateOutput,
 } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
 import { trpc } from './trpc'
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
-export interface PlayerLinkInfo {
-  brawlhallaId: number | null
-  steamId: string
-  status: 'pending' | 'linked' | 'failed' | 'conflict'
-  linkedAt: Date
-}
-
 const ACCOUNT_KEY = ['account', 'current'] as const
 const ACCOUNT_PREFERENCES_KEY = ['account', 'preferences'] as const
 const accountPreferencesKey = (accountId: string | null) =>
   [...ACCOUNT_PREFERENCES_KEY, accountId ?? 'anonymous'] as const
-const PLAYER_LINK_KEY = ['identity', 'playerLink'] as const
+const PRIMARY_PLAYER_KEY = ['account', 'primaryPlayer'] as const
 
 export function parseAccountResponse(value: unknown): AccountViewContract {
   return parseAccountViewOutput(value)
@@ -55,25 +50,34 @@ export function useAccountPreferences(accountId: string | null | undefined) {
   return { preferences: query.data ?? null, isLoading: query.isLoading }
 }
 
-export function usePlayerLink() {
+export function parsePrimaryPlayerResponse(value: unknown): PrimaryPlayerVerificationStateContract {
+  return parsePrimaryPlayerVerificationStateOutput(value)
+}
+
+export function usePrimaryPlayer() {
   const query = useQuery({
-    queryKey: PLAYER_LINK_KEY,
-    queryFn: async (): Promise<PlayerLinkInfo | null> => {
-      const legacyIdentity = await trpc.identity.me.query()
-      return legacyIdentity?.playerLink ?? null
-    },
+    queryKey: PRIMARY_PLAYER_KEY,
+    queryFn: async () => parsePrimaryPlayerResponse(await trpc.account.primaryPlayer.query()),
     staleTime: 5 * 60 * 1000,
-    refetchInterval: (query) => (query.state.data?.status === 'pending' ? 2_000 : false),
+    refetchInterval: (query) => (query.state.data?.attempts[0]?.status === 'pending' ? 2_000 : false),
   })
-  return { playerLink: query.data ?? null, isLoading: query.isLoading }
+  return { state: query.data ?? null, isLoading: query.isLoading }
+}
+
+function authUrl(path: '/auth/discord/login' | '/auth/steam/link'): string {
+  const url = new URL(path, apiUrl)
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error('Invalid authentication origin')
+  }
+  return url.toString()
 }
 
 export function signIn(): void {
-  window.location.href = `${apiUrl}/auth/discord/login`
+  window.location.assign(authUrl('/auth/discord/login'))
 }
 
 export function linkSteam(): void {
-  window.location.href = `${apiUrl}/auth/steam/link`
+  window.location.assign(authUrl('/auth/steam/link'))
 }
 
 export async function saveAccountPreferences(
@@ -93,11 +97,6 @@ export async function signOut(queryClient: ReturnType<typeof useQueryClient>): P
   queryClient.removeQueries({ queryKey: ACCOUNT_PREFERENCES_KEY })
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ACCOUNT_KEY }),
-    queryClient.invalidateQueries({ queryKey: PLAYER_LINK_KEY }),
+    queryClient.invalidateQueries({ queryKey: PRIMARY_PLAYER_KEY }),
   ])
-}
-
-export async function unlinkPlayer(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  await trpc.identity.unlinkPlayer.mutate()
-  await queryClient.invalidateQueries({ queryKey: PLAYER_LINK_KEY })
 }

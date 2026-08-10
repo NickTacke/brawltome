@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
-import { BhApiClient } from '@brawltome/bhapi'
+import { createPostgresAccounts } from '@brawltome/accounts/composition'
+import { BhApiClient, RateLimitError } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
@@ -11,6 +12,7 @@ import {
   createPostgresCareerPlayers,
   createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
+  createSteamPlayerEvidenceResolver,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player/composition'
@@ -34,6 +36,7 @@ const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 
 const workerConfig = readOperationsWorkerConfig(process.env)
+const accounts = createPostgresAccounts(connectionString)
 const discovery = createPostgresDiscovery(connectionString)
 const operations = createPostgresRefreshOperations(connectionString, {
   executionConcurrency: workerConfig.admission.totalConcurrency,
@@ -77,6 +80,7 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'request-admission-postgres', close: requestAdmission.close },
+    { name: 'accounts-postgres', close: accounts.close },
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'players-career-postgres', close: careerPlayers.close },
     { name: 'database-postgres', close: closeDatabase },
@@ -144,6 +148,30 @@ try {
       runOneRefreshOperation(repository, slotWorkerId, {
         ...common,
         sourceAdmission: requestAdmission,
+        executeEffect: async (lease) => {
+          if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
+          const admittedBhapi = new BhApiClient({
+            apiKey,
+            beforeRequest: async ({ domain }) => {
+              const admission = await requestAdmission.admitSource({
+                domain,
+                reservationKey: `${lease.operationId}:primary-player:${lease.attemptNumber}`,
+                units: 1,
+              })
+              if (admission.outcome === 'rate-limited') {
+                throw new RateLimitError(
+                  `${domain} PostgreSQL source admission is rate limited`,
+                  admission.retryAfterSeconds * 1_000,
+                )
+              }
+            },
+          })
+          await accounts.accounts.resolvePrimaryPlayerVerification(
+            lease.payload.value,
+            createSteamPlayerEvidenceResolver(admittedBhapi),
+          )
+          return operations.commitProofEffect(lease)
+        },
         ranking,
         leaderboardSource: { fetchPage: fetchLeaderboardPage },
         executePlayerProjection: async (lease) => {

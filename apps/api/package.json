@@ -21,7 +21,6 @@
     "@brawltome/database": "workspace:*",
     "@brawltome/discovery": "workspace:*",
     "@brawltome/game-data": "workspace:*",
-    "@brawltome/identity": "workspace:*",
     "@brawltome/matchmaking": "workspace:*",
     "@brawltome/player": "workspace:*",
     "@brawltome/ranking": "workspace:*",

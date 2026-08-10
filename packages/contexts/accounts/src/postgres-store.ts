@@ -1,10 +1,12 @@
-import postgres, { type Sql } from 'postgres'
+import postgres, { type Sql, type TransactionSql } from 'postgres'
 import {
   type Account,
   type AccountPreferences,
   type AccountsStore,
   LEADERBOARD_BRACKETS,
   LEADERBOARD_REGIONS,
+  type PrimaryPlayerVerificationAttempt,
+  type PrimaryPlayerVerificationState,
 } from './accounts'
 import {
   type V2AuthCutoverFinalization,
@@ -39,6 +41,27 @@ interface PreferencesRow {
   leaderboard_region: string
 }
 
+interface VerificationAttemptRow {
+  id: string
+  proof_subject: string
+  status: 'pending' | 'failed' | 'conflict' | 'verified'
+  started_at: Date
+  completed_at: Date | null
+  brawlhalla_id: number | null
+  player_name: string | null
+}
+
+interface VerificationAttemptOwnerRow {
+  account_id: string
+}
+
+interface PrimaryPlayerRow {
+  account_id: string
+  brawlhalla_id: number
+  player_name: string | null
+  verified_at: Date
+}
+
 const sessionAccountQuery = `SELECT
   users.id,
   identities.provider,
@@ -58,6 +81,17 @@ JOIN LATERAL (
   LIMIT 1
 ) identities ON true
 WHERE sessions.id = $1`
+
+const verificationAttemptQuery = `SELECT
+  attempts.id,
+  attempts.proof_subject,
+  COALESCE(outcomes.status, 'pending') AS status,
+  attempts.started_at,
+  outcomes.completed_at,
+  outcomes.brawlhalla_id::int,
+  outcomes.player_name
+FROM accounts.primary_player_verification_attempts attempts
+LEFT JOIN accounts.primary_player_verification_outcomes outcomes ON outcomes.attempt_id = attempts.id`
 
 export function createPostgresAccountsStore(connectionString: string): {
   store: AccountsStore
@@ -222,6 +256,128 @@ function postgresAccountsStore(client: Sql): AccountsStore {
       if (!stored) throw new Error('Accounts stored an unsupported preference version')
       return stored
     },
+
+    async beginPrimaryPlayerVerification(input) {
+      return client.begin(async (transaction) => {
+        await transaction.unsafe(
+          `INSERT INTO accounts.primary_player_verification_attempts (
+             id, account_id, proof_provider, proof_subject, idempotency_key, started_at
+           ) VALUES ($1, $2, 'steam', $3, $4, $5)
+           ON CONFLICT (idempotency_key) DO NOTHING`,
+          [input.attemptId, input.accountId, input.steamId, input.idempotencyKey, input.startedAt],
+        )
+        const [attempt] = await transaction.unsafe<VerificationAttemptRow[]>(
+          `${verificationAttemptQuery}
+           WHERE attempts.account_id = $1 AND attempts.idempotency_key = $2`,
+          [input.accountId, input.idempotencyKey],
+        )
+        if (!attempt) throw new Error('Failed to create Primary Player verification attempt')
+        return mapVerificationAttempt(attempt)
+      })
+    },
+
+    async findPrimaryPlayerVerificationAttempt(attemptId) {
+      const attempt = await findVerificationAttempt(client, attemptId)
+      return attempt ? { attempt: mapVerificationAttempt(attempt), steamId: attempt.proof_subject } : null
+    },
+
+    async completePrimaryPlayerVerification(input) {
+      return client.begin(async (transaction) => {
+        const [owner] = await transaction.unsafe<VerificationAttemptOwnerRow[]>(
+          `SELECT account_id
+           FROM accounts.primary_player_verification_attempts
+           WHERE id = $1
+           FOR UPDATE`,
+          [input.attemptId],
+        )
+        if (!owner) throw new Error('Unknown Primary Player verification attempt')
+
+        const existing = await findVerificationAttempt(transaction, input.attemptId)
+        if (!existing) throw new Error('Unknown Primary Player verification attempt')
+        if (existing.status !== 'pending') return mapVerificationAttempt(existing)
+
+        if (!input.evidence) {
+          await transaction.unsafe(
+            `INSERT INTO accounts.primary_player_verification_outcomes (
+               attempt_id, status, completed_at
+             ) VALUES ($1, 'failed', $2)`,
+            [input.attemptId, input.completedAt],
+          )
+          const completed = await findVerificationAttempt(transaction, input.attemptId)
+          if (!completed) throw new Error('Failed to record Primary Player verification outcome')
+          return mapVerificationAttempt(completed)
+        }
+
+        const lockKeys = [`account:${owner.account_id}`, `player:${input.evidence.brawlhallaId}`].sort()
+        for (const lockKey of lockKeys) {
+          await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey])
+        }
+
+        const ownership = await transaction.unsafe<PrimaryPlayerRow[]>(
+          `SELECT account_id, brawlhalla_id::int, player_name, verified_at
+           FROM accounts.primary_players
+           WHERE account_id = $1 OR brawlhalla_id = $2
+           FOR UPDATE`,
+          [owner.account_id, input.evidence.brawlhallaId],
+        )
+        const accountOwnership = ownership.find(({ account_id }) => account_id === owner.account_id)
+        const playerOwnership = ownership.find(({ brawlhalla_id }) => brawlhalla_id === input.evidence?.brawlhallaId)
+        const conflict =
+          (accountOwnership && accountOwnership.brawlhalla_id !== input.evidence.brawlhallaId) ||
+          (playerOwnership && playerOwnership.account_id !== owner.account_id)
+
+        if (!conflict && !accountOwnership) {
+          await transaction.unsafe(
+            `INSERT INTO accounts.primary_players (
+               account_id, brawlhalla_id, player_name, verified_at, verification_attempt_id
+             ) VALUES ($1, $2, $3, $4, $5)`,
+            [owner.account_id, input.evidence.brawlhallaId, input.evidence.name, input.completedAt, input.attemptId],
+          )
+        }
+
+        await transaction.unsafe(
+          `INSERT INTO accounts.primary_player_verification_outcomes (
+             attempt_id,
+             status,
+             brawlhalla_id,
+             player_name,
+             evidence_source,
+             evidence_checked_at,
+             completed_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            input.attemptId,
+            conflict ? 'conflict' : 'verified',
+            input.evidence.brawlhallaId,
+            input.evidence.name,
+            input.evidence.source,
+            input.evidence.checkedAt,
+            input.completedAt,
+          ],
+        )
+        const completed = await findVerificationAttempt(transaction, input.attemptId)
+        if (!completed) throw new Error('Failed to record Primary Player verification outcome')
+        return mapVerificationAttempt(completed)
+      })
+    },
+
+    async getPrimaryPlayerVerificationState(accountId) {
+      return client.begin('ISOLATION LEVEL REPEATABLE READ READ ONLY', async (transaction) => {
+        const primaryRows = await transaction.unsafe<PrimaryPlayerRow[]>(
+          `SELECT account_id, brawlhalla_id::int, player_name, verified_at
+           FROM accounts.primary_players
+           WHERE account_id = $1`,
+          [accountId],
+        )
+        const attemptRows = await transaction.unsafe<VerificationAttemptRow[]>(
+          `${verificationAttemptQuery}
+           WHERE attempts.account_id = $1
+           ORDER BY attempts.started_at DESC, attempts.id DESC`,
+          [accountId],
+        )
+        return mapVerificationState(primaryRows[0], attemptRows)
+      })
+    },
   }
 }
 
@@ -237,6 +393,49 @@ function mapPreferences(row: PreferencesRow): AccountPreferences | null {
     version: 1,
     leaderboardBracket: row.leaderboard_bracket as AccountPreferences['leaderboardBracket'],
     leaderboardRegion: row.leaderboard_region as AccountPreferences['leaderboardRegion'],
+  }
+}
+
+async function findVerificationAttempt(
+  client: Sql | TransactionSql,
+  attemptId: string,
+): Promise<VerificationAttemptRow | null> {
+  const [attempt] = await client.unsafe<VerificationAttemptRow[]>(
+    `${verificationAttemptQuery} WHERE attempts.id = $1`,
+    [attemptId],
+  )
+  return attempt ?? null
+}
+
+function mapVerificationAttempt(row: VerificationAttemptRow): PrimaryPlayerVerificationAttempt {
+  return {
+    id: row.id,
+    status: row.status,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    player:
+      row.brawlhalla_id === null
+        ? null
+        : {
+            brawlhallaId: row.brawlhalla_id,
+            name: row.player_name,
+          },
+  }
+}
+
+function mapVerificationState(
+  primary: PrimaryPlayerRow | undefined,
+  attempts: VerificationAttemptRow[],
+): PrimaryPlayerVerificationState {
+  return {
+    primaryPlayer: primary
+      ? {
+          brawlhallaId: primary.brawlhalla_id,
+          name: primary.player_name,
+          verifiedAt: primary.verified_at,
+        }
+      : null,
+    attempts: attempts.map(mapVerificationAttempt),
   }
 }
 
