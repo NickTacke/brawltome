@@ -354,6 +354,51 @@ describe('telemetry foundation', () => {
     }
   })
 
+  test('passes incoming correlation context to the provider as the exported parent', async () => {
+    const incoming = {
+      requestId: 'req-parent',
+      traceId: 'a'.repeat(32),
+      spanId: 'b'.repeat(16),
+      sampled: true,
+    }
+    let parentContext: unknown
+    const telemetry = createTelemetry({
+      service: 'test',
+      drainIntervalMs: 0,
+      tracer: {
+        startSpan: (_name: string, _options: unknown, context: unknown) => {
+          parentContext = context
+          return {
+            spanContext: () => ({ traceId: incoming.traceId, spanId: 'c'.repeat(16), traceFlags: 1 }),
+            setStatus() {
+              return this
+            },
+            recordException() {},
+            end() {},
+          }
+        },
+      } as never,
+      openTelemetry: {
+        active: () => ({ active: true }) as never,
+        setSpanContext: (context, spanContext) => ({ context, spanContext }) as never,
+        setSpan: (context) => context,
+        with: (_context, work) => work(),
+      },
+    })
+
+    await telemetry.run(incoming, () => telemetry.trace('child', {}, async () => undefined))
+
+    expect(parentContext).toEqual({
+      context: { active: true },
+      spanContext: {
+        traceId: incoming.traceId,
+        spanId: incoming.spanId,
+        traceFlags: 1,
+        isRemote: true,
+      },
+    })
+  })
+
   test('uses valid provider span identifiers as canonical correlation identifiers', async () => {
     const telemetry = createTelemetry({
       service: 'test',
@@ -420,5 +465,23 @@ describe('telemetry foundation', () => {
     expect(output).toContain('kind="clan-discovery-projection"')
     expect(output).toContain('kind="discovery-reconciliation"')
     expect(telemetry.stats().seriesDropped).toBe(2)
+  })
+
+  test('accepts every durable operation kind emitted by refresh operations', () => {
+    const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0 })
+
+    for (const kind of ['player-discovery-projection', 'ranked-player-pulse'] as const) {
+      telemetry.metrics.add('operation_attempts_total', 1, {
+        kind,
+        work_class: kind === 'player-discovery-projection' ? 'projection' : 'primary-monitoring',
+        outcome: 'succeeded',
+      })
+      telemetry.metrics.set('operation_dead_letters', 0, {
+        kind,
+        work_class: kind === 'player-discovery-projection' ? 'projection' : 'primary-monitoring',
+      })
+    }
+
+    expect(telemetry.stats().seriesDropped).toBe(0)
   })
 })

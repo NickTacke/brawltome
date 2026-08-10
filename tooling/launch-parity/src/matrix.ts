@@ -359,6 +359,37 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ),
   ),
   {
+    id: 'operations.observability',
+    area: 'operator-observability',
+    requirement:
+      'Repository-owned dashboards, fixed retention, quota preflight, and Discord alert rules have executable local firing and recovery evidence.',
+    sourceIssue: '#219',
+    status: 'verified',
+    destinations: [],
+    implementation: [
+      'deploy/observability/compose.yml',
+      'deploy/observability/prometheus/rules/alerts.yml',
+      'deploy/observability/grafana/dashboards/operations.json',
+      'deploy/observability/grafana/dashboards/http-health.json',
+      'deploy/observability/grafana/dashboards/telemetry-storage.json',
+      'packages/telemetry/src/node.ts',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'tooling/observability/tests/observability.test.ts',
+        assertion:
+          'Compose resource limits, retention and quota contracts, dashboards, complete low-cardinality alert inventory, and secret boundaries validate locally.',
+      },
+      {
+        kind: 'unit',
+        path: 'tooling/observability/tests/storage-preflight.test.ts',
+        assertion:
+          'Quota preflight rejects missing/shared mounts, capacity mismatch, low headroom, wrong ownership, and oversized Prometheus retention.',
+      },
+    ],
+  },
+  {
     id: 'operations.dead-letters',
     area: 'operator-operations',
     requirement:

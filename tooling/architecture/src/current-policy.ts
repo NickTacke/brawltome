@@ -40,7 +40,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/game-data': ['.', './reference-data'],
     '@brawltome/replay-format': ['.'],
     '@brawltome/shared': ['.', './constants', './weapons'],
-    '@brawltome/telemetry': ['.', './propagation'],
+    '@brawltome/telemetry': ['.', './node', './propagation'],
     '@brawltome/ui': ['.'],
     '@brawltome/architecture': ['.'],
     '@brawltome/accounts': ['.', './composition'],

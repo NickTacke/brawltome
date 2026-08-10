@@ -1,0 +1,86 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: production
+
+rule_files:
+  - /etc/prometheus/rules/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    http_headers:
+      X-Metrics-Secret:
+        files: [/run/secrets/metrics_scrape_secret]
+    static_configs:
+      - targets: ["api:3000"]
+        labels:
+          runtime: api
+
+  - job_name: operations-worker
+    metrics_path: /metrics
+    http_headers:
+      X-Metrics-Secret:
+        files: [/run/secrets/metrics_scrape_secret]
+    static_configs:
+      - targets: ["operations-worker:3001"]
+        labels:
+          runtime: operations-worker
+
+  - job_name: web
+    metrics_path: /api/metrics
+    http_headers:
+      X-Metrics-Secret:
+        files: [/run/secrets/metrics_scrape_secret]
+    static_configs:
+      - targets: ["web:3000"]
+        labels:
+          runtime: web
+
+  - job_name: discord
+    metrics_path: /metrics
+    http_headers:
+      X-Metrics-Secret:
+        files: [/run/secrets/metrics_scrape_secret]
+    static_configs:
+      - targets: ["discord-bot:3002"]
+        labels:
+          runtime: discord
+
+  - job_name: readiness
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["http://api:3000/health/ready"]
+        labels:
+          runtime: api
+      - targets: ["http://operations-worker:3001/health/ready"]
+        labels:
+          runtime: operations-worker
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: observability
+    static_configs:
+      - targets:
+          - prometheus:9090
+          - alertmanager:9093
+          - loki:3100
+          - tempo:3200
+          - otel-collector:8888
+
+  - job_name: telemetry-storage
+    static_configs:
+      - targets: ["node-exporter:9100"]

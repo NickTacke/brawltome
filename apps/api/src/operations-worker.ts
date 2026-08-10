@@ -109,7 +109,7 @@ const lifecycle = createRuntimeLifecycle({
 const health = new Hono()
 health.route('/health', createHealthRoutes(lifecycle))
 health.get('/metrics', async (context) => {
-  if (!internalSecretValid(context.req.header('x-internal-secret'), process.env.INTERNAL_API_SECRET)) {
+  if (!internalSecretValid(context.req.header('x-metrics-secret'), process.env.METRICS_SCRAPE_SECRET)) {
     return context.json({ error: 'unauthorized' }, 401)
   }
   try {

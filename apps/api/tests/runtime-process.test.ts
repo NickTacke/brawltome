@@ -136,6 +136,7 @@ function apiEnvironment(port: number): Record<string, string> {
     DATABASE_URL: connectionString,
     REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
     INTERNAL_API_SECRET: 'runtime-process-test-secret-32-characters',
+    METRICS_SCRAPE_SECRET: 'runtime-process-metrics-secret-32-chars',
     REFRESH_TRUST_COOKIE_SECRET: 'runtime-process-refresh-trust-secret-32-characters',
     PORT: String(port),
     RUNTIME_SHUTDOWN_DEADLINE_MS: '2000',
@@ -148,6 +149,7 @@ function workerEnvironment(port: number, deadlineMs: number): Record<string, str
     DATABASE_URL: connectionString,
     BRAWLHALLA_API_KEY: 'runtime-process-test-api-key',
     INTERNAL_API_SECRET: 'runtime-process-test-secret-32-characters',
+    METRICS_SCRAPE_SECRET: 'runtime-process-metrics-secret-32-chars',
     HEALTH_PORT: String(port),
     OPERATIONS_LEASE_MS: '5000',
     OPERATIONS_POLL_MS: '25',
@@ -199,8 +201,15 @@ describe('real V3 runtime lifecycle', () => {
         expect(correlated.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/)
         expect(correlated.headers.get('x-request-id')).not.toBe('runtime-process-request')
         expect((await fetch(`http://127.0.0.1:${port}/metrics`)).status).toBe(401)
+        expect(
+          (
+            await fetch(`http://127.0.0.1:${port}/metrics`, {
+              headers: { 'x-metrics-secret': apiEnvironment(port).INTERNAL_API_SECRET },
+            })
+          ).status,
+        ).toBe(401)
         const metrics = await fetch(`http://127.0.0.1:${port}/metrics`, {
-          headers: { 'x-internal-secret': apiEnvironment(port).INTERNAL_API_SECRET },
+          headers: { 'x-metrics-secret': apiEnvironment(port).METRICS_SCRAPE_SECRET },
         })
         expect(metrics.status).toBe(200)
         expect(await metrics.text()).toContain('http_server_requests_total')
@@ -251,7 +260,7 @@ describe('real V3 runtime lifecycle', () => {
       await waitForRuntimeReady(runtime, port, 'worker readiness')
       await waitFor(async () => {
         const workerMetrics = await fetch(`http://127.0.0.1:${port}/metrics`, {
-          headers: { 'x-internal-secret': workerEnvironment(port, 3_000).INTERNAL_API_SECRET },
+          headers: { 'x-metrics-secret': workerEnvironment(port, 3_000).METRICS_SCRAPE_SECRET },
         })
         return (
           workerMetrics.status === 200 && (await workerMetrics.text()).includes('worker_heartbeat_timestamp_seconds')

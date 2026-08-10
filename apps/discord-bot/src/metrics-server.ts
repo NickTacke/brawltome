@@ -25,7 +25,7 @@ export function startDiscordMetricsServer(options: {
             : Response.json({ status: 'unready', reason: 'discord_not_ready' }, { status: 503 })
         }
         if (url.pathname !== '/metrics') return new Response('not found', { status: 404 })
-        if (!authorized(request.headers.get('x-internal-secret'), options.secret)) {
+        if (!authorized(request.headers.get('x-metrics-secret'), options.secret)) {
           return Response.json({ error: 'unauthorized' }, { status: 401 })
         }
         return new Response(renderPrometheus(options.telemetry.metrics.snapshot()), {
