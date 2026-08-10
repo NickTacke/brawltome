@@ -115,6 +115,22 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       'OPERATIONS_SCHEDULE_BATCH_SIZE',
       1_000,
     ),
+    discovery: {
+      projectionBatchSize: boundedInteger(
+        env.DISCOVERY_PROJECTION_BATCH_SIZE,
+        500,
+        'DISCOVERY_PROJECTION_BATCH_SIZE',
+        1,
+        1_000,
+      ),
+      reconciliationIntervalMs: boundedInteger(
+        env.DISCOVERY_RECONCILIATION_INTERVAL_MS,
+        60 * 60 * 1000,
+        'DISCOVERY_RECONCILIATION_INTERVAL_MS',
+        60_000,
+        24 * 60 * 60 * 1000,
+      ),
+    },
     leaderboard: {
       pageDepth: positiveInteger(env.LEADERBOARD_PAGE_DEPTH, 1, 'LEADERBOARD_PAGE_DEPTH', 20),
       intervalMs: boundedInteger(

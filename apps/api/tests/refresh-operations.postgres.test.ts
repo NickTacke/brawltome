@@ -9,6 +9,7 @@ import postgres from 'postgres'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
+import { runtimeMigrationInventory } from '../src/runtime-migration-inventory'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `brawltome_operations_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -111,6 +112,42 @@ async function expire(operationId: string) {
 }
 
 describe('durable Refresh Operations', () => {
+  test('preserves the deployed runtime migration prefix and appends Discovery at the end', () => {
+    expect(runtimeMigrationInventory.map(({ identity }) => identity)).toEqual([
+      'players/0001',
+      'players/0002',
+      'players/0003',
+      'refresh-operations/0001',
+      'refresh-operations/0002',
+      'refresh-operations/0003',
+      'refresh-operations/0004',
+      'refresh-operations/0005',
+      'refresh-operations/0006',
+      'request-admission/0001',
+      'request-admission/0002',
+      'accounts/0001',
+      'accounts/0002',
+      'rankings/0001',
+      'clans/0001',
+      'refresh-operations/0007',
+      'refresh-operations/0008',
+      'accounts/0003',
+      'refresh-operations/0009',
+      'rankings/0002',
+      'players/0004',
+      'players/0005',
+      'refresh-operations/0010',
+      'discovery/0001',
+      'accounts/0004',
+      'players/0006',
+      'refresh-operations/0011',
+      'refresh-operations/0012',
+      'clans/0002',
+      'discovery/0002',
+      'refresh-operations/0013',
+    ])
+  })
+
   test('reports bounded authoritative oldest-job, schedule-lateness, and dead-letter gauges', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const control = postgres(connectionString, { max: 1 })
@@ -382,13 +419,13 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
-  test('admits exactly the six operation kinds under shared cross-kind concurrency', async () => {
+  test('admits every implemented operation kind under shared cross-kind concurrency', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = {
       ...testAdmission,
-      totalConcurrency: 6,
+      totalConcurrency: 8,
       interactiveReservation: 1,
-      classConcurrency: { ...testAdmission.classConcurrency, interactive: 3 },
+      classConcurrency: { ...testAdmission.classConcurrency, interactive: 3, projection: 3 },
     } as const
     await settleWithin('configure cross-kind admission', operations.configureAdmission(admission))
     await settleWithin(
@@ -431,6 +468,28 @@ describe('durable Refresh Operations', () => {
         operationKey: `cross-kind-player-discovery:${randomUUID()}`,
         workClass: 'projection',
         payload: { batchSize: 100 },
+        provenance: { source: 'integration-test' },
+      }),
+    )
+    await settleWithin(
+      'accept clan discovery projection',
+      operations.accept({
+        kind: 'clan-discovery-projection',
+        dedupeKey: `cross-kind-clan-discovery:${randomUUID()}`,
+        operationKey: `cross-kind-clan-discovery:${randomUUID()}`,
+        workClass: 'projection',
+        payload: { batchSize: 100 },
+        provenance: { source: 'integration-test' },
+      }),
+    )
+    await settleWithin(
+      'accept discovery reconciliation',
+      operations.accept({
+        kind: 'discovery-reconciliation',
+        dedupeKey: `cross-kind-discovery-reconciliation:${randomUUID()}`,
+        operationKey: `cross-kind-discovery-reconciliation:${randomUUID()}`,
+        workClass: 'projection',
+        payload: { owner: 'clan' },
         provenance: { source: 'integration-test' },
       }),
     )
@@ -494,6 +553,18 @@ describe('durable Refresh Operations', () => {
           operations.claim('cross-kind-player-discovery', 10_000, admission, 'player-discovery-projection'),
         ),
       ),
+      requireLease(
+        await settleWithin(
+          'clan discovery claim',
+          operations.claim('cross-kind-clan-discovery', 10_000, admission, 'clan-discovery-projection'),
+        ),
+      ),
+      requireLease(
+        await settleWithin(
+          'discovery reconciliation claim',
+          operations.claim('cross-kind-discovery-reconciliation', 10_000, admission, 'discovery-reconciliation'),
+        ),
+      ),
     ]
     expect(new Set(leases.map(({ kind }) => kind))).toEqual(
       new Set<OperationLease['kind']>([
@@ -503,6 +574,8 @@ describe('durable Refresh Operations', () => {
         'leaderboard-1v1',
         'clan-refresh',
         'player-discovery-projection',
+        'clan-discovery-projection',
+        'discovery-reconciliation',
       ]),
     )
     expect(await operations.claim('cross-kind-blocked', 10_000, admission)).toBeNull()

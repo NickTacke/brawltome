@@ -398,11 +398,27 @@ describe('telemetry foundation', () => {
       route: 'trpc',
       status_class: '2xx',
     })
+    const operationTelemetry = createTelemetry({ service: 'test', drainIntervalMs: 0 })
+    for (const kind of [
+      'ranked-player-pulse',
+      'player-discovery-projection',
+      'clan-discovery-projection',
+      'discovery-reconciliation',
+    ]) {
+      operationTelemetry.metrics.add('operation_attempts_total', 1, {
+        kind,
+        work_class: kind === 'ranked-player-pulse' ? 'primary-monitoring' : 'projection',
+        outcome: 'succeeded',
+      })
+    }
 
-    const output = renderPrometheus(telemetry.metrics.snapshot())
+    const output = renderPrometheus([...telemetry.metrics.snapshot(), ...operationTelemetry.metrics.snapshot()])
     expect(output).toContain('http_server_requests_total{method="GET",route="trpc",runtime="api",status_class="2xx"} 1')
     expect(output).toContain('http_server_duration_ms_bucket')
     expect(output).not.toContain('unknown-id-123')
+    expect(output).toContain('kind="ranked-player-pulse"')
+    expect(output).toContain('kind="clan-discovery-projection"')
+    expect(output).toContain('kind="discovery-reconciliation"')
     expect(telemetry.stats().seriesDropped).toBe(2)
   })
 })

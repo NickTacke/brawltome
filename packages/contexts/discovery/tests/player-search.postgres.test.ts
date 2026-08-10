@@ -42,6 +42,9 @@ afterAll(async () => {
   await admin.end()
 })
 
+const playerResults = async (discovery: ReturnType<typeof createPostgresDiscovery>, query: string) =>
+  (await discovery.search(query)).players
+
 const fact = (
   brawlhallaId: number,
   name: string,
@@ -72,30 +75,62 @@ describe('Discovery player search', () => {
         ],
       })
 
-      await expect(discovery.searchPlayers('  ALPHA  ')).resolves.toEqual([
+      await expect(playerResults(discovery, '  ALPHA  ')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 40, matchedAlias: null }),
         expect.objectContaining({ brawlhallaId: 30, matchedAlias: 'Alpha' }),
         expect.objectContaining({ brawlhallaId: 20, matchedAlias: null }),
         expect.objectContaining({ brawlhallaId: 90, matchedAlias: null }),
       ])
-      await expect(discovery.searchPlayers(' %_\\ ')).resolves.toEqual([])
-      await expect(discovery.searchPlayers(' team|alpha ')).resolves.toEqual([
+      await expect(playerResults(discovery, ' %_\\ ')).resolves.toEqual([])
+      await expect(playerResults(discovery, ' team|alpha ')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 90, name: 'Team | Alpha Prime' }),
       ])
 
       const explain = postgres(connectionString, { max: 1 })
       try {
-        await explain`SET enable_seqscan = off`
-        const plan = await explain`
-          EXPLAIN (FORMAT JSON)
-          SELECT term.*
-          FROM discovery.player_terms term
-          JOIN discovery.player_generations generation
-            ON generation.generation_id = term.generation_id AND generation.active
-          WHERE term.normalized_term >= 'alpha' COLLATE "C"
-            AND term.normalized_term < ${'alpha\u{10ffff}'} COLLATE "C"
+        const [generation] = await explain<{ generation_id: string }[]>`
+          SELECT generation_id FROM discovery.generations WHERE entity_kind = 'player' AND active
         `
-        expect(JSON.stringify(plan)).toContain('discovery_player_terms_prefix')
+        await explain`
+          INSERT INTO discovery.terms
+            (entity_kind, generation_id, entity_id, term_kind, display_term, normalized_term,
+             canonical_name, view_count)
+          SELECT 'player', ${generation.generation_id}, 100000 + value, 'canonical',
+                 'Noise ' || value, 'noise ' || lpad(value::text, 6, '0'),
+                 'Noise ' || value, 0
+          FROM generate_series(1, 30000) AS value
+        `
+        await explain`ANALYZE discovery.terms`
+        const plan = await explain`
+          EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+          WITH candidates AS (
+            SELECT term.*,
+                   term.normalized_term = 'alpha' COLLATE "C" AS exact_match,
+                   CASE WHEN term.term_kind = 'alias' THEN 1 ELSE 0 END AS alias_rank,
+                   CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 ELSE 2 END AS stable_term_rank
+            FROM discovery.terms term
+            JOIN discovery.generations generation
+              ON generation.entity_kind = term.entity_kind
+             AND generation.generation_id = term.generation_id AND generation.active
+            WHERE term.entity_kind = 'player'
+              AND term.normalized_term >= 'alpha' COLLATE "C"
+              AND term.normalized_term < ${'alpha\u{10ffff}'} COLLATE "C"
+          ), winners AS (
+            SELECT DISTINCT ON (entity_id) *
+            FROM candidates
+            ORDER BY entity_id, exact_match DESC, alias_rank, stable_term_rank,
+                     normalized_term, display_term
+          )
+          SELECT entity_id, canonical_name, region, rating, view_count,
+                 best_legend_name_key, term_kind, display_term
+          FROM winners
+          ORDER BY exact_match DESC, alias_rank, rating DESC NULLS LAST,
+                   view_count DESC, entity_id
+          LIMIT 40
+        `
+        const serializedPlan = JSON.stringify(plan)
+        expect(serializedPlan).toContain('discovery_terms_prefix')
+        expect(serializedPlan).not.toContain('Seq Scan on terms')
       } finally {
         await explain.end()
       }
@@ -110,7 +145,7 @@ describe('Discovery player search', () => {
       const stableTies = Array.from({ length: 45 }, (_, index) => fact(100 + index, `Prefix ${index}`, 2000, 50))
       await discovery.rebuildPlayers({ sourceVersion: 2, facts: [...stableTies].reverse() })
 
-      const capped = await discovery.searchPlayers('prefix')
+      const capped = await playerResults(discovery, 'prefix')
       expect(capped).toHaveLength(40)
       expect(capped.map(({ brawlhallaId }) => brawlhallaId)).toEqual(
         Array.from({ length: 40 }, (_, index) => 100 + index),
@@ -126,13 +161,13 @@ describe('Discovery player search', () => {
       await expect(discovery.applyPlayerEvents([event, event])).resolves.toEqual({ appliedEvents: 1 })
       await expect(discovery.applyPlayerEvents([event])).resolves.toEqual({ appliedEvents: 0 })
 
-      const prefixHits = await discovery.searchPlayers('prefix')
+      const prefixHits = await playerResults(discovery, 'prefix')
       expect(prefixHits.filter(({ brawlhallaId }) => brawlhallaId === 999)).toHaveLength(1)
       expect(prefixHits.find(({ brawlhallaId }) => brawlhallaId === 999)?.matchedAlias).toBe('Prefix')
 
       await discovery.rebuildPlayers({ sourceVersion: 4, facts: [fact(777, 'Replacement', null, 0)] })
-      await expect(discovery.searchPlayers('prefix')).resolves.toEqual([])
-      await expect(discovery.searchPlayers('replacement')).resolves.toEqual([
+      await expect(playerResults(discovery, 'prefix')).resolves.toEqual([])
+      await expect(playerResults(discovery, 'replacement')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 777, rating: null }),
       ])
     } finally {
@@ -155,13 +190,13 @@ describe('Discovery player search', () => {
           },
         ]),
       ).resolves.toEqual({ appliedEvents: 1 })
-      await expect(discovery.searchPlayers('newest')).resolves.toEqual([
+      await expect(playerResults(discovery, 'newest')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 500, name: 'Newest Name', rating: 2200 }),
       ])
       await expect(
         discovery.rebuildPlayers({ sourceVersion: 9, facts: [fact(500, 'Stale Rebuild', 1700, 0)] }),
       ).rejects.toThrow()
-      await expect(discovery.searchPlayers('newest')).resolves.toHaveLength(1)
+      await expect(playerResults(discovery, 'newest')).resolves.toHaveLength(1)
     } finally {
       await discovery.close()
     }

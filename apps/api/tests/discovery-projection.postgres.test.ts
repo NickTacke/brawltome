@@ -71,6 +71,9 @@ afterAll(async () => {
   await admin.end()
 })
 
+const playerResults = async (discovery: ReturnType<typeof createPostgresDiscovery>, query: string) =>
+  (await discovery.search(query)).players
+
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
   interactiveReservation: 1,
@@ -119,7 +122,7 @@ describe('Players to Discovery projection delivery', () => {
       `
 
       expect(await source.lag()).toBeGreaterThan(0)
-      await expect(discovery.searchPlayers('player')).resolves.toEqual([])
+      await expect(playerResults(discovery, 'player')).resolves.toEqual([])
 
       const operationInput = {
         kind: 'player-discovery-projection' as const,
@@ -147,10 +150,10 @@ describe('Players to Discovery projection delivery', () => {
       expect(firstDelivery.appliedEvents).toBeGreaterThan(0)
       expect((await operations.inspect(accepted[0].operationId)).operation.status).toBe('succeeded')
       expect(await source.lag()).toBe(0)
-      await expect(discovery.searchPlayers('former')).resolves.toEqual([
+      await expect(playerResults(discovery, 'former')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 10, name: 'Canonical | Player', rating: 2100, matchedAlias: 'Former' }),
       ])
-      await expect(discovery.searchPlayers('legacy')).resolves.toEqual([
+      await expect(playerResults(discovery, 'legacy')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 11, rating: null, viewCount: 0, matchedAlias: null }),
         expect.objectContaining({ brawlhallaId: 10, matchedAlias: 'Legacy | Player' }),
       ])
@@ -162,7 +165,7 @@ describe('Players to Discovery projection delivery', () => {
       await control`UPDATE public.player SET view_count = 99 WHERE brawlhalla_id = 10`
       expect(await source.lag()).toBe(1)
       await discovery.rebuildPlayersFrom(source)
-      await expect(discovery.searchPlayers('canonical')).resolves.toEqual([
+      await expect(playerResults(discovery, 'canonical')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 10, viewCount: 99 }),
       ])
       expect(await source.lag()).toBe(1)

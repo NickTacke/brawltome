@@ -38,15 +38,15 @@ describe('buildCommands', () => {
           matchedAlias: null,
         },
       ],
-      clanResults: [{ clanId: 99, clanName: 'Test Clan', clanXp: '10', memberCount: 1 }],
+      clanResults: [{ clanId: 1, clanName: 'Test Clan', clanXp: '10', memberCount: 1 }],
     })
     expect(result).toHaveLength(2)
     expect(result[0].kind).toBe('player')
     expect(result[0].id).toBe('p-1')
     expect(result[0].href).toBe('/player/1')
     expect(result[1].kind).toBe('clan')
-    expect(result[1].id).toBe('c-99')
-    expect(result[1].href).toBe('/clan/99')
+    expect(result[1].id).toBe('c-1')
+    expect(result[1].href).toBe('/clan/1')
   })
 
   it('returns empty array when in search mode with no results', () => {

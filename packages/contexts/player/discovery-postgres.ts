@@ -152,7 +152,16 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
     snapshot() {
       return client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
-        return { sourceVersion: await sourceVersion(sql), facts: await readFacts(sql) }
+        const [pending] = await sql<{ pending_count: number; oldest_pending_at: Date | null }[]>`
+          SELECT count(*)::integer AS pending_count, min(created_at) AS oldest_pending_at
+          FROM players.discovery_outbox WHERE delivered_at IS NULL
+        `
+        return {
+          sourceVersion: await sourceVersion(sql),
+          facts: await readFacts(sql),
+          pendingEventCount: pending.pending_count,
+          oldestPendingAt: pending.oldest_pending_at,
+        }
       })
     },
 

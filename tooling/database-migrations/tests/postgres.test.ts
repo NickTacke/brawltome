@@ -48,8 +48,13 @@ const deployedPulseGlobalHistory = [
   ['refresh-operations/0011', '538e16caf6c1ae189d2610648055c26964f153d66c4d2502611848fdfeaf7443'],
 ] as const
 
+const deployedMonitoringGlobalHistory = [
+  ...deployedPulseGlobalHistory,
+  ['refresh-operations/0012', '46b5a4dcb1b6f5b324492bf46f06338febdc6956497fbd796309b161c205d15b'],
+] as const
+
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories Accounts 0001 through 0004, Players 0001 through 0006, and Refresh Operations 0001 through 0012', () => {
+  test('inventories append-only capabilities through cross-kind Discovery', () => {
     expect(accountsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'accounts/0001',
       'accounts/0002',
@@ -64,6 +69,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'players/0005',
       'players/0006',
     ])
+    expect(clanMigrationInventory.map(({ identity }) => identity)).toEqual(['clans/0001', 'clans/0002'])
+    expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual(['discovery/0001', 'discovery/0002'])
     expect(refreshOperationsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'refresh-operations/0001',
       'refresh-operations/0002',
@@ -77,6 +84,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0010',
       'refresh-operations/0011',
       'refresh-operations/0012',
+      'refresh-operations/0013',
     ])
   })
 
@@ -90,7 +98,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     ]
     expect(globalMigrationInventory.slice(0, oldGlobalInventory.length)).toEqual(oldGlobalInventory)
     expect(globalMigrationInventory.slice(oldGlobalInventory.length)).toEqual([
-      ...clanMigrationInventory,
+      clanMigrationInventory[0],
       refreshOperationsMigrationInventory[6],
       refreshOperationsMigrationInventory[7],
       accountsMigrationInventory[2],
@@ -99,11 +107,14 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       playerMigrationInventory[3],
       playerMigrationInventory[4],
       refreshOperationsMigrationInventory[9],
-      ...discoveryMigrationInventory,
+      discoveryMigrationInventory[0],
       accountsMigrationInventory[3],
       playerMigrationInventory[5],
       refreshOperationsMigrationInventory[10],
       refreshOperationsMigrationInventory[11],
+      clanMigrationInventory[1],
+      discoveryMigrationInventory[1],
+      refreshOperationsMigrationInventory[12],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -125,18 +136,21 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
-  test('preserves the deployed 27-row pulse global history and upgrades it by appending monitoring', async () => {
+  test('preserves the deployed 28-row monitoring history and appends Discovery capabilities', async () => {
     expect(
       globalMigrationInventory
-        .slice(0, deployedPulseGlobalHistory.length)
+        .slice(0, deployedMonitoringGlobalHistory.length)
         .map(({ identity, checksum }) => [identity, checksum]),
-    ).toEqual(deployedPulseGlobalHistory.map((entry) => [...entry]))
-    const oldGlobalInventory = globalMigrationInventory.slice(0, deployedPulseGlobalHistory.length)
+    ).toEqual(deployedMonitoringGlobalHistory.map((entry) => [...entry]))
+    const oldGlobalInventory = globalMigrationInventory.slice(0, deployedMonitoringGlobalHistory.length)
     expect(deployedGlobalHistory).toHaveLength(25)
     expect(deployedPulseGlobalHistory).toHaveLength(27)
-    expect(globalMigrationInventory).toHaveLength(28)
-    expect(globalMigrationInventory.slice(deployedPulseGlobalHistory.length)).toEqual([
-      refreshOperationsMigrationInventory[11],
+    expect(deployedMonitoringGlobalHistory).toHaveLength(28)
+    expect(globalMigrationInventory).toHaveLength(31)
+    expect(globalMigrationInventory.slice(deployedMonitoringGlobalHistory.length)).toEqual([
+      clanMigrationInventory[1],
+      discoveryMigrationInventory[1],
+      refreshOperationsMigrationInventory[12],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -149,7 +163,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(1)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(3)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -249,7 +263,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
                clock_timestamp() + interval '1 minute')
           `
         }
-        expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(1)
+        expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(
+          refreshOperationsMigrationInventory.length - 11,
+        )
         const operations = await client<{ resource_key: string; status: string; error_code: string | null }[]>`
           SELECT resource_key, status, last_error->>'code' AS error_code
           FROM refresh_operations.operations

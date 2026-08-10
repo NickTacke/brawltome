@@ -240,25 +240,6 @@ export function createPostgresClans(connectionString: string) {
         : null
     },
 
-    async searchClans(query: string) {
-      const rows = await client<{ clan_id: number; clan_name: string; clan_xp: string; member_count: number }[]>`
-        SELECT profile.clan_id, profile.clan_name, profile.clan_xp::text,
-               count(member.brawlhalla_id)::integer AS member_count
-        FROM clans.profiles profile
-        LEFT JOIN clans.members member ON member.clan_id = profile.clan_id
-        WHERE profile.clan_name ILIKE ${`${query}%`}
-        GROUP BY profile.clan_id, profile.clan_name, profile.clan_xp
-        ORDER BY profile.clan_xp DESC, profile.clan_id
-        LIMIT 5
-      `
-      return rows.map((row) => ({
-        clanId: row.clan_id,
-        clanName: row.clan_name,
-        clanXp: row.clan_xp,
-        memberCount: row.member_count,
-      }))
-    },
-
     async publishProfile(
       profile: ClanProfileWrite,
       checkedAt: Date,
@@ -413,4 +394,4 @@ export function createPostgresClans(connectionString: string) {
 }
 
 export type PostgresClans = ReturnType<typeof createPostgresClans>
-export type ClanQueries = Pick<PostgresClans, 'getById' | 'getPlayerMembership' | 'searchClans'>
+export type ClanQueries = Pick<PostgresClans, 'getById' | 'getPlayerMembership'>

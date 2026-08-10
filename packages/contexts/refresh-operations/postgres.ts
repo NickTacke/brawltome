@@ -14,6 +14,7 @@ import {
   type DeadLetterListItem,
   type DeadLetterOperations,
   type DeadLetterPage,
+  type DiscoveryProjectionKind,
   type FencedResult,
   type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
@@ -27,6 +28,7 @@ import {
   type TransitionResult,
   type WorkClass,
   backgroundWorkClasses,
+  discoveryProjectionKinds,
   leaderboardOperationKinds,
   primaryMonitoringIntervalMs,
   validateAdmissionConfig,
@@ -146,9 +148,15 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
-  if (row.kind === 'player-discovery-projection') {
+  if (isDiscoveryProjectionKind(row.kind)) {
     if (row.work_class !== 'projection' || !('batchSize' in row.payload)) {
-      throw new Error('invalid durable player discovery projection operation')
+      throw new Error('invalid durable discovery projection operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (row.kind === 'discovery-reconciliation') {
+    if (row.work_class !== 'projection' || !('owner' in row.payload)) {
+      throw new Error('invalid durable discovery reconciliation operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -233,7 +241,8 @@ type AcceptedOrScheduledOperationKind =
   | 'interactive-player-refresh'
   | 'ranked-player-pulse'
   | LeaderboardOperationKind
-  | 'player-discovery-projection'
+  | DiscoveryProjectionKind
+  | 'discovery-reconciliation'
 
 function operationKind(input: { kind?: AcceptedOrScheduledOperationKind }): AcceptedOrScheduledOperationKind {
   return input.kind ?? 'proof'
@@ -241,6 +250,10 @@ function operationKind(input: { kind?: AcceptedOrScheduledOperationKind }): Acce
 
 function isLeaderboardKind(kind: string): kind is LeaderboardOperationKind {
   return (leaderboardOperationKinds as readonly string[]).includes(kind)
+}
+
+function isDiscoveryProjectionKind(kind: string): kind is DiscoveryProjectionKind {
+  return (discoveryProjectionKinds as readonly string[]).includes(kind)
 }
 
 function validateScheduleIdentity(input: {
@@ -338,7 +351,12 @@ export function createPostgresRefreshOperations(
   connectionString: string,
   options: {
     executionConcurrency?: number
-    playerProjectionEffectState?: (operationId: string) => Promise<'none' | 'applied' | 'acknowledged'>
+    projectionEffectState?: (
+      kind: DiscoveryProjectionKind,
+      effectOperationId: string,
+    ) => Promise<'none' | 'applied' | 'acknowledged'>
+    playerProjectionEffectState?: (effectOperationId: string) => Promise<'none' | 'applied' | 'acknowledged'>
+    reconciliationEffectApplied?: (effectOperationId: string) => Promise<boolean>
   } = {},
 ) {
   const executionConcurrency = options.executionConcurrency
@@ -655,12 +673,17 @@ export function createPostgresRefreshOperations(
           throw new Error('ranked player pulse brawlhallaId must be a positive 32-bit integer')
         }
       }
-      if (kind === 'player-discovery-projection') {
+      if (isDiscoveryProjectionKind(kind)) {
         const { batchSize } = input.payload as { batchSize: number }
-        if (input.workClass !== 'projection') throw new Error('player discovery requires projection work class')
+        if (input.workClass !== 'projection') throw new Error('discovery projection requires projection work class')
         if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 1_000) {
-          throw new Error('player discovery batchSize must be between 1 and 1000')
+          throw new Error('discovery projection batchSize must be between 1 and 1000')
         }
+      }
+      if (kind === 'discovery-reconciliation') {
+        const { owner } = input.payload as { owner: string }
+        if (input.workClass !== 'projection') throw new Error('discovery reconciliation requires projection work class')
+        if (owner !== 'player' && owner !== 'clan') throw new Error('discovery reconciliation owner is invalid')
       }
       for (;;) {
         const result = await client.begin(async (transaction) => {
@@ -1099,6 +1122,14 @@ export function createPostgresRefreshOperations(
           `
           if (!candidate) return { kind: 'retry' as const }
 
+          if (isDiscoveryProjectionKind(candidate.kind) || candidate.kind === 'discovery-reconciliation') {
+            await sql`
+              SELECT pg_advisory_xact_lock(
+                hashtextextended(${`discovery-effect:${candidate.effect_operation_id}`}, 200)
+              )
+            `
+          }
+
           if (candidate.status === 'leased') {
             const [proofEffect] =
               candidate.kind === 'proof'
@@ -1137,15 +1168,22 @@ export function createPostgresRefreshOperations(
                       ) AS complete
                     `
                   : []
-            const playerProjectionEffect =
-              candidate.kind === 'player-discovery-projection'
-                ? await options.playerProjectionEffectState?.(candidate.id)
-                : 'none'
+            const projectionEffect = isDiscoveryProjectionKind(candidate.kind)
+              ? await (options.projectionEffectState?.(candidate.kind, candidate.effect_operation_id) ??
+                  (candidate.kind === 'player-discovery-projection'
+                    ? options.playerProjectionEffectState?.(candidate.effect_operation_id)
+                    : 'none'))
+              : 'none'
+            const reconciliationEffectApplied =
+              candidate.kind === 'discovery-reconciliation'
+                ? await options.reconciliationEffectApplied?.(candidate.effect_operation_id)
+                : false
             if (
               proofEffect ||
               leaderboardEffect ||
               interactiveEffect?.complete ||
-              playerProjectionEffect === 'acknowledged'
+              projectionEffect === 'acknowledged' ||
+              reconciliationEffectApplied
             ) {
               await sql`
                 UPDATE refresh_operations.attempts
@@ -1168,7 +1206,11 @@ export function createPostgresRefreshOperations(
               WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
                 AND finished_at IS NULL
             `
-            if (candidate.attempt_count >= candidate.max_attempts && playerProjectionEffect !== 'applied') {
+            if (
+              candidate.attempt_count >= candidate.max_attempts &&
+              projectionEffect !== 'applied' &&
+              !reconciliationEffectApplied
+            ) {
               await sql`
                 UPDATE refresh_operations.operations
                 SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
@@ -1335,8 +1377,20 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async retryAppliedPlayerProjection(
-      lease: Extract<OperationLease, { kind: 'player-discovery-projection' }>,
+    async discoveryLeaseActive(lease: Extract<OperationLease, { workClass: 'projection' }>): Promise<boolean> {
+      const [result] = await client<{ active: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1 FROM refresh_operations.operations
+          WHERE id = ${lease.operationId} AND kind = ${lease.kind} AND status = 'leased'
+            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
+            AND lease_expires_at > clock_timestamp()
+        ) AS active
+      `
+      return result.active
+    },
+
+    async retryAppliedDiscoveryProjection(
+      lease: Extract<OperationLease, { payload: { batchSize: number } }>,
       retryDelayMs: number,
     ): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
@@ -1346,11 +1400,11 @@ export function createPostgresRefreshOperations(
           SET status = 'pending', lease_owner = NULL, lease_expires_at = NULL,
               available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
               last_error = ${sql.json({
-                code: 'player_projection_acknowledgment_pending',
-                message: 'Projection applied; owner acknowledgment remains pending',
+                code: 'discovery_projection_acknowledgment_pending',
+                message: 'Discovery projection applied; owner acknowledgment remains pending',
               })},
               updated_at = clock_timestamp()
-          WHERE id = ${lease.operationId} AND kind = 'player-discovery-projection' AND status = 'leased'
+          WHERE id = ${lease.operationId} AND kind = ${lease.kind} AND status = 'leased'
             AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
             AND lease_expires_at > clock_timestamp()
           RETURNING id
@@ -1360,8 +1414,8 @@ export function createPostgresRefreshOperations(
           UPDATE refresh_operations.attempts
           SET finished_at = clock_timestamp(), outcome = 'retry',
               error = ${sql.json({
-                code: 'player_projection_acknowledgment_pending',
-                message: 'Projection applied; owner acknowledgment remains pending',
+                code: 'discovery_projection_acknowledgment_pending',
+                message: 'Discovery projection applied; owner acknowledgment remains pending',
               })}
           WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
         `
@@ -1658,6 +1712,8 @@ export function createPostgresRefreshOperations(
         'interactive-player-refresh',
         'clan-refresh',
         'player-discovery-projection',
+        'clan-discovery-projection',
+        'discovery-reconciliation',
         'ranked-player-pulse',
         ...leaderboardOperationKinds,
       ]

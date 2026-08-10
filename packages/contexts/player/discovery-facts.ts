@@ -15,10 +15,17 @@ export type PlayerDiscoveryEvent = {
   fact: PlayerDiscoveryFact | null
 }
 
+export type PlayerDiscoverySnapshot = {
+  sourceVersion: number
+  facts: PlayerDiscoveryFact[]
+  pendingEventCount: number
+  oldestPendingAt: Date | null
+}
+
 export interface PlayerDiscoverySource {
   pendingEvents(limit: number): Promise<PlayerDiscoveryEvent[]>
   acknowledgeEvents(eventIds: string[]): Promise<void>
   replayDeliveredEvents(eventIds: string[]): Promise<void>
-  snapshot(): Promise<{ sourceVersion: number; facts: PlayerDiscoveryFact[] }>
+  snapshot(): Promise<PlayerDiscoverySnapshot>
   lag(): Promise<number>
 }
