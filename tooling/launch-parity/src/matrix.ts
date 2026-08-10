@@ -91,6 +91,50 @@ export const launchParityMatrix: readonly ParityRow[] = [
     verificationGap:
       'Service-backed migration, cutover finalization, and legacy-table retirement evidence requires DATABASE_URL and runs in the PostgreSQL-enabled CI check job, not this database-less parity job.',
   },
+  {
+    id: 'account.launch-preferences',
+    area: 'account-authentication',
+    requirement:
+      'Signed-in leaderboard defaults round-trip across sessions and devices while anonymous visitors receive non-persisted defaults.',
+    sourceIssue: '#207',
+    status: 'implemented',
+    destinations: ['/', '/trpc/account.preferences', '/trpc/account.updatePreferences'],
+    implementation: [
+      'packages/contexts/accounts/src/accounts.ts',
+      'packages/contexts/accounts/src/postgres-store.ts',
+      'packages/contexts/accounts/migrations/0003-add-preferences.ts',
+      'packages/contracts/src/account.ts',
+      'apps/api/src/router/account.router.ts',
+      'apps/web/src/components/Leaderboard/index.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/account.test.ts',
+        assertion: 'The strict versioned contract accepts only launch-consumed leaderboard bracket and region fields.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/account.router.test.ts',
+        assertion:
+          'Anonymous defaults, protected updates, strict input validation, and producer output validation pass.',
+      },
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/accounts.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL proves migration ownership and authenticated cross-session, cross-runtime round-trip.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/Leaderboard/utils.test.ts',
+        assertion:
+          'Home consumes canonical defaults, preserves URL precedence, and persists only authenticated filters.',
+      },
+    ],
+    verificationGap:
+      'Needs a browser assertion for authenticated selector persistence, account transitions, rapid updates, and visible save failure behavior.',
+  },
   implemented(
     'shell.desktop-rail',
     'shell-navigation',

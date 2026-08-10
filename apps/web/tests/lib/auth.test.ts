@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { parseAccountResponse, signOut } from '../../src/lib/auth'
+import { parseAccountPreferencesResponse, parseAccountResponse, signOut } from '../../src/lib/auth'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
@@ -33,25 +33,41 @@ describe('parseAccountResponse', () => {
   })
 })
 
+describe('parseAccountPreferencesResponse', () => {
+  test('accepts canonical launch preferences and rejects unknown fields', () => {
+    const preferences = { version: 1, leaderboardBracket: 'solo2v2', leaderboardRegion: 'SEA' } as const
+    expect(parseAccountPreferencesResponse(preferences)).toEqual(preferences)
+    expect(() => parseAccountPreferencesResponse({ ...preferences, theme: 'dark' })).toThrow()
+  })
+})
+
 describe('signOut', () => {
   test('invalidates account state after successful revocation', async () => {
     globalThis.fetch = mock(async () => new Response(null, { status: 204 })) as unknown as typeof fetch
     const invalidations: unknown[] = []
+    const removals: unknown[] = []
     const queryClient = {
       async invalidateQueries(options: unknown) {
         invalidations.push(options)
+      },
+      removeQueries(options: unknown) {
+        removals.push(options)
       },
     } as Parameters<typeof signOut>[0]
 
     await signOut(queryClient)
 
     expect(invalidations).toEqual([{ queryKey: ['account', 'current'] }, { queryKey: ['identity', 'playerLink'] }])
+    expect(removals).toEqual([{ queryKey: ['account', 'preferences'] }])
   })
 
   test('rejects failed revocation without invalidating signed-in state', async () => {
     globalThis.fetch = mock(async () => new Response(null, { status: 500 })) as unknown as typeof fetch
     const invalidateQueries = mock(async () => {})
-    const queryClient = { invalidateQueries } as unknown as Parameters<typeof signOut>[0]
+    const queryClient = {
+      invalidateQueries,
+      removeQueries: mock(() => {}),
+    } as unknown as Parameters<typeof signOut>[0]
 
     await expect(signOut(queryClient)).rejects.toThrow('Sign-out failed with status 500')
     expect(invalidateQueries).not.toHaveBeenCalled()

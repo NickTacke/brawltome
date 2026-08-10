@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { accountViewSchema, parseAccountViewOutput } from '../src/account'
+import { accountPreferencesSchema, accountViewSchema, parseAccountViewOutput } from '../src/account'
 
 const signedInView = {
   status: 'signedIn' as const,
@@ -10,6 +10,37 @@ const signedInView = {
     createdAt: '2026-08-09T18:42:01.000Z',
   },
 }
+
+describe('accountPreferencesSchema', () => {
+  test('defines only the launch-consumed leaderboard preferences in version 1', () => {
+    const preferences = {
+      version: 1 as const,
+      leaderboardBracket: 'solo2v2' as const,
+      leaderboardRegion: 'EU' as const,
+    }
+
+    expect(accountPreferencesSchema.parse(preferences)).toEqual(preferences)
+  })
+
+  test('rejects unknown, retired, partial, and unsupported preferences', () => {
+    expect(() =>
+      accountPreferencesSchema.parse({
+        version: 1,
+        leaderboardBracket: '1v1',
+        leaderboardRegion: 'all',
+        theme: 'dark',
+      }),
+    ).toThrow()
+    expect(() => accountPreferencesSchema.parse({ version: 1, leaderboardBracket: '1v1' })).toThrow()
+    expect(() =>
+      accountPreferencesSchema.parse({
+        version: 2,
+        leaderboardBracket: '1v1',
+        leaderboardRegion: 'all',
+      }),
+    ).toThrow()
+  })
+})
 
 describe('accountViewSchema', () => {
   test('represents anonymous and signed-in account views', () => {

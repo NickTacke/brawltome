@@ -1,5 +1,6 @@
 import { initializeAndImportV2Accounts } from './migrations/0001-initialize-and-import-v2'
 import { addV2AuthCutoverState } from './migrations/0002-add-v2-auth-cutover-state'
+import { addAccountPreferences } from './migrations/0003-add-preferences'
 import { createAccounts } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
@@ -21,4 +22,8 @@ export function createPostgresAccounts(connectionString: string) {
   }
 }
 
-export const accountsMigrationInventory = [initializeAndImportV2Accounts, addV2AuthCutoverState] as const
+export const accountsMigrationInventory = [
+  initializeAndImportV2Accounts,
+  addV2AuthCutoverState,
+  addAccountPreferences,
+] as const

@@ -1,5 +1,11 @@
 import postgres, { type Sql } from 'postgres'
-import type { Account, AccountsStore } from './accounts'
+import {
+  type Account,
+  type AccountPreferences,
+  type AccountsStore,
+  LEADERBOARD_BRACKETS,
+  LEADERBOARD_REGIONS,
+} from './accounts'
 import {
   type V2AuthCutoverFinalization,
   finalizeV2AuthCutover,
@@ -25,6 +31,12 @@ interface AccountRow {
 interface SessionAccountRow extends AccountRow {
   expires_at: Date
   imported_from_v2: boolean
+}
+
+interface PreferencesRow {
+  schema_version: number
+  leaderboard_bracket: string
+  leaderboard_region: string
 }
 
 const sessionAccountQuery = `SELECT
@@ -179,6 +191,52 @@ function postgresAccountsStore(client: Sql): AccountsStore {
         await revokeV2Session(transaction, id)
       })
     },
+
+    async findPreferences(accountId) {
+      const [row] = await client.unsafe<PreferencesRow[]>(
+        `SELECT schema_version, leaderboard_bracket, leaderboard_region
+         FROM accounts.preferences
+         WHERE account_id = $1`,
+        [accountId],
+      )
+      return row ? mapPreferences(row) : null
+    },
+
+    async upsertPreferences(accountId, preferences) {
+      const [row] = await client.unsafe<PreferencesRow[]>(
+        `INSERT INTO accounts.preferences (
+           account_id,
+           schema_version,
+           leaderboard_bracket,
+           leaderboard_region
+         ) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (account_id) DO UPDATE
+         SET schema_version = EXCLUDED.schema_version,
+             leaderboard_bracket = EXCLUDED.leaderboard_bracket,
+             leaderboard_region = EXCLUDED.leaderboard_region,
+             updated_at = now()
+         RETURNING schema_version, leaderboard_bracket, leaderboard_region`,
+        [accountId, preferences.version, preferences.leaderboardBracket, preferences.leaderboardRegion],
+      )
+      const stored = mapPreferences(row)
+      if (!stored) throw new Error('Accounts stored an unsupported preference version')
+      return stored
+    },
+  }
+}
+
+function mapPreferences(row: PreferencesRow): AccountPreferences | null {
+  if (
+    row.schema_version !== 1 ||
+    !LEADERBOARD_BRACKETS.includes(row.leaderboard_bracket as AccountPreferences['leaderboardBracket']) ||
+    !LEADERBOARD_REGIONS.includes(row.leaderboard_region as AccountPreferences['leaderboardRegion'])
+  ) {
+    return null
+  }
+  return {
+    version: 1,
+    leaderboardBracket: row.leaderboard_bracket as AccountPreferences['leaderboardBracket'],
+    leaderboardRegion: row.leaderboard_region as AccountPreferences['leaderboardRegion'],
   }
 }
 

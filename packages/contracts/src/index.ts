@@ -1,9 +1,11 @@
 export {
+  accountPreferencesSchema,
   accountSchema,
   accountViewSchema,
   anonymousAccountViewSchema,
   parseAccountViewOutput,
   signedInAccountViewSchema,
+  type AccountPreferencesContract,
   type AccountContract,
   type AccountViewContract,
 } from './account'

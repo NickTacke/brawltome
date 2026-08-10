@@ -531,4 +531,110 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       await admin.end()
     }
   })
+
+  test('round-trips launch preferences across sessions and runtimes without anonymous persistence', async () => {
+    const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
+    const defaultPreferences = { version: 1, leaderboardBracket: '1v1', leaderboardRegion: 'all' } as const
+    const { globalMigrationInventory } = await import('../src/inventories')
+    const { migratePostgres } = await import('../src/postgres')
+    const databaseName = `brawltome_preferences_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      await migratePostgres(databaseUrl.toString(), globalMigrationInventory)
+      const firstRuntime = createPostgresAccounts(databaseUrl.toString())
+      let accountId = ''
+      let secondDeviceToken = ''
+      try {
+        expect(await firstRuntime.accounts.getPreferences(null)).toEqual(defaultPreferences)
+        const anonymousClient = postgres(databaseUrl.toString(), { max: 1 })
+        try {
+          const [{ preference_count }] = await anonymousClient<{ preference_count: number }[]>`
+            SELECT count(*)::int AS preference_count FROM accounts.preferences
+          `
+          expect(preference_count).toBe(0)
+        } finally {
+          await anonymousClient.end()
+        }
+
+        const firstDevice = await firstRuntime.accounts.signInWithDiscord({
+          providerAccountId: 'discord-preferences',
+          displayName: 'Ada',
+          avatarHash: null,
+        })
+        const secondDevice = await firstRuntime.accounts.signInWithDiscord({
+          providerAccountId: 'discord-preferences',
+          displayName: 'Ada',
+          avatarHash: null,
+        })
+        accountId = firstDevice.account.id
+        secondDeviceToken = secondDevice.sessionToken
+
+        await firstRuntime.accounts.updatePreferences(accountId, {
+          version: 1,
+          leaderboardBracket: 'solo2v2',
+          leaderboardRegion: 'EU',
+        })
+      } finally {
+        await firstRuntime.close()
+      }
+
+      const secondRuntime = createPostgresAccounts(databaseUrl.toString())
+      try {
+        const authentication = await secondRuntime.accounts.authenticate(secondDeviceToken)
+        expect(authentication).toMatchObject({ status: 'signedIn', account: { id: accountId } })
+        expect(await secondRuntime.accounts.getPreferences(accountId)).toEqual({
+          version: 1,
+          leaderboardBracket: 'solo2v2',
+          leaderboardRegion: 'EU',
+        })
+
+        const otherAccount = await secondRuntime.accounts.signInWithDiscord({
+          providerAccountId: 'discord-other-preferences',
+          displayName: 'Grace',
+          avatarHash: null,
+        })
+        expect(otherAccount.account.id).not.toBe(accountId)
+        expect(await secondRuntime.accounts.getPreferences(otherAccount.account.id)).toEqual(defaultPreferences)
+
+        const client = postgres(databaseUrl.toString(), { max: 1 })
+        try {
+          const [stored] = await client<
+            { schema_version: number; leaderboard_bracket: string; leaderboard_region: string }[]
+          >`
+            SELECT schema_version, leaderboard_bracket, leaderboard_region
+            FROM accounts.preferences
+            WHERE account_id = ${accountId}
+          `
+          expect(stored).toEqual({
+            schema_version: 1,
+            leaderboard_bracket: 'solo2v2',
+            leaderboard_region: 'EU',
+          })
+
+          await client`
+            UPDATE accounts.preferences
+            SET schema_version = 2,
+                leaderboard_bracket = '3v3',
+                leaderboard_region = 'JPN'
+            WHERE account_id = ${accountId}
+          `
+        } finally {
+          await client.end()
+        }
+
+        expect(await secondRuntime.accounts.getPreferences(accountId)).toEqual(defaultPreferences)
+      } finally {
+        await secondRuntime.close()
+      }
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  }, 15_000)
 })

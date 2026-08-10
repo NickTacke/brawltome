@@ -1,5 +1,14 @@
-import type { Account } from '@brawltome/accounts'
-import { type AccountViewContract, parseAccountViewOutput } from '@brawltome/contracts'
+import type { Account, AccountPreferences } from '@brawltome/accounts'
+import {
+  type AccountPreferencesContract,
+  type AccountViewContract,
+  accountPreferencesSchema,
+  parseAccountViewOutput,
+} from '@brawltome/contracts'
+
+export function toAccountPreferences(preferences: AccountPreferences): AccountPreferencesContract {
+  return accountPreferencesSchema.parse(preferences)
+}
 
 export function toAccountView(account: Account | null): AccountViewContract {
   return parseAccountViewOutput(

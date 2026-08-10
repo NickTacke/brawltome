@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { type AccountsStore, createAccounts } from '../src/accounts'
+import {
+  type AccountsStore,
+  DEFAULT_ACCOUNT_PREFERENCES,
+  InvalidAccountPreferencesError,
+  createAccounts,
+} from '../src/accounts'
 
 const ACCOUNT_ID = '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295'
 const now = new Date('2026-08-09T18:00:00.000Z')
@@ -7,6 +12,7 @@ const now = new Date('2026-08-09T18:00:00.000Z')
 function makeStore() {
   const accounts = new Map<string, { id: string; displayName: string; avatarUrl: string | null; createdAt: Date }>()
   const sessions = new Map<string, { accountId: string; expiresAt: Date }>()
+  const preferences = new Map<string, typeof DEFAULT_ACCOUNT_PREFERENCES>()
   const store: AccountsStore = {
     async upsertDiscordIdentity(profile) {
       const existing = accounts.get(profile.providerAccountId)
@@ -44,8 +50,15 @@ function makeStore() {
     async deleteSession(id) {
       sessions.delete(id)
     },
+    async findPreferences(accountId) {
+      return preferences.get(accountId) ?? null
+    },
+    async upsertPreferences(accountId, nextPreferences) {
+      preferences.set(accountId, nextPreferences)
+      return nextPreferences
+    },
   }
-  return { store, accounts, sessions }
+  return { store, accounts, sessions, preferences }
 }
 
 function makeAccounts(store: AccountsStore, token = 'raw-session-token') {
@@ -147,6 +160,48 @@ describe('Accounts', () => {
 
     const result = await accounts.authenticate('raw-session-token')
     expect(result).toMatchObject({ status: 'signedIn', extended: false })
+  })
+
+  test('returns anonymous defaults without storing tracking state', async () => {
+    const state = makeStore()
+    const accounts = makeAccounts(state.store)
+
+    expect(await accounts.getPreferences(null)).toEqual(DEFAULT_ACCOUNT_PREFERENCES)
+    expect(state.preferences.size).toBe(0)
+  })
+
+  test('round-trips one explicit preference version for an account', async () => {
+    const state = makeStore()
+    const accounts = makeAccounts(state.store)
+    const updated = {
+      version: 1 as const,
+      leaderboardBracket: '3v3' as const,
+      leaderboardRegion: 'JPN' as const,
+    }
+
+    expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(DEFAULT_ACCOUNT_PREFERENCES)
+    expect(await accounts.updatePreferences(ACCOUNT_ID, updated)).toEqual(updated)
+    expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(updated)
+  })
+
+  test('rejects unsupported values at the Accounts boundary without changing stored preferences', async () => {
+    const state = makeStore()
+    const accounts = makeAccounts(state.store)
+
+    await expect(
+      accounts.updatePreferences(ACCOUNT_ID, {
+        version: 1,
+        leaderboardBracket: 'ranked' as '1v1',
+        leaderboardRegion: 'EU',
+      }),
+    ).rejects.toBeInstanceOf(InvalidAccountPreferencesError)
+    await expect(
+      accounts.updatePreferences(ACCOUNT_ID, {
+        ...DEFAULT_ACCOUNT_PREFERENCES,
+        theme: 'dark',
+      } as never),
+    ).rejects.toBeInstanceOf(InvalidAccountPreferencesError)
+    expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(DEFAULT_ACCOUNT_PREFERENCES)
   })
 
   test('sign-out revokes known sessions and is idempotent for unknown tokens', async () => {
