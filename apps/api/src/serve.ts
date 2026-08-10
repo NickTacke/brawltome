@@ -2,7 +2,6 @@ import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
-import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
 import {
   createPlayerRepo,
@@ -98,19 +97,6 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
 })
 const ranking = createPostgresRanking(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
-const playerLinkRepo = createPlayerLinkRepo(db)
-const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
-  redis,
-  'resolve-steam',
-  async () => {},
-  {
-    concurrency: 0,
-    maxDepth: 500,
-    dedupKey: (d) => `${d.userId}:${d.steamId}`,
-    metrics,
-  },
-)
-
 const matchmakingConfig = readMatchmakingConfig()
 const r2 = createR2Client(matchmakingConfig.r2)
 const matchmakingLive = matchmakingConfig.enabled && !!r2
@@ -181,8 +167,6 @@ const sharedCtx = {
   rankingQueries: ranking.queries,
   clanRepo,
   accounts,
-  playerLinkRepo,
-  steamLinkQueue,
   matchRepo,
   r2,
   matchmakingEnabled: matchmakingLive,
@@ -212,7 +196,10 @@ app.use(
   }),
 )
 
-app.route('/auth', createAuthRoutes({ accounts, playerLinkRepo, steamLinkQueue, config: authConfig }))
+app.route(
+  '/auth',
+  createAuthRoutes({ accounts, requestAdmission, verificationOperations: refreshOperations, config: authConfig }),
+)
 app.route('/internal/contracts', createContractProofRoutes())
 app.route('/internal/operations', createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET))
 

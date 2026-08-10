@@ -24,6 +24,7 @@ export {
   createPostgresPlayerDiscoverySource,
   type PostgresPlayerDiscoverySource,
 } from './discovery-postgres'
+export { createSteamPlayerEvidenceResolver } from './verification'
 export { createPlayerRepo } from './player.repo'
 
 export const playerMigrationInventory = [

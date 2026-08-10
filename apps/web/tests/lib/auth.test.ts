@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { parseAccountPreferencesResponse, parseAccountResponse, signOut } from '../../src/lib/auth'
+import {
+  parseAccountPreferencesResponse,
+  parseAccountResponse,
+  parsePrimaryPlayerResponse,
+  signOut,
+} from '../../src/lib/auth'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
@@ -41,6 +46,30 @@ describe('parseAccountPreferencesResponse', () => {
   })
 })
 
+describe('parsePrimaryPlayerResponse', () => {
+  test('parses privacy-safe ownership history and rejects proof subjects', () => {
+    const state = {
+      primaryPlayer: null,
+      attempts: [
+        {
+          id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
+          status: 'pending' as const,
+          startedAt: '2026-08-10T10:00:00.000Z',
+          completedAt: null,
+          player: null,
+        },
+      ],
+    }
+    expect(parsePrimaryPlayerResponse(state)).toEqual(state)
+    expect(() =>
+      parsePrimaryPlayerResponse({
+        ...state,
+        attempts: [{ ...state.attempts[0], steamId: 'private-proof-subject' }],
+      }),
+    ).toThrow()
+  })
+})
+
 describe('signOut', () => {
   test('invalidates account state after successful revocation', async () => {
     globalThis.fetch = mock(async () => new Response(null, { status: 204 })) as unknown as typeof fetch
@@ -57,7 +86,7 @@ describe('signOut', () => {
 
     await signOut(queryClient)
 
-    expect(invalidations).toEqual([{ queryKey: ['account', 'current'] }, { queryKey: ['identity', 'playerLink'] }])
+    expect(invalidations).toEqual([{ queryKey: ['account', 'current'] }, { queryKey: ['account', 'primaryPlayer'] }])
     expect(removals).toEqual([{ queryKey: ['account', 'preferences'] }])
   })
 

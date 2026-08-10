@@ -41,10 +41,73 @@ export const signedInAccountViewSchema = z
 
 export const accountViewSchema = z.discriminatedUnion('status', [anonymousAccountViewSchema, signedInAccountViewSchema])
 
+const primaryPlayerReferenceSchema = z
+  .object({
+    brawlhallaId: z.number().int().positive().safe(),
+    name: z.string().min(1).max(64).nullable(),
+  })
+  .strict()
+
+const primaryPlayerSchema = primaryPlayerReferenceSchema
+  .extend({ verifiedAt: z.string().datetime({ offset: false }) })
+  .strict()
+
+const verificationAttemptBase = {
+  id: z.string().uuid(),
+  startedAt: z.string().datetime({ offset: false }),
+}
+
+const primaryPlayerVerificationAttemptSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      ...verificationAttemptBase,
+      status: z.literal('pending'),
+      completedAt: z.null(),
+      player: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      ...verificationAttemptBase,
+      status: z.literal('failed'),
+      completedAt: z.string().datetime({ offset: false }),
+      player: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      ...verificationAttemptBase,
+      status: z.literal('conflict'),
+      completedAt: z.string().datetime({ offset: false }),
+      player: primaryPlayerReferenceSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...verificationAttemptBase,
+      status: z.literal('verified'),
+      completedAt: z.string().datetime({ offset: false }),
+      player: primaryPlayerReferenceSchema,
+    })
+    .strict(),
+])
+
+export const primaryPlayerVerificationStateSchema = z
+  .object({
+    primaryPlayer: primaryPlayerSchema.nullable(),
+    attempts: z.array(primaryPlayerVerificationAttemptSchema),
+  })
+  .strict()
+
 export type AccountPreferencesContract = z.infer<typeof accountPreferencesSchema>
 export type AccountContract = z.infer<typeof accountSchema>
 export type AccountViewContract = z.infer<typeof accountViewSchema>
+export type PrimaryPlayerVerificationStateContract = z.infer<typeof primaryPlayerVerificationStateSchema>
 
 export function parseAccountViewOutput(value: unknown): AccountViewContract {
   return accountViewSchema.parse(value)
+}
+
+export function parsePrimaryPlayerVerificationStateOutput(value: unknown): PrimaryPlayerVerificationStateContract {
+  return primaryPlayerVerificationStateSchema.parse(value)
 }

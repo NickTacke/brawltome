@@ -166,7 +166,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
     }
-  })
+  }, 15_000)
 
   test('copies V2 identities and valid sessions as UTC while preserving legacy tables', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts/composition')

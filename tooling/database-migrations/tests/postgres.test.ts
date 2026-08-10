@@ -29,6 +29,7 @@ const preCareerGlobalHistory = [
   ['accounts/0001', '35221acf208c770f80f551d62a6c7698e4a3c03fb4aa5c87b83ab9c442232354'],
   ['accounts/0002', '0267bc15fea9cf27bf8d08434e9c7cb3f8c054beb9274619a770236f116bf99c'],
   ['accounts/0003', '3b6a89bd5b60420ac04471559c2b8a8e27495b52135e176438910de3611696a3'],
+  ['accounts/0004', 'fb0dd41d2bb7175980963b13c4e809617cdd267dfe72170df594665ced443f33'],
   ['rankings/0001', 'd3c91ddf8a99e6a5a39b88eaad3813f9e65c693346fe1bf054b5fe6f4901b701'],
   ['clans/0001', 'f258dd4e3e46c8bcaa917f3f42a3d4a9925963374453e7c7c7b70565ea502700'],
   ['refresh-operations/0007', '7e8aafa5721bef24c28a00dfcee3d39d6cc90aecbdc77abf70401cb5cb8cf6e7'],
@@ -38,7 +39,13 @@ const preCareerGlobalHistory = [
 ] as const
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories Players 0001 through 0005 and Refresh Operations 0001 through 0010', () => {
+  test('inventories Accounts 0001 through 0004, Players 0001 through 0005, and Refresh Operations 0001 through 0010', () => {
+    expect(accountsMigrationInventory.map(({ identity }) => identity)).toEqual([
+      'accounts/0001',
+      'accounts/0002',
+      'accounts/0003',
+      'accounts/0004',
+    ])
     expect(playerMigrationInventory.map(({ identity }) => identity)).toEqual([
       'players/0001',
       'players/0002',

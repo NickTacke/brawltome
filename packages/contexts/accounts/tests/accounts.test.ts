@@ -57,6 +57,18 @@ function makeStore() {
       preferences.set(accountId, nextPreferences)
       return nextPreferences
     },
+    async beginPrimaryPlayerVerification() {
+      throw new Error('not used')
+    },
+    async findPrimaryPlayerVerificationAttempt() {
+      return null
+    },
+    async completePrimaryPlayerVerification() {
+      throw new Error('not used')
+    },
+    async getPrimaryPlayerVerificationState() {
+      return { primaryPlayer: null, attempts: [] }
+    },
   }
   return { store, accounts, sessions, preferences }
 }

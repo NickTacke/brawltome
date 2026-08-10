@@ -1,6 +1,6 @@
 'use client'
 
-import { signOut, usePlayerLink } from '@/lib/auth'
+import { signOut, usePrimaryPlayer } from '@/lib/auth'
 import type { AccountContract } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link2, Users } from 'lucide-react'
@@ -13,7 +13,7 @@ interface SignedInStateProps {
 
 export function SignedInState({ account }: SignedInStateProps) {
   const queryClient = useQueryClient()
-  const { playerLink, isLoading: playerLinkLoading } = usePlayerLink()
+  const { state: primaryPlayerState, isLoading: primaryPlayerLoading } = usePrimaryPlayer()
   const memberSince = new Date(account.createdAt).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
@@ -48,7 +48,7 @@ export function SignedInState({ account }: SignedInStateProps) {
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
         <h2 className="text-sm font-semibold">Linked Accounts</h2>
         <div className="mt-4 space-y-3">
-          <BrawlhallaLinkRow link={playerLink} loading={playerLinkLoading} />
+          <BrawlhallaLinkRow state={primaryPlayerState} loading={primaryPlayerLoading} />
           <div className="border-border/50 border-t" />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

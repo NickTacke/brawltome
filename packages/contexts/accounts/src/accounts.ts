@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SESSION_EXTEND_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
@@ -53,12 +53,52 @@ export interface AccountSignIn {
   expiresAt: Date
 }
 
+export interface PrimaryPlayerReference {
+  brawlhallaId: number
+  name: string | null
+}
+
+export interface PrimaryPlayer extends PrimaryPlayerReference {
+  verifiedAt: Date
+}
+
+export type PrimaryPlayerVerificationStatus = 'pending' | 'failed' | 'conflict' | 'verified'
+
+export interface PrimaryPlayerVerificationAttempt {
+  id: string
+  status: PrimaryPlayerVerificationStatus
+  startedAt: Date
+  completedAt: Date | null
+  player: PrimaryPlayerReference | null
+}
+
+export interface PrimaryPlayerVerificationState {
+  primaryPlayer: PrimaryPlayer | null
+  attempts: PrimaryPlayerVerificationAttempt[]
+}
+
+export interface PrimaryPlayerEvidence extends PrimaryPlayerReference {
+  name: string
+  checkedAt: Date
+  source: 'brawlhalla-v0-steam-search'
+}
+
 export interface Accounts {
   signInWithDiscord(profile: DiscordSignInProfile): Promise<AccountSignIn>
   authenticate(sessionToken: string | null): Promise<AccountAuthentication>
   signOut(sessionToken: string): Promise<void>
   getPreferences(accountId: string | null): Promise<AccountPreferences>
   updatePreferences(accountId: string, preferences: AccountPreferences): Promise<AccountPreferences>
+  beginPrimaryPlayerVerification(input: {
+    accountId: string
+    steamId: string
+    idempotencyKey: string
+  }): Promise<PrimaryPlayerVerificationAttempt>
+  resolvePrimaryPlayerVerification(
+    attemptId: string,
+    resolver: { resolve(steamId: string): Promise<PrimaryPlayerEvidence | null> },
+  ): Promise<PrimaryPlayerVerificationAttempt>
+  getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
 }
 
 export interface AccountsStore {
@@ -69,18 +109,36 @@ export interface AccountsStore {
   deleteSession(id: string): Promise<void>
   findPreferences(accountId: string): Promise<AccountPreferences | null>
   upsertPreferences(accountId: string, preferences: AccountPreferences): Promise<AccountPreferences>
+  beginPrimaryPlayerVerification(input: {
+    attemptId: string
+    accountId: string
+    steamId: string
+    idempotencyKey: string
+    startedAt: Date
+  }): Promise<PrimaryPlayerVerificationAttempt>
+  findPrimaryPlayerVerificationAttempt(
+    attemptId: string,
+  ): Promise<{ attempt: PrimaryPlayerVerificationAttempt; steamId: string } | null>
+  completePrimaryPlayerVerification(input: {
+    attemptId: string
+    evidence: PrimaryPlayerEvidence | null
+    completedAt: Date
+  }): Promise<PrimaryPlayerVerificationAttempt>
+  getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
 }
 
 interface CreateAccountsOptions {
   store: AccountsStore
   now?: () => Date
   generateToken?: () => string
+  generateId?: () => string
 }
 
 export function createAccounts({
   store,
   now = () => new Date(),
   generateToken = () => randomBytes(32).toString('base64url'),
+  generateId = randomUUID,
 }: CreateAccountsOptions): Accounts {
   return {
     async signInWithDiscord(profile) {
@@ -120,6 +178,26 @@ export function createAccounts({
     async updatePreferences(accountId, preferences) {
       if (!validPreferences(preferences)) throw new InvalidAccountPreferencesError()
       return store.upsertPreferences(accountId, preferences)
+    },
+
+    async beginPrimaryPlayerVerification(input) {
+      return store.beginPrimaryPlayerVerification({
+        ...input,
+        attemptId: generateId(),
+        startedAt: now(),
+      })
+    },
+
+    async resolvePrimaryPlayerVerification(attemptId, resolver) {
+      const pending = await store.findPrimaryPlayerVerificationAttempt(attemptId)
+      if (!pending) throw new Error('Unknown Primary Player verification attempt')
+      if (pending.attempt.status !== 'pending') return pending.attempt
+      const evidence = await resolver.resolve(pending.steamId)
+      return store.completePrimaryPlayerVerification({ attemptId, evidence, completedAt: now() })
+    },
+
+    getPrimaryPlayerVerificationState(accountId) {
+      return store.getPrimaryPlayerVerificationState(accountId)
     },
   }
 }

@@ -1,7 +1,7 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto'
-import type { Accounts } from '@brawltome/accounts'
-import { PlayerAlreadyLinkedError, type PlayerLinkRepo, linkPlayer } from '@brawltome/identity'
-import type { Queue } from '@brawltome/shared'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import type { Accounts, PrimaryPlayerVerificationAttempt } from '@brawltome/accounts'
+import type { AcceptOperationResult, AcceptProofOperation } from '@brawltome/refresh-operations'
+import type { ActorAdmission } from '@brawltome/request-admission'
 import { Hono } from 'hono'
 import {
   OAUTH_STATE_COOKIE,
@@ -30,8 +30,10 @@ export interface AuthConfig {
 
 export interface CreateAuthRoutesDeps {
   accounts: Accounts
-  playerLinkRepo: PlayerLinkRepo
-  steamLinkQueue: Queue<{ userId: string; steamId: string; caller: 'background' }>
+  requestAdmission: ActorAdmission
+  verificationOperations: {
+    accept(input: AcceptProofOperation): Promise<AcceptOperationResult>
+  }
   config: AuthConfig
 }
 
@@ -48,7 +50,7 @@ function stateMatches(expected: string | undefined, provided: string | undefined
 
 export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   const app = new Hono()
-  const { accounts, playerLinkRepo, steamLinkQueue, config } = deps
+  const { accounts, requestAdmission, verificationOperations, config } = deps
   const expectedOrigin = normalizeOrigin(config.webOrigin)
 
   app.get('/discord/login', (c) => {
@@ -180,7 +182,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
 
     let steamId: string | null
     try {
-      steamId = await verifySteamLogin(openidParams)
+      steamId = await verifySteamLogin(openidParams, `${config.steamReturnUrl}?state=${providedState}`)
     } catch (err) {
       console.error('[auth] steam verification failed', err)
       return c.redirect(`${config.webOrigin}/account?error=steam`)
@@ -195,15 +197,48 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       return c.redirect(`${config.webOrigin}/account?error=auth`)
     }
 
-    try {
-      await linkPlayer({ playerLinkRepo }, { userId: authentication.account.id, steamId })
-    } catch (err) {
-      console.error('[auth] linkPlayer failed', err)
-      const isAlreadyLinked = err instanceof PlayerAlreadyLinkedError
-      return c.redirect(`${config.webOrigin}/account?error=${isAlreadyLinked ? 'already_linked' : 'server'}`)
+    const responseNonce = openidParams['openid.response_nonce']
+    if (!responseNonce) {
+      return c.redirect(`${config.webOrigin}/account?error=steam`)
     }
 
-    await steamLinkQueue.enqueue({ userId: authentication.account.id, steamId, caller: 'background' })
+    const idempotencyKey = createHash('sha256').update(responseNonce).digest('hex')
+    const clientIp = c.req.header('cf-connecting-ip') ?? 'unknown'
+    const admissionKey = createHash('sha256')
+      .update(`${authentication.account.id}:${clientIp}:${idempotencyKey}`)
+      .digest('hex')
+    const admission = await requestAdmission.admitActor(
+      { kind: 'authenticated', accountId: authentication.account.id, ip: clientIp },
+      `primary-player:${admissionKey}`,
+    )
+    if (admission.outcome === 'rate-limited') {
+      return c.redirect(`${config.webOrigin}/account?error=rate_limited`)
+    }
+
+    let attempt: PrimaryPlayerVerificationAttempt
+    try {
+      attempt = await accounts.beginPrimaryPlayerVerification({
+        accountId: authentication.account.id,
+        steamId,
+        idempotencyKey,
+      })
+    } catch (err) {
+      console.error('[auth] Primary Player verification attempt failed', err)
+      return c.redirect(`${config.webOrigin}/account?error=server`)
+    }
+
+    if (attempt.status === 'pending') {
+      const operation = await verificationOperations.accept({
+        kind: 'proof',
+        dedupeKey: `primary-player:${attempt.id}`,
+        operationKey: `primary-player:${attempt.id}`,
+        workClass: 'interactive',
+        payload: { value: attempt.id },
+        provenance: { source: 'steam-openid', requestedBy: authentication.account.id },
+        maxAttempts: 3,
+      })
+      if (operation.outcome === 'already-active') return c.redirect(`${config.webOrigin}/account`)
+    }
     return c.redirect(`${config.webOrigin}/account`)
   })
 

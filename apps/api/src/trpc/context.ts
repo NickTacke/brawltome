@@ -2,7 +2,6 @@ import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
 import type { DiscoveryQueries } from '@brawltome/discovery'
-import type { PlayerLinkRepo } from '@brawltome/identity'
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
 import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
@@ -30,8 +29,6 @@ export interface Context {
   rankingQueries: RankingQueries
   clanRepo: ClanRepo
   accounts: Accounts
-  playerLinkRepo: PlayerLinkRepo
-  steamLinkQueue: Queue<{ userId: string; steamId: string; caller: 'background' }>
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined

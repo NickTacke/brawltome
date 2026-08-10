@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { type Account, type AccountPreferences, type Accounts, DEFAULT_ACCOUNT_PREFERENCES } from '@brawltome/accounts'
-import { accountPreferencesSchema, accountViewSchema } from '@brawltome/contracts'
+import { accountPreferencesSchema, accountViewSchema, primaryPlayerVerificationStateSchema } from '@brawltome/contracts'
 import { initTRPC } from '@trpc/server'
 import superjson from 'superjson'
-import { toAccountPreferences, toAccountView } from '../src/mappers/account.mapper'
+import { toAccountPreferences, toAccountView, toPrimaryPlayerVerificationState } from '../src/mappers/account.mapper'
 import { accountRouter } from '../src/router/account.router'
 
 interface TestContext {
@@ -13,6 +13,42 @@ interface TestContext {
 
 const t = initTRPC.context<TestContext>().create({ transformer: superjson })
 const caller = t.createCallerFactory(accountRouter as unknown as ReturnType<typeof t.router>)
+
+const accounts = {
+  async signInWithDiscord() {
+    throw new Error('not used')
+  },
+  async authenticate() {
+    return { status: 'anonymous' }
+  },
+  async signOut() {},
+  async getPreferences() {
+    return DEFAULT_ACCOUNT_PREFERENCES
+  },
+  async updatePreferences(_accountId, preferences) {
+    return preferences
+  },
+  async beginPrimaryPlayerVerification() {
+    throw new Error('not used')
+  },
+  async resolvePrimaryPlayerVerification() {
+    throw new Error('not used')
+  },
+  async getPrimaryPlayerVerificationState() {
+    return {
+      primaryPlayer: { brawlhallaId: 42, name: 'Ada', verifiedAt: new Date('2026-08-10T10:02:00.000Z') },
+      attempts: [
+        {
+          id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
+          status: 'verified' as const,
+          startedAt: new Date('2026-08-10T10:00:00.000Z'),
+          completedAt: new Date('2026-08-10T10:02:00.000Z'),
+          player: { brawlhallaId: 42, name: 'Ada' },
+        },
+      ],
+    }
+  },
+} satisfies Accounts
 
 const account: Account = {
   id: '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295',
@@ -37,6 +73,15 @@ function makeAccounts() {
     async updatePreferences(_accountId, nextPreferences) {
       preferences = nextPreferences
       return preferences
+    },
+    async beginPrimaryPlayerVerification() {
+      throw new Error('Not used')
+    },
+    async resolvePrimaryPlayerVerification() {
+      throw new Error('Not used')
+    },
+    async getPrimaryPlayerVerificationState() {
+      return { primaryPlayer: null, attempts: [] }
     },
   }
   return service
@@ -68,6 +113,40 @@ describe('account.current', () => {
         createdAt: '2026-08-09T18:42:01.000Z',
       },
     })
+  })
+
+  test('returns canonical Primary Player ownership and privacy-safe attempt history', async () => {
+    const result = await (caller({ account, accounts }) as { primaryPlayer: () => Promise<unknown> }).primaryPlayer()
+
+    expect(primaryPlayerVerificationStateSchema.parse(result)).toEqual({
+      primaryPlayer: { brawlhallaId: 42, name: 'Ada', verifiedAt: '2026-08-10T10:02:00.000Z' },
+      attempts: [
+        {
+          id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
+          status: 'verified',
+          startedAt: '2026-08-10T10:00:00.000Z',
+          completedAt: '2026-08-10T10:02:00.000Z',
+          player: { brawlhallaId: 42, name: 'Ada' },
+        },
+      ],
+    })
+  })
+
+  test('rejects malformed Primary Player producer state', () => {
+    expect(() =>
+      toPrimaryPlayerVerificationState({
+        primaryPlayer: null,
+        attempts: [
+          {
+            id: 'not-a-uuid',
+            status: 'pending',
+            startedAt: new Date(),
+            completedAt: null,
+            player: null,
+          },
+        ],
+      }),
+    ).toThrow()
   })
 })
 

@@ -7,4 +7,10 @@ export {
   type Accounts,
   type AccountSignIn,
   type DiscordSignInProfile,
+  type PrimaryPlayer,
+  type PrimaryPlayerEvidence,
+  type PrimaryPlayerReference,
+  type PrimaryPlayerVerificationAttempt,
+  type PrimaryPlayerVerificationState,
+  type PrimaryPlayerVerificationStatus,
 } from './src/accounts'
