@@ -8,6 +8,7 @@ export type ParityArea =
   | 'player-profile'
   | 'operator-operations'
   | 'global-statistics'
+  | 'discord-client'
 export type EvidenceKind = 'unit' | 'integration' | 'browser' | 'manual' | 'external'
 
 export type ParityEvidence = {

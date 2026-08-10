@@ -647,4 +647,117 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'discord.player-command',
+    area: 'discord-client',
+    requirement:
+      '/player acknowledges before network work, consumes canonical identity/ranked/career contracts, refreshes only stale displayed domains, and preserves cached degraded data without invented zeroes.',
+    sourceIssue: '#215',
+    status: 'verified',
+    destinations: ['/player'],
+    implementation: [
+      'apps/discord-bot/src/commands/player.ts',
+      'apps/discord-bot/src/utils/embeds.ts',
+      'apps/api/src/router/player.router.ts',
+      'packages/contracts/src/refresh-outcome.ts',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'apps/discord-bot/tests/commands/player.test.ts',
+        assertion:
+          'Full command and select flows cover normal, missing, stale, rate-limited, already-refreshing, temporary failure, defer-first, bounded polling, and expired interactions.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/player-refresh.router.test.ts',
+        assertion: 'Trusted Discord actor admission reserves exactly the stale canonical player domains.',
+      },
+    ],
+  },
+  {
+    id: 'discord.clan-command',
+    area: 'discord-client',
+    requirement:
+      '/clan acknowledges before network work, consumes canonical Discovery and Clans contracts, and preserves independent profile/roster refresh and degraded meanings.',
+    sourceIssue: '#215',
+    status: 'verified',
+    destinations: ['/clan'],
+    implementation: ['apps/discord-bot/src/commands/clan.ts', 'apps/discord-bot/src/utils/embeds.ts'],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'apps/discord-bot/tests/commands/clan.test.ts',
+        assertion:
+          'Full command, select, and pagination flows cover normal, missing, stale, rate-limited, already-refreshing, temporary failure, bounded polling, and expiry.',
+      },
+    ],
+  },
+  {
+    id: 'discord.status-command',
+    area: 'discord-client',
+    requirement:
+      '/status acknowledges promptly and reports #214 process liveness separately from dependency/schema readiness.',
+    sourceIssue: '#215',
+    status: 'verified',
+    destinations: ['/status'],
+    implementation: ['apps/discord-bot/src/commands/status.ts', 'apps/api/src/health-routes.ts'],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'apps/discord-bot/tests/commands/status.test.ts',
+        assertion: 'Ready, degraded, unavailable, defer-first, timeout, and probe-failure states render honestly.',
+      },
+    ],
+  },
+  {
+    id: 'discord.lifecycle-expiry',
+    area: 'discord-client',
+    requirement:
+      'Discord rejects new admission before shutdown drain, keeps interaction correlation bounded, and treats expired interaction/webhook responses as terminal.',
+    sourceIssue: '#215',
+    status: 'verified',
+    destinations: ['/player', '/clan', '/status'],
+    implementation: [
+      'apps/discord-bot/src/index.ts',
+      'apps/discord-bot/src/interaction-runtime.ts',
+      'apps/discord-bot/src/interaction-response.ts',
+      'apps/discord-bot/src/metrics-server.ts',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'apps/discord-bot/tests/interaction-runtime.test.ts',
+        assertion: 'Correlation, rejected admission metrics, bounded drain, and telemetry failure isolation pass.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/discord-bot/tests/metrics-server.test.ts',
+        assertion: 'Discord process liveness, readiness, and authenticated metrics remain independently observable.',
+      },
+    ],
+  },
+  {
+    id: 'discord.smoke-procedures',
+    area: 'discord-client',
+    requirement:
+      'Staging-guild and production smoke preflights are executable, redact credentials, emit evidence artifacts, and leave unexecuted live interaction checks explicitly pending.',
+    sourceIssue: '#215',
+    status: 'verified',
+    destinations: ['staging-guild', 'production'],
+    implementation: [
+      'apps/discord-bot/src/smoke.ts',
+      'apps/discord-bot/smoke/staging-guild.pending.json',
+      'apps/discord-bot/smoke/production.pending.json',
+      'apps/discord-bot/package.json',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'apps/discord-bot/tests/smoke.test.ts',
+        assertion:
+          'Both scopes verify command registration and API health without credential disclosure or false live-deployment claims.',
+      },
+    ],
+  },
 ]

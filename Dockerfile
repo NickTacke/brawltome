@@ -48,4 +48,5 @@ CMD ["bun", "run", "apps/api/src/operations-worker.ts"]
 FROM base AS discord-bot
 COPY --from=build /app .
 USER bun
+STOPSIGNAL SIGTERM
 CMD ["bun", "run", "apps/discord-bot/src/index.ts"]

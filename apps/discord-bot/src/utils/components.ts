@@ -19,7 +19,7 @@ interface PlayerOption {
 interface ClanOption {
   clanId: number
   clanName: string
-  memberCount?: number
+  memberCount: number | null
 }
 
 // Emoji cache reference (will be populated by emojis.ts)
@@ -93,7 +93,7 @@ export function buildClanSelectMenu(
       clans.slice(0, 25).map((c) =>
         new StringSelectMenuOptionBuilder()
           .setLabel(truncate(c.clanName, 100))
-          .setDescription(`${c.memberCount ?? 0} members`)
+          .setDescription(c.memberCount === null ? 'Member count unavailable' : `${c.memberCount} members`)
           .setValue(c.clanId.toString())
           .setDefault(c.clanId === selectedId)
           .setEmoji('🏰'),

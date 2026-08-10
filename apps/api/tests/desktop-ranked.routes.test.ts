@@ -7,6 +7,7 @@ const freshProfile = (observedAt: Date) => ({
   lastSuccessAt: observedAt,
   freshness: 'fresh' as const,
   freshForSeconds: 3600,
+  sparsePulse: null,
   snapshot: {
     oneVsOne: {
       rating: 0,
@@ -23,6 +24,7 @@ const freshProfile = (observedAt: Date) => ({
     fixedTeams: [],
     soloQueue: [],
     ratingHistory: [],
+    observedRatingDirection: null,
   },
 })
 

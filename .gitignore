@@ -24,6 +24,7 @@ Thumbs.db
 # Misc
 coverage/
 tmp/
+artifacts/
 docs/
 .worktrees/
 

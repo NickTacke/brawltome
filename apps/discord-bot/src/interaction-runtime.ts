@@ -7,8 +7,23 @@ export function createInteractionRuntime(telemetry: Telemetry) {
   const active = new Set<Promise<void>>()
   let accepting = true
 
+  function stopAccepting(): void {
+    accepting = false
+  }
+
   function run(input: { id: string; kind: InteractionKind; command: CommandName }, work: () => Promise<void>): boolean {
-    if (!accepting) return false
+    if (!accepting) {
+      telemetry.metrics.add('discord_interactions_total', 1, {
+        interaction_kind: input.kind,
+        command: input.command,
+        outcome: 'rejected',
+      })
+      telemetry.logger.warn('discord.interaction.rejected', {
+        interactionKind: input.kind,
+        command: input.command,
+      })
+      return false
+    }
     const context = telemetry.contextFromHeaders({ 'x-request-id': input.id }, { acceptIncoming: true })
     const execution = telemetry.run(context, async () => {
       telemetry.logger.info('discord.interaction.started', {
@@ -42,7 +57,7 @@ export function createInteractionRuntime(telemetry: Telemetry) {
   }
 
   async function drain(deadlineMs: number): Promise<boolean> {
-    accepting = false
+    stopAccepting()
     if (active.size === 0) return true
     let timer: ReturnType<typeof setTimeout> | undefined
     const timedOut = new Promise<false>((resolve) => {
@@ -56,6 +71,7 @@ export function createInteractionRuntime(telemetry: Telemetry) {
 
   return {
     run,
+    stopAccepting,
     drain,
     get accepting() {
       return accepting

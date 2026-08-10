@@ -22,6 +22,11 @@ const requiredRowIds = [
   'player.current-season-ranked',
   'player.canonical-profile',
   'statistics.eu-diamond-cohort-tracer',
+  'discord.player-command',
+  'discord.clan-command',
+  'discord.status-command',
+  'discord.lifecycle-expiry',
+  'discord.smoke-procedures',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],
