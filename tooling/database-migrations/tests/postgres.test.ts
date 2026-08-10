@@ -72,6 +72,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'accounts/0003',
       'accounts/0004',
       'accounts/0005',
+      'accounts/0006',
     ])
     expect(playerMigrationInventory.map(({ identity }) => identity)).toEqual([
       'players/0001',
@@ -144,6 +145,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       refreshOperationsMigrationInventory[14],
       clanMigrationInventory[2],
       rankingMigrationInventory[2],
+      accountsMigrationInventory[5],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -176,13 +178,14 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(39)
+    expect(globalMigrationInventory).toHaveLength(40)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
       refreshOperationsMigrationInventory[14],
       clanMigrationInventory[2],
       rankingMigrationInventory[2],
+      accountsMigrationInventory[5],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -195,7 +198,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(5)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(6)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

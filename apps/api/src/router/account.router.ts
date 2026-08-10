@@ -2,6 +2,8 @@ import { InvalidSavedPlayerError } from '@brawltome/accounts'
 import {
   accountPreferencesSchema,
   accountViewSchema,
+  pinnedPlayerOrderInputSchema,
+  playerShortcutsSchema,
   primaryPlayerVerificationStateSchema,
   savedPlayerInputSchema,
   savedPlayerOrderInputSchema,
@@ -9,8 +11,10 @@ import {
 } from '@brawltome/contracts'
 import { TRPCError } from '@trpc/server'
 import {
+  type AccountPlayerFacts,
   toAccountPreferences,
   toAccountView,
+  toPlayerShortcuts,
   toPrimaryPlayerVerificationState,
   toSavedPlayers,
 } from '../mappers/account.mapper'
@@ -18,18 +22,11 @@ import { mapPlayerRankedProfile } from '../mappers/player-ranked.mapper'
 import type { Context } from '../trpc/context'
 import { protectedProcedure, publicProcedure, router } from '../trpc/trpc'
 
-async function readSavedPlayers(ctx: Context, accountId: string) {
-  const savedPlayers = await ctx.accounts.getSavedPlayers(accountId)
-  const facts = new Map<
-    number,
-    {
-      player: Awaited<ReturnType<Context['playerReferenceQueries']['byId']>>
-      currentSeason: ReturnType<typeof mapPlayerRankedProfile>
-    }
-  >()
-  for (let index = 0; index < savedPlayers.length; index += 5) {
+async function readPlayerFacts(ctx: Context, brawlhallaIds: readonly number[]) {
+  const facts = new Map<number, AccountPlayerFacts>()
+  for (let index = 0; index < brawlhallaIds.length; index += 5) {
     const entries = await Promise.all(
-      savedPlayers.slice(index, index + 5).map(async ({ brawlhallaId }) => {
+      brawlhallaIds.slice(index, index + 5).map(async (brawlhallaId) => {
         const [player, currentSeason] = await Promise.all([
           ctx.playerReferenceQueries.byId(brawlhallaId),
           ctx.rankedPlayerQueries.byId(brawlhallaId),
@@ -39,7 +36,25 @@ async function readSavedPlayers(ctx: Context, accountId: string) {
     )
     for (const [brawlhallaId, profileFacts] of entries) facts.set(brawlhallaId, profileFacts)
   }
+  return facts
+}
+
+async function readSavedPlayers(ctx: Context, accountId: string) {
+  const savedPlayers = await ctx.accounts.getSavedPlayers(accountId)
+  const facts = await readPlayerFacts(
+    ctx,
+    savedPlayers.map(({ brawlhallaId }) => brawlhallaId),
+  )
   return toSavedPlayers(savedPlayers, facts)
+}
+
+async function readPlayerShortcuts(ctx: Context, accountId: string) {
+  const shortcuts = await ctx.accounts.getPlayerShortcuts(accountId)
+  const brawlhallaIds = [
+    ...(shortcuts.primaryPlayer ? [shortcuts.primaryPlayer.brawlhallaId] : []),
+    ...shortcuts.pinnedPlayers.map(({ brawlhallaId }) => brawlhallaId),
+  ]
+  return toPlayerShortcuts(shortcuts, await readPlayerFacts(ctx, brawlhallaIds))
 }
 
 function savedPlayerInputError(error: unknown): never {
@@ -67,6 +82,9 @@ export const accountRouter = router({
     .query(async ({ ctx }) =>
       toPrimaryPlayerVerificationState(await ctx.accounts.getPrimaryPlayerVerificationState(ctx.account.id)),
     ),
+  playerShortcuts: protectedProcedure
+    .output(playerShortcutsSchema)
+    .query(({ ctx }) => readPlayerShortcuts(ctx, ctx.account.id)),
   savedPlayers: protectedProcedure.output(savedPlayersSchema).query(({ ctx }) => readSavedPlayers(ctx, ctx.account.id)),
   savePlayer: protectedProcedure
     .input(savedPlayerInputSchema)
@@ -95,6 +113,35 @@ export const accountRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         await ctx.accounts.reorderSavedPlayers(ctx.account.id, input.brawlhallaIds)
+      } catch (error) {
+        savedPlayerInputError(error)
+      }
+      return readSavedPlayers(ctx, ctx.account.id)
+    }),
+  pinSavedPlayer: protectedProcedure
+    .input(savedPlayerInputSchema)
+    .output(savedPlayersSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.accounts.pinSavedPlayer(ctx.account.id, input.brawlhallaId)
+      } catch (error) {
+        savedPlayerInputError(error)
+      }
+      return readSavedPlayers(ctx, ctx.account.id)
+    }),
+  unpinSavedPlayer: protectedProcedure
+    .input(savedPlayerInputSchema)
+    .output(savedPlayersSchema)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.accounts.unpinSavedPlayer(ctx.account.id, input.brawlhallaId)
+      return readSavedPlayers(ctx, ctx.account.id)
+    }),
+  reorderPinnedPlayers: protectedProcedure
+    .input(pinnedPlayerOrderInputSchema)
+    .output(savedPlayersSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.accounts.reorderPinnedPlayers(ctx.account.id, input.brawlhallaIds)
       } catch (error) {
         savedPlayerInputError(error)
       }

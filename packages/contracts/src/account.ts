@@ -109,6 +109,7 @@ const utcDateTime = z.iso
 export const savedPlayerInputSchema = z.object({ brawlhallaId: brawlhallaIdSchema }).strict()
 
 export const MAX_SAVED_PLAYERS = 100
+export const MAX_PINNED_PLAYERS = 4
 
 export const savedPlayerOrderInputSchema = z
   .object({ brawlhallaIds: z.array(brawlhallaIdSchema).max(MAX_SAVED_PLAYERS) })
@@ -118,10 +119,23 @@ export const savedPlayerOrderInputSchema = z
     'Saved Player order cannot contain duplicates',
   )
 
+export const pinnedPlayerOrderInputSchema = z
+  .object({ brawlhallaIds: z.array(brawlhallaIdSchema).max(MAX_PINNED_PLAYERS) })
+  .strict()
+  .refine(
+    ({ brawlhallaIds }) => new Set(brawlhallaIds).size === brawlhallaIds.length,
+    'Pinned Player order cannot contain duplicates',
+  )
+
 export const savedPlayerSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     order: z.int().min(0).max(2_147_483_647),
+    pinOrder: z
+      .int()
+      .min(0)
+      .max(MAX_PINNED_PLAYERS - 1)
+      .nullable(),
     savedAt: utcDateTime,
     player: nullablePlayerReferenceSchema,
     currentSeason: nullablePlayerRankedProfileSchema,
@@ -138,10 +152,43 @@ export const savedPlayerSchema = z
 
 export const savedPlayersSchema = z.array(savedPlayerSchema).max(MAX_SAVED_PLAYERS)
 
+const shortcutMainLegendSchema = z
+  .object({
+    legendNameKey: z.string().min(1),
+    source: z.enum(['current-season', 'career']),
+  })
+  .strict()
+
+export const playerShortcutSchema = z
+  .object({
+    brawlhallaId: brawlhallaIdSchema,
+    name: z.string().min(1).max(256).nullable(),
+    mainLegend: shortcutMainLegendSchema.nullable(),
+  })
+  .strict()
+
+export const playerShortcutsSchema = z
+  .object({
+    primary: playerShortcutSchema.nullable(),
+    pins: z.array(playerShortcutSchema).max(MAX_PINNED_PLAYERS),
+  })
+  .strict()
+  .superRefine((shortcuts, context) => {
+    const ids = shortcuts.pins.map(({ brawlhallaId }) => brawlhallaId)
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({ code: 'custom', message: 'Pinned shortcuts cannot contain duplicates', path: ['pins'] })
+    }
+    if (shortcuts.primary && ids.includes(shortcuts.primary.brawlhallaId)) {
+      context.addIssue({ code: 'custom', message: 'Primary Player cannot also be pinned', path: ['pins'] })
+    }
+  })
+
 export type AccountPreferencesContract = z.infer<typeof accountPreferencesSchema>
 export type AccountContract = z.infer<typeof accountSchema>
 export type AccountViewContract = z.infer<typeof accountViewSchema>
 export type PrimaryPlayerVerificationStateContract = z.infer<typeof primaryPlayerVerificationStateSchema>
+export type PlayerShortcutContract = z.infer<typeof playerShortcutSchema>
+export type PlayerShortcutsContract = z.infer<typeof playerShortcutsSchema>
 export type SavedPlayerContract = z.infer<typeof savedPlayerSchema>
 export type SavedPlayersContract = z.infer<typeof savedPlayersSchema>
 
@@ -155,4 +202,8 @@ export function parsePrimaryPlayerVerificationStateOutput(value: unknown): Prima
 
 export function parseSavedPlayersOutput(value: unknown): SavedPlayersContract {
   return savedPlayersSchema.parse(value)
+}
+
+export function parsePlayerShortcutsOutput(value: unknown): PlayerShortcutsContract {
+  return playerShortcutsSchema.parse(value)
 }

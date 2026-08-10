@@ -4,6 +4,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SESSION_EXTEND_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
 
 export const MAX_SAVED_PLAYERS = 100
+export const MAX_PINNED_PLAYERS = 4
 
 export interface Account {
   id: string
@@ -106,7 +107,19 @@ export interface PrimaryPlayerEvidence extends PrimaryPlayerReference {
 export interface SavedPlayer {
   brawlhallaId: number
   order: number
+  pinOrder: number | null
   savedAt: Date
+}
+
+export interface PinnedPlayer {
+  brawlhallaId: number
+  order: number
+  pinnedAt: Date
+}
+
+export interface PlayerShortcuts {
+  primaryPlayer: PrimaryPlayer | null
+  pinnedPlayers: PinnedPlayer[]
 }
 
 export interface Accounts {
@@ -129,6 +142,10 @@ export interface Accounts {
   savePlayer(accountId: string, brawlhallaId: number): Promise<SavedPlayer>
   removeSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
   reorderSavedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<SavedPlayer[]>
+  getPlayerShortcuts(accountId: string): Promise<PlayerShortcuts>
+  pinSavedPlayer(accountId: string, brawlhallaId: number): Promise<PinnedPlayer>
+  unpinSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
+  reorderPinnedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<PinnedPlayer[]>
 }
 
 export interface AccountsStore {
@@ -160,6 +177,10 @@ export interface AccountsStore {
   savePlayer(accountId: string, brawlhallaId: number): Promise<SavedPlayer>
   removeSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
   reorderSavedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<SavedPlayer[]>
+  getPlayerShortcuts(accountId: string): Promise<PlayerShortcuts>
+  pinSavedPlayer(accountId: string, brawlhallaId: number): Promise<PinnedPlayer>
+  unpinSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
+  reorderPinnedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<PinnedPlayer[]>
 }
 
 interface CreateAccountsOptions {
@@ -255,6 +276,31 @@ export function createAccounts({
       }
       for (const brawlhallaId of orderedBrawlhallaIds) requireBrawlhallaId(brawlhallaId)
       return store.reorderSavedPlayers(accountId, orderedBrawlhallaIds)
+    },
+
+    getPlayerShortcuts(accountId) {
+      return store.getPlayerShortcuts(accountId)
+    },
+
+    pinSavedPlayer(accountId, brawlhallaId) {
+      requireBrawlhallaId(brawlhallaId)
+      return store.pinSavedPlayer(accountId, brawlhallaId)
+    },
+
+    unpinSavedPlayer(accountId, brawlhallaId) {
+      requireBrawlhallaId(brawlhallaId)
+      return store.unpinSavedPlayer(accountId, brawlhallaId)
+    },
+
+    reorderPinnedPlayers(accountId, orderedBrawlhallaIds) {
+      if (new Set(orderedBrawlhallaIds).size !== orderedBrawlhallaIds.length) {
+        throw new InvalidSavedPlayerError('Pinned Player order contains duplicate players')
+      }
+      if (orderedBrawlhallaIds.length > MAX_PINNED_PLAYERS) {
+        throw new InvalidSavedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
+      }
+      for (const brawlhallaId of orderedBrawlhallaIds) requireBrawlhallaId(brawlhallaId)
+      return store.reorderPinnedPlayers(accountId, orderedBrawlhallaIds)
     },
   }
 }

@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 import { CommandPalette } from '@/components/CommandPalette'
+import { useAccount } from '@/lib/auth'
+import { createPlayerShortcutNavigation, usePlayerShortcuts } from '@/lib/playerShortcuts'
 import { AppSidebar } from './AppSidebar'
 import { MobileMenu } from './MobileMenu'
 import { MobileMenuButton } from './MobileMenuButton'
@@ -11,18 +13,31 @@ import { MobileMenuButton } from './MobileMenuButton'
 export function SidebarLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isHome = pathname === '/'
+  const { account } = useAccount()
+  const { shortcuts, isLoading: shortcutsLoading, isError: shortcutsError } = usePlayerShortcuts(account?.id)
+  const playerShortcuts = createPlayerShortcutNavigation(account ? (shortcuts ?? { primary: null, pins: [] }) : null)
 
   return (
     <>
       <CommandPalette />
 
       {/* Mobile chrome is shell-owned so every route exposes exactly one menu trigger. */}
-      <MobileMenu />
+      <MobileMenu
+        account={account}
+        playerShortcuts={playerShortcuts}
+        shortcutsLoading={shortcutsLoading}
+        shortcutsError={shortcutsError}
+      />
 
       {/* Fixed desktop sidebar - does not affect content flow. h-dvh gives the
           AppSidebar (which uses h-full) a proper container height. */}
       <div className="hidden md:block fixed left-0 top-0 z-30 h-dvh">
-        <AppSidebar />
+        <AppSidebar
+          account={account}
+          playerShortcuts={playerShortcuts}
+          shortcutsLoading={shortcutsLoading}
+          shortcutsError={shortcutsError}
+        />
       </div>
 
       {/* Reserve the sidebar width at md+ so content never sits underneath the

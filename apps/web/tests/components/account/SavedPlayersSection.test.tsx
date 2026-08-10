@@ -8,6 +8,7 @@ const savedPlayers: SavedPlayersContract = [
   {
     brawlhallaId: 42,
     order: 0,
+    pinOrder: 0,
     savedAt: '2026-08-10T08:00:00Z',
     player: { brawlhallaId: 42, name: 'Ada' },
     currentSeason: {
@@ -42,6 +43,7 @@ const savedPlayers: SavedPlayersContract = [
             tier: 'Gold 4',
             wins: 5,
             games: 10,
+            source: 'v0-player-snapshot',
             recordedAt: '2026-08-10T09:00:00Z',
           },
           {
@@ -50,6 +52,7 @@ const savedPlayers: SavedPlayersContract = [
             tier: 'Gold 5',
             wins: 6,
             games: 12,
+            source: 'v0-player-snapshot',
             recordedAt: '2026-08-10T10:00:00Z',
           },
         ],
@@ -66,6 +69,7 @@ const savedPlayers: SavedPlayersContract = [
   {
     brawlhallaId: 43,
     order: 1,
+    pinOrder: null,
     savedAt: '2026-08-10T09:00:00Z',
     player: null,
     currentSeason: {
@@ -89,6 +93,8 @@ describe('SavedPlayersSection', () => {
         pendingPlayerId={null}
         onRemove={() => {}}
         onMove={() => {}}
+        onTogglePin={() => {}}
+        onMovePin={() => {}}
       />,
     )
 
@@ -123,6 +129,8 @@ describe('SavedPlayersSection', () => {
         pendingPlayerId={null}
         onRemove={() => {}}
         onMove={() => {}}
+        onTogglePin={() => {}}
+        onMovePin={() => {}}
       />,
     )
 
@@ -138,13 +146,18 @@ describe('SavedPlayersSection', () => {
         pendingPlayerId={null}
         onRemove={() => {}}
         onMove={() => {}}
+        onTogglePin={() => {}}
+        onMovePin={() => {}}
       />,
     )
 
     expect(html).toContain('<ol')
-    expect(html).toContain('aria-label="Move Ada down"')
+    expect(html).toContain('aria-label="Unpin Ada from shortcuts"')
+    expect(html).toContain('aria-label="Move Ada down in pinned shortcuts"')
+    expect(html).toContain('aria-label="Move Ada down in Saved Players"')
     expect(html).toContain('aria-label="Remove Ada from Saved Players"')
-    expect(html).toContain('aria-label="Move Player ID 43 up"')
+    expect(html).toContain('aria-label="Pin Player ID 43 to shortcuts"')
+    expect(html).toContain('aria-label="Move Player ID 43 up in Saved Players"')
     expect(html).toContain('disabled=""')
 
     const pendingHtml = renderToStaticMarkup(
@@ -154,9 +167,11 @@ describe('SavedPlayersSection', () => {
         pendingPlayerId={42}
         onRemove={() => {}}
         onMove={() => {}}
+        onTogglePin={() => {}}
+        onMovePin={() => {}}
       />,
     )
-    expect(pendingHtml.match(/disabled=""/g)).toHaveLength(6)
+    expect(pendingHtml.match(/disabled=""/g)).toHaveLength(10)
   })
 })
 

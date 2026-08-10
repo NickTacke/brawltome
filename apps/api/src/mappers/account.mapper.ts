@@ -1,13 +1,21 @@
-import type { Account, AccountPreferences, PrimaryPlayerVerificationState, SavedPlayer } from '@brawltome/accounts'
+import type {
+  Account,
+  AccountPreferences,
+  PlayerShortcuts,
+  PrimaryPlayerVerificationState,
+  SavedPlayer,
+} from '@brawltome/accounts'
 import {
   type AccountPreferencesContract,
   type AccountViewContract,
   type PlayerRankedProfileContract,
   type PlayerReferenceContract,
+  type PlayerShortcutsContract,
   type PrimaryPlayerVerificationStateContract,
   type SavedPlayersContract,
   accountPreferencesSchema,
   parseAccountViewOutput,
+  parsePlayerShortcutsOutput,
   parsePrimaryPlayerVerificationStateOutput,
   parseSavedPlayersOutput,
 } from '@brawltome/contracts'
@@ -32,12 +40,14 @@ export function toAccountView(account: Account | null): AccountViewContract {
   )
 }
 
+export interface AccountPlayerFacts {
+  player: PlayerReferenceContract | null
+  currentSeason: PlayerRankedProfileContract | null
+}
+
 export function toSavedPlayers(
   savedPlayers: readonly SavedPlayer[],
-  facts: ReadonlyMap<
-    number,
-    { player: PlayerReferenceContract | null; currentSeason: PlayerRankedProfileContract | null }
-  >,
+  facts: ReadonlyMap<number, AccountPlayerFacts>,
 ): SavedPlayersContract {
   return parseSavedPlayersOutput(
     savedPlayers.map((savedPlayer) => ({
@@ -47,6 +57,27 @@ export function toSavedPlayers(
       currentSeason: facts.get(savedPlayer.brawlhallaId)?.currentSeason ?? null,
     })),
   )
+}
+
+export function toPlayerShortcuts(
+  shortcuts: PlayerShortcuts,
+  facts: ReadonlyMap<number, AccountPlayerFacts>,
+): PlayerShortcutsContract {
+  const mapShortcut = (brawlhallaId: number, fallbackName: string | null = null) => {
+    const playerFacts = facts.get(brawlhallaId)
+    const mainLegend = playerFacts?.currentSeason?.snapshot?.mainLegend ?? null
+    return {
+      brawlhallaId,
+      name: playerFacts?.player?.name ?? fallbackName,
+      mainLegend: mainLegend ? { legendNameKey: mainLegend.legendNameKey, source: mainLegend.source } : null,
+    }
+  }
+  return parsePlayerShortcutsOutput({
+    primary: shortcuts.primaryPlayer
+      ? mapShortcut(shortcuts.primaryPlayer.brawlhallaId, shortcuts.primaryPlayer.name)
+      : null,
+    pins: shortcuts.pinnedPlayers.map(({ brawlhallaId }) => mapShortcut(brawlhallaId)),
+  })
 }
 
 export function toPrimaryPlayerVerificationState(

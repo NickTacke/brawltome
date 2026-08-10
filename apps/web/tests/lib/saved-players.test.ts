@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import type { SavedPlayersContract } from '@brawltome/contracts'
 import { QueryClient } from '@tanstack/react-query'
-import { moveSavedPlayer, parseSavedPlayersResponse } from '../../src/lib/savedPlayers'
+import { movePinnedPlayer, moveSavedPlayer, parseSavedPlayersResponse } from '../../src/lib/savedPlayers'
 import { createLatestSavedPlayerMutationGuard, updateSavedPlayersCache } from '../../src/lib/savedPlayersCache'
 
 const savedPlayers: SavedPlayersContract = [
   {
     brawlhallaId: 42,
     order: 0,
+    pinOrder: 0,
     savedAt: '2026-08-10T09:00:00Z',
     player: { brawlhallaId: 42, name: 'Ada' },
     currentSeason: null,
@@ -15,6 +16,7 @@ const savedPlayers: SavedPlayersContract = [
   {
     brawlhallaId: 43,
     order: 1,
+    pinOrder: null,
     savedAt: '2026-08-10T09:01:00Z',
     player: { brawlhallaId: 43, name: 'Lin' },
     currentSeason: null,
@@ -93,8 +95,9 @@ describe('Saved Players client state', () => {
     expect(cachedResult).toEqual(savedPlayers)
   })
 
-  test('builds a stable complete reorder without mutating cached data', () => {
+  test('builds stable independent Saved Player and pin reorders without mutating cached data', () => {
     expect(moveSavedPlayer(savedPlayers, 0, 1)).toEqual([43, 42])
+    expect(movePinnedPlayer(savedPlayers, 0, 0)).toEqual([42])
     expect(moveSavedPlayer(savedPlayers, 1, 0)).toEqual([43, 42])
     expect(moveSavedPlayer(savedPlayers, 0, -1)).toEqual([42, 43])
     expect(savedPlayers.map(({ brawlhallaId }) => brawlhallaId)).toEqual([42, 43])

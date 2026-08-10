@@ -3,9 +3,10 @@ import { addV2AuthCutoverState } from './migrations/0002-add-v2-auth-cutover-sta
 import { addAccountPreferences } from './migrations/0003-add-preferences'
 import { addPrimaryPlayerVerification } from './migrations/0004-add-primary-player-verification'
 import { addSavedPlayers } from './migrations/0005-add-saved-players'
+import { addPinnedPlayerShortcuts } from './migrations/0006-add-pinned-player-shortcuts'
 import { createAccounts } from './src/accounts'
 
-export { MAX_SAVED_PLAYERS } from './src/accounts'
+export { MAX_PINNED_PLAYERS, MAX_SAVED_PLAYERS } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
 export interface V2AuthCutoverGate {
@@ -33,4 +34,5 @@ export const accountsMigrationInventory = [
   addAccountPreferences,
   addPrimaryPlayerVerification,
   addSavedPlayers,
+  addPinnedPlayerShortcuts,
 ] as const

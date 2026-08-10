@@ -1,11 +1,22 @@
 'use client'
 
 import { signOut, usePrimaryPlayer } from '@/lib/auth'
-import { moveSavedPlayer, removeSavedPlayer, reorderSavedPlayers, useSavedPlayers } from '@/lib/savedPlayers'
+import { invalidatePlayerNavigation } from '@/lib/playerShortcuts'
+import {
+  movePinnedPlayer,
+  moveSavedPlayer,
+  orderedPinnedPlayers,
+  pinSavedPlayer,
+  removeSavedPlayer,
+  reorderPinnedPlayers,
+  reorderSavedPlayers,
+  unpinSavedPlayer,
+  useSavedPlayers,
+} from '@/lib/savedPlayers'
 import type { AccountContract } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link2, Users } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrawlhallaLinkRow } from './BrawlhallaLinkRow'
 import { DiscordIcon } from './DiscordIcon'
 import { SavedPlayersSection } from './SavedPlayersSection'
@@ -16,9 +27,10 @@ interface SignedInStateProps {
 
 export function SignedInState({ account }: SignedInStateProps) {
   const queryClient = useQueryClient()
-  const { state: primaryPlayerState, isLoading: primaryPlayerLoading } = usePrimaryPlayer()
+  const { state: primaryPlayerState, isLoading: primaryPlayerLoading, isError: primaryPlayerError } = usePrimaryPlayer()
   const { savedPlayers, isLoading: savedPlayersLoading, isError: savedPlayersQueryError } = useSavedPlayers(account.id)
   const savedPlayersHeadingRef = useRef<HTMLHeadingElement>(null)
+  const previousPrimaryPlayerIdRef = useRef<number | null | undefined>(undefined)
   const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null)
   const [savedPlayersError, setSavedPlayersError] = useState<string | null>(null)
   const [savedPlayersStatus, setSavedPlayersStatus] = useState('')
@@ -26,6 +38,15 @@ export function SignedInState({ account }: SignedInStateProps) {
     month: 'long',
     year: 'numeric',
   })
+
+  useEffect(() => {
+    if (primaryPlayerLoading || primaryPlayerError) return
+    const primaryPlayerId = primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null
+    const previousPrimaryPlayerId = previousPrimaryPlayerIdRef.current
+    previousPrimaryPlayerIdRef.current = primaryPlayerId
+    if (previousPrimaryPlayerId === undefined || previousPrimaryPlayerId === primaryPlayerId) return
+    void invalidatePlayerNavigation(queryClient, account.id)
+  }, [account.id, primaryPlayerError, primaryPlayerLoading, primaryPlayerState, queryClient])
 
   async function handleRemove(brawlhallaId: number) {
     if (pendingPlayerId !== null) return
@@ -56,9 +77,47 @@ export function SignedInState({ account }: SignedInStateProps) {
     try {
       await reorderSavedPlayers(queryClient, account.id, brawlhallaIds)
       const label = moved?.player?.name ?? `Player ID ${moved?.brawlhallaId ?? ''}`
-      setSavedPlayersStatus(`Moved ${label} to position ${toIndex + 1}.`)
+      setSavedPlayersStatus(`Moved ${label} to Saved Players position ${toIndex + 1}.`)
     } catch {
       setSavedPlayersError('Could not reorder Saved Players. Try again.')
+    } finally {
+      setPendingPlayerId(null)
+    }
+  }
+
+  async function handleTogglePin(brawlhallaId: number, pinned: boolean) {
+    if (pendingPlayerId !== null) return
+    const player = savedPlayers.find((savedPlayer) => savedPlayer.brawlhallaId === brawlhallaId)
+    const label = player?.player?.name ?? `Player ID ${brawlhallaId}`
+    setPendingPlayerId(brawlhallaId)
+    setSavedPlayersError(null)
+    setSavedPlayersStatus('')
+    try {
+      if (pinned) await unpinSavedPlayer(queryClient, account.id, brawlhallaId)
+      else await pinSavedPlayer(queryClient, account.id, brawlhallaId)
+      setSavedPlayersStatus(`${pinned ? 'Unpinned' : 'Pinned'} ${label}.`)
+    } catch {
+      setSavedPlayersError('Could not update pinned shortcuts. Try again.')
+    } finally {
+      setPendingPlayerId(null)
+    }
+  }
+
+  async function handleMovePin(fromIndex: number, toIndex: number) {
+    if (pendingPlayerId !== null) return
+    const currentPinned = orderedPinnedPlayers(savedPlayers)
+    const moved = currentPinned[fromIndex]
+    const brawlhallaIds = movePinnedPlayer(savedPlayers, fromIndex, toIndex)
+    if (!moved || brawlhallaIds.every((id, index) => id === currentPinned[index]?.brawlhallaId)) return
+    setPendingPlayerId(moved.brawlhallaId)
+    setSavedPlayersError(null)
+    setSavedPlayersStatus('')
+    try {
+      await reorderPinnedPlayers(queryClient, account.id, brawlhallaIds)
+      const label = moved.player?.name ?? `Player ID ${moved.brawlhallaId}`
+      setSavedPlayersStatus(`Moved ${label} to pinned shortcut position ${toIndex + 1}.`)
+    } catch {
+      setSavedPlayersError('Could not reorder pinned shortcuts. Try again.')
     } finally {
       setPendingPlayerId(null)
     }
@@ -118,8 +177,12 @@ export function SignedInState({ account }: SignedInStateProps) {
         error={savedPlayersQueryError}
         headingRef={savedPlayersHeadingRef}
         pendingPlayerId={pendingPlayerId}
+        primaryPlayerId={primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null}
+        primaryPlayerUnavailable={primaryPlayerLoading || primaryPlayerError}
         onRemove={(brawlhallaId) => void handleRemove(brawlhallaId)}
         onMove={(fromIndex, toIndex) => void handleMove(fromIndex, toIndex)}
+        onTogglePin={(brawlhallaId, pinned) => void handleTogglePin(brawlhallaId, pinned)}
+        onMovePin={(fromIndex, toIndex) => void handleMovePin(fromIndex, toIndex)}
       />
       <output aria-live="polite" className="text-muted-foreground block text-sm">
         {savedPlayersStatus}

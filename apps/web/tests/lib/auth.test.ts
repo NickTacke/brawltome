@@ -87,7 +87,11 @@ describe('signOut', () => {
     await signOut(queryClient)
 
     expect(invalidations).toEqual([{ queryKey: ['account', 'current'] }, { queryKey: ['account', 'primaryPlayer'] }])
-    expect(removals).toEqual([{ queryKey: ['account', 'preferences'] }, { queryKey: ['account', 'savedPlayers'] }])
+    expect(removals).toEqual([
+      { queryKey: ['account', 'preferences'] },
+      { queryKey: ['account', 'savedPlayers'] },
+      { queryKey: ['account', 'playerShortcuts'] },
+    ])
   })
 
   test('rejects failed revocation without invalidating signed-in state', async () => {
