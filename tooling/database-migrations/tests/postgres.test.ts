@@ -31,10 +31,19 @@ const deployedGlobalHistory = [
   ['rankings/0001', 'd3c91ddf8a99e6a5a39b88eaad3813f9e65c693346fe1bf054b5fe6f4901b701'],
   ['clans/0001', 'f258dd4e3e46c8bcaa917f3f42a3d4a9925963374453e7c7c7b70565ea502700'],
   ['refresh-operations/0007', '7e8aafa5721bef24c28a00dfcee3d39d6cc90aecbdc77abf70401cb5cb8cf6e7'],
+  ['refresh-operations/0008', '4155f341183e7f277b73a12a38eb24b219193a634cb253b583faf875c0c7a282'],
+  ['accounts/0003', '3b6a89bd5b60420ac04471559c2b8a8e27495b52135e176438910de3611696a3'],
+  ['refresh-operations/0009', '8c91d27975f4f672485a354c6486980f5aaac597ef9d29662b7b9476d6b3dc60'],
+  ['rankings/0002', 'ad02e3418fd523a88541aec0c6b1d0c1c38f87b3c4a20bd76f5dfb64e3bbb9bd'],
+  ['players/0004', '52476706ae067d30e57b1b33beb80254b511adbffb1b4f7c74d1371f5931df7c'],
+  ['players/0005', '4d2f348303b8be6e467479c9f4cbb00bdbb343f643c04ae408fd218fdfa9e1c4'],
+  ['refresh-operations/0010', '951803dec9356108ebc1f786b55816a1baa10f118c4dc014b45ccd49f7c3dfbd'],
+  ['discovery/0001', 'c3b9e880208831ee1be1fe8a27c733f0ec17e4df03435e39d811d264e9b51707'],
+  ['accounts/0004', 'fb0dd41d2bb7175980963b13c4e809617cdd267dfe72170df594665ced443f33'],
 ] as const
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories Accounts 0001 through 0004, Players 0001 through 0005, and Refresh Operations 0001 through 0010', () => {
+  test('inventories Accounts 0001 through 0004, Players 0001 through 0006, and Refresh Operations 0001 through 0011', () => {
     expect(accountsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'accounts/0001',
       'accounts/0002',
@@ -47,6 +56,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'players/0003',
       'players/0004',
       'players/0005',
+      'players/0006',
     ])
     expect(refreshOperationsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'refresh-operations/0001',
@@ -59,6 +69,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0008',
       'refresh-operations/0009',
       'refresh-operations/0010',
+      'refresh-operations/0011',
     ])
   })
 
@@ -83,6 +94,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       refreshOperationsMigrationInventory[9],
       ...discoveryMigrationInventory,
       accountsMigrationInventory[3],
+      playerMigrationInventory[5],
+      refreshOperationsMigrationInventory[10],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -104,23 +117,18 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
-  test('preserves the deployed global history before every later migration', async () => {
+  test('preserves the deployed 25-row global history and upgrades it to 27 rows', async () => {
     expect(
       globalMigrationInventory
         .slice(0, deployedGlobalHistory.length)
         .map(({ identity, checksum }) => [identity, checksum]),
     ).toEqual(deployedGlobalHistory.map((entry) => [...entry]))
     const oldGlobalInventory = globalMigrationInventory.slice(0, deployedGlobalHistory.length)
+    expect(deployedGlobalHistory).toHaveLength(25)
+    expect(globalMigrationInventory).toHaveLength(27)
     expect(globalMigrationInventory.slice(deployedGlobalHistory.length)).toEqual([
-      refreshOperationsMigrationInventory[7],
-      accountsMigrationInventory[2],
-      refreshOperationsMigrationInventory[8],
-      rankingMigrationInventory[1],
-      playerMigrationInventory[3],
-      playerMigrationInventory[4],
-      refreshOperationsMigrationInventory[9],
-      ...discoveryMigrationInventory,
-      accountsMigrationInventory[3],
+      playerMigrationInventory[5],
+      refreshOperationsMigrationInventory[10],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -142,7 +150,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
-  test('appends canonical ranked state after the applied Players prefix', async () => {
+  test('appends canonical ranked, career, discovery, and pulse state after the applied Players prefix', async () => {
     const databaseName = `brawltome_player_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -153,7 +161,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(3)
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(4)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const [rankedProfiles] = await client<{ table_name: string | null }[]>`
@@ -162,8 +170,12 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         const [careerProfiles] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.career_profiles')::text AS table_name
         `
+        const [rankedPulseState] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.ranked_v1_pulse_state')::text AS table_name
+        `
         expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
         expect(careerProfiles.table_name).toBe('players.career_profiles')
+        expect(rankedPulseState.table_name).toBe('players.ranked_v1_pulse_state')
       } finally {
         await client.end()
       }
@@ -184,7 +196,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(8)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(9)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const history = await client<{ identity: string }[]>`
@@ -256,8 +268,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
       const failingMigration: Migration = {
-        identity: 'players/0006',
-        predecessor: 'players/0005',
+        identity: 'players/0007',
+        predecessor: 'players/0006',
         checksum: checksumSql(failingSql),
         sql: failingSql,
       }
@@ -296,6 +308,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         const [careerProfiles] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.career_profiles')::text AS table_name
         `
+        const [rankedPulseState] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.ranked_v1_pulse_state')::text AS table_name
+        `
         const [activeLeaseFence] = await client<{ function_name: string | null }[]>`
           SELECT to_regprocedure(
             'refresh_operations.acquire_active_lease(uuid,text,bigint)'
@@ -321,6 +336,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
         expect(rankedSoloQueue.table_name).toBe('players.ranked_solo_queue')
         expect(careerProfiles.table_name).toBe('players.career_profiles')
+        expect(rankedPulseState.table_name).toBe('players.ranked_v1_pulse_state')
         expect(activeLeaseFence.function_name).toContain('acquire_active_lease')
         expect(interactiveSectionFence.function_name).toContain('commit_interactive_section_if_owned')
         expect(rollbackProbe.table_name).toBeNull()

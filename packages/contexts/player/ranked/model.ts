@@ -4,6 +4,7 @@ export const RANKED_FRESHNESS_SECONDS = 60 * 60
 export const RANKED_FRESHNESS_MS = RANKED_FRESHNESS_SECONDS * 1_000
 
 export type RankedFreshness = 'fresh' | 'stale' | 'unavailable'
+export type RankedPulseSourceStatus = { checkedAt: Date; lastSuccessAt: Date | null }
 export type MainLegend = {
   legendId: number
   legendNameKey: string

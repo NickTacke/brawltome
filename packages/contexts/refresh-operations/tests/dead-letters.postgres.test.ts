@@ -240,6 +240,7 @@ describe('dead-letter operations', () => {
     expect(scheduledReplay).toMatchObject({
       operationId: replayed.replayOperationId,
       effectOperationId: scheduledLease.effectOperationId,
+      effectCreatedAt: scheduledLease.effectCreatedAt,
       kind: 'proof',
       payload: scheduledLease.payload,
       scheduleWindowAt: scheduledLease.scheduleWindowAt,
@@ -275,6 +276,7 @@ describe('dead-letter operations', () => {
     )
     if (successor.kind !== 'interactive-player-refresh') throw new Error('Expected interactive replay')
     expect(successor.effectOperationId).toBe(original.effectOperationId)
+    expect(successor.effectCreatedAt).toBe(original.effectCreatedAt)
     expect(await operations.beginInteractiveSection(successor, 'ranked')).toBe('already-applied')
     expect(await operations.beginInteractiveSection(successor, 'stats')).toBe('execute')
     await operations.close()
@@ -390,6 +392,37 @@ describe('dead-letter operations', () => {
     })
     expect(projectionSuccessor.leaseToken).toBeGreaterThan(projectionLease.leaseToken)
     await operations.complete(projectionSuccessor)
+
+    await operations.accept({
+      kind: 'ranked-player-pulse',
+      dedupeKey: `pulse-dead-letter:${randomUUID()}`,
+      operationKey: `pulse-effect:${randomUUID()}`,
+      workClass: 'primary-monitoring',
+      payload: { brawlhallaId: 42 },
+      provenance: { source: 'integration-test' },
+      maxAttempts: 1,
+    })
+    const pulseLease = requireLease(await operations.claim('pulse-original', 10_000, admission, 'ranked-player-pulse'))
+    await operations.fail(pulseLease, { code: 'pulse_repairable', message: 'pulse repairable', retryable: false }, 0)
+    const pulseReplay = await operations.replayDeadLetter({
+      operationId: pulseLease.operationId,
+      actorId: 'operator:pulse',
+      reason: 'pulse source repaired',
+    })
+    if (pulseReplay.outcome !== 'replayed') throw new Error('Expected pulse replay')
+    const pulseSuccessor = requireLease(
+      await operations.claim('pulse-replay', 10_000, admission, 'ranked-player-pulse'),
+    )
+    expect(pulseSuccessor).toMatchObject({
+      operationId: pulseReplay.replayOperationId,
+      effectOperationId: pulseLease.effectOperationId,
+      effectCreatedAt: pulseLease.effectCreatedAt,
+      kind: 'ranked-player-pulse',
+      workClass: 'primary-monitoring',
+      payload: pulseLease.payload,
+      attemptNumber: 1,
+    })
+    await operations.complete(pulseSuccessor)
     await operations.close()
   })
 

@@ -99,6 +99,16 @@ export type AcceptProofOperation = {
   maxAttempts?: number
 }
 
+export type AcceptRankedPlayerPulseOperation = {
+  kind: 'ranked-player-pulse'
+  dedupeKey: string
+  operationKey: string
+  workClass: 'primary-monitoring'
+  payload: { brawlhallaId: number }
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
 export type AcceptLeaderboardOperation = {
   kind: LeaderboardOperationKind
   dedupeKey: string
@@ -119,7 +129,11 @@ export type AcceptPlayerDiscoveryProjection = {
   maxAttempts?: number
 }
 
-export type AcceptOperation = AcceptProofOperation | AcceptLeaderboardOperation | AcceptPlayerDiscoveryProjection
+export type AcceptOperation =
+  | AcceptProofOperation
+  | AcceptRankedPlayerPulseOperation
+  | AcceptLeaderboardOperation
+  | AcceptPlayerDiscoveryProjection
 
 export type AcceptOperationResult = {
   outcome: 'accepted' | 'already-active'
@@ -204,6 +218,7 @@ export interface InteractiveRefreshOperations {
 type LeaseFields = {
   operationId: string
   effectOperationId: string
+  effectCreatedAt: string
   operationKey: string
   provenance: OperationProvenance
   leaseOwner: string
@@ -229,6 +244,11 @@ export type OperationLease =
       kind: 'clan-refresh'
       workClass: 'interactive'
       payload: { clanId: number; staleSections: ('profile' | 'roster')[] }
+    })
+  | (LeaseFields & {
+      kind: 'ranked-player-pulse'
+      workClass: 'primary-monitoring'
+      payload: { brawlhallaId: number }
     })
   | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
 

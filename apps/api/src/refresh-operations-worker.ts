@@ -16,6 +16,7 @@ import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/r
 type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
+type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
 type PlayerProjectionLease = Extract<OperationLease, { kind: 'player-discovery-projection' }>
 type InteractiveLease = PlayerLease | ClanLease
@@ -33,6 +34,7 @@ type RunOneRefreshOperationOptions = {
     section: 'ranked' | 'stats',
     admitSourceCall: (domain: SourceDomain) => Promise<void>,
   ): Promise<void>
+  executeRankedPulse?(lease: RankedPulseLease, admitSourceCall: (domain: SourceDomain) => Promise<void>): Promise<void>
   executeClanSection?(
     lease: ClanLease,
     section: 'profile' | 'roster',
@@ -168,8 +170,8 @@ async function executeProof(
 
 function createSourceAdmission(
   options: RunOneRefreshOperationOptions,
-  lease: InteractiveLease,
-  section: InteractiveSection,
+  lease: InteractiveLease | RankedPulseLease,
+  section: InteractiveSection | 'ranked-pulse',
 ): (domain: SourceDomain) => Promise<void> {
   let sourceCall = 0
   return async (domain) => {
@@ -264,6 +266,27 @@ async function executePlayerProjection(
   await operations.complete(lease)
 }
 
+async function executeRankedPulse(
+  operations: RefreshOperationWorker,
+  lease: RankedPulseLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<void> {
+  if (!options.executeRankedPulse || !options.sourceAdmission) {
+    await operations.fail(
+      lease,
+      {
+        code: 'ranked_pulse_executor_unavailable',
+        message: 'Ranked pulse executor is not configured',
+        retryable: false,
+      },
+      0,
+    )
+    return
+  }
+  await options.executeRankedPulse(lease, createSourceAdmission(options, lease, 'ranked-pulse'))
+  await operations.complete(lease)
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -340,6 +363,8 @@ export async function runOneRefreshOperation(
       await executeInteractive(operations, lease, options, clanAuthority, authorityLost)
     } else if (lease.kind === 'player-discovery-projection') {
       await executePlayerProjection(operations, lease, options)
+    } else if (lease.kind === 'ranked-player-pulse') {
+      await executeRankedPulse(operations, lease, options)
     } else {
       await executeLeaderboard(operations, lease, options)
     }
@@ -375,7 +400,9 @@ export async function runOneRefreshOperation(
               ? 'clan_refresh_failed'
               : lease.kind === 'player-discovery-projection'
                 ? 'player_discovery_projection_failed'
-                : 'leaderboard_collection_failed'
+                : lease.kind === 'ranked-player-pulse'
+                  ? 'ranked_player_pulse_failed'
+                  : 'leaderboard_collection_failed'
     await operations.fail(lease, failureDetails(error, fallbackCode), retryDelayMs)
   } finally {
     renewal.abort()

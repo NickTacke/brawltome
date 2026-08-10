@@ -8,6 +8,7 @@ import { addClanRefresh } from './migrations/0007-add-clan-refresh'
 import { addDeadLetterOperations } from './migrations/0008-add-dead-letter-operations'
 import { addLeaderboardOperationModes } from './migrations/0009-add-leaderboard-modes'
 import { addPlayerDiscoveryProjection } from './migrations/0010-add-player-discovery-projection'
+import { addRankedPlayerPulseOperation } from './migrations/0011-add-ranked-player-pulse'
 
 export {
   createPostgresDeadLetterOperations,
@@ -27,4 +28,5 @@ export const refreshOperationsMigrationInventory = [
   addDeadLetterOperations,
   addLeaderboardOperationModes,
   addPlayerDiscoveryProjection,
+  addRankedPlayerPulseOperation,
 ] as const

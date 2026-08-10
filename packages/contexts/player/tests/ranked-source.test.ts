@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeV0RankedSnapshot } from '../ranked/source'
+import { decodeV0RankedSnapshot, decodeV1FixedTeamPulses, decodeV1OneVsOnePulse } from '../ranked/source'
 
 const completeSnapshot = {
   name: 'Measured Zero',
@@ -149,5 +149,108 @@ describe('V0 ranked snapshot source contract', () => {
     },
   ])('rejects malformed or partial complete snapshots %#', (payload) => {
     expect(() => decodeV0RankedSnapshot(payload, 91913839)).toThrow()
+  })
+})
+
+describe('V1 ranked pulse source contract', () => {
+  test('decodes only sparse approved 1v1 scalars without requiring unsupported fields', () => {
+    expect(
+      decodeV1OneVsOnePulse(
+        {
+          brawlhalla_id: 91913839,
+          rating: 2010,
+          games: 73,
+          tier: { malformed: true },
+          region: 42,
+          global_rank: -1,
+          legends: 'not-used-by-pulses',
+        },
+        91913839,
+      ),
+    ).toEqual({ rating: 2010, games: 73 })
+  })
+
+  test.each([{ brawlhalla_id: 91913839 }, { brawlhalla_id: 91913839, peak_rating: undefined }])(
+    'treats an empty 1v1 pulse as a no-op %#',
+    (payload) => {
+      expect(decodeV1OneVsOnePulse(payload, 91913839)).toBeNull()
+    },
+  )
+
+  test.each([
+    { brawlhalla_id: 42, rating: 1800 },
+    { brawlhalla_id: 91913839, rating: -1 },
+    { brawlhalla_id: 91913839, peak_rating: 1.5 },
+    { brawlhalla_id: 91913839, wins: '5' },
+    { brawlhalla_id: 91913839, games: Number.NaN },
+  ])('rejects malformed approved 1v1 pulse evidence %#', (payload) => {
+    expect(() => decodeV1OneVsOnePulse(payload, 91913839)).toThrow()
+  })
+
+  test('decodes sparse fixed-team scalars, normalizes composition, and ignores Solo Queue', () => {
+    expect(
+      decodeV1FixedTeamPulses(
+        {
+          brawlhalla_id: 91913839,
+          teams: {
+            ranked_2v2: [
+              {
+                brawlhalla_id_one: 42,
+                brawlhalla_id_two: 91913839,
+                rating: 1777,
+                wins: 11,
+                tier: null,
+                region: 99,
+                username_one: 12,
+              },
+              {
+                brawlhalla_id_one: 91913839,
+                brawlhalla_id_two: 0,
+                rating: 1900,
+                games: 3,
+              },
+            ],
+          },
+        },
+        91913839,
+      ),
+    ).toEqual([
+      {
+        brawlhallaIdOne: 42,
+        brawlhallaIdTwo: 91913839,
+        values: { rating: 1777, wins: 11 },
+      },
+    ])
+  })
+
+  test.each([
+    null,
+    { brawlhalla_id: 91913839 },
+    { brawlhalla_id: 91913839, teams: {} },
+    { brawlhalla_id: 91913839, teams: { ranked_2v2: undefined } },
+  ])('treats absent optional team evidence as a no-op %#', (payload) => {
+    expect(decodeV1FixedTeamPulses(payload, 91913839)).toEqual([])
+  })
+
+  test.each([
+    {
+      brawlhalla_id: 91913839,
+      teams: { ranked_2v2: [{ brawlhalla_id_one: 91913839, brawlhalla_id_two: 42, rating: -1 }] },
+    },
+    {
+      brawlhalla_id: 91913839,
+      teams: { ranked_2v2: [{ brawlhalla_id_one: 7, brawlhalla_id_two: 42, rating: 1700 }] },
+    },
+    {
+      brawlhalla_id: 91913839,
+      teams: {
+        ranked_2v2: [
+          { brawlhalla_id_one: 91913839, brawlhalla_id_two: 42, rating: 1700 },
+          { brawlhalla_id_one: 42, brawlhalla_id_two: 91913839, games: 10 },
+        ],
+      },
+    },
+  ])('rejects malformed fixed-team pulse evidence atomically %#', (payload) => {
+    expect(() => decodeV1FixedTeamPulses(payload, 91913839)).toThrow()
   })
 })

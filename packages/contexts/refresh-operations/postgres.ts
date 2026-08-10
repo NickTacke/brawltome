@@ -39,6 +39,7 @@ const utcDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
 type OperationRow = {
   id: string
   effect_operation_id: string
+  effect_created_at: string
   kind: OperationLease['kind']
   operation_key: string
   work_class: WorkClass
@@ -106,6 +107,7 @@ function toLease(row: OperationRow): OperationLease {
   const common = {
     operationId: row.id,
     effectOperationId: row.effect_operation_id,
+    effectCreatedAt: row.effect_created_at,
     operationKey: row.operation_key,
     provenance: row.provenance,
     leaseOwner: row.lease_owner,
@@ -127,7 +129,7 @@ function toLease(row: OperationRow): OperationLease {
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
   if (row.kind === 'interactive-player-refresh') {
-    if (row.work_class !== 'interactive' || !('brawlhallaId' in row.payload)) {
+    if (row.work_class !== 'interactive' || !('brawlhallaId' in row.payload) || !('staleSections' in row.payload)) {
       throw new Error('invalid durable interactive player refresh operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
@@ -135,6 +137,12 @@ function toLease(row: OperationRow): OperationLease {
   if (row.kind === 'clan-refresh') {
     if (row.work_class !== 'interactive' || !('clanId' in row.payload)) {
       throw new Error('invalid durable clan refresh operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (row.kind === 'ranked-player-pulse') {
+    if (row.work_class !== 'primary-monitoring' || !('brawlhallaId' in row.payload) || 'staleSections' in row.payload) {
+      throw new Error('invalid durable ranked player pulse operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -189,8 +197,8 @@ function parseFirstDueAt(value: string): Date {
 }
 
 function operationKind(input: {
-  kind?: 'proof' | LeaderboardOperationKind | 'player-discovery-projection'
-}): 'proof' | LeaderboardOperationKind | 'player-discovery-projection' {
+  kind?: 'proof' | 'ranked-player-pulse' | LeaderboardOperationKind | 'player-discovery-projection'
+}): 'proof' | 'ranked-player-pulse' | LeaderboardOperationKind | 'player-discovery-projection' {
   return input.kind ?? 'proof'
 }
 
@@ -576,6 +584,11 @@ export function createPostgresRefreshOperations(
       if (isLeaderboardKind(kind)) {
         if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
         validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
+      } else if (kind === 'ranked-player-pulse') {
+        const { brawlhallaId } = input.payload as { brawlhallaId: number }
+        if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
+          throw new Error('ranked player pulse brawlhallaId must be a positive 32-bit integer')
+        }
       }
       if (kind === 'player-discovery-projection') {
         const { batchSize } = input.payload as { batchSize: number }
@@ -775,7 +788,8 @@ export function createPostgresRefreshOperations(
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
-          const kindFilter = kind ? sql`AND kind = ${kind}` : sql``
+          const dueKindFilter = kind ? sql`AND kind = ${kind}` : sql``
+          const candidateKindFilter = kind ? sql`AND operation.kind = ${kind}` : sql``
           await sql`SELECT pg_advisory_xact_lock(${admissionLockId})`
           await sql`
             INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
@@ -804,7 +818,7 @@ export function createPostgresRefreshOperations(
             FROM refresh_operations.operations
             WHERE ((status = 'pending' AND available_at <= clock_timestamp())
                OR (status = 'leased' AND lease_expires_at <= clock_timestamp()))
-              ${kindFilter}
+              ${dueKindFilter}
           `
           const due = new Set(dueRows.map((row) => row.work_class))
           const eligible = (workClass: WorkClass) =>
@@ -841,9 +855,11 @@ export function createPostgresRefreshOperations(
           if (!selectedClass) return { kind: 'empty' as const }
 
           const [candidate] = await sql<OperationRow[]>`
-            SELECT operation.id, operation.effect_operation_id, operation.kind, operation.operation_key,
-                   operation.work_class, operation.payload, operation.provenance, operation.lease_owner,
-                   operation.lease_token, operation.attempt_count, operation.max_attempts, operation.status,
+            SELECT operation.id, operation.effect_operation_id,
+                   to_char(effect.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS effect_created_at,
+                   operation.kind, operation.operation_key, operation.work_class, operation.payload,
+                   operation.provenance, operation.lease_owner, operation.lease_token, operation.attempt_count,
+                   operation.max_attempts, operation.status,
                    (
                      SELECT occurrence.window_due_at
                        + (occurrence.missed_window_count * schedule.interval_ms) * interval '1 millisecond'
@@ -852,10 +868,11 @@ export function createPostgresRefreshOperations(
                      WHERE occurrence.id = operation.origin_schedule_occurrence_id
                    ) AS scheduled_window_at
             FROM refresh_operations.operations operation
+            JOIN refresh_operations.operations effect ON effect.id = operation.effect_operation_id
             WHERE operation.work_class = ${selectedClass}
               AND ((operation.status = 'pending' AND operation.available_at <= clock_timestamp())
                 OR (operation.status = 'leased' AND operation.lease_expires_at <= clock_timestamp()))
-              ${kindFilter}
+              ${candidateKindFilter}
             ORDER BY operation.available_at, operation.created_at, operation.id
             FOR UPDATE OF operation SKIP LOCKED
             LIMIT 1
@@ -891,7 +908,15 @@ export function createPostgresRefreshOperations(
                     FROM refresh_operations.operations operation
                     WHERE operation.id = ${candidate.id}
                   `
-                : []
+                : candidate.kind === 'ranked-player-pulse'
+                  ? await sql<{ complete: boolean }[]>`
+                      SELECT EXISTS (
+                        SELECT 1
+                        FROM refresh_operations.interactive_refresh_effects effect
+                        WHERE effect.operation_id = ${candidate.effect_operation_id} AND effect.section = 'ranked'
+                      ) AS complete
+                    `
+                  : []
             const playerProjectionEffect =
               candidate.kind === 'player-discovery-projection'
                 ? await options.playerProjectionEffectState?.(candidate.id)
@@ -961,7 +986,11 @@ export function createPostgresRefreshOperations(
           }
           return {
             kind: 'leased' as const,
-            lease: toLease({ ...leased, scheduled_window_at: candidate.scheduled_window_at }),
+            lease: toLease({
+              ...leased,
+              effect_created_at: candidate.effect_created_at,
+              scheduled_window_at: candidate.scheduled_window_at,
+            }),
           }
         })
         if (result.kind === 'leased') return result.lease

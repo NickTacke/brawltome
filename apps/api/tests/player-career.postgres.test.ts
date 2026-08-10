@@ -109,8 +109,10 @@ async function claimCareerOperation(
 function effectFor(lease: Extract<OperationLease, { kind: 'interactive-player-refresh' }>) {
   return {
     operationId: lease.operationId,
+    effectOperationId: lease.effectOperationId,
     leaseOwner: lease.leaseOwner,
     leaseToken: lease.leaseToken,
+    effectCreatedAt: lease.effectCreatedAt,
     section: 'stats' as const,
   }
 }
