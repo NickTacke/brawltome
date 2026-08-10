@@ -6,6 +6,7 @@ import {
   SlashCommandBuilder,
   type StringSelectMenuInteraction,
 } from 'discord.js'
+import { discordTelemetry } from '../lib/telemetry'
 import { api } from '../lib/trpc'
 import type { SearchResponse } from '../lib/types'
 import { buildPlayerSelectMenu } from '../utils/components'
@@ -100,7 +101,7 @@ export const playerCommand: Command = {
 
       await interaction.editReply(responseOptions)
     } catch (error) {
-      console.error('[Player Command] Error:', error)
+      discordTelemetry.logger.error('discord.player_command.failed', error)
 
       if (error instanceof TRPCClientError) {
         if (error.data?.httpStatus === 404) {
@@ -191,7 +192,7 @@ export async function handlePlayerSelect(interaction: StringSelectMenuInteractio
       })
     }
   } catch (error) {
-    console.error('[Player Select] Error:', error)
+    discordTelemetry.logger.error('discord.player_select.failed', error)
     await interaction.editReply({
       embeds: [buildErrorEmbed('Error', 'Something went wrong while fetching player data.')],
       components: [],

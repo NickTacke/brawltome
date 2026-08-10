@@ -8,6 +8,7 @@ import { bodyLimit } from 'hono/body-limit'
 import type { Redis } from 'ioredis'
 import { z } from 'zod'
 import { SESSION_COOKIE, parseCookies } from '../auth/cookies'
+import { type R2SourceCallObserver, createObservedR2Put } from '../matchmaking-telemetry'
 
 const MAX_INGEST_BODY_BYTES = 256 * 1024
 
@@ -26,6 +27,7 @@ export interface MatchmakingRoutesDeps {
   metrics: MetricsRegistry
   accounts: Accounts
   enabled: boolean
+  observeSourceCall?: R2SourceCallObserver
 }
 
 export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
@@ -38,6 +40,7 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
 
   const matchRepo = deps.matchRepo
   const r2 = deps.r2
+  const observedR2Put = createObservedR2Put(r2, deps.observeSourceCall)
 
   app.post(
     '/ingest',
@@ -108,7 +111,7 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
 
       const depsIngest: IngestDeps = {
         matchRepo,
-        r2Put: (key, bytes) => r2.put(key, bytes),
+        r2Put: observedR2Put,
         reparseRaw: () => serverParsed,
         knownHeroIds,
         knownLevelIds,

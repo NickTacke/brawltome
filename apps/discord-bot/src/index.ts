@@ -10,110 +10,129 @@ import {
 import { handleClanPage, handleClanSelect } from './commands/clan'
 import { commands } from './commands/index'
 import { handlePlayerSelect } from './commands/player'
+import { createInteractionRuntime } from './interaction-runtime'
+import { discordTelemetry } from './lib/telemetry'
+import { startDiscordMetricsServer } from './metrics-server'
 import { setEmojiCache } from './utils/components'
 import { getEmojiCache, getEmojiCount, initEmojis } from './utils/emojis'
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN
-const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID
+const discordToken = process.env.DISCORD_TOKEN
+const discordClientId = process.env.DISCORD_CLIENT_ID
+if (!discordToken) throw new Error('DISCORD_TOKEN is required')
 
-if (!DISCORD_TOKEN) {
-  console.error('Missing DISCORD_TOKEN environment variable')
-  process.exit(1)
-}
+const client = new Client({ intents: [GatewayIntentBits.Guilds] })
+const interactions = createInteractionRuntime(discordTelemetry)
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+const metricsServer = startDiscordMetricsServer({
+  telemetry: discordTelemetry,
+  port: Number(process.env.DISCORD_METRICS_PORT ?? 3002),
+  secret: process.env.INTERNAL_API_SECRET,
 })
 
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`Discord bot ready! Logged in as ${readyClient.user.tag}`)
-  console.log(`Serving ${readyClient.guilds.cache.size} guilds`)
-
+  discordTelemetry.logger.info('discord.ready', { guildCount: readyClient.guilds.cache.size })
   readyClient.user.setPresence({
     activities: [{ name: 'https://brawltome.app', type: ActivityType.Watching }],
     status: 'online',
   })
-
-  if (DISCORD_CLIENT_ID) {
-    const rest = new REST().setToken(DISCORD_TOKEN)
-    await initEmojis(rest, DISCORD_CLIENT_ID)
+  if (!discordClientId) return
+  try {
+    const rest = new REST().setToken(discordToken)
+    await initEmojis(rest, discordClientId)
     const cache = getEmojiCache()
     if (cache) setEmojiCache(cache)
-    console.log(`Loaded ${getEmojiCount()} application emojis`)
+    discordTelemetry.logger.info('discord.emojis.loaded', { emojiCount: getEmojiCount() })
+  } catch (error) {
+    discordTelemetry.logger.error('discord.emojis.failed', error)
   }
 })
 
-client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+function commandLabel(value: string): 'player' | 'clan' | 'status' | 'unknown' {
+  return value === 'player' || value === 'clan' || value === 'status' ? value : 'unknown'
+}
+
+async function dispatchInteraction(interaction: Interaction): Promise<void> {
   if (interaction.isChatInputCommand()) {
     const command = commands.get(interaction.commandName)
     if (!command) {
-      console.warn(`Unknown command: ${interaction.commandName}`)
+      discordTelemetry.logger.warn('discord.command.unknown', { command: 'unknown' })
       return
     }
-
     try {
       await command.execute(interaction as ChatInputCommandInteraction)
     } catch (error) {
-      console.error(`Error executing command ${interaction.commandName}:`, error)
-
-      const errorMessage = {
-        content: 'There was an error executing this command.',
-        ephemeral: true,
-      }
-
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(errorMessage)
-      } else {
-        await interaction.reply(errorMessage)
-      }
+      const errorMessage = { content: 'There was an error executing this command.', ephemeral: true }
+      if (interaction.replied || interaction.deferred) await interaction.followUp(errorMessage)
+      else await interaction.reply(errorMessage)
+      throw error
     }
     return
   }
 
   if (interaction.isStringSelectMenu()) {
-    try {
-      const [customId] = interaction.customId.split(':')
-
-      switch (customId) {
-        case 'player_select':
-          await handlePlayerSelect(interaction)
-          break
-        case 'clan_select':
-          await handleClanSelect(interaction)
-          break
-        default:
-          console.warn(`Unknown select menu: ${interaction.customId}`)
-      }
-    } catch (error) {
-      console.error(`Error handling select menu ${interaction.customId}:`, error)
-    }
+    const [customId] = interaction.customId.split(':')
+    if (customId === 'player_select') await handlePlayerSelect(interaction)
+    else if (customId === 'clan_select') await handleClanSelect(interaction)
+    else discordTelemetry.logger.warn('discord.component.unknown', { interactionKind: 'select' })
+    return
   }
 
   if (interaction.isButton()) {
-    try {
-      const [customId] = interaction.customId.split(':')
-
-      switch (customId) {
-        case 'clan_page':
-          await handleClanPage(interaction)
-          break
-      }
-    } catch (error) {
-      console.error(`Error handling button ${interaction.customId}:`, error)
-    }
+    const [customId] = interaction.customId.split(':')
+    if (customId === 'clan_page') await handleClanPage(interaction)
+    else discordTelemetry.logger.warn('discord.component.unknown', { interactionKind: 'button' })
   }
+}
+
+client.on(Events.InteractionCreate, (interaction: Interaction) => {
+  const kind = interaction.isChatInputCommand() ? 'command' : interaction.isStringSelectMenu() ? 'select' : 'button'
+  const command = interaction.isChatInputCommand() ? commandLabel(interaction.commandName) : 'component'
+  interactions.run({ id: interaction.id, kind, command }, () => dispatchInteraction(interaction))
 })
 
-void client.login(DISCORD_TOKEN)
+async function bounded(work: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const completed = work.then(
+    () => true,
+    () => false,
+  )
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), Math.max(1, timeoutMs))
+  })
+  const result = await Promise.race([completed, timedOut])
+  if (timer) clearTimeout(timer)
+  return result
+}
 
-process.on('SIGINT', () => {
-  console.log('Shutting down...')
-  void client.destroy()
-  process.exit(0)
-})
+let shutdownPromise: Promise<void> | undefined
+function shutdown(): Promise<void> {
+  shutdownPromise ??= (async () => {
+    discordTelemetry.logger.info('discord.shutdown.started')
+    const configuredDeadline = Number(process.env.RUNTIME_SHUTDOWN_DEADLINE_MS ?? 60_000)
+    const deadlineMs = Number.isFinite(configuredDeadline) && configuredDeadline > 0 ? configuredDeadline : 60_000
+    const deadline = Date.now() + deadlineMs
+    const drained = await interactions.drain(Math.max(0, deadline - Date.now() - 1_000))
+    try {
+      client.destroy()
+    } catch (error) {
+      discordTelemetry.logger.error('discord.client.destroy_failed', error)
+    }
+    const serverStopped = metricsServer
+      ? await bounded(metricsServer.stop(true), Math.max(1, deadline - Date.now() - 500))
+      : true
+    const telemetryStopped = await bounded(
+      discordTelemetry.shutdown(Math.max(1, deadline - Date.now())),
+      Math.max(1, deadline - Date.now()),
+    )
+    if (!drained || !serverStopped || !telemetryStopped) process.exitCode = 1
+  })()
+  return shutdownPromise
+}
 
-process.on('SIGTERM', () => {
-  console.log('Shutting down...')
-  void client.destroy()
-  process.exit(0)
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void shutdown())
+
+void client.login(discordToken).catch(async (error) => {
+  discordTelemetry.logger.error('discord.login.failed', error)
+  process.exitCode = 1
+  await shutdown()
 })

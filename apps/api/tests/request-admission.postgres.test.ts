@@ -76,6 +76,24 @@ beforeEach(async () => {
 })
 
 describe('PostgreSQL interactive refresh admission', () => {
+  test('reports only current-window bounded source quota use', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 3, 'brawlhalla-v1': 5 },
+    })
+    try {
+      await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 2 })
+      const usage = await admission.inspectCurrentUsage()
+      expect(usage.domains).toEqual([
+        { domain: 'brawlhalla-v0', used: 2, limit: 3 },
+        { domain: 'brawlhalla-v1', used: 0, limit: 5 },
+      ])
+      expect(new Date(usage.observedAt).getTime()).toBeGreaterThanOrEqual(new Date(usage.windowStartedAt).getTime())
+    } finally {
+      await admission.close()
+    }
+  })
+
   test('50 concurrent duplicates reserve one operation and consume actor/source once', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = createPostgresRequestAdmission(connectionString, {

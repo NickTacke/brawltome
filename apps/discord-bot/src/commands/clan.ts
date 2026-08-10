@@ -7,6 +7,7 @@ import {
   SlashCommandBuilder,
   type StringSelectMenuInteraction,
 } from 'discord.js'
+import { discordTelemetry } from '../lib/telemetry'
 import { api } from '../lib/trpc'
 import type { ClanResponse, SearchResponse } from '../lib/types'
 import { buildClanPaginationButtons, buildClanSelectMenu } from '../utils/components'
@@ -158,7 +159,7 @@ export const clanCommand: Command = {
         components,
       })
     } catch (error) {
-      console.error('[Clan Command] Error:', error)
+      discordTelemetry.logger.error('discord.clan_command.failed', error)
 
       if (error instanceof TRPCClientError) {
         if (error.data?.httpStatus === 404) {
@@ -239,7 +240,7 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
       components: responseComponents,
     })
   } catch (error) {
-    console.error('[Clan Select] Error:', error)
+    discordTelemetry.logger.error('discord.clan_select.failed', error)
     await interaction.editReply({
       embeds: [buildErrorEmbed('Error', 'Something went wrong while fetching clan data.')],
       components: [],

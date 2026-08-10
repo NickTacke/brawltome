@@ -20,8 +20,10 @@ import {
 import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
+import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
+import { internalSecretValid } from './auth/internal-secret'
 import { createHealthRoutes } from './health-routes'
 import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
@@ -30,12 +32,14 @@ import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refres
 import { readHealthPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { runtimeMigrationInventory } from './runtime-migration-inventory'
+import { createRuntimeTelemetry } from './telemetry'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL is required')
 const apiKey = process.env.BRAWLHALLA_API_KEY
 if (!apiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 
+const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
 const accounts = createPostgresAccounts(connectionString)
 const discovery = createPostgresDiscovery(connectionString)
@@ -91,12 +95,32 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'discovery-postgres', close: discovery.close },
     { name: 'players-discovery-source-postgres', close: playerDiscoverySource.close },
     { name: 'readiness-postgres', close: postgresReadiness.close },
+    { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],
 })
 
 const health = new Hono()
 health.route('/health', createHealthRoutes(lifecycle))
-healthServer.current = serve({ port: readHealthPort(process.env.HEALTH_PORT, 3001), fetch: health.fetch })
+health.get('/metrics', async (context) => {
+  if (!internalSecretValid(context.req.header('x-internal-secret'), process.env.INTERNAL_API_SECRET)) {
+    return context.json({ error: 'unauthorized' }, 401)
+  }
+  try {
+    const quota = await requestAdmission.inspectCurrentUsage()
+    for (const item of quota.domains) {
+      telemetry.metrics.set('source_quota_used', item.used, { domain: item.domain })
+      telemetry.metrics.set('source_quota_limit', item.limit, { domain: item.domain })
+    }
+  } catch (error) {
+    telemetry.logger.error('metrics.measurement.failed', error)
+  }
+  return context.body(renderPrometheus(telemetry.metrics.snapshot()), 200, {
+    'content-type': 'text/plain; version=0.0.4; charset=utf-8',
+    'cache-control': 'no-store',
+  })
+})
+const healthFetch = instrumentHttpHandler(telemetry, 'operations-worker', health.fetch)
+healthServer.current = serve({ port: readHealthPort(process.env.HEALTH_PORT, 3001), fetch: healthFetch })
 lifecycle.markReady()
 
 let shutdownRequested = false
@@ -119,6 +143,7 @@ try {
     lifecycle,
     workerId,
     config: workerConfig,
+    telemetry,
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
       const primaryMonitoring = await operations.reconcilePrimaryMonitoring(
@@ -164,6 +189,7 @@ try {
           if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
           const admittedBhapi = new BhApiClient({
             apiKey,
+            telemetry,
             beforeRequest: async ({ domain }) => {
               const admission = await requestAdmission.admitSource({
                 domain,
@@ -201,6 +227,7 @@ try {
           await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
           const admittedBhapi = new BhApiClient({
             apiKey,
+            telemetry,
             beforeRequest: async ({ domain }) => {
               if (lease.workClass === 'primary-monitoring') {
                 const snapshot = await accounts.primaryMonitoring.readSnapshot()
@@ -271,6 +298,7 @@ try {
         executeRankedPulse: async (lease, admitSourceCall) => {
           const admittedBhapi = new BhApiClient({
             apiKey,
+            telemetry,
             beforeRequest: ({ domain }) => admitSourceCall(domain),
           })
           await refreshRankedPlayerPulse(
@@ -309,7 +337,11 @@ try {
             leaseExpiresAt: new Date(0),
           }),
         executeClanSection: async (lease, section, admitSourceCall, leaseExpiresAt) => {
-          const admittedBhapi = new BhApiClient({ apiKey, beforeRequest: ({ domain }) => admitSourceCall(domain) })
+          const admittedBhapi = new BhApiClient({
+            apiKey,
+            telemetry,
+            beforeRequest: ({ domain }) => admitSourceCall(domain),
+          })
           const result = await processRefreshClanSection(
             clans,
             admittedBhapi,
@@ -324,7 +356,7 @@ try {
       }),
   })
 } catch (error) {
-  console.error('[operations-worker] fatal runtime failure', error)
+  telemetry.logger.error('operations_worker.fatal', error)
   process.exitCode = 1
 } finally {
   requestShutdown()

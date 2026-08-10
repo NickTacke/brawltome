@@ -111,6 +111,65 @@ async function expire(operationId: string) {
 }
 
 describe('durable Refresh Operations', () => {
+  test('reports bounded authoritative oldest-job, schedule-lateness, and dead-letter gauges', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      const pending = await operations.accept({
+        dedupeKey: `telemetry-pending:${randomUUID()}`,
+        operationKey: `telemetry-pending:${randomUUID()}`,
+        workClass: 'maintenance',
+        payload: { value: 'pending' },
+        provenance: { source: 'telemetry-test' },
+      })
+      const dead = await operations.accept({
+        dedupeKey: `telemetry-dead:${randomUUID()}`,
+        operationKey: `telemetry-dead:${randomUUID()}`,
+        workClass: 'projection',
+        payload: { value: 'dead' },
+        provenance: { source: 'telemetry-test' },
+        maxAttempts: 1,
+      })
+      await control`
+        UPDATE refresh_operations.operations
+        SET status = 'dead_letter', completed_at = clock_timestamp(),
+            last_error = ${control.json({ code: 'test_failure', message: 'safe', retryable: false })}
+        WHERE id = ${dead.operationId}
+      `
+      await operations.createSchedule({
+        scheduleKey: `telemetry-schedule:${randomUUID()}`,
+        operationKeyPrefix: `telemetry-schedule:${randomUUID()}`,
+        workClass: 'maintenance',
+        intervalMs: 60_000,
+        firstDueAt: new Date(Date.now() - 2_000).toISOString(),
+        payload: { value: 'schedule' },
+        provenance: { source: 'telemetry-test' },
+      })
+
+      const snapshot = await operations.inspectTelemetry()
+      expect(snapshot.oldestPending.find(({ workClass }) => workClass === 'maintenance')?.ageMs).toBeGreaterThanOrEqual(
+        0,
+      )
+      expect(
+        snapshot.deadLetters.find(({ workClass, kind }) => workClass === 'projection' && kind === 'proof')?.count,
+      ).toBeGreaterThanOrEqual(1)
+      expect(snapshot.scheduleLateness.find(({ kind }) => kind === 'proof')?.latenessMs).toBeGreaterThan(0)
+      expect(snapshot.oldestPending).toHaveLength(6)
+      expect(pending.operationId).toBeTruthy()
+    } finally {
+      await control`
+        DELETE FROM refresh_operations.schedules
+        WHERE provenance ->> 'source' = 'telemetry-test'
+      `
+      await control`
+        DELETE FROM refresh_operations.operations
+        WHERE provenance ->> 'source' = 'telemetry-test'
+      `
+      await operations.close()
+      await control.end()
+    }
+  })
+
   test('checks PostgreSQL and exact runtime schema without applying changes', async () => {
     const readiness = createPostgresReadiness(connectionString, refreshOperationsMigrationInventory)
     await readiness.check()
@@ -586,6 +645,16 @@ describe('durable Refresh Operations', () => {
       Array.from({ length: 20 }, (_, index) => schedulers[index % schedulers.length].materializeDueSchedules(1)),
     )
     expect(materialized.reduce((total, result) => total + result.occurrencesCreated, 0)).toBe(1)
+    const [committedOccurrence] = materialized.flatMap((result) => result.occurrences)
+    expect(committedOccurrence).toMatchObject({
+      scheduleId: created.scheduleId,
+      kind: 'proof',
+      workClass: 'projection',
+      missedWindowCount: 5,
+    })
+    expect(committedOccurrence.operationId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(committedOccurrence.occurrenceId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(committedOccurrence.latenessMs).toBeGreaterThanOrEqual(0)
     await Promise.all(schedulers.map((scheduler) => scheduler.close()))
 
     const restarted = createPostgresRefreshOperations(connectionString)

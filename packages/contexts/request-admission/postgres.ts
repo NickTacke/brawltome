@@ -4,6 +4,7 @@ import type {
   RefreshActor,
   SourceAdmissionResult,
   SourceDomain,
+  SourceQuotaUsage,
 } from '@brawltome/request-admission'
 import postgres from 'postgres'
 
@@ -169,6 +170,25 @@ export function createPostgresRequestAdmission(connectionString: string, config:
         `
         return { outcome: 'admitted' as const, deduplicated: false }
       })
+    },
+
+    async inspectCurrentUsage(): Promise<SourceQuotaUsage> {
+      const window = await captureWindow(client)
+      const rows = await client<{ domain: SourceDomain; units: number }[]>`
+        SELECT domain, units
+        FROM request_admission.source_windows
+        WHERE window_started_at = ${window.windowStartedAt}
+      `
+      const usedByDomain = new Map(rows.map((row) => [row.domain, row.units]))
+      return {
+        observedAt: window.now.toISOString(),
+        windowStartedAt: window.windowStartedAt.toISOString(),
+        domains: (Object.keys(sourceLimits) as SourceDomain[]).sort().map((domain) => ({
+          domain,
+          used: usedByDomain.get(domain) ?? 0,
+          limit: sourceLimits[domain],
+        })),
+      }
     },
 
     async inspectUsage() {

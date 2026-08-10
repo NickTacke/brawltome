@@ -9,12 +9,14 @@ import type { RankingQueries } from '@brawltome/ranking'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { MetricsRegistry, Queue, R2Client } from '@brawltome/shared'
+import type { Telemetry } from '@brawltome/telemetry'
 import type { Redis } from 'ioredis'
 
 export interface Context {
   db: Database
   redis: Redis
   metrics: MetricsRegistry
+  telemetry: Telemetry
   rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   playerRepo: PlayerRepo

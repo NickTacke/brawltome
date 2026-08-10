@@ -22,6 +22,7 @@ import {
   initGameData,
   verifyTurnstileResult,
 } from '@brawltome/shared'
+import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -46,6 +47,7 @@ import { createRefreshOperationRoutes } from './routes/refresh-operations.routes
 import { readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { runtimeMigrationInventory } from './runtime-migration-inventory'
+import { createRuntimeTelemetry } from './telemetry'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
@@ -61,6 +63,8 @@ if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimi
   throw new Error('AUTHENTICATED_REFRESH_IP_LIMIT must be a positive integer')
 }
 
+const telemetry = createRuntimeTelemetry('api')
+const runtimeConfig = readRuntimeConfig(process.env)
 const accountsRuntime = createPostgresAccounts(databaseUrl)
 const { accounts } = accountsRuntime
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
@@ -105,7 +109,7 @@ const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationI
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
 const lifecycle = createRuntimeLifecycle({
-  ...readRuntimeConfig(process.env),
+  ...runtimeConfig,
   readinessProbes: [
     { name: 'postgres-schema', check: postgresReadiness.check },
     {
@@ -141,6 +145,7 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'readiness-postgres', close: postgresReadiness.close },
+    { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],
 })
 
@@ -154,6 +159,7 @@ const sharedCtx = {
   db,
   redis,
   metrics,
+  telemetry,
   rankedQueue,
   statsQueue,
   playerRepo,
@@ -163,7 +169,8 @@ const sharedCtx = {
   careerPlayerQueries,
   refreshOperations,
   requestAdmission,
-  verifyRefreshChallenge: verifyTurnstileResult,
+  verifyRefreshChallenge: (token: string, remoteIp: string) =>
+    observeSourceCall(telemetry, 'turnstile', () => verifyTurnstileResult(token, remoteIp)),
   rankingQueries: ranking.queries,
   clanRepo,
   accounts,
@@ -198,10 +205,20 @@ app.use(
 
 app.route(
   '/auth',
-  createAuthRoutes({ accounts, requestAdmission, verificationOperations: refreshOperations, config: authConfig }),
+  createAuthRoutes({
+    accounts,
+    requestAdmission,
+    verificationOperations: refreshOperations,
+    config: authConfig,
+    observeSourceCall: (domain, work) => observeSourceCall(telemetry, domain, work),
+    logger: telemetry.logger,
+  }),
 )
 app.route('/internal/contracts', createContractProofRoutes())
-app.route('/internal/operations', createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET))
+app.route(
+  '/internal/operations',
+  createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
+)
 
 app.route(
   '/api/matches',
@@ -212,6 +229,7 @@ app.route(
     metrics,
     accounts,
     enabled: matchmakingLive,
+    observeSourceCall: (domain, work) => observeSourceCall(telemetry, domain, work),
   }),
 )
 
@@ -263,6 +281,37 @@ app.use(
 
 app.route('/health', createHealthRoutes(lifecycle))
 
+app.get('/metrics', async (c) => {
+  if (!internalSecretValid(c.req.header('x-internal-secret'), process.env.INTERNAL_API_SECRET)) {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+  try {
+    const [operations, quota] = await Promise.all([
+      refreshOperations.inspectTelemetry(),
+      requestAdmission.inspectCurrentUsage(),
+    ])
+    for (const item of operations.oldestPending) {
+      telemetry.metrics.set('operation_oldest_pending_age_ms', item.ageMs, { work_class: item.workClass })
+    }
+    for (const item of operations.deadLetters) {
+      telemetry.metrics.set('operation_dead_letters', item.count, { work_class: item.workClass, kind: item.kind })
+    }
+    for (const item of operations.scheduleLateness) {
+      telemetry.metrics.set('schedule_lateness_ms', item.latenessMs, { kind: item.kind })
+    }
+    for (const item of quota.domains) {
+      telemetry.metrics.set('source_quota_used', item.used, { domain: item.domain })
+      telemetry.metrics.set('source_quota_limit', item.limit, { domain: item.domain })
+    }
+  } catch (error) {
+    telemetry.logger.error('metrics.measurement.failed', error)
+  }
+  return c.body(renderPrometheus(telemetry.metrics.snapshot()), 200, {
+    'content-type': 'text/plain; version=0.0.4; charset=utf-8',
+    'cache-control': 'no-store',
+  })
+})
+
 app.get('/internal/metrics', async (c) => {
   const secret = c.req.header('x-internal-secret')
   if (!internalSecretValid(secret, process.env.INTERNAL_API_SECRET)) {
@@ -307,9 +356,9 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
     if (rateLimit.allowed) {
       await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
       await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
-      console.log(`[overlay] discovering player ${bhid}`)
+      telemetry.logger.info('overlay.player.discovery_requested')
     } else {
-      console.log(`[overlay] rate-limited for ${clientIp}, returning placeholder only`)
+      telemetry.logger.warn('overlay.request.rate_limited')
     }
 
     return c.json({
@@ -358,9 +407,10 @@ app.get('/api/overlay/opponent/:bhid', async (c) => {
 })
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
-server.current = Bun.serve({
-  port,
-  fetch: async (request) => {
+const instrumentedFetch = instrumentHttpHandler(
+  telemetry,
+  'api',
+  async (request) => {
     let pathname: string
     try {
       pathname = new URL(request.url).pathname
@@ -379,7 +429,12 @@ server.current = Bun.serve({
       finishWork()
     }
   },
-})
+  {
+    acceptIncoming: (request) =>
+      internalSecretValid(request.headers.get('x-internal-secret') ?? undefined, process.env.INTERNAL_API_SECRET),
+  },
+)
+server.current = Bun.serve({ port, fetch: instrumentedFetch })
 lifecycle.markReady()
 
 async function initializeGameData(): Promise<void> {
@@ -390,7 +445,7 @@ async function initializeGameData(): Promise<void> {
       await initGameData(db)
       gameDataReady = true
     } catch (error) {
-      console.error('[api] game data initialization failed; runtime remains unready', error)
+      telemetry.logger.error('api.game_data.initialization_failed', error)
     } finally {
       finishWork()
     }
@@ -411,4 +466,4 @@ function requestShutdown(): void {
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 
-console.log(`API server running on port ${port}`)
+telemetry.logger.info('api.started', { port })

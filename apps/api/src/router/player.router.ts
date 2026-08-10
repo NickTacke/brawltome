@@ -19,6 +19,14 @@ const temporarilyUnavailable = {
   retry: { kind: 'after' as const, afterSeconds: 30 },
 }
 
+function recordTelemetry(record: () => void): void {
+  try {
+    record()
+  } catch {
+    return
+  }
+}
+
 function timestamp(value: Date | string | null | undefined): number {
   if (!value) return 0
   const milliseconds = new Date(value).getTime()
@@ -139,6 +147,12 @@ async function requestPlayerRefresh(
       reserved.reservationToken,
     )
     if (activated === 'lease-lost') return { player, refresh: temporarilyUnavailable }
+    recordTelemetry(() =>
+      ctx.telemetry.logger.info('refresh.operation.accepted', {
+        operationId: reserved.operationId,
+        kind: 'interactive-player-refresh',
+      }),
+    )
     return {
       player,
       refresh: {
@@ -147,7 +161,10 @@ async function requestPlayerRefresh(
         retry: { kind: 'poll', afterSeconds: 2 },
       },
     }
-  } catch {
+  } catch (error) {
+    recordTelemetry(() =>
+      ctx.telemetry.logger.error('refresh.request.failed', error, { kind: 'interactive-player-refresh' }),
+    )
     return { player, refresh: temporarilyUnavailable }
   }
 }

@@ -894,7 +894,7 @@ export function createPostgresRefreshOperations(
           FOR UPDATE SKIP LOCKED
           LIMIT ${limit}
         `
-        const scheduleIds: string[] = []
+        const occurrences: MaterializeSchedulesResult['occurrences'] = []
         for (const schedule of schedules) {
           const dueWindowCount = Number(schedule.due_window_count)
           const missedWindowCount = dueWindowCount - 1
@@ -982,9 +982,17 @@ export function createPostgresRefreshOperations(
             WHERE id = ${schedule.id}
           `
           if (inserted) await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-          scheduleIds.push(schedule.id)
+          occurrences.push({
+            scheduleId: schedule.id,
+            occurrenceId,
+            operationId: inserted ? operationId : completedFullRefresh.id,
+            kind: schedule.kind,
+            workClass: schedule.work_class,
+            latenessMs,
+            missedWindowCount,
+          })
         }
-        return { occurrencesCreated: scheduleIds.length, scheduleIds }
+        return { occurrencesCreated: occurrences.length, occurrences }
       })
       return result
     },
@@ -1612,6 +1620,68 @@ export function createPostgresRefreshOperations(
 
     discardDeadLetter(input: DeadLetterDispositionInput) {
       return disposeDeadLetter('discarded', input)
+    },
+
+    async inspectTelemetry() {
+      const [databaseTime] = await client<{ observed_at: Date }[]>`
+        SELECT clock_timestamp() AS observed_at
+      `
+      const oldestPending = await client<{ work_class: WorkClass; age_ms: string | number }[]>`
+        SELECT work_class,
+               greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(created_at))) * 1000)::bigint AS age_ms
+        FROM refresh_operations.operations
+        WHERE status = 'pending' AND available_at <= ${databaseTime.observed_at}
+        GROUP BY work_class
+      `
+      const deadLetters = await client<
+        { work_class: WorkClass; kind: OperationLease['kind']; count: string | number }[]
+      >`
+        SELECT work_class, kind, count(*)::bigint AS count
+        FROM refresh_operations.operations
+        WHERE status = 'dead_letter'
+        GROUP BY work_class, kind
+      `
+      const scheduleLateness = await client<{ kind: OperationLease['kind']; lateness_ms: string | number }[]>`
+        SELECT kind,
+               greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(next_due_at))) * 1000)::bigint
+                 AS lateness_ms
+        FROM refresh_operations.schedules
+        WHERE enabled
+        GROUP BY kind
+      `
+      const pendingByClass = new Map(oldestPending.map((row) => [row.work_class, Number(row.age_ms)]))
+      const deadLettersByClassAndKind = new Map(
+        deadLetters.map((row) => [`${row.work_class}:${row.kind}`, Number(row.count)]),
+      )
+      const allOperationKinds: OperationLease['kind'][] = [
+        'proof',
+        'interactive-player-refresh',
+        'clan-refresh',
+        'player-discovery-projection',
+        'ranked-player-pulse',
+        ...leaderboardOperationKinds,
+      ]
+      const latenessByKind = new Map(scheduleLateness.map((row) => [row.kind, Number(row.lateness_ms)]))
+      return {
+        observedAt: databaseTime.observed_at.toISOString(),
+        oldestPending: workClasses.map((workClass) => ({
+          workClass,
+          ageMs: pendingByClass.get(workClass) ?? 0,
+        })),
+        deadLetters: workClasses.flatMap((workClass) =>
+          allOperationKinds.map((kind) => ({
+            workClass,
+            kind,
+            count: deadLettersByClassAndKind.get(`${workClass}:${kind}`) ?? 0,
+          })),
+        ),
+        scheduleLateness: (
+          ['proof', 'interactive-player-refresh', ...leaderboardOperationKinds] as OperationLease['kind'][]
+        ).map((kind) => ({
+          kind,
+          latenessMs: latenessByKind.get(kind) ?? 0,
+        })),
+      }
     },
 
     async inspect(operationId: string) {

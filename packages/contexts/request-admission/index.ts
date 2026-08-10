@@ -12,6 +12,12 @@ export type SourceAdmissionResult =
   | { outcome: 'admitted'; deduplicated: boolean }
   | { outcome: 'rate-limited'; retryAfterSeconds: number }
 
+export type SourceQuotaUsage = {
+  observedAt: string
+  windowStartedAt: string
+  domains: { domain: SourceDomain; used: number; limit: number }[]
+}
+
 export interface ActorAdmission {
   admitActor(actor: RefreshActor, reservationKey?: string): Promise<ActorAdmissionResult>
   hasActorReservation(reservationKey: string): Promise<boolean>
