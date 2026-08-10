@@ -3,8 +3,8 @@ use std::net::TcpListener;
 
 use brawltome_contracts::generated::Client;
 use brawltome_contracts::generated::types::{
-    ClanProfile, ContractProof, ContractProofEvent, GetContractProofXInternalSecret,
-    PlayerCareerProfile, PlayerRankedProfile, RefreshOutcome,
+    ClanProfile, ContractProof, ContractProofEvent, DesktopRankedLookup,
+    GetContractProofXInternalSecret, PlayerCareerProfile, PlayerRankedProfile, RefreshOutcome,
 };
 
 const VALID_PRESENT: &str = include_str!("../../tests/fixtures/valid-present.json");
@@ -21,6 +21,15 @@ const INVALID_OFFSET_DATE_TIME: &str =
 const INVALID_UNION: &str = include_str!("../../tests/fixtures/invalid-union.json");
 const PLAYER_RANKED_MEASURED_ZERO: &str =
     include_str!("../../tests/fixtures/player-ranked-measured-zero.json");
+const DESKTOP_RANKED_MEASURED_ZERO: &str =
+    include_str!("../../tests/fixtures/desktop-ranked-measured-zero.json");
+const DESKTOP_RANKED_STATES: [&str; 5] = [
+    include_str!("../../tests/fixtures/desktop-ranked-missing-accepted.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-unavailable-verification-required.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-stale-already-refreshing.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-stale-rate-limited.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-stale-temporarily-unavailable.json"),
+];
 const PLAYER_CAREER_MEASURED_ZERO: &str =
     include_str!("../../tests/fixtures/player-career-measured-zero.json");
 const REFRESH_OUTCOMES: [&str; 6] = [
@@ -98,6 +107,45 @@ fn generated_ranked_profile_preserves_measured_zero_and_solo_sentinel() {
 }
 
 #[test]
+fn generated_desktop_lookup_preserves_zero_and_rejects_inconsistent_availability() {
+    let wire: serde_json::Value =
+        serde_json::from_str(DESKTOP_RANKED_MEASURED_ZERO).expect("valid desktop fixture");
+    let lookup: DesktopRankedLookup =
+        serde_json::from_value(wire.clone()).expect("generated desktop lookup");
+    assert_eq!(
+        serde_json::to_value(lookup).expect("serialize desktop lookup"),
+        wire
+    );
+
+    for fixture in DESKTOP_RANKED_STATES {
+        let state_wire: serde_json::Value =
+            serde_json::from_str(fixture).expect("valid desktop state fixture");
+        let state: DesktopRankedLookup =
+            serde_json::from_value(state_wire.clone()).expect("generated desktop state");
+        assert_eq!(
+            serde_json::to_value(state).expect("serialize desktop state"),
+            state_wire
+        );
+    }
+
+    let mut out_of_range = wire.clone();
+    out_of_range["player"]["brawlhallaId"] = serde_json::json!(2_147_483_648u64);
+    assert!(
+        serde_json::from_value::<DesktopRankedLookup>(out_of_range).is_err(),
+        "accepted out-of-range desktop player ID"
+    );
+
+    let mut inconsistent = wire;
+    inconsistent["ranked"]["lastSuccessAt"] = serde_json::Value::Null;
+    inconsistent["ranked"]["freshness"] = serde_json::json!("fresh");
+    inconsistent["ranked"]["snapshot"] = serde_json::Value::Null;
+    assert!(
+        serde_json::from_value::<DesktopRankedLookup>(inconsistent).is_err(),
+        "accepted inconsistent ranked availability"
+    );
+}
+
+#[test]
 fn generated_ranked_profile_rejects_wire_values_rejected_by_zod() {
     for (name, pointer, invalid) in [
         (
@@ -163,19 +211,61 @@ fn generated_career_profile_enforces_zod_wire_semantics() {
     );
 
     for (name, pointer, invalid) in [
-        ("negative games", "/snapshot/combat/games", serde_json::json!(-1)),
-        ("out-of-range player ID", "/brawlhallaId", serde_json::json!(2_147_483_648u64)),
-        ("zero legend ID", "/snapshot/legends/0/legendId", serde_json::json!(0)),
-        ("noncanonical decimal", "/snapshot/combat/damageBomb", serde_json::json!("01")),
-        ("fraction above one", "/snapshot/account/xpPercentage", serde_json::json!(1.01)),
-        ("combat wins above games", "/snapshot/combat/wins", serde_json::json!(1)),
-        ("legend wins above games", "/snapshot/legends/0/wins", serde_json::json!(1)),
-        ("freshness drift", "/freshForSeconds", serde_json::json!(3600)),
-        ("offset checked-at", "/checkedAt", serde_json::json!("2026-08-09T22:00:00+00:00")),
-        ("offset last-success", "/lastSuccessAt", serde_json::json!("2026-08-09T22:00:00+00:00")),
+        (
+            "negative games",
+            "/snapshot/combat/games",
+            serde_json::json!(-1),
+        ),
+        (
+            "out-of-range player ID",
+            "/brawlhallaId",
+            serde_json::json!(2_147_483_648u64),
+        ),
+        (
+            "zero legend ID",
+            "/snapshot/legends/0/legendId",
+            serde_json::json!(0),
+        ),
+        (
+            "noncanonical decimal",
+            "/snapshot/combat/damageBomb",
+            serde_json::json!("01"),
+        ),
+        (
+            "fraction above one",
+            "/snapshot/account/xpPercentage",
+            serde_json::json!(1.01),
+        ),
+        (
+            "combat wins above games",
+            "/snapshot/combat/wins",
+            serde_json::json!(1),
+        ),
+        (
+            "legend wins above games",
+            "/snapshot/legends/0/wins",
+            serde_json::json!(1),
+        ),
+        (
+            "freshness drift",
+            "/freshForSeconds",
+            serde_json::json!(3600),
+        ),
+        (
+            "offset checked-at",
+            "/checkedAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+        (
+            "offset last-success",
+            "/lastSuccessAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
     ] {
         let mut invalid_wire = wire.clone();
-        *invalid_wire.pointer_mut(pointer).expect("fixture pointer exists") = invalid;
+        *invalid_wire
+            .pointer_mut(pointer)
+            .expect("fixture pointer exists") = invalid;
         assert!(
             serde_json::from_value::<PlayerCareerProfile>(invalid_wire).is_err(),
             "accepted invalid career {name}"
@@ -194,9 +284,24 @@ fn generated_career_profile_enforces_zod_wire_semantics() {
     );
 
     for (name, last_success, freshness, snapshot) in [
-        ("success without snapshot", wire["lastSuccessAt"].clone(), serde_json::json!("fresh"), serde_json::Value::Null),
-        ("unavailable with snapshot", serde_json::Value::Null, serde_json::json!("unavailable"), wire["snapshot"].clone()),
-        ("null success marked fresh", serde_json::Value::Null, serde_json::json!("fresh"), serde_json::Value::Null),
+        (
+            "success without snapshot",
+            wire["lastSuccessAt"].clone(),
+            serde_json::json!("fresh"),
+            serde_json::Value::Null,
+        ),
+        (
+            "unavailable with snapshot",
+            serde_json::Value::Null,
+            serde_json::json!("unavailable"),
+            wire["snapshot"].clone(),
+        ),
+        (
+            "null success marked fresh",
+            serde_json::Value::Null,
+            serde_json::json!("fresh"),
+            serde_json::Value::Null,
+        ),
     ] {
         let mut invalid_wire = wire.clone();
         invalid_wire["lastSuccessAt"] = last_success;

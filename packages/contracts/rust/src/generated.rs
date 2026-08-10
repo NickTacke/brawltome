@@ -12,15 +12,21 @@ pub mod types {
     where
         D: ::serde::Deserializer<'de>,
     {
-        <::std::option::Option<::std::string::String> as ::serde::Deserialize>::deserialize(deserializer)
+        <::std::option::Option<
+            ::std::string::String,
+        > as ::serde::Deserialize>::deserialize(deserializer)
     }
-    fn deserialize_nonnegative_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    fn deserialize_nonnegative_int32<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
         let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
         if value < 0 {
-            return Err(<D::Error as ::serde::de::Error>::custom("integer must be nonnegative"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom("integer must be nonnegative"),
+            );
         }
         Ok(value)
     }
@@ -30,59 +36,94 @@ pub mod types {
     where
         D: ::serde::Deserializer<'de>,
     {
-        let value = <::std::string::String as ::serde::Deserialize>::deserialize(deserializer)?;
+        let value = <::std::string::String as ::serde::Deserialize>::deserialize(
+            deserializer,
+        )?;
         if !value.ends_with('Z') {
-            return Err(<D::Error as ::serde::de::Error>::custom("date-time must use the UTC Z suffix"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom(
+                    "date-time must use the UTC Z suffix",
+                ),
+            );
         }
         value.parse().map_err(<D::Error as ::serde::de::Error>::custom)
     }
     fn deserialize_optional_utc_datetime<'de, D>(
         deserializer: D,
-    ) -> ::std::result::Result<::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>, D::Error>
+    ) -> ::std::result::Result<
+        ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        D::Error,
+    >
     where
         D: ::serde::Deserializer<'de>,
     {
-        let value = <::std::option::Option<::std::string::String> as ::serde::Deserialize>::deserialize(deserializer)?;
+        let value = <::std::option::Option<
+            ::std::string::String,
+        > as ::serde::Deserialize>::deserialize(deserializer)?;
         value
             .map(|value| {
                 if !value.ends_with('Z') {
-                    return Err(<D::Error as ::serde::de::Error>::custom("date-time must use the UTC Z suffix"));
+                    return Err(
+                        <D::Error as ::serde::de::Error>::custom(
+                            "date-time must use the UTC Z suffix",
+                        ),
+                    );
                 }
                 value.parse().map_err(<D::Error as ::serde::de::Error>::custom)
             })
             .transpose()
     }
-    fn deserialize_ranked_freshness_seconds<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    fn deserialize_ranked_freshness_seconds<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
         let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
         if value != 3600 {
-            return Err(<D::Error as ::serde::de::Error>::custom("ranked freshness must be 3600 seconds"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom(
+                    "ranked freshness must be 3600 seconds",
+                ),
+            );
         }
         Ok(value)
     }
-    fn deserialize_career_freshness_seconds<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    fn deserialize_career_freshness_seconds<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
         let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
         if value != 43200 {
-            return Err(<D::Error as ::serde::de::Error>::custom("career freshness must be 43200 seconds"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom(
+                    "career freshness must be 43200 seconds",
+                ),
+            );
         }
         Ok(value)
     }
-    fn deserialize_fraction<'de, D>(deserializer: D) -> ::std::result::Result<f64, D::Error>
+    fn deserialize_fraction<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<f64, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
         let value = <f64 as ::serde::Deserialize>::deserialize(deserializer)?;
         if !value.is_finite() || !(0.0..=1.0).contains(&value) {
-            return Err(<D::Error as ::serde::de::Error>::custom("number must be between 0 and 1"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom(
+                    "number must be between 0 and 1",
+                ),
+            );
         }
         Ok(value)
     }
-    fn deserialize_zero_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    fn deserialize_zero_int32<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
@@ -100,10 +141,14 @@ pub mod types {
     {
         let value = <u64 as ::serde::Deserialize>::deserialize(deserializer)?;
         if value > i32::MAX as u64 {
-            return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"),
+            );
         }
         ::std::num::NonZeroU64::new(value)
-            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom(
+                "integer must be positive",
+            ))
     }
     fn deserialize_bounded_nonzero_u32<'de, D>(
         deserializer: D,
@@ -113,10 +158,14 @@ pub mod types {
     {
         let value = <u32 as ::serde::Deserialize>::deserialize(deserializer)?;
         if value > i32::MAX as u32 {
-            return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+            return Err(
+                <D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"),
+            );
         }
         ::std::num::NonZeroU32::new(value)
-            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom(
+                "integer must be positive",
+            ))
     }
     fn deserialize_optional_bounded_nonzero_u32<'de, D>(
         deserializer: D,
@@ -124,22 +173,32 @@ pub mod types {
     where
         D: ::serde::Deserializer<'de>,
     {
-        let value = <::std::option::Option<u32> as ::serde::Deserialize>::deserialize(deserializer)?;
-        value.map(|value| {
-            if value > i32::MAX as u32 {
-                return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
-            }
-            ::std::num::NonZeroU32::new(value)
-                .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
-        }).transpose()
+        let value = <::std::option::Option<
+            u32,
+        > as ::serde::Deserialize>::deserialize(deserializer)?;
+        value
+            .map(|value| {
+                if value > i32::MAX as u32 {
+                    return Err(
+                        <D::Error as ::serde::de::Error>::custom(
+                            "integer exceeds int32 maximum",
+                        ),
+                    );
+                }
+                ::std::num::NonZeroU32::new(value)
+                    .ok_or_else(|| <D::Error as ::serde::de::Error>::custom(
+                        "integer must be positive",
+                    ))
+            })
+            .transpose()
     }
     fn is_visible_character(value: char) -> bool {
         !matches!(
             ::unicode_general_category::get_general_category(value),
-            ::unicode_general_category::GeneralCategory::SpaceSeparator
-                | ::unicode_general_category::GeneralCategory::LineSeparator
-                | ::unicode_general_category::GeneralCategory::ParagraphSeparator
-                | ::unicode_general_category::GeneralCategory::Format
+            ::unicode_general_category::GeneralCategory::SpaceSeparator |
+            ::unicode_general_category::GeneralCategory::LineSeparator |
+            ::unicode_general_category::GeneralCategory::ParagraphSeparator |
+            ::unicode_general_category::GeneralCategory::Format
         )
     }
     /// Error types.
@@ -4923,10 +4982,7 @@ pub mod types {
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
         pub count: i32,
         pub event: ContractProofEvent,
-        #[serde(
-            rename = "occurredAt",
-            deserialize_with = "deserialize_utc_datetime"
-        )]
+        #[serde(rename = "occurredAt", deserialize_with = "deserialize_utc_datetime")]
         pub occurred_at: ::chrono::DateTime<::chrono::offset::Utc>,
         #[serde(
             rename = "optionalValue",
@@ -5075,6 +5131,93 @@ pub mod types {
                     <D::Error as ::serde::de::Error>::custom(e.to_string())
                 })
         }
+    }
+    ///`DesktopRankedLookup`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "player",
+    ///    "ranked",
+    ///    "refresh"
+    ///  ],
+    ///  "properties": {
+    ///    "player": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "brawlhallaId",
+    ///        "name"
+    ///      ],
+    ///      "properties": {
+    ///        "brawlhallaId": {
+    ///          "type": "integer",
+    ///          "maximum": 2147483647.0,
+    ///          "exclusiveMinimum": 0.0
+    ///        },
+    ///        "name": {
+    ///          "type": "string"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "ranked": {
+    ///      "$ref": "#/components/schemas/PlayerRankedProfile"
+    ///    },
+    ///    "refresh": {
+    ///      "$ref": "#/components/schemas/RefreshOutcome"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct DesktopRankedLookup {
+        pub player: ::std::option::Option<DesktopRankedLookupPlayer>,
+        pub ranked: PlayerRankedProfile,
+        pub refresh: RefreshOutcome,
+    }
+    ///`DesktopRankedLookupPlayer`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "name"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "name": {
+    ///      "type": "string"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct DesktopRankedLookupPlayer {
+        #[serde(
+            rename = "brawlhallaId",
+            deserialize_with = "deserialize_bounded_nonzero_u64"
+        )]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        pub name: ::std::string::String,
     }
     ///`GetContractProofXInternalSecret`
     ///
@@ -5232,15 +5375,29 @@ pub mod types {
             #[derive(::serde::Deserialize)]
             #[serde(deny_unknown_fields)]
             struct Wire {
-                #[serde(rename = "brawlhallaId", deserialize_with = "deserialize_bounded_nonzero_u64")]
+                #[serde(
+                    rename = "brawlhallaId",
+                    deserialize_with = "deserialize_bounded_nonzero_u64"
+                )]
                 brawlhalla_id: ::std::num::NonZeroU64,
-                #[serde(rename = "checkedAt", deserialize_with = "deserialize_utc_datetime")]
+                #[serde(
+                    rename = "checkedAt",
+                    deserialize_with = "deserialize_utc_datetime"
+                )]
                 checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
-                #[serde(rename = "freshForSeconds", deserialize_with = "deserialize_career_freshness_seconds")]
+                #[serde(
+                    rename = "freshForSeconds",
+                    deserialize_with = "deserialize_career_freshness_seconds"
+                )]
                 fresh_for_seconds: i32,
                 freshness: PlayerCareerProfileFreshness,
-                #[serde(rename = "lastSuccessAt", deserialize_with = "deserialize_optional_utc_datetime")]
-                last_success_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+                #[serde(
+                    rename = "lastSuccessAt",
+                    deserialize_with = "deserialize_optional_utc_datetime"
+                )]
+                last_success_at: ::std::option::Option<
+                    ::chrono::DateTime<::chrono::offset::Utc>,
+                >,
                 snapshot: PlayerCareerSnapshot,
             }
             let wire = <Wire as ::serde::Deserialize>::deserialize(deserializer)?;
@@ -5251,13 +5408,21 @@ pub mod types {
                 && !matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
                 && wire.snapshot.0.is_some();
             if !unavailable && !available {
-                return Err(<D::Error as ::serde::de::Error>::custom("career availability fields are inconsistent"));
+                return Err(
+                    <D::Error as ::serde::de::Error>::custom(
+                        "career availability fields are inconsistent",
+                    ),
+                );
             }
             if let Some(snapshot) = &wire.snapshot.0 {
                 if snapshot.combat.wins > snapshot.combat.games
                     || snapshot.legends.iter().any(|legend| legend.wins > legend.games)
                 {
-                    return Err(<D::Error as ::serde::de::Error>::custom("career wins cannot exceed games"));
+                    return Err(
+                        <D::Error as ::serde::de::Error>::custom(
+                            "career wins cannot exceed games",
+                        ),
+                    );
                 }
             }
             Ok(Self {
@@ -7239,7 +7404,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -7921,7 +8087,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -7966,6 +8133,113 @@ pub mod types {
         }
     }
     ///`PlayerRankedProfile`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": [
+    ///    "object",
+    ///    "null"
+    ///  ],
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "checkedAt",
+    ///    "freshForSeconds",
+    ///    "freshness",
+    ///    "lastSuccessAt",
+    ///    "snapshot",
+    ///    "sparsePulse"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "freshForSeconds": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 3600.0,
+    ///      "minimum": 3600.0
+    ///    },
+    ///    "freshness": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "fresh",
+    ///        "stale",
+    ///        "unavailable"
+    ///      ]
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "snapshot": {
+    ///      "$ref": "#/components/schemas/PlayerRankedSnapshot"
+    ///    },
+    ///    "sparsePulse": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "checkedAt",
+    ///        "lastSuccessAt"
+    ///      ],
+    ///      "properties": {
+    ///        "checkedAt": {
+    ///          "type": "string",
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
+    ///        },
+    ///        "lastSuccessAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(transparent)]
+    pub struct PlayerRankedProfile(pub ::std::option::Option<PlayerRankedProfileInner>);
+    impl ::std::ops::Deref for PlayerRankedProfile {
+        type Target = ::std::option::Option<PlayerRankedProfileInner>;
+        fn deref(&self) -> &::std::option::Option<PlayerRankedProfileInner> {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedProfile>
+    for ::std::option::Option<PlayerRankedProfileInner> {
+        fn from(value: PlayerRankedProfile) -> Self {
+            value.0
+        }
+    }
+    impl ::std::convert::From<::std::option::Option<PlayerRankedProfileInner>>
+    for PlayerRankedProfile {
+        fn from(value: ::std::option::Option<PlayerRankedProfileInner>) -> Self {
+            Self(value)
+        }
+    }
+    ///`PlayerRankedProfileInner`
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -8048,35 +8322,25 @@ pub mod types {
     ///}
     /// ```
     /// </details>
-    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[derive(::serde::Serialize, Clone, Debug)]
     #[serde(deny_unknown_fields)]
-    pub struct PlayerRankedProfile {
+    pub struct PlayerRankedProfileInner {
         #[serde(rename = "brawlhallaId")]
-        #[serde(deserialize_with = "deserialize_bounded_nonzero_u64")]
         pub brawlhalla_id: ::std::num::NonZeroU64,
-        #[serde(
-            rename = "checkedAt",
-            deserialize_with = "deserialize_utc_datetime"
-        )]
+        #[serde(rename = "checkedAt")]
         pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
-        #[serde(
-            rename = "freshForSeconds",
-            deserialize_with = "deserialize_ranked_freshness_seconds"
-        )]
+        #[serde(rename = "freshForSeconds")]
         pub fresh_for_seconds: i32,
-        pub freshness: PlayerRankedProfileFreshness,
-        #[serde(
-            rename = "lastSuccessAt",
-            deserialize_with = "deserialize_optional_utc_datetime"
-        )]
+        pub freshness: PlayerRankedProfileInnerFreshness,
+        #[serde(rename = "lastSuccessAt")]
         pub last_success_at: ::std::option::Option<
             ::chrono::DateTime<::chrono::offset::Utc>,
         >,
         pub snapshot: PlayerRankedSnapshot,
         #[serde(rename = "sparsePulse")]
-        pub sparse_pulse: ::std::option::Option<PlayerRankedProfileSparsePulse>,
+        pub sparse_pulse: ::std::option::Option<PlayerRankedProfileInnerSparsePulse>,
     }
-    ///`PlayerRankedProfileFreshness`
+    ///`PlayerRankedProfileInnerFreshness`
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -8103,7 +8367,7 @@ pub mod types {
         PartialEq,
         PartialOrd
     )]
-    pub enum PlayerRankedProfileFreshness {
+    pub enum PlayerRankedProfileInnerFreshness {
         #[serde(rename = "fresh")]
         Fresh,
         #[serde(rename = "stale")]
@@ -8111,7 +8375,7 @@ pub mod types {
         #[serde(rename = "unavailable")]
         Unavailable,
     }
-    impl ::std::fmt::Display for PlayerRankedProfileFreshness {
+    impl ::std::fmt::Display for PlayerRankedProfileInnerFreshness {
         fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
             match *self {
                 Self::Fresh => f.write_str("fresh"),
@@ -8120,7 +8384,7 @@ pub mod types {
             }
         }
     }
-    impl ::std::str::FromStr for PlayerRankedProfileFreshness {
+    impl ::std::str::FromStr for PlayerRankedProfileInnerFreshness {
         type Err = self::error::ConversionError;
         fn from_str(
             value: &str,
@@ -8133,7 +8397,7 @@ pub mod types {
             }
         }
     }
-    impl ::std::convert::TryFrom<&str> for PlayerRankedProfileFreshness {
+    impl ::std::convert::TryFrom<&str> for PlayerRankedProfileInnerFreshness {
         type Error = self::error::ConversionError;
         fn try_from(
             value: &str,
@@ -8142,7 +8406,7 @@ pub mod types {
         }
     }
     impl ::std::convert::TryFrom<&::std::string::String>
-    for PlayerRankedProfileFreshness {
+    for PlayerRankedProfileInnerFreshness {
         type Error = self::error::ConversionError;
         fn try_from(
             value: &::std::string::String,
@@ -8151,7 +8415,7 @@ pub mod types {
         }
     }
     impl ::std::convert::TryFrom<::std::string::String>
-    for PlayerRankedProfileFreshness {
+    for PlayerRankedProfileInnerFreshness {
         type Error = self::error::ConversionError;
         fn try_from(
             value: ::std::string::String,
@@ -8159,7 +8423,7 @@ pub mod types {
             value.parse()
         }
     }
-    ///`PlayerRankedProfileSparsePulse`
+    ///`PlayerRankedProfileInnerSparsePulse`
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -8191,7 +8455,7 @@ pub mod types {
     /// </details>
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     #[serde(deny_unknown_fields)]
-    pub struct PlayerRankedProfileSparsePulse {
+    pub struct PlayerRankedProfileInnerSparsePulse {
         #[serde(rename = "checkedAt")]
         pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
         #[serde(rename = "lastSuccessAt")]
@@ -9215,7 +9479,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -9292,7 +9557,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -9412,7 +9678,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -9810,7 +10077,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -9885,7 +10153,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -10042,7 +10311,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -10119,7 +10389,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -10229,10 +10500,7 @@ pub mod types {
         pub peak_rating: i32,
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
         pub rating: i32,
-        #[serde(
-            rename = "recordedAt",
-            deserialize_with = "deserialize_utc_datetime"
-        )]
+        #[serde(rename = "recordedAt", deserialize_with = "deserialize_utc_datetime")]
         pub recorded_at: ::chrono::DateTime<::chrono::offset::Utc>,
         pub tier: PlayerRankedSnapshotInnerRatingHistoryItemTier,
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
@@ -10269,7 +10537,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -10403,10 +10672,7 @@ pub mod types {
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
         pub rating: i32,
         pub region: PlayerRankedSnapshotInnerSoloQueueItemRegion,
-        #[serde(
-            rename = "secondPlayerId",
-            deserialize_with = "deserialize_zero_int32"
-        )]
+        #[serde(rename = "secondPlayerId", deserialize_with = "deserialize_zero_int32")]
         pub second_player_id: i32,
         #[serde(rename = "teamName")]
         pub team_name: ::std::string::String,
@@ -10445,7 +10711,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -10521,7 +10788,8 @@ pub mod types {
         fn from_str(
             value: &str,
         ) -> ::std::result::Result<Self, self::error::ConversionError> {
-            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
                 return Err("shorter than 1 characters".into());
             }
             Ok(Self(value.to_string()))
@@ -11215,6 +11483,92 @@ pub mod types {
             value.parse()
         }
     }
+    impl<'de> ::serde::Deserialize<'de> for PlayerRankedProfileInner {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            #[derive(::serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Wire {
+                #[serde(
+                    rename = "brawlhallaId",
+                    deserialize_with = "deserialize_bounded_nonzero_u64"
+                )]
+                brawlhalla_id: ::std::num::NonZeroU64,
+                #[serde(
+                    rename = "checkedAt",
+                    deserialize_with = "deserialize_utc_datetime"
+                )]
+                checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+                #[serde(
+                    rename = "freshForSeconds",
+                    deserialize_with = "deserialize_ranked_freshness_seconds"
+                )]
+                fresh_for_seconds: i32,
+                freshness: PlayerRankedProfileInnerFreshness,
+                #[serde(
+                    rename = "lastSuccessAt",
+                    deserialize_with = "deserialize_optional_utc_datetime"
+                )]
+                last_success_at: ::std::option::Option<
+                    ::chrono::DateTime<::chrono::offset::Utc>,
+                >,
+                snapshot: PlayerRankedSnapshot,
+                #[serde(rename = "sparsePulse")]
+                sparse_pulse: ::std::option::Option<PlayerRankedProfileInnerSparsePulse>,
+            }
+            let wire = <Wire as ::serde::Deserialize>::deserialize(deserializer)?;
+            let unavailable = wire.last_success_at.is_none()
+                && matches!(
+                    wire.freshness, PlayerRankedProfileInnerFreshness::Unavailable
+                ) && wire.snapshot.0.is_none();
+            let available = wire.last_success_at.is_some()
+                && !matches!(
+                    wire.freshness, PlayerRankedProfileInnerFreshness::Unavailable
+                ) && wire.snapshot.0.is_some();
+            if !unavailable && !available {
+                return Err(
+                    <D::Error as ::serde::de::Error>::custom(
+                        "ranked availability fields are inconsistent",
+                    ),
+                );
+            }
+            if wire.sparse_pulse.is_some() && !available {
+                return Err(
+                    <D::Error as ::serde::de::Error>::custom(
+                        "sparse pulse evidence requires canonical ranked state",
+                    ),
+                );
+            }
+            if wire
+                .sparse_pulse
+                .as_ref()
+                .is_some_and(|pulse| {
+                    pulse
+                        .last_success_at
+                        .is_some_and(|last_success_at| {
+                            last_success_at > pulse.checked_at
+                        })
+                })
+            {
+                return Err(
+                    <D::Error as ::serde::de::Error>::custom(
+                        "pulse success cannot be later than its latest check",
+                    ),
+                );
+            }
+            Ok(Self {
+                brawlhalla_id: wire.brawlhalla_id,
+                checked_at: wire.checked_at,
+                fresh_for_seconds: wire.fresh_for_seconds,
+                freshness: wire.freshness,
+                last_success_at: wire.last_success_at,
+                snapshot: wire.snapshot,
+                sparse_pulse: wire.sparse_pulse,
+            })
+        }
+    }
 }
 #[derive(Clone, Debug)]
 /**Client for BrawlTome Internal Contracts
@@ -11270,6 +11624,62 @@ impl ClientInfo<()> for Client {
 impl ClientHooks<()> for &Client {}
 #[allow(clippy::all)]
 impl Client {
+    /**Sends a `GET` request to `/api/overlay/opponent/{brawlhallaId}`
+
+*/
+    pub async fn get_desktop_ranked_lookup<'a>(
+        &'a self,
+        brawlhalla_id: ::std::num::NonZeroU64,
+    ) -> Result<ResponseValue<types::DesktopRankedLookup>, Error<()>> {
+        let url = format!(
+            "{}/api/overlay/opponent/{}", self.baseurl, encode_path(& brawlhalla_id
+            .to_string()),
+        );
+        let mut header_map = ::reqwest::header::HeaderMap::with_capacity(1usize);
+        header_map
+            .append(
+                ::reqwest::header::HeaderName::from_static("api-version"),
+                ::reqwest::header::HeaderValue::from_static(Self::api_version()),
+            );
+        #[allow(unused_mut)]
+        let mut request = self
+            .client
+            .get(url)
+            .header(
+                ::reqwest::header::ACCEPT,
+                ::reqwest::header::HeaderValue::from_static("application/json"),
+            )
+            .headers(header_map)
+            .build()?;
+        let info = OperationInfo {
+            operation_id: "get_desktop_ranked_lookup",
+        };
+        self.pre(&mut request, &info).await?;
+        let result = self.exec(request, &info).await;
+        self.post(&result, &info).await?;
+        let response = result?;
+        if response.status().as_u16() == 200u16 {
+            const MAX_DESKTOP_RESPONSE_BYTES: u64 = 256 * 1024;
+            let content_length = response
+                .content_length()
+                .ok_or_else(|| {
+                    Error::Custom(
+                        "desktop ranked response omitted Content-Length".to_string(),
+                    )
+                })?;
+            if content_length > MAX_DESKTOP_RESPONSE_BYTES {
+                return Err(
+                    Error::Custom(
+                        "desktop ranked response exceeded the size limit".to_string(),
+                    ),
+                );
+            }
+        }
+        match response.status().as_u16() {
+            200u16 => ResponseValue::from_response(response).await,
+            _ => Err(Error::UnexpectedResponse(response)),
+        }
+    }
     /**Sends a `GET` request to `/internal/contracts/proof`
 
 */

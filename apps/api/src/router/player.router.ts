@@ -7,6 +7,7 @@ import {
 import { CAREER_FRESHNESS_SECONDS, RANKED_FRESHNESS_SECONDS } from '@brawltome/player'
 import { getV2PlayerProfile, isStale } from '@brawltome/player/v2-compatibility'
 import { z } from 'zod'
+import { requestInteractivePlayerRefresh } from '../interactive-player-refresh'
 import type { Context } from '../trpc/context'
 import { internalProcedure, mergeRouters, router } from '../trpc/trpc'
 import { createPlayerCareerRouter } from './player-career.router'
@@ -58,115 +59,44 @@ async function requestPlayerRefresh(
     `stats:${timestamp(career?.lastSuccessAt)}`,
   ].join(':')
 
-  try {
-    const active = await ctx.refreshOperations.findActiveInteractivePlayerRefresh(dedupeKey, input.id)
-    if (active) {
-      if (active.awaitingAdmission) {
-        if (await ctx.requestAdmission.hasActorReservation(active.operationId)) {
-          await ctx.refreshOperations.activateAdmittedInteractiveRefresh(active.operationId)
-        } else if (active.reservationExpired) {
-          await ctx.refreshOperations.rejectExpiredInteractiveRefresh(active.operationId)
-        } else {
-          return {
-            player,
-            refresh: {
-              outcome: 'alreadyRefreshing',
-              operationId: active.operationId,
-              retry: { kind: 'poll', afterSeconds: 2 },
-            },
-          }
-        }
+  const refresh = await requestInteractivePlayerRefresh({
+    brawlhallaId: input.id,
+    dedupeKey,
+    staleSections,
+    provenance: { source: 'interactive-api', requestedBy: ctx.account?.id },
+    refreshOperations: ctx.refreshOperations,
+    requestAdmission: ctx.requestAdmission,
+    resolveActor: async () => {
+      if (ctx.account) {
+        return { kind: 'authenticated', accountId: ctx.account.id, ip: ctx.clientIp }
       }
-      if (!active.reservationExpired || (await ctx.requestAdmission.hasActorReservation(active.operationId))) {
-        return {
-          player,
-          refresh: {
-            outcome: 'alreadyRefreshing',
-            operationId: active.operationId,
-            retry: { kind: 'poll', afterSeconds: 2 },
-          },
-        }
-      }
-    }
-
-    let actor: Parameters<Context['requestAdmission']['admitActor']>[0]
-    if (ctx.account) {
-      actor = { kind: 'authenticated', accountId: ctx.account.id, ip: ctx.clientIp }
-    } else {
       if (!ctx.refreshTrust.trusted) {
         if (!input.turnstileToken) {
-          return { player, refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } } }
+          return { outcome: 'verificationRequired', retry: { kind: 'verify' } }
         }
         const verification = await ctx.verifyRefreshChallenge(input.turnstileToken, ctx.clientIp)
-        if (verification === 'unavailable') return { player, refresh: temporarilyUnavailable }
+        if (verification === 'unavailable') return temporarilyUnavailable
         if (verification === 'invalid') {
-          return { player, refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } } }
+          return { outcome: 'verificationRequired', retry: { kind: 'verify' } }
         }
         ctx.refreshTrust.grant()
       }
-      actor = { kind: 'verified-anonymous', ip: ctx.clientIp }
-    }
-
-    const reserved = await ctx.refreshOperations.reserveInteractivePlayerRefresh({
-      dedupeKey,
-      operationKey: dedupeKey,
-      brawlhallaId: input.id,
-      staleSections,
-      provenance: { source: 'interactive-api', requestedBy: ctx.account?.id },
-      reservationTtlSeconds: 30,
-    })
-    if (reserved.outcome === 'already-active') {
-      return {
-        player,
-        refresh: {
-          outcome: 'alreadyRefreshing',
-          operationId: reserved.operationId,
-          retry: { kind: 'poll', afterSeconds: 2 },
-        },
-      }
-    }
-
-    const actorAdmission = await ctx.requestAdmission.admitActor(actor, reserved.operationId)
-    if (actorAdmission.outcome === 'rate-limited') {
-      await ctx.refreshOperations.rejectInteractiveRefresh(
-        reserved.operationId,
-        reserved.reservationToken,
-        'actor_rate_limited',
-      )
-      return {
-        player,
-        refresh: {
-          outcome: 'rateLimited',
-          retry: { kind: 'after', afterSeconds: actorAdmission.retryAfterSeconds },
-        },
-      }
-    }
-
-    const activated = await ctx.refreshOperations.activateInteractiveRefresh(
-      reserved.operationId,
-      reserved.reservationToken,
-    )
-    if (activated === 'lease-lost') return { player, refresh: temporarilyUnavailable }
+      return { kind: 'verified-anonymous', ip: ctx.clientIp }
+    },
+    onError: (error) =>
+      recordTelemetry(() =>
+        ctx.telemetry.logger.error('refresh.request.failed', error, { kind: 'interactive-player-refresh' }),
+      ),
+  })
+  if (refresh.outcome === 'accepted') {
     recordTelemetry(() =>
       ctx.telemetry.logger.info('refresh.operation.accepted', {
-        operationId: reserved.operationId,
+        operationId: refresh.operationId,
         kind: 'interactive-player-refresh',
       }),
     )
-    return {
-      player,
-      refresh: {
-        outcome: 'accepted',
-        operationId: reserved.operationId,
-        retry: { kind: 'poll', afterSeconds: 2 },
-      },
-    }
-  } catch (error) {
-    recordTelemetry(() =>
-      ctx.telemetry.logger.error('refresh.request.failed', error, { kind: 'interactive-player-refresh' }),
-    )
-    return { player, refresh: temporarilyUnavailable }
   }
+  return { player, refresh }
 }
 
 export function createCanonicalPlayerRefreshRouter(procedure = internalProcedure) {

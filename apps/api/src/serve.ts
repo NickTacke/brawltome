@@ -8,17 +8,13 @@ import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
 } from '@brawltome/player/composition'
-import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
 import {
-  TIERED_TTL,
-  checkRateLimit,
   createMetricsRegistry,
   createQueue,
   createR2Client,
-  getLegendById,
   initGameData,
   verifyTurnstileResult,
 } from '@brawltome/shared'
@@ -37,11 +33,13 @@ import {
   verifyRefreshTrust,
 } from './auth/refresh-trust-cookie'
 import { createAuthRoutes } from './auth/routes'
+import { requestWithVerifiedClientIp } from './client-ip'
 import { createHealthRoutes } from './health-routes'
 import { readMatchmakingConfig } from './matchmaking-config'
 import { createPostgresReadiness } from './postgres-readiness'
 import { appRouter } from './router'
 import { createContractProofRoutes } from './routes/contract-proof.routes'
+import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { readRuntimeConfig } from './runtime-config'
@@ -108,6 +106,7 @@ const matchRepo = matchmakingLive ? createMatchRepo(db) : null
 const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationInventory)
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
+
 const lifecycle = createRuntimeLifecycle({
   ...runtimeConfig,
   readinessProbes: [
@@ -215,6 +214,15 @@ app.route(
   }),
 )
 app.route('/internal/contracts', createContractProofRoutes())
+app.route(
+  '/api/overlay',
+  createDesktopRankedRoutes({
+    playerReferences: playerReferenceQueries,
+    rankedPlayers: rankedPlayerQueries,
+    refreshOperations,
+    requestAdmission,
+  }),
+)
 app.route(
   '/internal/operations',
   createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
@@ -335,96 +343,29 @@ app.get('/internal/metrics', async (c) => {
   })
 })
 
-app.get('/api/overlay/opponent/:bhid', async (c) => {
-  const bhid = Number(c.req.param('bhid'))
-  if (!Number.isInteger(bhid) || bhid <= 0) {
-    return c.json({ error: 'Invalid bhid' }, 400)
-  }
-
-  const clientIp =
-    c.req.header('x-client-ip') ??
-    c.req.header('cf-connecting-ip') ??
-    c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
-    '0.0.0.0'
-
-  const rateLimit = await checkRateLimit(redis, clientIp, 'overlay', metrics)
-
-  const p = await getV2PlayerProfile(playerRepo, bhid)
-  if (!p) {
-    await playerRepo.createPlaceholder(bhid)
-
-    if (rateLimit.allowed) {
-      await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
-      await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'on-demand' }, true)
-      telemetry.logger.info('overlay.player.discovery_requested')
-    } else {
-      telemetry.logger.warn('overlay.request.rate_limited')
-    }
-
-    return c.json({
-      brawlhallaId: bhid,
-      name: `Player ${bhid}`,
-      rating: 0,
-      peakRating: 0,
-      playtime: 0,
-      tier: 'Unranked',
-      region: '',
-      legendKey: '',
-      winRate: 0,
-    })
-  }
-
-  const now = Date.now()
-  const ttl = TIERED_TTL.hot
-
-  if (rateLimit.allowed) {
-    const rankedStale = !p.rankedLastUpdated || now - p.rankedLastUpdated.getTime() > ttl.ranked
-    if (rankedStale) {
-      await sharedCtx.rankedQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
-    }
-
-    const statsStale = !p.statsLastUpdated || now - p.statsLastUpdated.getTime() > ttl.stats
-    if (statsStale) {
-      await sharedCtx.statsQueue.enqueue({ brawlhallaId: bhid, caller: 'background' }, true)
-    }
-  }
-
-  const legendKey = p.bestLegend ? (getLegendById(p.bestLegend)?.legendNameKey ?? '') : ''
-  const winRate = p.rankedGames > 0 ? Math.round((p.rankedWins / p.rankedGames) * 1000) / 10 : 0
-  const playtime = p.matchTimeTotal ? Math.round((p.matchTimeTotal / 3600) * 10) / 10 : 0
-
-  return c.json({
-    brawlhallaId: p.brawlhallaId,
-    name: p.name,
-    rating: p.rating,
-    peakRating: p.peakRating ?? 0,
-    playtime,
-    tier: p.tier ?? 'Unranked',
-    region: p.region ?? '',
-    legendKey,
-    winRate,
-  })
-})
-
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 const instrumentedFetch = instrumentHttpHandler(
   telemetry,
   'api',
   async (request) => {
+    const verifiedRequest = requestWithVerifiedClientIp(
+      request,
+      server.current?.requestIP(request)?.address ?? '0.0.0.0',
+    )
     let pathname: string
     try {
-      pathname = new URL(request.url).pathname
+      pathname = new URL(verifiedRequest.url).pathname
     } catch {
       return Response.json({ error: 'invalid_request_url' }, { status: 400 })
     }
-    if (pathname.startsWith('/health/')) return app.fetch(request)
+    if (pathname.startsWith('/health/')) return app.fetch(verifiedRequest)
 
     const finishWork = lifecycle.startWork()
     if (!finishWork) {
       return Response.json({ error: 'service_unavailable' }, { status: 503, headers: { 'retry-after': '1' } })
     }
     try {
-      return await app.fetch(request)
+      return await app.fetch(verifiedRequest)
     } finally {
       finishWork()
     }

@@ -1,0 +1,30 @@
+{
+  "player": { "brawlhallaId": 42, "name": "Stale Ada" },
+  "ranked": {
+    "brawlhallaId": 42,
+    "checkedAt": "2026-08-09T23:30:00Z",
+    "lastSuccessAt": "2026-08-09T20:00:00Z",
+    "freshness": "stale",
+    "freshForSeconds": 3600,
+    "snapshot": {
+      "oneVsOne": {
+        "rating": 1900,
+        "peakRating": 2000,
+        "tier": "Platinum 2",
+        "wins": 9,
+        "games": 20,
+        "region": "US-E",
+        "globalRank": null,
+        "regionRank": 321
+      },
+      "rankedLegends": [],
+      "mainLegend": null,
+      "fixedTeams": [],
+      "soloQueue": [],
+      "ratingHistory": [],
+      "observedRatingDirection": null
+    },
+    "sparsePulse": null
+  },
+  "refresh": { "outcome": "rateLimited", "retry": { "kind": "after", "afterSeconds": 900 } }
+}
