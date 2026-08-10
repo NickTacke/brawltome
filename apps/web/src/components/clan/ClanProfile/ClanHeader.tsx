@@ -2,15 +2,13 @@
 
 import { formatDate } from '@/lib/format'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
+import type { ClanProfileContract } from '@brawltome/contracts'
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Calendar, Clock, TrendingUp, Trophy, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-// biome-ignore lint/suspicious/noExplicitAny: dynamic API response
-type ClanData = any
-
 interface ClanHeaderProps {
-  clan: ClanData
+  clan: ClanProfileContract
   id: string
   memberCount: number
   refreshing: boolean
@@ -18,13 +16,17 @@ interface ClanHeaderProps {
 
 export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProps) {
   const [relativeUpdated, setRelativeUpdated] = useState<string | null>(null)
+  const updateDelayed =
+    clan.profile.checkedAt !== null &&
+    clan.profile.lastSuccessAt !== null &&
+    new Date(clan.profile.checkedAt).getTime() > new Date(clan.profile.lastSuccessAt).getTime()
 
   useEffect(() => {
-    if (!clan.lastUpdated) return
-    setRelativeUpdated(timeAgo(clan.lastUpdated))
-    const intervalId = setInterval(() => setRelativeUpdated(timeAgo(clan.lastUpdated)), 60_000)
+    if (!clan.profile.lastSuccessAt) return
+    setRelativeUpdated(timeAgo(clan.profile.lastSuccessAt))
+    const intervalId = setInterval(() => setRelativeUpdated(timeAgo(clan.profile.lastSuccessAt as string)), 60_000)
     return () => clearInterval(intervalId)
-  }, [clan.lastUpdated])
+  }, [clan.profile.lastSuccessAt])
 
   return (
     <div id="overview" className="flex flex-col gap-6">
@@ -39,7 +41,7 @@ export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProp
             <Calendar className="w-4 h-4" />
             <span>Created {formatDate(clan.clanCreateDate)}</span>
           </div>
-          {clan.lastUpdated && relativeUpdated !== null && (
+          {clan.profile.lastSuccessAt && relativeUpdated !== null && (
             <>
               <span>•</span>
               <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
@@ -48,12 +50,24 @@ export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProp
               </Badge>
             </>
           )}
+          {updateDelayed && (
+            <>
+              <span>•</span>
+              <Badge variant="outline">Update delayed</Badge>
+            </>
+          )}
+          {!clan.profile.lastSuccessAt && (
+            <>
+              <span>•</span>
+              <Badge variant="outline">Freshness unavailable</Badge>
+            </>
+          )}
           {refreshing && (
             <>
               <span>•</span>
               <Badge variant="secondary" className="gap-2 animate-pulse">
                 <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
-                Syncing live data...
+                Updating...
               </Badge>
             </>
           )}
@@ -86,7 +100,7 @@ export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProp
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {memberCount > 0 ? formatNum(Math.round(Number(clan.clanXp ?? 0) / memberCount)) : '0'}
+              {memberCount > 0 ? formatNum(BigInt(clan.clanXp) / BigInt(memberCount)) : 'Unavailable'}
             </div>
           </CardContent>
         </Card>

@@ -35,9 +35,29 @@ const testAdmission = {
   },
 } as const
 
-function requireLease(lease: OperationLease | null): OperationLease {
+function requireLease(lease: OperationLease | null): OperationLease
+function requireLease<K extends OperationLease['kind']>(
+  lease: OperationLease | null,
+  expectedKind: K,
+): Extract<OperationLease, { kind: K }>
+function requireLease(lease: OperationLease | null, expectedKind?: OperationLease['kind']): OperationLease {
   if (!lease) throw new Error('Expected an operation lease')
+  if (expectedKind && lease.kind !== expectedKind) throw new Error(`Expected a ${expectedKind} lease`)
   return lease
+}
+
+async function settleWithin<T>(label: string, promise: Promise<T>, timeoutMs = 1_000): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
 }
 
 beforeAll(async () => {
@@ -171,7 +191,7 @@ describe('durable Refresh Operations', () => {
     await producer.close()
 
     const worker = createPostgresRefreshOperations(connectionString)
-    const lease = requireLease(await worker.claim('worker-a', 1_000, testAdmission))
+    const lease = requireLease(await worker.claim('worker-a', 1_000, testAdmission), 'proof')
     expect(await worker.commitProofEffect(lease)).toBe('applied')
     await expire(lease.operationId)
     expect(await worker.commitProofEffect(lease)).toBe('lease-lost')
@@ -203,10 +223,10 @@ describe('durable Refresh Operations', () => {
       payload: { value: 'A' },
       provenance: { source: 'integration-test' },
     })
-    const stale = requireLease(await operations.claim('worker-a', 1_000, testAdmission))
+    const stale = requireLease(await operations.claim('worker-a', 1_000, testAdmission), 'proof')
     await expire(stale.operationId)
     expect(await operations.commitProofEffect(stale)).toBe('lease-lost')
-    const current = requireLease(await operations.claim('worker-b', 1_000, testAdmission))
+    const current = requireLease(await operations.claim('worker-b', 1_000, testAdmission), 'proof')
     expect(current.leaseToken).toBeGreaterThan(stale.leaseToken)
     expect(await operations.complete(stale)).toBe('lease-lost')
     expect(await operations.commitProofEffect(current)).toBe('applied')
@@ -271,44 +291,145 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
-  test('counts cross-kind leases against shared total concurrency', async () => {
+  test('deduplicates concurrent clan refreshes and fences profile and roster checkpoints', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const dedupeKey = `clan:${randomUUID()}`
+    const reservations = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        operations.reserveInteractiveClanRefresh({
+          dedupeKey,
+          operationKey: dedupeKey,
+          clanId: 77,
+          staleSections: ['profile', 'roster'],
+          provenance: { source: 'integration-test' },
+          reservationTtlSeconds: 30,
+        }),
+      ),
+    )
+    expect(reservations.filter((result) => result.outcome === 'reserved')).toHaveLength(1)
+    const reserved = reservations.find((result) => result.outcome === 'reserved')
+    if (!reserved || reserved.outcome !== 'reserved') throw new Error('Expected clan reservation')
+    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    const stale = requireLease(await operations.claim('clan-a', 1_000, testAdmission, 'clan-refresh'))
+    if (stale.kind !== 'clan-refresh') throw new Error('Expected clan lease')
+    expect(await operations.commitInteractiveSection(stale, 'profile')).toBe('transitioned')
+    await expire(stale.operationId)
+    const current = requireLease(await operations.claim('clan-b', 1_000, testAdmission, 'clan-refresh'))
+    if (current.kind !== 'clan-refresh') throw new Error('Expected clan retry lease')
+    expect(await operations.beginInteractiveSection(current, 'profile')).toBe('already-applied')
+    expect(await operations.commitInteractiveSection(stale, 'roster')).toBe('lease-lost')
+    expect(await operations.commitInteractiveSection(current, 'roster')).toBe('transitioned')
+    expect(await operations.complete(current)).toBe('transitioned')
+    await operations.close()
+  })
+
+  test('admits exactly the four operation kinds under shared cross-kind concurrency', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = {
       ...testAdmission,
-      totalConcurrency: 2,
+      totalConcurrency: 4,
       interactiveReservation: 1,
-      classConcurrency: { ...testAdmission.classConcurrency, interactive: 2 },
+      classConcurrency: { ...testAdmission.classConcurrency, interactive: 3 },
     } as const
-    await operations.configureAdmission(admission)
-    await operations.accept({
-      dedupeKey: `cross-kind-proof:${randomUUID()}`,
-      operationKey: `cross-kind-proof:${randomUUID()}`,
-      workClass: 'interactive',
-      payload: { value: 'proof' },
-      provenance: { source: 'integration-test' },
-    })
-    const reserved = await operations.reserveInteractivePlayerRefresh({
-      dedupeKey: `cross-kind-interactive:${randomUUID()}`,
-      operationKey: `cross-kind-interactive:${randomUUID()}`,
-      brawlhallaId: 42,
-      staleSections: ['ranked'],
-      provenance: { source: 'integration-test' },
-      reservationTtlSeconds: 30,
-    })
-    if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
-
-    const proof = requireLease(await operations.claim('cross-kind-proof', 10_000, admission, 'proof'))
-    const interactive = requireLease(
-      await operations.claim('cross-kind-interactive', 10_000, admission, 'interactive-player-refresh'),
+    await settleWithin('configure cross-kind admission', operations.configureAdmission(admission))
+    await settleWithin(
+      'accept proof',
+      operations.accept({
+        dedupeKey: `cross-kind-proof:${randomUUID()}`,
+        operationKey: `cross-kind-proof:${randomUUID()}`,
+        workClass: 'interactive',
+        payload: { value: 'proof' },
+        provenance: { source: 'integration-test' },
+      }),
     )
-    expect(proof.kind).toBe('proof')
-    expect(interactive.kind).toBe('interactive-player-refresh')
+    await settleWithin(
+      'accept leaderboard',
+      operations.accept({
+        kind: 'leaderboard-1v1',
+        dedupeKey: `cross-kind-leaderboard:${randomUUID()}`,
+        operationKey: `cross-kind-leaderboard:${randomUUID()}`,
+        workClass: 'leaderboard',
+        payload: { pageDepth: 1, intervalMs: 60_000 },
+        provenance: { source: 'integration-test' },
+      }),
+    )
+    const player = await settleWithin(
+      'reserve player',
+      operations.reserveInteractivePlayerRefresh({
+        dedupeKey: `cross-kind-player:${randomUUID()}`,
+        operationKey: `cross-kind-player:${randomUUID()}`,
+        brawlhallaId: 42,
+        staleSections: ['ranked'],
+        provenance: { source: 'integration-test' },
+        reservationTtlSeconds: 30,
+      }),
+    )
+    const clan = await settleWithin(
+      'reserve clan',
+      operations.reserveInteractiveClanRefresh({
+        dedupeKey: `cross-kind-clan:${randomUUID()}`,
+        operationKey: `cross-kind-clan:${randomUUID()}`,
+        clanId: 77,
+        staleSections: ['profile'],
+        provenance: { source: 'integration-test' },
+        reservationTtlSeconds: 30,
+      }),
+    )
+    if (player.outcome !== 'reserved' || clan.outcome !== 'reserved') {
+      throw new Error('Expected player and clan reservations')
+    }
+    await settleWithin(
+      'activate player',
+      operations.activateInteractiveRefresh(player.operationId, player.reservationToken),
+    )
+    await settleWithin('activate clan', operations.activateInteractiveRefresh(clan.operationId, clan.reservationToken))
+
+    const leases = [
+      requireLease(await settleWithin('proof claim', operations.claim('cross-kind-proof', 10_000, admission, 'proof'))),
+      requireLease(
+        await settleWithin(
+          'player claim',
+          operations.claim('cross-kind-player', 10_000, admission, 'interactive-player-refresh'),
+        ),
+      ),
+      requireLease(
+        await settleWithin('clan claim', operations.claim('cross-kind-clan', 10_000, admission, 'clan-refresh')),
+      ),
+      requireLease(
+        await settleWithin(
+          'leaderboard claim',
+          operations.claim('cross-kind-leaderboard', 10_000, admission, 'leaderboard-1v1'),
+        ),
+      ),
+    ]
+    expect(new Set(leases.map(({ kind }) => kind))).toEqual(
+      new Set<OperationLease['kind']>(['proof', 'interactive-player-refresh', 'leaderboard-1v1', 'clan-refresh']),
+    )
     expect(await operations.claim('cross-kind-blocked', 10_000, admission)).toBeNull()
-    await operations.complete(proof)
-    await operations.complete(interactive)
-    await operations.configureAdmission(testAdmission)
-    await operations.close()
+
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      await expect(
+        settleWithin(
+          'reject unknown operation kind',
+          control`
+            INSERT INTO refresh_operations.operations
+              (id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
+            VALUES
+              (${randomUUID()}, 'unknown-refresh', ${randomUUID()}, ${randomUUID()}, 'interactive',
+               ${control.json({ value: 'invalid' })}, ${control.json({ source: 'integration-test' })}, 1)
+          `,
+        ),
+      ).rejects.toThrow()
+    } finally {
+      await settleWithin('close control connection', control.end())
+    }
+
+    for (const lease of leases) {
+      await settleWithin(`complete ${lease.kind}`, operations.complete(lease))
+    }
+    await settleWithin('restore admission policy', operations.configureAdmission(testAdmission))
+    await settleWithin('close cross-kind operations', operations.close())
   })
 
   test('runs the real route-to-polling-worker seam and dead-letters bounded runtime failures', async () => {
@@ -464,8 +585,8 @@ describe('durable Refresh Operations', () => {
     }
     expect(await operations.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 2 })
     const leases = [
-      requireLease(await operations.claim('shared-prefix-1', 10_000, testAdmission)),
-      requireLease(await operations.claim('shared-prefix-2', 10_000, testAdmission)),
+      requireLease(await operations.claim('shared-prefix-1', 10_000, testAdmission), 'proof'),
+      requireLease(await operations.claim('shared-prefix-2', 10_000, testAdmission), 'proof'),
     ]
     expect(new Set(leases.map(({ operationKey }) => operationKey)).size).toBe(2)
     for (const lease of leases) {

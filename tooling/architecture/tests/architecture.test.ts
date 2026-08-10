@@ -149,6 +149,21 @@ describe('V3 dependency architecture', () => {
     expect(repository.workspaces.find(({ name }) => name === '@brawltome/api')?.exports).toContain('./router')
   })
 
+  it('enforces Clans and Players persistence ownership isolation', async () => {
+    const root = resolve(import.meta.dir, '../../..')
+    const readTree = async (directory: string) => {
+      const files: string[] = []
+      for await (const file of new Bun.Glob('**/*.ts').scan({ cwd: resolve(root, directory), absolute: true })) {
+        files.push(await Bun.file(file).text())
+      }
+      return files.join('\n')
+    }
+    const clans = await readTree('packages/contexts/clan')
+    const players = await readTree('packages/contexts/player')
+    expect(clans).not.toMatch(/@brawltome\/(?:database|player)/)
+    expect(players).not.toMatch(/playerClan|getPlayerGuildV1|getGuildStatsV1/)
+  })
+
   it('passes the current repository only through the exact temporary V2 exceptions', () => {
     const repository = readArchitectureRepository(resolve(import.meta.dir, '../../..'))
     const result = checkArchitecture(repository, currentArchitecturePolicy)
@@ -161,9 +176,6 @@ describe('V3 dependency architecture', () => {
         'v2-api-replay-package',
         'v2-api-router-export',
         'v2-api-shared-package',
-        'v2-clan-bhapi-adapter',
-        'v2-clan-database-adapter',
-        'v2-clan-shared-package',
         'v2-discord-api-router-app-import',
         'v2-discord-api-router-undeclared',
         'v2-identity-player-link-database-adapter',

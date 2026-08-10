@@ -17,6 +17,57 @@ import type { Command } from './index'
 const clanCache = new Map<string, { clan: ClanResponse; timestamp: number }>()
 const CLAN_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
+const CLAN_FRESH_MS = 60 * 60 * 1_000
+const DISCORD_POLL_LIMIT = 4
+
+function stale(lastSuccessAt: string | null | undefined, now = Date.now()): boolean {
+  return !lastSuccessAt || now - new Date(lastSuccessAt).getTime() > CLAN_FRESH_MS
+}
+
+export async function pollClanUntilSectionsComplete(
+  initialClan: ClanResponse | null,
+  afterSeconds: number,
+  query: () => Promise<ClanResponse | null>,
+  wait: (milliseconds: number) => Promise<void> = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  limit = DISCORD_POLL_LIMIT,
+): Promise<ClanResponse | null> {
+  let clan = initialClan
+  const pending = {
+    profile: stale(clan?.profile.lastSuccessAt),
+    roster: stale(clan?.roster?.lastSuccessAt),
+  }
+  const initial = {
+    profile: clan?.profile.lastSuccessAt ?? null,
+    roster: clan?.roster?.lastSuccessAt ?? null,
+  }
+  for (let attempt = 0; attempt < limit; attempt += 1) {
+    await wait(afterSeconds * 1_000)
+    clan = await query()
+    if (
+      clan &&
+      (!pending.profile || clan.profile.lastSuccessAt !== initial.profile) &&
+      (!pending.roster || clan.roster?.lastSuccessAt !== initial.roster)
+    ) {
+      break
+    }
+  }
+  return clan
+}
+
+async function fetchClan(clanId: number, discordUserId: string) {
+  const response = await api.clan.refreshDiscord.mutate({ id: clanId, discordUserId })
+  let clan = response.clan
+  const retry = response.refresh.retry
+  if (
+    (response.refresh.outcome === 'accepted' || response.refresh.outcome === 'alreadyRefreshing') &&
+    retry.kind === 'poll'
+  ) {
+    clan = await pollClanUntilSectionsComplete(clan, retry.afterSeconds, () => api.clan.byId.query({ id: clanId }))
+  }
+  return { clan: clan ?? (await api.clan.byId.query({ id: clanId })), refresh: response.refresh }
+}
+
 export const clanCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('clan')
@@ -62,16 +113,14 @@ export const clanCommand: Command = {
         clanId = searchResults[0].clanId
       }
 
-      // Fetch clan data
-      const clan = await api.clan.byId.query({ id: clanId })
+      const { clan, refresh } = await fetchClan(clanId, interaction.user.id)
 
       if (!clan) {
         await interaction.editReply({
           embeds: [
-            buildErrorEmbed(
-              'Clan Not Found',
-              `Could not find a clan with that ID. Make sure you're using a valid clan ID.`,
-            ),
+            refresh.outcome === 'rateLimited'
+              ? buildErrorEmbed('Rate Limited', 'Clan data is cached when available. Try again later.')
+              : buildErrorEmbed('Clan Unavailable', 'Clan data could not be verified. Try again later.'),
           ],
         })
         return
@@ -96,7 +145,7 @@ export const clanCommand: Command = {
 
       // Add select menu if there are multiple search results
       if (searchResults.length > 1) {
-        const clanOptions = searchResults.map((c) => ({
+        const clanOptions = searchResults.map((c: SearchResponse['clans'][number]) => ({
           clanId: c.clanId,
           clanName: c.clanName,
           memberCount: 0,
@@ -146,11 +195,11 @@ export async function handleClanSelect(interaction: StringSelectMenuInteraction)
   await interaction.deferUpdate()
 
   try {
-    const clan = await api.clan.byId.query({ id: clanId })
+    const { clan } = await fetchClan(clanId, interaction.user.id)
 
     if (!clan) {
       await interaction.editReply({
-        embeds: [buildErrorEmbed('Clan Not Found', 'Could not find that clan.')],
+        embeds: [buildErrorEmbed('Clan Unavailable', 'Clan data could not be verified. Try again later.')],
         components: [],
       })
       return

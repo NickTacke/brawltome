@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { BhApiClient, RateLimitError } from '@brawltome/bhapi'
-import { processRefreshClan } from '@brawltome/clan'
 import { db } from '@brawltome/database'
 import { resolveSteamLink } from '@brawltome/identity'
 import { createPlayerLinkRepo } from '@brawltome/identity/composition'
@@ -90,26 +89,6 @@ const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'ba
     backoffMs: 1000,
     maxDepth: 2000,
     dedupKey: (d) => String(d.brawlhallaId),
-    priorityRatio: 3,
-    metrics,
-  },
-)
-
-const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(
-  newRedis(),
-  'refresh-clan',
-  async (data) => {
-    const start = performance.now()
-    console.log(`[queue] refresh-clan START: ${data.clanId} (caller=${data.caller})`)
-    await processRefreshClan(deps, data.clanId, data.caller ?? 'background')
-    console.log(`[queue] refresh-clan DONE: ${data.clanId} (${(performance.now() - start).toFixed(0)}ms)`)
-  },
-  {
-    concurrency: 1,
-    retries: 3,
-    backoffMs: 1000,
-    maxDepth: 1000,
-    dedupKey: (d) => String(d.clanId),
     priorityRatio: 3,
     metrics,
   },
@@ -246,7 +225,7 @@ bhapiMetricsTimer = setTimeout(snapBhapiMetrics, 5000)
 console.log('Worker starting...')
 await bhapi.init()
 await initGameData(db, bhapi)
-const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start(), clanQueue.start(), steamLinkQueue.start()]
+const starts: Promise<void>[] = [rankedQueue.start(), statsQueue.start(), steamLinkQueue.start()]
 if (backfillQueue) starts.push(backfillQueue.start())
 if (simulateQueue) starts.push(simulateQueue.start())
 Promise.all(starts).catch((err) => {
@@ -267,7 +246,6 @@ async function shutdownWorker(): Promise<void> {
   if (bhapiMetricsTimer) clearTimeout(bhapiMetricsTimer)
   rankedQueue.stop()
   statsQueue.stop()
-  clanQueue.stop()
   steamLinkQueue.stop()
   backfillQueue?.stop()
   simulateQueue?.stop()
@@ -282,5 +260,5 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => 
 
 const matchmakingQueues = matchmakingLive ? ', match-backfill-parse(1), match-simulate(1)' : ''
 console.log(
-  `Worker running. Queues: refresh-ranked(3), refresh-stats(2), refresh-clan(1), resolve-steam(1)${matchmakingQueues}. Sweep active.`,
+  `Worker running. Queues: refresh-ranked(3), refresh-stats(2), resolve-steam(1)${matchmakingQueues}. Sweep active.`,
 )

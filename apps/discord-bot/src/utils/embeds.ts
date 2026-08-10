@@ -181,21 +181,25 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
     .setURL(`https://brawltome.com/clan/${clan.clanId}`)
     .setThumbnail('https://brawltome.com/images/logo.png')
 
-  const xpValue = Number(clan.clanXp)
+  const formatDecimal = (value: string) => BigInt(value).toLocaleString('en-US')
   const totalPages = Math.ceil(clan.members.length / ITEMS_PER_PAGE)
 
   embed.addFields({
     name: '📋 Clan Info',
     value: [
       `👥 **Members**: ${clan.members.length}`,
-      `✨ **Total XP**: ${formatNumber(xpValue)}`,
+      `✨ **Total XP**: ${formatDecimal(clan.clanXp)}`,
       `📅 **Created**: <t:${Math.floor(new Date(clan.clanCreateDate).getTime() / 1000)}:D>`,
     ].join('\n'),
     inline: false,
   })
 
   if (clan.members.length > 0) {
-    const sortedMembers = [...clan.members].sort((a, b) => b.xp - a.xp)
+    const sortedMembers = [...clan.members].sort((a, b) => {
+      const left = BigInt(a.xp)
+      const right = BigInt(b.xp)
+      return left === right ? 0 : left > right ? -1 : 1
+    })
     const start = page * ITEMS_PER_PAGE
     const pageMembers = sortedMembers.slice(start, start + ITEMS_PER_PAGE)
 
@@ -204,13 +208,10 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
         const rank = start + i + 1
         const rankIcon = member.rank === 'Leader' ? '👑' : member.rank === 'Officer' ? '⭐' : `\`${rank}.\``
 
-        const legendEmoji = member.legendNameKey ? getAvatarEmoji(member.legendNameKey) : ''
-
         const memberLink = `[${truncate(member.name, 20)}](https://brawltome.com/player/${member.brawlhallaId})`
-        const elo = member.rating ? ` \`(${member.rating})\`` : ''
-        const memberXp = ` • \`${formatNumber(member.xp)} XP\``
+        const memberXp = ` • \`${formatDecimal(member.xp)} XP\``
 
-        return `${rankIcon} ${legendEmoji} **${memberLink}**${elo}${memberXp}`
+        return `${rankIcon} **${memberLink}**${memberXp}`
       })
       .join('\n')
 

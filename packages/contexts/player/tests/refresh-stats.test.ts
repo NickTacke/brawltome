@@ -1,12 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import type { BhV1Guild, BhV1PlayerGuild, BhV1PlayerStatsAll } from '@brawltome/bhapi'
-import { db, legend, player, playerClan, playerStatsLegend, playerWeaponStat } from '@brawltome/database'
+import type { BhV1PlayerStatsAll } from '@brawltome/bhapi'
+import { db, legend, player, playerStatsLegend, playerWeaponStat } from '@brawltome/database'
 import { initGameData } from '@brawltome/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { processRefreshStats } from '../commands/refresh-player'
 
 const TEST_ID = 990050
-const GUILD_ID = 8001
 
 // Legend IDs used in the fixture — must exist in the legend table for weapon aggregation to work
 const LEGEND_ID_FULL = 3 // bodvar (Hammer + Sword)
@@ -86,36 +85,8 @@ const STATS_FIXTURE: BhV1PlayerStatsAll = {
   ],
 }
 
-const GUILD_FIXTURE: BhV1Guild = {
-  guild_id: GUILD_ID,
-  name: 'TestGuild',
-  create_date: 1660419655,
-  xp: 10000,
-  legacy_xp: 90000,
-  notice: '',
-  tags: [],
-  discord_invite_code: '',
-  guild_points: 5000,
-  is_recruiting: false,
-}
-
-const PLAYER_GUILD_FIXTURE: BhV1PlayerGuild = {
-  brawlhalla_id: TEST_ID,
-  guild: {
-    guild_id: GUILD_ID,
-    guild_name: 'TestGuild',
-    personal_xp: 1234,
-    personal_xp_this_week: 50,
-    personal_points: 200,
-    join_date: 1660419655,
-    rank: 'Member',
-  },
-}
-
 const stub = {
   getPlayerStatsV1: async (_id: number, _mode: string, _opts?: unknown) => STATS_FIXTURE,
-  getPlayerGuildV1: async (_id: number, _opts?: unknown) => PLAYER_GUILD_FIXTURE,
-  getGuildStatsV1: async (_id: number, _opts?: unknown) => GUILD_FIXTURE,
   getAllLegendsV1: async (_opts?: unknown) => [
     {
       legend_id: LEGEND_ID_FULL,
@@ -203,7 +174,6 @@ beforeAll(async () => {
   await initGameData(db)
 
   // Clean test player rows
-  await db.delete(playerClan).where(eq(playerClan.brawlhallaId, TEST_ID))
   await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, TEST_ID))
   await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, TEST_ID))
   await db.delete(player).where(eq(player.brawlhallaId, TEST_ID))
@@ -214,7 +184,6 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await db.delete(playerClan).where(eq(playerClan.brawlhallaId, TEST_ID))
   await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, TEST_ID))
   await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, TEST_ID))
   await db.delete(player).where(eq(player.brawlhallaId, TEST_ID))
@@ -226,7 +195,6 @@ describe('processRefreshStats - key preservation', () => {
   const UNRESOLVABLE_LEGEND_ID = 77
 
   afterAll(async () => {
-    await db.delete(playerClan).where(eq(playerClan.brawlhallaId, PRES_ID))
     await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, PRES_ID))
     await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, PRES_ID))
     await db.delete(player).where(eq(player.brawlhallaId, PRES_ID))
@@ -302,8 +270,6 @@ describe('processRefreshStats - key preservation', () => {
             },
           ],
         }) as BhV1PlayerStatsAll,
-      getPlayerGuildV1: async () => null,
-      getGuildStatsV1: async () => null,
       getAllLegendsV1: async (_opts?: unknown) => [], // empty -> self-heal finds nothing for 77
     }
 
@@ -331,7 +297,6 @@ describe('processRefreshStats - skip blank key', () => {
   const NEW_LEGEND_ID = 88 // not in legend table, not in getAllLegendsV1 stub, no existing player row
 
   afterAll(async () => {
-    await db.delete(playerClan).where(eq(playerClan.brawlhallaId, SKIP_ID))
     await db.delete(playerWeaponStat).where(eq(playerWeaponStat.brawlhallaId, SKIP_ID))
     await db.delete(playerStatsLegend).where(eq(playerStatsLegend.brawlhallaId, SKIP_ID))
     await db.delete(player).where(eq(player.brawlhallaId, SKIP_ID))
@@ -378,8 +343,6 @@ describe('processRefreshStats - skip blank key', () => {
             },
           ],
         }) as BhV1PlayerStatsAll,
-      getPlayerGuildV1: async () => null,
-      getGuildStatsV1: async () => null,
       getAllLegendsV1: async (_opts?: unknown) => [], // empty -> self-heal finds nothing for 88
     }
 
@@ -448,16 +411,5 @@ describe('processRefreshStats (v1)', () => {
     const hammer = rows.find((r) => r.weapon === 'Hammer')
     expect(hammer).toBeDefined()
     expect(hammer?.kos).toBe(40 + 15)
-  })
-
-  it('writes clan row with membership personal_xp and computed lifetime_xp', async () => {
-    const row = await db.query.playerClan.findFirst({ where: eq(playerClan.brawlhallaId, TEST_ID) })
-    expect(row?.clanId).toBe(GUILD_ID)
-    expect(row?.clanName).toBe('TestGuild')
-    expect(row?.clanXp).toBe(10000n)
-    // clan_lifetime_xp = legacy_xp + xp = 90000 + 10000
-    expect(row?.clanLifetimeXp).toBe(100000n)
-    // personal_xp comes from membership, not guild stats
-    expect(row?.personalXp).toBe(1234)
   })
 })

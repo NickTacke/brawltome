@@ -274,12 +274,12 @@ export interface BhV1Guild {
   guild_id: number
   name: string
   create_date: number
-  xp: number
-  legacy_xp: number
+  xp: number | string
+  legacy_xp: number | string
   notice: string
   tags: string[]
   discord_invite_code: string
-  guild_points: number
+  guild_points: number | string
   rank?: number
   is_recruiting: boolean
   member_count?: number
@@ -304,8 +304,8 @@ export interface BhV1GuildMember {
   name: string
   rank: string
   join_date: number
-  xp: number
-  guild_points: number
+  xp: number | string
+  guild_points: number | string
 }
 
 export interface BhV1GuildMembers {

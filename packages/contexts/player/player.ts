@@ -1,7 +1,6 @@
 import type {
   player,
   playerAlias,
-  playerClan,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
@@ -24,7 +23,6 @@ export type PlayerResult = InferSelectModel<typeof player> & {
   aliases: InferSelectModel<typeof playerAlias>[]
   statsLegends: EnrichedStatsLegend[]
   weaponStats: InferSelectModel<typeof playerWeaponStat>[]
-  clan: InferSelectModel<typeof playerClan> | null
   rankedLegends: InferSelectModel<typeof playerRankedLegend>[]
   rankedTeams: Array<InferSelectModel<typeof playerRankedTeam> & { teammateName: string | null }>
   ratingHistory: InferSelectModel<typeof ratingHistory>[]
