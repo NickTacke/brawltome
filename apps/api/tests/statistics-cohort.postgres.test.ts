@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import type { AdmissionConfig, OperationLease } from '@brawltome/refresh-operations'
 import {
+  createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
-import type { CohortCandidateSnapshot, CohortCollectionIntent } from '@brawltome/statistics'
+import { type CohortCandidateSnapshot, type CohortCollectionIntent, launchCohortRegions } from '@brawltome/statistics'
 import { createPostgresStatistics, statisticsMigrationInventory } from '@brawltome/statistics/composition'
 import postgres from 'postgres'
 
@@ -77,6 +78,20 @@ function snapshot(seed: number, count = 3): CohortCandidateSnapshot {
   }
 }
 
+function fullSnapshots(seed: number): CohortCandidateSnapshot[] {
+  return launchCohortRegions.map((region, regionIndex) => ({
+    snapshotId: `20000000-0000-4000-8000-${String(seed * 100 + regionIndex + 1).padStart(12, '0')}`,
+    generationId: `30000000-0000-4000-8000-${String(seed).padStart(12, '0')}`,
+    observedAt: '2026-08-10T00:00:00.000Z',
+    region,
+    mode: '1v1',
+    candidates: [
+      { brawlhallaId: seed * 1_000_000 + regionIndex * 10 + 1, rating: 1680 },
+      { brawlhallaId: seed * 1_000_000 + regionIndex * 10 + 2, rating: 2000 },
+    ],
+  }))
+}
+
 async function enqueue(
   statistics: ReturnType<typeof createPostgresStatistics>,
   operations: ReturnType<typeof createPostgresRefreshOperations>,
@@ -127,7 +142,9 @@ const lifetimeEvidence = (brawlhallaId: number) => ({
   legends: [],
 })
 
-function authorization(lease: Extract<OperationLease, { workClass: 'global-statistics' }>) {
+function authorization(
+  lease: Extract<OperationLease, { kind: 'statistics-ranked-collection' | 'statistics-lifetime-collection' }>,
+) {
   return {
     operationId: lease.operationId,
     effectOperationId: lease.effectOperationId,
@@ -141,6 +158,51 @@ function authorization(lease: Extract<OperationLease, { workClass: 'global-stati
 }
 
 describe('Statistics EU Diamond+ production tracer', () => {
+  test('rejects known-insufficient full cells without creating source collection intents', async () => {
+    const statistics = createPostgresStatistics(connectionString)
+    const operations = createPostgresRefreshOperations(connectionString)
+    try {
+      const generation = await statistics.reconcileLaunchCohort(fullSnapshots(1))
+      expect(generation.state).toBe('insufficient-evidence')
+      expect(generation.cells).toHaveLength(18)
+      expect(await statistics.collectionIntents()).toEqual([])
+      const publicationIntents = await statistics.publicationIntents()
+      expect(publicationIntents).toEqual([
+        expect.objectContaining({ generationId: generation.generationId, product: 'ranked' }),
+        expect.objectContaining({ generationId: generation.generationId, product: 'lifetime' }),
+      ])
+      const intent = publicationIntents[0]
+      const reserved = await operations.reserveStatisticsPublication({
+        kind: intent.kind,
+        dedupeKey: intent.operationKey,
+        operationKey: intent.operationKey,
+        workClass: 'global-statistics',
+        payload: { generationId: intent.generationId, product: intent.product },
+        provenance: { source: 'statistics-publication-validation', requestedBy: 'issue-210' },
+        maxAttempts: 3,
+      })
+      expect(await statistics.recordPublicationOperation(intent, reserved.operationId)).toBe('recorded')
+      expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
+      const publication = await operations.claim('insufficient-publication', 1_000, admission, 'statistics-publication')
+      if (!publication || publication.kind !== 'statistics-publication') throw new Error('publication lease missing')
+      const rejected = await statistics.validateAndPublish({
+        operationId: publication.operationId,
+        effectOperationId: publication.effectOperationId,
+        operationKey: publication.operationKey,
+        kind: publication.kind,
+        leaseOwner: publication.leaseOwner,
+        leaseToken: publication.leaseToken,
+        generationId: publication.payload.generationId,
+        product: publication.payload.product,
+      })
+      expect(rejected.decision?.outcome).toBe('rejected')
+      expect(rejected.decision?.reasons).toContainEqual(expect.objectContaining({ code: 'cell-minimum-not-met' }))
+    } finally {
+      await statistics.close()
+      await operations.close()
+    }
+  })
+
   test('concurrent reconciliation pins one immutable generation and restart keeps it after newer input', async () => {
     const first = createPostgresStatistics(connectionString)
     const second = createPostgresStatistics(connectionString)
@@ -281,6 +343,82 @@ describe('Statistics EU Diamond+ production tracer', () => {
           SELECT status, attempt_count FROM refresh_operations.operations WHERE id = ${retry.operationId}
         `
         expect(failed).toEqual({ status: 'dead_letter', attempt_count: 2 })
+      } finally {
+        await sql.end()
+      }
+    } finally {
+      await statistics.close()
+      await operations.close()
+    }
+  })
+
+  test('does not spend execution attempts on admission deferral and caps replay-inclusive source attempts at three', async () => {
+    const statistics = createPostgresStatistics(connectionString)
+    const operations = createPostgresRefreshOperations(connectionString)
+    try {
+      await statistics.reconcileCohort(snapshot(23, 1))
+      const rankedIntent = (await statistics.collectionIntents()).find(({ product }) => product === 'ranked')
+      if (!rankedIntent) throw new Error('ranked intent missing')
+      const operationId = await enqueue(statistics, operations, rankedIntent, 3)
+
+      const denied = await operations.claim('admission-denied', 1_000, admission, 'statistics-ranked-collection')
+      if (!denied || denied.kind !== 'statistics-ranked-collection') throw new Error('denied lease missing')
+      expect(denied.attemptNumber).toBe(1)
+      expect(
+        await operations.defer(
+          denied,
+          { code: 'source_rate_limited', message: 'deferred for capacity', retryable: true },
+          0,
+        ),
+      ).toBe('transitioned')
+
+      for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber++) {
+        const lease = await operations.claim('source-worker', 1_000, admission, 'statistics-ranked-collection')
+        if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('source lease missing')
+        expect(lease.attemptNumber).toBe(attemptNumber)
+        expect(
+          await statistics.recordCollectionAttempt({
+            ...authorization(lease),
+            attemptNumber: lease.attemptNumber,
+          }),
+        ).toBe('recorded')
+        expect(
+          await operations.fail(
+            lease,
+            { code: 'source_failed', message: 'retryable source failure', retryable: true },
+            0,
+          ),
+        ).toBe('transitioned')
+      }
+
+      const deadLetters = createPostgresDeadLetterOperations(connectionString)
+      try {
+        const replay = await deadLetters.replayDeadLetter({
+          operationId,
+          actorId: 'operator:capacity-test',
+          reason: 'verify replay-inclusive source cap',
+        })
+        if (replay.outcome !== 'replayed') throw new Error('Statistics replay missing')
+      } finally {
+        await deadLetters.close()
+      }
+      const replayLease = await operations.claim('replay-worker', 1_000, admission, 'statistics-ranked-collection')
+      if (!replayLease || replayLease.kind !== 'statistics-ranked-collection') throw new Error('replay lease missing')
+      expect(
+        await statistics.preflightCollectionAttempt({
+          ...authorization(replayLease),
+          attemptNumber: replayLease.attemptNumber,
+        }),
+      ).toBe('capacity-exceeded')
+
+      const sql = postgres(connectionString, { max: 1 })
+      try {
+        const [attempts] = await sql<{ count: string }[]>`
+          SELECT count(*)::text AS count FROM statistics.collection_attempts
+          WHERE cohort_id = ${replayLease.payload.cohortId}
+            AND brawlhalla_id = ${replayLease.payload.brawlhallaId} AND product = 'ranked'
+        `
+        expect(attempts.count).toBe('3')
       } finally {
         await sql.end()
       }

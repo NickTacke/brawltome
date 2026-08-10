@@ -26,7 +26,11 @@ import { serve } from 'bun'
 import { Hono } from 'hono'
 import { internalSecretValid } from './auth/internal-secret'
 import { createHealthRoutes } from './health-routes'
-import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from './operations-worker-config'
+import {
+  leaderboardScheduleDefinitions,
+  readBrawlhallaV1RequestLimit,
+  readOperationsWorkerConfig,
+} from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
 import { createPostgresReadiness } from './postgres-readiness'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
@@ -54,7 +58,7 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
   authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
   sourceLimits: {
     'brawlhalla-v0': 180,
-    'brawlhalla-v1': Number(process.env.BRAWLHALLA_V1_REQUEST_LIMIT ?? 180),
+    'brawlhalla-v1': readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT),
   },
 })
 const playerRepo = createPlayerRepo(db)

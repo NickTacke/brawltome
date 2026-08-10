@@ -72,6 +72,8 @@ export type DiscoveryOwner = 'player' | 'clan'
 export const statisticsCollectionKinds = ['statistics-ranked-collection', 'statistics-lifetime-collection'] as const
 export type StatisticsCollectionKind = (typeof statisticsCollectionKinds)[number]
 export type StatisticsCollectionPayload = { cohortId: string; brawlhallaId: number }
+export type StatisticsPublicationKind = 'statistics-publication'
+export type StatisticsPublicationPayload = { generationId: string; product: 'ranked' | 'lifetime' }
 
 export type LeaderboardOperationPayload = {
   pageDepth: number
@@ -154,6 +156,16 @@ export type ReserveStatisticsCollection = {
   operationKey: string
   workClass: 'global-statistics'
   payload: StatisticsCollectionPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type ReserveStatisticsPublication = {
+  kind: StatisticsPublicationKind
+  dedupeKey: string
+  operationKey: string
+  workClass: 'global-statistics'
+  payload: StatisticsPublicationPayload
   provenance: OperationProvenance
   maxAttempts?: number
 }
@@ -265,11 +277,16 @@ export type ActiveInteractiveRefresh = {
   reservationExpired: boolean
 }
 
-export interface StatisticsCollectionOperations {
+export interface StatisticsOperations {
   reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult>
   listAwaitingStatisticsCollections(): Promise<string[]>
   activateStatisticsCollection(operationId: string): Promise<TransitionResult>
+  reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult>
+  listAwaitingStatisticsPublications(): Promise<string[]>
+  activateStatisticsPublication(operationId: string): Promise<TransitionResult>
 }
+
+export type StatisticsCollectionOperations = StatisticsOperations
 
 export interface InteractiveRefreshOperations {
   findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number): Promise<ActiveInteractiveRefresh | null>
@@ -340,6 +357,11 @@ export type OperationLease =
       kind: StatisticsCollectionKind
       workClass: 'global-statistics'
       payload: StatisticsCollectionPayload
+    })
+  | (LeaseFields & {
+      kind: StatisticsPublicationKind
+      workClass: 'global-statistics'
+      payload: StatisticsPublicationPayload
     })
   | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
 
@@ -427,6 +449,11 @@ export type DeadLetterInspection = {
     leaseToken: number
     createdAt: string
   }[]
+  statisticsPublicationEffects: {
+    operationKey: string
+    leaseToken: number
+    createdAt: string
+  }[]
   schedule: {
     scheduleId: string
     scheduleKey: string
@@ -497,6 +524,7 @@ export interface RefreshOperationWorker {
     lease: Extract<OperationLease, { payload: { batchSize: number } }>,
     retryDelayMs: number,
   ): Promise<TransitionResult>
+  defer(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>
   complete(lease: OperationLease): Promise<TransitionResult>
   fail(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>
 }

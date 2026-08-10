@@ -1,7 +1,10 @@
 import type { OperationLease } from '@brawltome/refresh-operations'
 import { decodeLifetimeEvidence, decodeRankedEvidence } from '@brawltome/statistics/composition'
 
-type StatisticsLease = Extract<OperationLease, { workClass: 'global-statistics' }>
+type StatisticsLease = Extract<
+  OperationLease,
+  { kind: 'statistics-ranked-collection' | 'statistics-lifetime-collection' }
+>
 
 type StatisticsPlayerSource = {
   getPlayerStatsV1(

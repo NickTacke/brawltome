@@ -23,6 +23,10 @@ function boundedInteger(value: string | undefined, fallback: number, name: strin
   return parsed
 }
 
+export function readBrawlhallaV1RequestLimit(value: string | undefined): number {
+  return boundedInteger(value, 150, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 150)
+}
+
 const classEnvironment: Record<WorkClass, string> = {
   interactive: 'OPERATIONS_INTERACTIVE_CONCURRENCY',
   'primary-monitoring': 'OPERATIONS_PRIMARY_MONITORING_CONCURRENCY',

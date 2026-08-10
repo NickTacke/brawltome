@@ -449,13 +449,27 @@ describe('telemetry foundation', () => {
       'player-discovery-projection',
       'clan-discovery-projection',
       'discovery-reconciliation',
+      'statistics-ranked-collection',
+      'statistics-lifetime-collection',
+      'statistics-publication',
     ]) {
       operationTelemetry.metrics.add('operation_attempts_total', 1, {
         kind,
-        work_class: kind === 'ranked-player-pulse' ? 'primary-monitoring' : 'projection',
+        work_class:
+          kind === 'ranked-player-pulse'
+            ? 'primary-monitoring'
+            : kind.startsWith('statistics-')
+              ? 'global-statistics'
+              : 'projection',
         outcome: 'succeeded',
       })
     }
+
+    operationTelemetry.metrics.add('operation_attempts_total', 1, {
+      kind: 'statistics-player-42' as never,
+      work_class: 'global-statistics',
+      outcome: 'succeeded',
+    })
 
     const output = renderPrometheus([...telemetry.metrics.snapshot(), ...operationTelemetry.metrics.snapshot()])
     expect(output).toContain('http_server_requests_total{method="GET",route="trpc",runtime="api",status_class="2xx"} 1')
@@ -464,7 +478,10 @@ describe('telemetry foundation', () => {
     expect(output).toContain('kind="ranked-player-pulse"')
     expect(output).toContain('kind="clan-discovery-projection"')
     expect(output).toContain('kind="discovery-reconciliation"')
+    expect(output).toContain('kind="statistics-publication"')
+    expect(output).not.toContain('statistics-player-42')
     expect(telemetry.stats().seriesDropped).toBe(2)
+    expect(operationTelemetry.stats().seriesDropped).toBe(1)
   })
 
   test('accepts every durable operation kind emitted by refresh operations', () => {

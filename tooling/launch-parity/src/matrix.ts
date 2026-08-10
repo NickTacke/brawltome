@@ -824,4 +824,47 @@ export const launchParityMatrix: readonly ParityRow[] = [
     verificationGap:
       'Two consecutive production-shaped restore rehearsals, storage headroom, elapsed duration, and operator cutover evidence remain external launch gates.',
   },
+  {
+    id: 'statistics.full-launch-cohort-validation',
+    area: 'global-statistics',
+    requirement:
+      'Global Statistics collects exactly nine launch regions by two rating brackets, validates each product independently, and retains the prior valid immutable publication after rejection.',
+    sourceIssue: '#210',
+    status: 'verified',
+    destinations: ['operations-worker'],
+    implementation: [
+      'packages/contexts/statistics/cohort.ts',
+      'packages/contexts/statistics/publication.ts',
+      'packages/contexts/statistics/postgres.ts',
+      'packages/contexts/statistics/migrations/0002-full-launch-cohort.ts',
+      'packages/contexts/refresh-operations/migrations/0015-add-statistics-publication.ts',
+      'apps/api/src/statistics-cohort-reconciliation.ts',
+      'apps/api/src/refresh-operations-worker.ts',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/statistics/tests/cohort.test.ts',
+        assertion:
+          'All 18 cells enforce independent minimums while deterministic selection and the fixed source-capacity envelope remain bounded.',
+      },
+      {
+        kind: 'unit',
+        path: 'packages/contexts/statistics/tests/publication.test.ts',
+        assertion:
+          'Exact 95% overall and 90% per-cell product thresholds audit progress, attempts, successes, observation windows, and capacity.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/statistics-full-cohort.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves immutable decisions, independent product publication, prior-valid stale retention, restart, concurrency, replay, and fencing.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/statistics-cohort-reconciliation.test.ts',
+        assertion: 'The adapter reads exactly nine pinned regional snapshots and refuses partial source generations.',
+      },
+    ],
+  },
 ]

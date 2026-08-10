@@ -122,6 +122,9 @@ const operationKind = [
   'leaderboard-3v3',
   'player-discovery-projection',
   'ranked-player-pulse',
+  'statistics-ranked-collection',
+  'statistics-lifetime-collection',
+  'statistics-publication',
 ] as const
 const outcome = [
   'succeeded',

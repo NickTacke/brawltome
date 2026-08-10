@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from '../src/operations-worker-config'
+import {
+  leaderboardScheduleDefinitions,
+  readBrawlhallaV1RequestLimit,
+  readOperationsWorkerConfig,
+} from '../src/operations-worker-config'
 import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
 
 describe('operations worker configuration', () => {
@@ -51,6 +55,12 @@ describe('operations worker configuration', () => {
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }
+  })
+
+  test('enforces the audited 150-request V1 source ceiling across runtimes', () => {
+    expect(readBrawlhallaV1RequestLimit(undefined)).toBe(150)
+    expect(readBrawlhallaV1RequestLimit('150')).toBe(150)
+    expect(() => readBrawlhallaV1RequestLimit('151')).toThrow('BRAWLHALLA_V1_REQUEST_LIMIT')
   })
 
   test('defines four deterministic staggered schedules in the existing leaderboard work class', () => {

@@ -1,16 +1,39 @@
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
-import { type CohortCandidateSnapshot, selectLaunchCohort } from './cohort'
+import {
+  type CohortCandidateSnapshot,
+  LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
+  LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
+  type LaunchCohortCapacityEnvelope,
+  type LaunchCohortRegion,
+  launchCohortBrackets,
+  launchCohortRegions,
+  selectFullLaunchCohort,
+  selectLaunchCohort,
+} from './cohort'
 import type {
   CohortAudit,
   CohortCollectionIntent,
+  CohortMemberAudit,
+  CollectionAttemptAuthorization,
+  CollectionAttemptPreflightResult,
+  CollectionAttemptResult,
   CollectionAuthorization,
   CollectionCommitResult,
   CollectionObservation,
   CollectionPreflightResult,
   CollectionProduct,
+  LaunchCellAudit,
+  LaunchCohortAudit,
+  ProductCollectionProgressAudit,
+  PublicationAuthorization,
+  PublicationCommitResult,
+  PublicationDecisionAudit,
+  PublicationIntent,
+  PublicationStatus,
   StatisticsTracer,
 } from './index'
+import { type CellCollectionProgress, validatePublicationDecision } from './publication'
 import { validateLifetimeEvidence, validateRankedEvidence } from './source'
 
 type CohortRow = {
@@ -19,8 +42,8 @@ type CohortRow = {
   source_snapshot_id: string
   source_generation_id: string
   source_observed_at: Date
-  region: 'EU'
-  bracket: 'Diamond+'
+  region: LaunchCohortRegion
+  bracket: 'Platinum' | 'Diamond+'
   sample_cap: 750
   minimum_evidence_players: 125
   eligible_players: number
@@ -28,7 +51,28 @@ type CohortRow = {
   evidence_state: 'ready' | 'insufficient-evidence'
 }
 
+type GenerationRow = {
+  id: string
+  methodology_version: string
+  source_generation_id: string
+  source_observed_at: Date
+  observation_window_starts_at: Date
+  observation_window_ends_at: Date
+  source_domain: 'brawlhalla-v1'
+  quota_units_per_window: 150
+  quota_window_seconds: 900
+  requests_per_player: 2
+  max_attempts_per_request: 3
+  selected_players: number
+  planned_requests: number
+  maximum_source_attempts: number
+  minimum_capacity_seconds: number
+  observation_window_seconds: 604800
+  evidence_state: 'ready' | 'insufficient-evidence'
+}
+
 type MemberRow = {
+  cohort_id: string
   brawlhalla_id: string | number
   source_rating: number
   ordinal: number
@@ -39,6 +83,20 @@ type MemberRow = {
   lifetime_succeeded_at: Date | null
 }
 
+type DecisionRow = {
+  id: string
+  generation_id: string
+  product: CollectionProduct
+  effect_operation_id: string
+  operation_key: string
+  decision: 'accepted' | 'rejected'
+  reasons: PublicationDecisionAudit['reasons']
+  progress: PublicationDecisionAudit['progress']
+  observation_window: PublicationDecisionAudit['observationWindow']
+  capacity_envelope: PublicationDecisionAudit['capacityEnvelope']
+  decided_at: Date
+}
+
 function productFromKind(kind: CollectionAuthorization['kind']): CollectionProduct {
   return kind === 'statistics-ranked-collection' ? 'ranked' : 'lifetime'
 }
@@ -47,83 +105,315 @@ function kindFromProduct(product: CollectionProduct): CohortCollectionIntent['ki
   return product === 'ranked' ? 'statistics-ranked-collection' : 'statistics-lifetime-collection'
 }
 
-function operationKey(cohortId: string, brawlhallaId: number, product: CollectionProduct): string {
+function collectionOperationKey(cohortId: string, brawlhallaId: number, product: CollectionProduct): string {
   return `statistics:${cohortId}:${brawlhallaId}:${product}`
+}
+
+function publicationOperationKey(generationId: string, product: CollectionProduct): string {
+  return `statistics:${generationId}:publication:${product}`
+}
+
+function capacityEnvelope(row: GenerationRow): LaunchCohortCapacityEnvelope {
+  return {
+    sourceDomain: row.source_domain,
+    quotaUnitsPerWindow: row.quota_units_per_window,
+    quotaWindowSeconds: row.quota_window_seconds,
+    requestsPerPlayer: row.requests_per_player,
+    maxAttemptsPerRequest: row.max_attempts_per_request,
+    plannedRequests: row.planned_requests,
+    maximumSourceAttempts: row.maximum_source_attempts,
+    minimumCapacitySeconds: row.minimum_capacity_seconds,
+    observationWindowSeconds: row.observation_window_seconds,
+  }
+}
+
+function memberAudit(row: MemberRow): CohortMemberAudit {
+  return {
+    brawlhallaId: Number(row.brawlhalla_id),
+    sourceRating: row.source_rating,
+    ordinal: row.ordinal,
+    selectionHash: row.selection_hash,
+    rankedOperationId: row.ranked_operation_id,
+    lifetimeOperationId: row.lifetime_operation_id,
+    rankedSucceededAt: row.ranked_succeeded_at?.toISOString() ?? null,
+    lifetimeSucceededAt: row.lifetime_succeeded_at?.toISOString() ?? null,
+  }
+}
+
+function decisionAudit(row: DecisionRow): PublicationDecisionAudit {
+  return {
+    decisionId: row.id,
+    generationId: row.generation_id,
+    effectOperationId: row.effect_operation_id,
+    operationKey: row.operation_key,
+    outcome: row.decision,
+    reasons: row.reasons,
+    progress: row.progress,
+    observationWindow: row.observation_window,
+    capacityEnvelope: row.capacity_envelope,
+    decidedAt: row.decided_at.toISOString(),
+  }
+}
+
+function summarizeProgress(
+  product: CollectionProduct,
+  cells: CellCollectionProgress[],
+): ProductCollectionProgressAudit {
+  return {
+    product,
+    selectedPlayers: cells.reduce((total, cell) => total + cell.selectedPlayers, 0),
+    operations: cells.reduce((total, cell) => total + cell.operations, 0),
+    sourceAttempts: cells.reduce((total, cell) => total + cell.sourceAttempts, 0),
+    successes: cells.reduce((total, cell) => total + cell.successes, 0),
+    cells,
+  }
+}
+
+function jsonValue(value: unknown): postgres.JSONValue {
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) throw new Error('Statistics audit evidence must be JSON serializable')
+  return JSON.parse(serialized) as postgres.JSONValue
 }
 
 export function createPostgresStatistics(connectionString: string) {
   const client = postgres(connectionString)
 
-  async function audit(sql: typeof client): Promise<CohortAudit | null> {
-    const [cohort] = await sql<CohortRow[]>`
-      SELECT id, methodology_version, source_snapshot_id, source_generation_id, source_observed_at,
-             region, bracket, sample_cap, minimum_evidence_players, eligible_players,
-             selected_players, evidence_state
-      FROM statistics.cohorts
-      WHERE tracer_key = 'eu-diamond-plus'
-    `
-    if (!cohort) return null
-    const members = await sql<MemberRow[]>`
-      SELECT member.brawlhalla_id, member.source_rating, member.ordinal, member.selection_hash,
-             ranked.operation_id AS ranked_operation_id,
+  async function members(sql: typeof client, cohortIds: readonly string[]): Promise<MemberRow[]> {
+    if (cohortIds.length === 0) return []
+    return sql<MemberRow[]>`
+      SELECT member.cohort_id, member.brawlhalla_id, member.source_rating, member.ordinal,
+             member.selection_hash, ranked.operation_id AS ranked_operation_id,
              lifetime.operation_id AS lifetime_operation_id,
              ranked_observed.observed_at AS ranked_succeeded_at,
              lifetime_observed.observed_at AS lifetime_succeeded_at
       FROM statistics.cohort_members member
       LEFT JOIN statistics.collection_operations ranked
         ON ranked.cohort_id = member.cohort_id
-       AND ranked.brawlhalla_id = member.brawlhalla_id
-       AND ranked.product = 'ranked'
+       AND ranked.brawlhalla_id = member.brawlhalla_id AND ranked.product = 'ranked'
       LEFT JOIN statistics.collection_operations lifetime
         ON lifetime.cohort_id = member.cohort_id
-       AND lifetime.brawlhalla_id = member.brawlhalla_id
-       AND lifetime.product = 'lifetime'
+       AND lifetime.brawlhalla_id = member.brawlhalla_id AND lifetime.product = 'lifetime'
       LEFT JOIN statistics.observations ranked_observed
         ON ranked_observed.cohort_id = member.cohort_id
-       AND ranked_observed.brawlhalla_id = member.brawlhalla_id
-       AND ranked_observed.product = 'ranked'
+       AND ranked_observed.brawlhalla_id = member.brawlhalla_id AND ranked_observed.product = 'ranked'
       LEFT JOIN statistics.observations lifetime_observed
         ON lifetime_observed.cohort_id = member.cohort_id
-       AND lifetime_observed.brawlhalla_id = member.brawlhalla_id
-       AND lifetime_observed.product = 'lifetime'
-      WHERE member.cohort_id = ${cohort.id}
-      ORDER BY member.ordinal
+       AND lifetime_observed.brawlhalla_id = member.brawlhalla_id AND lifetime_observed.product = 'lifetime'
+      WHERE member.cohort_id IN ${sql(cohortIds)}
+      ORDER BY member.cohort_id, member.ordinal
     `
+  }
+
+  async function auditLegacy(sql: typeof client): Promise<CohortAudit | null> {
+    const [cohort] = await sql<CohortRow[]>`
+      SELECT id, methodology_version, source_snapshot_id, source_generation_id, source_observed_at,
+             region, bracket, sample_cap, minimum_evidence_players, eligible_players,
+             selected_players, evidence_state
+      FROM statistics.cohorts WHERE tracer_key = 'eu-diamond-plus'
+    `
+    if (!cohort) return null
+    const rows = await members(sql, [cohort.id])
     return {
       cohortId: cohort.id,
       methodologyVersion: cohort.methodology_version,
       sourceSnapshotId: cohort.source_snapshot_id,
       sourceGenerationId: cohort.source_generation_id,
       sourceObservedAt: cohort.source_observed_at.toISOString(),
-      region: cohort.region,
-      bracket: cohort.bracket,
+      region: 'EU',
+      bracket: 'Diamond+',
       cap: cohort.sample_cap,
       minimumEvidencePlayers: cohort.minimum_evidence_players,
       eligiblePlayers: cohort.eligible_players,
       selectedPlayers: cohort.selected_players,
       state: cohort.evidence_state,
-      members: members.map((member) => ({
-        brawlhallaId: Number(member.brawlhalla_id),
-        sourceRating: member.source_rating,
-        ordinal: member.ordinal,
-        selectionHash: member.selection_hash,
-        rankedOperationId: member.ranked_operation_id,
-        lifetimeOperationId: member.lifetime_operation_id,
-        rankedSucceededAt: member.ranked_succeeded_at?.toISOString() ?? null,
-        lifetimeSucceededAt: member.lifetime_succeeded_at?.toISOString() ?? null,
-      })),
+      members: rows.map(memberAudit),
     }
   }
 
+  async function auditLaunch(sql: typeof client, generationId?: string): Promise<LaunchCohortAudit | null> {
+    const [generation] = await sql<GenerationRow[]>`
+      SELECT * FROM statistics.cohort_generations
+      WHERE (${generationId ?? null}::uuid IS NULL OR id = ${generationId ?? null})
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    `
+    if (!generation) return null
+    const cells = await sql<CohortRow[]>`
+      SELECT id, methodology_version, source_snapshot_id, source_generation_id, source_observed_at,
+             region, bracket, sample_cap, minimum_evidence_players, eligible_players,
+             selected_players, evidence_state
+      FROM statistics.cohorts WHERE generation_id = ${generation.id}
+      ORDER BY array_position(${launchCohortRegions}::text[], region),
+               array_position(${launchCohortBrackets}::text[], bracket)
+    `
+    const allMembers = await members(
+      sql,
+      cells.map(({ id }) => id),
+    )
+    const byCohort = new Map<string, CohortMemberAudit[]>()
+    for (const row of allMembers) {
+      const current = byCohort.get(row.cohort_id) ?? []
+      current.push(memberAudit(row))
+      byCohort.set(row.cohort_id, current)
+    }
+    const decisions = await sql<DecisionRow[]>`
+      SELECT id, generation_id, product, effect_operation_id, operation_key, decision,
+             reasons, progress, observation_window, capacity_envelope, decided_at
+      FROM statistics.publication_decisions
+      WHERE generation_id = ${generation.id}
+      ORDER BY product
+    `
+    const rankedProgress = await collectionProgress(sql, generation.id, 'ranked')
+    const lifetimeProgress = await collectionProgress(sql, generation.id, 'lifetime')
+    return {
+      generationId: generation.id,
+      methodologyVersion: generation.methodology_version,
+      sourceGenerationId: generation.source_generation_id,
+      sourceObservedAt: generation.source_observed_at.toISOString(),
+      observationWindow: {
+        startsAt: generation.observation_window_starts_at.toISOString(),
+        endsAt: generation.observation_window_ends_at.toISOString(),
+      },
+      capacityEnvelope: capacityEnvelope(generation),
+      selectedPlayers: generation.selected_players,
+      state: generation.evidence_state,
+      cells: cells.map(
+        (cell): LaunchCellAudit => ({
+          cohortId: cell.id,
+          sourceSnapshotId: cell.source_snapshot_id,
+          region: cell.region,
+          bracket: cell.bracket,
+          cap: cell.sample_cap,
+          minimumEvidencePlayers: cell.minimum_evidence_players,
+          eligiblePlayers: cell.eligible_players,
+          selectedPlayers: cell.selected_players,
+          state: cell.evidence_state,
+          members: byCohort.get(cell.id) ?? [],
+        }),
+      ),
+      progress: {
+        ranked: summarizeProgress('ranked', rankedProgress),
+        lifetime: summarizeProgress('lifetime', lifetimeProgress),
+      },
+      decisions: decisions.map(decisionAudit),
+    }
+  }
+
+  async function collectionProgress(
+    sql: typeof client,
+    generationId: string,
+    product: CollectionProduct,
+  ): Promise<CellCollectionProgress[]> {
+    const rows = await sql<
+      {
+        region: LaunchCohortRegion
+        bracket: 'Platinum' | 'Diamond+'
+        selected_players: number
+        operations: string | number
+        source_attempts: string | number
+        maximum_player_attempts: string | number
+        successes: string | number
+        first_attempt_at: Date | null
+        last_completed_at: Date | null
+      }[]
+    >`
+      SELECT cohort.region, cohort.bracket, cohort.selected_players,
+             count(DISTINCT collection.operation_id)::bigint AS operations,
+             coalesce(sum(attempt.attempt_count), 0)::bigint AS source_attempts,
+             coalesce(max(attempt.attempt_count), 0)::bigint AS maximum_player_attempts,
+             count(DISTINCT observation.effect_operation_id)::bigint AS successes,
+             min(attempt.first_attempt_at) AS first_attempt_at,
+             max(lineage.completed_at) AS last_completed_at
+      FROM statistics.cohorts cohort
+      LEFT JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
+      LEFT JOIN statistics.collection_operations collection
+        ON collection.cohort_id = member.cohort_id
+       AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = ${product}
+      LEFT JOIN LATERAL (
+        SELECT count(*)::integer AS attempt_count, min(source_attempt.attempted_at) AS first_attempt_at
+        FROM statistics.collection_attempts source_attempt
+        WHERE source_attempt.cohort_id = member.cohort_id
+          AND source_attempt.brawlhalla_id = member.brawlhalla_id
+          AND source_attempt.product = ${product}
+      ) attempt ON true
+      LEFT JOIN statistics.observations observation
+        ON observation.cohort_id = member.cohort_id
+       AND observation.brawlhalla_id = member.brawlhalla_id AND observation.product = ${product}
+      LEFT JOIN LATERAL (
+        SELECT max(operation.completed_at) AS completed_at
+        FROM refresh_operations.operations operation
+        WHERE operation.effect_operation_id = collection.operation_id
+          AND operation.status IN ('succeeded', 'dead_letter')
+      ) lineage ON true
+      WHERE cohort.generation_id = ${generationId}
+      GROUP BY cohort.id, cohort.region, cohort.bracket, cohort.selected_players
+      ORDER BY array_position(${launchCohortRegions}::text[], cohort.region),
+               array_position(${launchCohortBrackets}::text[], cohort.bracket)
+    `
+    return rows.map((row) => ({
+      region: row.region,
+      bracket: row.bracket,
+      selectedPlayers: row.selected_players,
+      operations: Number(row.operations),
+      sourceAttempts: Number(row.source_attempts),
+      maximumPlayerAttempts: Number(row.maximum_player_attempts),
+      successes: Number(row.successes),
+      firstAttemptAt: row.first_attempt_at?.toISOString() ?? null,
+      lastCompletedAt: row.last_completed_at?.toISOString() ?? null,
+    }))
+  }
+
+  async function inspectCollectionAttempt(
+    sql: typeof client,
+    authorization: CollectionAttemptAuthorization,
+  ): Promise<CollectionAttemptPreflightResult | 'already-recorded'> {
+    if (!Number.isSafeInteger(authorization.attemptNumber) || authorization.attemptNumber < 1) {
+      throw new Error('Statistics source attempt requires a positive attempt number')
+    }
+    const product = productFromKind(authorization.kind)
+    const [bound] = await sql<{ operation_id: string }[]>`
+      SELECT operation_id FROM statistics.collection_operations
+      WHERE cohort_id = ${authorization.cohortId} AND brawlhalla_id = ${authorization.brawlhallaId}
+        AND product = ${product}
+    `
+    if (bound?.operation_id !== authorization.effectOperationId) return 'effect-conflict'
+    const [operation] = await sql<{ matches: boolean }[]>`
+      SELECT effect_operation_id = ${authorization.effectOperationId}
+         AND operation_key = ${authorization.operationKey}
+         AND kind = ${authorization.kind} AS matches
+      FROM refresh_operations.operations WHERE id = ${authorization.operationId}
+    `
+    if (!operation?.matches) return 'effect-conflict'
+    const [existing] = await sql<{ matches: boolean }[]>`
+      SELECT effect_operation_id = ${authorization.effectOperationId}
+         AND lease_token = ${authorization.leaseToken} AS matches
+      FROM statistics.collection_attempts
+      WHERE operation_id = ${authorization.operationId} AND attempt_number = ${authorization.attemptNumber}
+    `
+    if (existing) return existing.matches ? 'already-recorded' : 'effect-conflict'
+    const [capacity] = await sql<{ attempts: number }[]>`
+      SELECT count(*)::integer AS attempts
+      FROM statistics.collection_attempts
+      WHERE cohort_id = ${authorization.cohortId}
+        AND brawlhalla_id = ${authorization.brawlhallaId}
+        AND product = ${product}
+    `
+    if ((capacity?.attempts ?? 0) >= LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST) return 'capacity-exceeded'
+    const [active] = await sql<{ active: boolean }[]>`
+      SELECT refresh_operations.acquire_active_lease(
+        ${authorization.operationId}, ${authorization.leaseOwner}, ${authorization.leaseToken}
+      ) AS active
+    `
+    return active?.active ? 'allowed' : 'lease-lost'
+  }
+
   const tracer: StatisticsTracer = {
-    async reconcileCohort(snapshot: CohortCandidateSnapshot): Promise<CohortAudit> {
+    async reconcileCohort(snapshot): Promise<CohortAudit> {
       const selected = selectLaunchCohort(snapshot)
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         await sql`SELECT pg_advisory_xact_lock(hashtext('statistics:eu-diamond-plus'))`
-        const existing = await audit(sql)
+        const existing = await auditLegacy(sql)
         if (existing) return existing
-
         const cohortId = randomUUID()
         await sql`
           INSERT INTO statistics.cohorts
@@ -146,31 +436,149 @@ export function createPostgresStatistics(connectionString: string) {
                 source_rating: member.sourceRating,
                 selection_hash: member.selectionHash,
               })),
-              'cohort_id',
-              'brawlhalla_id',
-              'ordinal',
-              'source_rating',
-              'selection_hash',
             )}
           `
         }
-        const created = await audit(sql)
+        const created = await auditLegacy(sql)
         if (!created) throw new Error('statistics cohort disappeared during reconciliation')
         return created
       })
     },
 
-    async collectionIntents(): Promise<CohortCollectionIntent[]> {
+    async reconcileLaunchCohort(snapshots): Promise<LaunchCohortAudit> {
+      const selected = selectFullLaunchCohort(snapshots)
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${selected.methodologyVersion}, 210))`
+        const [existing] = await sql<{ id: string }[]>`
+          SELECT id FROM statistics.cohort_generations
+          WHERE methodology_version = ${selected.methodologyVersion}
+            AND source_generation_id = ${selected.sourceGenerationId}
+        `
+        if (existing) {
+          const found = await auditLaunch(sql, existing.id)
+          if (!found) throw new Error('Statistics launch cohort disappeared')
+          return found
+        }
+        const [unfinished] = await sql<{ id: string }[]>`
+          SELECT generation.id FROM statistics.cohort_generations generation
+          WHERE (SELECT count(*) FROM statistics.publication_decisions decision
+                 WHERE decision.generation_id = generation.id) < 2
+          ORDER BY generation.created_at DESC LIMIT 1
+        `
+        if (unfinished) {
+          const active = await auditLaunch(sql, unfinished.id)
+          if (!active) throw new Error('active Statistics launch cohort disappeared')
+          return active
+        }
+
+        const generationId = randomUUID()
+        const startsAt = new Date()
+        const endsAt = new Date(startsAt.getTime() + LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS * 1_000)
+        const envelope = selected.capacityEnvelope
+        await sql`
+          INSERT INTO statistics.cohort_generations
+            (id, methodology_version, source_generation_id, source_observed_at,
+             observation_window_starts_at, observation_window_ends_at, source_domain,
+             quota_units_per_window, quota_window_seconds, requests_per_player,
+             max_attempts_per_request, selected_players, planned_requests, maximum_source_attempts,
+             minimum_capacity_seconds, observation_window_seconds, evidence_state)
+          VALUES (${generationId}, ${selected.methodologyVersion}, ${selected.sourceGenerationId},
+            ${selected.sourceObservedAt}, ${startsAt}, ${endsAt}, ${envelope.sourceDomain},
+            ${envelope.quotaUnitsPerWindow}, ${envelope.quotaWindowSeconds}, ${envelope.requestsPerPlayer},
+            ${envelope.maxAttemptsPerRequest}, ${selected.selectedPlayers}, ${envelope.plannedRequests},
+            ${envelope.maximumSourceAttempts}, ${envelope.minimumCapacitySeconds},
+            ${envelope.observationWindowSeconds}, ${selected.state})
+        `
+        for (const cell of selected.cells) {
+          const cohortId = randomUUID()
+          await sql`
+            INSERT INTO statistics.cohorts
+              (id, generation_id, tracer_key, methodology_version, source_snapshot_id,
+               source_generation_id, source_observed_at, region, bracket, sample_cap,
+               minimum_evidence_players, eligible_players, selected_players, evidence_state)
+            VALUES (${cohortId}, ${generationId}, ${`${generationId}:${cell.region}:${cell.bracket}`},
+              ${selected.methodologyVersion}, ${cell.source.snapshotId}, ${selected.sourceGenerationId},
+              ${selected.sourceObservedAt}, ${cell.region}, ${cell.bracket}, ${cell.cap},
+              ${cell.minimumEvidencePlayers}, ${cell.eligiblePlayers}, ${cell.selectedPlayers}, ${cell.state})
+          `
+          for (let offset = 0; offset < cell.members.length; offset += 500) {
+            const batch = cell.members.slice(offset, offset + 500)
+            await sql`
+              INSERT INTO statistics.cohort_members ${sql(
+                batch.map((member) => ({
+                  cohort_id: cohortId,
+                  brawlhalla_id: member.brawlhallaId,
+                  ordinal: member.ordinal,
+                  source_rating: member.sourceRating,
+                  selection_hash: member.selectionHash,
+                })),
+              )}
+            `
+          }
+        }
+        const created = await auditLaunch(sql, generationId)
+        if (!created) throw new Error('Statistics launch cohort disappeared during reconciliation')
+        return created
+      })
+    },
+
+    async reconciliationState() {
+      const [legacy, launch] = await Promise.all([
+        client<{ exists: boolean }[]>`
+          SELECT EXISTS (
+            SELECT 1 FROM statistics.cohorts WHERE generation_id IS NULL
+          ) AS exists
+        `,
+        client<
+          {
+            generation_id: string
+            source_generation_id: string
+            decision_count: string | number
+            cohort_ids: string[]
+          }[]
+        >`
+          SELECT generation.id AS generation_id, generation.source_generation_id,
+                 (SELECT count(*)::bigint FROM statistics.publication_decisions decision
+                  WHERE decision.generation_id = generation.id) AS decision_count,
+                 ARRAY(SELECT cohort.id FROM statistics.cohorts cohort
+                       WHERE cohort.generation_id = generation.id ORDER BY cohort.id) AS cohort_ids
+          FROM statistics.cohort_generations generation
+          ORDER BY generation.created_at DESC, generation.id DESC
+          LIMIT 1
+        `,
+      ])
+      const current = launch[0]
+      return {
+        legacyCohortExists: legacy[0]?.exists ?? false,
+        launch: current
+          ? {
+              generationId: current.generation_id,
+              sourceGenerationId: current.source_generation_id,
+              decisionCount: Number(current.decision_count),
+              cohortIds: current.cohort_ids,
+            }
+          : null,
+      }
+    },
+
+    async collectionIntents(limit = 500): Promise<CohortCollectionIntent[]> {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+        throw new Error('Statistics collection intent limit must be an integer between 1 and 500')
+      }
       const rows = await client<{ cohort_id: string; brawlhalla_id: string | number; product: CollectionProduct }[]>`
         SELECT member.cohort_id, member.brawlhalla_id, product.product
         FROM statistics.cohort_members member
+        JOIN statistics.cohorts cohort ON cohort.id = member.cohort_id
+        LEFT JOIN statistics.cohort_generations generation ON generation.id = cohort.generation_id
         CROSS JOIN (VALUES ('ranked'::text), ('lifetime'::text)) product(product)
         LEFT JOIN statistics.collection_operations operation
           ON operation.cohort_id = member.cohort_id
-         AND operation.brawlhalla_id = member.brawlhalla_id
-         AND operation.product = product.product
+         AND operation.brawlhalla_id = member.brawlhalla_id AND operation.product = product.product
         WHERE operation.operation_id IS NULL
-        ORDER BY member.ordinal, product.product DESC
+          AND (cohort.generation_id IS NULL OR generation.evidence_state = 'ready')
+        ORDER BY cohort.created_at, member.cohort_id, member.ordinal, product.product DESC
+        LIMIT ${limit}
       `
       return rows.map((row) => {
         const brawlhallaId = Number(row.brawlhalla_id)
@@ -179,22 +587,32 @@ export function createPostgresStatistics(connectionString: string) {
           brawlhallaId,
           product: row.product,
           kind: kindFromProduct(row.product),
-          operationKey: operationKey(row.cohort_id, brawlhallaId, row.product),
+          operationKey: collectionOperationKey(row.cohort_id, brawlhallaId, row.product),
         }
       })
     },
 
-    async recordCollectionOperation(intent: CohortCollectionIntent, operationId: string): Promise<void> {
-      const expectedKind = kindFromProduct(intent.product)
+    async boundCollectionOperationIds(operationIds): Promise<string[]> {
+      if (operationIds.length > 500)
+        throw new Error('Statistics collection binding lookup is limited to 500 operations')
+      if (operationIds.length === 0) return []
+      const rows = await client<{ operation_id: string }[]>`
+        SELECT operation_id FROM statistics.collection_operations
+        WHERE operation_id = ANY(${operationIds}::uuid[])
+        ORDER BY operation_id
+      `
+      return rows.map(({ operation_id }) => operation_id)
+    },
+
+    async recordCollectionOperation(intent, operationId): Promise<void> {
       if (
-        intent.kind !== expectedKind ||
-        intent.operationKey !== operationKey(intent.cohortId, intent.brawlhallaId, intent.product)
+        intent.kind !== kindFromProduct(intent.product) ||
+        intent.operationKey !== collectionOperationKey(intent.cohortId, intent.brawlhallaId, intent.product)
       ) {
         throw new Error('collection intent does not match the fixed operation identity')
       }
       await client`
-        INSERT INTO statistics.collection_operations
-          (cohort_id, brawlhalla_id, product, operation_id)
+        INSERT INTO statistics.collection_operations (cohort_id, brawlhalla_id, product, operation_id)
         VALUES (${intent.cohortId}, ${intent.brawlhallaId}, ${intent.product}, ${operationId})
         ON CONFLICT (cohort_id, brawlhalla_id, product) DO NOTHING
       `
@@ -206,7 +624,32 @@ export function createPostgresStatistics(connectionString: string) {
       if (recorded?.operation_id !== operationId) throw new Error('collection operation identity conflicts')
     },
 
-    async preflightCollection(authorization: CollectionAuthorization): Promise<CollectionPreflightResult> {
+    async preflightCollectionAttempt(authorization): Promise<CollectionAttemptPreflightResult> {
+      return client.begin(async (transaction) => {
+        const result = await inspectCollectionAttempt(transaction as unknown as typeof client, authorization)
+        return result === 'already-recorded' ? 'allowed' : result
+      })
+    },
+
+    async recordCollectionAttempt(authorization): Promise<CollectionAttemptResult> {
+      const product = productFromKind(authorization.kind)
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const inspected = await inspectCollectionAttempt(sql, authorization)
+        if (inspected !== 'allowed') return inspected
+        await sql`
+          INSERT INTO statistics.collection_attempts
+            (cohort_id, brawlhalla_id, product, operation_id, effect_operation_id,
+             attempt_number, lease_token)
+          VALUES (${authorization.cohortId}, ${authorization.brawlhallaId}, ${product},
+            ${authorization.operationId}, ${authorization.effectOperationId}, ${authorization.attemptNumber},
+            ${authorization.leaseToken})
+        `
+        return 'recorded'
+      })
+    },
+
+    async preflightCollection(authorization): Promise<CollectionPreflightResult> {
       const product = productFromKind(authorization.kind)
       const identities = await client<
         {
@@ -222,28 +665,25 @@ export function createPostgresStatistics(connectionString: string) {
                observation.effect_operation_id AS observation_effect_operation_id,
                observation.operation_key AS observation_operation_key,
                effect.operation_id AS effect_operation_id,
-               effect.operation_key AS effect_operation_key,
-               effect.kind AS effect_kind
+               effect.operation_key AS effect_operation_key, effect.kind AS effect_kind
         FROM statistics.collection_operations collection
         LEFT JOIN statistics.observations observation
           ON observation.cohort_id = collection.cohort_id
-         AND observation.brawlhalla_id = collection.brawlhalla_id
-         AND observation.product = collection.product
+         AND observation.brawlhalla_id = collection.brawlhalla_id AND observation.product = collection.product
         LEFT JOIN refresh_operations.statistics_collection_effects effect
           ON effect.operation_id = ${authorization.effectOperationId}
           OR effect.operation_key = ${authorization.operationKey}
         WHERE collection.cohort_id = ${authorization.cohortId}
-          AND collection.brawlhalla_id = ${authorization.brawlhallaId}
-          AND collection.product = ${product}
+          AND collection.brawlhalla_id = ${authorization.brawlhallaId} AND collection.product = ${product}
       `
       if (
         identities.length === 0 ||
-        identities.some((identity) => identity.bound_operation_id !== authorization.effectOperationId)
+        identities.some((row) => row.bound_operation_id !== authorization.effectOperationId)
       ) {
         return 'effect-conflict'
       }
-      const observations = identities.filter((identity) => identity.observation_effect_operation_id !== null)
-      const effects = identities.filter((identity) => identity.effect_operation_id !== null)
+      const observations = identities.filter((row) => row.observation_effect_operation_id !== null)
+      const effects = identities.filter((row) => row.effect_operation_id !== null)
       if (observations.length === 0 && effects.length === 0) return 'missing'
       if (
         observations.length === 1 &&
@@ -253,13 +693,12 @@ export function createPostgresStatistics(connectionString: string) {
         effects[0]?.effect_operation_id === authorization.effectOperationId &&
         effects[0]?.effect_operation_key === authorization.operationKey &&
         effects[0]?.effect_kind === authorization.kind
-      ) {
+      )
         return 'already-applied'
-      }
       return 'effect-conflict'
     },
 
-    async commitObservation(observation: CollectionObservation): Promise<CollectionCommitResult> {
+    async commitObservation(observation): Promise<CollectionCommitResult> {
       const { authorization } = observation
       const product = productFromKind(authorization.kind)
       const observedAt = observation.observedAt ?? new Date()
@@ -267,12 +706,10 @@ export function createPostgresStatistics(connectionString: string) {
         const sql = transaction as unknown as typeof client
         const [bound] = await sql<{ operation_id: string }[]>`
           SELECT operation_id FROM statistics.collection_operations
-          WHERE cohort_id = ${authorization.cohortId}
-            AND brawlhalla_id = ${authorization.brawlhallaId}
-            AND product = ${product}
-          FOR SHARE
+          WHERE cohort_id = ${authorization.cohortId} AND brawlhalla_id = ${authorization.brawlhallaId}
+            AND product = ${product} FOR SHARE
         `
-        if (!bound || bound.operation_id !== authorization.effectOperationId) return 'effect-conflict'
+        if (bound?.operation_id !== authorization.effectOperationId) return 'effect-conflict'
         const [effect] = await sql<{ result: CollectionCommitResult }[]>`
           SELECT refresh_operations.record_statistics_collection_effect(
             ${authorization.operationId}, ${authorization.operationKey}, ${authorization.kind},
@@ -281,46 +718,260 @@ export function createPostgresStatistics(connectionString: string) {
         `
         const result = effect?.result ?? 'lease-lost'
         if (result === 'lease-lost' || result === 'effect-conflict') return result
-
         const existingIdentity = async () => {
           const [existing] = await sql<{ matches: boolean }[]>`
             SELECT effect_operation_id = ${authorization.effectOperationId}
                AND operation_key = ${authorization.operationKey} AS matches
             FROM statistics.observations
             WHERE cohort_id = ${authorization.cohortId}
-              AND brawlhalla_id = ${authorization.brawlhallaId}
-              AND product = ${product}
+              AND brawlhalla_id = ${authorization.brawlhallaId} AND product = ${product}
           `
           return existing?.matches === true
         }
-        if (result === 'already-applied') {
-          return (await existingIdentity()) ? 'already-applied' : 'effect-conflict'
-        }
-
+        if (result === 'already-applied') return (await existingIdentity()) ? 'already-applied' : 'effect-conflict'
         const evidence =
-          observation.authorization.kind === 'statistics-ranked-collection'
+          authorization.kind === 'statistics-ranked-collection'
             ? validateRankedEvidence(observation.evidence, authorization.brawlhallaId)
             : validateLifetimeEvidence(observation.evidence, authorization.brawlhallaId)
-        const serializedEvidence = JSON.stringify(evidence)
-        if (serializedEvidence === undefined) throw new Error('statistics evidence must be JSON serializable')
-        const evidenceJson = JSON.parse(serializedEvidence) as postgres.JSONValue
         const inserted = await sql<{ effect_operation_id: string }[]>`
           INSERT INTO statistics.observations
             (cohort_id, brawlhalla_id, product, effect_operation_id, operation_key,
              lease_token, observed_at, evidence_version, evidence)
-          VALUES
-            (${authorization.cohortId}, ${authorization.brawlhallaId}, ${product},
-             ${authorization.effectOperationId}, ${authorization.operationKey}, ${authorization.leaseToken},
-             ${observedAt}, 1, ${sql.json(evidenceJson)})
-          ON CONFLICT (cohort_id, brawlhalla_id, product) DO NOTHING
-          RETURNING effect_operation_id
+          VALUES (${authorization.cohortId}, ${authorization.brawlhallaId}, ${product},
+            ${authorization.effectOperationId}, ${authorization.operationKey}, ${authorization.leaseToken},
+            ${observedAt}, 1, ${sql.json(jsonValue(evidence))})
+          ON CONFLICT (cohort_id, brawlhalla_id, product) DO NOTHING RETURNING effect_operation_id
         `
         if (inserted[0]) return 'applied'
         return (await existingIdentity()) ? 'already-applied' : 'effect-conflict'
       })
     },
 
-    getCohort: () => audit(client),
+    async publicationIntents(): Promise<PublicationIntent[]> {
+      const rows = await client<{ generation_id: string; product: CollectionProduct }[]>`
+        SELECT generation.id AS generation_id, product.product
+        FROM statistics.cohort_generations generation
+        CROSS JOIN (VALUES ('ranked'::text), ('lifetime'::text)) product(product)
+        LEFT JOIN statistics.publication_operations publication
+          ON publication.generation_id = generation.id AND publication.product = product.product
+        WHERE publication.operation_id IS NULL
+          AND (generation.evidence_state = 'insufficient-evidence' OR NOT EXISTS (
+            SELECT 1 FROM statistics.cohorts cohort
+            JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
+            LEFT JOIN statistics.collection_operations collection
+              ON collection.cohort_id = member.cohort_id
+             AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = product.product
+            WHERE cohort.generation_id = generation.id
+              AND (collection.operation_id IS NULL OR EXISTS (
+                SELECT 1 FROM refresh_operations.operations operation
+                WHERE operation.effect_operation_id = collection.operation_id
+                  AND operation.status NOT IN ('succeeded', 'dead_letter')
+              ) OR NOT EXISTS (
+                SELECT 1 FROM refresh_operations.operations operation
+                WHERE operation.effect_operation_id = collection.operation_id
+                  AND operation.status IN ('succeeded', 'dead_letter')
+              ))
+          ))
+        ORDER BY generation.created_at, product.product DESC
+      `
+      return rows.map(({ generation_id, product }) => ({
+        generationId: generation_id,
+        product,
+        kind: 'statistics-publication',
+        operationKey: publicationOperationKey(generation_id, product),
+      }))
+    },
+
+    async boundPublicationOperationIds(operationIds): Promise<string[]> {
+      if (operationIds.length > 100)
+        throw new Error('Statistics publication binding lookup is limited to 100 operations')
+      if (operationIds.length === 0) return []
+      const rows = await client<{ operation_id: string }[]>`
+        SELECT operation_id FROM statistics.publication_operations
+        WHERE operation_id = ANY(${operationIds}::uuid[])
+        ORDER BY operation_id
+      `
+      return rows.map(({ operation_id }) => operation_id)
+    },
+
+    async recordPublicationOperation(intent, operationId): Promise<'recorded' | 'collection-active'> {
+      if (
+        intent.kind !== 'statistics-publication' ||
+        intent.operationKey !== publicationOperationKey(intent.generationId, intent.product)
+      ) {
+        throw new Error('publication intent does not match the fixed operation identity')
+      }
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [existingBinding] = await sql<{ operation_id: string }[]>`
+          SELECT operation_id FROM statistics.publication_operations
+          WHERE generation_id = ${intent.generationId} AND product = ${intent.product}
+        `
+        if (existingBinding) {
+          if (existingBinding.operation_id !== operationId) throw new Error('publication operation identity conflicts')
+          return 'recorded'
+        }
+        const [seal] = await sql<{ result: 'sealed' | 'collection-active' | 'effect-conflict' }[]>`
+          SELECT refresh_operations.seal_statistics_collections_for_publication(
+            ${operationId},
+            ARRAY(
+              SELECT collection.operation_id
+              FROM statistics.collection_operations collection
+              JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
+              WHERE cohort.generation_id = ${intent.generationId}
+                AND collection.product = ${intent.product}
+              ORDER BY collection.operation_id
+            )
+          ) AS result
+        `
+        if (seal?.result === 'collection-active') return 'collection-active'
+        if (seal?.result !== 'sealed') throw new Error('publication collection seal conflicts')
+        await sql`
+          INSERT INTO statistics.publication_operations (generation_id, product, operation_id)
+          VALUES (${intent.generationId}, ${intent.product}, ${operationId})
+          ON CONFLICT (generation_id, product) DO NOTHING
+        `
+        const [recorded] = await sql<{ operation_id: string }[]>`
+          SELECT operation_id FROM statistics.publication_operations
+          WHERE generation_id = ${intent.generationId} AND product = ${intent.product}
+        `
+        if (recorded?.operation_id !== operationId) throw new Error('publication operation identity conflicts')
+        return 'recorded'
+      })
+    },
+
+    async preflightPublication(authorization): Promise<CollectionPreflightResult> {
+      const [identity] = await client<
+        {
+          bound_operation_id: string
+          decision_effect_operation_id: string | null
+          decision_operation_key: string | null
+          effect_operation_id: string | null
+          effect_operation_key: string | null
+        }[]
+      >`
+        SELECT publication.operation_id AS bound_operation_id,
+               decision.effect_operation_id AS decision_effect_operation_id,
+               decision.operation_key AS decision_operation_key,
+               effect.operation_id AS effect_operation_id, effect.operation_key AS effect_operation_key
+        FROM statistics.publication_operations publication
+        LEFT JOIN statistics.publication_decisions decision
+          ON decision.generation_id = publication.generation_id AND decision.product = publication.product
+        LEFT JOIN refresh_operations.statistics_publication_effects effect
+          ON effect.operation_id = ${authorization.effectOperationId}
+          OR effect.operation_key = ${authorization.operationKey}
+        WHERE publication.generation_id = ${authorization.generationId}
+          AND publication.product = ${authorization.product}
+      `
+      if (!identity || identity.bound_operation_id !== authorization.effectOperationId) return 'effect-conflict'
+      if (!identity.decision_effect_operation_id && !identity.effect_operation_id) return 'missing'
+      return identity.decision_effect_operation_id === authorization.effectOperationId &&
+        identity.decision_operation_key === authorization.operationKey &&
+        identity.effect_operation_id === authorization.effectOperationId &&
+        identity.effect_operation_key === authorization.operationKey
+        ? 'already-applied'
+        : 'effect-conflict'
+    },
+
+    async validateAndPublish(authorization): Promise<{
+      result: PublicationCommitResult
+      decision: PublicationDecisionAudit | null
+    }> {
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [bound] = await sql<{ operation_id: string }[]>`
+          SELECT operation_id FROM statistics.publication_operations
+          WHERE generation_id = ${authorization.generationId} AND product = ${authorization.product} FOR SHARE
+        `
+        if (bound?.operation_id !== authorization.effectOperationId)
+          return { result: 'effect-conflict', decision: null }
+        const [effect] = await sql<{ result: PublicationCommitResult }[]>`
+          SELECT refresh_operations.record_statistics_publication_effect(
+            ${authorization.operationId}, ${authorization.operationKey},
+            ${authorization.leaseOwner}, ${authorization.leaseToken},
+            ARRAY(
+              SELECT collection.operation_id
+              FROM statistics.collection_operations collection
+              JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
+              WHERE cohort.generation_id = ${authorization.generationId}
+                AND collection.product = ${authorization.product}
+              ORDER BY collection.operation_id
+            )
+          ) AS result
+        `
+        const result = effect?.result ?? 'lease-lost'
+        const [existing] = await sql<DecisionRow[]>`
+          SELECT id, generation_id, product, effect_operation_id, operation_key, decision,
+                 reasons, progress, observation_window, capacity_envelope, decided_at
+          FROM statistics.publication_decisions
+          WHERE generation_id = ${authorization.generationId} AND product = ${authorization.product}
+        `
+        if (result === 'lease-lost' || result === 'effect-conflict' || result === 'collection-active') {
+          return { result, decision: null }
+        }
+        if (result === 'already-applied') {
+          return existing &&
+            existing.effect_operation_id === authorization.effectOperationId &&
+            existing.operation_key === authorization.operationKey
+            ? { result: 'already-applied', decision: decisionAudit(existing) }
+            : { result: 'effect-conflict', decision: null }
+        }
+        if (existing) throw new Error('Statistics publication decision exists without its durable effect')
+        const [generation] = await sql<GenerationRow[]>`
+          SELECT * FROM statistics.cohort_generations WHERE id = ${authorization.generationId}
+        `
+        if (!generation) throw new Error('Statistics publication generation disappeared')
+        const evidence = validatePublicationDecision({
+          generationId: generation.id,
+          product: authorization.product,
+          cells: await collectionProgress(sql, generation.id, authorization.product),
+          observationWindow: {
+            startsAt: generation.observation_window_starts_at.toISOString(),
+            endsAt: generation.observation_window_ends_at.toISOString(),
+          },
+          capacityEnvelope: capacityEnvelope(generation),
+        })
+        const decisionId = randomUUID()
+        const [inserted] = await sql<DecisionRow[]>`
+          INSERT INTO statistics.publication_decisions
+            (id, generation_id, product, effect_operation_id, operation_key, lease_token,
+             decision, reasons, progress, observation_window, capacity_envelope)
+          VALUES (${decisionId}, ${generation.id}, ${authorization.product}, ${authorization.effectOperationId},
+            ${authorization.operationKey}, ${authorization.leaseToken}, ${evidence.outcome},
+            ${sql.json(jsonValue(evidence.reasons))}, ${sql.json(jsonValue(evidence.progress))},
+            ${sql.json(jsonValue(evidence.observationWindow))}, ${sql.json(jsonValue(evidence.capacityEnvelope))})
+          RETURNING id, generation_id, product, effect_operation_id, operation_key, decision,
+                    reasons, progress, observation_window, capacity_envelope, decided_at
+        `
+        if (!inserted) throw new Error('Statistics publication decision was not inserted')
+        return { result: 'applied', decision: decisionAudit(inserted) }
+      })
+    },
+
+    getCohort: () => auditLegacy(client),
+    getLaunchCohort: (generationId) => auditLaunch(client, generationId),
+
+    async getPublication(product): Promise<PublicationStatus | null> {
+      const [latest] = await client<DecisionRow[]>`
+        SELECT id, generation_id, product, effect_operation_id, operation_key, decision,
+               reasons, progress, observation_window, capacity_envelope, decided_at
+        FROM statistics.publication_decisions WHERE product = ${product}
+        ORDER BY decided_at DESC, id DESC LIMIT 1
+      `
+      if (!latest) return null
+      const [active] = await client<DecisionRow[]>`
+        SELECT id, generation_id, product, effect_operation_id, operation_key, decision,
+               reasons, progress, observation_window, capacity_envelope, decided_at
+        FROM statistics.publication_decisions WHERE product = ${product} AND decision = 'accepted'
+        ORDER BY decided_at DESC, id DESC LIMIT 1
+      `
+      return {
+        product,
+        active: active ? decisionAudit(active) : null,
+        latestDecision: decisionAudit(latest),
+        stale: latest.decision === 'rejected' && active !== undefined,
+      }
+    },
   }
 
   return {
