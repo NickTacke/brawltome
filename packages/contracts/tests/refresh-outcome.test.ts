@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  discordPlayerRefreshInputSchema,
   parsePlayerRefreshResponseOutput,
   parseRefreshOutcomeOutput,
   playerRefreshResponseSchema,
@@ -61,6 +62,27 @@ describe('canonical refresh outcome', () => {
     { outcome: 'unknown', retry: { kind: 'none' } },
   ])('rejects malformed semantic output %#', (value) => {
     expect(() => refreshOutcomeSchema.parse(value)).toThrow()
+  })
+
+  test('accepts only a strict trusted Discord player refresh identity', () => {
+    expect(discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '123456789012345678' })).toEqual({
+      id: 42,
+      discordUserId: '123456789012345678',
+    })
+    expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '' })).toThrow()
+    expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: 'invented-user' })).toThrow()
+    expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '00000000000000000' })).toThrow()
+    expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '18446744073709551616' })).toThrow()
+    expect(discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '18446744073709551615' }).discordUserId).toBe(
+      '18446744073709551615',
+    )
+    expect(() =>
+      discordPlayerRefreshInputSchema.parse({
+        id: 42,
+        discordUserId: '123456789012345678',
+        turnstileToken: 'spoofed',
+      }),
+    ).toThrow()
   })
 
   test('returns unchanged cached PlayerReference for every outcome and rejects persistence fields', () => {

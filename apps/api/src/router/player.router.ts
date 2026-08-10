@@ -1,15 +1,17 @@
 import {
+  type DiscordPlayerRefreshInputContract,
   type PlayerRefreshInputContract,
   type PlayerRefreshResponseContract,
+  discordPlayerRefreshInputSchema,
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
 } from '@brawltome/contracts'
 import { CAREER_FRESHNESS_SECONDS, RANKED_FRESHNESS_SECONDS } from '@brawltome/player'
-import { getV2PlayerProfile, isStale } from '@brawltome/player/v2-compatibility'
+import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
 import { z } from 'zod'
 import { requestInteractivePlayerRefresh } from '../interactive-player-refresh'
 import type { Context } from '../trpc/context'
-import { internalProcedure, mergeRouters, router } from '../trpc/trpc'
+import { discordBotProcedure, internalProcedure, mergeRouters, router } from '../trpc/trpc'
 import { createPlayerCareerRouter } from './player-career.router'
 import { createPlayerRankedRouter } from './player-ranked.router'
 import { createPlayerReferenceRouter } from './player-reference.router'
@@ -37,14 +39,16 @@ function timestamp(value: Date | string | null | undefined): number {
 async function requestPlayerRefresh(
   ctx: Context,
   input: PlayerRefreshInputContract,
+  discordUserId?: string,
+  now = Date.now(),
 ): Promise<PlayerRefreshResponseContract> {
   const [player, ranked, career] = await Promise.all([
     ctx.playerReferenceQueries.byId(input.id),
     ctx.rankedPlayerQueries.byId(input.id),
     ctx.careerPlayerQueries.byId(input.id),
   ])
-  const rankedStale = !ranked?.lastSuccessAt || isStale(ranked.lastSuccessAt, RANKED_FRESHNESS_SECONDS * 1_000)
-  const statsStale = !career?.lastSuccessAt || isStale(career.lastSuccessAt, CAREER_FRESHNESS_SECONDS * 1_000)
+  const rankedStale = !ranked?.lastSuccessAt || now - ranked.lastSuccessAt.getTime() > RANKED_FRESHNESS_SECONDS * 1_000
+  const statsStale = !career?.lastSuccessAt || now - career.lastSuccessAt.getTime() > CAREER_FRESHNESS_SECONDS * 1_000
   if (!rankedStale && !statsStale) {
     return { player, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
   }
@@ -57,16 +61,21 @@ async function requestPlayerRefresh(
     input.id,
     `ranked:${timestamp(ranked?.lastSuccessAt)}`,
     `stats:${timestamp(career?.lastSuccessAt)}`,
+    `sections:${staleSections.join(',')}`,
   ].join(':')
 
   const refresh = await requestInteractivePlayerRefresh({
     brawlhallaId: input.id,
     dedupeKey,
     staleSections,
-    provenance: { source: 'interactive-api', requestedBy: ctx.account?.id },
+    provenance: {
+      source: discordUserId ? 'discord' : 'interactive-api',
+      requestedBy: discordUserId ?? ctx.account?.id,
+    },
     refreshOperations: ctx.refreshOperations,
     requestAdmission: ctx.requestAdmission,
     resolveActor: async () => {
+      if (discordUserId) return { kind: 'discord', discordUserId }
       if (ctx.account) {
         return { kind: 'authenticated', accountId: ctx.account.id, ip: ctx.clientIp }
       }
@@ -99,12 +108,28 @@ async function requestPlayerRefresh(
   return { player, refresh }
 }
 
-export function createCanonicalPlayerRefreshRouter(procedure = internalProcedure) {
+function requestDiscordPlayerRefresh(
+  ctx: Context,
+  input: DiscordPlayerRefreshInputContract,
+  now: number,
+): Promise<PlayerRefreshResponseContract> {
+  return requestPlayerRefresh(ctx, { id: input.id }, input.discordUserId, now)
+}
+
+export function createCanonicalPlayerRefreshRouter(
+  procedure = internalProcedure,
+  discordProcedure = discordBotProcedure,
+  now: () => number = Date.now,
+) {
   return router({
     requestRefresh: procedure
       .input(playerRefreshInputSchema)
       .output(playerRefreshResponseSchema)
-      .mutation(({ ctx, input }) => requestPlayerRefresh(ctx, input)),
+      .mutation(({ ctx, input }) => requestPlayerRefresh(ctx, input, undefined, now())),
+    refreshDiscord: discordProcedure
+      .input(discordPlayerRefreshInputSchema)
+      .output(playerRefreshResponseSchema)
+      .mutation(({ ctx, input }) => requestDiscordPlayerRefresh(ctx, input, now())),
   })
 }
 

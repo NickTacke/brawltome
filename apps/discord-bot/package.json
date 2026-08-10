@@ -6,6 +6,8 @@
     "dev": "bun run --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "deploy-commands": "bun run src/deploy-commands.ts",
+    "smoke:staging-guild": "bun run src/smoke.ts staging-guild",
+    "smoke:production": "bun run src/smoke.ts production",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

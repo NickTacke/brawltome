@@ -34,6 +34,7 @@ export interface Context {
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined
+  discordInternalSecret: string | undefined
   account: Account | null
   matchRepo: MatchRepo | null
   r2: R2Client | null

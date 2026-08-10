@@ -11,7 +11,7 @@ import {
   discordClanRefreshInputSchema,
 } from '@brawltome/contracts'
 import type { Context } from '../trpc/context'
-import { internalProcedure, router } from '../trpc/trpc'
+import { discordBotProcedure, internalProcedure, router } from '../trpc/trpc'
 
 const CLAN_TTL_MS = 60 * 60 * 1_000
 const unavailable = { outcome: 'temporarilyUnavailable' as const, retry: { kind: 'after' as const, afterSeconds: 30 } }
@@ -46,24 +46,35 @@ export async function mapClan(clans: ClanQueries, clanId: number): Promise<ClanP
   })
 }
 
-function stale(value: Date | null | undefined): boolean {
-  return !value || Date.now() - value.getTime() > CLAN_TTL_MS
+function timestamp(value: Date | null | undefined): number {
+  return value?.getTime() ?? 0
+}
+
+function stale(value: Date | null | undefined, now: number): boolean {
+  return !value || now - value.getTime() > CLAN_TTL_MS
 }
 
 async function requestClanRefresh(
   ctx: Context,
   input: ClanRefreshInputContract,
   discordUserId?: string,
+  now = Date.now(),
 ): Promise<ClanRefreshResponseContract> {
   const stored = await ctx.clanRepo.getById(input.id)
   const clan = await mapClan(ctx.clanRepo, input.id)
   const staleSections = [
-    stale(stored?.profile.lastSuccessAt) ? ('profile' as const) : null,
-    stale(stored?.roster?.lastSuccessAt) ? ('roster' as const) : null,
+    stale(stored?.profile.lastSuccessAt, now) ? ('profile' as const) : null,
+    stale(stored?.roster?.lastSuccessAt, now) ? ('roster' as const) : null,
   ].filter((section): section is 'profile' | 'roster' => section !== null)
   if (staleSections.length === 0) return { clan, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
 
-  const dedupeKey = `clan:${input.id}`
+  const dedupeKey = [
+    'clan',
+    input.id,
+    `profile:${timestamp(stored?.profile.lastSuccessAt)}`,
+    `roster:${timestamp(stored?.roster?.lastSuccessAt)}`,
+    `sections:${staleSections.join(',')}`,
+  ].join(':')
   try {
     const active = await ctx.refreshOperations.findActiveInteractiveClanRefresh(dedupeKey)
     if (
@@ -156,11 +167,16 @@ async function requestClanRefresh(
 function requestDiscordClanRefresh(
   ctx: Context,
   input: DiscordClanRefreshInputContract,
+  now: number,
 ): Promise<ClanRefreshResponseContract> {
-  return requestClanRefresh(ctx, { id: input.id }, input.discordUserId)
+  return requestClanRefresh(ctx, { id: input.id }, input.discordUserId, now)
 }
 
-export function createClanRouter(procedure = internalProcedure) {
+export function createClanRouter(
+  procedure = internalProcedure,
+  discordProcedure = discordBotProcedure,
+  now: () => number = Date.now,
+) {
   return router({
     byId: procedure
       .input(clanByIdInputSchema)
@@ -169,11 +185,11 @@ export function createClanRouter(procedure = internalProcedure) {
     refresh: procedure
       .input(clanRefreshInputSchema)
       .output(clanRefreshResponseSchema)
-      .mutation(({ ctx, input }) => requestClanRefresh(ctx, input)),
-    refreshDiscord: procedure
+      .mutation(({ ctx, input }) => requestClanRefresh(ctx, input, undefined, now())),
+    refreshDiscord: discordProcedure
       .input(discordClanRefreshInputSchema)
       .output(clanRefreshResponseSchema)
-      .mutation(({ ctx, input }) => requestDiscordClanRefresh(ctx, input)),
+      .mutation(({ ctx, input }) => requestDiscordClanRefresh(ctx, input, now())),
   })
 }
 

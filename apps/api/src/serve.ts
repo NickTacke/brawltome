@@ -257,6 +257,7 @@ app.use(
           ua,
         )
       const internalSecret = c.req.header('x-internal-secret') ?? undefined
+      const discordInternalSecret = c.req.header('x-discord-internal-secret') ?? undefined
 
       const cookies = parseCookies(c.req.header('cookie'))
       const rawToken = cookies[SESSION_COOKIE] ?? null
@@ -273,6 +274,7 @@ app.use(
         clientIp,
         isBot,
         internalSecret,
+        discordInternalSecret,
         account: authentication.status === 'signedIn' ? authentication.account : null,
         refreshTrust: {
           trusted: refreshTrusted,

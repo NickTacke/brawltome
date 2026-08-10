@@ -2,13 +2,13 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - '5432:5432'
+      - "5432:5432"
     environment:
       POSTGRES_USER: brawltome
       POSTGRES_PASSWORD: brawltome
       POSTGRES_DB: brawltome
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U brawltome -d brawltome']
+      test: ["CMD-SHELL", "pg_isready -U brawltome -d brawltome"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -18,15 +18,15 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - '6379:6379'
+      - "6379:6379"
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   migration:
-    profiles: ['v3']
+    profiles: ["v3"]
     build:
       context: .
       target: migration
@@ -35,10 +35,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    restart: 'no'
+    restart: "no"
 
   api:
-    profiles: ['v3']
+    profiles: ["v3"]
     build:
       context: .
       target: api
@@ -46,20 +46,58 @@ services:
       DATABASE_URL: postgres://brawltome:brawltome@postgres:5432/brawltome
       REDIS_URL: redis://redis:6379
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+      DISCORD_INTERNAL_API_SECRET: ${DISCORD_INTERNAL_API_SECRET}
       REFRESH_TRUST_COOKIE_SECRET: ${REFRESH_TRUST_COOKIE_SECRET}
       AUTHENTICATED_REFRESH_IP_LIMIT: ${AUTHENTICATED_REFRESH_IP_LIMIT:-120}
-      PORT: '3000'
-      RUNTIME_SHUTDOWN_DEADLINE_MS: '60000'
-      RUNTIME_CLEANUP_RESERVE_MS: '5000'
+      PORT: "3000"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      RUNTIME_CLEANUP_RESERVE_MS: "5000"
     ports:
-      - '3000:3000'
+      - "3000:3000"
     depends_on:
       migration:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'bun', '-e', "const r = await fetch('http://localhost:3000/health/ready'); if (!r.ok) process.exit(1)"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch('http://localhost:3000/health/ready'); if (!r.ok) process.exit(1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    stop_grace_period: 70s
+    restart: unless-stopped
+
+  discord-bot:
+    profiles: ["v3"]
+    build:
+      context: .
+      target: discord-bot
+    environment:
+      API_URL: http://api:3000
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+      DISCORD_INTERNAL_API_SECRET: ${DISCORD_INTERNAL_API_SECRET}
+      DISCORD_METRICS_PORT: "3002"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch('http://localhost:3002/health/ready'); if (!r.ok) process.exit(1)",
+        ]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -68,7 +106,7 @@ services:
     restart: unless-stopped
 
   operations-worker:
-    profiles: ['v3']
+    profiles: ["v3"]
     build:
       context: .
       target: operations-worker
@@ -78,14 +116,20 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       AUTHENTICATED_REFRESH_IP_LIMIT: ${AUTHENTICATED_REFRESH_IP_LIMIT:-120}
       BRAWLHALLA_V1_REQUEST_LIMIT: ${BRAWLHALLA_V1_REQUEST_LIMIT:-180}
-      HEALTH_PORT: '3001'
-      RUNTIME_SHUTDOWN_DEADLINE_MS: '60000'
-      RUNTIME_CLEANUP_RESERVE_MS: '5000'
+      HEALTH_PORT: "3001"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      RUNTIME_CLEANUP_RESERVE_MS: "5000"
     depends_on:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ['CMD', 'bun', '-e', "const r = await fetch('http://localhost:3001/health/ready'); if (!r.ok) process.exit(1)"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch('http://localhost:3001/health/ready'); if (!r.ok) process.exit(1)",
+        ]
       interval: 10s
       timeout: 3s
       retries: 6

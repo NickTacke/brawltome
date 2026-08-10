@@ -1,5 +1,5 @@
 import { brawlhallaIdSchema } from './player-reference'
-import { refreshOutcomeSchema } from './refresh-outcome'
+import { discordUserIdSchema, refreshOutcomeSchema } from './refresh-outcome'
 import { z } from './zod'
 
 export const clanIdSchema = z.number().int().positive().max(2_147_483_647)
@@ -61,7 +61,7 @@ export const clanRefreshInputSchema = z
 export const discordClanRefreshInputSchema = z
   .object({
     id: clanIdSchema,
-    discordUserId: z.string().min(1).max(64),
+    discordUserId: discordUserIdSchema,
   })
   .strict()
 export const clanRefreshResponseSchema = z

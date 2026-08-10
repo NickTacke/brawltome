@@ -1,6 +1,7 @@
 import { Colors, EmbedBuilder } from 'discord.js'
-import type { ClanResponse, PlayerResponse } from '../lib/types'
-import { getAvatarEmoji, getBannerEmoji, getWeaponEmoji } from './emojis'
+import type { CanonicalPlayerResponse, ClanRefreshResponse, ClanResponse, PlayerRefreshResponse } from '../lib/types'
+import { getBannerEmoji } from './emojis'
+import { escapeDiscordText } from './text'
 
 const TIER_COLORS: Record<string, number> = {
   Valhallan: 0xffd700,
@@ -26,11 +27,6 @@ function formatPlaytime(seconds: number): string {
   return `${Math.floor(seconds / 60)}m`
 }
 
-function formatWinRate(wins: number, games: number): string {
-  if (games === 0) return '0%'
-  return `${((wins / games) * 100).toFixed(0)}%`
-}
-
 function formatNumber(num: number | bigint): string {
   const n = Number(num)
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
@@ -41,160 +37,136 @@ function formatNumber(num: number | bigint): string {
 function getLegendAvatarUrl(legendNameKey: string | undefined): string | null {
   if (!legendNameKey) return null
   const key = legendNameKey.toLowerCase().replace(/\s+/g, '_')
-  return `https://brawltome.com/images/legends/avatars/${key}.png`
+  return `https://brawltome.app/images/legends/avatars/${key}.png`
 }
 
-export function buildPlayerEmbed(player: PlayerResponse): EmbedBuilder {
-  const tierEmoji = getBannerEmoji(player.tier)
+function refreshActive(refresh: PlayerRefreshResponse['refresh'] | ClanRefreshResponse['refresh']): boolean {
+  return refresh.outcome === 'accepted' || refresh.outcome === 'alreadyRefreshing'
+}
 
-  const topXpLegend = player.statsLegends?.slice().sort((a, b) => b.xp - a.xp)[0]
+function updatedLabel(
+  lastSuccessAt: string | null,
+  freshness: 'fresh' | 'stale' | 'unavailable',
+  active: boolean,
+): string {
+  if (active && freshness !== 'fresh') return 'Refreshing'
+  if (!lastSuccessAt || freshness === 'unavailable') return 'Unavailable'
+  const unixSeconds = Math.floor(new Date(lastSuccessAt).getTime() / 1_000)
+  const updated = Number.isFinite(unixSeconds) ? `Updated <t:${unixSeconds}:R>` : 'Updated'
+  return freshness === 'stale' ? `Update delayed • ${updated}` : updated
+}
 
+function retryLabel(
+  refresh: PlayerRefreshResponse['refresh'] | ClanRefreshResponse['refresh'],
+  now: number,
+): string | null {
+  if (refresh.outcome !== 'rateLimited' && refresh.outcome !== 'temporarilyUnavailable') return null
+  const retryAt = Math.floor(now / 1_000) + refresh.retry.afterSeconds
+  return `Update delayed. Try again <t:${retryAt}:R>.`
+}
+
+export function buildCanonicalPlayerEmbed(
+  player: CanonicalPlayerResponse,
+  refresh: PlayerRefreshResponse['refresh'],
+  now = Date.now(),
+): EmbedBuilder {
+  const ranked = player.currentSeason
+  const rankedSnapshot = ranked?.snapshot
+  const career = player.career
+  const careerSnapshot = career?.snapshot
+  const tier = rankedSnapshot?.oneVsOne.tier ?? null
   const embed = new EmbedBuilder()
-    .setTitle(player.name)
-    .setColor(getTierColor(player.tier))
-    .setURL(`https://brawltome.com/player/${player.brawlhallaId}`)
+    .setTitle(escapeDiscordText(player.reference.name))
+    .setColor(getTierColor(tier))
+    .setURL(`https://brawltome.app/player/${player.reference.brawlhallaId}`)
 
-  if (topXpLegend) {
-    const avatarUrl = getLegendAvatarUrl(topXpLegend.legendNameKey)
-    if (avatarUrl) embed.setThumbnail(avatarUrl)
-  }
+  const mainLegend = rankedSnapshot?.mainLegend?.legendNameKey
+  const avatarUrl = getLegendAvatarUrl(mainLegend)
+  if (avatarUrl) embed.setThumbnail(avatarUrl)
 
-  const descLines = [
-    `${tierEmoji} **${player.tier || 'Unranked'}** • **${player.rating || 0}** / ${player.peakRating || 0} Elo`,
-  ]
+  const retry = retryLabel(refresh, now)
+  if (retry) embed.setDescription(retry)
 
-  if (player.rankedGames > 0) {
-    descLines.push(
-      `**${player.rankedWins}W** / **${
-        player.rankedGames - player.rankedWins
-      }L** (${formatWinRate(player.rankedWins, player.rankedGames)})`,
+  const competitive = rankedSnapshot
+    ? [
+        `${getBannerEmoji(rankedSnapshot.oneVsOne.tier)} **${rankedSnapshot.oneVsOne.tier}**`,
+        `**${rankedSnapshot.oneVsOne.rating}** rating • **${rankedSnapshot.oneVsOne.peakRating}** peak`,
+        `**${rankedSnapshot.oneVsOne.wins}W** / **${rankedSnapshot.oneVsOne.games - rankedSnapshot.oneVsOne.wins}L**`,
+      ].join('\n')
+    : 'Unavailable'
+  embed.addFields({ name: 'Competitive Snapshot', value: competitive, inline: false })
+
+  const active = refreshActive(refresh)
+  const currentSeason = [updatedLabel(ranked?.lastSuccessAt ?? null, ranked?.freshness ?? 'unavailable', active)]
+  if (rankedSnapshot) {
+    currentSeason.push(
+      rankedSnapshot.rankedLegends.length > 0
+        ? `${rankedSnapshot.rankedLegends.length} ranked legends observed`
+        : 'No ranked legend games observed',
     )
   }
+  embed.addFields({ name: 'Current Season', value: currentSeason.join('\n'), inline: true })
 
-  if (player.clan) {
-    const clanLink = `[${player.clan.clanName}](https://brawltome.com/clan/${player.clan.clanId})`
-    descLines.push(`🏰 ${clanLink}`)
+  const careerLines = [updatedLabel(career?.lastSuccessAt ?? null, career?.freshness ?? 'unavailable', active)]
+  if (careerSnapshot) {
+    careerLines.push(
+      `Level **${careerSnapshot.account.level}**`,
+      `Games **${formatNumber(careerSnapshot.combat.games)}**`,
+      `Playtime **${formatPlaytime(careerSnapshot.combat.matchTime)}**`,
+    )
   }
+  embed.addFields({ name: 'Career Statistics', value: careerLines.join('\n'), inline: true })
 
-  embed.setDescription(descLines.join('\n'))
-
-  if (player.level != null) {
-    embed.addFields({
-      name: '📊 Stats',
-      value: [
-        `Level **${player.level || 0}**`,
-        `Playtime **${formatPlaytime(player.matchTimeTotal || 0)}**`,
-        `Games **${formatNumber(player.totalGames || 0)}**`,
-      ].join('\n'),
-      inline: true,
-    })
-  }
-
-  if (player.statsLegends && player.statsLegends.length > 0) {
-    const topLegends = player.statsLegends
-      .slice()
-      .sort((a, b) => b.xp - a.xp)
-      .slice(0, 3)
-
-    const legendsText = topLegends
-      .map((legend) => {
-        const emoji = getAvatarEmoji(legend.legendNameKey)
-        const name = legend.bioName || legend.legendNameKey
-        return `${emoji} **${name}** Lv${legend.level}`
-      })
-      .join('\n')
-
-    embed.addFields({
-      name: '⭐ Most Played',
-      value: legendsText,
-      inline: true,
-    })
-  }
-
-  if (player.weaponStats && player.weaponStats.length > 0) {
-    const topWeapons = player.weaponStats
-      .slice()
-      .sort((a, b) => b.timeHeld - a.timeHeld)
-      .slice(0, 3)
-
-    const weaponsText = topWeapons
-      .map((weapon) => {
-        const emoji = getWeaponEmoji(weapon.weapon)
-        const playtime = formatPlaytime(weapon.timeHeld)
-        return `${emoji} **${weapon.weapon}** ${playtime}`
-      })
-      .join('\n')
-
-    embed.addFields({
-      name: '🗡️ Weapons',
-      value: weaponsText,
-      inline: true,
-    })
-  }
-
-  if (player.rankedTeams && player.rankedTeams.length > 0) {
-    const topTeams = player.rankedTeams
-      .slice()
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 3)
-
-    const teamsText = topTeams
-      .map((team) => {
-        const tierBadge = getBannerEmoji(team.tier)
-        const wr = formatWinRate(team.wins, team.games)
-
-        const teammateId = team.brawlhallaIdOne === player.brawlhallaId ? team.brawlhallaIdTwo : team.brawlhallaIdOne
-
-        const names = team.teamName.split('+')
-        const teammateName = names.find((n) => n.toLowerCase() !== player.name.toLowerCase()) || names[0]
-
-        const teammateLink = `[${teammateName}](https://brawltome.com/player/${teammateId})`
-
-        return `${tierBadge} **${team.rating}** / ${
-          team.peakRating
-        } - ${teammateLink}\n ${team.wins}W/${team.games - team.wins}L (${wr})`
-      })
-      .join('\n')
-
-    embed.addFields({
-      name: '👥 2v2 Teams',
-      value: teamsText,
-      inline: false,
-    })
-  }
-
-  embed.setFooter({
-    text: `${player.region ?? 'Unknown'} • brawltome.app`,
-    iconURL: 'https://brawltome.com/images/logo.png',
-  })
-
-  embed.setTimestamp()
-
+  embed.setFooter({ text: 'BrawlTome-observed • brawltome.app' }).setTimestamp()
   return embed
 }
 
-export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
+function clanSectionLabel(lastSuccessAt: string | null | undefined, now: number, active: boolean): string {
+  if (active && !lastSuccessAt) return 'Refreshing'
+  if (!lastSuccessAt) return 'Unavailable'
+  const timestamp = new Date(lastSuccessAt).getTime()
+  if (!Number.isFinite(timestamp)) return 'Unavailable'
+  const updated = `Updated <t:${Math.floor(timestamp / 1_000)}:R>`
+  if (active && now - timestamp > 60 * 60 * 1_000) return 'Refreshing'
+  return now - timestamp > 60 * 60 * 1_000 ? `Update delayed • ${updated}` : updated
+}
+
+export function buildClanEmbed(
+  clan: ClanResponse,
+  page = 0,
+  refresh?: ClanRefreshResponse['refresh'],
+  now = Date.now(),
+): EmbedBuilder {
   const ITEMS_PER_PAGE = 5
   const embed = new EmbedBuilder()
-    .setTitle(clan.clanName)
+    .setTitle(escapeDiscordText(clan.clanName))
     .setColor(0x35228a)
     .setURL(`https://brawltome.com/clan/${clan.clanId}`)
-    .setThumbnail('https://brawltome.com/images/logo.png')
+    .setThumbnail('https://brawltome.app/images/logo.png')
+
+  if (refresh) {
+    const retry = retryLabel(refresh, now)
+    if (retry) embed.setDescription(retry)
+  }
 
   const formatDecimal = (value: string) => BigInt(value).toLocaleString('en-US')
-  const totalPages = Math.ceil(clan.members.length / ITEMS_PER_PAGE)
+  const active = refresh ? refreshActive(refresh) : false
+  const rosterAvailable = clan.roster?.lastSuccessAt != null
+  const totalPages = rosterAvailable ? Math.ceil(clan.members.length / ITEMS_PER_PAGE) : 0
 
   embed.addFields({
     name: '📋 Clan Info',
     value: [
-      `👥 **Members**: ${clan.members.length}`,
+      `👥 **Members**: ${rosterAvailable ? clan.members.length : '**Unavailable**'}`,
       `✨ **Total XP**: ${formatDecimal(clan.clanXp)}`,
       `📅 **Created**: <t:${Math.floor(new Date(clan.clanCreateDate).getTime() / 1000)}:D>`,
+      `Profile: ${clanSectionLabel(clan.profile.lastSuccessAt, now, active)}`,
+      `Roster: ${clanSectionLabel(clan.roster?.lastSuccessAt, now, active)}`,
     ].join('\n'),
     inline: false,
   })
 
-  if (clan.members.length > 0) {
+  if (rosterAvailable && clan.members.length > 0) {
     const sortedMembers = [...clan.members].sort((a, b) => {
       const left = BigInt(a.xp)
       const right = BigInt(b.xp)
@@ -208,7 +180,7 @@ export function buildClanEmbed(clan: ClanResponse, page = 0): EmbedBuilder {
         const rank = start + i + 1
         const rankIcon = member.rank === 'Leader' ? '👑' : member.rank === 'Officer' ? '⭐' : `\`${rank}.\``
 
-        const memberLink = `[${truncate(member.name, 20)}](https://brawltome.com/player/${member.brawlhallaId})`
+        const memberLink = `[${escapeDiscordText(truncate(member.name, 20))}](https://brawltome.app/player/${member.brawlhallaId})`
         const memberXp = ` • \`${formatDecimal(member.xp)} XP\``
 
         return `${rankIcon} **${memberLink}**${memberXp}`

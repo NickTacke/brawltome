@@ -10,6 +10,7 @@ export function startDiscordMetricsServer(options: {
   telemetry: Telemetry
   port: number
   secret: string | undefined
+  readiness?: () => boolean
   serve?: typeof Bun.serve
 }): ReturnType<typeof Bun.serve> | undefined {
   try {
@@ -17,6 +18,12 @@ export function startDiscordMetricsServer(options: {
       port: options.port,
       fetch(request) {
         const url = new URL(request.url)
+        if (url.pathname === '/health/live') return Response.json({ status: 'live' })
+        if (url.pathname === '/health/ready') {
+          return options.readiness?.()
+            ? Response.json({ status: 'ready' })
+            : Response.json({ status: 'unready', reason: 'discord_not_ready' }, { status: 503 })
+        }
         if (url.pathname !== '/metrics') return new Response('not found', { status: 404 })
         if (!authorized(request.headers.get('x-internal-secret'), options.secret)) {
           return Response.json({ error: 'unauthorized' }, { status: 401 })

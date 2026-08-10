@@ -110,11 +110,14 @@ export {
   type PlayerReferenceContract,
 } from './player-reference'
 export {
+  discordPlayerRefreshInputSchema,
+  discordUserIdSchema,
   parsePlayerRefreshResponseOutput,
   parseRefreshOutcomeOutput,
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
   refreshOutcomeSchema,
+  type DiscordPlayerRefreshInputContract,
   type PlayerRefreshInputContract,
   type PlayerRefreshResponseContract,
   type RefreshOutcomeContract,
