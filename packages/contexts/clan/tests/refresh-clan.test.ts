@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
 import { processRefreshClan, processRefreshClanSection } from '../commands/refresh-clan'
+import { clanMigrationInventory } from '../composition'
 import { importLegacyClans } from '../legacy-import'
-import { initializeClans } from '../migrations/0001-initialize-clans'
 import { createPostgresClans } from '../postgres'
 
 const baseUrl = process.env.DATABASE_URL
@@ -44,7 +44,7 @@ beforeAll(async () => {
   url.pathname = `/${databaseName}`
   connectionString = url.toString()
   const setup = postgres(connectionString, { max: 1 })
-  await setup.unsafe(initializeClans.sql)
+  for (const migration of clanMigrationInventory) await setup.unsafe(migration.sql)
   await setup.end()
   clans = createPostgresClans(connectionString)
 })
@@ -404,16 +404,19 @@ describe('Clans PostgreSQL capability', () => {
       INSERT INTO public.player_clan VALUES (55, 'Other', 78, 30, 40, 9);
     `)
     await setup.end()
-    expect((await importLegacyClans(connectionString)).quarantined).toBe(2)
-    expect((await importLegacyClans(connectionString)).quarantined).toBe(2)
+    const completed = await importLegacyClans(connectionString)
+    expect(completed.status).toBe('complete')
+    expect(completed.reconciliation.rejectedRows).toBe(3)
+    expect(await importLegacyClans(connectionString)).toEqual(completed)
     const inspect = postgres(connectionString)
     const [{ member_count }] =
       await inspect`SELECT count(*)::integer AS member_count FROM clans.members WHERE brawlhalla_id = 55`
-    const [{ conflict_count }] = await inspect`SELECT count(*)::integer AS conflict_count FROM clans.import_conflicts`
+    const [{ rejected_count }] =
+      await inspect`SELECT count(*)::integer AS rejected_count FROM clans.legacy_import_rejections`
     const [{ archive_count }] = await inspect`SELECT count(*)::integer AS archive_count FROM clans.legacy_archive`
-    expect({ member_count, conflict_count, archive_count }).toEqual({
+    expect({ member_count, rejected_count, archive_count }).toEqual({
       member_count: 0,
-      conflict_count: 2,
+      rejected_count: 3,
       archive_count: 5,
     })
     await inspect.end()

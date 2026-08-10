@@ -92,13 +92,24 @@ export const leaderboardEntrySchema = z.union([
   leaderboard3v3EntrySchema,
 ])
 
-const provenanceSchema = z
-  .object({
-    source: z.literal('brawlhalla-v1-ranked-leaderboard'),
-    contractVersion: z.literal(1),
-    pageDepth: z.int().min(1).max(20),
-  })
-  .strict()
+const provenanceSchema = z.union([
+  z
+    .object({
+      source: z.literal('brawlhalla-v1-ranked-leaderboard'),
+      contractVersion: z.literal(1),
+      pageDepth: z.int().min(1).max(20),
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal('v2-legacy'),
+      contractVersion: z.literal(1),
+      sourceChecksum: z.string().regex(/^[a-f0-9]{64}$/u),
+      importedAt: utcDateTimeSchema,
+      completeness: z.literal('frozen-repository-rows'),
+    })
+    .strict(),
+])
 
 const availableFields = {
   snapshotId: z.uuid(),

@@ -62,6 +62,29 @@ describe('leaderboard contract', () => {
     }
   })
 
+  test('round-trips disclosed legacy provenance without presenting it as V1 collection', () => {
+    const output = {
+      ...common,
+      status: 'stale' as const,
+      mode: '1v1' as const,
+      provenance: {
+        source: 'v2-legacy' as const,
+        contractVersion: 1 as const,
+        sourceChecksum: 'a'.repeat(64),
+        importedAt: '2026-08-10T12:00:00Z',
+        completeness: 'frozen-repository-rows' as const,
+      },
+      entries: entries['1v1'],
+    }
+    expect(parseLeaderboardOutput(output)).toEqual(output)
+    expect(() =>
+      leaderboardOutputSchema.parse({
+        ...output,
+        provenance: { ...output.provenance, sourceChecksum: 'invalid' },
+      }),
+    ).toThrow()
+  })
+
   test('cannot deserialize one mode identity as another', () => {
     expect(() => leaderboardOutputSchema.parse({ ...common, mode: 'solo2v2', entries: entries['1v1'] })).toThrow()
     expect(() => leaderboardOutputSchema.parse({ ...common, mode: '3v3', entries: entries['2v2'] })).toThrow()

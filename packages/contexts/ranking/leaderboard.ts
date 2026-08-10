@@ -71,11 +71,19 @@ export type LeaderboardView =
       observedAt: string
       publishedAt: string
       expectedNextPublicationAt: string
-      provenance: {
-        source: 'brawlhalla-v1-ranked-leaderboard'
-        contractVersion: 1
-        pageDepth: number
-      }
+      provenance:
+        | {
+            source: 'brawlhalla-v1-ranked-leaderboard'
+            contractVersion: 1
+            pageDepth: number
+          }
+        | {
+            source: 'v2-legacy'
+            contractVersion: 1
+            sourceChecksum: string
+            importedAt: string
+            completeness: 'frozen-repository-rows'
+          }
       page: number
       pageSize: number
       hasMore: boolean

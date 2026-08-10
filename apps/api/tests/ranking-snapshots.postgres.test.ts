@@ -548,10 +548,11 @@ describe('immutable Ranking snapshots for every mode', () => {
     await control`
       INSERT INTO rankings.generations
         (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
-         expected_next_publication_at, page_depth, source, source_contract_version, finalized)
+         expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
       VALUES (${generationId}, ${randomUUID()}, ${`incomplete:${randomUUID()}`}, '1v1', ${scheduleWindowAt},
         ${scheduleWindowAt}, ${new Date(scheduleWindowAt.getTime() + intervalMs)}, 1,
-        'brawlhalla-v1-ranked-leaderboard', 1, false)
+        'brawlhalla-v1-ranked-leaderboard', 1, false,
+        ${control.json({ source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 })})
     `
     await control`
       INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
