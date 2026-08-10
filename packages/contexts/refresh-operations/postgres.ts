@@ -21,11 +21,14 @@ import {
   type MaterializeSchedulesResult,
   type OperationFailure,
   type OperationLease,
+  type PrimaryMonitoringSnapshot,
+  type ReconcilePrimaryMonitoringResult,
   type ReserveInteractiveRefreshResult,
   type TransitionResult,
   type WorkClass,
   backgroundWorkClasses,
   leaderboardOperationKinds,
+  primaryMonitoringIntervalMs,
   validateAdmissionConfig,
   validateLeaderboardOperationPayload,
   workClasses,
@@ -56,18 +59,39 @@ type OperationRow = {
 type ScheduleRow = {
   id: string
   schedule_key: string
-  kind: 'proof' | LeaderboardOperationKind
+  kind: 'proof' | 'interactive-player-refresh' | LeaderboardOperationKind
   work_class: WorkClass
   interval_ms: string | number
   first_due_at: Date
   next_window_number: string | number
   next_due_at: Date
   operation_key_prefix: string
-  payload: { value: string } | { pageDepth: number; intervalMs: number }
+  resource_key: string | null
+  payload:
+    | { value: string }
+    | { pageDepth: number; intervalMs: number }
+    | { assignmentId: string; brawlhallaId: number; staleSections: ['ranked', 'stats'] }
   provenance: { source: string; requestedBy?: string }
   max_attempts: number
   materialized_at: Date
   due_window_count: string | number
+}
+
+type PrimaryMonitoringScheduleDefinition = {
+  kind: 'interactive-player-refresh'
+  scheduleKey: string
+  operationKeyPrefix: string
+  resourceKey: string
+  workClass: 'primary-monitoring'
+  intervalMs: typeof primaryMonitoringIntervalMs
+  firstDueAt: string
+  payload: {
+    assignmentId: string
+    brawlhallaId: number
+    staleSections: ['ranked', 'stats']
+  }
+  provenance: { source: string; requestedBy: string }
+  maxAttempts: number
 }
 
 type AdmissionCreditRow = {
@@ -129,8 +153,16 @@ function toLease(row: OperationRow): OperationLease {
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
   if (row.kind === 'interactive-player-refresh') {
-    if (row.work_class !== 'interactive' || !('brawlhallaId' in row.payload) || !('staleSections' in row.payload)) {
-      throw new Error('invalid durable interactive player refresh operation')
+    if (
+      (row.work_class !== 'interactive' && row.work_class !== 'primary-monitoring') ||
+      !('brawlhallaId' in row.payload) ||
+      !('staleSections' in row.payload)
+    ) {
+      throw new Error('invalid durable player refresh operation')
+    }
+    if (row.work_class === 'primary-monitoring') {
+      if (!('assignmentId' in row.payload)) throw new Error('invalid durable Primary monitoring operation')
+      return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -196,9 +228,14 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-function operationKind(input: {
-  kind?: 'proof' | 'ranked-player-pulse' | LeaderboardOperationKind | 'player-discovery-projection'
-}): 'proof' | 'ranked-player-pulse' | LeaderboardOperationKind | 'player-discovery-projection' {
+type AcceptedOrScheduledOperationKind =
+  | 'proof'
+  | 'interactive-player-refresh'
+  | 'ranked-player-pulse'
+  | LeaderboardOperationKind
+  | 'player-discovery-projection'
+
+function operationKind(input: { kind?: AcceptedOrScheduledOperationKind }): AcceptedOrScheduledOperationKind {
   return input.kind ?? 'proof'
 }
 
@@ -206,7 +243,12 @@ function isLeaderboardKind(kind: string): kind is LeaderboardOperationKind {
   return (leaderboardOperationKinds as readonly string[]).includes(kind)
 }
 
-function validateSchedule(input: CreateSchedule): Date {
+function validateScheduleIdentity(input: {
+  scheduleKey: string
+  operationKeyPrefix: string
+  intervalMs: number
+  firstDueAt: string
+}): Date {
   if (!input.scheduleKey || input.scheduleKey.length > 200) {
     throw new Error('scheduleKey must contain between 1 and 200 characters')
   }
@@ -216,13 +258,34 @@ function validateSchedule(input: CreateSchedule): Date {
   if (!Number.isSafeInteger(input.intervalMs) || input.intervalMs <= 0) {
     throw new Error('intervalMs must be a positive safe integer')
   }
-  if (isLeaderboardKind(operationKind(input))) {
+  return parseFirstDueAt(input.firstDueAt)
+}
+
+function validateSchedule(input: CreateSchedule): Date {
+  const firstDueAt = validateScheduleIdentity(input)
+  const kind = operationKind(input)
+  if (isLeaderboardKind(kind)) {
     const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
     if (payload.intervalMs !== input.intervalMs) {
       throw new Error('leaderboard payload intervalMs must match the schedule intervalMs')
     }
   }
-  return parseFirstDueAt(input.firstDueAt)
+  return firstDueAt
+}
+
+function validatePrimaryMonitoringSchedule(input: PrimaryMonitoringScheduleDefinition): Date {
+  const firstDueAt = validateScheduleIdentity(input)
+  const { payload } = input
+  if (input.resourceKey !== `player:${payload.brawlhallaId}`) {
+    throw new Error('Primary monitoring requires a canonical player resource key')
+  }
+  if (!Number.isSafeInteger(payload.brawlhallaId) || payload.brawlhallaId <= 0) {
+    throw new Error('Primary monitoring requires a positive safe Brawlhalla ID')
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.assignmentId)) {
+    throw new Error('Primary monitoring requires a UUID assignmentId')
+  }
+  return firstDueAt
 }
 
 function admissionConfigDocument(config: AdmissionConfig) {
@@ -303,6 +366,7 @@ export function createPostgresRefreshOperations(
           kind: OperationLease['kind']
           dedupe_key: string
           operation_key: string
+          resource_key: string | null
           work_class: WorkClass
           payload_version: number
           payload: OperationLease['payload']
@@ -312,7 +376,7 @@ export function createPostgresRefreshOperations(
           origin_schedule_occurrence_id: string | null
         }[]
       >`
-        SELECT id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload_version,
+        SELECT id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload_version,
                payload, provenance, max_attempts, lease_token, origin_schedule_occurrence_id
         FROM refresh_operations.operations
         WHERE id = ${input.operationId} AND status = 'dead_letter'
@@ -341,13 +405,13 @@ export function createPostgresRefreshOperations(
         replayOperationId = randomUUID()
         await sql`
           INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload_version,
+            (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload_version,
              payload, provenance, max_attempts, lease_token, replayed_from_operation_id,
              origin_schedule_occurrence_id)
           VALUES
             (${replayOperationId}, ${target.effect_operation_id}, ${target.kind},
-             ${`${target.dedupe_key}:replay:${actionId}`}, ${target.operation_key}, ${target.work_class},
-             ${target.payload_version}, ${sql.json(target.payload)}, ${sql.json(target.provenance)},
+             ${`${target.dedupe_key}:replay:${actionId}`}, ${target.operation_key}, ${target.resource_key},
+             ${target.work_class}, ${target.payload_version}, ${sql.json(target.payload)}, ${sql.json(target.provenance)},
              ${target.max_attempts}, ${target.lease_token}, ${target.id}, ${target.origin_schedule_occurrence_id})
         `
       }
@@ -394,13 +458,15 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async findActiveInteractivePlayerRefresh(dedupeKey: string) {
+    async findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number) {
       const [active] = await client<{ id: string; awaiting_admission: boolean; reservation_expired: boolean }[]>`
         SELECT id,
           status = 'awaiting_admission' AS awaiting_admission,
           status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp() AS reservation_expired
         FROM refresh_operations.operations
-        WHERE kind = 'interactive-player-refresh' AND dedupe_key = ${dedupeKey}
+        WHERE kind = 'interactive-player-refresh'
+          AND (dedupe_key = ${dedupeKey}
+            OR (${brawlhallaId ?? null}::bigint IS NOT NULL AND resource_key = ${brawlhallaId ? `player:${brawlhallaId}` : null}))
           AND status IN ('awaiting_admission', 'pending', 'leased')
       `
       return active
@@ -448,23 +514,22 @@ export function createPostgresRefreshOperations(
           const reservationToken = randomUUID()
           const [inserted] = await sql<{ id: string }[]>`
             INSERT INTO refresh_operations.operations
-              (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-               status, max_attempts, reservation_token, reservation_expires_at)
+              (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
+               provenance, status, max_attempts, reservation_token, reservation_expires_at)
             VALUES
               (${operationId}, ${operationId}, 'interactive-player-refresh', ${input.dedupeKey},
-               ${input.operationKey}, 'interactive',
+               ${input.operationKey}, ${`player:${input.brawlhallaId}`}, 'interactive',
                ${sql.json({ brawlhallaId: input.brawlhallaId, staleSections: input.staleSections })},
                ${sql.json(input.provenance)}, 'awaiting_admission', 3, ${reservationToken},
                clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
-            ON CONFLICT (kind, dedupe_key)
-              WHERE status IN ('awaiting_admission', 'pending', 'leased')
-            DO NOTHING
+            ON CONFLICT DO NOTHING
             RETURNING id
           `
           if (inserted) return { outcome: 'reserved' as const, operationId, reservationToken }
           const [active] = await sql<{ id: string }[]>`
             SELECT id FROM refresh_operations.operations
-            WHERE kind = 'interactive-player-refresh' AND dedupe_key = ${input.dedupeKey}
+            WHERE kind = 'interactive-player-refresh'
+              AND (dedupe_key = ${input.dedupeKey} OR resource_key = ${`player:${input.brawlhallaId}`})
               AND status IN ('awaiting_admission', 'pending', 'leased')
           `
           return active ? { outcome: 'already-active' as const, operationId: active.id } : null
@@ -626,17 +691,120 @@ export function createPostgresRefreshOperations(
       }
     },
 
+    async reconcilePrimaryMonitoring(snapshot: PrimaryMonitoringSnapshot): Promise<ReconcilePrimaryMonitoringResult> {
+      if (!(snapshot.observedAt instanceof Date) || Number.isNaN(snapshot.observedAt.getTime())) {
+        throw new Error('Primary monitoring snapshot requires a valid observedAt')
+      }
+      const definitions = snapshot.targets.map((target) => {
+        const definition: PrimaryMonitoringScheduleDefinition = {
+          kind: 'interactive-player-refresh' as const,
+          scheduleKey: `primary-player:${target.brawlhallaId}:${target.assignmentId}`,
+          operationKeyPrefix: `primary-player:${target.brawlhallaId}`,
+          resourceKey: `player:${target.brawlhallaId}`,
+          workClass: 'primary-monitoring' as const,
+          intervalMs: primaryMonitoringIntervalMs,
+          firstDueAt: new Date(target.verifiedAt.getTime() + primaryMonitoringIntervalMs).toISOString(),
+          payload: {
+            assignmentId: target.assignmentId,
+            brawlhallaId: target.brawlhallaId,
+            staleSections: ['ranked', 'stats'] as ['ranked', 'stats'],
+          },
+          provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
+          maxAttempts: 3,
+        }
+        validatePrimaryMonitoringSchedule(definition)
+        return definition
+      })
+      if (new Set(definitions.map(({ resourceKey }) => resourceKey)).size !== definitions.length) {
+        throw new Error('Primary monitoring snapshot contains duplicate players')
+      }
+
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        await sql`SELECT pg_advisory_xact_lock(${208_192})`
+        const [previous] = await sql<{ observed_at: Date }[]>`
+          SELECT observed_at
+          FROM refresh_operations.primary_monitoring_reconciliation
+          WHERE singleton
+          FOR UPDATE
+        `
+        if (previous && previous.observed_at.getTime() >= snapshot.observedAt.getTime()) {
+          return { created: 0, retired: 0 }
+        }
+
+        const existing = await sql<
+          {
+            id: string
+            schedule_key: string
+            resource_key: string | null
+            first_due_at: Date
+            payload: { assignmentId?: string; brawlhallaId?: number }
+          }[]
+        >`
+          SELECT id, schedule_key, resource_key, first_due_at, payload
+          FROM refresh_operations.schedules
+          WHERE provenance ->> 'source' = 'primary-player-monitoring' AND enabled
+          FOR UPDATE
+        `
+        const desiredByResource = new Map(definitions.map((definition) => [definition.resourceKey, definition]))
+        let retired = 0
+        for (const schedule of existing) {
+          const desired = schedule.resource_key ? desiredByResource.get(schedule.resource_key) : undefined
+          const matches =
+            desired &&
+            schedule.schedule_key === desired.scheduleKey &&
+            schedule.first_due_at.getTime() === new Date(desired.firstDueAt).getTime() &&
+            schedule.payload.assignmentId === desired.payload.assignmentId &&
+            schedule.payload.brawlhallaId === desired.payload.brawlhallaId
+          if (matches) {
+            desiredByResource.delete(desired.resourceKey)
+            continue
+          }
+          await sql`
+            UPDATE refresh_operations.schedules
+            SET enabled = false,
+                schedule_key = schedule_key || ':retired:' || id::text,
+                updated_at = clock_timestamp()
+            WHERE id = ${schedule.id}
+          `
+          retired++
+        }
+
+        let created = 0
+        for (const definition of desiredByResource.values()) {
+          await sql`
+            INSERT INTO refresh_operations.schedules
+              (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
+               operation_key_prefix, payload, provenance, max_attempts)
+            VALUES
+              (${randomUUID()}, ${definition.scheduleKey}, ${definition.kind}, ${definition.resourceKey},
+               ${definition.workClass}, ${definition.intervalMs}, ${definition.firstDueAt}, ${definition.firstDueAt},
+               ${definition.operationKeyPrefix}, ${sql.json(definition.payload)},
+               ${sql.json(definition.provenance)}, ${definition.maxAttempts})
+          `
+          created++
+        }
+        await sql`
+          INSERT INTO refresh_operations.primary_monitoring_reconciliation (singleton, observed_at)
+          VALUES (true, ${snapshot.observedAt})
+          ON CONFLICT (singleton) DO UPDATE SET observed_at = EXCLUDED.observed_at
+        `
+        return { created, retired }
+      })
+    },
+
     async createSchedule(input: CreateSchedule): Promise<CreateScheduleResult> {
       const firstDueAt = validateSchedule(input)
       const kind = operationKind(input)
       const scheduleId = randomUUID()
       const [created] = await client<{ id: string }[]>`
         INSERT INTO refresh_operations.schedules
-          (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
+          (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
            operation_key_prefix, payload, provenance, max_attempts)
         VALUES
-          (${scheduleId}, ${input.scheduleKey}, ${kind}, ${input.workClass}, ${input.intervalMs},
-           ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${client.json(input.payload)},
+          (${scheduleId}, ${input.scheduleKey}, ${kind}, NULL,
+           ${input.workClass}, ${input.intervalMs}, ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix},
+           ${client.json(input.payload)},
            ${client.json(input.provenance)}, ${input.maxAttempts ?? 3})
         ON CONFLICT (schedule_key) DO NOTHING
         RETURNING id
@@ -646,6 +814,7 @@ export function createPostgresRefreshOperations(
       const [existing] = await client<{ id: string; matches: boolean }[]>`
         SELECT id,
           kind = ${kind}
+          AND resource_key IS NULL
           AND work_class = ${input.workClass}
           AND interval_ms = ${input.intervalMs}
           AND first_due_at = ${firstDueAt}
@@ -713,7 +882,7 @@ export function createPostgresRefreshOperations(
           SELECT clock_timestamp() AS materialized_at
         `
         const schedules = await sql<ScheduleRow[]>`
-          SELECT id, schedule_key, kind, work_class, interval_ms, first_due_at, next_window_number,
+          SELECT id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_window_number,
                  next_due_at, operation_key_prefix, payload, provenance, max_attempts,
                  ${clock.materialized_at}::timestamptz AS materialized_at,
                  floor(
@@ -738,30 +907,73 @@ export function createPostgresRefreshOperations(
           const latenessMs = Math.max(0, materializedAt.getTime() - windowDueAt.getTime())
           const windowIdentity = `${schedule.id}:${firstWindowNumber}`
 
-          await sql`
-            INSERT INTO refresh_operations.operations
-              (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-               max_attempts, available_at)
-            VALUES
-              (${operationId}, ${operationId}, ${schedule.kind}, ${`schedule:${windowIdentity}`},
-               ${`${schedule.operation_key_prefix}:${schedule.id}:${firstWindowNumber}`}, ${schedule.work_class},
-               ${sql.json(schedule.payload)}, ${sql.json(schedule.provenance)}, ${schedule.max_attempts},
-               ${materializedAt})
-          `
+          if (schedule.resource_key) {
+            await sql`
+              UPDATE refresh_operations.operations
+              SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
+                  completed_at = ${materializedAt}, updated_at = ${materializedAt},
+                  last_error = ${sql.json({
+                    code: 'admission_reservation_expired',
+                    message: 'Admission reservation expired',
+                    retryable: false,
+                  })}
+              WHERE resource_key = ${schedule.resource_key}
+                AND status = 'awaiting_admission'
+                AND reservation_expires_at <= ${materializedAt}
+            `
+          }
+
+          const [completedFullRefresh] =
+            schedule.kind === 'interactive-player-refresh' && schedule.resource_key
+              ? await sql<{ id: string }[]>`
+                  SELECT operation.id
+                  FROM refresh_operations.operations operation
+                  JOIN refresh_operations.interactive_refresh_effects effect
+                    ON effect.operation_id = operation.effect_operation_id
+                  WHERE operation.resource_key = ${schedule.resource_key}
+                    AND operation.status = 'succeeded'
+                    AND operation.completed_at >= ${windowDueAt}
+                  GROUP BY operation.id, operation.completed_at
+                  HAVING bool_or(effect.section = 'ranked' AND effect.completed_at >= ${windowDueAt})
+                     AND bool_or(effect.section = 'stats' AND effect.completed_at >= ${windowDueAt})
+                  ORDER BY operation.completed_at DESC, operation.id
+                  LIMIT 1
+                `
+              : []
+          const [inserted] = completedFullRefresh
+            ? []
+            : await sql<{ id: string }[]>`
+                INSERT INTO refresh_operations.operations
+                  (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
+                   provenance, max_attempts, available_at)
+                VALUES
+                  (${operationId}, ${operationId}, ${schedule.kind}, ${`schedule:${windowIdentity}`},
+                   ${`${schedule.operation_key_prefix}:${schedule.id}:${firstWindowNumber}`}, ${schedule.resource_key},
+                   ${schedule.work_class}, ${sql.json(schedule.payload)}, ${sql.json(schedule.provenance)},
+                   ${schedule.max_attempts}, ${materializedAt})
+                ON CONFLICT DO NOTHING
+                RETURNING id
+              `
+          if (!inserted && !completedFullRefresh) continue
+          const deduplicatedOperationId = completedFullRefresh?.id ?? null
           await sql`
             INSERT INTO refresh_operations.schedule_occurrences
-              (id, schedule_id, operation_id, first_window_number, last_window_number,
-               window_due_at, materialized_at, lateness_ms, missed_window_count, catch_up)
+              (id, schedule_id, operation_id, deduplicated_to_operation_id, disposition,
+               first_window_number, last_window_number, window_due_at, materialized_at, lateness_ms,
+               missed_window_count, catch_up)
             VALUES
-              (${occurrenceId}, ${schedule.id}, ${operationId}, ${firstWindowNumber},
-               ${nextWindowNumber - 1}, ${windowDueAt}, ${materializedAt}, ${latenessMs},
-               ${missedWindowCount}, ${missedWindowCount > 0})
+              (${occurrenceId}, ${schedule.id}, ${inserted ? operationId : null}, ${deduplicatedOperationId},
+               ${inserted ? 'materialized' : 'deduplicated'}, ${firstWindowNumber}, ${nextWindowNumber - 1},
+               ${windowDueAt}, ${materializedAt}, ${latenessMs}, ${missedWindowCount},
+               ${missedWindowCount > 0})
           `
-          await sql`
-            UPDATE refresh_operations.operations
-            SET origin_schedule_occurrence_id = ${occurrenceId}
-            WHERE id = ${operationId}
-          `
+          if (inserted) {
+            await sql`
+              UPDATE refresh_operations.operations
+              SET origin_schedule_occurrence_id = ${occurrenceId}
+              WHERE id = ${operationId}
+            `
+          }
           await sql`
             UPDATE refresh_operations.schedules
             SET next_window_number = ${nextWindowNumber},
@@ -769,10 +981,10 @@ export function createPostgresRefreshOperations(
                 updated_at = ${materializedAt}
             WHERE id = ${schedule.id}
           `
-          await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+          if (inserted) await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
           scheduleIds.push(schedule.id)
         }
-        return { occurrencesCreated: schedules.length, scheduleIds }
+        return { occurrencesCreated: scheduleIds.length, scheduleIds }
       })
       return result
     },
@@ -1423,10 +1635,14 @@ export function createPostgresRefreshOperations(
         SELECT * FROM refresh_operations.schedules WHERE id = ${scheduleId}
       `
       const occurrences = await client`
-        SELECT occurrence.*, operation.status AS operation_status,
-               operation.attempt_count, operation.last_error, operation.completed_at
+        SELECT occurrence.*, coalesce(operation.status, deduplicated.status) AS operation_status,
+               coalesce(operation.attempt_count, deduplicated.attempt_count) AS attempt_count,
+               coalesce(operation.last_error, deduplicated.last_error) AS last_error,
+               coalesce(operation.completed_at, deduplicated.completed_at) AS completed_at
         FROM refresh_operations.schedule_occurrences occurrence
-        JOIN refresh_operations.operations operation ON operation.id = occurrence.operation_id
+        LEFT JOIN refresh_operations.operations operation ON operation.id = occurrence.operation_id
+        LEFT JOIN refresh_operations.operations deduplicated
+          ON deduplicated.id = occurrence.deduplicated_to_operation_id
         WHERE occurrence.schedule_id = ${scheduleId}
         ORDER BY occurrence.window_due_at
       `

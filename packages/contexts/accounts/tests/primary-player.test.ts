@@ -80,6 +80,14 @@ function createStore(): AccountsStore {
     async getPrimaryPlayerVerificationState() {
       return state
     },
+    async readPrimaryMonitoringSnapshot() {
+      return {
+        observedAt: startedAt,
+        targets: state.primaryPlayer
+          ? [{ assignmentId: '5f689990-dc60-4d70-bd1c-7b49b89786b7', ...state.primaryPlayer }]
+          : [],
+      }
+    },
   }
 }
 

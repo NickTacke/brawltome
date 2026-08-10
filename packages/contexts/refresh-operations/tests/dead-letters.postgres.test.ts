@@ -423,6 +423,49 @@ describe('dead-letter operations', () => {
       attemptNumber: 1,
     })
     await operations.complete(pulseSuccessor)
+
+    const monitoringTarget = {
+      assignmentId: randomUUID(),
+      brawlhallaId: 43,
+      verifiedAt: new Date(Date.now() - 24 * 60 * 60 * 1_000 - 1_000),
+    }
+    await operations.reconcilePrimaryMonitoring({ observedAt: new Date(), targets: [monitoringTarget] })
+    await operations.materializeDueSchedules()
+    const monitoringLease = requireLease(
+      await operations.claim('monitoring-original', 10_000, admission, 'interactive-player-refresh'),
+    )
+    await operations.fail(
+      monitoringLease,
+      { code: 'monitoring_repairable', message: 'monitoring repairable', retryable: false },
+      0,
+    )
+    const monitoringReplay = await operations.replayDeadLetter({
+      operationId: monitoringLease.operationId,
+      actorId: 'operator:monitoring',
+      reason: 'monitoring source repaired',
+    })
+    if (monitoringReplay.outcome !== 'replayed') throw new Error('Expected monitoring replay')
+    const monitoringSuccessor = requireLease(
+      await operations.claim('monitoring-replay', 10_000, admission, 'interactive-player-refresh'),
+    )
+    expect(monitoringSuccessor).toMatchObject({
+      operationId: monitoringReplay.replayOperationId,
+      effectOperationId: monitoringLease.effectOperationId,
+      effectCreatedAt: monitoringLease.effectCreatedAt,
+      kind: 'interactive-player-refresh',
+      workClass: 'primary-monitoring',
+      payload: {
+        assignmentId: monitoringTarget.assignmentId,
+        brawlhallaId: monitoringTarget.brawlhallaId,
+        staleSections: ['ranked', 'stats'],
+      },
+      provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
+      attemptNumber: 1,
+    })
+    if (monitoringSuccessor.kind !== 'interactive-player-refresh') throw new Error('Expected monitoring replay')
+    expect(await operations.beginInteractiveSection(monitoringSuccessor, 'ranked')).toBe('execute')
+    expect(await operations.beginInteractiveSection(monitoringSuccessor, 'stats')).toBe('execute')
+    await operations.complete(monitoringSuccessor)
     await operations.close()
   })
 

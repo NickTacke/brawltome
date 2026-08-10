@@ -26,17 +26,20 @@ function harness(
   } = {},
 ) {
   const calls = { verify: 0, actor: 0, source: 0, reserve: 0, activate: 0, grant: 0 }
+  let activeLookupPlayerId: number | undefined
   const operationId = crypto.randomUUID()
   const playerReferenceQueries: PlayerReferenceQueries = { byId: async () => cached }
   const operations: InteractiveRefreshOperations = {
-    findActiveInteractivePlayerRefresh: async () =>
-      options.activeOperationId
+    findActiveInteractivePlayerRefresh: async (_dedupeKey, brawlhallaId) => {
+      activeLookupPlayerId = brawlhallaId
+      return options.activeOperationId
         ? {
             operationId: options.activeOperationId,
             awaitingAdmission: options.activeAwaiting ?? false,
             reservationExpired: options.activeAwaiting ?? false,
           }
-        : null,
+        : null
+    },
     findActiveInteractiveClanRefresh: async () => null,
     reserveInteractivePlayerRefresh: async () => {
       calls.reserve++
@@ -111,7 +114,7 @@ function harness(
       return options.verification ?? 'invalid'
     },
   } as unknown as Context
-  return { context, calls, operationId }
+  return { context, calls, operationId, activeLookupPlayerId: () => activeLookupPlayerId }
 }
 
 function caller(options: Parameters<typeof harness>[0] = {}) {
@@ -177,7 +180,7 @@ describe('canonical player interactive refresh', () => {
 
   test('returns alreadyRefreshing before verification or source admission', async () => {
     const activeOperationId = crypto.randomUUID()
-    const { canonical, calls } = caller({ activeOperationId })
+    const { canonical, calls, activeLookupPlayerId } = caller({ activeOperationId })
     await expect(canonical.requestRefresh({ id: 42 })).resolves.toEqual({
       player: cached,
       refresh: {
@@ -188,6 +191,7 @@ describe('canonical player interactive refresh', () => {
     })
     expect(calls.source).toBe(0)
     expect(calls.verify).toBe(0)
+    expect(activeLookupPlayerId()).toBe(42)
   })
 
   test('reconciles actor-admitted work after an activation crash without charging again', async () => {

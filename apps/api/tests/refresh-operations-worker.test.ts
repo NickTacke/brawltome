@@ -23,6 +23,79 @@ const admission: AdmissionConfig = {
 }
 
 describe('refresh operations worker source retry', () => {
+  test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      operationKey: 'primary-player:42',
+      kind: 'interactive-player-refresh',
+      workClass: 'primary-monitoring',
+      payload: {
+        assignmentId: crypto.randomUUID(),
+        brawlhallaId: 42,
+        staleSections: ['ranked', 'stats'],
+      },
+      provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: '2026-08-10T00:00:00.000Z',
+    }
+    const sections: string[] = []
+    const callers: string[] = []
+    let sourceAdmissions = 0
+    let completed = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      beginInteractiveSection: async () => 'execute' as const,
+      commitInteractiveSection: async () => 'transitioned' as const,
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async () => {
+          sourceAdmissions++
+          return { outcome: 'admitted', deduplicated: false }
+        },
+      },
+      isPrimaryMonitoringTarget: async () => true,
+      executeSection: async (_lease, section, admitSourceCall, caller) => {
+        sections.push(section)
+        callers.push(caller)
+        await admitSourceCall('brawlhalla-v0')
+      },
+    })
+
+    expect(sections).toEqual(['ranked', 'stats'])
+    expect(callers).toEqual(['background', 'background'])
+    expect(sourceAdmissions).toBe(2)
+    expect(completed).toBe(true)
+
+    sections.length = 0
+    completed = false
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      isPrimaryMonitoringTarget: async () => false,
+      executeSection: async (_lease, section) => {
+        sections.push(section)
+      },
+    })
+    expect(sections).toEqual([])
+    expect(completed).toBe(true)
+  })
   test('executes player projection work through the durable projection class', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),

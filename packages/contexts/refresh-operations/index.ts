@@ -22,6 +22,7 @@ export type BackgroundWorkClass = (typeof backgroundWorkClasses)[number]
 export const minLeaderboardIntervalMs = 60_000
 export const maxLeaderboardIntervalMs = 24 * 60 * 60 * 1000
 export const maxLeaderboardPageDepth = 20
+export const primaryMonitoringIntervalMs = 24 * 60 * 60 * 1000
 
 export type OperationProvenance = {
   source: string
@@ -166,6 +167,22 @@ export type CreateLeaderboardSchedule = {
 
 export type CreateSchedule = CreateProofSchedule | CreateLeaderboardSchedule
 
+export type PrimaryMonitoringTarget = {
+  assignmentId: string
+  brawlhallaId: number
+  verifiedAt: Date
+}
+
+export type PrimaryMonitoringSnapshot = {
+  observedAt: Date
+  targets: PrimaryMonitoringTarget[]
+}
+
+export type ReconcilePrimaryMonitoringResult = {
+  created: number
+  retired: number
+}
+
 export type CreateScheduleResult = {
   outcome: 'created' | 'already-exists' | 'reconciled'
   scheduleId: string
@@ -205,7 +222,7 @@ export type ActiveInteractiveRefresh = {
 }
 
 export interface InteractiveRefreshOperations {
-  findActiveInteractivePlayerRefresh(dedupeKey: string): Promise<ActiveInteractiveRefresh | null>
+  findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number): Promise<ActiveInteractiveRefresh | null>
   findActiveInteractiveClanRefresh(dedupeKey: string): Promise<ActiveInteractiveRefresh | null>
   reserveInteractivePlayerRefresh(input: InteractivePlayerRefreshReservation): Promise<ReserveInteractiveRefreshResult>
   reserveInteractiveClanRefresh(input: InteractiveClanRefreshReservation): Promise<ReserveInteractiveRefreshResult>
@@ -234,6 +251,15 @@ export type OperationLease =
       kind: 'interactive-player-refresh'
       workClass: 'interactive'
       payload: { brawlhallaId: number; staleSections: ('ranked' | 'stats')[] }
+    })
+  | (LeaseFields & {
+      kind: 'interactive-player-refresh'
+      workClass: 'primary-monitoring'
+      payload: {
+        assignmentId: string
+        brawlhallaId: number
+        staleSections: ['ranked', 'stats']
+      }
     })
   | (LeaseFields & {
       kind: 'player-discovery-projection'

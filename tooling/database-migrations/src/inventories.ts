@@ -26,4 +26,5 @@ export const globalMigrationInventory: readonly Migration[] = [
   accountsMigrationInventory[3],
   playerMigrationInventory[5],
   refreshOperationsMigrationInventory[10],
+  refreshOperationsMigrationInventory[11],
 ]

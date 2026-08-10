@@ -323,11 +323,11 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
-  test('admits exactly the five operation kinds under shared cross-kind concurrency', async () => {
+  test('admits exactly the six operation kinds under shared cross-kind concurrency', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = {
       ...testAdmission,
-      totalConcurrency: 5,
+      totalConcurrency: 6,
       interactiveReservation: 1,
       classConcurrency: { ...testAdmission.classConcurrency, interactive: 3 },
     } as const
@@ -339,6 +339,17 @@ describe('durable Refresh Operations', () => {
         operationKey: `cross-kind-proof:${randomUUID()}`,
         workClass: 'interactive',
         payload: { value: 'proof' },
+        provenance: { source: 'integration-test' },
+      }),
+    )
+    await settleWithin(
+      'accept ranked player pulse',
+      operations.accept({
+        kind: 'ranked-player-pulse',
+        dedupeKey: `cross-kind-ranked-pulse:${randomUUID()}`,
+        operationKey: `cross-kind-ranked-pulse:${randomUUID()}`,
+        workClass: 'primary-monitoring',
+        payload: { brawlhallaId: 41 },
         provenance: { source: 'integration-test' },
       }),
     )
@@ -404,6 +415,12 @@ describe('durable Refresh Operations', () => {
         ),
       ),
       requireLease(
+        await settleWithin(
+          'ranked pulse claim',
+          operations.claim('cross-kind-ranked-pulse', 10_000, admission, 'ranked-player-pulse'),
+        ),
+      ),
+      requireLease(
         await settleWithin('clan claim', operations.claim('cross-kind-clan', 10_000, admission, 'clan-refresh')),
       ),
       requireLease(
@@ -423,6 +440,7 @@ describe('durable Refresh Operations', () => {
       new Set<OperationLease['kind']>([
         'proof',
         'interactive-player-refresh',
+        'ranked-player-pulse',
         'leaderboard-1v1',
         'clan-refresh',
         'player-discovery-projection',
@@ -589,6 +607,244 @@ describe('durable Refresh Operations', () => {
     expect(lease.workClass).toBe('projection')
     expect(await restarted.complete(lease)).toBe('transitioned')
     await restarted.close()
+  })
+
+  test('reconciles verified Primary monitoring across replicas, ownership changes, and restart', async () => {
+    const intervalMs = 24 * 60 * 60 * 1_000
+    const verifiedAt = new Date(Date.now() - intervalMs - 10_000)
+    const replicas = [
+      createPostgresRefreshOperations(connectionString),
+      createPostgresRefreshOperations(connectionString),
+    ]
+    const assignmentId = randomUUID()
+    const observedAt = new Date()
+    const target = { assignmentId, brawlhallaId: 4242, verifiedAt }
+
+    const reconciliations = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        replicas[index % replicas.length].reconcilePrimaryMonitoring({ observedAt, targets: [target] }),
+      ),
+    )
+    expect(reconciliations.reduce((total, result) => total + result.created, 0)).toBe(1)
+    expect(reconciliations.reduce((total, result) => total + result.retired, 0)).toBe(0)
+
+    const materialized = await Promise.all(
+      Array.from({ length: 20 }, (_, index) => replicas[index % replicas.length].materializeDueSchedules(1)),
+    )
+    expect(materialized.reduce((total, result) => total + result.occurrencesCreated, 0)).toBe(1)
+    const monitoring = requireLease(
+      await replicas[0].claim('primary-monitoring-worker', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(monitoring).toMatchObject({
+      workClass: 'primary-monitoring',
+      payload: { brawlhallaId: 4242, staleSections: ['ranked', 'stats'] },
+      provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
+    })
+    expect(monitoring.scheduleWindowAt).toBe(new Date(verifiedAt.getTime() + intervalMs).toISOString())
+
+    const interactive = await replicas[1].reserveInteractivePlayerRefresh({
+      dedupeKey: `interactive-freshness:${randomUUID()}`,
+      operationKey: `interactive-freshness:${randomUUID()}`,
+      brawlhallaId: 4242,
+      staleSections: ['ranked', 'stats'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    expect(interactive).toEqual({ outcome: 'already-active', operationId: monitoring.operationId })
+    expect(await replicas[0].complete(monitoring)).toBe('transitioned')
+
+    const control = postgres(connectionString, { max: 1 })
+    const [schedule] = await control`
+      SELECT id, provenance, enabled
+      FROM refresh_operations.schedules
+      WHERE schedule_key = ${`primary-player:4242:${assignmentId}`}
+    `
+    await Promise.all(replicas.map((replica) => replica.close()))
+
+    const restarted = createPostgresRefreshOperations(connectionString)
+    const history = await restarted.inspectSchedule(schedule.id)
+    expect(history.schedule).toMatchObject({
+      enabled: true,
+      provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
+    })
+    expect(history.occurrences[0]).toMatchObject({
+      operation_status: 'succeeded',
+      missed_window_count: '0',
+      catch_up: false,
+    })
+    expect(Number(history.occurrences[0].lateness_ms)).toBeGreaterThanOrEqual(10_000)
+
+    expect(
+      await restarted.reconcilePrimaryMonitoring({ observedAt: new Date(observedAt.getTime() + 1), targets: [] }),
+    ).toEqual({ created: 0, retired: 1 })
+    const [retired] = await control`
+      SELECT enabled FROM refresh_operations.schedules WHERE id = ${schedule.id}
+    `
+    expect(retired.enabled).toBe(false)
+    expect(await restarted.reconcilePrimaryMonitoring({ observedAt, targets: [target] })).toEqual({
+      created: 0,
+      retired: 0,
+    })
+
+    const reassignedAt = new Date(Date.now() - intervalMs - 5_000)
+    const reassignedSnapshot = {
+      observedAt: new Date(observedAt.getTime() + 2),
+      targets: [{ assignmentId: randomUUID(), brawlhallaId: 4343, verifiedAt: reassignedAt }],
+    }
+    expect(await restarted.reconcilePrimaryMonitoring(reassignedSnapshot)).toEqual({ created: 1, retired: 0 })
+    expect(await restarted.reconcilePrimaryMonitoring(reassignedSnapshot)).toEqual({ created: 0, retired: 0 })
+
+    const interactiveFirst = await restarted.reserveInteractivePlayerRefresh({
+      dedupeKey: `interactive-first:${randomUUID()}`,
+      operationKey: `interactive-first:${randomUUID()}`,
+      brawlhallaId: 4343,
+      staleSections: ['ranked', 'stats'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (interactiveFirst.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+    expect(
+      await restarted.activateInteractiveRefresh(interactiveFirst.operationId, interactiveFirst.reservationToken),
+    ).toBe('transitioned')
+    expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 0 })
+    const [reassignedSchedule] = await control`
+      SELECT id FROM refresh_operations.schedules
+      WHERE resource_key = 'player:4343' AND enabled
+    `
+    expect((await restarted.inspectSchedule(reassignedSchedule.id)).occurrences).toHaveLength(0)
+
+    const interactiveLease = requireLease(
+      await restarted.claim('interactive-first-worker', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(interactiveLease.operationId).toBe(interactiveFirst.operationId)
+    expect(await restarted.commitInteractiveSection(interactiveLease, 'ranked')).toBe('transitioned')
+    expect(await restarted.commitInteractiveSection(interactiveLease, 'stats')).toBe('transitioned')
+    expect(await restarted.complete(interactiveLease)).toBe('transitioned')
+    expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 1 })
+    expect((await restarted.inspectSchedule(reassignedSchedule.id)).occurrences[0]).toMatchObject({
+      disposition: 'deduplicated',
+      operation_id: null,
+      deduplicated_to_operation_id: interactiveFirst.operationId,
+      operation_status: 'succeeded',
+    })
+
+    const partialTarget = { assignmentId: randomUUID(), brawlhallaId: 4444, verifiedAt: reassignedAt }
+    expect(
+      await restarted.reconcilePrimaryMonitoring({
+        observedAt: new Date(observedAt.getTime() + 3),
+        targets: [...reassignedSnapshot.targets, partialTarget],
+      }),
+    ).toEqual({ created: 1, retired: 0 })
+    const partialInteractive = await restarted.reserveInteractivePlayerRefresh({
+      dedupeKey: `partial-interactive:${randomUUID()}`,
+      operationKey: `partial-interactive:${randomUUID()}`,
+      brawlhallaId: partialTarget.brawlhallaId,
+      staleSections: ['stats'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (partialInteractive.outcome !== 'reserved') throw new Error('Expected partial interactive reservation')
+    expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 0 })
+    expect(
+      await restarted.activateInteractiveRefresh(partialInteractive.operationId, partialInteractive.reservationToken),
+    ).toBe('transitioned')
+    const partialLease = requireLease(
+      await restarted.claim('partial-interactive-worker', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(await restarted.commitInteractiveSection(partialLease, 'stats')).toBe('transitioned')
+    expect(await restarted.complete(partialLease)).toBe('transitioned')
+    expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 1 })
+    const monitoringAfterPartial = requireLease(
+      await restarted.claim('monitoring-after-partial', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(monitoringAfterPartial).toMatchObject({
+      workClass: 'primary-monitoring',
+      payload: { brawlhallaId: partialTarget.brawlhallaId, staleSections: ['ranked', 'stats'] },
+    })
+    expect(await restarted.complete(monitoringAfterPartial)).toBe('transitioned')
+    await Promise.all([control.end(), restarted.close()])
+  })
+
+  test('expires abandoned blockers and requires both full-refresh checkpoints after the due watermark', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    const intervalMs = 24 * 60 * 60 * 1_000
+    const expiredTarget = {
+      assignmentId: randomUUID(),
+      brawlhallaId: 4545,
+      verifiedAt: new Date(Date.now() - intervalMs - 1_000),
+    }
+    const splitTarget = { assignmentId: randomUUID(), brawlhallaId: 4646, verifiedAt: new Date() }
+    await operations.reconcilePrimaryMonitoring({ observedAt: new Date(), targets: [expiredTarget, splitTarget] })
+
+    const abandoned = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: `abandoned:${randomUUID()}`,
+      operationKey: `abandoned:${randomUUID()}`,
+      brawlhallaId: expiredTarget.brawlhallaId,
+      staleSections: ['ranked'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (abandoned.outcome !== 'reserved') throw new Error('Expected abandoned reservation')
+    await control`
+      UPDATE refresh_operations.operations
+      SET reservation_expires_at = clock_timestamp() - interval '1 second'
+      WHERE id = ${abandoned.operationId}
+    `
+    expect(await operations.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 1 })
+    expect((await operations.inspect(abandoned.operationId)).operation).toMatchObject({
+      status: 'dead_letter',
+      last_error: { code: 'admission_reservation_expired' },
+    })
+    const afterAbandoned = requireLease(
+      await operations.claim('after-abandoned', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(afterAbandoned).toMatchObject({
+      workClass: 'primary-monitoring',
+      payload: { brawlhallaId: expiredTarget.brawlhallaId },
+    })
+    expect(await operations.complete(afterAbandoned)).toBe('transitioned')
+
+    const split = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: `split:${randomUUID()}`,
+      operationKey: `split:${randomUUID()}`,
+      brawlhallaId: splitTarget.brawlhallaId,
+      staleSections: ['ranked', 'stats'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (split.outcome !== 'reserved') throw new Error('Expected split reservation')
+    expect(await operations.activateInteractiveRefresh(split.operationId, split.reservationToken)).toBe('transitioned')
+    const splitLease = requireLease(
+      await operations.claim('split-worker', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(await operations.commitInteractiveSection(splitLease, 'ranked')).toBe('transitioned')
+    await control`
+      UPDATE refresh_operations.schedules
+      SET first_due_at = statement_timestamp(), next_due_at = statement_timestamp()
+      WHERE resource_key = ${`player:${splitTarget.brawlhallaId}`} AND enabled
+    `
+    await Bun.sleep(5)
+    expect(await operations.commitInteractiveSection(splitLease, 'stats')).toBe('transitioned')
+    expect(await operations.complete(splitLease)).toBe('transitioned')
+
+    expect(await operations.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 1 })
+    const afterSplit = requireLease(
+      await operations.claim('after-split', 10_000, testAdmission, 'interactive-player-refresh'),
+      'interactive-player-refresh',
+    )
+    expect(afterSplit).toMatchObject({
+      workClass: 'primary-monitoring',
+      payload: { brawlhallaId: splitTarget.brawlhallaId },
+    })
+    expect(await operations.complete(afterSplit)).toBe('transitioned')
+    await Promise.all([control.end(), operations.close()])
   })
 
   test('keeps scheduled effects idempotent without colliding across schedules', async () => {

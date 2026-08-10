@@ -69,6 +69,9 @@ function makeStore() {
     async getPrimaryPlayerVerificationState() {
       return { primaryPlayer: null, attempts: [] }
     },
+    async readPrimaryMonitoringSnapshot() {
+      return { observedAt: now, targets: [] }
+    },
   }
   return { store, accounts, sessions, preferences }
 }

@@ -7,6 +7,8 @@ export {
   type Accounts,
   type AccountSignIn,
   type DiscordSignInProfile,
+  type PrimaryMonitoringSnapshot,
+  type PrimaryMonitoringTarget,
   type PrimaryPlayer,
   type PrimaryPlayerEvidence,
   type PrimaryPlayerReference,

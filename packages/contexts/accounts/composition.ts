@@ -13,6 +13,7 @@ export function createPostgresAccounts(connectionString: string) {
   const { store, finalizeV2AuthCutover, close } = createPostgresAccountsStore(connectionString)
   return {
     accounts: createAccounts({ store }),
+    primaryMonitoring: { readSnapshot: store.readPrimaryMonitoringSnapshot },
     async finalizeV2AuthCutover(gate: V2AuthCutoverGate) {
       if (gate.legacyWritersQuiesced !== true) {
         throw new Error('Legacy auth writers must be quiescent before finalization')

@@ -33,8 +33,10 @@ type RunOneRefreshOperationOptions = {
     lease: PlayerLease,
     section: 'ranked' | 'stats',
     admitSourceCall: (domain: SourceDomain) => Promise<void>,
+    caller: 'on-demand' | 'background',
   ): Promise<void>
   executeRankedPulse?(lease: RankedPulseLease, admitSourceCall: (domain: SourceDomain) => Promise<void>): Promise<void>
+  isPrimaryMonitoringTarget?(lease: Extract<PlayerLease, { workClass: 'primary-monitoring' }>): Promise<boolean>
   executeClanSection?(
     lease: ClanLease,
     section: 'profile' | 'roster',
@@ -199,6 +201,13 @@ async function executeInteractive(
 
   for (const section of lease.payload.staleSections as InteractiveSection[]) {
     if (authorityLost.signal.aborted) return
+    if (lease.kind === 'interactive-player-refresh' && lease.workClass === 'primary-monitoring') {
+      if (!options.isPrimaryMonitoringTarget) throw new Error('Primary monitoring eligibility is unavailable')
+      if (!(await options.isPrimaryMonitoringTarget(lease))) {
+        await operations.complete(lease)
+        return
+      }
+    }
     let leaseExpiresAt: Date | undefined
     if (lease.kind === 'clan-refresh') {
       const authority = await operations.renewWithAuthority(lease, options.leaseMs)
@@ -222,7 +231,12 @@ async function executeInteractive(
         if (!options.executeSection || (section !== 'ranked' && section !== 'stats')) {
           throw new Error('Player refresh handler unavailable')
         }
-        await options.executeSection(lease, section, admitSourceCall)
+        await options.executeSection(
+          lease,
+          section,
+          admitSourceCall,
+          lease.workClass === 'primary-monitoring' ? 'background' : 'on-demand',
+        )
       } else {
         if (
           !options.executeClanSection ||

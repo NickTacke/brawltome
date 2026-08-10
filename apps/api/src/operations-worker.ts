@@ -121,6 +121,9 @@ try {
     config: workerConfig,
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
+      const primaryMonitoring = await operations.reconcilePrimaryMonitoring(
+        await accounts.primaryMonitoring.readSnapshot(),
+      )
       let reconciledProjection = 0
       if ((await playerDiscoverySource.lag()) > 0) {
         const projection = await operations.accept({
@@ -133,14 +136,22 @@ try {
         })
         reconciledProjection = projection.outcome === 'accepted' ? 1 : 0
       }
-      if (leaderboardSchedulesReconciled) return interactiveAdmissions + reconciledProjection
+      if (leaderboardSchedulesReconciled) {
+        return interactiveAdmissions + reconciledProjection + primaryMonitoring.created + primaryMonitoring.retired
+      }
       let reconciledSchedules = 0
       for (const definition of leaderboardSchedules) {
         const schedule = await operations.reconcileLeaderboardSchedule(definition)
         if (schedule.outcome !== 'already-exists') reconciledSchedules++
       }
       leaderboardSchedulesReconciled = true
-      return interactiveAdmissions + reconciledProjection + reconciledSchedules
+      return (
+        interactiveAdmissions +
+        reconciledProjection +
+        reconciledSchedules +
+        primaryMonitoring.created +
+        primaryMonitoring.retired
+      )
     },
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
@@ -179,18 +190,36 @@ try {
           await discovery.deliverPendingPlayers(playerDiscoverySource, lease.payload.batchSize, lease.operationId)
         },
         playerProjectionEffectState: discovery.playerProjectionEffectState,
-        executeSection: async (lease, section, admitSourceCall) => {
+        isPrimaryMonitoringTarget: async (lease) => {
+          const snapshot = await accounts.primaryMonitoring.readSnapshot()
+          return snapshot.targets.some(
+            (target) =>
+              target.assignmentId === lease.payload.assignmentId && target.brawlhallaId === lease.payload.brawlhallaId,
+          )
+        },
+        executeSection: async (lease, section, admitSourceCall, caller) => {
           await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
           const admittedBhapi = new BhApiClient({
             apiKey,
-            beforeRequest: ({ domain }) => admitSourceCall(domain),
+            beforeRequest: async ({ domain }) => {
+              if (lease.workClass === 'primary-monitoring') {
+                const snapshot = await accounts.primaryMonitoring.readSnapshot()
+                const current = snapshot.targets.some(
+                  (target) =>
+                    target.assignmentId === lease.payload.assignmentId &&
+                    target.brawlhallaId === lease.payload.brawlhallaId,
+                )
+                if (!current) throw new Error('Primary Player assignment is no longer current')
+              }
+              await admitSourceCall(domain)
+            },
           })
           if (section === 'ranked') {
             await refreshCanonicalRankedPlayer(
               rankedPlayers,
               { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) },
               lease.payload.brawlhallaId,
-              { caller: 'on-demand' },
+              { caller },
               {
                 operationId: lease.operationId,
                 effectOperationId: lease.effectOperationId,
@@ -215,7 +244,7 @@ try {
               careerPlayers,
               { getStats: (brawlhallaId, options) => admittedBhapi.getPlayerStats(brawlhallaId, options) },
               lease.payload.brawlhallaId,
-              { caller: 'on-demand' },
+              { caller },
               {
                 operationId: lease.operationId,
                 effectOperationId: lease.effectOperationId,

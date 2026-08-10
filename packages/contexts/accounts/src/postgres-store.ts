@@ -60,6 +60,7 @@ interface PrimaryPlayerRow {
   brawlhalla_id: number
   player_name: string | null
   verified_at: Date
+  verification_attempt_id: string
 }
 
 const sessionAccountQuery = `SELECT
@@ -376,6 +377,25 @@ function postgresAccountsStore(client: Sql): AccountsStore {
           [accountId],
         )
         return mapVerificationState(primaryRows[0], attemptRows)
+      })
+    },
+
+    async readPrimaryMonitoringSnapshot() {
+      return client.begin('ISOLATION LEVEL REPEATABLE READ READ ONLY', async (transaction) => {
+        const [clock] = await transaction.unsafe<{ observed_at: Date }[]>('SELECT clock_timestamp() AS observed_at')
+        const rows = await transaction.unsafe<PrimaryPlayerRow[]>(
+          `SELECT account_id, brawlhalla_id::int, player_name, verified_at, verification_attempt_id
+           FROM accounts.primary_players
+           ORDER BY brawlhalla_id`,
+        )
+        return {
+          observedAt: clock.observed_at,
+          targets: rows.map(({ brawlhalla_id, verified_at, verification_attempt_id }) => ({
+            assignmentId: verification_attempt_id,
+            brawlhallaId: brawlhalla_id,
+            verifiedAt: verified_at,
+          })),
+        }
       })
     },
   }
