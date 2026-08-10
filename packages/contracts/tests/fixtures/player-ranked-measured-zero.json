@@ -4,6 +4,7 @@
   "lastSuccessAt": "2026-08-09T22:00:00Z",
   "freshness": "fresh",
   "freshForSeconds": 3600,
+  "sparsePulse": null,
   "snapshot": {
     "oneVsOne": {
       "rating": 0,
@@ -35,6 +36,7 @@
         "globalRank": null
       }
     ],
-    "ratingHistory": []
+    "ratingHistory": [],
+    "observedRatingDirection": null
   }
 }

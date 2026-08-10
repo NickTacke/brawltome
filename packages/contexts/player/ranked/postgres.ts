@@ -5,6 +5,7 @@ import {
   type RankedPlayerProfile,
   type RankedPlayerQueries,
   type RankedPulseSourceStatus,
+  deriveObservedRatingDirection,
   rankedFreshness,
 } from './model'
 import type { V0RankedSnapshot, V1RankedPulse } from './source'
@@ -46,6 +47,8 @@ type ProfileRow = {
   pulse_games: number | null
   pulse_effect_created_at: string | null
   pulse_effect_operation_id: string | null
+  pulse_checked_at: Date | null
+  pulse_last_success_at: Date | null
 }
 
 type ValuesRow = {
@@ -167,7 +170,8 @@ export function createPostgresRankedPlayers(
                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS v0_effect_created_at,
                profile.v0_effect_operation_id, pulse.rating AS pulse_rating,
                pulse.peak_rating AS pulse_peak_rating, pulse.wins AS pulse_wins,
-               pulse.games AS pulse_games,
+               pulse.games AS pulse_games, pulse.checked_at AS pulse_checked_at,
+               pulse.last_success_at AS pulse_last_success_at,
                to_char(pulse.one_vs_one_effect_created_at AT TIME ZONE 'UTC',
                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS pulse_effect_created_at,
                pulse.one_vs_one_effect_operation_id AS pulse_effect_operation_id
@@ -178,6 +182,9 @@ export function createPostgresRankedPlayers(
         if (!profile) return null
 
         const freshness = rankedFreshness(profile.last_success_at, now())
+        const sparsePulse = profile.pulse_checked_at
+          ? { checkedAt: profile.pulse_checked_at, lastSuccessAt: profile.pulse_last_success_at }
+          : null
         if (!profile.last_success_at) {
           return {
             brawlhallaId,
@@ -185,6 +192,7 @@ export function createPostgresRankedPlayers(
             lastSuccessAt: null,
             freshness,
             freshForSeconds: RANKED_FRESHNESS_SECONDS,
+            sparsePulse,
             snapshot: null,
           }
         }
@@ -263,6 +271,7 @@ export function createPostgresRankedPlayers(
         const careerMainLegend = rankedMainLegend ? null : await options.resolveCareerMainLegend?.(brawlhallaId)
         const mainLegend =
           rankedMainLegend ?? (careerMainLegend ? { ...careerMainLegend, source: 'career' as const } : null)
+        const ratingHistory = historyRows.map((row) => ({ ...values(row), recordedAt: row.recorded_at }))
 
         return {
           brawlhallaId,
@@ -270,6 +279,7 @@ export function createPostgresRankedPlayers(
           lastSuccessAt: profile.last_success_at,
           freshness,
           freshForSeconds: RANKED_FRESHNESS_SECONDS,
+          sparsePulse,
           snapshot: {
             oneVsOne: {
               ...oneVsOneValues,
@@ -298,7 +308,8 @@ export function createPostgresRankedPlayers(
               globalRank: row.global_rank,
               ...values(row),
             })),
-            ratingHistory: historyRows.map((row) => ({ ...values(row), recordedAt: row.recorded_at })),
+            ratingHistory,
+            observedRatingDirection: deriveObservedRatingDirection(ratingHistory),
           },
         } satisfies RankedPlayerProfile
       })

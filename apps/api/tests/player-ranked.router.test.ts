@@ -21,6 +21,7 @@ describe('player.rankedById', () => {
         lastSuccessAt: observedAt,
         freshness: 'fresh',
         freshForSeconds: 3600,
+        sparsePulse: { checkedAt: observedAt, lastSuccessAt: observedAt },
         snapshot: {
           oneVsOne: {
             rating: 0,
@@ -36,7 +37,31 @@ describe('player.rankedById', () => {
           mainLegend: null,
           fixedTeams: [],
           soloQueue: [],
-          ratingHistory: [],
+          ratingHistory: [
+            {
+              rating: 0,
+              peakRating: 782,
+              tier: 'Tin 0',
+              wins: 0,
+              games: 0,
+              recordedAt: observedAt,
+            },
+            {
+              rating: 100,
+              peakRating: 782,
+              tier: 'Tin 0',
+              wins: 1,
+              games: 0,
+              recordedAt: new Date('2026-08-09T21:55:00Z'),
+            },
+          ],
+          observedRatingDirection: {
+            direction: 'down',
+            ratingChange: -100,
+            observationCount: 2,
+            fromObservedAt: new Date('2026-08-09T21:55:00Z'),
+            toObservedAt: observedAt,
+          },
         },
       }),
     })
@@ -44,7 +69,21 @@ describe('player.rankedById', () => {
     await expect(caller.rankedById({ id: 42 })).resolves.toMatchObject({
       checkedAt: '2026-08-09T22:00:00.000Z',
       lastSuccessAt: '2026-08-09T22:00:00.000Z',
-      snapshot: { oneVsOne: { rating: 0 }, fixedTeams: [], soloQueue: [] },
+      sparsePulse: {
+        checkedAt: '2026-08-09T22:00:00.000Z',
+        lastSuccessAt: '2026-08-09T22:00:00.000Z',
+      },
+      snapshot: {
+        oneVsOne: { rating: 0 },
+        fixedTeams: [],
+        soloQueue: [],
+        observedRatingDirection: {
+          direction: 'down',
+          ratingChange: -100,
+          fromObservedAt: '2026-08-09T21:55:00.000Z',
+          toObservedAt: '2026-08-09T22:00:00.000Z',
+        },
+      },
     })
 
     await expect(caller.rankedById({ id: 0 })).rejects.toThrow()

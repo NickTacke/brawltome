@@ -318,6 +318,13 @@ describe('Players-owned canonical ranked state', () => {
           { rating: 1601, games: 11 },
           { rating: 1600, games: 10 },
         ],
+        observedRatingDirection: {
+          direction: 'up',
+          ratingChange: 1,
+          observationCount: 2,
+          fromObservedAt: expect.any(Date),
+          toObservedAt: expect.any(Date),
+        },
       })
     } finally {
       await Promise.all([players.close(), operations.close()])
@@ -368,7 +375,15 @@ describe('Players-owned canonical ranked state', () => {
       expect((await operations.inspect(accepted.operationId)).operation.status).toBe('succeeded')
       expect(await players.byId(brawlhallaId)).toMatchObject({
         lastSuccessAt: expect.any(Date),
-        snapshot: { oneVsOne: { rating: 1750, games: 14 }, ratingHistory: [{ rating: 1500, games: 10 }] },
+        sparsePulse: {
+          checkedAt: expect.any(Date),
+          lastSuccessAt: expect.any(Date),
+        },
+        snapshot: {
+          oneVsOne: { rating: 1750, games: 14 },
+          ratingHistory: [{ rating: 1500, games: 10 }],
+          observedRatingDirection: null,
+        },
       })
     } finally {
       await Promise.all([players.close(), operations.close()])
@@ -722,7 +737,10 @@ describe('Players-owned canonical ranked state', () => {
       expect(await operations.claim('ranked-noop-recovery', 10_000, admission)).toBeNull()
       expect((await operations.inspect(crashLease.operationId)).operation.status).toBe('succeeded')
 
-      expect(await players.byId(brawlhallaId)).toEqual(canonical)
+      expect(await players.byId(brawlhallaId)).toMatchObject({
+        ...canonical,
+        sparsePulse: { checkedAt: expect.any(Date), lastSuccessAt: null },
+      })
       expect(await players.pulseStatusById(brawlhallaId)).toMatchObject({
         checkedAt: expect.any(Date),
         lastSuccessAt: null,

@@ -20,6 +20,20 @@ describe('ProfileHeader', () => {
     expect(html).not.toContain('1h')
   })
 
+  test('preserves canonical measured-zero lifetime playtime', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHeader
+        player={{ ...player, career: { snapshot: { combat: { matchTime: 0 } } } }}
+        topLegend={null}
+        aliases={[]}
+        refreshing={false}
+      />,
+    )
+
+    expect(html).toContain('Lifetime playtime:')
+    expect(html).toContain('0h')
+  })
+
   test('labels playtime only from the canonical lifetime career snapshot', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader

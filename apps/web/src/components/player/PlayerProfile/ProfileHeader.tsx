@@ -13,19 +13,27 @@ import {
   DropdownMenuTrigger,
 } from '@brawltome/ui'
 import Link from 'next/link'
-import type { PlayerData } from '../shared'
 import { formatHours } from '../shared'
 import { StaleBadge } from './StaleBadge'
 
+interface ProfileHeaderPlayer {
+  brawlhallaId: number
+  name: string
+  currentSeason?: { snapshot: { oneVsOne: { region: string } } | null } | null
+  career?: { snapshot: { combat: { matchTime: number } } | null } | null
+  clan?: { clanId: number; clanName: string } | null
+}
+
 interface ProfileHeaderProps {
-  player: PlayerData
-  topLegend: PlayerData | null
+  player: ProfileHeaderPlayer
+  topLegend: { legendNameKey: string } | null
   aliases: string[]
   refreshing: boolean
 }
 
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
   const lifetimeMatchTime = player.career?.snapshot?.combat.matchTime
+  const region = player.currentSeason?.snapshot?.oneVsOne.region
 
   return (
     <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -47,16 +55,16 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
             {fixEncoding(player.name)}
           </h1>
           <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
-            {player.region && (
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{player.region}</Badge>
-              </div>
+            {region && (
+              <>
+                <Badge variant="outline">{region}</Badge>
+                <span>&bull;</span>
+              </>
             )}
-            <span>&bull;</span>
             <div>
               ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span>
             </div>
-            {lifetimeMatchTime > 0 && (
+            {typeof lifetimeMatchTime === 'number' && (
               <>
                 <span>&bull;</span>
                 <div className="flex items-center gap-2">

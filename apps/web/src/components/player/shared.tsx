@@ -76,16 +76,9 @@ export const getXpForLevel = (lv: number) => {
 export const WinLossBar = ({ percent, className }: { percent: number; className?: string }) => {
   const clamped = Math.max(0, Math.min(100, percent || 0))
   return (
-    <div
-      className={`relative w-full overflow-hidden rounded-full bg-danger-muted ${className || ''}`}
-      role="progressbar"
-      tabIndex={0}
-      aria-valuenow={clamped}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={`Win rate ${clamped.toFixed(1)}%`}
-    >
-      <div className="h-full bg-success transition-all" style={{ width: `${clamped}%` }} />
+    <div className={`relative w-full overflow-hidden rounded-full bg-danger-muted ${className || ''}`}>
+      <progress className="sr-only" value={clamped} max={100} aria-label={`Win rate ${clamped.toFixed(1)}%`} />
+      <div aria-hidden="true" className="h-full bg-success transition-all" style={{ width: `${clamped}%` }} />
     </div>
   )
 }

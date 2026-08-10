@@ -7978,7 +7978,8 @@ pub mod types {
     ///    "freshForSeconds",
     ///    "freshness",
     ///    "lastSuccessAt",
-    ///    "snapshot"
+    ///    "snapshot",
+    ///    "sparsePulse"
     ///  ],
     ///  "properties": {
     ///    "brawlhallaId": {
@@ -8015,6 +8016,32 @@ pub mod types {
     ///    },
     ///    "snapshot": {
     ///      "$ref": "#/components/schemas/PlayerRankedSnapshot"
+    ///    },
+    ///    "sparsePulse": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "checkedAt",
+    ///        "lastSuccessAt"
+    ///      ],
+    ///      "properties": {
+    ///        "checkedAt": {
+    ///          "type": "string",
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
+    ///        },
+    ///        "lastSuccessAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
     ///    }
     ///  },
     ///  "additionalProperties": false
@@ -8046,6 +8073,8 @@ pub mod types {
             ::chrono::DateTime<::chrono::offset::Utc>,
         >,
         pub snapshot: PlayerRankedSnapshot,
+        #[serde(rename = "sparsePulse")]
+        pub sparse_pulse: ::std::option::Option<PlayerRankedProfileSparsePulse>,
     }
     ///`PlayerRankedProfileFreshness`
     ///
@@ -8130,6 +8159,46 @@ pub mod types {
             value.parse()
         }
     }
+    ///`PlayerRankedProfileSparsePulse`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "checkedAt",
+    ///    "lastSuccessAt"
+    ///  ],
+    ///  "properties": {
+    ///    "checkedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedProfileSparsePulse {
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+    }
     ///`PlayerRankedSnapshot`
     ///
     /// <details><summary>JSON schema</summary>
@@ -8143,6 +8212,7 @@ pub mod types {
     ///  "required": [
     ///    "fixedTeams",
     ///    "mainLegend",
+    ///    "observedRatingDirection",
     ///    "oneVsOne",
     ///    "rankedLegends",
     ///    "ratingHistory",
@@ -8251,6 +8321,52 @@ pub mod types {
     ///            "current-season",
     ///            "career"
     ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "observedRatingDirection": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "direction",
+    ///        "fromObservedAt",
+    ///        "observationCount",
+    ///        "ratingChange",
+    ///        "toObservedAt"
+    ///      ],
+    ///      "properties": {
+    ///        "direction": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "up",
+    ///            "down",
+    ///            "unchanged"
+    ///          ]
+    ///        },
+    ///        "fromObservedAt": {
+    ///          "type": "string",
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
+    ///        },
+    ///        "observationCount": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 365.0,
+    ///          "minimum": 2.0
+    ///        },
+    ///        "ratingChange": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": -2147483647.0
+    ///        },
+    ///        "toObservedAt": {
+    ///          "type": "string",
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
     ///        }
     ///      },
     ///      "additionalProperties": false
@@ -8425,7 +8541,8 @@ pub mod types {
     ///          }
     ///        },
     ///        "additionalProperties": false
-    ///      }
+    ///      },
+    ///      "maxItems": 365
     ///    },
     ///    "soloQueue": {
     ///      "type": "array",
@@ -8535,6 +8652,7 @@ pub mod types {
     ///  "required": [
     ///    "fixedTeams",
     ///    "mainLegend",
+    ///    "observedRatingDirection",
     ///    "oneVsOne",
     ///    "rankedLegends",
     ///    "ratingHistory",
@@ -8643,6 +8761,52 @@ pub mod types {
     ///            "current-season",
     ///            "career"
     ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "observedRatingDirection": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "direction",
+    ///        "fromObservedAt",
+    ///        "observationCount",
+    ///        "ratingChange",
+    ///        "toObservedAt"
+    ///      ],
+    ///      "properties": {
+    ///        "direction": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "up",
+    ///            "down",
+    ///            "unchanged"
+    ///          ]
+    ///        },
+    ///        "fromObservedAt": {
+    ///          "type": "string",
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
+    ///        },
+    ///        "observationCount": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 365.0,
+    ///          "minimum": 2.0
+    ///        },
+    ///        "ratingChange": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": -2147483647.0
+    ///        },
+    ///        "toObservedAt": {
+    ///          "type": "string",
+    ///          "format": "date-time",
+    ///          "pattern": "Z$"
     ///        }
     ///      },
     ///      "additionalProperties": false
@@ -8817,7 +8981,8 @@ pub mod types {
     ///          }
     ///        },
     ///        "additionalProperties": false
-    ///      }
+    ///      },
+    ///      "maxItems": 365
     ///    },
     ///    "soloQueue": {
     ///      "type": "array",
@@ -8901,6 +9066,10 @@ pub mod types {
         pub fixed_teams: ::std::vec::Vec<PlayerRankedSnapshotInnerFixedTeamsItem>,
         #[serde(rename = "mainLegend")]
         pub main_legend: ::std::option::Option<PlayerRankedSnapshotInnerMainLegend>,
+        #[serde(rename = "observedRatingDirection")]
+        pub observed_rating_direction: ::std::option::Option<
+            PlayerRankedSnapshotInnerObservedRatingDirection,
+        >,
         #[serde(rename = "oneVsOne")]
         pub one_vs_one: PlayerRankedSnapshotInnerOneVsOne,
         #[serde(rename = "rankedLegends")]
@@ -9360,6 +9529,155 @@ pub mod types {
     }
     impl ::std::convert::TryFrom<::std::string::String>
     for PlayerRankedSnapshotInnerMainLegendSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`PlayerRankedSnapshotInnerObservedRatingDirection`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "direction",
+    ///    "fromObservedAt",
+    ///    "observationCount",
+    ///    "ratingChange",
+    ///    "toObservedAt"
+    ///  ],
+    ///  "properties": {
+    ///    "direction": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "up",
+    ///        "down",
+    ///        "unchanged"
+    ///      ]
+    ///    },
+    ///    "fromObservedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "observationCount": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 365.0,
+    ///      "minimum": 2.0
+    ///    },
+    ///    "ratingChange": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": -2147483647.0
+    ///    },
+    ///    "toObservedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerObservedRatingDirection {
+        pub direction: PlayerRankedSnapshotInnerObservedRatingDirectionDirection,
+        #[serde(rename = "fromObservedAt")]
+        pub from_observed_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "observationCount")]
+        pub observation_count: i32,
+        #[serde(rename = "ratingChange")]
+        pub rating_change: i32,
+        #[serde(rename = "toObservedAt")]
+        pub to_observed_at: ::chrono::DateTime<::chrono::offset::Utc>,
+    }
+    ///`PlayerRankedSnapshotInnerObservedRatingDirectionDirection`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "up",
+    ///    "down",
+    ///    "unchanged"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum PlayerRankedSnapshotInnerObservedRatingDirectionDirection {
+        #[serde(rename = "up")]
+        Up,
+        #[serde(rename = "down")]
+        Down,
+        #[serde(rename = "unchanged")]
+        Unchanged,
+    }
+    impl ::std::fmt::Display
+    for PlayerRankedSnapshotInnerObservedRatingDirectionDirection {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Up => f.write_str("up"),
+                Self::Down => f.write_str("down"),
+                Self::Unchanged => f.write_str("unchanged"),
+            }
+        }
+    }
+    impl ::std::str::FromStr
+    for PlayerRankedSnapshotInnerObservedRatingDirectionDirection {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "up" => Ok(Self::Up),
+                "down" => Ok(Self::Down),
+                "unchanged" => Ok(Self::Unchanged),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerObservedRatingDirectionDirection {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerObservedRatingDirectionDirection {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerObservedRatingDirectionDirection {
         type Error = self::error::ConversionError;
         fn try_from(
             value: ::std::string::String,

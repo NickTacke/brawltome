@@ -20,6 +20,7 @@ const requiredRowIds = [
   'operations.dead-letters',
   'refresh.interactive-player',
   'player.current-season-ranked',
+  'player.canonical-profile',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],

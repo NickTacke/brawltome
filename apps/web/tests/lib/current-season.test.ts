@@ -21,6 +21,7 @@ const unavailable: PlayerRankedProfileContract = {
   lastSuccessAt: null,
   freshness: 'unavailable',
   freshForSeconds: 3600,
+  sparsePulse: null,
   snapshot: null,
 }
 
@@ -72,6 +73,7 @@ describe('Current Season player adapter', () => {
           },
         ],
         ratingHistory: [],
+        observedRatingDirection: null,
       },
     }
 
