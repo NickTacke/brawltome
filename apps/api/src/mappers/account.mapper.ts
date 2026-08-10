@@ -1,11 +1,15 @@
-import type { Account, AccountPreferences, PrimaryPlayerVerificationState } from '@brawltome/accounts'
+import type { Account, AccountPreferences, PrimaryPlayerVerificationState, SavedPlayer } from '@brawltome/accounts'
 import {
   type AccountPreferencesContract,
   type AccountViewContract,
+  type PlayerRankedProfileContract,
+  type PlayerReferenceContract,
   type PrimaryPlayerVerificationStateContract,
+  type SavedPlayersContract,
   accountPreferencesSchema,
   parseAccountViewOutput,
   parsePrimaryPlayerVerificationStateOutput,
+  parseSavedPlayersOutput,
 } from '@brawltome/contracts'
 
 export function toAccountPreferences(preferences: AccountPreferences): AccountPreferencesContract {
@@ -25,6 +29,23 @@ export function toAccountView(account: Account | null): AccountViewContract {
           },
         }
       : { status: 'anonymous' },
+  )
+}
+
+export function toSavedPlayers(
+  savedPlayers: readonly SavedPlayer[],
+  facts: ReadonlyMap<
+    number,
+    { player: PlayerReferenceContract | null; currentSeason: PlayerRankedProfileContract | null }
+  >,
+): SavedPlayersContract {
+  return parseSavedPlayersOutput(
+    savedPlayers.map((savedPlayer) => ({
+      ...savedPlayer,
+      savedAt: savedPlayer.savedAt.toISOString(),
+      player: facts.get(savedPlayer.brawlhallaId)?.player ?? null,
+      currentSeason: facts.get(savedPlayer.brawlhallaId)?.currentSeason ?? null,
+    })),
   )
 }
 

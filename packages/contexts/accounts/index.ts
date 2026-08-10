@@ -1,6 +1,8 @@
 export {
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
+  InvalidSavedPlayerError,
+  MAX_SAVED_PLAYERS,
   type Account,
   type AccountAuthentication,
   type AccountPreferences,
@@ -15,4 +17,5 @@ export {
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
   type PrimaryPlayerVerificationStatus,
+  type SavedPlayer,
 } from './src/accounts'

@@ -112,7 +112,7 @@ async function expire(operationId: string) {
 }
 
 describe('durable Refresh Operations', () => {
-  test('preserves the deployed runtime migration prefix and appends Discovery at the end', () => {
+  test('preserves the deployed runtime migration prefix and appends Saved Players at the end', () => {
     expect(runtimeMigrationInventory.map(({ identity }) => identity)).toEqual([
       'players/0001',
       'players/0002',
@@ -145,6 +145,7 @@ describe('durable Refresh Operations', () => {
       'clans/0002',
       'discovery/0002',
       'refresh-operations/0013',
+      'accounts/0005',
     ])
   })
 

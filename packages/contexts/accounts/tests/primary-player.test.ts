@@ -88,6 +88,16 @@ function createStore(): AccountsStore {
           : [],
       }
     },
+    async getSavedPlayers() {
+      return []
+    },
+    async savePlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, savedAt: startedAt }
+    },
+    async removeSavedPlayer() {},
+    async reorderSavedPlayers() {
+      return []
+    },
   }
 }
 

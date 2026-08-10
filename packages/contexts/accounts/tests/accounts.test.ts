@@ -72,6 +72,16 @@ function makeStore() {
     async readPrimaryMonitoringSnapshot() {
       return { observedAt: now, targets: [] }
     },
+    async getSavedPlayers() {
+      return []
+    },
+    async savePlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, savedAt: now }
+    },
+    async removeSavedPlayer() {},
+    async reorderSavedPlayers() {
+      return []
+    },
   }
   return { store, accounts, sessions, preferences }
 }

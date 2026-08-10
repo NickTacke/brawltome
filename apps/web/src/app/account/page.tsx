@@ -2,7 +2,7 @@
 
 import { signIn, useAccount } from '@/lib/auth'
 import { Skeleton } from '@brawltome/ui'
-import { Monitor, Rss, Trophy, UserPlus } from 'lucide-react'
+import { Bookmark, Monitor, Trophy, UserRound } from 'lucide-react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
@@ -20,9 +20,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 const FEATURE_TEASERS = [
   {
-    icon: UserPlus,
-    title: 'Follow Players',
-    description: 'Track your favorites and see live elo changes as they climb.',
+    icon: Bookmark,
+    title: 'Saved Players',
+    description: 'Keep private player bookmarks with honestly scoped latest observations.',
   },
   {
     icon: Monitor,
@@ -30,9 +30,9 @@ const FEATURE_TEASERS = [
     description: 'Real-time overlay and match tracking. Requires an account.',
   },
   {
-    icon: Rss,
-    title: 'Activity Feed',
-    description: 'See when followed players rank up or hit new milestones.',
+    icon: UserRound,
+    title: 'Player Profiles',
+    description: 'Return to canonical Current Season and Career facts without ownership claims.',
   },
   {
     icon: Trophy,

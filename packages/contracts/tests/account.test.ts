@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type PrimaryPlayerVerificationStateContract,
+  type SavedPlayersContract,
   accountPreferencesSchema,
   accountViewSchema,
   parseAccountViewOutput,
   parsePrimaryPlayerVerificationStateOutput,
+  parseSavedPlayersOutput,
+  savedPlayerOrderInputSchema,
 } from '../src/account'
 
 const signedInView = {
@@ -77,6 +80,51 @@ describe('accountViewSchema', () => {
       }),
     ).toThrow()
     expect(() => accountViewSchema.parse({ status: 'anonymous', session: { id: 'secret' } })).toThrow()
+  })
+})
+
+describe('savedPlayersSchema', () => {
+  test('preserves canonical Player Profile observation facts without ownership or follow semantics', () => {
+    const savedPlayers: SavedPlayersContract = [
+      {
+        brawlhallaId: 42,
+        order: 0,
+        savedAt: '2026-08-10T09:00:00.000Z',
+        player: { brawlhallaId: 42, name: 'Ada' },
+        currentSeason: {
+          brawlhallaId: 42,
+          checkedAt: '2026-08-10T10:00:00.000Z',
+          lastSuccessAt: null,
+          freshness: 'unavailable',
+          freshForSeconds: 3_600,
+          sparsePulse: null,
+          snapshot: null,
+        },
+      },
+    ]
+
+    expect(parseSavedPlayersOutput(savedPlayers)).toEqual(savedPlayers)
+    expect(() => parseSavedPlayersOutput([{ ...savedPlayers[0], accountId: signedInView.account.id }])).toThrow()
+    expect(() => parseSavedPlayersOutput([{ ...savedPlayers[0], following: true }])).toThrow()
+    expect(() =>
+      parseSavedPlayersOutput([
+        {
+          ...savedPlayers[0],
+          player: { brawlhallaId: 43, name: 'Different player' },
+        },
+      ]),
+    ).toThrow()
+  })
+
+  test('requires a complete duplicate-free order payload shape', () => {
+    expect(savedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
+    expect(() => savedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
+    expect(() =>
+      savedPlayerOrderInputSchema.parse({ brawlhallaIds: Array.from({ length: 101 }, (_, index) => index + 1) }),
+    ).toThrow()
+    expect(() =>
+      savedPlayerOrderInputSchema.parse({ accountId: signedInView.account.id, brawlhallaIds: [42] }),
+    ).toThrow()
   })
 })
 

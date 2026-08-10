@@ -1,11 +1,14 @@
 'use client'
 
 import { signOut, usePrimaryPlayer } from '@/lib/auth'
+import { moveSavedPlayer, removeSavedPlayer, reorderSavedPlayers, useSavedPlayers } from '@/lib/savedPlayers'
 import type { AccountContract } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link2, Users } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { BrawlhallaLinkRow } from './BrawlhallaLinkRow'
 import { DiscordIcon } from './DiscordIcon'
+import { SavedPlayersSection } from './SavedPlayersSection'
 
 interface SignedInStateProps {
   account: AccountContract
@@ -14,10 +17,52 @@ interface SignedInStateProps {
 export function SignedInState({ account }: SignedInStateProps) {
   const queryClient = useQueryClient()
   const { state: primaryPlayerState, isLoading: primaryPlayerLoading } = usePrimaryPlayer()
+  const { savedPlayers, isLoading: savedPlayersLoading, isError: savedPlayersQueryError } = useSavedPlayers(account.id)
+  const savedPlayersHeadingRef = useRef<HTMLHeadingElement>(null)
+  const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null)
+  const [savedPlayersError, setSavedPlayersError] = useState<string | null>(null)
+  const [savedPlayersStatus, setSavedPlayersStatus] = useState('')
   const memberSince = new Date(account.createdAt).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
   })
+
+  async function handleRemove(brawlhallaId: number) {
+    if (pendingPlayerId !== null) return
+    const removed = savedPlayers.find((savedPlayer) => savedPlayer.brawlhallaId === brawlhallaId)
+    const label = removed?.player?.name ?? `Player ID ${brawlhallaId}`
+    setPendingPlayerId(brawlhallaId)
+    setSavedPlayersError(null)
+    setSavedPlayersStatus('')
+    try {
+      await removeSavedPlayer(queryClient, account.id, brawlhallaId)
+      setSavedPlayersStatus(`Removed ${label} from Saved Players.`)
+      savedPlayersHeadingRef.current?.focus()
+    } catch {
+      setSavedPlayersError('Could not update Saved Players. Try again.')
+    } finally {
+      setPendingPlayerId(null)
+    }
+  }
+
+  async function handleMove(fromIndex: number, toIndex: number) {
+    if (pendingPlayerId !== null) return
+    const brawlhallaIds = moveSavedPlayer(savedPlayers, fromIndex, toIndex)
+    if (brawlhallaIds.every((id, index) => id === savedPlayers[index]?.brawlhallaId)) return
+    const moved = savedPlayers[fromIndex]
+    setPendingPlayerId(moved?.brawlhallaId ?? null)
+    setSavedPlayersError(null)
+    setSavedPlayersStatus('')
+    try {
+      await reorderSavedPlayers(queryClient, account.id, brawlhallaIds)
+      const label = moved?.player?.name ?? `Player ID ${moved?.brawlhallaId ?? ''}`
+      setSavedPlayersStatus(`Moved ${label} to position ${toIndex + 1}.`)
+    } catch {
+      setSavedPlayersError('Could not reorder Saved Players. Try again.')
+    } finally {
+      setPendingPlayerId(null)
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col gap-6 px-6 py-12">
@@ -67,22 +112,23 @@ export function SignedInState({ account }: SignedInStateProps) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
-        <div className="flex items-center gap-4">
-          <div className="text-center">
-            <p className="text-lg font-bold">0</p>
-            <p className="text-muted-foreground text-xs">Following</p>
-          </div>
-          <div className="border-border/50 h-8 border-l" />
-          <div className="text-center">
-            <p className="text-lg font-bold">0</p>
-            <p className="text-muted-foreground text-xs">Followers</p>
-          </div>
-        </div>
-        <p className="text-muted-foreground mt-4 text-xs">
-          Follow players from their profile page to track their progress.
+      <SavedPlayersSection
+        savedPlayers={savedPlayers}
+        loading={savedPlayersLoading}
+        error={savedPlayersQueryError}
+        headingRef={savedPlayersHeadingRef}
+        pendingPlayerId={pendingPlayerId}
+        onRemove={(brawlhallaId) => void handleRemove(brawlhallaId)}
+        onMove={(fromIndex, toIndex) => void handleMove(fromIndex, toIndex)}
+      />
+      <output aria-live="polite" className="text-muted-foreground block text-sm">
+        {savedPlayersStatus}
+      </output>
+      {savedPlayersError && (
+        <p role="alert" className="text-sm text-red-300">
+          {savedPlayersError}
         </p>
-      </div>
+      )}
 
       <button
         type="button"

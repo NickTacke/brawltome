@@ -1,6 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { type Account, type AccountPreferences, type Accounts, DEFAULT_ACCOUNT_PREFERENCES } from '@brawltome/accounts'
-import { accountPreferencesSchema, accountViewSchema, primaryPlayerVerificationStateSchema } from '@brawltome/contracts'
+import {
+  type Account,
+  type AccountPreferences,
+  type Accounts,
+  DEFAULT_ACCOUNT_PREFERENCES,
+  InvalidSavedPlayerError,
+  type SavedPlayer,
+} from '@brawltome/accounts'
+import {
+  accountPreferencesSchema,
+  accountViewSchema,
+  primaryPlayerVerificationStateSchema,
+  savedPlayersSchema,
+} from '@brawltome/contracts'
 import { initTRPC } from '@trpc/server'
 import superjson from 'superjson'
 import { toAccountPreferences, toAccountView, toPrimaryPlayerVerificationState } from '../src/mappers/account.mapper'
@@ -9,6 +21,8 @@ import { accountRouter } from '../src/router/account.router'
 interface TestContext {
   account: Account | null
   accounts: Accounts
+  playerReferenceQueries: { byId(id: number): Promise<{ brawlhallaId: number; name: string } | null> }
+  rankedPlayerQueries: { byId(id: number): Promise<unknown> }
 }
 
 const t = initTRPC.context<TestContext>().create({ transformer: superjson })
@@ -48,6 +62,16 @@ const accounts = {
       ],
     }
   },
+  async getSavedPlayers() {
+    return []
+  },
+  async savePlayer(_accountId, brawlhallaId) {
+    return { brawlhallaId, order: 0, savedAt: new Date('2026-08-10T10:03:00.000Z') }
+  },
+  async removeSavedPlayer() {},
+  async reorderSavedPlayers() {
+    return []
+  },
 } satisfies Accounts
 
 const account: Account = {
@@ -59,6 +83,7 @@ const account: Account = {
 
 function makeAccounts() {
   let preferences: AccountPreferences = { ...DEFAULT_ACCOUNT_PREFERENCES }
+  let savedPlayers: SavedPlayer[] = []
   const service: Accounts = {
     async signInWithDiscord() {
       throw new Error('Not used')
@@ -83,12 +108,59 @@ function makeAccounts() {
     async getPrimaryPlayerVerificationState() {
       return { primaryPlayer: null, attempts: [] }
     },
+    async getSavedPlayers() {
+      return savedPlayers
+    },
+    async savePlayer(_accountId, brawlhallaId) {
+      const existing = savedPlayers.find((savedPlayer) => savedPlayer.brawlhallaId === brawlhallaId)
+      if (existing) return existing
+      const savedPlayer = {
+        brawlhallaId,
+        order: savedPlayers.length,
+        savedAt: new Date('2026-08-10T10:03:00.000Z'),
+      }
+      savedPlayers = [...savedPlayers, savedPlayer]
+      return savedPlayer
+    },
+    async removeSavedPlayer(_accountId, brawlhallaId) {
+      savedPlayers = savedPlayers
+        .filter((savedPlayer) => savedPlayer.brawlhallaId !== brawlhallaId)
+        .map((savedPlayer, order) => ({ ...savedPlayer, order }))
+    },
+    async reorderSavedPlayers(_accountId, orderedBrawlhallaIds) {
+      savedPlayers = orderedBrawlhallaIds.map((brawlhallaId, order) => ({
+        ...(savedPlayers.find((savedPlayer) => savedPlayer.brawlhallaId === brawlhallaId) as SavedPlayer),
+        order,
+      }))
+      return savedPlayers
+    },
   }
   return service
 }
 
-function context(currentAccount: Account | null): TestContext {
-  return { account: currentAccount, accounts: makeAccounts() }
+function context(currentAccount: Account | null, accountService = makeAccounts()): TestContext {
+  return {
+    account: currentAccount,
+    accounts: accountService,
+    playerReferenceQueries: {
+      async byId(id) {
+        return id === 404 ? null : { brawlhallaId: id, name: `Player ${id}` }
+      },
+    },
+    rankedPlayerQueries: {
+      async byId(id) {
+        return {
+          brawlhallaId: id,
+          checkedAt: new Date('2026-08-10T10:00:00.000Z'),
+          lastSuccessAt: null,
+          freshness: 'unavailable',
+          freshForSeconds: 3_600,
+          sparsePulse: null,
+          snapshot: null,
+        }
+      },
+    },
+  }
 }
 
 describe('account.current', () => {
@@ -116,7 +188,9 @@ describe('account.current', () => {
   })
 
   test('returns canonical Primary Player ownership and privacy-safe attempt history', async () => {
-    const result = await (caller({ account, accounts }) as { primaryPlayer: () => Promise<unknown> }).primaryPlayer()
+    const result = await (
+      caller(context(account, accounts)) as { primaryPlayer: () => Promise<unknown> }
+    ).primaryPlayer()
 
     expect(primaryPlayerVerificationStateSchema.parse(result)).toEqual({
       primaryPlayer: { brawlhallaId: 42, name: 'Ada', verifiedAt: '2026-08-10T10:02:00.000Z' },
@@ -147,6 +221,87 @@ describe('account.current', () => {
         ],
       }),
     ).toThrow()
+  })
+})
+
+describe('account.savedPlayers', () => {
+  test('returns canonical Player Profile facts for session-owned bookmarks only', async () => {
+    const accountService = makeAccounts()
+    const api = caller(context(account, accountService)) as {
+      savedPlayers: () => Promise<unknown>
+      savePlayer: (input: unknown) => Promise<unknown>
+    }
+
+    expect(await api.savedPlayers()).toEqual([])
+    const result = await api.savePlayer({ brawlhallaId: 42 })
+
+    expect(savedPlayersSchema.parse(result)).toEqual([
+      {
+        brawlhallaId: 42,
+        order: 0,
+        savedAt: '2026-08-10T10:03:00.000Z',
+        player: { brawlhallaId: 42, name: 'Player 42' },
+        currentSeason: {
+          brawlhallaId: 42,
+          checkedAt: '2026-08-10T10:00:00.000Z',
+          lastSuccessAt: null,
+          freshness: 'unavailable',
+          freshForSeconds: 3_600,
+          sparsePulse: null,
+          snapshot: null,
+        },
+      },
+    ])
+  })
+
+  test('supports idempotent remove and complete manual reorder through protected procedures', async () => {
+    const api = caller(context(account)) as {
+      savePlayer: (input: unknown) => Promise<unknown>
+      removeSavedPlayer: (input: unknown) => Promise<unknown>
+      reorderSavedPlayers: (input: unknown) => Promise<unknown>
+    }
+    await api.savePlayer({ brawlhallaId: 42 })
+    await api.savePlayer({ brawlhallaId: 43 })
+
+    const reordered = savedPlayersSchema.parse(await api.reorderSavedPlayers({ brawlhallaIds: [43, 42] }))
+    expect(reordered.map(({ brawlhallaId, order }) => ({ brawlhallaId, order }))).toEqual([
+      { brawlhallaId: 43, order: 0 },
+      { brawlhallaId: 42, order: 1 },
+    ])
+    expect(await api.removeSavedPlayer({ brawlhallaId: 43 })).toHaveLength(1)
+    expect(await api.removeSavedPlayer({ brawlhallaId: 43 })).toHaveLength(1)
+  })
+
+  test('rejects anonymous access, client-supplied account identity, and unknown players', async () => {
+    const anonymousApi = caller(context(null)) as {
+      savedPlayers: () => Promise<unknown>
+      savePlayer: (input: unknown) => Promise<unknown>
+      removeSavedPlayer: (input: unknown) => Promise<unknown>
+      reorderSavedPlayers: (input: unknown) => Promise<unknown>
+    }
+    await expect(anonymousApi.savedPlayers()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(anonymousApi.savePlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await expect(anonymousApi.removeSavedPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+    await expect(anonymousApi.reorderSavedPlayers({ brawlhallaIds: [] })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+
+    const signedInApi = caller(context(account)) as { savePlayer: (input: unknown) => Promise<unknown> }
+    await expect(
+      signedInApi.savePlayer({ brawlhallaId: 42, accountId: 'd6bf157b-9c07-4ce3-9924-a053a28a59bb' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(signedInApi.savePlayer({ brawlhallaId: 404 })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    const limitedAccounts: Accounts = {
+      ...makeAccounts(),
+      async savePlayer() {
+        throw new InvalidSavedPlayerError('Saved Players cannot exceed 100')
+      },
+    }
+    const limitedApi = caller(context(account, limitedAccounts)) as { savePlayer: (input: unknown) => Promise<unknown> }
+    await expect(limitedApi.savePlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 })
 
