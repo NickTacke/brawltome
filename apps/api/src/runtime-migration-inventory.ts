@@ -6,7 +6,7 @@ import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operatio
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
 
 export const runtimeMigrationInventory = [
-  ...playerMigrationInventory,
+  ...playerMigrationInventory.slice(0, 3),
   ...refreshOperationsMigrationInventory.slice(0, 6),
   ...requestAdmissionMigrationInventory,
   ...accountsMigrationInventory,
@@ -16,4 +16,5 @@ export const runtimeMigrationInventory = [
   refreshOperationsMigrationInventory[7],
   refreshOperationsMigrationInventory[8],
   rankingMigrationInventory[1],
+  playerMigrationInventory[3],
 ] as const

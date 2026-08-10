@@ -25,6 +25,8 @@ interface ProfileHeaderProps {
 }
 
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
+  const lifetimeMatchTime = player.career?.snapshot?.combat.matchTime
+
   return (
     <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
@@ -54,12 +56,12 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
             <div>
               ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span>
             </div>
-            {player.matchTimeTotal > 0 && (
+            {lifetimeMatchTime > 0 && (
               <>
                 <span>&bull;</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Playtime:</span>
-                  <span className="font-mono text-foreground">{formatHours(player.matchTimeTotal)}</span>
+                  <span className="text-muted-foreground">Lifetime playtime:</span>
+                  <span className="font-mono text-foreground">{formatHours(lifetimeMatchTime)}</span>
                 </div>
               </>
             )}

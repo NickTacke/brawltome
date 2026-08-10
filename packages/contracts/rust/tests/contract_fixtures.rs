@@ -4,7 +4,7 @@ use std::net::TcpListener;
 use brawltome_contracts::generated::Client;
 use brawltome_contracts::generated::types::{
     ClanProfile, ContractProof, ContractProofEvent, GetContractProofXInternalSecret,
-    PlayerRankedProfile, RefreshOutcome,
+    PlayerCareerProfile, PlayerRankedProfile, RefreshOutcome,
 };
 
 const VALID_PRESENT: &str = include_str!("../../tests/fixtures/valid-present.json");
@@ -21,6 +21,8 @@ const INVALID_OFFSET_DATE_TIME: &str =
 const INVALID_UNION: &str = include_str!("../../tests/fixtures/invalid-union.json");
 const PLAYER_RANKED_MEASURED_ZERO: &str =
     include_str!("../../tests/fixtures/player-ranked-measured-zero.json");
+const PLAYER_CAREER_MEASURED_ZERO: &str =
+    include_str!("../../tests/fixtures/player-career-measured-zero.json");
 const REFRESH_OUTCOMES: [&str; 6] = [
     include_str!("../../tests/fixtures/refresh-accepted.json"),
     include_str!("../../tests/fixtures/refresh-already-refreshing.json"),
@@ -145,6 +147,64 @@ fn generated_ranked_profile_rejects_wire_values_rejected_by_zod() {
         assert!(
             serde_json::from_value::<PlayerRankedProfile>(wire).is_err(),
             "accepted invalid ranked {name}"
+        );
+    }
+}
+
+#[test]
+fn generated_career_profile_enforces_zod_wire_semantics() {
+    let wire: serde_json::Value =
+        serde_json::from_str(PLAYER_CAREER_MEASURED_ZERO).expect("valid career fixture");
+    let profile: PlayerCareerProfile =
+        serde_json::from_value(wire.clone()).expect("generated career profile");
+    assert_eq!(
+        serde_json::to_value(profile).expect("serialize career profile"),
+        wire
+    );
+
+    for (name, pointer, invalid) in [
+        ("negative games", "/snapshot/combat/games", serde_json::json!(-1)),
+        ("out-of-range player ID", "/brawlhallaId", serde_json::json!(2_147_483_648u64)),
+        ("zero legend ID", "/snapshot/legends/0/legendId", serde_json::json!(0)),
+        ("noncanonical decimal", "/snapshot/combat/damageBomb", serde_json::json!("01")),
+        ("fraction above one", "/snapshot/account/xpPercentage", serde_json::json!(1.01)),
+        ("combat wins above games", "/snapshot/combat/wins", serde_json::json!(1)),
+        ("legend wins above games", "/snapshot/legends/0/wins", serde_json::json!(1)),
+        ("freshness drift", "/freshForSeconds", serde_json::json!(3600)),
+        ("offset checked-at", "/checkedAt", serde_json::json!("2026-08-09T22:00:00+00:00")),
+        ("offset last-success", "/lastSuccessAt", serde_json::json!("2026-08-09T22:00:00+00:00")),
+    ] {
+        let mut invalid_wire = wire.clone();
+        *invalid_wire.pointer_mut(pointer).expect("fixture pointer exists") = invalid;
+        assert!(
+            serde_json::from_value::<PlayerCareerProfile>(invalid_wire).is_err(),
+            "accepted invalid career {name}"
+        );
+    }
+
+    let mut unavailable_wire = wire.clone();
+    unavailable_wire["lastSuccessAt"] = serde_json::Value::Null;
+    unavailable_wire["freshness"] = serde_json::json!("unavailable");
+    unavailable_wire["snapshot"] = serde_json::Value::Null;
+    let unavailable: PlayerCareerProfile =
+        serde_json::from_value(unavailable_wire.clone()).expect("valid unavailable career profile");
+    assert_eq!(
+        serde_json::to_value(unavailable).expect("serialize unavailable career profile"),
+        unavailable_wire
+    );
+
+    for (name, last_success, freshness, snapshot) in [
+        ("success without snapshot", wire["lastSuccessAt"].clone(), serde_json::json!("fresh"), serde_json::Value::Null),
+        ("unavailable with snapshot", serde_json::Value::Null, serde_json::json!("unavailable"), wire["snapshot"].clone()),
+        ("null success marked fresh", serde_json::Value::Null, serde_json::json!("fresh"), serde_json::Value::Null),
+    ] {
+        let mut invalid_wire = wire.clone();
+        invalid_wire["lastSuccessAt"] = last_success;
+        invalid_wire["freshness"] = freshness;
+        invalid_wire["snapshot"] = snapshot;
+        assert!(
+            serde_json::from_value::<PlayerCareerProfile>(invalid_wire).is_err(),
+            "accepted inconsistent career availability: {name}"
         );
     }
 }

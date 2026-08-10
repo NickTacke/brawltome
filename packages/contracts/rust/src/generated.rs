@@ -62,6 +62,26 @@ pub mod types {
         }
         Ok(value)
     }
+    fn deserialize_career_freshness_seconds<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value != 43200 {
+            return Err(<D::Error as ::serde::de::Error>::custom("career freshness must be 43200 seconds"));
+        }
+        Ok(value)
+    }
+    fn deserialize_fraction<'de, D>(deserializer: D) -> ::std::result::Result<f64, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <f64 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err(<D::Error as ::serde::de::Error>::custom("number must be between 0 and 1"));
+        }
+        Ok(value)
+    }
     fn deserialize_zero_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -5120,6 +5140,2820 @@ pub mod types {
         }
     }
     impl<'de> ::serde::Deserialize<'de> for GetContractProofXInternalSecret {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerProfile`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "checkedAt",
+    ///    "freshForSeconds",
+    ///    "freshness",
+    ///    "lastSuccessAt",
+    ///    "snapshot"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "freshForSeconds": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 43200.0,
+    ///      "minimum": 43200.0
+    ///    },
+    ///    "freshness": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "fresh",
+    ///        "stale",
+    ///        "unavailable"
+    ///      ]
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "snapshot": {
+    ///      "$ref": "#/components/schemas/PlayerCareerSnapshot"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerProfile {
+        #[serde(rename = "brawlhallaId")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u64")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "freshForSeconds")]
+        pub fresh_for_seconds: i32,
+        pub freshness: PlayerCareerProfileFreshness,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub snapshot: PlayerCareerSnapshot,
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerProfile {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            #[derive(::serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Wire {
+                #[serde(rename = "brawlhallaId", deserialize_with = "deserialize_bounded_nonzero_u64")]
+                brawlhalla_id: ::std::num::NonZeroU64,
+                #[serde(rename = "checkedAt", deserialize_with = "deserialize_utc_datetime")]
+                checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+                #[serde(rename = "freshForSeconds", deserialize_with = "deserialize_career_freshness_seconds")]
+                fresh_for_seconds: i32,
+                freshness: PlayerCareerProfileFreshness,
+                #[serde(rename = "lastSuccessAt", deserialize_with = "deserialize_optional_utc_datetime")]
+                last_success_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+                snapshot: PlayerCareerSnapshot,
+            }
+            let wire = <Wire as ::serde::Deserialize>::deserialize(deserializer)?;
+            let unavailable = wire.last_success_at.is_none()
+                && matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
+                && wire.snapshot.0.is_none();
+            let available = wire.last_success_at.is_some()
+                && !matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
+                && wire.snapshot.0.is_some();
+            if !unavailable && !available {
+                return Err(<D::Error as ::serde::de::Error>::custom("career availability fields are inconsistent"));
+            }
+            if let Some(snapshot) = &wire.snapshot.0 {
+                if snapshot.combat.wins > snapshot.combat.games
+                    || snapshot.legends.iter().any(|legend| legend.wins > legend.games)
+                {
+                    return Err(<D::Error as ::serde::de::Error>::custom("career wins cannot exceed games"));
+                }
+            }
+            Ok(Self {
+                brawlhalla_id: wire.brawlhalla_id,
+                checked_at: wire.checked_at,
+                fresh_for_seconds: wire.fresh_for_seconds,
+                freshness: wire.freshness,
+                last_success_at: wire.last_success_at,
+                snapshot: wire.snapshot,
+            })
+        }
+    }
+    ///`PlayerCareerProfileFreshness`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "fresh",
+    ///    "stale",
+    ///    "unavailable"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum PlayerCareerProfileFreshness {
+        #[serde(rename = "fresh")]
+        Fresh,
+        #[serde(rename = "stale")]
+        Stale,
+        #[serde(rename = "unavailable")]
+        Unavailable,
+    }
+    impl ::std::fmt::Display for PlayerCareerProfileFreshness {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Fresh => f.write_str("fresh"),
+                Self::Stale => f.write_str("stale"),
+                Self::Unavailable => f.write_str("unavailable"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerProfileFreshness {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "fresh" => Ok(Self::Fresh),
+                "stale" => Ok(Self::Stale),
+                "unavailable" => Ok(Self::Unavailable),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`PlayerCareerSnapshot`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": [
+    ///    "object",
+    ///    "null"
+    ///  ],
+    ///  "required": [
+    ///    "account",
+    ///    "combat",
+    ///    "legends",
+    ///    "weapons"
+    ///  ],
+    ///  "properties": {
+    ///    "account": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "level",
+    ///        "xp",
+    ///        "xpPercentage"
+    ///      ],
+    ///      "properties": {
+    ///        "level": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "xp": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "xpPercentage": {
+    ///          "type": "number",
+    ///          "maximum": 1.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "combat": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "bombKos",
+    ///        "damageBomb",
+    ///        "damageMine",
+    ///        "damageSidekick",
+    ///        "damageSpikeball",
+    ///        "games",
+    ///        "matchTime",
+    ///        "mineKos",
+    ///        "sidekickKos",
+    ///        "snowballHits",
+    ///        "snowballKos",
+    ///        "spikeballKos",
+    ///        "wins"
+    ///      ],
+    ///      "properties": {
+    ///        "bombKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "damageBomb": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "damageMine": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "damageSidekick": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "damageSpikeball": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "games": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "matchTime": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "mineKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "sidekickKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "snowballHits": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "snowballKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "spikeballKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "wins": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "legends": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "damageDealt",
+    ///          "damageTaken",
+    ///          "falls",
+    ///          "gadgets",
+    ///          "games",
+    ///          "kos",
+    ///          "legendId",
+    ///          "legendNameKey",
+    ///          "level",
+    ///          "matchTime",
+    ///          "suicides",
+    ///          "teamKos",
+    ///          "thrownItem",
+    ///          "unarmed",
+    ///          "weaponOne",
+    ///          "weaponTwo",
+    ///          "wins",
+    ///          "xp",
+    ///          "xpPercentage"
+    ///        ],
+    ///        "properties": {
+    ///          "damageDealt": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d*)$"
+    ///          },
+    ///          "damageTaken": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d*)$"
+    ///          },
+    ///          "falls": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "gadgets": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "kos": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "legendId": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "legendNameKey": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "level": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "matchTime": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "suicides": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "teamKos": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "thrownItem": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "unarmed": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "weaponOne": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "heldTime",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "heldTime": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "weaponTwo": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "heldTime",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "heldTime": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "xp": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "xpPercentage": {
+    ///            "type": "number",
+    ///            "maximum": 1.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "weapons": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "damage",
+    ///          "heldTime",
+    ///          "kos",
+    ///          "weapon"
+    ///        ],
+    ///        "properties": {
+    ///          "damage": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d*)$"
+    ///          },
+    ///          "heldTime": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "kos": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "weapon": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshot(
+        pub ::std::option::Option<PlayerCareerSnapshotInner>,
+    );
+    impl ::std::ops::Deref for PlayerCareerSnapshot {
+        type Target = ::std::option::Option<PlayerCareerSnapshotInner>;
+        fn deref(&self) -> &::std::option::Option<PlayerCareerSnapshotInner> {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshot>
+    for ::std::option::Option<PlayerCareerSnapshotInner> {
+        fn from(value: PlayerCareerSnapshot) -> Self {
+            value.0
+        }
+    }
+    impl ::std::convert::From<::std::option::Option<PlayerCareerSnapshotInner>>
+    for PlayerCareerSnapshot {
+        fn from(value: ::std::option::Option<PlayerCareerSnapshotInner>) -> Self {
+            Self(value)
+        }
+    }
+    ///`PlayerCareerSnapshotInner`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "account",
+    ///    "combat",
+    ///    "legends",
+    ///    "weapons"
+    ///  ],
+    ///  "properties": {
+    ///    "account": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "level",
+    ///        "xp",
+    ///        "xpPercentage"
+    ///      ],
+    ///      "properties": {
+    ///        "level": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "xp": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "xpPercentage": {
+    ///          "type": "number",
+    ///          "maximum": 1.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "combat": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "bombKos",
+    ///        "damageBomb",
+    ///        "damageMine",
+    ///        "damageSidekick",
+    ///        "damageSpikeball",
+    ///        "games",
+    ///        "matchTime",
+    ///        "mineKos",
+    ///        "sidekickKos",
+    ///        "snowballHits",
+    ///        "snowballKos",
+    ///        "spikeballKos",
+    ///        "wins"
+    ///      ],
+    ///      "properties": {
+    ///        "bombKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "damageBomb": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "damageMine": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "damageSidekick": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "damageSpikeball": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "games": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "matchTime": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "mineKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "sidekickKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "snowballHits": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "snowballKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "spikeballKos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "wins": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "legends": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "damageDealt",
+    ///          "damageTaken",
+    ///          "falls",
+    ///          "gadgets",
+    ///          "games",
+    ///          "kos",
+    ///          "legendId",
+    ///          "legendNameKey",
+    ///          "level",
+    ///          "matchTime",
+    ///          "suicides",
+    ///          "teamKos",
+    ///          "thrownItem",
+    ///          "unarmed",
+    ///          "weaponOne",
+    ///          "weaponTwo",
+    ///          "wins",
+    ///          "xp",
+    ///          "xpPercentage"
+    ///        ],
+    ///        "properties": {
+    ///          "damageDealt": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d*)$"
+    ///          },
+    ///          "damageTaken": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d*)$"
+    ///          },
+    ///          "falls": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "gadgets": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "kos": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "legendId": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "legendNameKey": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "level": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "matchTime": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "suicides": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "teamKos": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "thrownItem": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "unarmed": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "weaponOne": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "heldTime",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "heldTime": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "weaponTwo": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "damage",
+    ///              "heldTime",
+    ///              "kos"
+    ///            ],
+    ///            "properties": {
+    ///              "damage": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d*)$"
+    ///              },
+    ///              "heldTime": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              },
+    ///              "kos": {
+    ///                "type": "integer",
+    ///                "format": "int32",
+    ///                "maximum": 2147483647.0,
+    ///                "minimum": 0.0
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "xp": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "xpPercentage": {
+    ///            "type": "number",
+    ///            "maximum": 1.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "weapons": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "damage",
+    ///          "heldTime",
+    ///          "kos",
+    ///          "weapon"
+    ///        ],
+    ///        "properties": {
+    ///          "damage": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d*)$"
+    ///          },
+    ///          "heldTime": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "kos": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "weapon": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInner {
+        pub account: PlayerCareerSnapshotInnerAccount,
+        pub combat: PlayerCareerSnapshotInnerCombat,
+        pub legends: ::std::vec::Vec<PlayerCareerSnapshotInnerLegendsItem>,
+        pub weapons: ::std::vec::Vec<PlayerCareerSnapshotInnerWeaponsItem>,
+    }
+    ///`PlayerCareerSnapshotInnerAccount`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "level",
+    ///    "xp",
+    ///    "xpPercentage"
+    ///  ],
+    ///  "properties": {
+    ///    "level": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "xp": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "xpPercentage": {
+    ///      "type": "number",
+    ///      "maximum": 1.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerAccount {
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub level: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub xp: i32,
+        #[serde(rename = "xpPercentage")]
+        #[serde(deserialize_with = "deserialize_fraction")]
+        pub xp_percentage: f64,
+    }
+    ///`PlayerCareerSnapshotInnerCombat`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "bombKos",
+    ///    "damageBomb",
+    ///    "damageMine",
+    ///    "damageSidekick",
+    ///    "damageSpikeball",
+    ///    "games",
+    ///    "matchTime",
+    ///    "mineKos",
+    ///    "sidekickKos",
+    ///    "snowballHits",
+    ///    "snowballKos",
+    ///    "spikeballKos",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "bombKos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "damageBomb": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "damageMine": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "damageSidekick": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "damageSpikeball": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "matchTime": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "mineKos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "sidekickKos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "snowballHits": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "snowballKos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "spikeballKos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerCombat {
+        #[serde(rename = "bombKos")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub bomb_kos: i32,
+        #[serde(rename = "damageBomb")]
+        pub damage_bomb: PlayerCareerSnapshotInnerCombatDamageBomb,
+        #[serde(rename = "damageMine")]
+        pub damage_mine: PlayerCareerSnapshotInnerCombatDamageMine,
+        #[serde(rename = "damageSidekick")]
+        pub damage_sidekick: PlayerCareerSnapshotInnerCombatDamageSidekick,
+        #[serde(rename = "damageSpikeball")]
+        pub damage_spikeball: PlayerCareerSnapshotInnerCombatDamageSpikeball,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(rename = "matchTime")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub match_time: i32,
+        #[serde(rename = "mineKos")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub mine_kos: i32,
+        #[serde(rename = "sidekickKos")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub sidekick_kos: i32,
+        #[serde(rename = "snowballHits")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub snowball_hits: i32,
+        #[serde(rename = "snowballKos")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub snowball_kos: i32,
+        #[serde(rename = "spikeballKos")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub spikeball_kos: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+    }
+    ///`PlayerCareerSnapshotInnerCombatDamageBomb`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerCombatDamageBomb(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerCombatDamageBomb {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerCombatDamageBomb>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerCombatDamageBomb) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerCombatDamageBomb {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerSnapshotInnerCombatDamageBomb {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageBomb {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageBomb {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerSnapshotInnerCombatDamageBomb {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerCombatDamageMine`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerCombatDamageMine(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerCombatDamageMine {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerCombatDamageMine>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerCombatDamageMine) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerCombatDamageMine {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerSnapshotInnerCombatDamageMine {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageMine {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageMine {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerSnapshotInnerCombatDamageMine {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerCombatDamageSidekick`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerCombatDamageSidekick(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerCombatDamageSidekick {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerCombatDamageSidekick>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerCombatDamageSidekick) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerCombatDamageSidekick {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerCombatDamageSidekick {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageSidekick {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageSidekick {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerCombatDamageSidekick {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerCombatDamageSpikeball`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerCombatDamageSpikeball(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerCombatDamageSpikeball>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerCombatDamageSpikeball) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damageDealt",
+    ///    "damageTaken",
+    ///    "falls",
+    ///    "gadgets",
+    ///    "games",
+    ///    "kos",
+    ///    "legendId",
+    ///    "legendNameKey",
+    ///    "level",
+    ///    "matchTime",
+    ///    "suicides",
+    ///    "teamKos",
+    ///    "thrownItem",
+    ///    "unarmed",
+    ///    "weaponOne",
+    ///    "weaponTwo",
+    ///    "wins",
+    ///    "xp",
+    ///    "xpPercentage"
+    ///  ],
+    ///  "properties": {
+    ///    "damageDealt": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "damageTaken": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "falls": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "gadgets": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "damage",
+    ///        "kos"
+    ///      ],
+    ///      "properties": {
+    ///        "damage": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "kos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "legendId": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "legendNameKey": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "level": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "matchTime": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "suicides": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "teamKos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "thrownItem": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "damage",
+    ///        "kos"
+    ///      ],
+    ///      "properties": {
+    ///        "damage": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "kos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "unarmed": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "damage",
+    ///        "kos"
+    ///      ],
+    ///      "properties": {
+    ///        "damage": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "kos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "weaponOne": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "damage",
+    ///        "heldTime",
+    ///        "kos"
+    ///      ],
+    ///      "properties": {
+    ///        "damage": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "heldTime": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "kos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "weaponTwo": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "damage",
+    ///        "heldTime",
+    ///        "kos"
+    ///      ],
+    ///      "properties": {
+    ///        "damage": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d*)$"
+    ///        },
+    ///        "heldTime": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "kos": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "xp": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "xpPercentage": {
+    ///      "type": "number",
+    ///      "maximum": 1.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerLegendsItem {
+        #[serde(rename = "damageDealt")]
+        pub damage_dealt: PlayerCareerSnapshotInnerLegendsItemDamageDealt,
+        #[serde(rename = "damageTaken")]
+        pub damage_taken: PlayerCareerSnapshotInnerLegendsItemDamageTaken,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub falls: i32,
+        pub gadgets: PlayerCareerSnapshotInnerLegendsItemGadgets,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+        #[serde(rename = "legendId")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u32")]
+        pub legend_id: ::std::num::NonZeroU32,
+        #[serde(rename = "legendNameKey")]
+        pub legend_name_key: PlayerCareerSnapshotInnerLegendsItemLegendNameKey,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub level: i32,
+        #[serde(rename = "matchTime")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub match_time: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub suicides: i32,
+        #[serde(rename = "teamKos")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub team_kos: i32,
+        #[serde(rename = "thrownItem")]
+        pub thrown_item: PlayerCareerSnapshotInnerLegendsItemThrownItem,
+        pub unarmed: PlayerCareerSnapshotInnerLegendsItemUnarmed,
+        #[serde(rename = "weaponOne")]
+        pub weapon_one: PlayerCareerSnapshotInnerLegendsItemWeaponOne,
+        #[serde(rename = "weaponTwo")]
+        pub weapon_two: PlayerCareerSnapshotInnerLegendsItemWeaponTwo,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub xp: i32,
+        #[serde(rename = "xpPercentage")]
+        #[serde(deserialize_with = "deserialize_fraction")]
+        pub xp_percentage: f64,
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemDamageDealt`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemDamageDealt(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemDamageDealt {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemDamageDealt>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemDamageDealt) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemDamageDealt {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemDamageDealt {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemDamageDealt {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemDamageDealt {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemDamageDealt {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemDamageTaken`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemDamageTaken(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemDamageTaken {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemDamageTaken>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemDamageTaken) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemDamageTaken {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemDamageTaken {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemDamageTaken {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemDamageTaken {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemDamageTaken {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemGadgets`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damage",
+    ///    "kos"
+    ///  ],
+    ///  "properties": {
+    ///    "damage": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemGadgets {
+        pub damage: PlayerCareerSnapshotInnerLegendsItemGadgetsDamage,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemGadgetsDamage`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemGadgetsDamage(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemGadgetsDamage {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemGadgetsDamage>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemGadgetsDamage) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemGadgetsDamage {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemGadgetsDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemGadgetsDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemGadgetsDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemGadgetsDamage {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemLegendNameKey`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemLegendNameKey(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemLegendNameKey {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemLegendNameKey>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemLegendNameKey) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemLegendNameKey {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemLegendNameKey {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemThrownItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damage",
+    ///    "kos"
+    ///  ],
+    ///  "properties": {
+    ///    "damage": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemThrownItem {
+        pub damage: PlayerCareerSnapshotInnerLegendsItemThrownItemDamage,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemThrownItemDamage`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemThrownItemDamage(
+        ::std::string::String,
+    );
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemThrownItemDamage {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemThrownItemDamage>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemThrownItemDamage) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemThrownItemDamage {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemThrownItemDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemThrownItemDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemThrownItemDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemThrownItemDamage {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemUnarmed`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damage",
+    ///    "kos"
+    ///  ],
+    ///  "properties": {
+    ///    "damage": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemUnarmed {
+        pub damage: PlayerCareerSnapshotInnerLegendsItemUnarmedDamage,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemUnarmedDamage`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemUnarmedDamage(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemUnarmedDamage {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemUnarmedDamage>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemUnarmedDamage) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemUnarmedDamage {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemUnarmedDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemUnarmedDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemUnarmedDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemUnarmedDamage {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemWeaponOne`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damage",
+    ///    "heldTime",
+    ///    "kos"
+    ///  ],
+    ///  "properties": {
+    ///    "damage": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "heldTime": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemWeaponOne {
+        pub damage: PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage,
+        #[serde(rename = "heldTime")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub held_time: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage(
+        ::std::string::String,
+    );
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponOneDamage {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemWeaponTwo`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damage",
+    ///    "heldTime",
+    ///    "kos"
+    ///  ],
+    ///  "properties": {
+    ///    "damage": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "heldTime": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemWeaponTwo {
+        pub damage: PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage,
+        #[serde(rename = "heldTime")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub held_time: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+    }
+    ///`PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage(
+        ::std::string::String,
+    );
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerCareerSnapshotInnerLegendsItemWeaponTwoDamage {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerWeaponsItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "damage",
+    ///    "heldTime",
+    ///    "kos",
+    ///    "weapon"
+    ///  ],
+    ///  "properties": {
+    ///    "damage": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d*)$"
+    ///    },
+    ///    "heldTime": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "kos": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "weapon": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerWeaponsItem {
+        pub damage: PlayerCareerSnapshotInnerWeaponsItemDamage,
+        #[serde(rename = "heldTime")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub held_time: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub kos: i32,
+        pub weapon: PlayerCareerSnapshotInnerWeaponsItemWeapon,
+    }
+    ///`PlayerCareerSnapshotInnerWeaponsItemDamage`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d*)$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerWeaponsItemDamage(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerWeaponsItemDamage {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerWeaponsItemDamage>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerWeaponsItemDamage) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerWeaponsItemDamage {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d*)$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d*)$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerSnapshotInnerWeaponsItemDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerWeaponsItemDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerWeaponsItemDamage {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerSnapshotInnerWeaponsItemDamage {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerWeaponsItemWeapon`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerWeaponsItemWeapon(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerWeaponsItemWeapon {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerWeaponsItemWeapon>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerWeaponsItemWeapon) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerWeaponsItemWeapon {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerSnapshotInnerWeaponsItemWeapon {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerWeaponsItemWeapon {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerWeaponsItemWeapon {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerSnapshotInnerWeaponsItemWeapon {
         fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
         where
             D: ::serde::Deserializer<'de>,

@@ -13,6 +13,29 @@ import { migratePostgres } from '../src/postgres'
 
 const connectionString = process.env.DATABASE_URL
 
+const preCareerGlobalHistory = [
+  ['players/0001', '9fff6573583618708c9c931a59389543124d9848ac747012682ea278eda23bc4'],
+  ['players/0002', 'fc28d5cfebc3578e98941194f7d3a82f49acb66048c522c60579bc5952b8d813'],
+  ['players/0003', 'dfad48739d880c7e48b92d47968549ffa18800969d64709b4700e1a1bddf870c'],
+  ['refresh-operations/0001', '1f32e6322472955d54595762e3089c9adb07ec0727270cbbdd0c5feb5404e4f2'],
+  ['refresh-operations/0002', 'eeb157f26cb2e5a263953f7405ff908beaa65b3dd368a73d4b480e822b3a3dbd'],
+  ['refresh-operations/0003', '4f5d57a9827939268a0bea1574e9724cc37e93904582288afdfd7d862e639cf2'],
+  ['refresh-operations/0004', '34ab6f76aa894f80e8f9316742b6c8a23e44f816768e5967c887817dc1a8c7bc'],
+  ['refresh-operations/0005', 'cc91f02a20ef0e3489a981552e71c01aedbbe19c7facf24e3c420d4ab2622abb'],
+  ['refresh-operations/0006', '9cedc673d6c7508bcb157585e05c7f74854f26b7527f78f1fb58cc72346d7b23'],
+  ['request-admission/0001', 'c5a231d4c495e6fd0077527ca681fc0b9d87acc19ee775b141f6dace81783fff'],
+  ['request-admission/0002', 'dc0ce038a0793f9f61a08f3fd6faba4385a3721910798ec266cc7a94b7666e37'],
+  ['accounts/0001', '35221acf208c770f80f551d62a6c7698e4a3c03fb4aa5c87b83ab9c442232354'],
+  ['accounts/0002', '0267bc15fea9cf27bf8d08434e9c7cb3f8c054beb9274619a770236f116bf99c'],
+  ['accounts/0003', '3b6a89bd5b60420ac04471559c2b8a8e27495b52135e176438910de3611696a3'],
+  ['rankings/0001', 'd3c91ddf8a99e6a5a39b88eaad3813f9e65c693346fe1bf054b5fe6f4901b701'],
+  ['clans/0001', 'f258dd4e3e46c8bcaa917f3f42a3d4a9925963374453e7c7c7b70565ea502700'],
+  ['refresh-operations/0007', '7e8aafa5721bef24c28a00dfcee3d39d6cc90aecbdc77abf70401cb5cb8cf6e7'],
+  ['refresh-operations/0008', '4155f341183e7f277b73a12a38eb24b219193a634cb253b583faf875c0c7a282'],
+  ['refresh-operations/0009', '8c91d27975f4f672485a354c6486980f5aaac597ef9d29662b7b9476d6b3dc60'],
+  ['rankings/0002', 'ad02e3418fd523a88541aec0c6b1d0c1c38f87b3c4a20bd76f5dfb64e3bbb9bd'],
+] as const
+
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   test('inventories refresh migrations as the stable 0001 through 0009 chain', () => {
     expect(refreshOperationsMigrationInventory.map(({ identity }) => identity)).toEqual([
@@ -30,7 +53,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
   test('preserves the complete pre-Clans global history as an applied prefix', async () => {
     const oldGlobalInventory = [
-      ...playerMigrationInventory,
+      ...playerMigrationInventory.slice(0, 3),
       ...refreshOperationsMigrationInventory.slice(0, 6),
       ...requestAdmissionMigrationInventory,
       ...accountsMigrationInventory,
@@ -43,6 +66,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       refreshOperationsMigrationInventory[7],
       refreshOperationsMigrationInventory[8],
       rankingMigrationInventory[1],
+      playerMigrationInventory[3],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -64,6 +88,32 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   }, 15_000)
 
+  test('preserves the complete pre-career global history and appends Players 0004 at the tail', async () => {
+    expect(
+      globalMigrationInventory
+        .slice(0, preCareerGlobalHistory.length)
+        .map(({ identity, checksum }) => [identity, checksum]),
+    ).toEqual(preCareerGlobalHistory.map((entry) => [...entry]))
+    const oldGlobalInventory = globalMigrationInventory.slice(0, preCareerGlobalHistory.length)
+    expect(globalMigrationInventory.slice(preCareerGlobalHistory.length)).toEqual([playerMigrationInventory[3]])
+
+    const databaseName = `brawltome_career_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(1)
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  }, 15_000)
+
   test('appends canonical ranked state after the applied Players prefix', async () => {
     const databaseName = `brawltome_player_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
@@ -75,13 +125,17 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(1)
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(2)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const [rankedProfiles] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.ranked_profiles')::text AS table_name
         `
+        const [careerProfiles] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.career_profiles')::text AS table_name
+        `
         expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
+        expect(careerProfiles.table_name).toBe('players.career_profiles')
       } finally {
         await client.end()
       }
@@ -174,8 +228,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
       const failingMigration: Migration = {
-        identity: 'players/0004',
-        predecessor: 'players/0003',
+        identity: 'players/0005',
+        predecessor: 'players/0004',
         checksum: checksumSql(failingSql),
         sql: failingSql,
       }
@@ -211,6 +265,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         const [rankedSoloQueue] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.ranked_solo_queue')::text AS table_name
         `
+        const [careerProfiles] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.career_profiles')::text AS table_name
+        `
         const [activeLeaseFence] = await client<{ function_name: string | null }[]>`
           SELECT to_regprocedure(
             'refresh_operations.acquire_active_lease(uuid,text,bigint)'
@@ -235,6 +292,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(playerRefreshEffects.table_name).toBe('players.interactive_refresh_effects')
         expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
         expect(rankedSoloQueue.table_name).toBe('players.ranked_solo_queue')
+        expect(careerProfiles.table_name).toBe('players.career_profiles')
         expect(activeLeaseFence.function_name).toContain('acquire_active_lease')
         expect(interactiveSectionFence.function_name).toContain('commit_interactive_section_if_owned')
         expect(rollbackProbe.table_name).toBeNull()

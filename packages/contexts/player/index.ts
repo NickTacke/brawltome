@@ -1,4 +1,11 @@
 export {
+  CAREER_FRESHNESS_SECONDS,
+  type CareerPlayerProfile,
+  type CareerPlayerQueries,
+  type CareerSnapshot,
+  careerFreshness,
+} from './career/model'
+export {
   RANKED_FRESHNESS_SECONDS,
   type MainLegend,
   type RankedPlayerProfile,

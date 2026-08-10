@@ -1,24 +1,20 @@
 'use client'
 
 import { Card, CardContent } from '@brawltome/ui'
-import { CombatCard } from '../CombatCard'
-import { LegendSection } from '../LegendSection'
+import { CareerStatistics } from '../CareerStatistics'
 import { RankedCard } from '../RankedCard'
 import { RatingChart } from '../RatingChart'
 import { TeamSection } from '../TeamSection'
-import { WeaponSection } from '../WeaponSection'
 import type { PlayerData } from '../shared'
 
 interface ProfileSectionsProps {
   player: PlayerData
   id: string
-  allLegends: PlayerData[]
   rankedTeams: PlayerData[]
-  // biome-ignore lint/suspicious/noExplicitAny: weapon stats inferred type
-  weaponStats: any[]
+  careerRefreshing: boolean
 }
 
-export function ProfileSections({ player, id, allLegends, rankedTeams, weaponStats }: ProfileSectionsProps) {
+export function ProfileSections({ player, id, rankedTeams, careerRefreshing }: ProfileSectionsProps) {
   return (
     <>
       <section id="ranked" aria-labelledby="current-season-heading" className="space-y-6">
@@ -61,20 +57,7 @@ export function ProfileSections({ player, id, allLegends, rankedTeams, weaponSta
         </div>
       </section>
 
-      <section aria-labelledby="career-statistics-heading" className="space-y-6">
-        <h2 id="career-statistics-heading" className="text-2xl font-bold text-foreground">
-          Career Statistics
-        </h2>
-        <CombatCard player={player} />
-
-        <div id="weapons">
-          <WeaponSection weaponStats={weaponStats} />
-        </div>
-
-        <div id="legends">
-          <LegendSection allLegends={allLegends} rankedLegends={[]} />
-        </div>
-      </section>
+      <CareerStatistics career={player.career ?? null} refreshing={careerRefreshing} />
     </>
   )
 }

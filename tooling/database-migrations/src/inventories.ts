@@ -7,7 +7,7 @@ import { requestAdmissionMigrationInventory } from '@brawltome/request-admission
 import type { Migration } from './plan'
 
 export const globalMigrationInventory: readonly Migration[] = [
-  ...playerMigrationInventory,
+  ...playerMigrationInventory.slice(0, 3),
   ...refreshOperationsMigrationInventory.slice(0, 6),
   ...requestAdmissionMigrationInventory,
   ...accountsMigrationInventory,
@@ -17,4 +17,5 @@ export const globalMigrationInventory: readonly Migration[] = [
   refreshOperationsMigrationInventory[7],
   refreshOperationsMigrationInventory[8],
   rankingMigrationInventory[1],
+  playerMigrationInventory[3],
 ]

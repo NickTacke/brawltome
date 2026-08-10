@@ -8,6 +8,7 @@ describe('stored Player Reference', () => {
     const storedId = randomInt(1_500_000_000, 2_000_000_000)
     const placeholderId = storedId + 1
     const rankedId = storedId + 2
+    const careerId = storedId + 3
     const rollback = new Error('rollback Player Reference integration test')
 
     try {
@@ -21,10 +22,13 @@ describe('stored Player Reference', () => {
           transaction as unknown as Database,
           async (brawlhallaId) =>
             brawlhallaId === rankedId ? { brawlhallaId, name: 'Canonical Ranked Player' } : null,
+          async (brawlhallaId) =>
+            brawlhallaId === careerId ? { brawlhallaId, name: 'Canonical Career Player' } : null,
         )
 
         expect(await queries.byId(storedId)).toEqual({ brawlhallaId: storedId, name: 'Canonical Player' })
         expect(await queries.byId(rankedId)).toEqual({ brawlhallaId: rankedId, name: 'Canonical Ranked Player' })
+        expect(await queries.byId(careerId)).toEqual({ brawlhallaId: careerId, name: 'Canonical Career Player' })
         expect(await queries.byId(placeholderId)).toBeNull()
         expect(await queries.byId(storedId - 1)).toBeNull()
         throw rollback

@@ -385,4 +385,45 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'player.career-statistics',
+    area: 'player-profile',
+    requirement:
+      'The preserved player URL publishes Players-owned complete V0 lifetime Career Statistics independently from Current Season with twelve-hour freshness.',
+    sourceIssue: '#195',
+    status: 'verified',
+    destinations: ['/player/:id'],
+    implementation: [
+      'packages/contexts/player/career/source.ts',
+      'packages/contexts/player/career/postgres.ts',
+      'packages/contracts/src/player-career.ts',
+      'apps/api/src/router/player-career.router.ts',
+      'apps/web/src/components/player/CareerStatistics.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/player/tests/career-source.test.ts',
+        assertion:
+          'Strict V0 decoding preserves exact damage, measured zero, authoritative empties, and rejects unresolved legends.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/api/tests/player-career.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL proves atomic checkpoints, retention, authoritative replacement, lease fencing, and crash reconciliation.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/player-career.router.test.ts',
+        assertion: 'The canonical career API maps Players state and rejects malformed producer output.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/player/CareerStatistics.test.tsx',
+        assertion:
+          'Rendered lifetime UI labels supported facts, omits unavailable deep sections, and makes no weapon performance claim.',
+      },
+    ],
+  },
 ]

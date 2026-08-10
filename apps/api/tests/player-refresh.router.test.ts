@@ -22,6 +22,7 @@ function harness(
     authenticated?: boolean
     trusted?: boolean
     rankedLastSuccess?: Date | null
+    careerLastSuccess?: Date | null
   } = {},
 ) {
   const calls = { verify: 0, actor: 0, source: 0, reserve: 0, activate: 0, grant: 0 }
@@ -36,10 +37,16 @@ function harness(
             reservationExpired: options.activeAwaiting ?? false,
           }
         : null,
+    findActiveInteractiveClanRefresh: async () => null,
     reserveInteractivePlayerRefresh: async () => {
       calls.reserve++
       return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() }
     },
+    reserveInteractiveClanRefresh: async () => ({
+      outcome: 'reserved',
+      operationId,
+      reservationToken: crypto.randomUUID(),
+    }),
     activateInteractiveRefresh: async () => {
       calls.activate++
       return 'transitioned'
@@ -68,6 +75,18 @@ function harness(
           return null
         }
         return { lastSuccessAt: stored.rankedLastUpdated }
+      },
+    },
+    careerPlayerQueries: {
+      byId: async () => {
+        if ('careerLastSuccess' in options) {
+          return options.careerLastSuccess ? { lastSuccessAt: options.careerLastSuccess } : null
+        }
+        const stored = options.player === undefined ? stalePlayer : options.player
+        if (!stored || typeof stored !== 'object' || !('statsLastUpdated' in stored) || !stored.statsLastUpdated) {
+          return null
+        }
+        return { lastSuccessAt: stored.statsLastUpdated }
       },
     },
     playerRepo: { findById: async () => (options.player === undefined ? stalePlayer : options.player) },
@@ -133,6 +152,27 @@ describe('canonical player interactive refresh', () => {
       refresh: { outcome: 'notNeeded' },
     })
     expect(fresh.calls.reserve).toBe(0)
+  })
+
+  test('uses canonical career last-success instead of legacy stats timestamps', async () => {
+    const missingCareer = caller({
+      player: { rankedLastUpdated: new Date(), statsLastUpdated: new Date() },
+      rankedLastSuccess: new Date(),
+      careerLastSuccess: null,
+      trusted: true,
+    })
+    await expect(missingCareer.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
+      refresh: { outcome: 'accepted' },
+    })
+
+    const freshCareer = caller({
+      player: { rankedLastUpdated: null, statsLastUpdated: null },
+      rankedLastSuccess: new Date(),
+      careerLastSuccess: new Date(),
+    })
+    await expect(freshCareer.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
+      refresh: { outcome: 'notNeeded' },
+    })
   })
 
   test('returns alreadyRefreshing before verification or source admission', async () => {
