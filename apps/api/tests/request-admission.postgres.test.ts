@@ -64,9 +64,11 @@ afterAll(async () => {
 beforeEach(async () => {
   const control = postgres(connectionString, { max: 1 })
   try {
+    await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions DISABLE TRIGGER USER')
     await control.unsafe(
       'TRUNCATE request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, refresh_operations.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
     )
+    await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions ENABLE TRIGGER USER')
   } finally {
     await control.end()
   }
@@ -447,6 +449,66 @@ describe('PostgreSQL interactive refresh admission', () => {
       }),
     ).toMatchObject({ outcome: 'admitted', deduplicated: false })
     expect((await admission.inspectUsage()).sourceUnits).toEqual({ 'brawlhalla-v0': 2 })
+    await admission.close()
+    await operations.close()
+  })
+
+  test('charges replay source calls while preserving the original effect identity', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v1': 180 },
+    })
+    const key = `source-replay:${randomUUID()}`
+    const reserved = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: key,
+      operationKey: key,
+      brawlhallaId: 42,
+      staleSections: ['ranked'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    const original = await operations.claim(
+      'source-replay-original',
+      1_000,
+      testAdmission,
+      'interactive-player-refresh',
+    )
+    if (!original || original.kind !== 'interactive-player-refresh') throw new Error('Expected original lease')
+    expect(
+      await admission.admitSource({
+        domain: 'brawlhalla-v1',
+        reservationKey: `${original.operationId}:ranked:${original.attemptNumber}:0`,
+        units: 1,
+      }),
+    ).toMatchObject({ outcome: 'admitted', deduplicated: false })
+    await operations.fail(original, { code: 'operator_repairable', message: 'repairable', retryable: false }, 0)
+
+    const replay = await operations.replayDeadLetter({
+      operationId: original.operationId,
+      actorId: 'operator:integration',
+      reason: 'upstream repaired',
+    })
+    if (replay.outcome !== 'replayed') throw new Error('Expected replay')
+    expect(
+      await runOneRefreshOperation(operations, 'source-replay-successor', {
+        leaseMs: 1_000,
+        retryDelayMs: 0,
+        admission: testAdmission,
+        sourceAdmission: admission,
+        executeSection: async (lease, _section, admitSourceCall) => {
+          expect(lease.effectOperationId).toBe(original.effectOperationId)
+          expect(lease.operationId).toBe(replay.replayOperationId)
+          await admitSourceCall('brawlhalla-v1')
+        },
+      }),
+    ).toBe(true)
+    expect(await admission.inspectUsage()).toMatchObject({
+      sourceUnits: { 'brawlhalla-v1': 2 },
+      sourceReservations: 2,
+    })
     await admission.close()
     await operations.close()
   })

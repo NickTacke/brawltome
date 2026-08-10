@@ -13,4 +13,5 @@ export const runtimeMigrationInventory = [
   ...rankingMigrationInventory,
   ...clanMigrationInventory,
   refreshOperationsMigrationInventory[6],
+  refreshOperationsMigrationInventory[7],
 ] as const

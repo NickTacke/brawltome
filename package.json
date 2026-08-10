@@ -7,6 +7,7 @@
     "dev:web": "bun run --filter @brawltome/web dev",
     "dev:v2-compatibility-worker": "bun run --filter @brawltome/api dev:v2-compatibility-worker",
     "dev:operations-worker": "bun run --filter @brawltome/api dev:operations-worker",
+    "operations:dead-letters": "bun run --filter @brawltome/refresh-operations dead-letters --",
     "dev:desktop": "bun run --filter @brawltome/desktop dev",
     "dev:discord-bot": "bun run --filter @brawltome/discord-bot dev",
     "build": "bun run --filter '*' build",

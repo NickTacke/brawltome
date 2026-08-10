@@ -10,6 +10,7 @@ import type { V0RankedSnapshot } from './source'
 
 export type CanonicalRankedEffect = {
   operationId: string
+  effectOperationId?: string
   leaseOwner: string
   leaseToken: number
   section: 'ranked'
@@ -247,7 +248,7 @@ export function createPostgresRankedPlayers(
         if (!(await commitInteractiveSection(sql, effect))) return 'lease-lost' as const
         const inserted = await sql<{ operation_id: string }[]>`
           INSERT INTO players.interactive_refresh_effects (operation_id, section, lease_token)
-          VALUES (${effect.operationId}::uuid, ${effect.section}, ${effect.leaseToken})
+          VALUES (${effect.effectOperationId ?? effect.operationId}::uuid, ${effect.section}, ${effect.leaseToken})
           ON CONFLICT (operation_id, section) DO NOTHING
           RETURNING operation_id
         `

@@ -180,15 +180,15 @@ export function createPostgresRanking(connectionString: string) {
         const effect = await recordOperationEffect(sql, authorization)
         if (effect === 'lease-lost' || effect === 'effect-conflict') return effect
 
+        const effectOperationId = authorization.effectOperationId ?? authorization.operationId
         const [existing] = await sql<{ operation_id: string; operation_key: string }[]>`
           SELECT operation_id, operation_key
           FROM rankings.generations
-          WHERE operation_key = ${candidate.operationKey} OR operation_id = ${authorization.operationId}
+          WHERE operation_key = ${candidate.operationKey} OR operation_id = ${effectOperationId}
           LIMIT 1
         `
         if (existing) {
-          return existing.operation_id === authorization.operationId &&
-            existing.operation_key === candidate.operationKey
+          return existing.operation_id === effectOperationId && existing.operation_key === candidate.operationKey
             ? ('already-published' as const)
             : ('effect-conflict' as const)
         }
@@ -202,7 +202,7 @@ export function createPostgresRanking(connectionString: string) {
             (id, operation_id, operation_key, observed_at, schedule_window_at,
              expected_next_publication_at, page_depth, source, source_contract_version)
           VALUES
-            (${generationId}, ${authorization.operationId}, ${candidate.operationKey}, ${candidate.observedAt},
+            (${generationId}, ${effectOperationId}, ${candidate.operationKey}, ${candidate.observedAt},
              ${candidate.scheduleWindowAt}, ${candidate.expectedNextPublicationAt}, ${candidate.pageDepth},
              'brawlhalla-v1-ranked-leaderboard', 1)
         `

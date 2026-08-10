@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { checkArchitecture } from '../src/check-architecture'
 import { currentArchitecturePolicy } from '../src/current-policy'
@@ -162,6 +163,19 @@ describe('V3 dependency architecture', () => {
     const players = await readTree('packages/contexts/player')
     expect(clans).not.toMatch(/@brawltome\/(?:database|player)/)
     expect(players).not.toMatch(/playerClan|getPlayerGuildV1|getGuildStatsV1/)
+  })
+
+  it('keeps dead-letter operator tooling capability-owned and behind a narrow composition boundary', () => {
+    const repositoryRoot = resolve(import.meta.dir, '../../..')
+    const repository = readArchitectureRepository(repositoryRoot)
+    const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/refresh-operations')
+    const packageDocument = JSON.parse(
+      readFileSync(resolve(repositoryRoot, 'packages/contexts/refresh-operations/package.json'), 'utf8'),
+    ) as { scripts?: Record<string, string> }
+
+    expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(true)
+    expect(refreshOperations?.exports.sort()).toEqual(['.', './composition'])
+    expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
   })
 
   it('passes the current repository only through the exact temporary V2 exceptions', () => {

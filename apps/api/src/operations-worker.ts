@@ -142,6 +142,7 @@ try {
               { caller: 'on-demand' },
               {
                 operationId: lease.operationId,
+                effectOperationId: lease.effectOperationId,
                 leaseOwner: lease.leaseOwner,
                 leaseToken: lease.leaseToken,
                 section: 'ranked',
@@ -149,7 +150,7 @@ try {
             )
           } else {
             await processRefreshStats({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', {
-              operationId: lease.operationId,
+              operationId: lease.effectOperationId,
               section,
               leaseToken: lease.leaseToken,
             })
@@ -157,7 +158,7 @@ try {
         },
         syncClanLeaseAuthority: async (lease, section, leaseExpiresAt) => {
           const prepared = await clans.prepareRefreshEffect({
-            operationId: lease.operationId,
+            operationId: lease.effectOperationId,
             section,
             leaseToken: lease.leaseToken,
             leaseExpiresAt,
@@ -166,7 +167,7 @@ try {
         },
         revokeClanLeaseAuthority: (lease, section) =>
           clans.revokeRefreshEffect({
-            operationId: lease.operationId,
+            operationId: lease.effectOperationId,
             section,
             leaseToken: lease.leaseToken,
             leaseExpiresAt: new Date(0),
@@ -180,7 +181,7 @@ try {
             section,
             'on-demand',
             new Date(),
-            { operationId: lease.operationId, section, leaseToken: lease.leaseToken, leaseExpiresAt },
+            { operationId: lease.effectOperationId, section, leaseToken: lease.leaseToken, leaseExpiresAt },
           )
           if (result.outcome === 'preserved') throw new Error(result.error ?? `${section} refresh failed`)
         },

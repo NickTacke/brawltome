@@ -17,6 +17,7 @@ const requiredRowIds = [
   'route.clan-id',
   'route.account',
   'route.stats',
+  'operations.dead-letters',
   'refresh.interactive-player',
   'player.current-season-ranked',
 ] as const

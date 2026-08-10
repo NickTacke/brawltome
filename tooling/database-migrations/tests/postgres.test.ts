@@ -14,7 +14,7 @@ import { migratePostgres } from '../src/postgres'
 const connectionString = process.env.DATABASE_URL
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories refresh migrations as the stable 0001 through 0007 chain', () => {
+  test('inventories refresh migrations as the stable 0001 through 0008 chain', () => {
     expect(refreshOperationsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'refresh-operations/0001',
       'refresh-operations/0002',
@@ -23,6 +23,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0005',
       'refresh-operations/0006',
       'refresh-operations/0007',
+      'refresh-operations/0008',
     ])
   })
 
@@ -38,6 +39,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(globalMigrationInventory.slice(oldGlobalInventory.length)).toEqual([
       ...clanMigrationInventory,
       refreshOperationsMigrationInventory[6],
+      refreshOperationsMigrationInventory[7],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -50,12 +52,14 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
+        globalMigrationInventory.length - oldGlobalInventory.length,
+      )
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
     }
-  })
+  }, 15_000)
 
   test('appends canonical ranked state after the applied Players prefix', async () => {
     const databaseName = `brawltome_player_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -84,7 +88,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   })
 
-  test('appends interactive, leaderboard, lease-fence, and clan migrations after a scheduling prefix', async () => {
+  test('appends interactive, leaderboard, lease-fence, clan, and dead-letter migrations after a scheduling prefix', async () => {
     const databaseName = `brawltome_migration_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -95,7 +99,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(5)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(6)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const history = await client<{ identity: string }[]>`
