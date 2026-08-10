@@ -621,17 +621,37 @@ export function createPostgresRefreshOperations(
           if (!candidate) return { kind: 'retry' as const }
 
           if (candidate.status === 'leased') {
-            const [effect] =
+            const [proofEffect] =
               candidate.kind === 'proof'
                 ? await sql<{ operation_id: string }[]>`
                     SELECT operation_id FROM refresh_operations.proof_effects
                     WHERE operation_id = ${candidate.id}
                   `
-                : await sql<{ operation_id: string }[]>`
+                : []
+            const [leaderboardEffect] =
+              candidate.kind === 'leaderboard-1v1'
+                ? await sql<{ operation_id: string }[]>`
                     SELECT operation_id FROM refresh_operations.leaderboard_effects
                     WHERE operation_id = ${candidate.id}
                   `
-            if (effect) {
+                : []
+            const [interactiveEffect] =
+              candidate.kind === 'interactive-player-refresh'
+                ? await sql<{ complete: boolean }[]>`
+                    SELECT NOT EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements_text(operation.payload -> 'staleSections') AS required(section)
+                      WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM refresh_operations.interactive_refresh_effects effect
+                        WHERE effect.operation_id = operation.id AND effect.section = required.section
+                      )
+                    ) AS complete
+                    FROM refresh_operations.operations operation
+                    WHERE operation.id = ${candidate.id}
+                  `
+                : []
+            if (proofEffect || leaderboardEffect || interactiveEffect?.complete) {
               await sql`
                 UPDATE refresh_operations.attempts
                 SET finished_at = clock_timestamp(), outcome = 'succeeded'

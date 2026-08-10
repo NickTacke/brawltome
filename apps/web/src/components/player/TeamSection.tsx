@@ -16,8 +16,8 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
   if (!rankedTeams || rankedTeams.length === 0) return null
 
   const idNumber = Number.parseInt(id, 10)
-  const soloQueue = rankedTeams.find((t) => {
-    const teammateId = t.brawlhallaIdOne === idNumber ? t.brawlhallaIdTwo : t.brawlhallaIdOne
+  const soloQueueRows = rankedTeams.filter((team) => {
+    const teammateId = team.brawlhallaIdOne === idNumber ? team.brawlhallaIdTwo : team.brawlhallaIdOne
     return teammateId === 0
   })
   const pairedTeams = rankedTeams.filter((t) => {
@@ -25,7 +25,7 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
     return teammateId !== 0
   })
 
-  const teamsTotals = rankedTeams.reduce(
+  const teamsTotals = pairedTeams.reduce(
     (acc: { games: number; wins: number }, team: PlayerData) => {
       acc.games += parseNum(team?.games)
       acc.wins += parseNum(team?.wins)
@@ -34,7 +34,6 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
     { games: 0, wins: 0 },
   )
   const teamsWinrate = teamsTotals.games > 0 ? (teamsTotals.wins / teamsTotals.games) * 100 : 0
-  const sqWinrate = soloQueue && soloQueue.games > 0 ? (soloQueue.wins / soloQueue.games) * 100 : 0
 
   return (
     <div className="space-y-4">
@@ -51,78 +50,87 @@ export function TeamSection({ player, rankedTeams, id }: TeamSectionProps) {
               {timeAgo(player.rankedLastUpdated)}
             </Badge>
           )}
-          <span className="text-sm text-muted-foreground font-mono">Teams: {rankedTeams.length}</span>
+          <span className="text-sm text-muted-foreground font-mono">Fixed teams: {pairedTeams.length}</span>
         </div>
       </div>
 
       <Card className="bg-linear-to-br from-card to-background border-border">
         <CardContent className="pt-6">
-          <div className={`flex ${soloQueue ? 'flex-col md:flex-row' : ''} gap-4 md:gap-6`}>
-            {/* Solo Queue */}
-            {soloQueue && (
-              <div className="flex-1 min-w-0">
-                <div className="flex gap-4">
-                  <div className="w-16 sm:w-20 shrink-0">
-                    <img
-                      src={getRankBanner(soloQueue.tier)}
-                      alt={soloQueue.tier || 'Unranked'}
-                      className="w-full h-auto object-contain drop-shadow-lg"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="text-sm sm:text-base font-bold text-muted-foreground">
-                      Solo Queue &middot; {soloQueue.tier}
+          <div className={`flex ${soloQueueRows.length > 0 ? 'flex-col md:flex-row' : ''} gap-4 md:gap-6`}>
+            {soloQueueRows.length > 0 && (
+              <div className="flex-1 min-w-0 space-y-6">
+                {soloQueueRows.map((soloQueue: PlayerData, index: number) => {
+                  const winRate = soloQueue.games > 0 ? (soloQueue.wins / soloQueue.games) * 100 : 0
+                  return (
+                    <div key={`${soloQueue.teamName}:${soloQueue.region}:${index}`} className="flex gap-4">
+                      <div className="w-16 sm:w-20 shrink-0">
+                        <img
+                          src={getRankBanner(soloQueue.tier)}
+                          alt={soloQueue.tier || 'Unranked'}
+                          className="w-full h-auto object-contain drop-shadow-lg"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="text-sm sm:text-base font-bold text-muted-foreground">
+                          Solo Queue &middot; {soloQueue.tier}
+                        </div>
+                        <div className="flex items-baseline gap-1 flex-wrap">
+                          <span className="text-2xl sm:text-3xl font-black text-foreground tracking-tight leading-none">
+                            {soloQueue.rating}
+                          </span>
+                          <span className="text-xl sm:text-2xl font-bold text-muted-foreground/30 leading-none">/</span>
+                          <span className="text-xl sm:text-2xl font-bold text-muted-foreground/50 leading-none">
+                            {soloQueue.peakRating}
+                          </span>
+                          <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-wider ml-0.5">
+                            Peak
+                          </span>
+                        </div>
+                        <WinLossBar percent={winRate} className="h-2.5" />
+                        <div className="flex justify-between text-[10px] font-bold">
+                          <span className="text-foreground">
+                            {soloQueue.wins}W{' '}
+                            <span className="font-normal text-muted-foreground">({winRate.toFixed(1)}%)</span>
+                          </span>
+                          <span className="text-foreground">
+                            {soloQueue.games - soloQueue.wins}L{' '}
+                            <span className="font-normal text-muted-foreground">({(100 - winRate).toFixed(1)}%)</span>
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-baseline gap-1 flex-wrap">
-                      <span className="text-2xl sm:text-3xl font-black text-foreground tracking-tight leading-none">
-                        {soloQueue.rating}
-                      </span>
-                      <span className="text-xl sm:text-2xl font-bold text-muted-foreground/30 leading-none">/</span>
-                      <span className="text-xl sm:text-2xl font-bold text-muted-foreground/50 leading-none">
-                        {soloQueue.peakRating}
-                      </span>
-                      <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-wider ml-0.5">
-                        Peak
-                      </span>
-                    </div>
-                    <WinLossBar percent={sqWinrate} className="h-2.5" />
-                    <div className="flex justify-between text-[10px] font-bold">
-                      <span className="text-foreground">
-                        {soloQueue.wins}W{' '}
-                        <span className="font-normal text-muted-foreground">({sqWinrate.toFixed(1)}%)</span>
-                      </span>
-                      <span className="text-foreground">
-                        {soloQueue.games - soloQueue.wins}L{' '}
-                        <span className="font-normal text-muted-foreground">({(100 - sqWinrate).toFixed(1)}%)</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  )
+                })}
               </div>
             )}
 
-            {soloQueue && <div className="border-t md:border-t-0 md:border-l border-border/30" />}
+            {soloQueueRows.length > 0 && pairedTeams.length > 0 && (
+              <div className="border-t md:border-t-0 md:border-l border-border/30" />
+            )}
 
-            {/* Overall */}
-            <div className="flex-1 min-w-0 space-y-1 sm:space-y-2">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 sm:mb-3">
-                Overall
-              </div>
-              <div className="flex items-baseline justify-between">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xl sm:text-3xl font-black text-foreground">{formatNum(teamsTotals.wins)}</span>
-                  <span className="text-xs sm:text-sm text-muted-foreground font-mono">
-                    / {formatNum(teamsTotals.games)}
-                  </span>
+            {pairedTeams.length > 0 && (
+              <div className="flex-1 min-w-0 space-y-1 sm:space-y-2">
+                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 sm:mb-3">
+                  Fixed Teams
                 </div>
-                <span className="text-lg sm:text-2xl font-black text-foreground">{teamsWinrate.toFixed(1)}%</span>
+                <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xl sm:text-3xl font-black text-foreground">
+                      {formatNum(teamsTotals.wins)}
+                    </span>
+                    <span className="text-xs sm:text-sm text-muted-foreground font-mono">
+                      / {formatNum(teamsTotals.games)}
+                    </span>
+                  </div>
+                  <span className="text-lg sm:text-2xl font-black text-foreground">{teamsWinrate.toFixed(1)}%</span>
+                </div>
+                <WinLossBar percent={teamsWinrate} className="h-2 sm:h-3" />
+                <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  <span>Wins / Games</span>
+                  <span>Win Rate</span>
+                </div>
               </div>
-              <WinLossBar percent={teamsWinrate} className="h-2 sm:h-3" />
-              <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                <span>Wins / Games</span>
-                <span>Win Rate</span>
-              </div>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>

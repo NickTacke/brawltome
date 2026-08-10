@@ -3,7 +3,8 @@ use std::net::TcpListener;
 
 use brawltome_contracts::generated::Client;
 use brawltome_contracts::generated::types::{
-    ContractProof, ContractProofEvent, GetContractProofXInternalSecret, RefreshOutcome,
+    ContractProof, ContractProofEvent, GetContractProofXInternalSecret, PlayerRankedProfile,
+    RefreshOutcome,
 };
 
 const VALID_PRESENT: &str = include_str!("../../tests/fixtures/valid-present.json");
@@ -18,6 +19,8 @@ const INVALID_DATE_TIME: &str = include_str!("../../tests/fixtures/invalid-date-
 const INVALID_OFFSET_DATE_TIME: &str =
     include_str!("../../tests/fixtures/invalid-offset-date-time.json");
 const INVALID_UNION: &str = include_str!("../../tests/fixtures/invalid-union.json");
+const PLAYER_RANKED_MEASURED_ZERO: &str =
+    include_str!("../../tests/fixtures/player-ranked-measured-zero.json");
 const REFRESH_OUTCOMES: [&str; 6] = [
     include_str!("../../tests/fixtures/refresh-accepted.json"),
     include_str!("../../tests/fixtures/refresh-already-refreshing.json"),
@@ -81,19 +84,107 @@ fn rejects_missing_nullable_out_of_range_datetime_and_unknown_union() {
 }
 
 #[test]
+fn generated_ranked_profile_preserves_measured_zero_and_solo_sentinel() {
+    let wire: serde_json::Value =
+        serde_json::from_str(PLAYER_RANKED_MEASURED_ZERO).expect("valid ranked fixture");
+    let profile: PlayerRankedProfile =
+        serde_json::from_value(wire.clone()).expect("generated ranked profile");
+    assert_eq!(
+        serde_json::to_value(profile).expect("serialize ranked profile"),
+        wire
+    );
+}
+
+#[test]
+fn generated_ranked_profile_rejects_wire_values_rejected_by_zod() {
+    for (name, pointer, invalid) in [
+        (
+            "negative rating",
+            "/snapshot/oneVsOne/rating",
+            serde_json::json!(-1),
+        ),
+        (
+            "out-of-range player ID",
+            "/brawlhallaId",
+            serde_json::json!(2_147_483_648u64),
+        ),
+        (
+            "out-of-range global rank",
+            "/snapshot/oneVsOne/globalRank",
+            serde_json::json!(2_147_483_648u64),
+        ),
+        (
+            "freshness drift",
+            "/freshForSeconds",
+            serde_json::json!(3599),
+        ),
+        (
+            "offset checked-at",
+            "/checkedAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+        (
+            "offset last-success",
+            "/lastSuccessAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+        (
+            "separator-only tier",
+            "/snapshot/oneVsOne/tier",
+            serde_json::json!(" \u{200b}"),
+        ),
+        (
+            "nonzero Solo sentinel",
+            "/snapshot/soloQueue/0/secondPlayerId",
+            serde_json::json!(1),
+        ),
+    ] {
+        let mut wire: serde_json::Value =
+            serde_json::from_str(PLAYER_RANKED_MEASURED_ZERO).expect("valid ranked fixture");
+        *wire.pointer_mut(pointer).expect("fixture pointer exists") = invalid;
+        assert!(
+            serde_json::from_value::<PlayerRankedProfile>(wire).is_err(),
+            "accepted invalid ranked {name}"
+        );
+    }
+}
+
+#[test]
 fn generated_refresh_outcomes_preserve_all_six_semantic_variants() {
     for fixture in REFRESH_OUTCOMES {
         let wire: serde_json::Value = serde_json::from_str(fixture).expect("valid refresh fixture");
-        let outcome: RefreshOutcome = serde_json::from_value(wire.clone()).expect("generated refresh outcome");
-        assert_eq!(serde_json::to_value(outcome).expect("serialize refresh outcome"), wire);
+        let outcome: RefreshOutcome =
+            serde_json::from_value(wire.clone()).expect("generated refresh outcome");
+        assert_eq!(
+            serde_json::to_value(outcome).expect("serialize refresh outcome"),
+            wire
+        );
     }
 
-    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[0]).unwrap(), RefreshOutcome::Accepted { .. }));
-    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[1]).unwrap(), RefreshOutcome::AlreadyRefreshing { .. }));
-    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[2]).unwrap(), RefreshOutcome::NotNeeded { .. }));
-    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[3]).unwrap(), RefreshOutcome::VerificationRequired { .. }));
-    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[4]).unwrap(), RefreshOutcome::RateLimited { .. }));
-    assert!(matches!(serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[5]).unwrap(), RefreshOutcome::TemporarilyUnavailable { .. }));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[0]).unwrap(),
+        RefreshOutcome::Accepted { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[1]).unwrap(),
+        RefreshOutcome::AlreadyRefreshing { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[2]).unwrap(),
+        RefreshOutcome::NotNeeded { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[3]).unwrap(),
+        RefreshOutcome::VerificationRequired { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[4]).unwrap(),
+        RefreshOutcome::RateLimited { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[5]).unwrap(),
+        RefreshOutcome::TemporarilyUnavailable { .. }
+    ));
 }
 
 #[tokio::test]

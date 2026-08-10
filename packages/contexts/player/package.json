@@ -15,7 +15,8 @@
     "@brawltome/shared": "workspace:*",
     "@brawltome/bhapi": "workspace:*",
     "drizzle-orm": "^0.39.0",
-    "ioredis": "^5.8.0"
+    "ioredis": "^5.8.0",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

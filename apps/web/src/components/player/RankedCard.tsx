@@ -1,9 +1,15 @@
 'use client'
 
 import { formatNum, timeAgo } from '@/lib/utils'
+import type { PlayerRankedProfileContract } from '@brawltome/contracts'
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Clock } from 'lucide-react'
 import { type PlayerData, WinLossBar, calculateEloReset, calculateGlory, getRankBanner } from './shared'
+
+function freshnessWindow(seconds: number): string {
+  const hours = seconds / 3_600
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+}
 
 interface RankedCardProps {
   player: PlayerData
@@ -11,6 +17,25 @@ interface RankedCardProps {
 }
 
 export function RankedCard({ player, rankedTeams }: RankedCardProps) {
+  const currentSeason = player.currentSeason as PlayerRankedProfileContract | null
+  if (!currentSeason?.snapshot) {
+    return (
+      <Card className="bg-linear-to-br from-card to-background border-border">
+        <CardHeader>
+          <div className="flex justify-between items-center gap-4">
+            <CardTitle className="text-lg font-bold">Competitive Snapshot</CardTitle>
+            <Badge variant="outline">Unavailable</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Current Season ranked data is unavailable.</p>
+          {currentSeason?.checkedAt && <p>Last checked {timeAgo(currentSeason.checkedAt)}.</p>}
+          {currentSeason && <p>Freshness window: {freshnessWindow(currentSeason.freshForSeconds)}.</p>}
+        </CardContent>
+      </Card>
+    )
+  }
+
   const rankedWins = player.rankedWins ?? 0
   const rankedGames = player.rankedGames ?? 0
   const winrate = rankedGames > 0 ? (rankedWins / rankedGames) * 100 : 0
@@ -23,19 +48,18 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
   return (
     <Card className="bg-linear-to-br from-card to-background border-border">
       <CardHeader className="pb-4">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-lg font-bold flex items-center gap-2">&#127942; Ranked Performance</CardTitle>
-          {player.rankedLastUpdated && (
-            <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
-              <Clock className="w-3 h-3" aria-hidden="true" />
-              <span className="sr-only">Updated </span>
-              <span className="hidden sm:inline" aria-hidden="true">
-                Updated{' '}
-              </span>
-              {timeAgo(player.rankedLastUpdated)}
-            </Badge>
-          )}
+        <div className="flex justify-between items-center gap-4">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">&#127942; Competitive Snapshot</CardTitle>
+          <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
+            <Clock className="w-3 h-3" aria-hidden="true" />
+            {currentSeason.freshness === 'fresh' ? 'Updated' : 'Update delayed'}
+          </Badge>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Last checked {timeAgo(currentSeason.checkedAt)}. Last successful update{' '}
+          {currentSeason.lastSuccessAt ? timeAgo(currentSeason.lastSuccessAt) : 'unavailable'}. Freshness window:{' '}
+          {freshnessWindow(currentSeason.freshForSeconds)}.
+        </p>
       </CardHeader>
 
       <CardContent className="space-y-8 pt-6 pb-8">

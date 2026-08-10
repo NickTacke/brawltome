@@ -18,6 +18,7 @@ const requiredRowIds = [
   'route.account',
   'route.stats',
   'refresh.interactive-player',
+  'player.current-season-ranked',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],
@@ -120,7 +121,12 @@ export function validateLaunchParity(rows: readonly ParityRow[], repositoryRoot:
 
 function readNavigation(repositoryRoot: string): { destinations: NavigationDestination[]; errors: string[] } {
   const path = resolve(repositoryRoot, 'apps/web/src/components/sidebar/navigation.json')
-  const value = JSON.parse(readFileSync(path, 'utf8')) as unknown
+  let value: unknown
+  try {
+    value = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return { destinations: [], errors: ['shell navigation contract must contain valid JSON'] }
+  }
   if (!Array.isArray(value)) return { destinations: [], errors: ['shell navigation contract must be an array'] }
 
   const destinations: NavigationDestination[] = []
@@ -142,7 +148,12 @@ function readNavigation(repositoryRoot: string): { destinations: NavigationDesti
 
 function readPreservedRoutes(repositoryRoot: string): { fixtures: PreservedRouteFixture[]; errors: string[] } {
   const path = resolve(repositoryRoot, 'apps/web/tests/fixtures/preserved-public-routes.json')
-  const value = JSON.parse(readFileSync(path, 'utf8')) as unknown
+  let value: unknown
+  try {
+    value = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return { fixtures: [], errors: ['preserved public route fixture must contain valid JSON'] }
+  }
   if (!Array.isArray(value)) return { fixtures: [], errors: ['preserved public route fixture must be an array'] }
 
   const fixtures: PreservedRouteFixture[] = []

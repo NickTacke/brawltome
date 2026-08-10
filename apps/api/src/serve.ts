@@ -3,7 +3,7 @@ import { createClanRepo } from '@brawltome/clan'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import { createPlayerRepo, playerMigrationInventory } from '@brawltome/player/composition'
+import { createPlayerRepo, createPostgresRankedPlayers, playerMigrationInventory } from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
 import { createPostgresRanking, rankingMigrationInventory } from '@brawltome/ranking/composition'
 import {
@@ -88,7 +88,12 @@ const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'backgroun
 )
 
 const playerRepo = createPlayerRepo(db)
-const playerReferenceQueries = createDatabasePlayerReferenceQueries(db)
+const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
+  resolveCareerMainLegend: (brawlhallaId) => playerRepo.getCareerMainLegend(brawlhallaId),
+})
+const playerReferenceQueries = createDatabasePlayerReferenceQueries(db, (brawlhallaId) =>
+  rankedPlayerQueries.referenceById(brawlhallaId),
+)
 const refreshOperations = createPostgresRefreshOperations(databaseUrl)
 const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
   authenticatedIpLimit: authenticatedRefreshIpLimit,
@@ -144,6 +149,7 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'operations-postgres', close: refreshOperations.close },
+    { name: 'players-ranked-postgres', close: rankedPlayerQueries.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -173,6 +179,7 @@ const sharedCtx = {
   clanQueue,
   playerRepo,
   playerReferenceQueries,
+  rankedPlayerQueries,
   refreshOperations,
   requestAdmission,
   verifyRefreshChallenge: verifyTurnstileResult,
@@ -372,7 +379,12 @@ const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 server.current = Bun.serve({
   port,
   fetch: async (request) => {
-    const pathname = new URL(request.url).pathname
+    let pathname: string
+    try {
+      pathname = new URL(request.url).pathname
+    } catch {
+      return Response.json({ error: 'invalid_request_url' }, { status: 400 })
+    }
     if (pathname.startsWith('/health/')) return app.fetch(request)
 
     const finishWork = lifecycle.startWork()

@@ -21,6 +21,7 @@ function harness(
     verification?: 'valid' | 'invalid' | 'unavailable'
     authenticated?: boolean
     trusted?: boolean
+    rankedLastSuccess?: Date | null
   } = {},
 ) {
   const calls = { verify: 0, actor: 0, source: 0, reserve: 0, activate: 0, grant: 0 }
@@ -57,6 +58,18 @@ function harness(
       ? { id: 'account-42', displayName: 'Ada', avatarUrl: null, createdAt: new Date('2026-01-01T00:00:00.000Z') }
       : null,
     playerReferenceQueries,
+    rankedPlayerQueries: {
+      byId: async () => {
+        if ('rankedLastSuccess' in options) {
+          return options.rankedLastSuccess ? { lastSuccessAt: options.rankedLastSuccess } : null
+        }
+        const stored = options.player === undefined ? stalePlayer : options.player
+        if (!stored || typeof stored !== 'object' || !('rankedLastUpdated' in stored) || !stored.rankedLastUpdated) {
+          return null
+        }
+        return { lastSuccessAt: stored.rankedLastUpdated }
+      },
+    },
     playerRepo: { findById: async () => (options.player === undefined ? stalePlayer : options.player) },
     refreshOperations: operations,
     requestAdmission: {
@@ -102,6 +115,24 @@ describe('canonical player interactive refresh', () => {
       refresh: { outcome: 'notNeeded', retry: { kind: 'none' } },
     })
     expect(calls).toEqual({ verify: 0, actor: 0, source: 0, reserve: 0, activate: 0, grant: 0 })
+  })
+
+  test('uses canonical last-success rather than checked-at or legacy ranked timestamps for freshness', async () => {
+    const freshStats = { rankedLastUpdated: new Date(), statsLastUpdated: new Date() }
+    const stale = caller({ player: freshStats, rankedLastSuccess: null, trusted: true })
+    await expect(stale.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
+      refresh: { outcome: 'accepted' },
+    })
+    expect(stale.calls.reserve).toBe(1)
+
+    const fresh = caller({
+      player: { rankedLastUpdated: null, statsLastUpdated: new Date() },
+      rankedLastSuccess: new Date(),
+    })
+    await expect(fresh.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
+      refresh: { outcome: 'notNeeded' },
+    })
+    expect(fresh.calls.reserve).toBe(0)
   })
 
   test('returns alreadyRefreshing before verification or source admission', async () => {

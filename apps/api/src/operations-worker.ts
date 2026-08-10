@@ -3,9 +3,10 @@ import { BhApiClient } from '@brawltome/bhapi'
 import { closeDatabase, db } from '@brawltome/database'
 import {
   createPlayerRepo,
+  createPostgresRankedPlayers,
   playerMigrationInventory,
-  processRefreshRanked,
   processRefreshStats,
+  refreshCanonicalRankedPlayer,
 } from '@brawltome/player/composition'
 import {
   createPostgresRanking,
@@ -47,6 +48,9 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
 })
 const playerRepo = createPlayerRepo(db)
 const ranking = createPostgresRanking(connectionString)
+const rankedPlayers = createPostgresRankedPlayers(connectionString, {
+  resolveCareerMainLegend: (brawlhallaId) => playerRepo.getCareerMainLegend(brawlhallaId),
+})
 const postgresReadiness = createPostgresReadiness(connectionString, [
   ...playerMigrationInventory,
   ...refreshOperationsMigrationInventory,
@@ -75,6 +79,7 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'request-admission-postgres', close: requestAdmission.close },
+    { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'database-postgres', close: closeDatabase },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -140,11 +145,25 @@ try {
             apiKey,
             beforeRequest: ({ domain }) => admitSourceCall(domain),
           })
-          const effect = { operationId: lease.operationId, section, leaseToken: lease.leaseToken }
           if (section === 'ranked') {
-            await processRefreshRanked({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', effect)
+            await refreshCanonicalRankedPlayer(
+              rankedPlayers,
+              { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) },
+              lease.payload.brawlhallaId,
+              { caller: 'on-demand' },
+              {
+                operationId: lease.operationId,
+                leaseOwner: lease.leaseOwner,
+                leaseToken: lease.leaseToken,
+                section: 'ranked',
+              },
+            )
           } else {
-            await processRefreshStats({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', effect)
+            await processRefreshStats({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', {
+              operationId: lease.operationId,
+              section,
+              leaseToken: lease.leaseToken,
+            })
           }
         },
       }),

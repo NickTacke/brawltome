@@ -9,6 +9,7 @@ import { TIERED_TTL } from '@brawltome/shared'
 import { z } from 'zod'
 import type { Context } from '../trpc/context'
 import { internalProcedure, mergeRouters, router } from '../trpc/trpc'
+import { createPlayerRankedRouter } from './player-ranked.router'
 import { createPlayerReferenceRouter } from './player-reference.router'
 
 const v2RefreshInputSchema = z.object({ id: z.number().int().positive(), turnstileToken: z.string() }).strict()
@@ -27,9 +28,12 @@ async function requestPlayerRefresh(
   ctx: Context,
   input: PlayerRefreshInputContract,
 ): Promise<PlayerRefreshResponseContract> {
-  const player = await ctx.playerReferenceQueries.byId(input.id)
-  const stored = await ctx.playerRepo.findById(input.id)
-  const rankedStale = !stored || isStale(stored.rankedLastUpdated, TIERED_TTL.hot.ranked)
+  const [player, stored, ranked] = await Promise.all([
+    ctx.playerReferenceQueries.byId(input.id),
+    ctx.playerRepo.findById(input.id),
+    ctx.rankedPlayerQueries.byId(input.id),
+  ])
+  const rankedStale = !ranked?.lastSuccessAt || isStale(ranked.lastSuccessAt, TIERED_TTL.hot.ranked)
   const statsStale = !stored || isStale(stored.statsLastUpdated, TIERED_TTL.hot.stats)
   if (!rankedStale && !statsStale) {
     return { player, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
@@ -41,7 +45,7 @@ async function requestPlayerRefresh(
   const dedupeKey = [
     'player',
     input.id,
-    `ranked:${timestamp(stored?.rankedLastUpdated)}`,
+    `ranked:${timestamp(ranked?.lastSuccessAt)}`,
     `stats:${timestamp(stored?.statsLastUpdated)}`,
   ].join(':')
 
@@ -172,6 +176,7 @@ export function createV2PlayerRefreshRouter(procedure = internalProcedure) {
 
 export const playerRouter = mergeRouters(
   createPlayerReferenceRouter(),
+  createPlayerRankedRouter(),
   createCanonicalPlayerRefreshRouter(),
   createV2PlayerRefreshRouter(),
 )

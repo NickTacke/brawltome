@@ -1,7 +1,7 @@
 import { TIERED_TTL } from '@brawltome/shared/constants'
 
 export interface PlayerRefreshTimestamps {
-  rankedLastUpdated?: Date | string | null
+  currentSeason?: { lastSuccessAt?: Date | string | null } | null
   statsLastUpdated?: Date | string | null
 }
 
@@ -22,7 +22,7 @@ export function getPendingPlayerSections(
 ): PendingPlayerSections {
   if (!player) return { ranked: true, stats: true }
 
-  const rankedUpdatedAt = timestamp(player.rankedLastUpdated)
+  const rankedUpdatedAt = timestamp(player.currentSeason?.lastSuccessAt)
   const statsUpdatedAt = timestamp(player.statsLastUpdated)
 
   return {
@@ -38,7 +38,7 @@ export function hasCompletedPlayerRefresh(
 ): boolean {
   if (!next) return false
 
-  const rankedAdvanced = timestamp(next.rankedLastUpdated) > timestamp(initial?.rankedLastUpdated)
+  const rankedAdvanced = timestamp(next.currentSeason?.lastSuccessAt) > timestamp(initial?.currentSeason?.lastSuccessAt)
   const statsAdvanced = timestamp(next.statsLastUpdated) > timestamp(initial?.statsLastUpdated)
 
   return (!pending.ranked || rankedAdvanced) && (!pending.stats || statsAdvanced)

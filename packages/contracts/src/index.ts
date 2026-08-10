@@ -31,6 +31,13 @@ export {
   type LeaderboardScope,
 } from './leaderboard'
 export {
+  nullablePlayerRankedProfileSchema,
+  parsePlayerRankedProfileOutput,
+  playerRankedProfileSchema,
+  playerRankedSnapshotSchema,
+  type PlayerRankedProfileContract,
+} from './player-ranked'
+export {
   brawlhallaIdSchema,
   nullablePlayerReferenceSchema,
   parsePlayerReferenceOutput,

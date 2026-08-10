@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { playerMigrationInventory } from '@brawltome/player/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
 import { type Migration, checksumSql } from '../src/plan'
@@ -8,17 +9,45 @@ import { migratePostgres } from '../src/postgres'
 const connectionString = process.env.DATABASE_URL
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories refresh migrations as the stable 0001 through 0005 chain', () => {
+  test('inventories refresh migrations as the stable 0001 through 0006 chain', () => {
     expect(refreshOperationsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'refresh-operations/0001',
       'refresh-operations/0002',
       'refresh-operations/0003',
       'refresh-operations/0004',
       'refresh-operations/0005',
+      'refresh-operations/0006',
     ])
   })
 
-  test('appends leaderboard support after the applied interactive prefix', async () => {
+  test('appends canonical ranked state after the applied Players prefix', async () => {
+    const databaseName = `brawltome_player_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 2))).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(1)
+      const client = postgres(databaseUrl.toString(), { max: 1 })
+      try {
+        const [rankedProfiles] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.ranked_profiles')::text AS table_name
+        `
+        expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
+      } finally {
+        await client.end()
+      }
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  })
+
+  test('appends interactive, leaderboard, and lease-fence migrations after an applied scheduling prefix', async () => {
     const databaseName = `brawltome_migration_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -28,8 +57,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 4))).toBe(4)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(1)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 2))).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(4)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const history = await client<{ identity: string }[]>`
@@ -38,6 +67,41 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(history.map(({ identity }) => identity)).toEqual(
           refreshOperationsMigrationInventory.map(({ identity }) => identity),
         )
+      } finally {
+        await client.end()
+      }
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  })
+
+  test('appends the active lease fence after an applied leaderboard prefix', async () => {
+    const databaseName = `brawltome_lease_fence_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 5))).toBe(5)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(1)
+      const client = postgres(databaseUrl.toString(), { max: 1 })
+      try {
+        const [activeLeaseFence] = await client<{ function_name: string | null }[]>`
+          SELECT to_regprocedure(
+            'refresh_operations.acquire_active_lease(uuid,text,bigint)'
+          )::text AS function_name
+        `
+        const [interactiveSectionFence] = await client<{ function_name: string | null }[]>`
+          SELECT to_regprocedure(
+            'refresh_operations.commit_interactive_section_if_owned(uuid,text,bigint,text)'
+          )::text AS function_name
+        `
+        expect(activeLeaseFence.function_name).toContain('acquire_active_lease')
+        expect(interactiveSectionFence.function_name).toContain('commit_interactive_section_if_owned')
       } finally {
         await client.end()
       }
@@ -67,8 +131,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
       const failingMigration: Migration = {
-        identity: 'players/0003',
-        predecessor: 'players/0002',
+        identity: 'players/0004',
+        predecessor: 'players/0003',
         checksum: checksumSql(failingSql),
         sql: failingSql,
       }
@@ -95,6 +159,22 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         const [playerRefreshEffects] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.interactive_refresh_effects')::text AS table_name
         `
+        const [rankedProfiles] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.ranked_profiles')::text AS table_name
+        `
+        const [rankedSoloQueue] = await client<{ table_name: string | null }[]>`
+          SELECT to_regclass('players.ranked_solo_queue')::text AS table_name
+        `
+        const [activeLeaseFence] = await client<{ function_name: string | null }[]>`
+          SELECT to_regprocedure(
+            'refresh_operations.acquire_active_lease(uuid,text,bigint)'
+          )::text AS function_name
+        `
+        const [interactiveSectionFence] = await client<{ function_name: string | null }[]>`
+          SELECT to_regprocedure(
+            'refresh_operations.commit_interactive_section_if_owned(uuid,text,bigint,text)'
+          )::text AS function_name
+        `
         const [rollbackProbe] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.rollback_probe')::text AS table_name
         `
@@ -106,6 +186,10 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(refreshOperationsSchema.exists).toBe(true)
         expect(requestAdmissionSchema.exists).toBe(true)
         expect(playerRefreshEffects.table_name).toBe('players.interactive_refresh_effects')
+        expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
+        expect(rankedSoloQueue.table_name).toBe('players.ranked_solo_queue')
+        expect(activeLeaseFence.function_name).toContain('acquire_active_lease')
+        expect(interactiveSectionFence.function_name).toContain('commit_interactive_section_if_owned')
         expect(rollbackProbe.table_name).toBeNull()
       } finally {
         await client.end()
