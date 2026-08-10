@@ -33,7 +33,6 @@ import {
   REGIONS,
   type RegionId,
   buildLeaderboardQueryString,
-  displayedSoloStanding,
   isTeamEntry,
   parseLeaderboardSearchParams,
   preferencesForLeaderboardUpdate,
@@ -104,37 +103,27 @@ export function Leaderboard() {
       setObservedAt(null)
     }
 
-    const request =
-      bracket === '1v1'
-        ? trpc.leaderboard.oneVsOne.query({
-            bracket,
-            region,
-            page,
-            pageSize: PAGE_SIZE,
-            snapshotId: snapshotRef.current?.snapshotId,
-          })
-        : trpc.leaderboard.get.query({ bracket, region, page, pageSize: PAGE_SIZE })
+    const request = trpc.leaderboard.get.query({
+      mode: bracket,
+      region,
+      page,
+      pageSize: PAGE_SIZE,
+      snapshotId: snapshotRef.current?.snapshotId,
+    })
 
     request
       .then((data) => {
         if (cancelled) return
-        if ('status' in data) {
-          setSnapshotStatus(data.status)
-          if (data.status === 'unavailable') {
-            snapshotRef.current = null
-            setEntries([])
-            setObservedAt(null)
-            setKnownLastPage(data.page)
-          } else {
-            snapshotRef.current = { scopeKey, snapshotId: data.snapshotId }
-            setEntries(data.entries.map((entry) => ({ ...entry, rank: entry.standing })))
-            setObservedAt(data.observedAt)
-            setKnownLastPage(data.hasMore ? null : data.page)
-          }
-        } else {
-          setSnapshotStatus(null)
+        setSnapshotStatus(data.status)
+        if (data.status === 'unavailable') {
+          snapshotRef.current = null
+          setEntries([])
           setObservedAt(null)
-          setEntries(data.entries as LeaderboardEntry[])
+          setKnownLastPage(data.page)
+        } else {
+          snapshotRef.current = { scopeKey, snapshotId: data.snapshotId }
+          setEntries(data.entries)
+          setObservedAt(data.observedAt)
           setKnownLastPage(data.hasMore ? null : data.page)
         }
         setFetchedKey(`${bracket}:${region}:${page}`)
@@ -255,12 +244,12 @@ export function Leaderboard() {
                 </TableCell>
               </TableRow>
             ) : entries.length > 0 ? (
-              entries.map((entry, i) => {
+              entries.map((entry) => {
                 if (isTeamEntry(entry)) {
-                  return <TeamLeaderboardRow key={`${entry.brawlhallaIdOne}-${entry.brawlhallaIdTwo}`} entry={entry} />
+                  const [first, second] = entry.identity.players
+                  return <TeamLeaderboardRow key={`${first.brawlhallaId}-${second.brawlhallaId}`} entry={entry} />
                 }
-                const standing = displayedSoloStanding(bracket, entry, page, i)
-                return <SoloLeaderboardRow key={entry.brawlhallaId} entry={entry} rank={standing} />
+                return <SoloLeaderboardRow key={entry.identity.player.brawlhallaId} entry={entry} />
               })
             ) : (
               <TableRow className="border-border hover:bg-transparent">

@@ -6,6 +6,7 @@ import { addLeaderboardOperationKind } from './migrations/0005-add-leaderboard-k
 import { exposeActiveLeaseFence } from './migrations/0006-expose-active-lease-fence'
 import { addClanRefresh } from './migrations/0007-add-clan-refresh'
 import { addDeadLetterOperations } from './migrations/0008-add-dead-letter-operations'
+import { addLeaderboardOperationModes } from './migrations/0009-add-leaderboard-modes'
 
 export {
   createPostgresDeadLetterOperations,
@@ -23,4 +24,5 @@ export const refreshOperationsMigrationInventory = [
   exposeActiveLeaseFence,
   addClanRefresh,
   addDeadLetterOperations,
+  addLeaderboardOperationModes,
 ] as const

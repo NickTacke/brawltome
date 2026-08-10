@@ -1,25 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { leaderboard1v1InputSchema, leaderboard1v1OutputSchema, parseLeaderboard1v1Output } from '../src/leaderboard'
+import { leaderboardInputSchema, leaderboardOutputSchema, parseLeaderboardOutput } from '../src/leaderboard'
 
-const row = {
-  standing: 1,
-  sourceRank: 3,
-  brawlhallaId: 42,
-  name: 'Ada',
-  region: 'EU' as const,
-  rating: 2100,
-  peakRating: 2200,
-  wins: 20,
-  losses: 10,
-  games: 30,
-  tier: 'Diamond',
-}
-
-const available = {
+const common = {
   status: 'fresh' as const,
-  snapshotId: '10000000-0000-4000-8000-000000000001',
-  generationId: '10000000-0000-4000-8000-000000000002',
-  region: 'all' as const,
+  snapshotId: '00000000-0000-4000-8000-000000000001',
+  generationId: '00000000-0000-4000-8000-000000000002',
+  region: 'EU' as const,
   observedAt: '2026-08-09T12:00:00Z',
   publishedAt: '2026-08-09T12:00:01Z',
   expectedNextPublicationAt: '2026-08-09T12:15:00Z',
@@ -28,50 +14,88 @@ const available = {
   pageSize: 20,
   hasMore: false,
   totalRows: 1,
-  entries: [row],
+}
+const metrics = {
+  standing: 1,
+  sourceRank: 4,
+  region: 'EU' as const,
+  rating: 2100,
+  peakRating: 2200,
+  wins: 20,
+  losses: 10,
+  games: 30,
+  tier: 'Diamond',
+}
+const player = { brawlhallaId: 42, name: 'Ada' }
+
+const entries = {
+  '1v1': [{ ...metrics, identity: { type: 'one-vs-one-player' as const, player } }],
+  '2v2': [
+    {
+      ...metrics,
+      identity: {
+        type: 'fixed-two-vs-two-team' as const,
+        players: [player, { brawlhallaId: 43, name: 'Bodvar' }],
+      },
+    },
+  ],
+  solo2v2: [{ ...metrics, identity: { type: 'solo-two-vs-two-player' as const, player } }],
+  '3v3': [{ ...metrics, identity: { type: 'three-vs-three-player' as const, player } }],
 }
 
-describe('1v1 leaderboard contracts', () => {
-  test('accepts canonical fresh, stale, and typed unavailable results', () => {
-    expect(parseLeaderboard1v1Output(available)).toEqual(available)
-    expect(parseLeaderboard1v1Output({ ...available, status: 'stale' })).toMatchObject({ status: 'stale' })
-    expect(
-      parseLeaderboard1v1Output({ status: 'unavailable', reason: 'not_yet_published', page: 1, pageSize: 20 }),
-    ).toEqual({ status: 'unavailable', reason: 'not_yet_published', page: 1, pageSize: 20 })
-    expect(
-      parseLeaderboard1v1Output({ status: 'unavailable', reason: 'snapshot_not_found', page: 2, pageSize: 20 }),
-    ).toMatchObject({ status: 'unavailable', reason: 'snapshot_not_found' })
+describe('leaderboard contract', () => {
+  test('accepts every canonical mode input and rejects legacy or unknown fields', () => {
+    for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
+      expect(leaderboardInputSchema.parse({ mode, region: 'all', page: 1 })).toEqual({ mode, region: 'all', page: 1 })
+    }
+    expect(() => leaderboardInputSchema.parse({ bracket: '1v1', region: 'all', page: 1 })).toThrow()
+    expect(() => leaderboardInputSchema.parse({ mode: 'solo_2v2', region: 'all', page: 1 })).toThrow()
+    expect(() => leaderboardInputSchema.parse({ mode: '1v1', region: 'all', page: 1, extra: true })).toThrow()
   })
 
-  test('rejects malformed timestamps, ranks, counts, and persistence-shaped output', () => {
-    for (const value of [
-      { ...available, observedAt: '2026-08-09T12:00:00+00:00' },
-      { ...available, entries: [{ ...row, standing: 0 }] },
-      { ...available, entries: [{ ...row, games: 31 }] },
-      {
-        ...available,
-        entries: [{ ...row, wins: 2_147_483_647, losses: 1, games: 2_147_483_648 }],
-      },
-      { ...available, entries: [{ ...row, region: 'mars' }] },
-      { ...available, internalColumn: true },
-      { status: 'unavailable', reason: 'not_yet_published', page: 1, pageSize: 20, entries: [] },
-    ]) {
-      expect(() => leaderboard1v1OutputSchema.parse(value)).toThrow()
+  test('round-trips strict mode-specific identity discriminants', () => {
+    for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
+      const output = { ...common, mode, entries: entries[mode] }
+      const parsed = parseLeaderboardOutput(output)
+      expect(parsed.mode).toBe(mode)
+      expect(parsed).toEqual(output as never)
     }
   })
 
-  test('bounds canonical input, pins optional snapshots, and preserves Global as all', () => {
-    const snapshotId = '10000000-0000-4000-8000-000000000001'
+  test('cannot deserialize one mode identity as another', () => {
+    expect(() => leaderboardOutputSchema.parse({ ...common, mode: 'solo2v2', entries: entries['1v1'] })).toThrow()
+    expect(() => leaderboardOutputSchema.parse({ ...common, mode: '3v3', entries: entries['2v2'] })).toThrow()
+    expect(() => leaderboardOutputSchema.parse({ ...common, mode: '2v2', entries: entries.solo2v2 })).toThrow()
+  })
+
+  test('rejects zero IDs, noncanonical or duplicate fixed teams, inconsistent games, and unknown output fields', () => {
+    const fixed = entries['2v2'][0]
+    for (const identity of [
+      { type: 'fixed-two-vs-two-team', players: [{ brawlhallaId: 0, name: 'Zero' }, player] },
+      { type: 'fixed-two-vs-two-team', players: [player, player] },
+      { type: 'fixed-two-vs-two-team', players: [{ brawlhallaId: 43, name: 'B' }, player] },
+    ]) {
+      expect(() =>
+        leaderboardOutputSchema.parse({ ...common, mode: '2v2', entries: [{ ...fixed, identity }] }),
+      ).toThrow()
+    }
+    expect(() =>
+      leaderboardOutputSchema.parse({ ...common, mode: '1v1', entries: [{ ...entries['1v1'][0], games: 29 }] }),
+    ).toThrow()
+    expect(() =>
+      leaderboardOutputSchema.parse({ ...common, mode: '1v1', entries: entries['1v1'], persistence: true }),
+    ).toThrow()
+  })
+
+  test('keeps unavailable state mode-specific and pagination-bounded', () => {
     expect(
-      leaderboard1v1InputSchema.parse({ bracket: '1v1', region: 'all', page: 1, pageSize: 20, snapshotId }),
-    ).toEqual({
-      bracket: '1v1',
-      region: 'all',
-      page: 1,
-      pageSize: 20,
-      snapshotId,
-    })
-    expect(() => leaderboard1v1InputSchema.parse({ bracket: '2v2', region: 'all', page: 1 })).toThrow()
-    expect(() => leaderboard1v1InputSchema.parse({ bracket: '1v1', region: 'EU', page: 0 })).toThrow()
+      parseLeaderboardOutput({
+        status: 'unavailable',
+        reason: 'not_yet_published',
+        mode: '3v3',
+        page: 1,
+        pageSize: 20,
+      }),
+    ).toEqual({ status: 'unavailable', reason: 'not_yet_published', mode: '3v3', page: 1, pageSize: 20 })
   })
 })

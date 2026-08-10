@@ -193,6 +193,41 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   },
   {
+    id: 'ranking.immutable-all-mode-publication',
+    area: 'shell-navigation',
+    requirement:
+      'Home serves immutable validated fixed 2v2, Solo 2v2, and 3v3 standings with independent stale retention and snapshot-pinned pagination.',
+    sourceIssue: '#202',
+    status: 'verified',
+    destinations: ['/'],
+    implementation: [
+      'packages/contexts/ranking/leaderboard.ts',
+      'packages/contexts/ranking/postgres.ts',
+      'packages/contracts/src/leaderboard.ts',
+      'apps/api/src/router/leaderboard.router.ts',
+      'apps/web/src/components/Leaderboard/index.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/ranking-snapshots.postgres.test.ts',
+        assertion:
+          'PostgreSQL proves all-mode migration, identity constraints, atomic fencing, independent stale retention, restart, and snapshot-pinned pagination.',
+      },
+      {
+        kind: 'unit',
+        path: 'packages/contexts/ranking/tests/v1-leaderboard-source.test.ts',
+        assertion:
+          'Strict source probes reject zero IDs, cardinality drift, malformed metrics, and mode identity mixing.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/Leaderboard/LeaderboardRow.test.tsx',
+        assertion: 'Home rows preserve authoritative source rank and never construct a player-zero link.',
+      },
+    ],
+  },
+  {
     id: 'ranking.home-snapshot-states',
     area: 'shell-navigation',
     requirement:

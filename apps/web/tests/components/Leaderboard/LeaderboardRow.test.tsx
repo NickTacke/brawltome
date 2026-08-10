@@ -1,28 +1,71 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { SoloLeaderboardRow } from '../../../src/components/Leaderboard/LeaderboardRow'
+import { SoloLeaderboardRow, TeamLeaderboardRow } from '../../../src/components/Leaderboard/LeaderboardRow'
 
-describe('SoloLeaderboardRow', () => {
-  test('renders authoritative and source standings while preserving unknown legacy counts', () => {
+const metrics = {
+  standing: 3,
+  sourceRank: 7,
+  region: 'EU' as const,
+  rating: 2100,
+  peakRating: null,
+  tier: null,
+  wins: 20,
+  losses: 10,
+  games: 30,
+}
+
+describe('validated leaderboard rows', () => {
+  test('player modes render authoritative and source standings', () => {
     const html = renderToStaticMarkup(
       <SoloLeaderboardRow
-        rank={3}
         entry={{
-          brawlhallaId: 42,
-          name: 'Ada',
-          region: 'EU',
-          rating: 2100,
-          peakRating: null,
-          tier: null,
-          rank: 3,
-          sourceRank: 7,
+          ...metrics,
+          identity: {
+            type: 'three-vs-three-player',
+            player: { brawlhallaId: 42, name: 'Ada' },
+          },
         }}
       />,
     )
     expect(html).toContain('#3')
     expect(html).toContain('Source #7')
+    expect(html).toContain('href="/player/42"')
     expect(html).toContain('Peak: ---')
-    expect(html.match(/---/g)?.length).toBeGreaterThanOrEqual(4)
-    expect(html).not.toContain('0.0%')
+  })
+
+  test('fixed teams render both positive player links and their authoritative source rank', () => {
+    const html = renderToStaticMarkup(
+      <TeamLeaderboardRow
+        entry={{
+          ...metrics,
+          identity: {
+            type: 'fixed-two-vs-two-team',
+            players: [
+              { brawlhallaId: 42, name: 'Ada' },
+              { brawlhallaId: 43, name: 'Bodvar' },
+            ],
+          },
+        }}
+      />,
+    )
+    expect(html).toContain('#3')
+    expect(html).toContain('Source #7')
+    expect(html).toContain('href="/player/42"')
+    expect(html).toContain('href="/player/43"')
+  })
+
+  test('defensively never creates a /player/0 link', () => {
+    const html = renderToStaticMarkup(
+      <SoloLeaderboardRow
+        entry={{
+          ...metrics,
+          identity: {
+            type: 'solo-two-vs-two-player',
+            player: { brawlhallaId: 0, name: 'Sentinel' },
+          },
+        }}
+      />,
+    )
+    expect(html).not.toContain('/player/0')
   })
 })

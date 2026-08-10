@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { LeaderboardPageSource } from '@brawltome/ranking/composition'
 import {
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
@@ -285,7 +286,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = createPostgresRequestAdmission(connectionString, {
       authenticatedIpLimit: 120,
-      sourceLimits: { 'brawlhalla-v0': 180 },
+      sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
     const proof = await operations.accept({
       dedupeKey: `dispatch-proof:${randomUUID()}`,
@@ -319,12 +320,15 @@ describe('PostgreSQL interactive refresh admission', () => {
       sourceAdmission: admission,
       executeSection: async () => undefined,
       leaderboardSource: {
-        async fetchPage({ region }: { region: 'US-E' | 'EU' | 'SEA' | 'BRZ' | 'AUS' | 'US-W' | 'JPN' | 'ME' | 'SA' }) {
+        async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
+          if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
           return {
             rankings: [
               {
-                id: 1,
-                username: `${region} Player`,
+                identity: {
+                  type: 'one-vs-one-player' as const,
+                  player: { id: 1, username: `${region} Player` },
+                },
                 rating: 2_000,
                 best_rating: 2_100,
                 rank: 1,
@@ -339,10 +343,10 @@ describe('PostgreSQL interactive refresh admission', () => {
         },
       },
       ranking: {
-        async publish1v1Generation() {
+        async publishGeneration() {
           return 'published' as const
         },
-        async record1v1CollectionFailure() {
+        async recordCollectionFailure() {
           return 'recorded' as const
         },
       },

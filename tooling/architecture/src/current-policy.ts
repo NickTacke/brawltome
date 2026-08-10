@@ -394,7 +394,6 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       files: [
         'packages/contexts/ranking/commands/sweep-leaderboards.ts',
         'packages/contexts/ranking/queries/search-local.ts',
-        'packages/contexts/ranking/queries/get-leaderboard.ts',
         'packages/contexts/ranking/tests/sweep-leaderboards.test.ts',
         'packages/contexts/ranking/tests/sweep-upserts.test.ts',
         'packages/contexts/ranking/tests/get-leaderboard.test.ts',
@@ -411,7 +410,6 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       files: [
         'packages/contexts/ranking/commands/sweep-leaderboards.ts',
         'packages/contexts/ranking/queries/search-local.ts',
-        'packages/contexts/ranking/queries/get-leaderboard.ts',
         'packages/contexts/ranking/tests/sweep-leaderboards.test.ts',
         'packages/contexts/ranking/tests/sweep-upserts.test.ts',
         'packages/contexts/ranking/tests/get-leaderboard.test.ts',

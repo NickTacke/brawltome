@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { LeaderboardSourceError, decode1v1LeaderboardPage, fetch1v1LeaderboardPage } from '../v1-leaderboard-source'
+import {
+  type LeaderboardMode,
+  LeaderboardSourceError,
+  decodeLeaderboardPage,
+  fetchLeaderboardPage,
+} from '../v1-leaderboard-source'
 
-const sourceRow = {
-  players: [{ id: 42, username: 'Ada' }],
+const metrics = {
   rating: 2100,
   best_rating: 2200,
   rank: 1,
@@ -12,83 +16,96 @@ const sourceRow = {
   tier: 'Diamond',
 }
 
-describe('V1 1v1 leaderboard source', () => {
-  test('accepts additive unknown fields while decoding required semantics', () => {
-    expect(
-      decode1v1LeaderboardPage(
-        { rankings: [{ ...sourceRow, additive: true }], total_pages: 4, new_envelope_field: 'safe' },
-        { region: 'EU', page: 1 },
-      ),
-    ).toEqual({
-      rankings: [
-        {
-          id: 42,
-          username: 'Ada',
-          rating: 2100,
-          best_rating: 2200,
-          rank: 1,
-          wins: 20,
-          losses: 10,
-          region: 'EU',
-          tier: 'Diamond',
-        },
-      ],
-      totalPages: 4,
+const player = (id: number, username: string) => ({ id, username })
+const realShapedRows: Record<LeaderboardMode, unknown> = {
+  '1v1': { ...metrics, players: [player(42, 'Ada')] },
+  '2v2': { ...metrics, players: [player(9, 'Nix'), player(3, 'Bodvar')] },
+  solo2v2: { ...metrics, players: [player(43, 'Solo Ada')] },
+  '3v3': { ...metrics, players: [player(44, 'Three Ada')] },
+}
+
+function decode(mode: LeaderboardMode, row: unknown = realShapedRows[mode]) {
+  return decodeLeaderboardPage({ rankings: [row], total_pages: 4, additive: true }, { mode, region: 'EU', page: 1 })
+}
+
+describe('V1 ranked leaderboard source', () => {
+  test('decodes every live-shaped mode into an explicit non-interchangeable identity', () => {
+    expect(decode('1v1').rankings[0].identity).toEqual({
+      type: 'one-vs-one-player',
+      player: player(42, 'Ada'),
+    })
+    expect(decode('2v2').rankings[0].identity).toEqual({
+      type: 'fixed-two-vs-two-team',
+      players: [player(3, 'Bodvar'), player(9, 'Nix')],
+    })
+    expect(decode('solo2v2').rankings[0].identity).toEqual({
+      type: 'solo-two-vs-two-player',
+      player: player(43, 'Solo Ada'),
+    })
+    expect(decode('3v3').rankings[0].identity).toEqual({
+      type: 'three-vs-three-player',
+      player: player(44, 'Three Ada'),
     })
   })
 
-  test('preserves a supported player region that differs from the requested leaderboard scope', () => {
-    const decoded = decode1v1LeaderboardPage(
-      { rankings: [{ ...sourceRow, region: 'US-E' }], total_pages: 1 },
-      { region: 'EU', page: 1 },
-    )
-    expect(decoded.rankings[0].region).toBe('US-E')
+  test('accepts additive unknown fields and preserves a supported row region differing from scope', () => {
+    const row = { ...(realShapedRows['1v1'] as object), region: 'US-E', additive: true }
+    expect(decode('1v1', row).rankings[0]).toMatchObject({ region: 'US-E', rating: 2100 })
   })
 
-  test('rejects malformed, missing, drifted, or unsupported required semantics', () => {
+  test('rejects zero, duplicate, missing, or cardinality-drifted contestants for every mode', () => {
+    for (const mode of ['1v1', 'solo2v2', '3v3'] as const) {
+      for (const players of [[], [player(0, 'Sentinel')], [player(1, 'A'), player(2, 'B')]]) {
+        expect(() => decode(mode, { ...metrics, players })).toThrow(LeaderboardSourceError)
+      }
+    }
+    for (const players of [
+      [],
+      [player(1, 'A')],
+      [player(1, 'A'), player(1, 'A')],
+      [player(0, 'Sentinel'), player(2, 'B')],
+      [player(1, 'A'), player(2, 'B'), player(3, 'C')],
+    ]) {
+      expect(() => decode('2v2', { ...metrics, players })).toThrow(LeaderboardSourceError)
+    }
+  })
+
+  test('rejects malformed or drifted required semantics', () => {
+    const valid = realShapedRows['1v1'] as Record<string, unknown>
     for (const body of [
       null,
       [],
       { rankings: [], total_pages: 0 },
-      { rankings: [{ ...sourceRow, players: [] }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, players: [{ id: 0, username: 'Ada' }] }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, players: [{ id: 42, username: '  ' }] }], total_pages: 1 },
-      {
-        rankings: [
-          {
-            ...sourceRow,
-            players: [
-              { id: 42, username: 'Ada' },
-              { id: 43, username: 'Bodvar' },
-            ],
-          },
-        ],
-        total_pages: 1,
-      },
-      { rankings: [{ ...sourceRow, players: undefined, id: 42, username: 'Ada' }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, rating: Number.NaN }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, best_rating: 2099 }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, rank: 1.5 }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, wins: -1 }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, wins: 2_147_483_647, losses: 1 }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, region: 'OTHER' }], total_pages: 1 },
-      { rankings: [{ ...sourceRow, tier: '' }], total_pages: 1 },
+      { rankings: [{ ...valid, players: [{ id: 42, username: '  ' }] }], total_pages: 1 },
+      { rankings: [{ ...valid, players: undefined, id: 42, username: 'Ada' }], total_pages: 1 },
+      { rankings: [{ ...valid, rating: Number.NaN }], total_pages: 1 },
+      { rankings: [{ ...valid, best_rating: 2099 }], total_pages: 1 },
+      { rankings: [{ ...valid, rank: 1.5 }], total_pages: 1 },
+      { rankings: [{ ...valid, wins: -1 }], total_pages: 1 },
+      { rankings: [{ ...valid, wins: 2_147_483_647, losses: 1 }], total_pages: 1 },
+      { rankings: [{ ...valid, region: 'OTHER' }], total_pages: 1 },
+      { rankings: [{ ...valid, tier: '' }], total_pages: 1 },
     ]) {
-      expect(() => decode1v1LeaderboardPage(body, { region: 'EU', page: 1 })).toThrow(LeaderboardSourceError)
+      expect(() => decodeLeaderboardPage(body, { mode: '1v1', region: 'EU', page: 1 })).toThrow(LeaderboardSourceError)
     }
   })
 
-  test('uses the exact bounded V1 URL and never rewrites JPN or requests all', async () => {
+  test('uses the exact bounded V1 game_mode values and never requests Global', async () => {
     const urls: string[] = []
+    const modes = ['1v1', '2v2', 'solo2v2', '3v3'] as const
     const fetcher = async (input: RequestInfo | URL) => {
       urls.push(String(input))
-      return new Response(JSON.stringify({ rankings: [{ ...sourceRow, region: 'JPN' }], total_pages: 1 }))
+      const mode = modes[urls.length - 1]
+      return new Response(JSON.stringify({ rankings: [realShapedRows[mode]], total_pages: 1 }))
     }
-    await fetch1v1LeaderboardPage({ region: 'JPN', page: 1 }, { fetcher })
+    for (const mode of modes) await fetchLeaderboardPage({ mode, region: 'JPN', page: 1 }, { fetcher })
     expect(urls).toEqual([
       'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=1v1&page=1&max_results=50&leaderboard=prod',
+      'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=2v2&page=1&max_results=50&leaderboard=prod',
+      'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=solo_2v2&page=1&max_results=50&leaderboard=prod',
+      'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=3v3&page=1&max_results=50&leaderboard=prod',
     ])
-    await expect(fetch1v1LeaderboardPage({ region: 'all' as never, page: 1 }, { fetcher })).rejects.toThrow()
+    await expect(fetchLeaderboardPage({ mode: '3v3', region: 'all' as never, page: 1 }, { fetcher })).rejects.toThrow()
   })
 
   test('classifies response drift and transport failures for durable retries', async () => {
@@ -96,15 +113,21 @@ describe('V1 1v1 leaderboard source', () => {
     const unavailable = () => Promise.resolve(new Response('busy', { status: 503 }))
     const missing = () => Promise.resolve(new Response('nope', { status: 404 }))
 
-    await expect(fetch1v1LeaderboardPage({ region: 'EU', page: 1 }, { fetcher: malformed })).rejects.toMatchObject({
+    await expect(
+      fetchLeaderboardPage({ mode: '3v3', region: 'EU', page: 1 }, { fetcher: malformed }),
+    ).rejects.toMatchObject({
       code: 'source_contract_invalid',
       retryable: false,
     })
-    await expect(fetch1v1LeaderboardPage({ region: 'EU', page: 1 }, { fetcher: unavailable })).rejects.toMatchObject({
+    await expect(
+      fetchLeaderboardPage({ mode: '3v3', region: 'EU', page: 1 }, { fetcher: unavailable }),
+    ).rejects.toMatchObject({
       code: 'source_unavailable',
       retryable: true,
     })
-    await expect(fetch1v1LeaderboardPage({ region: 'EU', page: 1 }, { fetcher: missing })).rejects.toMatchObject({
+    await expect(
+      fetchLeaderboardPage({ mode: '3v3', region: 'EU', page: 1 }, { fetcher: missing }),
+    ).rejects.toMatchObject({
       code: 'source_not_found',
       retryable: false,
     })

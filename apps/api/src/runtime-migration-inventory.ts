@@ -10,8 +10,10 @@ export const runtimeMigrationInventory = [
   ...refreshOperationsMigrationInventory.slice(0, 6),
   ...requestAdmissionMigrationInventory,
   ...accountsMigrationInventory,
-  ...rankingMigrationInventory,
+  rankingMigrationInventory[0],
   ...clanMigrationInventory,
   refreshOperationsMigrationInventory[6],
   refreshOperationsMigrationInventory[7],
+  refreshOperationsMigrationInventory[8],
+  rankingMigrationInventory[1],
 ] as const

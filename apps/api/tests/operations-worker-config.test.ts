@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { readOperationsWorkerConfig } from '../src/operations-worker-config'
+import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from '../src/operations-worker-config'
 import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
 
 describe('operations worker configuration', () => {
@@ -41,6 +41,22 @@ describe('operations worker configuration', () => {
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }
+  })
+
+  test('defines four deterministic staggered schedules in the existing leaderboard work class', () => {
+    const definitions = leaderboardScheduleDefinitions(readOperationsWorkerConfig({}).leaderboard)
+    expect(definitions.map(({ mode, kind, workClass }) => ({ mode, kind, workClass }))).toEqual([
+      { mode: '1v1', kind: 'leaderboard-1v1', workClass: 'leaderboard' },
+      { mode: '2v2', kind: 'leaderboard-2v2', workClass: 'leaderboard' },
+      { mode: 'solo2v2', kind: 'leaderboard-solo-2v2', workClass: 'leaderboard' },
+      { mode: '3v3', kind: 'leaderboard-3v3', workClass: 'leaderboard' },
+    ])
+    expect(definitions.map(({ firstDueAt }) => firstDueAt)).toEqual([
+      '2020-01-01T00:00:00.000Z',
+      '2020-01-01T00:03:45.000Z',
+      '2020-01-01T00:07:30.000Z',
+      '2020-01-01T00:11:15.000Z',
+    ])
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {
