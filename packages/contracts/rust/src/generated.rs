@@ -36,6 +36,92 @@ pub mod types {
         }
         value.parse().map_err(<D::Error as ::serde::de::Error>::custom)
     }
+    fn deserialize_optional_utc_datetime<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <::std::option::Option<::std::string::String> as ::serde::Deserialize>::deserialize(deserializer)?;
+        value
+            .map(|value| {
+                if !value.ends_with('Z') {
+                    return Err(<D::Error as ::serde::de::Error>::custom("date-time must use the UTC Z suffix"));
+                }
+                value.parse().map_err(<D::Error as ::serde::de::Error>::custom)
+            })
+            .transpose()
+    }
+    fn deserialize_ranked_freshness_seconds<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value != 3600 {
+            return Err(<D::Error as ::serde::de::Error>::custom("ranked freshness must be 3600 seconds"));
+        }
+        Ok(value)
+    }
+    fn deserialize_zero_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value != 0 {
+            return Err(<D::Error as ::serde::de::Error>::custom("integer must be zero"));
+        }
+        Ok(value)
+    }
+    fn deserialize_bounded_nonzero_u64<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::num::NonZeroU64, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <u64 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value > i32::MAX as u64 {
+            return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+        }
+        ::std::num::NonZeroU64::new(value)
+            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+    }
+    fn deserialize_bounded_nonzero_u32<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::num::NonZeroU32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <u32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value > i32::MAX as u32 {
+            return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+        }
+        ::std::num::NonZeroU32::new(value)
+            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+    }
+    fn deserialize_optional_bounded_nonzero_u32<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::option::Option<::std::num::NonZeroU32>, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <::std::option::Option<u32> as ::serde::Deserialize>::deserialize(deserializer)?;
+        value.map(|value| {
+            if value > i32::MAX as u32 {
+                return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+            }
+            ::std::num::NonZeroU32::new(value)
+                .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+        }).transpose()
+    }
+    fn is_visible_character(value: char) -> bool {
+        !matches!(
+            ::unicode_general_category::get_general_category(value),
+            ::unicode_general_category::GeneralCategory::SpaceSeparator
+                | ::unicode_general_category::GeneralCategory::LineSeparator
+                | ::unicode_general_category::GeneralCategory::ParagraphSeparator
+                | ::unicode_general_category::GeneralCategory::Format
+        )
+    }
     /// Error types.
     pub mod error {
         /// Error from a `TryFrom` or `FromStr` implementation.
@@ -333,6 +419,2288 @@ pub mod types {
         }
     }
     impl<'de> ::serde::Deserialize<'de> for GetContractProofXInternalSecret {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedProfile`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "checkedAt",
+    ///    "freshForSeconds",
+    ///    "freshness",
+    ///    "lastSuccessAt",
+    ///    "snapshot"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "freshForSeconds": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 3600.0,
+    ///      "minimum": 3600.0
+    ///    },
+    ///    "freshness": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "fresh",
+    ///        "stale",
+    ///        "unavailable"
+    ///      ]
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "snapshot": {
+    ///      "$ref": "#/components/schemas/PlayerRankedSnapshot"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedProfile {
+        #[serde(rename = "brawlhallaId")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u64")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(
+            rename = "checkedAt",
+            deserialize_with = "deserialize_utc_datetime"
+        )]
+        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(
+            rename = "freshForSeconds",
+            deserialize_with = "deserialize_ranked_freshness_seconds"
+        )]
+        pub fresh_for_seconds: i32,
+        pub freshness: PlayerRankedProfileFreshness,
+        #[serde(
+            rename = "lastSuccessAt",
+            deserialize_with = "deserialize_optional_utc_datetime"
+        )]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub snapshot: PlayerRankedSnapshot,
+    }
+    ///`PlayerRankedProfileFreshness`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "fresh",
+    ///    "stale",
+    ///    "unavailable"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum PlayerRankedProfileFreshness {
+        #[serde(rename = "fresh")]
+        Fresh,
+        #[serde(rename = "stale")]
+        Stale,
+        #[serde(rename = "unavailable")]
+        Unavailable,
+    }
+    impl ::std::fmt::Display for PlayerRankedProfileFreshness {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Fresh => f.write_str("fresh"),
+                Self::Stale => f.write_str("stale"),
+                Self::Unavailable => f.write_str("unavailable"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedProfileFreshness {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "fresh" => Ok(Self::Fresh),
+                "stale" => Ok(Self::Stale),
+                "unavailable" => Ok(Self::Unavailable),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`PlayerRankedSnapshot`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": [
+    ///    "object",
+    ///    "null"
+    ///  ],
+    ///  "required": [
+    ///    "fixedTeams",
+    ///    "mainLegend",
+    ///    "oneVsOne",
+    ///    "rankedLegends",
+    ///    "ratingHistory",
+    ///    "soloQueue"
+    ///  ],
+    ///  "properties": {
+    ///    "fixedTeams": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "brawlhallaIdOne",
+    ///          "brawlhallaIdTwo",
+    ///          "games",
+    ///          "globalRank",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "region",
+    ///          "teamName",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "brawlhallaIdOne": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "brawlhallaIdTwo": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "globalRank": {
+    ///            "type": [
+    ///              "integer",
+    ///              "null"
+    ///            ],
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "region": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "teamName": {
+    ///            "type": "string"
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "mainLegend": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "legendId",
+    ///        "legendNameKey",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legendId": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "legendNameKey": {
+    ///          "type": "string",
+    ///          "minLength": 1
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "current-season",
+    ///            "career"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "oneVsOne": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "games",
+    ///        "globalRank",
+    ///        "peakRating",
+    ///        "rating",
+    ///        "region",
+    ///        "regionRank",
+    ///        "tier",
+    ///        "wins"
+    ///      ],
+    ///      "properties": {
+    ///        "games": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "globalRank": {
+    ///          "type": [
+    ///            "integer",
+    ///            "null"
+    ///          ],
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "peakRating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "rating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "region": {
+    ///          "type": "string",
+    ///          "minLength": 1
+    ///        },
+    ///        "regionRank": {
+    ///          "type": [
+    ///            "integer",
+    ///            "null"
+    ///          ],
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "tier": {
+    ///          "type": "string",
+    ///          "minLength": 1
+    ///        },
+    ///        "wins": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "rankedLegends": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "games",
+    ///          "legendId",
+    ///          "legendNameKey",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "legendId": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "legendNameKey": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "ratingHistory": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "games",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "recordedAt",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "recordedAt": {
+    ///            "type": "string",
+    ///            "format": "date-time",
+    ///            "pattern": "Z$"
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "soloQueue": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "games",
+    ///          "globalRank",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "region",
+    ///          "secondPlayerId",
+    ///          "teamName",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "globalRank": {
+    ///            "type": [
+    ///              "integer",
+    ///              "null"
+    ///            ],
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "region": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "secondPlayerId": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 0.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "teamName": {
+    ///            "type": "string"
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshot(
+        pub ::std::option::Option<PlayerRankedSnapshotInner>,
+    );
+    impl ::std::ops::Deref for PlayerRankedSnapshot {
+        type Target = ::std::option::Option<PlayerRankedSnapshotInner>;
+        fn deref(&self) -> &::std::option::Option<PlayerRankedSnapshotInner> {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshot>
+    for ::std::option::Option<PlayerRankedSnapshotInner> {
+        fn from(value: PlayerRankedSnapshot) -> Self {
+            value.0
+        }
+    }
+    impl ::std::convert::From<::std::option::Option<PlayerRankedSnapshotInner>>
+    for PlayerRankedSnapshot {
+        fn from(value: ::std::option::Option<PlayerRankedSnapshotInner>) -> Self {
+            Self(value)
+        }
+    }
+    ///`PlayerRankedSnapshotInner`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "fixedTeams",
+    ///    "mainLegend",
+    ///    "oneVsOne",
+    ///    "rankedLegends",
+    ///    "ratingHistory",
+    ///    "soloQueue"
+    ///  ],
+    ///  "properties": {
+    ///    "fixedTeams": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "brawlhallaIdOne",
+    ///          "brawlhallaIdTwo",
+    ///          "games",
+    ///          "globalRank",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "region",
+    ///          "teamName",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "brawlhallaIdOne": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "brawlhallaIdTwo": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "globalRank": {
+    ///            "type": [
+    ///              "integer",
+    ///              "null"
+    ///            ],
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "region": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "teamName": {
+    ///            "type": "string"
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "mainLegend": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "legendId",
+    ///        "legendNameKey",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legendId": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "legendNameKey": {
+    ///          "type": "string",
+    ///          "minLength": 1
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "current-season",
+    ///            "career"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "oneVsOne": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "games",
+    ///        "globalRank",
+    ///        "peakRating",
+    ///        "rating",
+    ///        "region",
+    ///        "regionRank",
+    ///        "tier",
+    ///        "wins"
+    ///      ],
+    ///      "properties": {
+    ///        "games": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "globalRank": {
+    ///          "type": [
+    ///            "integer",
+    ///            "null"
+    ///          ],
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "peakRating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "rating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "region": {
+    ///          "type": "string",
+    ///          "minLength": 1
+    ///        },
+    ///        "regionRank": {
+    ///          "type": [
+    ///            "integer",
+    ///            "null"
+    ///          ],
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "tier": {
+    ///          "type": "string",
+    ///          "minLength": 1
+    ///        },
+    ///        "wins": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "rankedLegends": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "games",
+    ///          "legendId",
+    ///          "legendNameKey",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "legendId": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "legendNameKey": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "ratingHistory": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "games",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "recordedAt",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "recordedAt": {
+    ///            "type": "string",
+    ///            "format": "date-time",
+    ///            "pattern": "Z$"
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "soloQueue": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "games",
+    ///          "globalRank",
+    ///          "peakRating",
+    ///          "rating",
+    ///          "region",
+    ///          "secondPlayerId",
+    ///          "teamName",
+    ///          "tier",
+    ///          "wins"
+    ///        ],
+    ///        "properties": {
+    ///          "games": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "globalRank": {
+    ///            "type": [
+    ///              "integer",
+    ///              "null"
+    ///            ],
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 1.0
+    ///          },
+    ///          "peakRating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "rating": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "region": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "secondPlayerId": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 0.0,
+    ///            "minimum": 0.0
+    ///          },
+    ///          "teamName": {
+    ///            "type": "string"
+    ///          },
+    ///          "tier": {
+    ///            "type": "string",
+    ///            "minLength": 1
+    ///          },
+    ///          "wins": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInner {
+        #[serde(rename = "fixedTeams")]
+        pub fixed_teams: ::std::vec::Vec<PlayerRankedSnapshotInnerFixedTeamsItem>,
+        #[serde(rename = "mainLegend")]
+        pub main_legend: ::std::option::Option<PlayerRankedSnapshotInnerMainLegend>,
+        #[serde(rename = "oneVsOne")]
+        pub one_vs_one: PlayerRankedSnapshotInnerOneVsOne,
+        #[serde(rename = "rankedLegends")]
+        pub ranked_legends: ::std::vec::Vec<PlayerRankedSnapshotInnerRankedLegendsItem>,
+        #[serde(rename = "ratingHistory")]
+        pub rating_history: ::std::vec::Vec<PlayerRankedSnapshotInnerRatingHistoryItem>,
+        #[serde(rename = "soloQueue")]
+        pub solo_queue: ::std::vec::Vec<PlayerRankedSnapshotInnerSoloQueueItem>,
+    }
+    ///`PlayerRankedSnapshotInnerFixedTeamsItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaIdOne",
+    ///    "brawlhallaIdTwo",
+    ///    "games",
+    ///    "globalRank",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "region",
+    ///    "teamName",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaIdOne": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "brawlhallaIdTwo": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "globalRank": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "region": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "teamName": {
+    ///      "type": "string"
+    ///    },
+    ///    "tier": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerFixedTeamsItem {
+        #[serde(rename = "brawlhallaIdOne")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u64")]
+        pub brawlhalla_id_one: ::std::num::NonZeroU64,
+        #[serde(rename = "brawlhallaIdTwo")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u64")]
+        pub brawlhalla_id_two: ::std::num::NonZeroU64,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(rename = "globalRank")]
+        #[serde(deserialize_with = "deserialize_optional_bounded_nonzero_u32")]
+        pub global_rank: ::std::option::Option<::std::num::NonZeroU32>,
+        #[serde(rename = "peakRating")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub peak_rating: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub rating: i32,
+        pub region: PlayerRankedSnapshotInnerFixedTeamsItemRegion,
+        #[serde(rename = "teamName")]
+        pub team_name: ::std::string::String,
+        pub tier: PlayerRankedSnapshotInnerFixedTeamsItemTier,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+    }
+    ///`PlayerRankedSnapshotInnerFixedTeamsItemRegion`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerFixedTeamsItemRegion(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerFixedTeamsItemRegion {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerFixedTeamsItemRegion>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerFixedTeamsItemRegion) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerFixedTeamsItemRegion {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerFixedTeamsItemRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerFixedTeamsItemRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerFixedTeamsItemRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRankedSnapshotInnerFixedTeamsItemRegion {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerFixedTeamsItemTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerFixedTeamsItemTier(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerFixedTeamsItemTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerFixedTeamsItemTier>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerFixedTeamsItemTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerFixedTeamsItemTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedSnapshotInnerFixedTeamsItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerFixedTeamsItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerFixedTeamsItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerRankedSnapshotInnerFixedTeamsItemTier {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerMainLegend`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "legendId",
+    ///    "legendNameKey",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legendId": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "legendNameKey": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "current-season",
+    ///        "career"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerMainLegend {
+        #[serde(rename = "legendId")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u32")]
+        pub legend_id: ::std::num::NonZeroU32,
+        #[serde(rename = "legendNameKey")]
+        pub legend_name_key: PlayerRankedSnapshotInnerMainLegendLegendNameKey,
+        pub source: PlayerRankedSnapshotInnerMainLegendSource,
+    }
+    ///`PlayerRankedSnapshotInnerMainLegendLegendNameKey`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerMainLegendLegendNameKey(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerMainLegendLegendNameKey {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerMainLegendLegendNameKey>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerMainLegendLegendNameKey) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerMainLegendLegendNameKey {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerMainLegendLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerMainLegendLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerMainLegendLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRankedSnapshotInnerMainLegendLegendNameKey {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerMainLegendSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "current-season",
+    ///    "career"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum PlayerRankedSnapshotInnerMainLegendSource {
+        #[serde(rename = "current-season")]
+        CurrentSeason,
+        #[serde(rename = "career")]
+        Career,
+    }
+    impl ::std::fmt::Display for PlayerRankedSnapshotInnerMainLegendSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::CurrentSeason => f.write_str("current-season"),
+                Self::Career => f.write_str("career"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerMainLegendSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "current-season" => Ok(Self::CurrentSeason),
+                "career" => Ok(Self::Career),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedSnapshotInnerMainLegendSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerMainLegendSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerMainLegendSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`PlayerRankedSnapshotInnerOneVsOne`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "games",
+    ///    "globalRank",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "region",
+    ///    "regionRank",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "globalRank": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "region": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "regionRank": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "tier": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerOneVsOne {
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(rename = "globalRank")]
+        #[serde(deserialize_with = "deserialize_optional_bounded_nonzero_u32")]
+        pub global_rank: ::std::option::Option<::std::num::NonZeroU32>,
+        #[serde(rename = "peakRating")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub peak_rating: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub rating: i32,
+        pub region: PlayerRankedSnapshotInnerOneVsOneRegion,
+        #[serde(rename = "regionRank")]
+        #[serde(deserialize_with = "deserialize_optional_bounded_nonzero_u32")]
+        pub region_rank: ::std::option::Option<::std::num::NonZeroU32>,
+        pub tier: PlayerRankedSnapshotInnerOneVsOneTier,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+    }
+    ///`PlayerRankedSnapshotInnerOneVsOneRegion`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerOneVsOneRegion(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerOneVsOneRegion {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerOneVsOneRegion>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerOneVsOneRegion) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerOneVsOneRegion {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedSnapshotInnerOneVsOneRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerOneVsOneRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerOneVsOneRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerRankedSnapshotInnerOneVsOneRegion {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerOneVsOneTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerOneVsOneTier(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerOneVsOneTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerOneVsOneTier>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerOneVsOneTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerOneVsOneTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedSnapshotInnerOneVsOneTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerOneVsOneTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerOneVsOneTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerRankedSnapshotInnerOneVsOneTier {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerRankedLegendsItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "games",
+    ///    "legendId",
+    ///    "legendNameKey",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "legendId": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "legendNameKey": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "tier": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerRankedLegendsItem {
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(rename = "legendId")]
+        #[serde(deserialize_with = "deserialize_bounded_nonzero_u32")]
+        pub legend_id: ::std::num::NonZeroU32,
+        #[serde(rename = "legendNameKey")]
+        pub legend_name_key: PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey,
+        #[serde(rename = "peakRating")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub peak_rating: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub rating: i32,
+        pub tier: PlayerRankedSnapshotInnerRankedLegendsItemTier,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+    }
+    ///`PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey(
+        ::std::string::String,
+    );
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr
+    for PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRankedSnapshotInnerRankedLegendsItemLegendNameKey {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerRankedLegendsItemTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerRankedLegendsItemTier(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerRankedLegendsItemTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerRankedLegendsItemTier>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerRankedLegendsItemTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerRankedLegendsItemTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerRankedLegendsItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerRankedLegendsItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerRankedLegendsItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRankedSnapshotInnerRankedLegendsItemTier {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerRatingHistoryItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "games",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "recordedAt",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "recordedAt": {
+    ///      "type": "string",
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "tier": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerRatingHistoryItem {
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(rename = "peakRating")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub peak_rating: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub rating: i32,
+        #[serde(
+            rename = "recordedAt",
+            deserialize_with = "deserialize_utc_datetime"
+        )]
+        pub recorded_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        pub tier: PlayerRankedSnapshotInnerRatingHistoryItemTier,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+    }
+    ///`PlayerRankedSnapshotInnerRatingHistoryItemTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerRatingHistoryItemTier(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerRatingHistoryItemTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerRatingHistoryItemTier>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerRatingHistoryItemTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerRatingHistoryItemTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerRatingHistoryItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerRatingHistoryItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerRatingHistoryItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRankedSnapshotInnerRatingHistoryItemTier {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerSoloQueueItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "games",
+    ///    "globalRank",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "region",
+    ///    "secondPlayerId",
+    ///    "teamName",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "globalRank": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "region": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "secondPlayerId": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 0.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "teamName": {
+    ///      "type": "string"
+    ///    },
+    ///    "tier": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerRankedSnapshotInnerSoloQueueItem {
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub games: i32,
+        #[serde(rename = "globalRank")]
+        #[serde(deserialize_with = "deserialize_optional_bounded_nonzero_u32")]
+        pub global_rank: ::std::option::Option<::std::num::NonZeroU32>,
+        #[serde(rename = "peakRating")]
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub peak_rating: i32,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub rating: i32,
+        pub region: PlayerRankedSnapshotInnerSoloQueueItemRegion,
+        #[serde(
+            rename = "secondPlayerId",
+            deserialize_with = "deserialize_zero_int32"
+        )]
+        pub second_player_id: i32,
+        #[serde(rename = "teamName")]
+        pub team_name: ::std::string::String,
+        pub tier: PlayerRankedSnapshotInnerSoloQueueItemTier,
+        #[serde(deserialize_with = "deserialize_nonnegative_int32")]
+        pub wins: i32,
+    }
+    ///`PlayerRankedSnapshotInnerSoloQueueItemRegion`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerSoloQueueItemRegion(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerSoloQueueItemRegion {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerSoloQueueItemRegion>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerSoloQueueItemRegion) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerSoloQueueItemRegion {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedSnapshotInnerSoloQueueItemRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerSoloQueueItemRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerSoloQueueItemRegion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRankedSnapshotInnerSoloQueueItemRegion {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerRankedSnapshotInnerSoloQueueItemTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRankedSnapshotInnerSoloQueueItemTier(::std::string::String);
+    impl ::std::ops::Deref for PlayerRankedSnapshotInnerSoloQueueItemTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRankedSnapshotInnerSoloQueueItemTier>
+    for ::std::string::String {
+        fn from(value: PlayerRankedSnapshotInnerSoloQueueItemTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerSoloQueueItemTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRankedSnapshotInnerSoloQueueItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerSoloQueueItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerSoloQueueItemTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerRankedSnapshotInnerSoloQueueItemTier {
         fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
         where
             D: ::serde::Deserializer<'de>,

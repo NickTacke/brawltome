@@ -239,4 +239,43 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'player.current-season-ranked',
+    area: 'player-profile',
+    requirement:
+      'The preserved player URL publishes Players-owned complete V0 Current Season state with independent freshness and non-destructive failure semantics.',
+    sourceIssue: '#194',
+    status: 'verified',
+    destinations: ['/player/:id'],
+    implementation: [
+      'packages/contexts/player/ranked/source.ts',
+      'packages/contexts/player/ranked/postgres.ts',
+      'packages/contracts/src/player-ranked.ts',
+      'apps/api/src/router/player-ranked.router.ts',
+      'apps/web/src/components/player/PlayerProfile/ProfileSections.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/player/tests/ranked-source.test.ts',
+        assertion: 'Complete V0 snapshots preserve measured zero and separate fixed teams from ordered Solo Queue.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/api/tests/player-ranked.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL proves fenced effects, last-success preservation, authoritative empties, and history.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/player-ranked.router.test.ts',
+        assertion: 'The canonical API maps Players state and validates producer output.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/lib/current-season.test.ts',
+        assertion: 'The preserved profile uses canonical Current Season values without legacy ranked fallback.',
+      },
+    ],
+  },
 ]

@@ -72,8 +72,94 @@ fn enforce_wire_semantics(source: String) -> String {
         }
         value.parse().map_err(<D::Error as ::serde::de::Error>::custom)
     }
+    fn deserialize_optional_utc_datetime<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <::std::option::Option<::std::string::String> as ::serde::Deserialize>::deserialize(deserializer)?;
+        value
+            .map(|value| {
+                if !value.ends_with('Z') {
+                    return Err(<D::Error as ::serde::de::Error>::custom("date-time must use the UTC Z suffix"));
+                }
+                value.parse().map_err(<D::Error as ::serde::de::Error>::custom)
+            })
+            .transpose()
+    }
+    fn deserialize_ranked_freshness_seconds<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value != 3600 {
+            return Err(<D::Error as ::serde::de::Error>::custom("ranked freshness must be 3600 seconds"));
+        }
+        Ok(value)
+    }
+    fn deserialize_zero_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value != 0 {
+            return Err(<D::Error as ::serde::de::Error>::custom("integer must be zero"));
+        }
+        Ok(value)
+    }
+    fn deserialize_bounded_nonzero_u64<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::num::NonZeroU64, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <u64 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value > i32::MAX as u64 {
+            return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+        }
+        ::std::num::NonZeroU64::new(value)
+            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+    }
+    fn deserialize_bounded_nonzero_u32<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::num::NonZeroU32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <u32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value > i32::MAX as u32 {
+            return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+        }
+        ::std::num::NonZeroU32::new(value)
+            .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+    }
+    fn deserialize_optional_bounded_nonzero_u32<'de, D>(
+        deserializer: D,
+    ) -> ::std::result::Result<::std::option::Option<::std::num::NonZeroU32>, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <::std::option::Option<u32> as ::serde::Deserialize>::deserialize(deserializer)?;
+        value.map(|value| {
+            if value > i32::MAX as u32 {
+                return Err(<D::Error as ::serde::de::Error>::custom("integer exceeds int32 maximum"));
+            }
+            ::std::num::NonZeroU32::new(value)
+                .ok_or_else(|| <D::Error as ::serde::de::Error>::custom("integer must be positive"))
+        }).transpose()
+    }
+    fn is_visible_character(value: char) -> bool {
+        !matches!(
+            ::unicode_general_category::get_general_category(value),
+            ::unicode_general_category::GeneralCategory::SpaceSeparator
+                | ::unicode_general_category::GeneralCategory::LineSeparator
+                | ::unicode_general_category::GeneralCategory::ParagraphSeparator
+                | ::unicode_general_category::GeneralCategory::Format
+        )
+    }
 "#;
-    source
+    let source = source
         .replacen("pub mod types {\n", &format!("pub mod types {{\n{helpers}"), 1)
         .replacen(
             nullable_field,
@@ -94,5 +180,121 @@ fn enforce_wire_semantics(source: String) -> String {
             date_time_field,
             "        #[serde(\n            rename = \"occurredAt\",\n            deserialize_with = \"deserialize_utc_datetime\"\n        )]\n        pub occurred_at: ::chrono::DateTime<::chrono::offset::Utc>,",
             1,
+        );
+    enforce_ranked_wire_semantics(source)
+}
+
+fn enforce_ranked_wire_semantics(source: String) -> String {
+    let start = source
+        .find("    ///`PlayerRankedProfile`")
+        .expect("generated ranked profile start changed");
+    let relative_end = source[start..]
+        .find("    ///`PlayerRefreshResponse`")
+        .expect("generated ranked profile end changed");
+    let end = start + relative_end;
+    let mut ranked = source[start..end].to_owned();
+
+    for field in ["games", "peak_rating", "rating", "wins"] {
+        let original = format!("        pub {field}: i32,");
+        assert!(
+            ranked.contains(&original),
+            "generated ranked {field} field changed"
+        );
+        ranked = ranked.replace(
+            &original,
+            &format!(
+                "        #[serde(deserialize_with = \"deserialize_nonnegative_int32\")]\n        pub {field}: i32,"
+            ),
+        );
+    }
+
+    for field in ["brawlhalla_id", "brawlhalla_id_one", "brawlhalla_id_two"] {
+        let original = format!("        pub {field}: ::std::num::NonZeroU64,");
+        if ranked.contains(&original) {
+            ranked = ranked.replace(
+                &original,
+                &format!(
+                    "        #[serde(deserialize_with = \"deserialize_bounded_nonzero_u64\")]\n        pub {field}: ::std::num::NonZeroU64,"
+                ),
+            );
+        }
+    }
+    let legend_id = "        pub legend_id: ::std::num::NonZeroU32,";
+    assert!(
+        ranked.contains(legend_id),
+        "generated ranked legend ID changed"
+    );
+    ranked = ranked.replace(
+        legend_id,
+        "        #[serde(deserialize_with = \"deserialize_bounded_nonzero_u32\")]\n        pub legend_id: ::std::num::NonZeroU32,",
+    );
+    for field in ["global_rank", "region_rank"] {
+        let original =
+            format!("        pub {field}: ::std::option::Option<::std::num::NonZeroU32>,");
+        if ranked.contains(&original) {
+            ranked = ranked.replace(
+                &original,
+                &format!(
+                    "        #[serde(deserialize_with = \"deserialize_optional_bounded_nonzero_u32\")]\n        pub {field}: ::std::option::Option<::std::num::NonZeroU32>,"
+                ),
+            );
+        }
+    }
+
+    let checked_at = "        #[serde(rename = \"checkedAt\")]\n        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,";
+    let last_success_at = "        #[serde(rename = \"lastSuccessAt\")]\n        pub last_success_at: ::std::option::Option<\n            ::chrono::DateTime<::chrono::offset::Utc>,\n        >,";
+    let recorded_at = "        #[serde(rename = \"recordedAt\")]\n        pub recorded_at: ::chrono::DateTime<::chrono::offset::Utc>,";
+    let freshness =
+        "        #[serde(rename = \"freshForSeconds\")]\n        pub fresh_for_seconds: i32,";
+    let second_player =
+        "        #[serde(rename = \"secondPlayerId\")]\n        pub second_player_id: i32,";
+    for expected in [
+        checked_at,
+        last_success_at,
+        recorded_at,
+        freshness,
+        second_player,
+    ] {
+        assert!(
+            ranked.contains(expected),
+            "generated ranked field mapping changed: {expected}"
+        );
+    }
+
+    ranked = ranked
+        .replacen(
+            checked_at,
+            "        #[serde(\n            rename = \"checkedAt\",\n            deserialize_with = \"deserialize_utc_datetime\"\n        )]\n        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,",
+            1,
         )
+        .replacen(
+            last_success_at,
+            "        #[serde(\n            rename = \"lastSuccessAt\",\n            deserialize_with = \"deserialize_optional_utc_datetime\"\n        )]\n        pub last_success_at: ::std::option::Option<\n            ::chrono::DateTime<::chrono::offset::Utc>,\n        >,",
+            1,
+        )
+        .replace(
+            recorded_at,
+            "        #[serde(\n            rename = \"recordedAt\",\n            deserialize_with = \"deserialize_utc_datetime\"\n        )]\n        pub recorded_at: ::chrono::DateTime<::chrono::offset::Utc>,",
+        )
+        .replacen(
+            freshness,
+            "        #[serde(\n            rename = \"freshForSeconds\",\n            deserialize_with = \"deserialize_ranked_freshness_seconds\"\n        )]\n        pub fresh_for_seconds: i32,",
+            1,
+        )
+        .replace(
+            second_player,
+            "        #[serde(\n            rename = \"secondPlayerId\",\n            deserialize_with = \"deserialize_zero_int32\"\n        )]\n        pub second_player_id: i32,",
+        );
+
+    let non_visible_check = "if value.chars().count() < 1usize {";
+    assert!(
+        ranked.matches(non_visible_check).count() >= 3,
+        "generated ranked visible-string checks changed"
+    );
+    ranked = ranked.replace(
+        non_visible_check,
+        "if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {",
+    );
+
+    format!("{}{}{}", &source[..start], ranked, &source[end..])
 }

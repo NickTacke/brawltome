@@ -7,6 +7,7 @@ describe('stored Player Reference', () => {
   test('reads canonical identity while hiding persistence fields and placeholders', async () => {
     const storedId = randomInt(1_500_000_000, 2_000_000_000)
     const placeholderId = storedId + 1
+    const rankedId = storedId + 2
     const rollback = new Error('rollback Player Reference integration test')
 
     try {
@@ -16,9 +17,14 @@ describe('stored Player Reference', () => {
           { brawlhallaId: placeholderId, name: `Player ${placeholderId}`, rating: 0 },
         ])
 
-        const queries = createDatabasePlayerReferenceQueries(transaction as unknown as Database)
+        const queries = createDatabasePlayerReferenceQueries(
+          transaction as unknown as Database,
+          async (brawlhallaId) =>
+            brawlhallaId === rankedId ? { brawlhallaId, name: 'Canonical Ranked Player' } : null,
+        )
 
         expect(await queries.byId(storedId)).toEqual({ brawlhallaId: storedId, name: 'Canonical Player' })
+        expect(await queries.byId(rankedId)).toEqual({ brawlhallaId: rankedId, name: 'Canonical Ranked Player' })
         expect(await queries.byId(placeholderId)).toBeNull()
         expect(await queries.byId(storedId - 1)).toBeNull()
         throw rollback

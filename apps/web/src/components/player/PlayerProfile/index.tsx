@@ -4,6 +4,7 @@ import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
+import { applyCurrentSeason } from '@/lib/current-season'
 import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '@/lib/player-refresh'
 import { getRefreshClientAction } from '@/lib/refresh-outcome'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
@@ -20,9 +21,12 @@ interface PlayerProfileProps {
 
 const deriveDisplayLists = (player: PlayerData) => {
   const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
-  const rankedTeams = [...(player.rankedTeams || [])].sort(
-    (a: PlayerData, b: PlayerData) => (b.rating ?? 0) - (a.rating ?? 0),
-  )
+  const teams = [...(player.rankedTeams || [])]
+  const fixedTeams = teams
+    .filter((team: PlayerData) => team.brawlhallaIdTwo !== 0)
+    .sort((a: PlayerData, b: PlayerData) => (b.rating ?? 0) - (a.rating ?? 0))
+  const soloQueue = teams.filter((team: PlayerData) => team.brawlhallaIdTwo === 0)
+  const rankedTeams = [...fixedTeams, ...soloQueue]
   const aliases: string[] = (player.aliases || [])
     .map((a: PlayerData) => a?.value)
     .filter((v: unknown): v is string => typeof v === 'string' && v.trim().length > 0)
@@ -88,9 +92,13 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     [applyRefreshOutcome, id],
   )
 
-  const weaponStats = useMemo(
-    () => (player ? aggregateRichWeaponStats(player.statsLegends || [], player.rankedLegends || []) : []),
+  const displayPlayer = useMemo(
+    () => (player ? applyCurrentSeason(player, player.currentSeason ?? null) : null),
     [player],
+  )
+  const weaponStats = useMemo(
+    () => (displayPlayer ? aggregateRichWeaponStats(displayPlayer.statsLegends || [], []) : []),
+    [displayPlayer],
   )
 
   const turnstile = verificationRequired ? (
@@ -101,21 +109,23 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     throw error
   }
 
-  if (!player) {
+  if (!displayPlayer) {
     const lookupFailed = turnstileError || error instanceof RefreshTimeoutError
     return <LookupState errored={lookupFailed} message={refreshMessage} turnstile={turnstile} />
   }
 
-  const { allLegends, rankedTeams, aliases } = deriveDisplayLists(player)
+  const { allLegends, rankedTeams, aliases } = deriveDisplayLists(displayPlayer)
+  const mainLegend = displayPlayer.currentSeason?.snapshot?.mainLegend
+  const topLegend = mainLegend ? { legendNameKey: mainLegend.legendNameKey } : null
 
   return (
     <div className="space-y-8 pb-10">
       {turnstile}
       {refreshMessage && <output className="text-sm text-muted-foreground">{refreshMessage}</output>}
       <NavBar showBack />
-      <ProfileHeader player={player} topLegend={allLegends[0] ?? null} aliases={aliases} refreshing={isRefreshing} />
+      <ProfileHeader player={displayPlayer} topLegend={topLegend} aliases={aliases} refreshing={isRefreshing} />
       <ProfileSections
-        player={player}
+        player={displayPlayer}
         id={id}
         allLegends={allLegends}
         rankedTeams={rankedTeams}

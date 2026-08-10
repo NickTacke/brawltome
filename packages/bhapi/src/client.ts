@@ -52,6 +52,7 @@ export interface BhApiClientOptions {
 
 export interface CallOptions {
   caller?: Caller
+  onAttempt?: () => void
 }
 
 export class BhApiClient {
@@ -135,7 +136,7 @@ export class BhApiClient {
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
-    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v0')
+    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v0', false, opts.onAttempt)
   }
 
   private async callV1<T>(endpoint: string, opts: CallOptions): Promise<T | null> {
@@ -151,7 +152,7 @@ export class BhApiClient {
     console.log(`[bhapi] v1 ${path} (${remaining} ${caller} tokens left)`)
 
     const url = `${this.baseUrl}/v1${endpoint}`
-    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true)
+    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true, opts.onAttempt)
   }
 
   private async sendRequest<T>(
@@ -160,8 +161,10 @@ export class BhApiClient {
     endpoint: string,
     domain: BhApiSourceDomain,
     rejectNullPayload = false,
+    onAttempt?: () => void,
   ): Promise<T | null> {
     await this.beforeRequest?.({ domain, path })
+    onAttempt?.()
     const fetchStart = Date.now()
     let res: Response
     try {

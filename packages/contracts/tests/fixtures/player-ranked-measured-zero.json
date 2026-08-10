@@ -1,0 +1,40 @@
+{
+  "brawlhallaId": 91913839,
+  "checkedAt": "2026-08-09T22:00:00Z",
+  "lastSuccessAt": "2026-08-09T22:00:00Z",
+  "freshness": "fresh",
+  "freshForSeconds": 3600,
+  "snapshot": {
+    "oneVsOne": {
+      "rating": 0,
+      "peakRating": 782,
+      "tier": "Tin 0",
+      "wins": 0,
+      "games": 0,
+      "region": "US-E",
+      "globalRank": null,
+      "regionRank": null
+    },
+    "rankedLegends": [],
+    "mainLegend": {
+      "legendId": 3,
+      "legendNameKey": "bodvar",
+      "source": "career"
+    },
+    "fixedTeams": [],
+    "soloQueue": [
+      {
+        "secondPlayerId": 0,
+        "teamName": "Solo Queue",
+        "rating": 1670,
+        "peakRating": 1670,
+        "tier": "Gold 5",
+        "wins": 2,
+        "games": 2,
+        "region": "EU",
+        "globalRank": null
+      }
+    ],
+    "ratingHistory": []
+  }
+}

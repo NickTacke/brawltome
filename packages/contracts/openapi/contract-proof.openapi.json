@@ -84,6 +84,409 @@
           }
         ]
       },
+      "PlayerRankedProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "brawlhallaId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "checkedAt": {
+            "format": "date-time",
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "freshForSeconds": {
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 3600,
+            "type": "integer"
+          },
+          "freshness": {
+            "enum": [
+              "fresh",
+              "stale",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "nullable": true,
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/PlayerRankedSnapshot"
+          }
+        },
+        "required": [
+          "brawlhallaId",
+          "checkedAt",
+          "lastSuccessAt",
+          "freshness",
+          "freshForSeconds",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "PlayerRankedSnapshot": {
+        "additionalProperties": false,
+        "nullable": true,
+        "properties": {
+          "fixedTeams": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "brawlhallaIdOne": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "brawlhallaIdTwo": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "globalRank": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "region": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "teamName": {
+                  "type": "string"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "brawlhallaIdOne",
+                "brawlhallaIdTwo",
+                "teamName",
+                "region",
+                "globalRank"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "mainLegend": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "legendId": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "legendNameKey": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "current-season",
+                  "career"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "legendId",
+              "legendNameKey",
+              "source"
+            ],
+            "type": "object"
+          },
+          "oneVsOne": {
+            "additionalProperties": false,
+            "properties": {
+              "games": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "globalRank": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "nullable": true,
+                "type": "integer"
+              },
+              "peakRating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "region": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "regionRank": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "nullable": true,
+                "type": "integer"
+              },
+              "tier": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "wins": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "rating",
+              "peakRating",
+              "tier",
+              "wins",
+              "games",
+              "region",
+              "globalRank",
+              "regionRank"
+            ],
+            "type": "object"
+          },
+          "rankedLegends": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "legendId": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "legendNameKey": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "legendId",
+                "legendNameKey"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ratingHistory": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "recordedAt": {
+                  "format": "date-time",
+                  "pattern": "Z$",
+                  "type": "string"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "recordedAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "soloQueue": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "globalRank": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "region": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "secondPlayerId": {
+                  "format": "int32",
+                  "maximum": 0,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "teamName": {
+                  "type": "string"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "secondPlayerId",
+                "teamName",
+                "region",
+                "globalRank"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "oneVsOne",
+          "rankedLegends",
+          "mainLegend",
+          "fixedTeams",
+          "soloQueue",
+          "ratingHistory"
+        ],
+        "type": "object"
+      },
       "PlayerRefreshResponse": {
         "additionalProperties": false,
         "properties": {

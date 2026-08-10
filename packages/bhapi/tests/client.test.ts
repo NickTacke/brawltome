@@ -469,6 +469,27 @@ describe('v1 client', () => {
     }
   })
 
+  it('marks an actual source attempt only after distributed admission succeeds', async () => {
+    let attempts = 0
+    const blocked = new BhApiClient({
+      apiKey: 'test',
+      baseUrl: `http://localhost:${server.port}`,
+      beforeRequest: async () => {
+        throw new Error('source admission blocked')
+      },
+    })
+    await blocked.init()
+    await expect(blocked.getPlayerRanked(PLAYER_ID, { onAttempt: () => attempts++ })).rejects.toThrow(
+      'source admission blocked',
+    )
+    expect(attempts).toBe(0)
+
+    const admitted = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${server.port}` })
+    await admitted.init()
+    await admitted.getPlayerRanked(PLAYER_ID, { onAttempt: () => attempts++ })
+    expect(attempts).toBe(1)
+  })
+
   it('admits every paginated V1 HTTP request at the request boundary', async () => {
     const v1 = makeV1Server()
     const admitted: Array<{ domain: string; path: string }> = []

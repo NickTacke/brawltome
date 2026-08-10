@@ -11,7 +11,11 @@ import {
 } from '@brawltome/database'
 import { getLegendById } from '@brawltome/shared'
 import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
-import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
+import {
+  getCareerMainLegend,
+  getEffectiveBestLegend,
+  getEffectiveBestLegendsBatch,
+} from './queries/get-effective-best-legend'
 
 export type Team2v2Row = {
   brawlhalla_id_one: number
@@ -805,6 +809,10 @@ export function createPlayerRepo(db: Database) {
             valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
           },
         })
+    },
+
+    getCareerMainLegend(brawlhallaId: number) {
+      return getCareerMainLegend(db, brawlhallaId)
     },
 
     getEffectiveBestLegend(brawlhallaId: number) {
