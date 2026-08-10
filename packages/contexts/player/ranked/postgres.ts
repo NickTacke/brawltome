@@ -246,11 +246,11 @@ export function createPostgresRankedPlayers(
           WHERE brawlhalla_id = ${brawlhallaId}
           ORDER BY ordinal
         `,
-          sql<Array<ValuesRow & { recorded_at: Date }>>`
-          SELECT rating, peak_rating, tier, wins, games, recorded_at
+          sql<Array<ValuesRow & { recorded_at: Date; history_source: 'v0-player-snapshot' | 'v2-legacy' }>>`
+          SELECT rating, peak_rating, tier, wins, games, recorded_at, history_source
           FROM players.ranked_rating_history
           WHERE brawlhalla_id = ${brawlhallaId}
-          ORDER BY recorded_at DESC, id DESC
+          ORDER BY recorded_at DESC, source_order DESC NULLS LAST, id DESC
           LIMIT 365
         `,
         ])
@@ -271,7 +271,11 @@ export function createPostgresRankedPlayers(
         const careerMainLegend = rankedMainLegend ? null : await options.resolveCareerMainLegend?.(brawlhallaId)
         const mainLegend =
           rankedMainLegend ?? (careerMainLegend ? { ...careerMainLegend, source: 'career' as const } : null)
-        const ratingHistory = historyRows.map((row) => ({ ...values(row), recordedAt: row.recorded_at }))
+        const ratingHistory = historyRows.map((row) => ({
+          ...values(row),
+          source: row.history_source === 'v2-legacy' ? ('legacy-v2' as const) : ('v0-player-snapshot' as const),
+          recordedAt: row.recorded_at,
+        }))
 
         return {
           brawlhallaId,
@@ -518,7 +522,8 @@ export function createPostgresRankedPlayers(
             SELECT rating, games
             FROM players.ranked_rating_history
             WHERE brawlhalla_id = ${snapshot.brawlhallaId}
-            ORDER BY recorded_at DESC, id DESC
+              AND history_source = 'v0-player-snapshot'
+            ORDER BY recorded_at DESC, source_order DESC NULLS LAST, id DESC
             LIMIT 1
           `
           if (!last || last.rating !== one.rating || last.games !== one.games) {

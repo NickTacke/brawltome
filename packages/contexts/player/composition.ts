@@ -4,6 +4,7 @@ import { addCanonicalRankedState } from './migrations/0003-add-canonical-ranked-
 import { addCanonicalCareerState } from './migrations/0004-add-canonical-career-state'
 import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
 import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overlays'
+import { addV2PlayerImport } from './migrations/0007-add-v2-player-import'
 
 export { discoverPlayer } from './commands/discover-player'
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
@@ -32,6 +33,11 @@ export {
 } from './discovery-postgres'
 export { createSteamPlayerEvidenceResolver } from './verification'
 export { createPlayerRepo } from './player.repo'
+export {
+  importLegacyPlayers,
+  type LegacyPlayerImportOptions,
+  type LegacyPlayerImportResult,
+} from './legacy-import'
 
 export const playerMigrationInventory = [
   initializePlayersSchema,
@@ -40,4 +46,5 @@ export const playerMigrationInventory = [
   addCanonicalCareerState,
   addDiscoveryFacts,
   addRankedPulseOverlays,
+  addV2PlayerImport,
 ] as const

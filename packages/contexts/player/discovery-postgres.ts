@@ -11,17 +11,12 @@ type FactRow = {
 }
 type LegacyRow = {
   brawlhalla_id: number
-  name: string
+  player_name: string
   region: string | null
-  rating: number
+  rating: number | null
   view_count: number
 }
 type AliasRow = { brawlhalla_id: number; display_alias: string }
-
-async function relationExists(sql: Sql, relation: string): Promise<boolean> {
-  const [row] = await sql<{ exists: boolean }[]>`SELECT to_regclass(${relation}) IS NOT NULL AS exists`
-  return row.exists
-}
 
 async function sourceVersion(sql: Sql): Promise<number> {
   const [state] = await sql<{ source_version: string | number }[]>`
@@ -37,27 +32,23 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     FROM players.ranked_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
-  const legacy = (await relationExists(sql, 'public.player'))
-    ? await sql<LegacyRow[]>`
-        SELECT brawlhalla_id, name, region, rating, view_count
-        FROM public.player
-        ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
-      `
-    : []
+  const legacy = await sql<LegacyRow[]>`
+    SELECT brawlhalla_id, player_name, region, rating, view_count
+    FROM players.legacy_discovery_profiles
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+  `
   const canonicalAliases = await sql<AliasRow[]>`
     SELECT brawlhalla_id, display_alias
     FROM players.discovery_aliases
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
     ORDER BY observed_at DESC, normalized_alias
   `
-  const legacyAliases = (await relationExists(sql, 'public.player_alias'))
-    ? await sql<AliasRow[]>`
-        SELECT brawlhalla_id, value AS display_alias
-        FROM public.player_alias
-        ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
-        ORDER BY created_at DESC, key
-      `
-    : []
+  const legacyAliases = await sql<AliasRow[]>`
+    SELECT brawlhalla_id, display_alias
+    FROM players.legacy_discovery_aliases
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+    ORDER BY observed_at DESC, normalized_alias
+  `
 
   const rankedById = new Map(ranked.map((row) => [row.brawlhalla_id, row]))
   const legacyById = new Map(legacy.map((row) => [row.brawlhalla_id, row]))
@@ -74,12 +65,17 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     .flatMap((brawlhallaId) => {
       const canonical = rankedById.get(brawlhallaId)
       const fallback = legacyById.get(brawlhallaId)
-      const name = canonical?.player_name ?? fallback?.name
+      const name = canonical?.player_name ?? fallback?.player_name
       if (!name || [...name].length > 256 || !/[^\p{Separator}\p{Format}]/u.test(name)) return []
       const canonicalAvailable = canonical?.player_name !== null && canonical?.player_name !== undefined
       const aliases = aliasesById.get(brawlhallaId) ?? []
-      if (canonicalAvailable && fallback?.name && fallback.name !== name && !aliases.includes(fallback.name)) {
-        aliases.push(fallback.name)
+      if (
+        canonicalAvailable &&
+        fallback?.player_name &&
+        fallback.player_name !== name &&
+        !aliases.includes(fallback.player_name)
+      ) {
+        aliases.push(fallback.player_name)
       }
       const rawRating = canonicalAvailable ? canonical.rating : fallback?.rating
       return [

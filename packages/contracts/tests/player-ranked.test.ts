@@ -81,8 +81,24 @@ describe('Player ranked profile contract', () => {
       snapshot: {
         ...rankedSnapshot,
         ratingHistory: [
-          { rating: 1_650, peakRating: 1_700, tier: 'Gold 5', wins: 6, games: 12, recordedAt: '2026-08-09T22:00:00Z' },
-          { rating: 1_600, peakRating: 1_650, tier: 'Gold 4', wins: 5, games: 10, recordedAt: '2026-08-09T20:00:00Z' },
+          {
+            source: 'v0-player-snapshot' as const,
+            rating: 1_650,
+            peakRating: 1_700,
+            tier: 'Gold 5',
+            wins: 6,
+            games: 12,
+            recordedAt: '2026-08-09T22:00:00Z',
+          },
+          {
+            source: 'legacy-v2' as const,
+            rating: 1_600,
+            peakRating: 1_650,
+            tier: 'Gold 4',
+            wins: 5,
+            games: 10,
+            recordedAt: '2026-08-09T20:00:00Z',
+          },
         ],
         observedRatingDirection: {
           direction: 'up' as const,

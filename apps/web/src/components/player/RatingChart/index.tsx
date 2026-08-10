@@ -139,8 +139,8 @@ export function RatingChart({ data }: RatingChartProps) {
             )}
           </div>
           <p id="rating-history-coverage" className="text-sm text-muted-foreground">
-            The chart shows up to 365 retained BrawlTome complete-ranked observations. Dates mark successful
-            observations, so gaps between them remain outside BrawlTome coverage.
+            The chart shows up to 365 retained BrawlTome rating observations from canonical V0 snapshots and preserved
+            legacy V2 history. Dates mark observations, so gaps between them remain outside BrawlTome coverage.
           </p>
         </CardHeader>
         <CardContent>

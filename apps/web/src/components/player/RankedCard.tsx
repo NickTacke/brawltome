@@ -141,16 +141,17 @@ export function RankedCard({ currentSeason }: RankedCardProps) {
                   {Math.abs(direction.ratingChange)} rating
                 </p>
                 <p className="text-muted-foreground">
-                  Direction compares {direction.observationCount} of up to 365 retained BrawlTome complete-ranked
-                  observations from {observedDate(direction.fromObservedAt)} to {observedDate(direction.toObservedAt)}
-                  within the latest monotonic-games segment. Sparse pulse overlays are excluded. This is BrawlTome
-                  coverage, not complete Elo history.
+                  Direction compares {direction.observationCount} of up to 365 retained BrawlTome rating observations
+                  from canonical V0 snapshots and preserved legacy V2 history, from{' '}
+                  {observedDate(direction.fromObservedAt)} to {observedDate(direction.toObservedAt)} within the latest
+                  monotonic-games segment. Sparse pulse overlays are excluded. This is BrawlTome coverage, not complete
+                  Elo history.
                 </p>
               </>
             ) : (
               <p className="text-muted-foreground">
-                Unavailable until BrawlTome owns at least two complete-ranked observations in the latest monotonic-games
-                segment. Sparse pulse overlays are excluded.
+                Unavailable until BrawlTome owns at least two rating observations in the latest monotonic-games segment.
+                Sparse pulse overlays are excluded.
               </p>
             )}
           </div>

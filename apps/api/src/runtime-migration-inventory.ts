@@ -33,4 +33,5 @@ export const runtimeMigrationInventory = [
   statisticsMigrationInventory[0],
   refreshOperationsMigrationInventory[13],
   accountsMigrationInventory[4],
+  playerMigrationInventory[6],
 ] as const

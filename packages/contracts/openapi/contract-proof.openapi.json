@@ -1518,6 +1518,13 @@
                   "pattern": "Z$",
                   "type": "string"
                 },
+                "source": {
+                  "enum": [
+                    "v0-player-snapshot",
+                    "legacy-v2"
+                  ],
+                  "type": "string"
+                },
                 "tier": {
                   "minLength": 1,
                   "type": "string"
@@ -1535,6 +1542,7 @@
                 "tier",
                 "wins",
                 "games",
+                "source",
                 "recordedAt"
               ],
               "type": "object"

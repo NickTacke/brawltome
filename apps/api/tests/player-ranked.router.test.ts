@@ -39,6 +39,7 @@ describe('player.rankedById', () => {
           soloQueue: [],
           ratingHistory: [
             {
+              source: 'v0-player-snapshot',
               rating: 0,
               peakRating: 782,
               tier: 'Tin 0',
@@ -47,6 +48,7 @@ describe('player.rankedById', () => {
               recordedAt: observedAt,
             },
             {
+              source: 'legacy-v2',
               rating: 100,
               peakRating: 782,
               tier: 'Tin 0',

@@ -760,4 +760,37 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'player.v2-facts-history-migration',
+    area: 'operator-operations',
+    requirement:
+      'Players imports V2 identities, scoped facts, and ordered rating history through a resumable checksummed archive without presenting ambiguous defaults as measured zero.',
+    sourceIssue: '#222',
+    status: 'implemented',
+    destinations: ['bun run --filter @brawltome/database-migrations import:players'],
+    implementation: [
+      'packages/contexts/player/migrations/0007-add-v2-player-import.ts',
+      'packages/contexts/player/legacy-import.ts',
+      'packages/contexts/player/discovery-postgres.ts',
+      'packages/contexts/player/ranked/postgres.ts',
+      'tooling/database-migrations/src/import-players.ts',
+      'tooling/database-migrations/src/inventories.ts',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'packages/contexts/player/tests/legacy-import.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves exact archive reconciliation, immutable checksums, unknown-zero provenance, ordered history, crash resume, concurrency, repeat safety, rejection evidence, and V0 refresh preservation.',
+      },
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/postgres.test.ts',
+        assertion:
+          'The current 34-row pre-#222 inventory remains an exact applied prefix and Players/0007 appends once.',
+      },
+    ],
+    verificationGap:
+      'Two consecutive production-shaped restore rehearsals, storage headroom, elapsed duration, and operator cutover evidence remain external launch gates.',
+  },
 ]

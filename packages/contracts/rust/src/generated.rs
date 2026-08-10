@@ -8766,6 +8766,7 @@ pub mod types {
     ///          "peakRating",
     ///          "rating",
     ///          "recordedAt",
+    ///          "source",
     ///          "tier",
     ///          "wins"
     ///        ],
@@ -8792,6 +8793,13 @@ pub mod types {
     ///            "type": "string",
     ///            "format": "date-time",
     ///            "pattern": "Z$"
+    ///          },
+    ///          "source": {
+    ///            "type": "string",
+    ///            "enum": [
+    ///              "v0-player-snapshot",
+    ///              "legacy-v2"
+    ///            ]
     ///          },
     ///          "tier": {
     ///            "type": "string",
@@ -9206,6 +9214,7 @@ pub mod types {
     ///          "peakRating",
     ///          "rating",
     ///          "recordedAt",
+    ///          "source",
     ///          "tier",
     ///          "wins"
     ///        ],
@@ -9232,6 +9241,13 @@ pub mod types {
     ///            "type": "string",
     ///            "format": "date-time",
     ///            "pattern": "Z$"
+    ///          },
+    ///          "source": {
+    ///            "type": "string",
+    ///            "enum": [
+    ///              "v0-player-snapshot",
+    ///              "legacy-v2"
+    ///            ]
     ///          },
     ///          "tier": {
     ///            "type": "string",
@@ -10448,6 +10464,7 @@ pub mod types {
     ///    "peakRating",
     ///    "rating",
     ///    "recordedAt",
+    ///    "source",
     ///    "tier",
     ///    "wins"
     ///  ],
@@ -10474,6 +10491,13 @@ pub mod types {
     ///      "type": "string",
     ///      "format": "date-time",
     ///      "pattern": "Z$"
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v0-player-snapshot",
+    ///        "legacy-v2"
+    ///      ]
     ///    },
     ///    "tier": {
     ///      "type": "string",
@@ -10502,9 +10526,89 @@ pub mod types {
         pub rating: i32,
         #[serde(rename = "recordedAt", deserialize_with = "deserialize_utc_datetime")]
         pub recorded_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        pub source: PlayerRankedSnapshotInnerRatingHistoryItemSource,
         pub tier: PlayerRankedSnapshotInnerRatingHistoryItemTier,
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
         pub wins: i32,
+    }
+    ///`PlayerRankedSnapshotInnerRatingHistoryItemSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v0-player-snapshot",
+    ///    "legacy-v2"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum PlayerRankedSnapshotInnerRatingHistoryItemSource {
+        #[serde(rename = "v0-player-snapshot")]
+        V0PlayerSnapshot,
+        #[serde(rename = "legacy-v2")]
+        LegacyV2,
+    }
+    impl ::std::fmt::Display for PlayerRankedSnapshotInnerRatingHistoryItemSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V0PlayerSnapshot => f.write_str("v0-player-snapshot"),
+                Self::LegacyV2 => f.write_str("legacy-v2"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for PlayerRankedSnapshotInnerRatingHistoryItemSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v0-player-snapshot" => Ok(Self::V0PlayerSnapshot),
+                "legacy-v2" => Ok(Self::LegacyV2),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for PlayerRankedSnapshotInnerRatingHistoryItemSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRankedSnapshotInnerRatingHistoryItemSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRankedSnapshotInnerRatingHistoryItemSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
     }
     ///`PlayerRankedSnapshotInnerRatingHistoryItemTier`
     ///
