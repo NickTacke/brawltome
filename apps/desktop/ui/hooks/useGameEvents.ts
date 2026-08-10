@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useEffect, useRef, useState } from 'react'
+import { renderAcknowledgement } from '../acceptance'
 import { desktopMatchLabel } from '../opponent-status'
 import type { DetectionStateSnapshot, DetectionStatus, GameEvent, Opponent } from '../types'
 
@@ -17,6 +18,7 @@ export function useGameEvents() {
   const [scanning, setScanning] = useState(false)
   const [detectionStatus, setDetectionStatus] = useState<DetectionStatus>('idle')
   const [localPlayerBhid, setLocalPlayerBhid] = useState<number | null>(null)
+  const [acceptanceSampleId, setAcceptanceSampleId] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const statusHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const matchActiveRef = useRef(false)
@@ -56,12 +58,14 @@ export function useGameEvents() {
           setScanning(true)
           setVisible(true)
           setOpponents([])
+          setAcceptanceSampleId(null)
           // Match panel takes over; the status badge gets out of the way.
           hideStatusNow()
         } else if (payload.event === 'match_found') {
           setScanning(false)
           setOpponents(payload.opponents)
           setMatchType(desktopMatchLabel(payload.isRanked))
+          setAcceptanceSampleId(payload.acceptanceSampleId)
           setVisible(true)
           matchActiveRef.current = true
           hideStatusNow()
@@ -76,6 +80,7 @@ export function useGameEvents() {
           setOpponents([])
           setVisible(false)
           setScanning(false)
+          setAcceptanceSampleId(null)
           matchActiveRef.current = false
           if (timerRef.current) {
             clearTimeout(timerRef.current)
@@ -109,6 +114,7 @@ export function useGameEvents() {
           setOpponents([])
           setVisible(false)
           setScanning(false)
+          setAcceptanceSampleId(null)
           matchActiveRef.current = false
           if (timerRef.current) {
             clearTimeout(timerRef.current)
@@ -159,6 +165,28 @@ export function useGameEvents() {
       if (statusHideTimerRef.current) clearTimeout(statusHideTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    const acknowledgement = renderAcknowledgement(acceptanceSampleId, opponents)
+    if (!acknowledgement) return
+
+    let paintedFrame = 0
+    const committedFrame = requestAnimationFrame(() => {
+      paintedFrame = requestAnimationFrame(() => {
+        void invoke('complete_acceptance_sample', {
+          sampleId: acknowledgement.sampleId,
+          apiFailurePresented: acknowledgement.apiFailurePresented,
+        }).catch(() => {
+          // Acceptance evidence is opt-in and fail-open. Rendering must never
+          // depend on the probe being configured or writable.
+        })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(committedFrame)
+      if (paintedFrame) cancelAnimationFrame(paintedFrame)
+    }
+  }, [acceptanceSampleId, opponents])
 
   return {
     opponents,

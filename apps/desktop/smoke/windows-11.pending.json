@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "status": "pending",
+  "observedAt": null,
+  "platform": null,
+  "workload": {
+    "id": null,
+    "samples": []
+  },
+  "checks": {},
+  "claims": {
+    "windows11": false,
+    "hardware": false,
+    "updaterInstall": false,
+    "performance": false
+  }
+}

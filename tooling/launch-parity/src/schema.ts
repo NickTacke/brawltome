@@ -9,6 +9,7 @@ export type ParityArea =
   | 'operator-operations'
   | 'global-statistics'
   | 'discord-client'
+  | 'desktop-client'
   | 'operator-observability'
 export type EvidenceKind = 'unit' | 'integration' | 'browser' | 'manual' | 'external'
 

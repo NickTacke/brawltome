@@ -492,6 +492,129 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   },
   {
+    id: 'desktop.windows-lifecycle',
+    area: 'desktop-client',
+    requirement:
+      'The installed desktop observes real Brawlhalla attach, ready, ranked detection, detach, overlay always-on-top and click-through, and tray hide/show/quit without changing normal behavior when evidence is disabled.',
+    sourceIssue: '#217',
+    status: 'implemented',
+    destinations: ['Windows 11 desktop overlay', 'system tray'],
+    implementation: [
+      'apps/desktop/app/src/windows_acceptance.rs',
+      'apps/desktop/app/src/overlay.rs',
+      'apps/desktop/app/src/tray.rs',
+      'apps/desktop/scripts/windows-acceptance.ps1',
+      '.github/workflows/desktop-ci.yml',
+    ],
+    evidence: [
+      {
+        kind: 'external',
+        path: 'apps/desktop/app/tests/windows_acceptance.rs',
+        assertion:
+          'Platform-neutral tests prove the probe is opt-in, bounded, identifier-free, one-shot, fail-open, and inert when disabled.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/desktop/app/tests/windows_lifecycle.rs',
+        assertion: 'Pure overlay hit-testing and reversible tray lifecycle decisions pass on every host.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/desktop/smoke/windows-11.pending.json',
+        assertion:
+          'Supported Windows 11 and representative-hardware observations remain explicitly pending and claim-free.',
+      },
+    ],
+    verificationGap:
+      'Run the executable harness on every owner-designated supported Windows 11 release and representative hardware with real Brawlhalla start, attach/ready, ranked detection, detach, overlay/click-through, and tray hide/show/quit. Windows 10 remains best effort and nonblocking.',
+  },
+  {
+    id: 'desktop.api-failure',
+    area: 'desktop-client',
+    requirement:
+      'Generated ranked lookup failures render a truthful unavailable state while the installed desktop remains alive.',
+    sourceIssue: '#217',
+    status: 'implemented',
+    destinations: ['Windows 11 desktop overlay'],
+    implementation: [
+      'apps/desktop/app/src/api_client.rs',
+      'apps/desktop/app/src/detection_bridge.rs',
+      'apps/desktop/ui/hooks/useGameEvents.ts',
+      'apps/desktop/scripts/windows-acceptance.ps1',
+    ],
+    evidence: [
+      {
+        kind: 'external',
+        path: 'apps/desktop/app/tests/api_client.rs',
+        assertion: 'Generated-client failures reject malformed or failed responses without inventing ranked values.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/desktop/tests/windows-acceptance.test.ts',
+        assertion: 'Acceptance requires API failure content to render and the app to answer afterward.',
+      },
+    ],
+    verificationGap:
+      'Run the API-failure phase against an unreachable endpoint during a real ranked detection on every supported Windows 11 environment and observe degraded content without process exit.',
+  },
+  {
+    id: 'desktop.opponent-presentation-performance',
+    area: 'desktop-client',
+    requirement:
+      'Opponent information renders with nearest-rank p95 strictly below 2,000 ms from real ranked detection under the owner-approved acceptance workload.',
+    sourceIssue: '#217',
+    status: 'implemented',
+    destinations: ['Windows 11 desktop overlay'],
+    implementation: [
+      'apps/desktop/app/src/detection_bridge.rs',
+      'apps/desktop/app/src/windows_acceptance.rs',
+      'apps/desktop/ui/acceptance.ts',
+      'apps/desktop/ui/hooks/useGameEvents.ts',
+      'apps/desktop/src/windows-acceptance.ts',
+      'apps/desktop/scripts/windows-acceptance.ps1',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'apps/desktop/tests/windows-acceptance.test.ts',
+        assertion:
+          'Known samples prove one-shot render acknowledgement, explicit workload policy, nearest-rank p95, and strict rejection at 2,000 ms.',
+      },
+    ],
+    verificationGap:
+      'The owner must define the supported Windows releases, representative hardware, workload ID/mode mix, and minimum sample count, then collect enough real match-to-render samples with p95 below 2,000 ms.',
+  },
+  {
+    id: 'desktop.updater-install',
+    area: 'desktop-client',
+    requirement:
+      'The exact release installer and latest.json signature verify against the committed updater public key before upload, and a previous signed build installs the newer published artifact through the updater path.',
+    sourceIssue: '#217',
+    status: 'implemented',
+    destinations: ['GitHub desktop release', 'Windows 11 updater'],
+    implementation: [
+      'apps/desktop/app/src/updater_artifact.rs',
+      'apps/desktop/app/src/bin/verify_updater_artifact.rs',
+      'apps/desktop/scripts/windows-acceptance.ps1',
+      '.github/workflows/desktop-release.yml',
+    ],
+    evidence: [
+      {
+        kind: 'external',
+        path: 'apps/desktop/app/tests/updater_artifact.rs',
+        assertion:
+          'Public-key verification rejects installer tampering, signature/metadata drift, wrong versions, and insecure URLs without claiming installation.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/desktop/smoke/windows-11.pending.json',
+        assertion: 'Signed updater installation remains pending rather than inferred from artifact preflight.',
+      },
+    ],
+    verificationGap:
+      'Provision the existing external signing credentials and private-submodule read token, then update a real previous signed build to a newer signed published build on supported Windows 11 and observe verification, replacement, relaunch, and installed version.',
+  },
+  {
     id: 'player.current-season-ranked',
     area: 'player-profile',
     requirement:
