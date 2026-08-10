@@ -1,4 +1,4 @@
-import type { AccountPreferencesContract } from '@brawltome/contracts'
+import type { AccountPreferencesContract, LeaderboardEntry as ContractLeaderboardEntry } from '@brawltome/contracts'
 import { buildQueryString, parseEnum, parseInteger } from '../../lib/searchParams'
 
 export const BRACKETS = [
@@ -41,42 +41,12 @@ export interface LeaderboardFilters {
   page: number
 }
 
-export interface SoloLeaderboardEntry {
-  brawlhallaId: number
-  name: string
-  region: string
-  rating: number
-  peakRating: number | null
-  tier: string | null
-  bestLegendNameKey?: string | null
-  rankedWins?: number
-  rankedGames?: number
-  wins?: number
-  games?: number
-  losses?: number
-  rank: number
-  sourceRank?: number
-}
-
-export interface TeamLeaderboardEntry {
-  brawlhallaIdOne: number
-  brawlhallaIdTwo: number
-  playerOneName: string
-  playerTwoName: string
-  teamName?: string | null
-  region: string
-  rating: number
-  peakRating: number | null
-  tier: string | null
-  wins: number
-  games: number
-  rank: number
-}
-
-export type LeaderboardEntry = SoloLeaderboardEntry | TeamLeaderboardEntry
+export type TeamLeaderboardEntry = Extract<ContractLeaderboardEntry, { identity: { type: 'fixed-two-vs-two-team' } }>
+export type SoloLeaderboardEntry = Exclude<ContractLeaderboardEntry, TeamLeaderboardEntry>
+export type LeaderboardEntry = ContractLeaderboardEntry
 
 export function isTeamEntry(entry: LeaderboardEntry): entry is TeamLeaderboardEntry {
-  return 'brawlhallaIdOne' in entry && 'brawlhallaIdTwo' in entry
+  return entry.identity.type === 'fixed-two-vs-two-team'
 }
 
 export function parseLeaderboardSearchParams(
@@ -112,13 +82,8 @@ export function buildLeaderboardQueryString(filters: LeaderboardFilters): string
   })
 }
 
-export function displayedSoloStanding(
-  bracket: BracketId,
-  entry: SoloLeaderboardEntry,
-  page: number,
-  index: number,
-): number {
-  return bracket === '1v1' ? entry.rank : (page - 1) * PAGE_SIZE + index + 1
+export function playerHref(brawlhallaId: number): string | null {
+  return Number.isSafeInteger(brawlhallaId) && brawlhallaId > 0 ? `/player/${brawlhallaId}` : null
 }
 
 export function snapshotNotice(status: 'fresh' | 'stale' | 'unavailable' | null): string | null {

@@ -9,12 +9,12 @@ import {
   processRefreshStats,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player/composition'
-import { createPostgresRanking, fetch1v1LeaderboardPage } from '@brawltome/ranking/composition'
+import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
 import { Hono } from 'hono'
 import { createHealthRoutes } from './health-routes'
-import { readOperationsWorkerConfig } from './operations-worker-config'
+import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
 import { createPostgresReadiness } from './postgres-readiness'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
@@ -93,7 +93,8 @@ function requestShutdown(): void {
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 
-let leaderboardScheduleReconciled = false
+const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
+let leaderboardSchedulesReconciled = false
 try {
   await runOperationsWorker({
     operations,
@@ -102,22 +103,14 @@ try {
     config: workerConfig,
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
-      if (leaderboardScheduleReconciled) return interactiveAdmissions
-      const schedule = await operations.reconcileLeaderboardSchedule({
-        kind: 'leaderboard-1v1',
-        scheduleKey: 'rankings:1v1:v1',
-        operationKeyPrefix: 'rankings:1v1',
-        workClass: 'leaderboard',
-        intervalMs: workerConfig.leaderboard.intervalMs,
-        firstDueAt: workerConfig.leaderboard.firstDueAt,
-        payload: {
-          pageDepth: workerConfig.leaderboard.pageDepth,
-          intervalMs: workerConfig.leaderboard.intervalMs,
-        },
-        provenance: { source: 'rankings-schedule', requestedBy: 'issue-201' },
-      })
-      leaderboardScheduleReconciled = true
-      return interactiveAdmissions + (schedule.outcome === 'already-exists' ? 0 : 1)
+      if (leaderboardSchedulesReconciled) return interactiveAdmissions
+      let reconciled = 0
+      for (const definition of leaderboardSchedules) {
+        const schedule = await operations.reconcileLeaderboardSchedule(definition)
+        if (schedule.outcome !== 'already-exists') reconciled++
+      }
+      leaderboardSchedulesReconciled = true
+      return interactiveAdmissions + reconciled
     },
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
@@ -127,7 +120,7 @@ try {
         ...common,
         sourceAdmission: requestAdmission,
         ranking,
-        leaderboardSource: { fetchPage: fetch1v1LeaderboardPage },
+        leaderboardSource: { fetchPage: fetchLeaderboardPage },
         executeSection: async (lease, section, admitSourceCall) => {
           await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
           const admittedBhapi = new BhApiClient({

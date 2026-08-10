@@ -40,6 +40,33 @@ const weightEnvironment: Record<BackgroundWorkClass, string> = {
   maintenance: 'OPERATIONS_MAINTENANCE_WEIGHT',
 }
 
+const leaderboardModes = [
+  { mode: '1v1', kind: 'leaderboard-1v1' },
+  { mode: '2v2', kind: 'leaderboard-2v2' },
+  { mode: 'solo2v2', kind: 'leaderboard-solo-2v2' },
+  { mode: '3v3', kind: 'leaderboard-3v3' },
+] as const
+
+export function leaderboardScheduleDefinitions(config: {
+  pageDepth: number
+  intervalMs: number
+  firstDueAt: string
+}) {
+  const baseDueAt = new Date(config.firstDueAt).getTime()
+  if (!Number.isFinite(baseDueAt)) throw new Error('leaderboard firstDueAt must be a valid timestamp')
+  const staggerMs = Math.floor(config.intervalMs / leaderboardModes.length)
+  return leaderboardModes.map((definition, index) => ({
+    ...definition,
+    scheduleKey: `rankings:${definition.mode}:v1`,
+    operationKeyPrefix: `rankings:${definition.mode}`,
+    workClass: 'leaderboard' as const,
+    intervalMs: config.intervalMs,
+    firstDueAt: new Date(baseDueAt + index * staggerMs).toISOString(),
+    payload: { pageDepth: config.pageDepth, intervalMs: config.intervalMs },
+    provenance: { source: 'rankings-schedule', requestedBy: 'issue-202' },
+  }))
+}
+
 export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
   const classDefaults: Record<WorkClass, number> = {
     interactive: 4,

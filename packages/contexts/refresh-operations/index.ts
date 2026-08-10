@@ -56,6 +56,14 @@ export function validateAdmissionConfig(config: AdmissionConfig): AdmissionConfi
   return config
 }
 
+export const leaderboardOperationKinds = [
+  'leaderboard-1v1',
+  'leaderboard-2v2',
+  'leaderboard-solo-2v2',
+  'leaderboard-3v3',
+] as const
+export type LeaderboardOperationKind = (typeof leaderboardOperationKinds)[number]
+
 export type LeaderboardOperationPayload = {
   pageDepth: number
   intervalMs: number
@@ -92,7 +100,7 @@ export type AcceptProofOperation = {
 }
 
 export type AcceptLeaderboardOperation = {
-  kind: 'leaderboard-1v1'
+  kind: LeaderboardOperationKind
   dedupeKey: string
   operationKey: string
   workClass: 'leaderboard'
@@ -121,7 +129,7 @@ export type CreateProofSchedule = {
 }
 
 export type CreateLeaderboardSchedule = {
-  kind: 'leaderboard-1v1'
+  kind: LeaderboardOperationKind
   scheduleKey: string
   operationKeyPrefix: string
   workClass: 'leaderboard'
@@ -202,12 +210,12 @@ export type OperationLease =
       workClass: 'interactive'
       payload: { brawlhallaId: number; staleSections: ('ranked' | 'stats')[] }
     })
-  | (LeaseFields & { kind: 'leaderboard-1v1'; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
   | (LeaseFields & {
       kind: 'clan-refresh'
       workClass: 'interactive'
       payload: { clanId: number; staleSections: ('profile' | 'roster')[] }
     })
+  | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
 
 export type OperationFailure = {
   code: string

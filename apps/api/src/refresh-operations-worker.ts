@@ -2,7 +2,8 @@ import {
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
   type RankingPublicationStore,
-  collectAndPublish1v1Generation,
+  collectAndPublishLeaderboardGeneration,
+  leaderboardModeFromOperationKind,
 } from '@brawltome/ranking/composition'
 import type {
   AdmissionConfig,
@@ -15,9 +16,9 @@ import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/r
 type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
-type LeaderboardLease = Extract<OperationLease, { kind: 'leaderboard-1v1' }>
+type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
 type InteractiveLease = PlayerLease | ClanLease
-type InteractiveSection = 'ranked' | 'stats' | 'profile' | 'roster'
+type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
 type RunOneRefreshOperationOptions = {
   leaseMs: number
@@ -255,7 +256,7 @@ async function executeLeaderboard(
   lease: LeaderboardLease,
   options: RunOneRefreshOperationOptions,
 ): Promise<void> {
-  if (!options.ranking || !options.leaderboardSource) {
+  if (!options.ranking || !options.leaderboardSource || !options.sourceAdmission) {
     await operations.fail(
       lease,
       { code: 'leaderboard_executor_unavailable', message: 'Leaderboard executor is not configured', retryable: false },
@@ -263,17 +264,36 @@ async function executeLeaderboard(
     )
     return
   }
-  await collectAndPublish1v1Generation({
+  const { leaderboardSource, ranking, sourceAdmission } = options
+  const renewLeaderboardLease = async () => {
+    if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') throw new LeaderboardLeaseLostError()
+  }
+  const mode = leaderboardModeFromOperationKind(lease.kind)
+  await collectAndPublishLeaderboardGeneration({
+    mode,
     authorization: {
       operationId: lease.operationId,
       effectOperationId: lease.effectOperationId,
       operationKey: lease.operationKey,
+      operationKind: lease.kind,
       leaseOwner: lease.leaseOwner,
       leaseToken: lease.leaseToken,
       scheduleWindowAt: lease.scheduleWindowAt,
     },
-    source: options.leaderboardSource,
-    publication: options.ranking,
+    source: {
+      async fetchPage(input) {
+        await renewLeaderboardLease()
+        const admission = await sourceAdmission.admitSource({
+          domain: 'brawlhalla-v1',
+          reservationKey: `${lease.operationId}:${lease.attemptNumber}:${input.mode}:${input.region}:${input.page}`,
+          units: 1,
+        })
+        if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
+        await renewLeaderboardLease()
+        return leaderboardSource.fetchPage(input)
+      },
+    },
+    publication: ranking,
     pageDepth: lease.payload.pageDepth,
     intervalMs: lease.payload.intervalMs,
   })

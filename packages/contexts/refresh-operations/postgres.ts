@@ -17,6 +17,7 @@ import {
   type FencedResult,
   type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
+  type LeaderboardOperationKind,
   type MaterializeSchedulesResult,
   type OperationFailure,
   type OperationLease,
@@ -24,6 +25,7 @@ import {
   type TransitionResult,
   type WorkClass,
   backgroundWorkClasses,
+  leaderboardOperationKinds,
   validateAdmissionConfig,
   validateLeaderboardOperationPayload,
   workClasses,
@@ -53,7 +55,7 @@ type OperationRow = {
 type ScheduleRow = {
   id: string
   schedule_key: string
-  kind: 'proof' | 'leaderboard-1v1'
+  kind: 'proof' | LeaderboardOperationKind
   work_class: WorkClass
   interval_ms: string | number
   first_due_at: Date
@@ -112,7 +114,7 @@ function toLease(row: OperationRow): OperationLease {
     maxAttempts: row.max_attempts,
     scheduleWindowAt: row.scheduled_window_at?.toISOString() ?? null,
   }
-  if (row.kind === 'leaderboard-1v1') {
+  if (isLeaderboardKind(row.kind)) {
     if (row.work_class !== 'leaderboard' || !('pageDepth' in row.payload)) {
       throw new Error('invalid durable leaderboard operation')
     }
@@ -130,7 +132,7 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
-  if (!('value' in row.payload)) throw new Error('invalid durable proof operation')
+  if (row.kind !== 'proof' || !('value' in row.payload)) throw new Error('invalid durable proof operation')
   return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
 }
 
@@ -180,8 +182,12 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-function operationKind(input: { kind?: 'proof' | 'leaderboard-1v1' }): 'proof' | 'leaderboard-1v1' {
+function operationKind(input: { kind?: 'proof' | LeaderboardOperationKind }): 'proof' | LeaderboardOperationKind {
   return input.kind ?? 'proof'
+}
+
+function isLeaderboardKind(kind: string): kind is LeaderboardOperationKind {
+  return (leaderboardOperationKinds as readonly string[]).includes(kind)
 }
 
 function validateSchedule(input: CreateSchedule): Date {
@@ -194,7 +200,7 @@ function validateSchedule(input: CreateSchedule): Date {
   if (!Number.isSafeInteger(input.intervalMs) || input.intervalMs <= 0) {
     throw new Error('intervalMs must be a positive safe integer')
   }
-  if (operationKind(input) === 'leaderboard-1v1') {
+  if (isLeaderboardKind(operationKind(input))) {
     const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
     if (payload.intervalMs !== input.intervalMs) {
       throw new Error('leaderboard payload intervalMs must match the schedule intervalMs')
@@ -556,7 +562,7 @@ export function createPostgresRefreshOperations(
 
     async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
       const kind = operationKind(input)
-      if (kind === 'leaderboard-1v1') {
+      if (isLeaderboardKind(kind)) {
         if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
         validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
       }
@@ -630,7 +636,7 @@ export function createPostgresRefreshOperations(
         await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
         const [existing] = await sql<{ id: string; matches: boolean }[]>`
           SELECT id,
-            kind = 'leaderboard-1v1'
+            kind = ${input.kind}
             AND work_class = 'leaderboard'
             AND interval_ms = ${input.intervalMs}
             AND first_due_at = ${firstDueAt}
@@ -658,7 +664,7 @@ export function createPostgresRefreshOperations(
             (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
              operation_key_prefix, payload, provenance, max_attempts)
           VALUES
-            (${scheduleId}, ${input.scheduleKey}, 'leaderboard-1v1', 'leaderboard', ${input.intervalMs},
+            (${scheduleId}, ${input.scheduleKey}, ${input.kind}, 'leaderboard', ${input.intervalMs},
              ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${sql.json(input.payload)},
              ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
         `
@@ -846,13 +852,12 @@ export function createPostgresRefreshOperations(
                     WHERE operation_id = ${candidate.effect_operation_id}
                   `
                 : []
-            const [leaderboardEffect] =
-              candidate.kind === 'leaderboard-1v1'
-                ? await sql<{ operation_id: string }[]>`
+            const [leaderboardEffect] = isLeaderboardKind(candidate.kind)
+              ? await sql<{ operation_id: string }[]>`
                     SELECT operation_id FROM refresh_operations.leaderboard_effects
                     WHERE operation_id = ${candidate.effect_operation_id}
                   `
-                : []
+              : []
             const [interactiveEffect] =
               candidate.kind === 'interactive-player-refresh' || candidate.kind === 'clan-refresh'
                 ? await sql<{ complete: boolean }[]>`
