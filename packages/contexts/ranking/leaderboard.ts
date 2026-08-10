@@ -31,6 +31,7 @@ export type LeaderboardGenerationCandidate = {
 
 export type RankingPublicationAuthorization = {
   operationId: string
+  effectOperationId?: string
   operationKey: string
   leaseOwner: string
   leaseToken: number

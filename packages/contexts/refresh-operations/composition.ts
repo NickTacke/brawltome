@@ -5,8 +5,14 @@ import { addInteractiveRefreshCheckpoints } from './migrations/0004-add-interact
 import { addLeaderboardOperationKind } from './migrations/0005-add-leaderboard-kind'
 import { exposeActiveLeaseFence } from './migrations/0006-expose-active-lease-fence'
 import { addClanRefresh } from './migrations/0007-add-clan-refresh'
+import { addDeadLetterOperations } from './migrations/0008-add-dead-letter-operations'
 
-export { createPostgresRefreshOperations, type PostgresRefreshOperations } from './postgres'
+export {
+  createPostgresDeadLetterOperations,
+  createPostgresRefreshOperations,
+  type PostgresDeadLetterOperations,
+  type PostgresRefreshOperations,
+} from './postgres'
 
 export const refreshOperationsMigrationInventory = [
   initializeRefreshOperations,
@@ -16,4 +22,5 @@ export const refreshOperationsMigrationInventory = [
   addLeaderboardOperationKind,
   exposeActiveLeaseFence,
   addClanRefresh,
+  addDeadLetterOperations,
 ] as const

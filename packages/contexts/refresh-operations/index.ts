@@ -185,6 +185,7 @@ export interface InteractiveRefreshOperations {
 
 type LeaseFields = {
   operationId: string
+  effectOperationId: string
   operationKey: string
   provenance: OperationProvenance
   leaseOwner: string
@@ -219,6 +220,116 @@ export type SectionCheckpointResult = 'execute' | 'already-applied' | 'lease-los
 export type TransitionResult = 'transitioned' | 'lease-lost'
 export type RenewResult = 'renewed' | 'lease-lost'
 export type LeaseAuthorityResult = { outcome: 'renewed'; leaseExpiresAt: Date } | { outcome: 'lease-lost' }
+
+export type DeadLetterDisposition = 'replayed' | 'discarded'
+
+export type DeadLetterListItem = {
+  operationId: string
+  kind: OperationLease['kind']
+  operationKey: string
+  workClass: WorkClass
+  provenance: OperationProvenance
+  attemptCount: number
+  maxAttempts: number
+  lastError: OperationFailure | null
+  deadLetteredAt: string
+  disposition: DeadLetterDisposition | null
+}
+
+export type ListDeadLettersInput = {
+  limit?: number
+  cursor?: string
+}
+
+export type DeadLetterPage = {
+  items: DeadLetterListItem[]
+  nextCursor: string | null
+}
+
+export type DeadLetterAuditAction = {
+  actionId: string
+  targetOperationId: string
+  disposition: DeadLetterDisposition
+  actorId: string
+  reason: string
+  occurredAt: string
+  replayOperationId: string | null
+}
+
+export type DeadLetterInspection = {
+  operation: DeadLetterListItem & {
+    dedupeKey: string
+    payload: OperationLease['payload']
+    payloadVersion: number
+    replayedFromOperationId: string | null
+  }
+  attempts: {
+    attemptNumber: number
+    leaseToken: number
+    leaseOwner: string
+    startedAt: string
+    finishedAt: string | null
+    outcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_expired' | null
+    error: OperationFailure | null
+  }[]
+  proofEffects: {
+    operationKey: string
+    effectValue: { value: string }
+    createdAt: string
+  }[]
+  interactiveEffects: {
+    section: 'ranked' | 'stats' | 'profile' | 'roster'
+    leaseToken: number
+    completedAt: string
+  }[]
+  leaderboardEffects: {
+    operationKey: string
+    leaseToken: number
+    createdAt: string
+  }[]
+  schedule: {
+    scheduleId: string
+    scheduleKey: string
+    firstWindowNumber: number
+    lastWindowNumber: number
+    windowDueAt: string
+    materializedAt: string
+    latenessMs: number
+    missedWindowCount: number
+    catchUp: boolean
+  } | null
+  auditActions: DeadLetterAuditAction[]
+}
+
+export type DeadLetterDispositionInput = {
+  operationId: string
+  actorId: string
+  reason: string
+}
+
+export type DeadLetterDispositionResult =
+  | { outcome: 'replayed'; disposition: 'replayed'; actionId: string; replayOperationId: string }
+  | { outcome: 'discarded'; disposition: 'discarded'; actionId: string; replayOperationId: null }
+  | {
+      outcome: 'already-disposed'
+      disposition: 'replayed'
+      actionId: string
+      replayOperationId: string
+    }
+  | {
+      outcome: 'already-disposed'
+      disposition: 'discarded'
+      actionId: string
+      replayOperationId: null
+    }
+  | { outcome: 'not-found'; disposition: null; actionId: null; replayOperationId: null }
+
+export interface DeadLetterOperations {
+  listDeadLetters(input?: ListDeadLettersInput): Promise<DeadLetterPage>
+  inspectDeadLetter(operationId: string): Promise<DeadLetterInspection | null>
+  replayDeadLetter(input: DeadLetterDispositionInput): Promise<DeadLetterDispositionResult>
+  discardDeadLetter(input: DeadLetterDispositionInput): Promise<DeadLetterDispositionResult>
+}
 
 export interface RefreshOperationWorker {
   claim(

@@ -211,11 +211,12 @@ describe('immutable Ranking snapshots', () => {
     const control = postgres(connectionString, { max: 1 })
     let constraintError: unknown
     try {
+      const operationId = randomUUID()
       await control`
         INSERT INTO refresh_operations.operations
-          (id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
+          (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
         VALUES
-          (${randomUUID()}, 'leaderboard-1v1', ${randomUUID()}, ${randomUUID()}, 'maintenance',
+          (${operationId}, ${operationId}, 'leaderboard-1v1', ${randomUUID()}, ${randomUUID()}, 'maintenance',
            ${control.json({ pageDepth: 0, intervalMs: 1.5 })}, ${control.json({ source: 'test' })}, 1)
       `
     } catch (error) {

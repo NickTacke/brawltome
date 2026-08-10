@@ -6,6 +6,7 @@ export type ParityArea =
   | 'preserved-public-route'
   | 'refresh-admission'
   | 'player-profile'
+  | 'operator-operations'
 export type EvidenceKind = 'unit' | 'integration' | 'browser' | 'manual' | 'external'
 
 export type ParityEvidence = {

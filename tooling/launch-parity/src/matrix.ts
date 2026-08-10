@@ -207,6 +207,34 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ),
   ),
   {
+    id: 'operations.dead-letters',
+    area: 'operator-operations',
+    requirement:
+      'Authenticated operators can list, inspect, replay, or discard dead letters through an audited JSON CLI.',
+    sourceIssue: '#193',
+    status: 'verified',
+    destinations: [],
+    implementation: [
+      'packages/contexts/refresh-operations/cli.ts',
+      'packages/contexts/refresh-operations/operator-auth.ts',
+      'packages/contexts/refresh-operations/postgres.ts',
+      'packages/contexts/refresh-operations/migrations/0008-add-dead-letter-operations.ts',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'packages/contexts/refresh-operations/tests/dead-letters.postgres.test.ts',
+        assertion:
+          'Real PostgreSQL and spawned CLI tests prove authentication, redaction, lineage, concurrency, idempotency, and immutable audit behavior.',
+      },
+      {
+        kind: 'unit',
+        path: 'tooling/architecture/tests/architecture.test.ts',
+        assertion: 'The operator CLI remains capability-owned behind approved package boundaries.',
+      },
+    ],
+  },
+  {
     id: 'refresh.interactive-player',
     area: 'refresh-admission',
     requirement:

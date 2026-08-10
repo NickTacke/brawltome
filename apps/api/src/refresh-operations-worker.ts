@@ -266,6 +266,7 @@ async function executeLeaderboard(
   await collectAndPublish1v1Generation({
     authorization: {
       operationId: lease.operationId,
+      effectOperationId: lease.effectOperationId,
       operationKey: lease.operationKey,
       leaseOwner: lease.leaseOwner,
       leaseToken: lease.leaseToken,
