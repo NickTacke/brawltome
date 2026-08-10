@@ -37,7 +37,7 @@ const apiReadiness = createApiReadinessMonitor({ verify: verifyApiAccess })
 const metricsServer = startDiscordMetricsServer({
   telemetry: discordTelemetry,
   port: Number(process.env.DISCORD_METRICS_PORT ?? 3002),
-  secret: internalSecret,
+  secret: process.env.METRICS_SCRAPE_SECRET,
   readiness: () => gatewayReady && apiReadiness.isReady() && interactions.accepting,
 })
 

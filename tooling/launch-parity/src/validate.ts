@@ -18,6 +18,7 @@ const requiredRowIds = [
   'route.account',
   'route.stats',
   'operations.dead-letters',
+  'operations.observability',
   'refresh.interactive-player',
   'player.current-season-ranked',
   'player.canonical-profile',

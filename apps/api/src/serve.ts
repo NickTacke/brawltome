@@ -292,7 +292,7 @@ app.use(
 app.route('/health', createHealthRoutes(lifecycle))
 
 app.get('/metrics', async (c) => {
-  if (!internalSecretValid(c.req.header('x-internal-secret'), process.env.INTERNAL_API_SECRET)) {
+  if (!internalSecretValid(c.req.header('x-metrics-secret'), process.env.METRICS_SCRAPE_SECRET)) {
     return c.json({ error: 'unauthorized' }, 401)
   }
   try {

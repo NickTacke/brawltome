@@ -1,0 +1,81 @@
+name: brawltome-observability-pipeline-evidence
+
+x-limits: &limits
+  restart: "no"
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  loki:
+    <<: *limits
+    image: grafana/loki:3.5.3@sha256:3165cecce301ce5b9b6e3530284b080934a05cd5cafac3d3d82edcb887b45ecd
+    user: "10001:10001"
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ../loki/loki.yml:/etc/loki/loki.yml:ro
+    tmpfs:
+      - /var/loki:rw,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0750,size=128m
+    ports:
+      - 127.0.0.1:13100:3100
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 384M, pids: 64 }
+
+  tempo:
+    <<: *limits
+    image: grafana/tempo:2.8.2@sha256:0ef775495967cd5d7a6b2e146b6ea695d624803c8db8349fb8ce4164f719f9b7
+    user: "10001:10001"
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ../tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+    tmpfs:
+      - /var/tempo:rw,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0750,size=128m
+    ports:
+      - 127.0.0.1:13200:3200
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 384M, pids: 64 }
+
+  grafana:
+    <<: *limits
+    image: grafana/grafana-oss:12.1.1@sha256:a1701c2180249361737a99a01bc770db39381640e4d631825d38ff4535efa47d
+    user: "472:472"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_SYNTHETIC_PASSWORD:?Set only for the local pipeline test}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_UNIFIED_ALERTING_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+    tmpfs:
+      - /var/lib/grafana:rw,noexec,nosuid,nodev,uid=472,gid=472,mode=0750,size=64m
+      - /tmp:rw,noexec,nosuid,nodev,uid=472,gid=472,mode=0750,size=16m
+    ports:
+      - 127.0.0.1:13000:3000
+    depends_on: [loki, tempo]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 320M, pids: 64 }
+
+  otel-collector:
+    <<: *limits
+    image: otel/opentelemetry-collector-contrib:0.158.0@sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5
+    user: "10001:10001"
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ../otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    secrets:
+      - otel_ingest_token
+    ports:
+      - 127.0.0.1:14318:4318
+    depends_on: [loki, tempo]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 320M, pids: 64 }
+
+secrets:
+  otel_ingest_token:
+    file: ./fixtures/otel-ingest-token

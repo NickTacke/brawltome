@@ -17,6 +17,7 @@
       "@brawltome/ui": ["./packages/ui/src/index.ts"],
       "@brawltome/shared": ["./packages/shared/src/index.ts"],
       "@brawltome/telemetry": ["./packages/telemetry/src/index.ts"],
+      "@brawltome/telemetry/node": ["./packages/telemetry/src/node.ts"],
       "@brawltome/player": ["./packages/contexts/player/index.ts"],
       "@brawltome/clan": ["./packages/contexts/clan/index.ts"],
       "@brawltome/ranking": ["./packages/contexts/ranking/index.ts"],

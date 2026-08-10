@@ -3,12 +3,14 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import {
   type Context,
   type Span,
+  type SpanContext,
   SpanStatusCode,
   type Tracer,
   isSpanContextValid,
   context as otelContext,
   trace as otelTrace,
 } from '@opentelemetry/api'
+import { otlpSignalUrl } from './otlp'
 import {
   type TelemetryContext,
   type TelemetryIds,
@@ -118,6 +120,8 @@ const operationKind = [
   'leaderboard-2v2',
   'leaderboard-solo-2v2',
   'leaderboard-3v3',
+  'player-discovery-projection',
+  'ranked-player-pulse',
 ] as const
 const outcome = [
   'succeeded',
@@ -386,6 +390,71 @@ export function createJsonConsoleSink(options: JsonConsoleSinkOptions = {}): Tel
   }
 }
 
+function otlpId(hex: string | undefined): string | undefined {
+  if (!hex || !/^[0-9a-f]+$/i.test(hex) || hex.length % 2 !== 0) return undefined
+  return hex.toLowerCase()
+}
+
+export function createOtlpHttpSink(options: {
+  endpoint: string
+  fetch?: typeof fetch
+  headers?: Readonly<Record<string, string>>
+}): TelemetrySink {
+  const url = otlpSignalUrl(options.endpoint, 'logs')
+  const send = options.fetch ?? fetch
+  return {
+    export: async (records, signal) => {
+      if (records.length === 0) return
+      const byService = new Map<string, TelemetryRecord[]>()
+      for (const record of records) {
+        const serviceRecords = byService.get(record.service) ?? []
+        serviceRecords.push(record)
+        byService.set(record.service, serviceRecords)
+      }
+      const resourceLogs = Array.from(byService, ([service, serviceRecords]) => ({
+        resource: {
+          attributes: [{ key: 'service.name', value: { stringValue: service } }],
+        },
+        scopeLogs: [
+          {
+            scope: { name: '@brawltome/telemetry', version: '1' },
+            logRecords: serviceRecords.map((record) => ({
+              timeUnixNano: String(BigInt(Date.parse(record.timestamp)) * 1_000_000n),
+              observedTimeUnixNano: String(BigInt(Date.now()) * 1_000_000n),
+              severityNumber: { debug: 5, info: 9, warn: 13, error: 17 }[record.level],
+              severityText: record.level.toUpperCase(),
+              body: { stringValue: JSON.stringify(record) },
+              ...(otlpId(record.traceId) ? { traceId: otlpId(record.traceId) } : {}),
+              ...(otlpId(record.spanId) ? { spanId: otlpId(record.spanId) } : {}),
+              attributes: [
+                { key: 'brawltome.schema', value: { intValue: String(record.schema) } },
+                { key: 'brawltome.event', value: { stringValue: record.event } },
+              ],
+            })),
+          },
+        ],
+      }))
+      const response = await send(url, {
+        method: 'POST',
+        headers: { ...options.headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ resourceLogs }),
+        signal,
+      })
+      if (!response.ok) throw new Error(`OTLP log export failed (${response.status})`)
+    },
+  }
+}
+
+export function createFanoutSink(sinks: readonly TelemetrySink[]): TelemetrySink {
+  if (sinks.length === 0) throw new Error('At least one telemetry sink is required')
+  return {
+    export: async (records, signal) => {
+      const results = await Promise.allSettled(sinks.map((sink) => sink.export(records, signal)))
+      if (results.some(({ status }) => status === 'rejected')) throw new Error('One or more telemetry sinks failed')
+    },
+  }
+}
+
 export type Telemetry = ReturnType<typeof createTelemetry>
 
 export function createTelemetry(options: {
@@ -402,6 +471,7 @@ export function createTelemetry(options: {
   openTelemetry?: {
     getTracer?: () => Tracer
     active?: () => Context
+    setSpanContext?: (context: Context, spanContext: SpanContext) => Context
     setSpan?: (context: Context, span: Span) => Context
     with?: <T>(context: Context, work: () => T) => T
   }
@@ -591,7 +661,7 @@ export function createTelemetry(options: {
       let localContext = childContext(parent)
       const started = now()
       const callerAttributes = normalizeAttributes(attributes) ?? {}
-      const normalized = normalizeAttributes({ span: name, ...callerAttributes }) ?? {}
+      const normalized = normalizeAttributes({ 'brawltome.span': true, span: name, ...callerAttributes }) ?? {}
       let span: Span | undefined
 
       try {
@@ -599,7 +669,19 @@ export function createTelemetry(options: {
           options.tracer ??
           (options.openTelemetry?.getTracer ?? (() => otelTrace.getTracer(options.service.slice(0, 80))))()
         try {
-          span = tracer.startSpan(name.slice(0, 120), { attributes: normalized })
+          let parentContext = (options.openTelemetry?.active ?? (() => otelContext.active()))()
+          if (parent) {
+            parentContext = (
+              options.openTelemetry?.setSpanContext ??
+              ((context, spanContext) => otelTrace.setSpanContext(context, spanContext))
+            )(parentContext, {
+              traceId: parent.traceId,
+              spanId: parent.spanId,
+              traceFlags: parent.sampled ? 1 : 0,
+              isRemote: true,
+            })
+          }
+          span = tracer.startSpan(name.slice(0, 120), { attributes: normalized }, parentContext)
         } catch {
           span = undefined
         }

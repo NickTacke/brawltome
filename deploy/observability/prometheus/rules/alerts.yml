@@ -1,0 +1,124 @@
+groups:
+  - name: brawltome-operational
+    interval: 15s
+    rules:
+      - alert: RuntimeMetricsTargetDown
+        expr: up{job=~"api|operations-worker|web|discord"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: metrics-reachability
+        annotations:
+          summary: "{{ $labels.runtime }} metrics target is unreachable"
+          description: "The dedicated metrics scrape has failed for at least two minutes."
+
+      - alert: RuntimeNotReady
+        expr: probe_success{job="readiness"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: readiness
+        annotations:
+          summary: "{{ $labels.runtime }} is not ready"
+          description: "The dependency-aware readiness probe has failed for at least two minutes."
+
+      - alert: WorkerHeartbeatStale
+        expr: time() - max by (runtime) (worker_heartbeat_timestamp_seconds) > 60
+        for: 2m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: worker-heartbeat
+        annotations:
+          summary: "{{ $labels.runtime }} heartbeat is stale"
+          description: "No successful worker loop heartbeat has been observed for more than one minute."
+
+      - alert: OldestRunnableJobDelayed
+        expr: max by (work_class) (operation_oldest_pending_age_ms) > 900000
+        for: 5m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: oldest-job
+        annotations:
+          summary: "{{ $labels.work_class }} runnable work is delayed"
+          description: "The oldest runnable operation has exceeded the initial 15-minute operator threshold."
+
+      - alert: ScheduleMaterializationLate
+        expr: max by (kind) (schedule_lateness_ms) > 300000
+        for: 5m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: schedule-lateness
+        annotations:
+          summary: "{{ $labels.kind }} schedule is late"
+          description: "An enabled schedule has remained more than five minutes late."
+
+      - alert: DeadLettersPresent
+        expr: max by (work_class, kind) (operation_dead_letters) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: dead-letters
+        annotations:
+          summary: "{{ $labels.kind }} has unexplained dead letters"
+          description: "At least one durable operation is in dead-letter state."
+
+      - alert: SourceQuotaNearLimit
+        expr: max by (domain) (source_quota_used) / clamp_min(max by (domain) (source_quota_limit), 1) >= 0.9
+        for: 2m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: source-quota
+        annotations:
+          summary: "{{ $labels.domain }} source quota is at least 90 percent used"
+          description: "Distributed source admission is close to its fixed window limit."
+
+      - alert: RefreshFailuresElevated
+        expr: sum by (kind, failure_category) (increase(refresh_failures_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: refresh-failures
+        annotations:
+          summary: "{{ $labels.kind }} refresh failures detected"
+          description: "One or more refresh attempts failed in the last 15 minutes."
+
+      - alert: HttpLatencyHigh
+        expr: histogram_quantile(0.95, sum by (runtime, le) (rate(http_server_duration_ms_bucket[5m]))) > 250
+        for: 5m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: http-latency
+        annotations:
+          summary: "{{ $labels.runtime }} HTTP p95 exceeds 250 ms"
+          description: "The five-minute HTTP p95 has exceeded the launch threshold."
+
+      - alert: HttpErrorRateHigh
+        expr: sum by (runtime) (rate(http_server_requests_total{status_class="5xx"}[5m])) / clamp_min(sum by (runtime) (rate(http_server_requests_total[5m])), 0.001) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: http-errors
+        annotations:
+          summary: "{{ $labels.runtime }} HTTP 5xx rate exceeds one percent"
+          description: "The fixed launch error boundary is breached over the five-minute window."
+
+      - alert: TelemetryStorageNearQuota
+        expr: 1 - (node_filesystem_avail_bytes{mountpoint=~"/storage/(prometheus|loki|tempo)"} / node_filesystem_size_bytes{mountpoint=~"/storage/(prometheus|loki|tempo)"}) >= 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: telemetry-storage
+        annotations:
+          summary: "Telemetry storage is at least 80 percent used"
+          description: "A dedicated quota-backed telemetry filesystem is nearing capacity."

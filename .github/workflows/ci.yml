@@ -12,6 +12,19 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run architecture:check
 
+  observability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun test tooling/observability/tests/observability.test.ts tooling/observability/tests/storage-preflight.test.ts packages/telemetry/tests/otlp.test.ts
+      - run: bun run observability:validate
+      - run: bun run observability:test-alerts
+      - run: bun run observability:test-pipeline
+
   launch-parity:
     runs-on: ubuntu-latest
     services:

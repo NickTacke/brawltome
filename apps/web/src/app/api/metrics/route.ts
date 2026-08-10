@@ -3,13 +3,13 @@ import { webTelemetry } from '@/lib/web-telemetry-registry'
 import { renderPrometheus } from '@brawltome/telemetry'
 
 function authorized(provided: string | null): boolean {
-  const expected = process.env.INTERNAL_API_SECRET
+  const expected = process.env.METRICS_SCRAPE_SECRET
   if (!provided || !expected || provided.length !== expected.length) return false
   return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request.headers.get('x-internal-secret'))) {
+  if (!authorized(request.headers.get('x-metrics-secret'))) {
     return Response.json({ error: 'unauthorized' }, { status: 401 })
   }
   return new Response(renderPrometheus(webTelemetry.metrics.snapshot()), {

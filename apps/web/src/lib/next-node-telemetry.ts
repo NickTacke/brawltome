@@ -1,4 +1,5 @@
 import { statusClassOf } from '@brawltome/telemetry'
+import { createBrawltomeTraceProvider } from '@brawltome/telemetry/node'
 import { SpanStatusCode } from '@opentelemetry/api'
 import {
   AlwaysOnSampler,
@@ -6,7 +7,7 @@ import {
   type ReadableSpan,
   type SpanProcessor,
 } from '@opentelemetry/sdk-trace-node'
-import { webTelemetry } from './web-telemetry-registry'
+import { webOtlpHeaders, webTelemetry, webTraceSampleRate } from './web-telemetry-registry'
 
 const NEXT_REQUEST_SPAN = 'BaseServer.handleRequest'
 const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'])
@@ -68,20 +69,39 @@ const globalProvider = globalThis as typeof globalThis & {
 
 export function registerNextNodeTelemetry(): void {
   if (globalProvider.__brawltomeWebTracerProvider) return
-  const provider = new NodeTracerProvider({
-    sampler: new AlwaysOnSampler(),
-    forceFlushTimeoutMillis: 250,
-    spanLimits: {
-      attributeCountLimit: 32,
-      attributeValueLengthLimit: 256,
-      eventCountLimit: 8,
-      linkCountLimit: 0,
-      attributePerEventCountLimit: 8,
-      attributePerLinkCountLimit: 0,
-    },
-    spanProcessors: [createNextRequestSpanProcessor()],
-  })
+  const requestProcessor = createNextRequestSpanProcessor()
+  const localProvider = () =>
+    new NodeTracerProvider({
+      sampler: new AlwaysOnSampler(),
+      forceFlushTimeoutMillis: 250,
+      spanLimits: {
+        attributeCountLimit: 32,
+        attributeValueLengthLimit: 256,
+        eventCountLimit: 8,
+        linkCountLimit: 0,
+        attributePerEventCountLimit: 8,
+        attributePerLinkCountLimit: 0,
+      },
+      spanProcessors: [requestProcessor],
+    })
+  const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim()
+  let provider: NodeTracerProvider
+  try {
+    provider = endpoint
+      ? createBrawltomeTraceProvider({
+          service: 'web',
+          sampleRate: webTraceSampleRate,
+          endpoint,
+          exportTimeoutMs: 250,
+          spanProcessors: [requestProcessor],
+          headers: webOtlpHeaders,
+        })
+      : localProvider()
+  } catch {
+    provider = localProvider()
+  }
   provider.register()
+  process.once('beforeExit', () => void provider.shutdown())
   globalProvider.__brawltomeWebTracerProvider = provider
 }
 

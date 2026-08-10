@@ -29,6 +29,13 @@ describe('Discord metrics and health listener', () => {
           new Request('http://localhost/metrics', { headers: { 'x-internal-secret': 'internal-secret' } }),
         )
       )?.status,
+    ).toBe(401)
+    expect(
+      (
+        await handler?.(
+          new Request('http://localhost/metrics', { headers: { 'x-metrics-secret': 'internal-secret' } }),
+        )
+      )?.status,
     ).toBe(200)
   })
 

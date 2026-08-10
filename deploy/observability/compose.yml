@@ -1,0 +1,298 @@
+name: brawltome-observability
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - observability
+
+services:
+  prometheus:
+    <<: *service-defaults
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    user: "65534:65534"
+    read_only: true
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:?Set below 80 percent of the metrics quota}
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - type: bind
+        source: ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/prometheus
+        target: /prometheus
+    secrets:
+      - metrics_scrape_secret
+    networks:
+      - observability
+      - application
+    expose:
+      - "9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    labels:
+      io.brawltome.storage-quota-bytes: ${OBSERVABILITY_METRICS_QUOTA_BYTES:?Set measured metrics quota}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 2G
+          pids: 128
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+  alertmanager:
+    <<: *service-defaults
+    image: prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba
+    user: "65534:65534"
+    read_only: true
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+    tmpfs:
+      - /alertmanager:rw,noexec,nosuid,nodev,uid=65534,gid=65534,mode=0750,size=64m
+    secrets:
+      - discord_webhook_url
+    networks:
+      - observability
+      - notifications
+    expose:
+      - "9093"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+          pids: 64
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+
+  loki:
+    <<: *service-defaults
+    image: grafana/loki:3.5.3@sha256:3165cecce301ce5b9b6e3530284b080934a05cd5cafac3d3d82edcb887b45ecd
+    user: "10001:10001"
+    read_only: true
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - type: bind
+        source: ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/loki
+        target: /var/loki
+    expose:
+      - "3100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    labels:
+      io.brawltome.storage-quota-bytes: ${OBSERVABILITY_LOGS_QUOTA_BYTES:?Set measured logs quota}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+          pids: 128
+        reservations:
+          cpus: "0.20"
+          memory: 256M
+
+  tempo:
+    <<: *service-defaults
+    image: grafana/tempo:2.8.2@sha256:0ef775495967cd5d7a6b2e146b6ea695d624803c8db8349fb8ce4164f719f9b7
+    user: "10001:10001"
+    read_only: true
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - type: bind
+        source: ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/tempo
+        target: /var/tempo
+    expose:
+      - "3200"
+      - "4317"
+      - "4318"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    labels:
+      io.brawltome.storage-quota-bytes: ${OBSERVABILITY_TRACES_QUOTA_BYTES:?Set measured traces quota}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+          pids: 128
+        reservations:
+          cpus: "0.20"
+          memory: 256M
+
+  otel-collector:
+    <<: *service-defaults
+    image: otel/opentelemetry-collector-contrib:0.158.0@sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5
+    user: "10001:10001"
+    read_only: true
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    secrets:
+      - otel_ingest_token
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    networks:
+      - observability
+      - application
+    expose:
+      - "4317"
+      - "4318"
+      - "8888"
+    depends_on:
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 384M
+          pids: 128
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+  blackbox-exporter:
+    <<: *service-defaults
+    image: prom/blackbox-exporter:v0.27.0@sha256:a50c4c0eda297baa1678cd4dc4712a67fdea713b832d43ce7fcc5f9bea05094d
+    user: "65534:65534"
+    read_only: true
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - application
+    expose:
+      - "9115"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.20"
+          memory: 128M
+          pids: 64
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+
+  node-exporter:
+    <<: *service-defaults
+    image: prom/node-exporter:v1.9.1@sha256:d00a542e409ee618a4edc67da14dd48c5da66726bbd5537ab2af9c1dfc442c8a
+    user: "65534:65534"
+    read_only: true
+    command:
+      - --collector.disable-defaults
+      - --collector.filesystem
+      - --collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$
+    volumes:
+      - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/prometheus:/storage/prometheus:ro
+      - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/loki:/storage/loki:ro
+      - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/tempo:/storage/tempo:ro
+    expose:
+      - "9100"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 96M
+          pids: 64
+        reservations:
+          cpus: "0.02"
+          memory: 32M
+
+  grafana:
+    <<: *service-defaults
+    image: grafana/grafana-oss:12.1.1@sha256:a1701c2180249361737a99a01bc770db39381640e4d631825d38ff4535efa47d
+    user: "472:472"
+    read_only: true
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_UNIFIED_ALERTING_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    tmpfs:
+      - /var/lib/grafana:rw,noexec,nosuid,nodev,uid=472,gid=472,mode=0750,size=256m
+      - /tmp:size=32m,noexec,nosuid,nodev
+    secrets:
+      - grafana_admin_password
+    networks:
+      - observability
+      - dokploy-ingress
+    expose:
+      - "3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+          pids: 128
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+networks:
+  observability:
+    internal: true
+  notifications: {}
+  dokploy-ingress:
+    external: true
+    name: ${DOKPLOY_NETWORK_NAME:-dokploy-network}
+  application:
+    external: true
+    name: ${BRAWLTOME_NETWORK_NAME:?Set the dedicated BrawlTome application network}
+
+secrets:
+  discord_webhook_url:
+    file: ${DISCORD_WEBHOOK_URL_FILE:?Owner must supply at deployment}
+  grafana_admin_password:
+    file: ${GRAFANA_ADMIN_PASSWORD_FILE:?Owner must supply at deployment}
+  metrics_scrape_secret:
+    file: ${METRICS_SCRAPE_SECRET_FILE:?Owner must supply the dedicated scrape credential used by app runtimes}
+  otel_ingest_token:
+    file: ${OTEL_INGEST_TOKEN_FILE:?Owner must supply the dedicated telemetry ingest token}
