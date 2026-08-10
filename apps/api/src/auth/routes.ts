@@ -212,7 +212,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
     }
 
     const idempotencyKey = createHash('sha256').update(responseNonce).digest('hex')
-    const clientIp = c.req.header('cf-connecting-ip') ?? 'unknown'
+    const clientIp = c.req.header('x-client-ip') ?? 'unknown'
     const admissionKey = createHash('sha256')
       .update(`${authentication.account.id}:${clientIp}:${idempotencyKey}`)
       .digest('hex')

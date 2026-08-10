@@ -35,6 +35,12 @@ export {
   type ContractProof,
 } from './contract-proof'
 export {
+  desktopRankedLookupInputSchema,
+  desktopRankedLookupSchema,
+  parseDesktopRankedLookupOutput,
+  type DesktopRankedLookupContract,
+} from './desktop-ranked'
+export {
   discoveryClanHitSchema,
   discoveryPlayerHitSchema,
   discoverySearchInputSchema,

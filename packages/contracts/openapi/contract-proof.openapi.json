@@ -676,6 +676,43 @@
           }
         ]
       },
+      "DesktopRankedLookup": {
+        "additionalProperties": false,
+        "properties": {
+          "player": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "brawlhallaId": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "brawlhallaId",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ranked": {
+            "$ref": "#/components/schemas/PlayerRankedProfile"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshOutcome"
+          }
+        },
+        "required": [
+          "player",
+          "ranked",
+          "refresh"
+        ],
+        "type": "object"
+      },
       "PlayerCareerProfile": {
         "additionalProperties": false,
         "properties": {
@@ -1114,6 +1151,7 @@
       },
       "PlayerRankedProfile": {
         "additionalProperties": false,
+        "nullable": true,
         "properties": {
           "brawlhallaId": {
             "exclusiveMinimum": true,
@@ -1830,6 +1868,36 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/api/overlay/opponent/{brawlhallaId}": {
+      "get": {
+        "operationId": "getDesktopRankedLookup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brawlhallaId",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": true,
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesktopRankedLookup"
+                }
+              }
+            },
+            "description": "Canonical ranked player snapshot with desktop refresh admission"
+          }
+        }
+      }
+    },
     "/internal/contracts/proof": {
       "get": {
         "operationId": "getContractProof",

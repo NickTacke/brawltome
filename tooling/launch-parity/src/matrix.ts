@@ -382,6 +382,47 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   },
   {
+    id: 'desktop.ranked-opponent-lookup',
+    area: 'player-profile',
+    requirement:
+      'Desktop opponent lookup uses the generated canonical Ranked Player Snapshot client, ranked-only admission, bounded polling, and truthful degraded presentation.',
+    sourceIssue: '#216',
+    status: 'verified',
+    destinations: ['/api/overlay/opponent/:brawlhallaId', 'https://brawltome.com/player/:id'],
+    implementation: [
+      'packages/contracts/src/desktop-ranked.ts',
+      'apps/api/src/routes/desktop-ranked.routes.ts',
+      'apps/desktop/app/src/api_client.rs',
+      'apps/desktop/app/src/detection_bridge.rs',
+      'apps/desktop/ui/components/OpponentCard.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/desktop-ranked.test.ts',
+        assertion: 'Shared fixtures preserve nullable, UTC, measured-zero, stale, blocked, and refreshing semantics.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/desktop-ranked.routes.test.ts',
+        assertion:
+          'The preserved route deduplicates and admits ranked-only work while retaining missing or stale cache.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/desktop/app/tests/api_client.rs',
+        assertion:
+          'The generated Rust operation rejects malformed/API failures and maps every canonical state without invented values.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/desktop/tests/opponent-status.test.ts',
+        assertion:
+          'Desktop user language distinguishes updated, refreshing, delayed, verification, and unavailable states.',
+      },
+    ],
+  },
+  {
     id: 'player.current-season-ranked',
     area: 'player-profile',
     requirement:

@@ -267,7 +267,7 @@ describe('GET /auth/steam/callback', () => {
     const response = await app.request(steamCallbackUrl(state).toString(), {
       headers: {
         cookie: `brawltome_session=raw-session-token; brawltome_steam_state=${state}`,
-        'cf-connecting-ip': '203.0.113.10',
+        'x-client-ip': '203.0.113.10',
       },
     })
 
@@ -356,7 +356,7 @@ describe('GET /auth/steam/callback', () => {
     const response = await app.request(steamCallbackUrl(state).toString(), {
       headers: {
         cookie: `brawltome_session=raw-session-token; brawltome_steam_state=${state}`,
-        'cf-connecting-ip': '203.0.113.10',
+        'x-client-ip': '203.0.113.10',
       },
     })
 

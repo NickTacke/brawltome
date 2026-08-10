@@ -1,0 +1,13 @@
+{
+  "player": { "brawlhallaId": 42, "name": "Unavailable Ada" },
+  "ranked": {
+    "brawlhallaId": 42,
+    "checkedAt": "2026-08-09T22:00:00Z",
+    "lastSuccessAt": null,
+    "freshness": "unavailable",
+    "freshForSeconds": 3600,
+    "snapshot": null,
+    "sparsePulse": null
+  },
+  "refresh": { "outcome": "verificationRequired", "retry": { "kind": "verify" } }
+}
