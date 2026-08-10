@@ -29,6 +29,10 @@ const requiredRowIds = [
   'discord.lifecycle-expiry',
   'discord.smoke-procedures',
   'statistics.full-launch-cohort-validation',
+  'desktop.windows-lifecycle',
+  'desktop.api-failure',
+  'desktop.opponent-presentation-performance',
+  'desktop.updater-install',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],
@@ -37,6 +41,12 @@ const requiredShellDestinations = new Map([
   ['/learn', 'soon'],
   ['/tournaments', 'soon'],
   ['/feed', 'soon'],
+])
+const windowsAcceptanceRowIds = new Set([
+  'desktop.windows-lifecycle',
+  'desktop.api-failure',
+  'desktop.opponent-presentation-performance',
+  'desktop.updater-install',
 ])
 const preservedRoutes = new Map([
   ['route.home', { destination: '/', page: 'apps/web/src/app/page.tsx' }],
@@ -114,6 +124,11 @@ export function validateLaunchParity(rows: readonly ParityRow[], repositoryRoot:
     }
     if (row.status === 'verified' && !row.evidence.some((evidence) => evidenceCommand(evidence))) {
       errors.push(`${row.id} verified rows require executable evidence`)
+    }
+    if (row.status === 'verified' && windowsAcceptanceRowIds.has(row.id)) {
+      errors.push(
+        `${row.id} requires independently reviewed external Windows acceptance; repository evidence cannot self-promote it`,
+      )
     }
     if (row.status === 'waived') {
       if (!row.waiver?.owner || !row.waiver.reason) errors.push(`${row.id} waived rows require an owner and reason`)

@@ -1,4 +1,4 @@
-import { open } from '@tauri-apps/plugin-shell'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { opponentStatusMessage } from '../opponent-status'
 import type { Opponent } from '../types'
 import { TierBadge } from './TierBadge'
@@ -61,7 +61,7 @@ export function OpponentCard({ opponent }: OpponentCardProps) {
           type="button"
           aria-label={`Open player ${opponent.brawlhallaId} on BrawlTome`}
           className="mr-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-[hsla(var(--overlay-border)/0.7)] text-[11px] text-white transition-colors hover:bg-[hsla(var(--overlay-muted-bg)/0.6)]"
-          onClick={() => open(`https://brawltome.com/player/${opponent.brawlhallaId}`)}
+          onClick={() => void openUrl(`https://brawltome.com/player/${opponent.brawlhallaId}`)}
         >
           ↗
         </button>

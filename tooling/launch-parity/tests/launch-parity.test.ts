@@ -92,6 +92,17 @@ describe('launch parity validation', () => {
     ])
   })
 
+  test('does not promote pending Windows evidence to verified acceptance', () => {
+    const row = launchParityMatrix.find((candidate) => candidate.id === 'desktop.api-failure')
+    if (!row) throw new Error('desktop API failure parity row is missing')
+
+    expect(
+      validateLaunchParity([{ ...row, status: 'verified', verificationGap: undefined }], repositoryRoot),
+    ).toContain(
+      'desktop.api-failure requires independently reviewed external Windows acceptance; repository evidence cannot self-promote it',
+    )
+  })
+
   test('keeps the repository matrix and web navigation contract consistent', () => {
     expect(validateRepositoryParity(launchParityMatrix, repositoryRoot)).toEqual([])
 

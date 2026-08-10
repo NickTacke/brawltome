@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
 
 #[cfg(target_os = "windows")]
-use crate::api_client;
+use crate::{api_client, windows_acceptance};
 
 /// Live snapshot of detection's lifecycle. Bridge writes; the React side reads
 /// once on mount via the `get_detection_state` Tauri command to recover from
@@ -49,6 +49,7 @@ impl DetectionState {
         }
     }
 
+    #[cfg(target_os = "windows")]
     fn on_attached(&self) {
         let mut inner = self.inner.lock().unwrap();
         inner.attached = true;
@@ -56,6 +57,7 @@ impl DetectionState {
         inner.bhid = None;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_detached(&self) {
         let mut inner = self.inner.lock().unwrap();
         inner.attached = false;
@@ -64,18 +66,22 @@ impl DetectionState {
         inner.match_active = false;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_ready(&self) {
         self.inner.lock().unwrap().ready = true;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_local_player_found(&self, bhid: u32) {
         self.inner.lock().unwrap().bhid = Some(bhid);
     }
 
+    #[cfg(target_os = "windows")]
     fn on_match_started(&self) {
         self.inner.lock().unwrap().match_active = true;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_match_ended(&self) {
         self.inner.lock().unwrap().match_active = false;
     }
@@ -104,6 +110,8 @@ struct LegacyMatchFound {
     is_ranked: bool,
     #[serde(rename = "localPlayerId")]
     local_player_id: u32,
+    #[serde(rename = "acceptanceSampleId")]
+    acceptance_sample_id: Option<String>,
 }
 
 #[cfg(target_os = "windows")]
@@ -149,7 +157,11 @@ struct LegacyLocalPlayerFound {
 /// updates the shared DetectionState so a late-mounting frontend can recover
 /// the current lifecycle status via `get_detection_state`.
 #[cfg(target_os = "windows")]
-pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
+pub fn spawn(
+    app: &tauri::AppHandle,
+    state: Arc<DetectionState>,
+    acceptance_probe: Arc<windows_acceptance::AcceptanceProbe>,
+) {
     let app_handle = app.clone();
     let api_url = std::env::var("BRAWLTOME_API_URL")
         .map(|s| s.trim().to_string())
@@ -193,10 +205,24 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                 }
                 GameEvent::Attached(_) => {
                     state.on_attached();
+                    for check in [
+                        windows_acceptance::AcceptanceCheck::GameProcessDetected,
+                        windows_acceptance::AcceptanceCheck::ProcessAttached,
+                    ] {
+                        if let Err(error) = acceptance_probe.record_check(check) {
+                            log::warn!("Could not record game process attachment: {error}");
+                        }
+                    }
                     let _ = app_handle.emit("game-event", &LegacyAttached { event: "attached" });
                 }
                 GameEvent::Detached(_) => {
                     state.on_detached();
+                    acceptance_probe.abort_opponent_samples();
+                    if let Err(error) = acceptance_probe
+                        .record_check(windows_acceptance::AcceptanceCheck::ProcessDetached)
+                    {
+                        log::warn!("Could not record process detachment: {error}");
+                    }
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
@@ -205,6 +231,11 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                 }
                 GameEvent::Ready(_) => {
                     state.on_ready();
+                    if let Err(error) = acceptance_probe
+                        .record_check(windows_acceptance::AcceptanceCheck::DetectionReady)
+                    {
+                        log::warn!("Could not record detection readiness: {error}");
+                    }
                     let _ = app_handle.emit("game-event", &LegacyReady { event: "ready" });
                 }
                 GameEvent::LocalPlayerFound(p) => {
@@ -219,6 +250,7 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                 }
                 GameEvent::MatchEnded(p) => {
                     state.on_match_ended();
+                    acceptance_probe.abort_opponent_samples();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
@@ -242,12 +274,35 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                     let opponent_cache_for_lookup = opponent_cache.clone();
                     let opponent_bhids = p.opponent_bhids.clone();
                     let local_player_bhid = p.local_player_bhid;
-                    let is_ranked = matches!(
-                        p.match_type,
-                        brawltome_events::MatchType::Ranked1v1
-                            | brawltome_events::MatchType::Ranked2v2
-                            | brawltome_events::MatchType::Ranked3v3
-                    );
+                    let acceptance_mode = match p.match_type {
+                        brawltome_events::MatchType::Ranked1v1 => {
+                            windows_acceptance::AcceptanceMode::Ranked1v1
+                        }
+                        brawltome_events::MatchType::Ranked2v2 => {
+                            windows_acceptance::AcceptanceMode::Ranked2v2
+                        }
+                        brawltome_events::MatchType::Ranked3v3 => {
+                            windows_acceptance::AcceptanceMode::Ranked3v3
+                        }
+                        _ => windows_acceptance::AcceptanceMode::Other,
+                    };
+                    let is_ranked =
+                        !matches!(acceptance_mode, windows_acceptance::AcceptanceMode::Other);
+                    if is_ranked {
+                        if let Err(error) = acceptance_probe.record_check(
+                            windows_acceptance::AcceptanceCheck::RankedOpponentDetected,
+                        ) {
+                            log::warn!("Could not record ranked opponent detection: {error}");
+                        }
+                    }
+                    let acceptance_sample_id =
+                        match acceptance_probe.start_opponent_sample(acceptance_mode) {
+                            Ok(sample_id) => sample_id,
+                            Err(error) => {
+                                log::warn!("Could not start opponent presentation sample: {error}");
+                                None
+                            }
+                        };
 
                     pending_refetch = Some(tokio::spawn(async move {
                         let mut poll_delays = HashMap::new();
@@ -300,6 +355,7 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                                     opponents,
                                     is_ranked,
                                     local_player_id: local_player_bhid,
+                                    acceptance_sample_id: acceptance_sample_id.clone(),
                                 },
                             );
                         }
@@ -388,6 +444,7 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                                             opponents,
                                             is_ranked,
                                             local_player_id: local_player_bhid,
+                                            acceptance_sample_id: acceptance_sample_id.clone(),
                                         },
                                     );
                                 }
@@ -413,6 +470,7 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                                     opponents,
                                     is_ranked,
                                     local_player_id: local_player_bhid,
+                                    acceptance_sample_id: acceptance_sample_id.clone(),
                                 },
                             );
                         }
@@ -428,4 +486,9 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
 
 /// No-op on non-Windows so call sites don't need cfg gating.
 #[cfg(not(target_os = "windows"))]
-pub fn spawn(_app: &tauri::AppHandle, _state: Arc<DetectionState>) {}
+pub fn spawn(
+    _app: &tauri::AppHandle,
+    _state: Arc<DetectionState>,
+    _acceptance_probe: Arc<crate::windows_acceptance::AcceptanceProbe>,
+) {
+}
