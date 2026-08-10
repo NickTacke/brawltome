@@ -3,6 +3,7 @@ import { addInteractiveRefreshEffects } from './migrations/0002-add-interactive-
 import { addCanonicalRankedState } from './migrations/0003-add-canonical-ranked-state'
 import { addCanonicalCareerState } from './migrations/0004-add-canonical-career-state'
 import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
+import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overlays'
 
 export { discoverPlayer } from './commands/discover-player'
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
@@ -18,7 +19,12 @@ export {
   type CanonicalRankedEffect,
   type PostgresRankedPlayers,
 } from './ranked/postgres'
-export { refreshCanonicalRankedPlayer, type V0RankedSource } from './ranked/refresh'
+export {
+  refreshCanonicalRankedPlayer,
+  refreshRankedPlayerPulse,
+  type V0RankedSource,
+  type V1RankedPulseSource,
+} from './ranked/refresh'
 export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
 export {
   createPostgresPlayerDiscoverySource,
@@ -33,4 +39,5 @@ export const playerMigrationInventory = [
   addCanonicalRankedState,
   addCanonicalCareerState,
   addDiscoveryFacts,
+  addRankedPulseOverlays,
 ] as const

@@ -23,6 +23,20 @@ export type RankedValues = {
   games: number
 }
 
+export type RankedPulseValues = Partial<Pick<RankedValues, 'rating' | 'peakRating' | 'wins' | 'games'>>
+
+export type V1FixedTeamPulse = {
+  brawlhallaIdOne: number
+  brawlhallaIdTwo: number
+  values: RankedPulseValues
+}
+
+export type V1RankedPulse = {
+  brawlhallaId: number
+  oneVsOne: RankedPulseValues | null
+  fixedTeams: V1FixedTeamPulse[]
+}
+
 export type V0RankedSnapshot = {
   brawlhallaId: number
   name: string
@@ -100,6 +114,61 @@ function rankedValues(value: RecordValue, path: string): RankedValues {
     wins: integer(value.wins, `${path}.wins`),
     games: integer(value.games, `${path}.games`),
   }
+}
+
+function rankedPulseValues(value: RecordValue, path: string): RankedPulseValues {
+  const result: RankedPulseValues = {}
+  if (value.rating !== undefined) result.rating = integer(value.rating, `${path}.rating`)
+  if (value.peak_rating !== undefined) result.peakRating = integer(value.peak_rating, `${path}.peak_rating`)
+  if (value.wins !== undefined) result.wins = integer(value.wins, `${path}.wins`)
+  if (value.games !== undefined) result.games = integer(value.games, `${path}.games`)
+  return result
+}
+
+export function decodeV1OneVsOnePulse(payload: unknown, requestedBrawlhallaId: number): RankedPulseValues | null {
+  const source = record(payload, 'ranked pulse')
+  const brawlhallaId = integer(source.brawlhalla_id, 'ranked pulse.brawlhalla_id', 1)
+  if (brawlhallaId !== requestedBrawlhallaId) {
+    throw new Error('ranked pulse.brawlhalla_id does not match the requested player')
+  }
+  const values = rankedPulseValues(source, 'ranked pulse')
+  return Object.keys(values).length > 0 ? values : null
+}
+
+export function decodeV1FixedTeamPulses(payload: unknown, requestedBrawlhallaId: number): V1FixedTeamPulse[] {
+  if (payload === null) return []
+  const source = record(payload, 'ranked team pulse')
+  const brawlhallaId = integer(source.brawlhalla_id, 'ranked team pulse.brawlhalla_id', 1)
+  if (brawlhallaId !== requestedBrawlhallaId) {
+    throw new Error('ranked team pulse.brawlhalla_id does not match the requested player')
+  }
+  if (source.teams === undefined) return []
+  const teams = record(source.teams, 'ranked team pulse.teams')
+  if (teams.ranked_2v2 === undefined) return []
+
+  const seen = new Set<string>()
+  const pulses: V1FixedTeamPulse[] = []
+  for (const [index, value] of array(teams.ranked_2v2, 'ranked team pulse.teams.ranked_2v2').entries()) {
+    const path = `ranked team pulse.teams.ranked_2v2[${index}]`
+    const team = record(value, path)
+    const first = integer(team.brawlhalla_id_one, `${path}.brawlhalla_id_one`, 1)
+    const second = integer(team.brawlhalla_id_two, `${path}.brawlhalla_id_two`)
+    if (second === 0) {
+      if (first !== brawlhallaId) throw new Error(`${path} Solo Queue owner must be the first player`)
+      continue
+    }
+    if (first !== brawlhallaId && second !== brawlhallaId) {
+      throw new Error(`${path} does not contain the requested player`)
+    }
+    const brawlhallaIdOne = Math.min(first, second)
+    const brawlhallaIdTwo = Math.max(first, second)
+    const key = `${brawlhallaIdOne}:${brawlhallaIdTwo}`
+    if (seen.has(key)) throw new Error(`ranked team pulse contains duplicate fixed team ${key}`)
+    seen.add(key)
+    const values = rankedPulseValues(team, path)
+    if (Object.keys(values).length > 0) pulses.push({ brawlhallaIdOne, brawlhallaIdTwo, values })
+  }
+  return pulses
 }
 
 function playerRegion(value: unknown, path: string): string {

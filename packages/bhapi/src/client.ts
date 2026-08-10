@@ -235,18 +235,26 @@ export class BhApiClient {
     return payload as T
   }
 
+  getPlayerStatsV1Payload(id: number, mode: V1Mode = 'all', opts: CallOptions = {}): Promise<unknown | null> {
+    const modeQuery = mode === 'all' ? '' : `&mode=${mode}`
+    return this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
+  }
+
   async getPlayerStatsV1(
     id: number,
     mode: V1Mode = 'all',
     opts: CallOptions = {},
   ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
-    const modeQuery = mode === 'all' ? '' : `&mode=${mode}`
-    const payload = await this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
+    const payload = await this.getPlayerStatsV1Payload(id, mode, opts)
     return payload === null ? null : validatePlayerStats(payload, id, mode)
   }
 
+  getPlayerTeamsV1Payload(id: number, opts: CallOptions = {}): Promise<unknown | null> {
+    return this.callV1<unknown>(`/player/teams?brawlhalla_id=${id}`, opts)
+  }
+
   async getPlayerTeamsV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerTeams | null> {
-    const payload = await this.callV1<unknown>(`/player/teams?brawlhalla_id=${id}`, opts)
+    const payload = await this.getPlayerTeamsV1Payload(id, opts)
     return payload === null ? null : validatePlayerTeams(payload, id)
   }
 

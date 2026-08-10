@@ -515,6 +515,31 @@ describe('v1 client', () => {
     }
   })
 
+  it('returns sparse V1 player payloads without applying the legacy full-response validator', async () => {
+    const sparseStats = { brawlhalla_id: PLAYER_ID, rating: 2700, games: 101 }
+    const sparseTeams = {
+      brawlhalla_id: PLAYER_ID,
+      teams: { ranked_2v2: [{ brawlhalla_id_one: PLAYER_ID, brawlhalla_id_two: 42, wins: 7 }] },
+    }
+    const sparse = Bun.serve({
+      port: 0,
+      fetch(request) {
+        return new URL(request.url).pathname.endsWith('/teams')
+          ? Response.json(sparseTeams)
+          : Response.json(sparseStats)
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${sparse.port}` })
+      await client.init()
+      expect(await client.getPlayerStatsV1Payload(PLAYER_ID, 'ranked_1v1')).toEqual(sparseStats)
+      expect(await client.getPlayerTeamsV1Payload(PLAYER_ID)).toEqual(sparseTeams)
+      await expect(client.getPlayerStatsV1(PLAYER_ID, 'ranked_1v1')).rejects.toThrow('name')
+    } finally {
+      sparse.stop()
+    }
+  })
+
   it('rejects stats without a legends array', async () => {
     const malformedStats = Bun.serve({
       port: 0,

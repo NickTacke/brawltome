@@ -15,6 +15,7 @@ import {
   createSteamPlayerEvidenceResolver,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
+  refreshRankedPlayerPulse,
 } from '@brawltome/player/composition'
 import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
@@ -195,6 +196,7 @@ try {
                 effectOperationId: lease.effectOperationId,
                 leaseOwner: lease.leaseOwner,
                 leaseToken: lease.leaseToken,
+                effectCreatedAt: lease.effectCreatedAt,
                 section: 'ranked',
               },
             )
@@ -236,6 +238,30 @@ try {
               },
             )
           }
+        },
+        executeRankedPulse: async (lease, admitSourceCall) => {
+          const admittedBhapi = new BhApiClient({
+            apiKey,
+            beforeRequest: ({ domain }) => admitSourceCall(domain),
+          })
+          await refreshRankedPlayerPulse(
+            rankedPlayers,
+            {
+              getOneVsOne: (brawlhallaId, options) =>
+                admittedBhapi.getPlayerStatsV1Payload(brawlhallaId, 'ranked_1v1', options),
+              getFixedTeams: (brawlhallaId, options) => admittedBhapi.getPlayerTeamsV1Payload(brawlhallaId, options),
+            },
+            lease.payload.brawlhallaId,
+            { caller: 'background' },
+            {
+              operationId: lease.operationId,
+              effectOperationId: lease.effectOperationId,
+              leaseOwner: lease.leaseOwner,
+              leaseToken: lease.leaseToken,
+              effectCreatedAt: lease.effectCreatedAt,
+              section: 'ranked',
+            },
+          )
         },
         syncClanLeaseAuthority: async (lease, section, leaseExpiresAt) => {
           const prepared = await clans.prepareRefreshEffect({
