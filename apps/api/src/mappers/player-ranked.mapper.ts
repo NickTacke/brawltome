@@ -7,6 +7,12 @@ export function mapPlayerRankedProfile(profile: RankedPlayerProfile | null): Pla
     ...profile,
     checkedAt: profile.checkedAt.toISOString(),
     lastSuccessAt: profile.lastSuccessAt?.toISOString() ?? null,
+    sparsePulse: profile.sparsePulse
+      ? {
+          checkedAt: profile.sparsePulse.checkedAt.toISOString(),
+          lastSuccessAt: profile.sparsePulse.lastSuccessAt?.toISOString() ?? null,
+        }
+      : null,
     snapshot: profile.snapshot
       ? {
           ...profile.snapshot,
@@ -14,6 +20,13 @@ export function mapPlayerRankedProfile(profile: RankedPlayerProfile | null): Pla
             ...point,
             recordedAt: point.recordedAt.toISOString(),
           })),
+          observedRatingDirection: profile.snapshot.observedRatingDirection
+            ? {
+                ...profile.snapshot.observedRatingDirection,
+                fromObservedAt: profile.snapshot.observedRatingDirection.fromObservedAt.toISOString(),
+                toObservedAt: profile.snapshot.observedRatingDirection.toObservedAt.toISOString(),
+              }
+            : null,
         }
       : null,
   })

@@ -1148,6 +1148,28 @@
           },
           "snapshot": {
             "$ref": "#/components/schemas/PlayerRankedSnapshot"
+          },
+          "sparsePulse": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "checkedAt": {
+                "format": "date-time",
+                "pattern": "Z$",
+                "type": "string"
+              },
+              "lastSuccessAt": {
+                "format": "date-time",
+                "nullable": true,
+                "pattern": "Z$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "checkedAt",
+              "lastSuccessAt"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -1156,6 +1178,7 @@
           "lastSuccessAt",
           "freshness",
           "freshForSeconds",
+          "sparsePulse",
           "snapshot"
         ],
         "type": "object"
@@ -1265,6 +1288,50 @@
               "legendId",
               "legendNameKey",
               "source"
+            ],
+            "type": "object"
+          },
+          "observedRatingDirection": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "direction": {
+                "enum": [
+                  "up",
+                  "down",
+                  "unchanged"
+                ],
+                "type": "string"
+              },
+              "fromObservedAt": {
+                "format": "date-time",
+                "pattern": "Z$",
+                "type": "string"
+              },
+              "observationCount": {
+                "format": "int32",
+                "maximum": 365,
+                "minimum": 2,
+                "type": "integer"
+              },
+              "ratingChange": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483647,
+                "type": "integer"
+              },
+              "toObservedAt": {
+                "format": "date-time",
+                "pattern": "Z$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "direction",
+              "ratingChange",
+              "observationCount",
+              "fromObservedAt",
+              "toObservedAt"
             ],
             "type": "object"
           },
@@ -1434,6 +1501,7 @@
               ],
               "type": "object"
             },
+            "maxItems": 365,
             "type": "array"
           },
           "soloQueue": {
@@ -1511,7 +1579,8 @@
           "mainLegend",
           "fixedTeams",
           "soloQueue",
-          "ratingHistory"
+          "ratingHistory",
+          "observedRatingDirection"
         ],
         "type": "object"
       },

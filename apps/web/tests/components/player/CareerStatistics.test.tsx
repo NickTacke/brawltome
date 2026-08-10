@@ -96,6 +96,23 @@ describe('CareerStatistics', () => {
     expect(html).not.toContain('Career Weapon Usage')
   })
 
+  test('explains a canonical not-yet-observed career state and omits deep sections', () => {
+    const unavailable: PlayerCareerProfileContract = {
+      brawlhallaId: 42,
+      checkedAt: '2026-08-10T10:00:00Z',
+      lastSuccessAt: null,
+      freshness: 'unavailable',
+      freshForSeconds: 43_200,
+      snapshot: null,
+    }
+    const html = renderToStaticMarkup(<CareerStatistics career={unavailable} />)
+
+    expect(html).toContain('Lifetime career facts have not been successfully observed')
+    expect(html).toContain('Deep career sections are omitted')
+    expect(html).toContain('Last checked 2026-08-10')
+    expect(html).not.toContain('Account Statistics')
+  })
+
   test('does not report career updating during a ranked-only refresh', () => {
     const html = renderToStaticMarkup(<CareerStatistics career={profile} refreshing={false} />)
 

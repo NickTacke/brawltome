@@ -33,6 +33,7 @@ const rankedSnapshot: NonNullable<PlayerRankedProfileContract['snapshot']> = {
     },
   ],
   ratingHistory: [],
+  observedRatingDirection: null,
 }
 
 const profile: PlayerRankedProfileContract = {
@@ -41,6 +42,7 @@ const profile: PlayerRankedProfileContract = {
   lastSuccessAt: '2026-08-09T22:00:00Z',
   freshness: 'fresh',
   freshForSeconds: 3600,
+  sparsePulse: null,
   snapshot: rankedSnapshot,
 }
 
@@ -55,6 +57,44 @@ describe('Player ranked profile contract', () => {
         snapshot: null,
       }),
     ).toMatchObject({ checkedAt: profile.checkedAt, lastSuccessAt: null, snapshot: null })
+  })
+
+  test('compares pulse timestamps by instant rather than ISO string shape', () => {
+    expect(() =>
+      parsePlayerRankedProfileOutput({
+        ...profile,
+        sparsePulse: {
+          checkedAt: '2026-08-09T22:00:00Z',
+          lastSuccessAt: '2026-08-09T22:00:00.500Z',
+        },
+      }),
+    ).toThrow()
+  })
+
+  test('publishes separate sparse pulse evidence and coverage-bounded observed direction', () => {
+    const withObservations = {
+      ...profile,
+      sparsePulse: {
+        checkedAt: '2026-08-09T22:30:00Z',
+        lastSuccessAt: '2026-08-09T22:29:00Z',
+      },
+      snapshot: {
+        ...rankedSnapshot,
+        ratingHistory: [
+          { rating: 1_650, peakRating: 1_700, tier: 'Gold 5', wins: 6, games: 12, recordedAt: '2026-08-09T22:00:00Z' },
+          { rating: 1_600, peakRating: 1_650, tier: 'Gold 4', wins: 5, games: 10, recordedAt: '2026-08-09T20:00:00Z' },
+        ],
+        observedRatingDirection: {
+          direction: 'up' as const,
+          ratingChange: 50,
+          observationCount: 2,
+          fromObservedAt: '2026-08-09T20:00:00Z',
+          toObservedAt: '2026-08-09T22:00:00Z',
+        },
+      },
+    }
+
+    expect(parsePlayerRankedProfileOutput(withObservations)).toEqual(withObservations)
   })
 
   test.each([
@@ -75,6 +115,11 @@ describe('Player ranked profile contract', () => {
     {
       ...profile,
       snapshot: { ...rankedSnapshot, oneVsOne: { ...rankedSnapshot.oneVsOne, tier: ' \u200B' } },
+    },
+    { ...profile, lastSuccessAt: null, freshness: 'unavailable' },
+    {
+      ...profile,
+      sparsePulse: { checkedAt: '2026-08-09T22:00:00Z', lastSuccessAt: '2026-08-09T22:01:00Z' },
     },
   ])('rejects malformed or partial output %#', (value) => {
     expect(() => playerRankedProfileSchema.parse(value)).toThrow()

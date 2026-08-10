@@ -31,7 +31,12 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
     )
   }
   if (!career.lastSuccessAt || career.freshness === 'unavailable') {
-    return <p className="text-sm text-muted-foreground">Unavailable. Last checked {observedDate(career.checkedAt)}.</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        Unavailable. Lifetime career facts have not been successfully observed. Deep career sections are omitted. Last
+        checked {observedDate(career.checkedAt)}.
+      </p>
+    )
   }
   if (career.freshness === 'stale') {
     return (

@@ -27,6 +27,32 @@ describe('loadPlayerWithReference', () => {
     })
   })
 
+  test('uses canonical identity when optional V2 profile enrichment is absent', async () => {
+    const result = await loadPlayerWithReference(
+      {
+        player: {
+          referenceById: { query: async () => ({ brawlhallaId: 42, name: 'Canonical' }) },
+          rankedById: { query: async () => ({ brawlhallaId: 42, snapshot: null }) },
+          careerById: { query: async () => ({ brawlhallaId: 42, snapshot: null }) },
+          byId: { query: async () => null },
+        },
+      },
+      42,
+    )
+
+    expect(result).toEqual({
+      reference: { brawlhallaId: 42, name: 'Canonical' },
+      player: {
+        brawlhallaId: 42,
+        name: 'Canonical',
+        aliases: [],
+        clan: null,
+        currentSeason: { brawlhallaId: 42, snapshot: null },
+        career: { brawlhallaId: 42, snapshot: null },
+      },
+    })
+  })
+
   test('makes canonical absence authoritative and propagates transport failures', async () => {
     expect(
       await loadPlayerWithReference(

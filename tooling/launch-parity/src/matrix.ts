@@ -461,4 +461,74 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'player.canonical-profile',
+    area: 'player-profile',
+    requirement:
+      'Every viewer receives one preserved-URL identity, Competitive Snapshot, Current Season, then Career hierarchy with independent source evidence, honest missing states, and coverage-qualified observed direction.',
+    sourceIssue: '#197',
+    status: 'verified',
+    destinations: ['/player/:id'],
+    implementation: [
+      'packages/contexts/player/ranked/model.ts',
+      'packages/contexts/player/ranked/postgres.ts',
+      'packages/contracts/src/player-ranked.ts',
+      'apps/api/src/mappers/player-ranked.mapper.ts',
+      'apps/web/src/lib/player-reference.ts',
+      'apps/web/src/components/player/PlayerProfile/PlayerProfileHierarchy.tsx',
+      'apps/web/src/components/player/RankedCard.tsx',
+      'apps/web/src/components/player/PlayerProfile/ProfileSections.tsx',
+      'apps/web/src/components/player/RatingChart/index.tsx',
+      'apps/web/src/components/player/CareerStatistics.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/player/tests/ranked-model.test.ts',
+        assertion:
+          'Observed direction uses only the latest monotonic-games segment of Players-owned complete-ranked observations.',
+      },
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/player-ranked.test.ts',
+        assertion:
+          'The canonical contract separates complete-ranked and sparse-pulse timestamps and bounds direction to published history coverage.',
+      },
+      {
+        kind: 'external',
+        path: 'apps/api/tests/player-ranked.postgres.test.ts',
+        assertion:
+          'Dedicated real PostgreSQL proves V0-only history direction, independently checked sparse pulses, measured zero, and non-destructive failure.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/web/tests/lib/player-reference.test.ts',
+        assertion: 'Canonical Players identity renders at the preserved URL without requiring optional V2 enrichment.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/web/tests/components/player/PlayerProfileHierarchy.test.tsx',
+        assertion:
+          'Rendered output keeps one viewer-neutral identity, Competitive Snapshot, Current Season, then Career hierarchy.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/player/RankedCard.test.tsx',
+        assertion:
+          'Competitive facts distinguish measured zero from unavailable ratios and qualify direction and pulse coverage without advice or causality.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/player/ProfileSections.test.tsx',
+        assertion:
+          'Unsupported deep sections explain and collapse while supported detail uses native disclosure semantics.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/player/RatingChart.test.tsx',
+        assertion:
+          'Rating history exposes a screen-reader observation list, coverage description, and pressed-state filters.',
+      },
+    ],
+  },
 ]

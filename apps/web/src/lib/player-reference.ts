@@ -23,8 +23,16 @@ export async function loadPlayerWithReference<TPlayer extends { name: string } |
     client.player.byId.query({ id }),
   ])
 
+  if (!reference) return { reference: null, player: null }
+
+  const profile = player ?? {
+    brawlhallaId: reference.brawlhallaId,
+    name: reference.name,
+    aliases: [],
+    clan: null,
+  }
   return {
     reference,
-    player: reference && player ? { ...player, name: reference.name, currentSeason: ranked, career } : null,
+    player: { ...profile, name: reference.name, currentSeason: ranked, career },
   }
 }
