@@ -3,7 +3,11 @@ import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import { createPlayerRepo, createPostgresRankedPlayers } from '@brawltome/player/composition'
+import {
+  createPlayerRepo,
+  createPostgresCareerPlayers,
+  createPostgresRankedPlayers,
+} from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
@@ -76,11 +80,14 @@ const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'ba
   { concurrency: 0, maxDepth: 2000, dedupKey: (d) => String(d.brawlhallaId), metrics },
 )
 const playerRepo = createPlayerRepo(db)
+const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
 const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
-  resolveCareerMainLegend: (brawlhallaId) => playerRepo.getCareerMainLegend(brawlhallaId),
+  resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
 })
-const playerReferenceQueries = createDatabasePlayerReferenceQueries(db, (brawlhallaId) =>
-  rankedPlayerQueries.referenceById(brawlhallaId),
+const playerReferenceQueries = createDatabasePlayerReferenceQueries(
+  db,
+  (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
+  (brawlhallaId) => careerPlayerQueries.referenceById(brawlhallaId),
 )
 const refreshOperations = createPostgresRefreshOperations(databaseUrl)
 const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
@@ -133,6 +140,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'operations-postgres', close: refreshOperations.close },
     { name: 'clans-postgres', close: clanRepo.close },
     { name: 'players-ranked-postgres', close: rankedPlayerQueries.close },
+    { name: 'players-career-postgres', close: careerPlayerQueries.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -162,6 +170,7 @@ const sharedCtx = {
   playerRepo,
   playerReferenceQueries,
   rankedPlayerQueries,
+  careerPlayerQueries,
   refreshOperations,
   requestAdmission,
   verifyRefreshChallenge: verifyTurnstileResult,

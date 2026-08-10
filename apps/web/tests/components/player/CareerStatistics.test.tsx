@@ -1,0 +1,120 @@
+import { describe, expect, test } from 'bun:test'
+import type { PlayerCareerProfileContract } from '@brawltome/contracts'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { CareerStatistics } from '../../../src/components/player/CareerStatistics'
+
+const profile: PlayerCareerProfileContract = {
+  brawlhallaId: 42,
+  checkedAt: '2026-08-10T10:00:00Z',
+  lastSuccessAt: '2026-08-10T10:00:00Z',
+  freshness: 'fresh',
+  freshForSeconds: 43_200,
+  snapshot: {
+    account: { xp: 100, level: 2, xpPercentage: 0.5 },
+    combat: {
+      games: 10,
+      wins: 4,
+      matchTime: 600,
+      damageBomb: '9007199254740993',
+      damageMine: '0',
+      damageSpikeball: '0',
+      damageSidekick: '0',
+      snowballHits: 0,
+      bombKos: 0,
+      mineKos: 0,
+      spikeballKos: 0,
+      sidekickKos: 0,
+      snowballKos: 0,
+    },
+    legends: [
+      {
+        legendId: 3,
+        legendNameKey: 'bodvar',
+        xp: 100,
+        level: 2,
+        xpPercentage: 0.5,
+        games: 10,
+        wins: 4,
+        matchTime: 600,
+        kos: 20,
+        falls: 15,
+        suicides: 0,
+        teamKos: 1,
+        damageDealt: '9007199254740993',
+        damageTaken: '800',
+        unarmed: { damage: '100', kos: 2 },
+        thrownItem: { damage: '10', kos: 1 },
+        gadgets: { damage: '20', kos: 0 },
+        weaponOne: { damage: '9007199254740993', kos: 12, heldTime: 500 },
+        weaponTwo: { damage: '7', kos: 5, heldTime: 100 },
+      },
+    ],
+    weapons: [{ weapon: 'Hammer', heldTime: 500, damage: '9007199254740993', kos: 12 }],
+  },
+}
+
+describe('CareerStatistics', () => {
+  test('labels all lifetime facts and exposes only supported weapon usage measurements', () => {
+    const html = renderToStaticMarkup(<CareerStatistics career={profile} />)
+
+    for (const heading of [
+      'Career Statistics',
+      'Account Statistics',
+      'Career Combat Record',
+      'Career Legend Statistics',
+      'Career Weapon Usage',
+    ]) {
+      expect(html).toContain(heading)
+    }
+    expect(html).toContain('Lifetime account, combat, legend, and weapon facts')
+    expect(html).toContain('9007199254740993')
+    expect(html).toContain('Held time')
+    expect(html).toContain('Held share')
+    const weaponSection = html.slice(html.indexOf('Career Weapon Usage'))
+    for (const unsupported of ['games', 'wins', 'win rate', 'WR', 'performance', 'strength']) {
+      expect(weaponSection.toLowerCase()).not.toContain(unsupported.toLowerCase())
+    }
+  })
+
+  test('keeps last-known facts visible with delayed-update messaging when stale', () => {
+    const html = renderToStaticMarkup(
+      <CareerStatistics career={{ ...profile, freshness: 'stale', checkedAt: '2026-08-11T10:00:00Z' }} />,
+    )
+
+    expect(html).toContain('Update delayed. Last successful update 2026-08-10.')
+    expect(html).toContain('Career Weapon Usage')
+    expect(html).toContain('9007199254740993')
+  })
+
+  test('shows one compact unavailable explanation and omits deep sections', () => {
+    const html = renderToStaticMarkup(<CareerStatistics career={null} />)
+
+    expect(html).toContain('Career Statistics')
+    expect(html).toContain('Unavailable')
+    expect(html).toContain('Lifetime career facts have not been successfully observed')
+    expect(html).not.toContain('Account Statistics')
+    expect(html).not.toContain('Career Weapon Usage')
+  })
+
+  test('does not report career updating during a ranked-only refresh', () => {
+    const html = renderToStaticMarkup(<CareerStatistics career={profile} refreshing={false} />)
+
+    expect(html).toContain('Updated 2026-08-10.')
+    expect(html).not.toContain('Updating career statistics')
+  })
+
+  test('does not claim last-known facts are visible before the first career success', () => {
+    const unavailable: PlayerCareerProfileContract = {
+      brawlhallaId: 42,
+      checkedAt: '2026-08-10T10:00:00Z',
+      lastSuccessAt: null,
+      freshness: 'unavailable',
+      freshForSeconds: 43_200,
+      snapshot: null,
+    }
+    const html = renderToStaticMarkup(<CareerStatistics career={unavailable} refreshing />)
+
+    expect(html).toContain('Updating career statistics')
+    expect(html).not.toContain('Last-known lifetime facts remain visible')
+  })
+})

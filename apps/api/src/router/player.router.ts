@@ -4,11 +4,12 @@ import {
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
 } from '@brawltome/contracts'
+import { CAREER_FRESHNESS_SECONDS, RANKED_FRESHNESS_SECONDS } from '@brawltome/player'
 import { getV2PlayerProfile, isStale } from '@brawltome/player/v2-compatibility'
-import { TIERED_TTL } from '@brawltome/shared'
 import { z } from 'zod'
 import type { Context } from '../trpc/context'
 import { internalProcedure, mergeRouters, router } from '../trpc/trpc'
+import { createPlayerCareerRouter } from './player-career.router'
 import { createPlayerRankedRouter } from './player-ranked.router'
 import { createPlayerReferenceRouter } from './player-reference.router'
 
@@ -28,13 +29,13 @@ async function requestPlayerRefresh(
   ctx: Context,
   input: PlayerRefreshInputContract,
 ): Promise<PlayerRefreshResponseContract> {
-  const [player, stored, ranked] = await Promise.all([
+  const [player, ranked, career] = await Promise.all([
     ctx.playerReferenceQueries.byId(input.id),
-    ctx.playerRepo.findById(input.id),
     ctx.rankedPlayerQueries.byId(input.id),
+    ctx.careerPlayerQueries.byId(input.id),
   ])
-  const rankedStale = !ranked?.lastSuccessAt || isStale(ranked.lastSuccessAt, TIERED_TTL.hot.ranked)
-  const statsStale = !stored || isStale(stored.statsLastUpdated, TIERED_TTL.hot.stats)
+  const rankedStale = !ranked?.lastSuccessAt || isStale(ranked.lastSuccessAt, RANKED_FRESHNESS_SECONDS * 1_000)
+  const statsStale = !career?.lastSuccessAt || isStale(career.lastSuccessAt, CAREER_FRESHNESS_SECONDS * 1_000)
   if (!rankedStale && !statsStale) {
     return { player, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
   }
@@ -46,7 +47,7 @@ async function requestPlayerRefresh(
     'player',
     input.id,
     `ranked:${timestamp(ranked?.lastSuccessAt)}`,
-    `stats:${timestamp(stored?.statsLastUpdated)}`,
+    `stats:${timestamp(career?.lastSuccessAt)}`,
   ].join(':')
 
   try {
@@ -181,6 +182,7 @@ export function createV2PlayerRefreshRouter(procedure = internalProcedure) {
 export const playerRouter = mergeRouters(
   createPlayerReferenceRouter(),
   createPlayerRankedRouter(),
+  createPlayerCareerRouter(),
   createCanonicalPlayerRefreshRouter(),
   createV2PlayerRefreshRouter(),
 )

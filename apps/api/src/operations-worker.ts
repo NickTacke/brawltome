@@ -3,10 +3,12 @@ import { BhApiClient } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
+import { createLegendReferenceIndex, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
 import {
   createPlayerRepo,
+  createPostgresCareerPlayers,
   createPostgresRankedPlayers,
-  processRefreshStats,
+  refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player/composition'
 import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
@@ -40,8 +42,9 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
 })
 const playerRepo = createPlayerRepo(db)
 const ranking = createPostgresRanking(connectionString)
+const careerPlayers = createPostgresCareerPlayers(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
-  resolveCareerMainLegend: (brawlhallaId) => playerRepo.getCareerMainLegend(brawlhallaId),
+  resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
 const clans = createPostgresClans(connectionString)
 const postgresReadiness = createPostgresReadiness(connectionString, runtimeMigrationInventory)
@@ -68,6 +71,7 @@ const lifecycle = createRuntimeLifecycle({
     },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
+    { name: 'players-career-postgres', close: careerPlayers.close },
     { name: 'database-postgres', close: closeDatabase },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -142,11 +146,42 @@ try {
               },
             )
           } else {
-            await processRefreshStats({ db, bhapi: admittedBhapi }, lease.payload.brawlhallaId, 'on-demand', {
-              operationId: lease.effectOperationId,
-              section,
-              leaseToken: lease.leaseToken,
-            })
+            const legendRecords = await db.query.legend.findMany()
+            const references = createLegendReferenceIndex(
+              legendRecords.map((legend) => ({
+                legendId: legend.legendId,
+                legendNameKey: legendSlug(legend.legendId, legend.legendNameKey),
+                bioName: legend.bioName,
+                weaponOne: legend.weaponOne,
+                weaponTwo: legend.weaponTwo,
+              })),
+            )
+            await refreshCanonicalCareerPlayer(
+              careerPlayers,
+              { getStats: (brawlhallaId, options) => admittedBhapi.getPlayerStats(brawlhallaId, options) },
+              lease.payload.brawlhallaId,
+              { caller: 'on-demand' },
+              {
+                operationId: lease.operationId,
+                effectOperationId: lease.effectOperationId,
+                leaseOwner: lease.leaseOwner,
+                leaseToken: lease.leaseToken,
+                section: 'stats',
+              },
+              (legendId, legendNameKey) => {
+                const byId = references.getById(legendId)
+                const byKey = references.getByKey(legendNameKey)
+                if (!byId || !byKey || byId.legendId !== byKey.legendId || byId.legendNameKey !== byKey.legendNameKey) {
+                  return null
+                }
+                return {
+                  legendId: byId.legendId,
+                  legendNameKey: byId.legendNameKey,
+                  weaponOne: normalizeWeaponName(byId.weaponOne),
+                  weaponTwo: normalizeWeaponName(byId.weaponTwo),
+                }
+              },
+            )
           }
         },
         syncClanLeaseAuthority: async (lease, section, leaseExpiresAt) => {

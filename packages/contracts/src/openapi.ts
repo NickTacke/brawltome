@@ -1,6 +1,7 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi'
 import { clanProfileSchema, clanRefreshResponseSchema } from './clan'
 import { contractProofSchema } from './contract-proof'
+import { playerCareerProfileSchema } from './player-career'
 import { playerRankedProfileSchema } from './player-ranked'
 import { playerRefreshResponseSchema, refreshOutcomeSchema } from './refresh-outcome'
 import { z } from './zod'
@@ -10,6 +11,7 @@ export function generateContractOpenApi() {
   const responseSchema = registry.register('ContractProof', contractProofSchema)
   registry.register('RefreshOutcome', refreshOutcomeSchema)
   registry.register('PlayerRefreshResponse', playerRefreshResponseSchema)
+  registry.register('PlayerCareerProfile', playerCareerProfileSchema)
   registry.register('PlayerRankedProfile', playerRankedProfileSchema)
   registry.register('ClanProfile', clanProfileSchema)
   registry.register('ClanRefreshResponse', clanRefreshResponseSchema)

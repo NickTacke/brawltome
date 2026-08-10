@@ -98,6 +98,26 @@ fn enforce_wire_semantics(source: String) -> String {
         }
         Ok(value)
     }
+    fn deserialize_career_freshness_seconds<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <i32 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if value != 43200 {
+            return Err(<D::Error as ::serde::de::Error>::custom("career freshness must be 43200 seconds"));
+        }
+        Ok(value)
+    }
+    fn deserialize_fraction<'de, D>(deserializer: D) -> ::std::result::Result<f64, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        let value = <f64 as ::serde::Deserialize>::deserialize(deserializer)?;
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err(<D::Error as ::serde::de::Error>::custom("number must be between 0 and 1"));
+        }
+        Ok(value)
+    }
     fn deserialize_zero_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -181,7 +201,7 @@ fn enforce_wire_semantics(source: String) -> String {
             "        #[serde(\n            rename = \"occurredAt\",\n            deserialize_with = \"deserialize_utc_datetime\"\n        )]\n        pub occurred_at: ::chrono::DateTime<::chrono::offset::Utc>,",
             1,
         );
-    enforce_ranked_wire_semantics(source)
+    enforce_career_wire_semantics(enforce_ranked_wire_semantics(source))
 }
 
 fn enforce_ranked_wire_semantics(source: String) -> String {
@@ -297,4 +317,161 @@ fn enforce_ranked_wire_semantics(source: String) -> String {
     );
 
     format!("{}{}{}", &source[..start], ranked, &source[end..])
+}
+
+fn enforce_career_wire_semantics(source: String) -> String {
+    let start = source
+        .find("    ///`PlayerCareerProfile`")
+        .expect("generated career profile start changed");
+    let relative_end = source[start..]
+        .find("    ///`PlayerRankedProfile`")
+        .expect("generated career profile end changed");
+    let end = start + relative_end;
+    let mut career = source[start..end].to_owned();
+
+    let profile = r#"    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerProfile {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "freshForSeconds")]
+        pub fresh_for_seconds: i32,
+        pub freshness: PlayerCareerProfileFreshness,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub snapshot: PlayerCareerSnapshot,
+    }"#;
+    assert!(
+        career.contains(profile),
+        "generated career profile mapping changed"
+    );
+    let validated_profile = r#"    #[derive(::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerProfile {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "freshForSeconds")]
+        pub fresh_for_seconds: i32,
+        pub freshness: PlayerCareerProfileFreshness,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub snapshot: PlayerCareerSnapshot,
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerProfile {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            #[derive(::serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Wire {
+                #[serde(rename = "brawlhallaId", deserialize_with = "deserialize_bounded_nonzero_u64")]
+                brawlhalla_id: ::std::num::NonZeroU64,
+                #[serde(rename = "checkedAt", deserialize_with = "deserialize_utc_datetime")]
+                checked_at: ::chrono::DateTime<::chrono::offset::Utc>,
+                #[serde(rename = "freshForSeconds", deserialize_with = "deserialize_career_freshness_seconds")]
+                fresh_for_seconds: i32,
+                freshness: PlayerCareerProfileFreshness,
+                #[serde(rename = "lastSuccessAt", deserialize_with = "deserialize_optional_utc_datetime")]
+                last_success_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+                snapshot: PlayerCareerSnapshot,
+            }
+            let wire = <Wire as ::serde::Deserialize>::deserialize(deserializer)?;
+            let unavailable = wire.last_success_at.is_none()
+                && matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
+                && wire.snapshot.0.is_none();
+            let available = wire.last_success_at.is_some()
+                && !matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
+                && wire.snapshot.0.is_some();
+            if !unavailable && !available {
+                return Err(<D::Error as ::serde::de::Error>::custom("career availability fields are inconsistent"));
+            }
+            if let Some(snapshot) = &wire.snapshot.0 {
+                if snapshot.combat.wins > snapshot.combat.games
+                    || snapshot.legends.iter().any(|legend| legend.wins > legend.games)
+                {
+                    return Err(<D::Error as ::serde::de::Error>::custom("career wins cannot exceed games"));
+                }
+            }
+            Ok(Self {
+                brawlhalla_id: wire.brawlhalla_id,
+                checked_at: wire.checked_at,
+                fresh_for_seconds: wire.fresh_for_seconds,
+                freshness: wire.freshness,
+                last_success_at: wire.last_success_at,
+                snapshot: wire.snapshot,
+            })
+        }
+    }"#;
+    career = career.replacen(profile, validated_profile, 1);
+
+    {
+        let field = "brawlhalla_id";
+        let original = format!("        pub {field}: ::std::num::NonZeroU64,");
+        if career.contains(&original) {
+            career = career.replace(
+                &original,
+                &format!("        #[serde(deserialize_with = \"deserialize_bounded_nonzero_u64\")]\n        pub {field}: ::std::num::NonZeroU64,"),
+            );
+        }
+    }
+    let legend_id = "        pub legend_id: ::std::num::NonZeroU32,";
+    assert!(
+        career.contains(legend_id),
+        "generated career legend ID changed"
+    );
+    career = career.replace(
+        legend_id,
+        "        #[serde(deserialize_with = \"deserialize_bounded_nonzero_u32\")]\n        pub legend_id: ::std::num::NonZeroU32,",
+    );
+    let xp_percentage = "        pub xp_percentage: f64,";
+    assert!(
+        career.matches(xp_percentage).count() >= 2,
+        "generated career fractions changed"
+    );
+    career = career.replace(
+        xp_percentage,
+        "        #[serde(deserialize_with = \"deserialize_fraction\")]\n        pub xp_percentage: f64,",
+    );
+
+    let mut bounded = String::with_capacity(career.len());
+    for line in career.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("pub ")
+            && trimmed.ends_with(": i32,")
+            && !trimmed.contains("fresh_for_seconds")
+        {
+            let indent = &line[..line.len() - line.trim_start().len()];
+            bounded.push_str(indent);
+            bounded.push_str("#[serde(deserialize_with = \"deserialize_nonnegative_int32\")]\n");
+        }
+        bounded.push_str(line);
+        bounded.push('\n');
+    }
+    career = bounded;
+
+    let non_visible_check = "if value.chars().count() < 1usize {";
+    assert!(
+        career.matches(non_visible_check).count() >= 2,
+        "generated career visible-string checks changed"
+    );
+    career = career.replace(
+        non_visible_check,
+        "if value.chars().count() < 1usize || !value.chars().any(is_visible_character) {",
+    );
+
+    format!(
+        "{}{}\n{}",
+        &source[..start],
+        career.trim_end(),
+        &source[end..]
+    )
 }

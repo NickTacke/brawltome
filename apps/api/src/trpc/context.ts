@@ -3,7 +3,7 @@ import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
 import type { PlayerLinkRepo } from '@brawltome/identity'
 import type { MatchRepo } from '@brawltome/matchmaking'
-import type { PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
+import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
 import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
 import type { RankingQueries } from '@brawltome/ranking'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
@@ -20,6 +20,7 @@ export interface Context {
   playerRepo: PlayerRepo
   playerReferenceQueries: PlayerReferenceQueries
   rankedPlayerQueries: RankedPlayerQueries
+  careerPlayerQueries: CareerPlayerQueries
   refreshOperations: InteractiveRefreshOperations
   requestAdmission: ActorAdmission
   refreshTrust: { trusted: boolean; grant(): void }

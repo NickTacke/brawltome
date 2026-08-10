@@ -7,7 +7,6 @@ import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
 import { applyCurrentSeason } from '@/lib/current-season'
 import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '@/lib/player-refresh'
 import { getRefreshClientAction } from '@/lib/refresh-outcome'
-import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
@@ -20,7 +19,6 @@ interface PlayerProfileProps {
 }
 
 const deriveDisplayLists = (player: PlayerData) => {
-  const allLegends = [...(player.statsLegends || [])].sort((a: PlayerData, b: PlayerData) => (b.xp ?? 0) - (a.xp ?? 0))
   const teams = [...(player.rankedTeams || [])]
   const fixedTeams = teams
     .filter((team: PlayerData) => team.brawlhallaIdTwo !== 0)
@@ -32,7 +30,7 @@ const deriveDisplayLists = (player: PlayerData) => {
     .filter((v: unknown): v is string => typeof v === 'string' && v.trim().length > 0)
     .filter((v: string) => v.trim() !== player.name)
     .sort((a: string, b: string) => a.localeCompare(b))
-  return { allLegends, rankedTeams, aliases }
+  return { rankedTeams, aliases }
 }
 
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
@@ -96,11 +94,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     () => (player ? applyCurrentSeason(player, player.currentSeason ?? null) : null),
     [player],
   )
-  const weaponStats = useMemo(
-    () => (displayPlayer ? aggregateRichWeaponStats(displayPlayer.statsLegends || [], []) : []),
-    [displayPlayer],
-  )
-
   const turnstile = verificationRequired ? (
     <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
   ) : null
@@ -114,7 +107,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     return <LookupState errored={lookupFailed} message={refreshMessage} turnstile={turnstile} />
   }
 
-  const { allLegends, rankedTeams, aliases } = deriveDisplayLists(displayPlayer)
+  const { rankedTeams, aliases } = deriveDisplayLists(displayPlayer)
   const mainLegend = displayPlayer.currentSeason?.snapshot?.mainLegend
   const topLegend = mainLegend ? { legendNameKey: mainLegend.legendNameKey } : null
 
@@ -127,9 +120,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       <ProfileSections
         player={displayPlayer}
         id={id}
-        allLegends={allLegends}
         rankedTeams={rankedTeams}
-        weaponStats={weaponStats}
+        careerRefreshing={isRefreshing && pendingSections.stats}
       />
     </div>
   )

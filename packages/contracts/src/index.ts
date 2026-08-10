@@ -61,6 +61,13 @@ export {
   type LeaderboardScope,
 } from './leaderboard'
 export {
+  nullablePlayerCareerProfileSchema,
+  parsePlayerCareerProfileOutput,
+  playerCareerProfileSchema,
+  playerCareerSnapshotSchema,
+  type PlayerCareerProfileContract,
+} from './player-career'
+export {
   nullablePlayerRankedProfileSchema,
   parsePlayerRankedProfileOutput,
   playerRankedProfileSchema,

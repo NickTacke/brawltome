@@ -1,8 +1,9 @@
-import { TIERED_TTL } from '@brawltome/shared/constants'
+const RANKED_FRESHNESS_MS = 3_600_000
+const CAREER_FRESHNESS_MS = 43_200_000
 
 export interface PlayerRefreshTimestamps {
   currentSeason?: { lastSuccessAt?: Date | string | null } | null
-  statsLastUpdated?: Date | string | null
+  career?: { lastSuccessAt?: Date | string | null } | null
 }
 
 export interface PendingPlayerSections {
@@ -23,11 +24,11 @@ export function getPendingPlayerSections(
   if (!player) return { ranked: true, stats: true }
 
   const rankedUpdatedAt = timestamp(player.currentSeason?.lastSuccessAt)
-  const statsUpdatedAt = timestamp(player.statsLastUpdated)
+  const careerUpdatedAt = timestamp(player.career?.lastSuccessAt)
 
   return {
-    ranked: rankedUpdatedAt === 0 || now - rankedUpdatedAt > TIERED_TTL.hot.ranked,
-    stats: statsUpdatedAt === 0 || now - statsUpdatedAt > TIERED_TTL.hot.stats,
+    ranked: rankedUpdatedAt === 0 || now - rankedUpdatedAt > RANKED_FRESHNESS_MS,
+    stats: careerUpdatedAt === 0 || now - careerUpdatedAt > CAREER_FRESHNESS_MS,
   }
 }
 
@@ -39,7 +40,7 @@ export function hasCompletedPlayerRefresh(
   if (!next) return false
 
   const rankedAdvanced = timestamp(next.currentSeason?.lastSuccessAt) > timestamp(initial?.currentSeason?.lastSuccessAt)
-  const statsAdvanced = timestamp(next.statsLastUpdated) > timestamp(initial?.statsLastUpdated)
+  const careerAdvanced = timestamp(next.career?.lastSuccessAt) > timestamp(initial?.career?.lastSuccessAt)
 
-  return (!pending.ranked || rankedAdvanced) && (!pending.stats || statsAdvanced)
+  return (!pending.ranked || rankedAdvanced) && (!pending.stats || careerAdvanced)
 }

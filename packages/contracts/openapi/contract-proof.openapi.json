@@ -676,6 +676,442 @@
           }
         ]
       },
+      "PlayerCareerProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "brawlhallaId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "checkedAt": {
+            "format": "date-time",
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "freshForSeconds": {
+            "format": "int32",
+            "maximum": 43200,
+            "minimum": 43200,
+            "type": "integer"
+          },
+          "freshness": {
+            "enum": [
+              "fresh",
+              "stale",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "nullable": true,
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/PlayerCareerSnapshot"
+          }
+        },
+        "required": [
+          "brawlhallaId",
+          "checkedAt",
+          "lastSuccessAt",
+          "freshness",
+          "freshForSeconds",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "PlayerCareerSnapshot": {
+        "additionalProperties": false,
+        "nullable": true,
+        "properties": {
+          "account": {
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "xp": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "xpPercentage": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "xp",
+              "level",
+              "xpPercentage"
+            ],
+            "type": "object"
+          },
+          "combat": {
+            "additionalProperties": false,
+            "properties": {
+              "bombKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "damageBomb": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "damageMine": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "damageSidekick": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "damageSpikeball": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "games": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "matchTime": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "mineKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sidekickKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snowballHits": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snowballKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spikeballKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wins": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "games",
+              "wins",
+              "matchTime",
+              "damageBomb",
+              "damageMine",
+              "damageSpikeball",
+              "damageSidekick",
+              "snowballHits",
+              "bombKos",
+              "mineKos",
+              "spikeballKos",
+              "sidekickKos",
+              "snowballKos"
+            ],
+            "type": "object"
+          },
+          "legends": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "damageDealt": {
+                  "pattern": "^(0|[1-9]\\d*)$",
+                  "type": "string"
+                },
+                "damageTaken": {
+                  "pattern": "^(0|[1-9]\\d*)$",
+                  "type": "string"
+                },
+                "falls": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "gadgets": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos"
+                  ],
+                  "type": "object"
+                },
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "kos": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "legendId": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "legendNameKey": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "level": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "matchTime": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "suicides": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "teamKos": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "thrownItem": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos"
+                  ],
+                  "type": "object"
+                },
+                "unarmed": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos"
+                  ],
+                  "type": "object"
+                },
+                "weaponOne": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "heldTime": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos",
+                    "heldTime"
+                  ],
+                  "type": "object"
+                },
+                "weaponTwo": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "heldTime": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos",
+                    "heldTime"
+                  ],
+                  "type": "object"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "xp": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "xpPercentage": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "legendId",
+                "legendNameKey",
+                "xp",
+                "level",
+                "xpPercentage",
+                "games",
+                "wins",
+                "matchTime",
+                "kos",
+                "falls",
+                "suicides",
+                "teamKos",
+                "damageDealt",
+                "damageTaken",
+                "unarmed",
+                "thrownItem",
+                "gadgets",
+                "weaponOne",
+                "weaponTwo"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "weapons": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "damage": {
+                  "pattern": "^(0|[1-9]\\d*)$",
+                  "type": "string"
+                },
+                "heldTime": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "kos": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "weapon": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "weapon",
+                "heldTime",
+                "damage",
+                "kos"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "account",
+          "combat",
+          "legends",
+          "weapons"
+        ],
+        "type": "object"
+      },
       "PlayerRankedProfile": {
         "additionalProperties": false,
         "properties": {
