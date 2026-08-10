@@ -1,3 +1,4 @@
+import type { Telemetry } from '@brawltome/telemetry'
 import { type Caller, RequestQueue, type RequestQueuePersistence } from './request-queue'
 import { validatePlayerGuild, validatePlayerStats, validatePlayerTeams } from './v1-validation'
 
@@ -47,6 +48,7 @@ export interface BhApiClientOptions {
   baseUrl?: string
   fetchTimeoutMs?: number
   metrics?: BhApiMetricsSink
+  telemetry?: Telemetry
   beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
 }
 
@@ -61,6 +63,7 @@ export class BhApiClient {
   private readonly queue: RequestQueue
   private readonly fetchTimeoutMs: number
   private readonly metrics?: BhApiMetricsSink
+  private readonly telemetry?: Telemetry
   private readonly beforeRequest?: BhApiClientOptions['beforeRequest']
 
   constructor(opts: BhApiClientOptions) {
@@ -68,6 +71,7 @@ export class BhApiClient {
     this.baseUrl = opts.baseUrl ?? BASE_URL
     this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
     this.metrics = opts.metrics
+    this.telemetry = opts.telemetry
     this.beforeRequest = opts.beforeRequest
     this.queue = new RequestQueue({
       minSpacingMs: 150,
@@ -165,6 +169,31 @@ export class BhApiClient {
   ): Promise<T | null> {
     await this.beforeRequest?.({ domain, path })
     onAttempt?.()
+    const started = performance.now()
+    let outcome: 'succeeded' | 'not_found' | 'rate_limited' | 'failed' = 'failed'
+    try {
+      const performRequest = () => this.performRequest<T>(url, path, endpoint, rejectNullPayload)
+      const result = this.telemetry
+        ? await this.telemetry.trace('source.call', { domain }, performRequest)
+        : await performRequest()
+      outcome = result === null ? 'not_found' : 'succeeded'
+      return result
+    } catch (error) {
+      if (error instanceof RateLimitError) outcome = 'rate_limited'
+      throw error
+    } finally {
+      const labels = { domain, outcome }
+      this.telemetry?.metrics.add('source_calls_total', 1, labels)
+      this.telemetry?.metrics.observe('source_duration_ms', performance.now() - started, labels)
+    }
+  }
+
+  private async performRequest<T>(
+    url: string,
+    path: string,
+    endpoint: string,
+    rejectNullPayload: boolean,
+  ): Promise<T | null> {
     const fetchStart = Date.now()
     let res: Response
     try {

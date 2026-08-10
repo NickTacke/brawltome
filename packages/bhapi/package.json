@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/telemetry": "workspace:*",
     "ioredis": "^5.8.0"
   },
   "devDependencies": {

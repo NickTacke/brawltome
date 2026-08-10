@@ -1,4 +1,6 @@
+import { telemetryFetch } from '@brawltome/telemetry'
 import { type ChatInputCommandInteraction, Colors, EmbedBuilder, SlashCommandBuilder } from 'discord.js'
+import { discordTelemetry } from '../lib/telemetry'
 import { api } from '../lib/trpc'
 import type { Command } from './index'
 
@@ -9,8 +11,8 @@ export const statusCommand: Command = {
     await interaction.deferReply()
 
     const targets = [
-      { name: 'Brawlhalla', url: 'https://www.brawlhalla.com' },
-      { name: 'BrawlTome', url: 'https://brawltome.app' },
+      { name: 'Brawlhalla', url: 'https://www.brawlhalla.com', domain: 'brawlhalla-v0' as const },
+      { name: 'BrawlTome', url: 'https://brawltome.app', domain: 'api' as const },
     ]
 
     const [siteResults, apiHealth] = await Promise.all([
@@ -21,7 +23,7 @@ export const statusCommand: Command = {
           const timeoutId = setTimeout(() => controller.abort(), 10000)
 
           try {
-            const response = await fetch(target.url, {
+            const response = await telemetryFetch(discordTelemetry, target.domain, fetch, target.url, {
               signal: controller.signal,
             })
             const end = performance.now()

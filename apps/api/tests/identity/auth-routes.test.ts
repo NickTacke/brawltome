@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import type { Account, Accounts, DiscordSignInProfile } from '@brawltome/accounts'
+import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { type CreateAuthRoutesDeps, createAuthRoutes } from '../../src/auth/routes'
 
@@ -45,6 +46,12 @@ function makeFakes() {
     },
     async signOut(sessionToken) {
       sessions.delete(sessionToken)
+    },
+    async getPreferences() {
+      return { version: 1, leaderboardBracket: '1v1', leaderboardRegion: 'all' }
+    },
+    async updatePreferences(_accountId, preferences) {
+      return preferences
     },
     async beginPrimaryPlayerVerification(input) {
       verificationAttempts.push(input)
@@ -99,7 +106,11 @@ function makeFakes() {
   }
 }
 
-function buildApp(fakes: ReturnType<typeof makeFakes>) {
+function buildApp(
+  fakes: ReturnType<typeof makeFakes>,
+  observeSourceCall?: CreateAuthRoutesDeps['observeSourceCall'],
+  logger?: CreateAuthRoutesDeps['logger'],
+) {
   const app = new Hono()
   app.route(
     '/auth',
@@ -107,6 +118,8 @@ function buildApp(fakes: ReturnType<typeof makeFakes>) {
       accounts: fakes.accounts,
       requestAdmission: fakes.requestAdmission,
       verificationOperations: fakes.verificationOperations,
+      observeSourceCall,
+      logger,
       config: {
         discordClientId: 'cid',
         discordClientSecret: 'csecret',
@@ -156,7 +169,11 @@ describe('GET /auth/discord/callback', () => {
 
   it('maps the verified Discord profile through Accounts and preserves the session cookie', async () => {
     const fakes = makeFakes()
-    const app = buildApp(fakes)
+    const observedDomains: string[] = []
+    const app = buildApp(fakes, async (domain, work) => {
+      observedDomains.push(domain)
+      return work()
+    })
     globalThis.fetch = mock(async (url) => {
       const value = String(url)
       if (value.includes('/oauth2/token')) {
@@ -179,6 +196,7 @@ describe('GET /auth/discord/callback', () => {
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('Max-Age=2592000')
     expect(fakes.profiles).toEqual([{ providerAccountId: '42', displayName: 'coolguy', avatarHash: 'abc' }])
+    expect(observedDomains).toEqual(['discord', 'discord'])
   })
 
   it('redirects to the discord error state on upstream failure', async () => {
@@ -190,6 +208,27 @@ describe('GET /auth/discord/callback', () => {
     })
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/account?error=discord')
+  })
+
+  it('does not put Discord OAuth response bodies or tokens into normalized telemetry', async () => {
+    const canary = 'oauth-private-token-canary'
+    const sink = createMemorySink()
+    const telemetry = createTelemetry({ service: 'auth-test', sink, drainIntervalMs: 0 })
+    const app = buildApp(makeFakes(), undefined, telemetry.logger)
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify({ access_token: canary, private_payload: canary }), { status: 400 }),
+    ) as unknown as typeof fetch
+
+    const res = await app.request('/auth/discord/callback?code=x&state=expected', {
+      headers: { cookie: 'brawltome_oauth_state=expected' },
+    })
+    await telemetry.flush(50)
+    const output = JSON.stringify(sink.records)
+
+    expect(res.status).toBe(302)
+    expect(output).toContain('auth.discord_token_exchange.failed')
+    expect(output).not.toContain(canary)
+    expect(output).not.toContain('private_payload')
   })
 })
 
@@ -212,7 +251,11 @@ describe('GET /auth/steam/callback', () => {
   it('uses authenticated account admission without Turnstile and queues one privacy-safe attempt', async () => {
     const fakes = makeFakes()
     fakes.sessions.add('raw-session-token')
-    const app = buildApp(fakes)
+    const observedDomains: string[] = []
+    const app = buildApp(fakes, async (domain, work) => {
+      observedDomains.push(domain)
+      return work()
+    })
     const start = await app.request('/auth/steam/link', {
       headers: { cookie: 'brawltome_session=raw-session-token' },
     })
@@ -229,6 +272,7 @@ describe('GET /auth/steam/callback', () => {
     })
 
     expect(response.headers.get('location')).toBe('http://localhost:3001/account')
+    expect(observedDomains).toEqual(['steam'])
     expect(fakes.actorAdmissions).toEqual([
       {
         actor: { kind: 'authenticated', accountId: account.id, ip: '203.0.113.10' },

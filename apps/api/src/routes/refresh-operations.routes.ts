@@ -1,4 +1,5 @@
 import type { AcceptProofOperation } from '@brawltome/refresh-operations'
+import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { internalSecretValid } from '../auth/internal-secret'
@@ -50,7 +51,11 @@ async function readBoundedJson(request: Request): Promise<{ value?: unknown; too
   }
 }
 
-export function createRefreshOperationRoutes(producer: ProofOperationProducer, expectedSecret: string | undefined) {
+export function createRefreshOperationRoutes(
+  producer: ProofOperationProducer,
+  expectedSecret: string | undefined,
+  telemetry?: Telemetry,
+) {
   const app = new Hono()
   app.post('/proof', async (c) => {
     if (!internalSecretValid(c.req.header('x-internal-secret'), expectedSecret)) {
@@ -68,6 +73,11 @@ export function createRefreshOperationRoutes(producer: ProofOperationProducer, e
       payload: { value: parsed.data.value },
       provenance: { source: 'internal-api', requestedBy: parsed.data.requestedBy },
       maxAttempts: parsed.data.maxAttempts,
+    })
+    telemetry?.logger.info('operation.requested', {
+      operationId: result.operationId,
+      kind: 'proof',
+      outcome: result.outcome,
     })
     return c.json(result, result.outcome === 'accepted' ? 202 : 200)
   })

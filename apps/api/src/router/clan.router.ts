@@ -16,6 +16,14 @@ import { internalProcedure, router } from '../trpc/trpc'
 const CLAN_TTL_MS = 60 * 60 * 1_000
 const unavailable = { outcome: 'temporarilyUnavailable' as const, retry: { kind: 'after' as const, afterSeconds: 30 } }
 
+function recordTelemetry(record: () => void): void {
+  try {
+    record()
+  } catch {
+    return
+  }
+}
+
 function iso(value: Date | null): string | null {
   return value?.toISOString() ?? null
 }
@@ -129,11 +137,18 @@ async function requestClanRefresh(
     ) {
       return { clan, refresh: unavailable }
     }
+    recordTelemetry(() =>
+      ctx.telemetry.logger.info('refresh.operation.accepted', {
+        operationId: reserved.operationId,
+        kind: 'clan-refresh',
+      }),
+    )
     return {
       clan,
       refresh: { outcome: 'accepted', operationId: reserved.operationId, retry: { kind: 'poll', afterSeconds: 2 } },
     }
-  } catch {
+  } catch (error) {
+    recordTelemetry(() => ctx.telemetry.logger.error('refresh.request.failed', error, { kind: 'clan-refresh' }))
     return { clan, refresh: unavailable }
   }
 }

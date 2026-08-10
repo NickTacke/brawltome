@@ -44,8 +44,7 @@ export async function exchangeCode(params: ExchangeCodeParams): Promise<{ access
   })
 
   if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Discord token exchange failed: ${res.status} ${text}`)
+    throw new Error(`Discord token exchange failed (${res.status})`)
   }
 
   const data = z.object({ access_token: z.string().min(1) }).parse(await res.json())
@@ -75,8 +74,7 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
   })
 
   if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Discord user fetch failed: ${res.status} ${text}`)
+    throw new Error(`Discord user fetch failed (${res.status})`)
   }
 
   const data = discordUserSchema.parse(await res.json())

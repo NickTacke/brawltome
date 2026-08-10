@@ -1,4 +1,5 @@
 import { type REST, Routes } from 'discord.js'
+import { discordTelemetry } from '../lib/telemetry'
 
 interface DiscordEmoji {
   id: string
@@ -17,7 +18,7 @@ export async function initEmojis(rest: REST, clientId: string): Promise<void> {
 
 export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
   if (!restClient || !appClientId) {
-    console.warn('[Emojis] Not initialized - call initEmojis first')
+    discordTelemetry.logger.warn('discord.emojis.not_initialized')
     return new Map()
   }
 
@@ -25,10 +26,10 @@ export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
     const response = (await restClient.get(Routes.applicationEmojis(appClientId))) as { items: DiscordEmoji[] }
 
     emojiCache = new Map(response.items.map((e) => [e.name, e]))
-    console.log(`[Emojis] Loaded ${emojiCache.size} application emojis`)
+    discordTelemetry.logger.info('discord.emojis.loaded', { emojiCount: emojiCache.size })
     return emojiCache
   } catch (error) {
-    console.error('[Emojis] Failed to load emojis:', error)
+    discordTelemetry.logger.error('discord.emojis.failed', error)
     emojiCache = new Map()
     return emojiCache
   }

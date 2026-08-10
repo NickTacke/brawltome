@@ -1,8 +1,10 @@
 import 'server-only'
 import type { AppRouter } from '@brawltome/api/router'
+import { telemetryFetch } from '@brawltome/telemetry'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import { cookies, headers } from 'next/headers'
 import superjson from 'superjson'
+import { webTelemetry } from './telemetry'
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
@@ -14,6 +16,13 @@ async function createServerTrpc(propagateRefreshTrust: boolean) {
   const ua = h.get('user-agent') ?? ''
   const incomingCookie = h.get('cookie')
   const cookieStore = propagateRefreshTrust ? await cookies() : null
+  const telemetryContext = webTelemetry.contextFromHeaders(
+    {
+      'x-request-id': h.get('x-request-id'),
+      traceparent: h.get('traceparent'),
+    },
+    { acceptIncoming: true },
+  )
 
   const outHeaders: Record<string, string> = {}
   if (ip) outHeaders['x-client-ip'] = ip
@@ -28,7 +37,9 @@ async function createServerTrpc(propagateRefreshTrust: boolean) {
         transformer: superjson,
         headers: outHeaders,
         fetch: async (url, init) => {
-          const response = await fetch(url, init)
+          const response = await webTelemetry.run(telemetryContext, () =>
+            telemetryFetch(webTelemetry, 'api', fetch, url, init, { propagateContext: true }),
+          )
           if (cookieStore) {
             const setCookies = response.headers.getSetCookie?.() ?? [response.headers.get('set-cookie') ?? '']
             for (const setCookie of setCookies) {

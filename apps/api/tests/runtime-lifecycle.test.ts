@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { createTelemetry } from '@brawltome/telemetry'
 import { createHealthRoutes } from '../src/health-routes'
 import { runOperationsWorker } from '../src/operations-worker-runtime'
 import { assertExactSchemaCompatibility } from '../src/postgres-readiness'
@@ -222,6 +223,37 @@ describe('runtime lifecycle', () => {
     await worker
     expect(await shutdown).toMatchObject({ drained: true, cleanupCompleted: true })
     expect(reconciliations).toBe(1)
+  })
+
+  test('records a failed schedule materialization before generic loop handling', async () => {
+    const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
+    const telemetry = createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 })
+    lifecycle.markReady()
+
+    await runOperationsWorker({
+      operations: {
+        configureAdmission: async () => undefined,
+        materializeDueSchedules: async () => {
+          lifecycle.beginShutdown()
+          throw new Error('materialization failed')
+        },
+      } as never,
+      lifecycle,
+      workerId: 'failing-materialization-worker',
+      config: {
+        leaseMs: 30,
+        pollMs: 1,
+        retryDelayMs: 1,
+        scheduleBatchSize: 1,
+        admission: testAdmission,
+      },
+      logger: { error: () => undefined },
+      runOne: async () => false,
+      telemetry,
+    })
+
+    const metric = telemetry.metrics.snapshot().find(({ name }) => name === 'schedule_materializations_total')
+    expect(metric?.series).toContainEqual({ labels: { outcome: 'failed' }, value: 1 })
   })
 
   test('polls for work when PostgreSQL listener registration fails', async () => {

@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Accounts, PrimaryPlayerVerificationAttempt } from '@brawltome/accounts'
 import type { AcceptOperationResult, AcceptProofOperation } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
+import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import {
   OAUTH_STATE_COOKIE,
@@ -35,6 +36,8 @@ export interface CreateAuthRoutesDeps {
     accept(input: AcceptProofOperation): Promise<AcceptOperationResult>
   }
   config: AuthConfig
+  observeSourceCall?: <T>(domain: 'discord' | 'steam', work: () => Promise<T>) => Promise<T>
+  logger?: Pick<Telemetry['logger'], 'error' | 'warn'>
 }
 
 function normalizeOrigin(value: string | undefined): string {
@@ -51,6 +54,8 @@ function stateMatches(expected: string | undefined, provided: string | undefined
 export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   const app = new Hono()
   const { accounts, requestAdmission, verificationOperations, config } = deps
+  const observe = deps.observeSourceCall ?? ((_domain, work) => work())
+  const logger = deps.logger ?? { error: () => undefined, warn: () => undefined }
   const expectedOrigin = normalizeOrigin(config.webOrigin)
 
   app.get('/discord/login', (c) => {
@@ -82,23 +87,25 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
 
     let accessToken: string
     try {
-      const exchange = await exchangeCode({
-        clientId: config.discordClientId,
-        clientSecret: config.discordClientSecret,
-        redirectUri: config.discordRedirectUri,
-        code,
-      })
+      const exchange = await observe('discord', () =>
+        exchangeCode({
+          clientId: config.discordClientId,
+          clientSecret: config.discordClientSecret,
+          redirectUri: config.discordRedirectUri,
+          code,
+        }),
+      )
       accessToken = exchange.accessToken
     } catch (err) {
-      console.error('[auth] discord token exchange failed', err)
+      logger.error('auth.discord_token_exchange.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=discord`)
     }
 
     let profile: Awaited<ReturnType<typeof fetchDiscordUser>>
     try {
-      profile = await fetchDiscordUser(accessToken)
+      profile = await observe('discord', () => fetchDiscordUser(accessToken))
     } catch (err) {
-      console.error('[auth] discord user fetch failed', err)
+      logger.error('auth.discord_user_fetch.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=discord`)
     }
 
@@ -110,7 +117,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       })
       c.header('Set-Cookie', buildSessionCookie(sessionToken, SESSION_COOKIE_TTL_SEC), { append: true })
     } catch (err) {
-      console.error('[auth] signInWithDiscord failed', err)
+      logger.error('auth.discord_sign_in.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=server`)
     }
 
@@ -120,7 +127,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   app.post('/signout', async (c) => {
     const origin = normalizeOrigin(c.req.header('origin'))
     if (origin !== expectedOrigin) {
-      console.warn('[auth] signout rejected: origin mismatch', { origin, expected: expectedOrigin })
+      logger.warn('auth.signout.rejected')
       return c.json({ error: 'csrf' }, 403)
     }
 
@@ -130,7 +137,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       try {
         await accounts.signOut(raw)
       } catch (err) {
-        console.error('[auth] signOut failed', err)
+        logger.error('auth.signout.failed', err)
         return c.json({ error: 'signout_failed' }, 500)
       }
     }
@@ -182,9 +189,11 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
 
     let steamId: string | null
     try {
-      steamId = await verifySteamLogin(openidParams, `${config.steamReturnUrl}?state=${providedState}`)
+      steamId = await observe('steam', () =>
+        verifySteamLogin(openidParams, `${config.steamReturnUrl}?state=${providedState}`),
+      )
     } catch (err) {
-      console.error('[auth] steam verification failed', err)
+      logger.error('auth.steam_verification.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=steam`)
     }
 
@@ -223,7 +232,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
         idempotencyKey,
       })
     } catch (err) {
-      console.error('[auth] Primary Player verification attempt failed', err)
+      logger.error('auth.primary_player_verification.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=server`)
     }
 

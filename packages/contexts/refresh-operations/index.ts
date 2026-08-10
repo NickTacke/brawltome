@@ -190,7 +190,22 @@ export type CreateScheduleResult = {
 
 export type MaterializeSchedulesResult = {
   occurrencesCreated: number
-  scheduleIds: string[]
+  occurrences: {
+    scheduleId: string
+    occurrenceId: string
+    operationId: string
+    kind: OperationLease['kind']
+    workClass: WorkClass
+    latenessMs: number
+    missedWindowCount: number
+  }[]
+}
+
+export type OperationsTelemetrySnapshot = {
+  observedAt: string
+  oldestPending: { workClass: WorkClass; ageMs: number }[]
+  deadLetters: { workClass: WorkClass; kind: OperationLease['kind']; count: number }[]
+  scheduleLateness: { kind: OperationLease['kind']; latenessMs: number }[]
 }
 
 export type InteractivePlayerRefreshReservation = {
@@ -401,6 +416,7 @@ export interface DeadLetterOperations {
 }
 
 export interface RefreshOperationWorker {
+  inspectTelemetry(): Promise<OperationsTelemetrySnapshot>
   claim(
     workerId: string,
     leaseMs: number,

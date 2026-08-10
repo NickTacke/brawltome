@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
+import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const admission: AdmissionConfig = {
@@ -23,10 +24,160 @@ const admission: AdmissionConfig = {
 }
 
 describe('refresh operations worker source retry', () => {
+  test('correlates attempts in logs while keeping IDs out of metric labels and isolating exporter failure', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'proof:telemetry',
+      kind: 'proof',
+      workClass: 'interactive',
+      payload: { value: 'proof' },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    const sink = createMemorySink()
+    const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+    let completed = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      commitProofEffect: async () => 'applied' as const,
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    expect(
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        telemetry,
+      }),
+    ).toBe(true)
+    await telemetry.flush(50)
+
+    expect(completed).toBe(true)
+    expect(sink.records.some((record) => record.attributes?.operationId === lease.operationId)).toBe(true)
+    const metricText = JSON.stringify(telemetry.metrics.snapshot())
+    expect(metricText).not.toContain(lease.operationId)
+    expect(metricText).toContain('operation_attempts_total')
+
+    const failingTelemetry = createTelemetry({
+      service: 'worker',
+      sink: {
+        export: async () => {
+          throw new Error('offline')
+        },
+      },
+      drainIntervalMs: 0,
+    })
+    completed = false
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      telemetry: failingTelemetry,
+    })
+    await expect(failingTelemetry.shutdown(5)).resolves.toBeUndefined()
+    expect(completed).toBe(true)
+  })
+
+  test('reports lease_lost when the failure transition is fenced', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'proof:fenced-failure',
+      kind: 'proof',
+      workClass: 'interactive',
+      payload: { value: 'proof' },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      fail: async () => 'lease-lost' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      telemetry,
+      executeEffect: async () => {
+        throw new Error('execution failed')
+      },
+    })
+
+    const attempts = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_attempts_total')
+    expect(attempts?.series[0]?.labels.outcome).toBe('lease_lost')
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+    expect(failures?.series[0]?.labels.failure_category).toBe('lease_lost')
+  })
+
+  test('records leaderboard source calls without correlation IDs in labels', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:telemetry',
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 1_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => 'transitioned' as const,
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      telemetry,
+      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async () => ({ rankings: [], totalPages: 1 }),
+      },
+    })
+
+    const sourceMetrics = telemetry.metrics.snapshot().find(({ name }) => name === 'source_calls_total')
+    expect(sourceMetrics?.series[0]?.labels).toEqual({ domain: 'brawlhalla-v1', outcome: 'succeeded' })
+    expect(JSON.stringify(sourceMetrics)).not.toContain(lease.operationId)
+  })
+
   test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
       operationKey: 'primary-player:42',
       kind: 'interactive-player-refresh',
       workClass: 'primary-monitoring',
@@ -100,6 +251,7 @@ describe('refresh operations worker source retry', () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
       operationKey: 'discovery:players:test',
       kind: 'player-discovery-projection',
       workClass: 'projection',
@@ -141,6 +293,7 @@ describe('refresh operations worker source retry', () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
       operationKey: 'discovery:players:failed-reconciliation',
       kind: 'player-discovery-projection',
       workClass: 'projection',
@@ -188,6 +341,7 @@ describe('refresh operations worker source retry', () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
       operationKey: 'clan:77',
       kind: 'clan-refresh',
       workClass: 'interactive',
@@ -236,6 +390,7 @@ describe('refresh operations worker source retry', () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
       operationKey: 'clan:renewal-loss',
       kind: 'clan-refresh',
       workClass: 'interactive',
@@ -291,6 +446,7 @@ describe('refresh operations worker source retry', () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
       operationKey: 'clan:78',
       kind: 'clan-refresh',
       workClass: 'interactive',

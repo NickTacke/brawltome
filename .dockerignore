@@ -1,0 +1,11 @@
+.git
+**/.git
+.worktrees
+.pi-subagents
+**/node_modules
+**/.next
+**/dist
+**/target
+**/coverage
+**/*.log
+.DS_Store
