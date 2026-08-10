@@ -3,8 +3,8 @@ use std::net::TcpListener;
 
 use brawltome_contracts::generated::Client;
 use brawltome_contracts::generated::types::{
-    ContractProof, ContractProofEvent, GetContractProofXInternalSecret, PlayerRankedProfile,
-    RefreshOutcome,
+    ClanProfile, ContractProof, ContractProofEvent, GetContractProofXInternalSecret,
+    PlayerRankedProfile, RefreshOutcome,
 };
 
 const VALID_PRESENT: &str = include_str!("../../tests/fixtures/valid-present.json");
@@ -185,6 +185,36 @@ fn generated_refresh_outcomes_preserve_all_six_semantic_variants() {
         serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[5]).unwrap(),
         RefreshOutcome::TemporarilyUnavailable { .. }
     ));
+}
+
+#[test]
+fn generated_clan_contract_preserves_decimal_xp_and_section_provenance() {
+    let wire = serde_json::json!({
+        "clanId": 77,
+        "clanName": "Exact",
+        "clanCreateDate": "2026-08-09T12:00:00Z",
+        "clanXp": "900719925474099312345",
+        "clanLifetimeXp": "1801439850948198711110",
+        "notice": null,
+        "tags": null,
+        "discordInviteCode": null,
+        "guildPoints": null,
+        "isRecruiting": null,
+        "profile": {
+            "checkedAt": null,
+            "checkProvenance": { "source": "legacy-import", "outcome": "legacy-unknown" },
+            "lastSuccessAt": null,
+            "lastSuccessProvenance": null
+        },
+        "roster": null,
+        "members": []
+    });
+    let clan: ClanProfile = serde_json::from_value(wire.clone()).expect("valid generated clan");
+    assert_eq!(&*clan.clan_xp, "900719925474099312345");
+    assert_eq!(
+        serde_json::to_value(clan).expect("serialize generated clan"),
+        wire
+    );
 }
 
 #[tokio::test]

@@ -17,7 +17,6 @@ export interface Context {
   metrics: MetricsRegistry
   rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
   statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
-  clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
   playerRepo: PlayerRepo
   playerReferenceQueries: PlayerReferenceQueries
   rankedPlayerQueries: RankedPlayerQueries

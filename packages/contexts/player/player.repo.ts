@@ -2,7 +2,6 @@ import type { Database } from '@brawltome/database'
 import {
   player,
   playerAlias,
-  playerClan,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
@@ -40,7 +39,6 @@ export function createPlayerRepo(db: Database) {
           aliases: true,
           statsLegends: true,
           weaponStats: true,
-          clan: true,
           rankedLegends: true,
           rankedTeams: true,
         },
@@ -324,42 +322,6 @@ export function createPlayerRepo(db: Database) {
           await tx.insert(playerWeaponStat).values(weapons.map((w) => ({ brawlhallaId, ...w })))
         }
       })
-    },
-
-    async upsertClan(
-      brawlhallaId: number,
-      data: {
-        clan_name: string
-        clan_id: number
-        clan_xp: string | number
-        clan_lifetime_xp: string | number
-        personal_xp: number
-      } | null,
-    ) {
-      if (data) {
-        await db
-          .insert(playerClan)
-          .values({
-            brawlhallaId,
-            clanName: data.clan_name,
-            clanId: data.clan_id,
-            clanXp: BigInt(data.clan_xp || '0'),
-            clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-            personalXp: data.personal_xp,
-          })
-          .onConflictDoUpdate({
-            target: playerClan.brawlhallaId,
-            set: {
-              clanName: data.clan_name,
-              clanId: data.clan_id,
-              clanXp: BigInt(data.clan_xp || '0'),
-              clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-              personalXp: data.personal_xp,
-            },
-          })
-      } else {
-        await db.delete(playerClan).where(eq(playerClan.brawlhallaId, brawlhallaId))
-      }
     },
 
     async get1v1LeaderboardSweep(opts: {

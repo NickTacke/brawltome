@@ -1,26 +1,17 @@
 import { hostname } from 'node:os'
 import { BhApiClient } from '@brawltome/bhapi'
+import { processRefreshClanSection } from '@brawltome/clan'
+import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import {
   createPlayerRepo,
   createPostgresRankedPlayers,
-  playerMigrationInventory,
   processRefreshStats,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player/composition'
-import {
-  createPostgresRanking,
-  fetch1v1LeaderboardPage,
-  rankingMigrationInventory,
-} from '@brawltome/ranking/composition'
-import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import {
-  createPostgresRequestAdmission,
-  requestAdmissionMigrationInventory,
-} from '@brawltome/request-admission/composition'
+import { createPostgresRanking, fetch1v1LeaderboardPage } from '@brawltome/ranking/composition'
+import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
+import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
 import { Hono } from 'hono'
 import { createHealthRoutes } from './health-routes'
 import { readOperationsWorkerConfig } from './operations-worker-config'
@@ -29,6 +20,7 @@ import { createPostgresReadiness } from './postgres-readiness'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
 import { readHealthPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
+import { runtimeMigrationInventory } from './runtime-migration-inventory'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL is required')
@@ -51,12 +43,8 @@ const ranking = createPostgresRanking(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => playerRepo.getCareerMainLegend(brawlhallaId),
 })
-const postgresReadiness = createPostgresReadiness(connectionString, [
-  ...playerMigrationInventory,
-  ...refreshOperationsMigrationInventory,
-  ...requestAdmissionMigrationInventory,
-  ...rankingMigrationInventory,
-])
+const clans = createPostgresClans(connectionString)
+const postgresReadiness = createPostgresReadiness(connectionString, runtimeMigrationInventory)
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
 let listener: Awaited<ReturnType<typeof operations.listen>> | undefined
@@ -83,6 +71,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'database-postgres', close: closeDatabase },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
+    { name: 'clans-postgres', close: clans.close },
     { name: 'readiness-postgres', close: postgresReadiness.close },
   ],
 })
@@ -165,6 +154,35 @@ try {
               leaseToken: lease.leaseToken,
             })
           }
+        },
+        syncClanLeaseAuthority: async (lease, section, leaseExpiresAt) => {
+          const prepared = await clans.prepareRefreshEffect({
+            operationId: lease.operationId,
+            section,
+            leaseToken: lease.leaseToken,
+            leaseExpiresAt,
+          })
+          if (prepared === 'fenced') throw new Error(`${section} refresh lease was fenced`)
+        },
+        revokeClanLeaseAuthority: (lease, section) =>
+          clans.revokeRefreshEffect({
+            operationId: lease.operationId,
+            section,
+            leaseToken: lease.leaseToken,
+            leaseExpiresAt: new Date(0),
+          }),
+        executeClanSection: async (lease, section, admitSourceCall, leaseExpiresAt) => {
+          const admittedBhapi = new BhApiClient({ apiKey, beforeRequest: ({ domain }) => admitSourceCall(domain) })
+          const result = await processRefreshClanSection(
+            clans,
+            admittedBhapi,
+            lease.payload.clanId,
+            section,
+            'on-demand',
+            new Date(),
+            { operationId: lease.operationId, section, leaseToken: lease.leaseToken, leaseExpiresAt },
+          )
+          if (result.outcome === 'preserved') throw new Error(result.error ?? `${section} refresh failed`)
         },
       }),
   })

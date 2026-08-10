@@ -8,6 +8,7 @@ import {
   type CreateSchedule,
   type CreateScheduleResult,
   type FencedResult,
+  type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
   type MaterializeSchedulesResult,
   type OperationFailure,
@@ -83,6 +84,12 @@ function toLease(row: OperationRow): OperationLease {
   if (row.kind === 'interactive-player-refresh') {
     if (row.work_class !== 'interactive' || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable interactive player refresh operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (row.kind === 'clan-refresh') {
+    if (row.work_class !== 'interactive' || !('clanId' in row.payload)) {
+      throw new Error('invalid durable clan refresh operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -235,6 +242,24 @@ export function createPostgresRefreshOperations(
         : null
     },
 
+    async findActiveInteractiveClanRefresh(dedupeKey: string) {
+      const [active] = await client<{ id: string; awaiting_admission: boolean; reservation_expired: boolean }[]>`
+        SELECT id,
+          status = 'awaiting_admission' AS awaiting_admission,
+          status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp() AS reservation_expired
+        FROM refresh_operations.operations
+        WHERE kind = 'clan-refresh' AND dedupe_key = ${dedupeKey}
+          AND status IN ('awaiting_admission', 'pending', 'leased')
+      `
+      return active
+        ? {
+            operationId: active.id,
+            awaitingAdmission: active.awaiting_admission,
+            reservationExpired: active.reservation_expired,
+          }
+        : null
+    },
+
     async reserveInteractivePlayerRefresh(
       input: InteractivePlayerRefreshReservation,
     ): Promise<ReserveInteractiveRefreshResult> {
@@ -277,6 +302,47 @@ export function createPostgresRefreshOperations(
       }
     },
 
+    async reserveInteractiveClanRefresh(
+      input: InteractiveClanRefreshReservation,
+    ): Promise<ReserveInteractiveRefreshResult> {
+      for (;;) {
+        const result = await client.begin(async (transaction) => {
+          const sql = transaction as unknown as typeof client
+          await sql`
+            UPDATE refresh_operations.operations
+            SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
+                completed_at = clock_timestamp(), updated_at = clock_timestamp(),
+                last_error = ${sql.json({ code: 'admission_reservation_expired', message: 'Admission reservation expired' })}
+            WHERE kind = 'clan-refresh' AND dedupe_key = ${input.dedupeKey}
+              AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
+          `
+          const operationId = randomUUID()
+          const reservationToken = randomUUID()
+          const [inserted] = await sql<{ id: string }[]>`
+            INSERT INTO refresh_operations.operations
+              (id, kind, dedupe_key, operation_key, work_class, payload, provenance, status, max_attempts,
+               reservation_token, reservation_expires_at)
+            VALUES
+              (${operationId}, 'clan-refresh', ${input.dedupeKey}, ${input.operationKey}, 'interactive',
+               ${sql.json({ clanId: input.clanId, staleSections: input.staleSections })},
+               ${sql.json(input.provenance)}, 'awaiting_admission', 3, ${reservationToken},
+               clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
+            ON CONFLICT (kind, dedupe_key)
+              WHERE status IN ('awaiting_admission', 'pending', 'leased')
+            DO NOTHING RETURNING id
+          `
+          if (inserted) return { outcome: 'reserved' as const, operationId, reservationToken }
+          const [active] = await sql<{ id: string }[]>`
+            SELECT id FROM refresh_operations.operations
+            WHERE kind = 'clan-refresh' AND dedupe_key = ${input.dedupeKey}
+              AND status IN ('awaiting_admission', 'pending', 'leased')
+          `
+          return active ? { outcome: 'already-active' as const, operationId: active.id } : null
+        })
+        if (result) return result
+      }
+    },
+
     async activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
@@ -284,7 +350,7 @@ export function createPostgresRefreshOperations(
           UPDATE refresh_operations.operations
           SET status = 'pending', reservation_token = NULL, reservation_expires_at = NULL,
               updated_at = clock_timestamp()
-          WHERE id = ${operationId} AND kind = 'interactive-player-refresh'
+          WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
             AND status = 'awaiting_admission' AND reservation_token = ${reservationToken}
             AND reservation_expires_at > clock_timestamp()
           RETURNING id
@@ -302,7 +368,7 @@ export function createPostgresRefreshOperations(
           UPDATE refresh_operations.operations
           SET status = 'pending', reservation_token = NULL, reservation_expires_at = NULL,
               updated_at = clock_timestamp()
-          WHERE id = ${operationId} AND kind = 'interactive-player-refresh'
+          WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
             AND status = 'awaiting_admission'
           RETURNING id
         `
@@ -322,7 +388,7 @@ export function createPostgresRefreshOperations(
         SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
             completed_at = clock_timestamp(), updated_at = clock_timestamp(),
             last_error = ${client.json({ code: reason, message: 'Interactive refresh admission rejected' })}
-        WHERE id = ${operationId} AND kind = 'interactive-player-refresh'
+        WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
           AND status = 'awaiting_admission' AND reservation_token = ${reservationToken}
         RETURNING id
       `
@@ -335,7 +401,7 @@ export function createPostgresRefreshOperations(
         SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
             completed_at = clock_timestamp(), updated_at = clock_timestamp(),
             last_error = ${client.json({ code: 'admission_reservation_expired', message: 'Admission reservation expired' })}
-        WHERE id = ${operationId} AND kind = 'interactive-player-refresh'
+        WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
           AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
         RETURNING id
       `
@@ -636,7 +702,7 @@ export function createPostgresRefreshOperations(
                   `
                 : []
             const [interactiveEffect] =
-              candidate.kind === 'interactive-player-refresh'
+              candidate.kind === 'interactive-player-refresh' || candidate.kind === 'clan-refresh'
                 ? await sql<{ complete: boolean }[]>`
                     SELECT NOT EXISTS (
                       SELECT 1
@@ -722,7 +788,7 @@ export function createPostgresRefreshOperations(
     async listAwaitingInteractiveRefreshes(): Promise<string[]> {
       const rows = await client<{ id: string }[]>`
         SELECT id FROM refresh_operations.operations
-        WHERE kind = 'interactive-player-refresh' AND status = 'awaiting_admission'
+        WHERE kind IN ('interactive-player-refresh', 'clan-refresh') AND status = 'awaiting_admission'
         ORDER BY created_at, id
         LIMIT 100
       `
@@ -742,9 +808,24 @@ export function createPostgresRefreshOperations(
       return renewed[0] ? 'renewed' : 'lease-lost'
     },
 
+    async renewWithAuthority(lease: OperationLease, leaseMs: number) {
+      const [renewed] = await renewalClient<{ lease_expires_at: Date }[]>`
+        UPDATE refresh_operations.operations
+        SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
+            updated_at = clock_timestamp()
+        WHERE id = ${lease.operationId} AND status = 'leased'
+          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
+          AND lease_expires_at > clock_timestamp()
+        RETURNING lease_expires_at
+      `
+      return renewed
+        ? ({ outcome: 'renewed', leaseExpiresAt: renewed.lease_expires_at } as const)
+        : ({ outcome: 'lease-lost' } as const)
+    },
+
     async beginInteractiveSection(
-      lease: Extract<OperationLease, { kind: 'interactive-player-refresh' }>,
-      section: 'ranked' | 'stats',
+      lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
+      section: 'ranked' | 'stats' | 'profile' | 'roster',
     ) {
       const [owned] = await client<{ completed: boolean }[]>`
         SELECT EXISTS (
@@ -761,8 +842,8 @@ export function createPostgresRefreshOperations(
     },
 
     async commitInteractiveSection(
-      lease: Extract<OperationLease, { kind: 'interactive-player-refresh' }>,
-      section: 'ranked' | 'stats',
+      lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
+      section: 'ranked' | 'stats' | 'profile' | 'roster',
     ): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client

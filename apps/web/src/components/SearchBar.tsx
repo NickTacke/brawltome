@@ -31,7 +31,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     Array<{
       clanId: number
       clanName: string
-      clanXp: bigint
+      clanXp: string
     }>
   >([])
   const [showClans, setShowClans] = useState(false)

@@ -1,19 +1,13 @@
-import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts/composition'
-import { createClanRepo } from '@brawltome/clan'
+import { createPostgresAccounts } from '@brawltome/accounts/composition'
+import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPlayerLinkRepo } from '@brawltome/identity/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import { createPlayerRepo, createPostgresRankedPlayers, playerMigrationInventory } from '@brawltome/player/composition'
+import { createPlayerRepo, createPostgresRankedPlayers } from '@brawltome/player/composition'
 import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
-import { createPostgresRanking, rankingMigrationInventory } from '@brawltome/ranking/composition'
-import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import {
-  createPostgresRequestAdmission,
-  requestAdmissionMigrationInventory,
-} from '@brawltome/request-admission/composition'
+import { createPostgresRanking } from '@brawltome/ranking/composition'
+import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
+import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
 import {
   TIERED_TTL,
   checkRateLimit,
@@ -47,6 +41,7 @@ import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
+import { runtimeMigrationInventory } from './runtime-migration-inventory'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
@@ -80,13 +75,6 @@ const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'ba
   async () => {},
   { concurrency: 0, maxDepth: 2000, dedupKey: (d) => String(d.brawlhallaId), metrics },
 )
-const clanQueue = createQueue<{ clanId: number; caller: 'on-demand' | 'background' }>(
-  redis,
-  'refresh-clan',
-  async () => {},
-  { concurrency: 0, maxDepth: 1000, dedupKey: (d) => String(d.clanId), metrics },
-)
-
 const playerRepo = createPlayerRepo(db)
 const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
   resolveCareerMainLegend: (brawlhallaId) => playerRepo.getCareerMainLegend(brawlhallaId),
@@ -100,7 +88,7 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
   sourceLimits: { 'brawlhalla-v0': 180 },
 })
 const ranking = createPostgresRanking(databaseUrl)
-const clanRepo = createClanRepo(db)
+const clanRepo = createPostgresClans(databaseUrl)
 const playerLinkRepo = createPlayerLinkRepo(db)
 const steamLinkQueue = createQueue<{ userId: string; steamId: string; caller: 'background' }>(
   redis,
@@ -118,13 +106,7 @@ const matchmakingConfig = readMatchmakingConfig()
 const r2 = createR2Client(matchmakingConfig.r2)
 const matchmakingLive = matchmakingConfig.enabled && !!r2
 const matchRepo = matchmakingLive ? createMatchRepo(db) : null
-const postgresReadiness = createPostgresReadiness(databaseUrl, [
-  ...playerMigrationInventory,
-  ...refreshOperationsMigrationInventory,
-  ...requestAdmissionMigrationInventory,
-  ...accountsMigrationInventory,
-  ...rankingMigrationInventory,
-])
+const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationInventory)
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
 const lifecycle = createRuntimeLifecycle({
@@ -149,6 +131,7 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'operations-postgres', close: refreshOperations.close },
+    { name: 'clans-postgres', close: clanRepo.close },
     { name: 'players-ranked-postgres', close: rankedPlayerQueries.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
@@ -176,7 +159,6 @@ const sharedCtx = {
   metrics,
   rankedQueue,
   statsQueue,
-  clanQueue,
   playerRepo,
   playerReferenceQueries,
   rankedPlayerQueries,

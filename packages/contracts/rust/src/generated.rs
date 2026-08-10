@@ -154,6 +154,4707 @@ pub mod types {
             }
         }
     }
+    ///`ClanProfile`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "clanCreateDate",
+    ///    "clanId",
+    ///    "clanLifetimeXp",
+    ///    "clanName",
+    ///    "clanXp",
+    ///    "discordInviteCode",
+    ///    "guildPoints",
+    ///    "isRecruiting",
+    ///    "members",
+    ///    "notice",
+    ///    "profile",
+    ///    "roster",
+    ///    "tags"
+    ///  ],
+    ///  "properties": {
+    ///    "clanCreateDate": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "clanId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "clanLifetimeXp": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d{0,40})$"
+    ///    },
+    ///    "clanName": {
+    ///      "type": "string",
+    ///      "maxLength": 256,
+    ///      "minLength": 1
+    ///    },
+    ///    "clanXp": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    },
+    ///    "discordInviteCode": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "guildPoints": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    },
+    ///    "isRecruiting": {
+    ///      "type": [
+    ///        "boolean",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "members": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "brawlhallaId",
+    ///          "guildPoints",
+    ///          "joinDate",
+    ///          "name",
+    ///          "rank",
+    ///          "xp"
+    ///        ],
+    ///        "properties": {
+    ///          "brawlhallaId": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "guildPoints": {
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
+    ///            "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///          },
+    ///          "joinDate": {
+    ///            "type": "string",
+    ///            "format": "date-time"
+    ///          },
+    ///          "name": {
+    ///            "type": "string",
+    ///            "maxLength": 256,
+    ///            "minLength": 1
+    ///          },
+    ///          "rank": {
+    ///            "type": "string",
+    ///            "maxLength": 64,
+    ///            "minLength": 1
+    ///          },
+    ///          "xp": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "notice": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "profile": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "checkProvenance",
+    ///        "checkedAt",
+    ///        "lastSuccessAt",
+    ///        "lastSuccessProvenance"
+    ///      ],
+    ///      "properties": {
+    ///        "checkProvenance": {
+    ///          "type": "object",
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        },
+    ///        "checkedAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessProvenance": {
+    ///          "type": [
+    ///            "object",
+    ///            "null"
+    ///          ],
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "roster": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "checkProvenance",
+    ///        "checkedAt",
+    ///        "lastSuccessAt",
+    ///        "lastSuccessProvenance"
+    ///      ],
+    ///      "properties": {
+    ///        "checkProvenance": {
+    ///          "type": "object",
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        },
+    ///        "checkedAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessProvenance": {
+    ///          "type": [
+    ///            "object",
+    ///            "null"
+    ///          ],
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "tags": {
+    ///      "type": [
+    ///        "array",
+    ///        "null"
+    ///      ],
+    ///      "items": {
+    ///        "type": "string"
+    ///      }
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfile {
+        #[serde(rename = "clanCreateDate")]
+        pub clan_create_date: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "clanId")]
+        pub clan_id: ::std::num::NonZeroU64,
+        #[serde(rename = "clanLifetimeXp")]
+        pub clan_lifetime_xp: ClanProfileClanLifetimeXp,
+        #[serde(rename = "clanName")]
+        pub clan_name: ClanProfileClanName,
+        #[serde(rename = "clanXp")]
+        pub clan_xp: ClanProfileClanXp,
+        #[serde(rename = "discordInviteCode")]
+        pub discord_invite_code: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "guildPoints")]
+        pub guild_points: ::std::option::Option<ClanProfileGuildPoints>,
+        #[serde(rename = "isRecruiting")]
+        pub is_recruiting: ::std::option::Option<bool>,
+        pub members: ::std::vec::Vec<ClanProfileMembersItem>,
+        pub notice: ::std::option::Option<::std::string::String>,
+        pub profile: ClanProfileProfile,
+        pub roster: ::std::option::Option<ClanProfileRoster>,
+        pub tags: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
+    }
+    ///`ClanProfileClanLifetimeXp`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,40})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileClanLifetimeXp(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileClanLifetimeXp {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileClanLifetimeXp> for ::std::string::String {
+        fn from(value: ClanProfileClanLifetimeXp) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileClanLifetimeXp {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,40})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,40})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileClanLifetimeXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileClanLifetimeXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileClanLifetimeXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileClanLifetimeXp {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileClanName`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "maxLength": 256,
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileClanName(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileClanName {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileClanName> for ::std::string::String {
+        fn from(value: ClanProfileClanName) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileClanName {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() > 256usize {
+                return Err("longer than 256 characters".into());
+            }
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileClanName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileClanName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileClanName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileClanName {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileClanXp`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileClanXp(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileClanXp {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileClanXp> for ::std::string::String {
+        fn from(value: ClanProfileClanXp) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileClanXp {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileClanXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileClanXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileClanXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileClanXp {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileGuildPoints`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileGuildPoints(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileGuildPoints {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileGuildPoints> for ::std::string::String {
+        fn from(value: ClanProfileGuildPoints) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileGuildPoints {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileGuildPoints {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileMembersItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "guildPoints",
+    ///    "joinDate",
+    ///    "name",
+    ///    "rank",
+    ///    "xp"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "guildPoints": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    },
+    ///    "joinDate": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "name": {
+    ///      "type": "string",
+    ///      "maxLength": 256,
+    ///      "minLength": 1
+    ///    },
+    ///    "rank": {
+    ///      "type": "string",
+    ///      "maxLength": 64,
+    ///      "minLength": 1
+    ///    },
+    ///    "xp": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileMembersItem {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(rename = "guildPoints")]
+        pub guild_points: ::std::option::Option<ClanProfileMembersItemGuildPoints>,
+        #[serde(rename = "joinDate")]
+        pub join_date: ::chrono::DateTime<::chrono::offset::Utc>,
+        pub name: ClanProfileMembersItemName,
+        pub rank: ClanProfileMembersItemRank,
+        pub xp: ClanProfileMembersItemXp,
+    }
+    ///`ClanProfileMembersItemGuildPoints`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileMembersItemGuildPoints(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileMembersItemGuildPoints {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileMembersItemGuildPoints>
+    for ::std::string::String {
+        fn from(value: ClanProfileMembersItemGuildPoints) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileMembersItemGuildPoints {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileMembersItemGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileMembersItemGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileMembersItemGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileMembersItemGuildPoints {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileMembersItemName`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "maxLength": 256,
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileMembersItemName(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileMembersItemName {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileMembersItemName> for ::std::string::String {
+        fn from(value: ClanProfileMembersItemName) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileMembersItemName {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() > 256usize {
+                return Err("longer than 256 characters".into());
+            }
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileMembersItemName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileMembersItemName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileMembersItemName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileMembersItemName {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileMembersItemRank`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "maxLength": 64,
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileMembersItemRank(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileMembersItemRank {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileMembersItemRank> for ::std::string::String {
+        fn from(value: ClanProfileMembersItemRank) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileMembersItemRank {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() > 64usize {
+                return Err("longer than 64 characters".into());
+            }
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileMembersItemRank {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileMembersItemRank {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileMembersItemRank {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileMembersItemRank {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileMembersItemXp`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanProfileMembersItemXp(::std::string::String);
+    impl ::std::ops::Deref for ClanProfileMembersItemXp {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanProfileMembersItemXp> for ::std::string::String {
+        fn from(value: ClanProfileMembersItemXp) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileMembersItemXp {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileMembersItemXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for ClanProfileMembersItemXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for ClanProfileMembersItemXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanProfileMembersItemXp {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanProfileProfile`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "checkProvenance",
+    ///    "checkedAt",
+    ///    "lastSuccessAt",
+    ///    "lastSuccessProvenance"
+    ///  ],
+    ///  "properties": {
+    ///    "checkProvenance": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessProvenance": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileProfile {
+        #[serde(rename = "checkProvenance")]
+        pub check_provenance: ClanProfileProfileCheckProvenance,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        #[serde(rename = "lastSuccessProvenance")]
+        pub last_success_provenance: ::std::option::Option<
+            ClanProfileProfileLastSuccessProvenance,
+        >,
+    }
+    ///`ClanProfileProfileCheckProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileProfileCheckProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanProfileProfileCheckProvenanceOutcome,
+        pub source: ClanProfileProfileCheckProvenanceSource,
+    }
+    ///`ClanProfileProfileCheckProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileProfileCheckProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display for ClanProfileProfileCheckProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileProfileCheckProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileProfileCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileProfileCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileProfileCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileProfileCheckProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileProfileCheckProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display for ClanProfileProfileCheckProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileProfileCheckProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileProfileCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileProfileCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileProfileCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileProfileLastSuccessProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileProfileLastSuccessProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanProfileProfileLastSuccessProvenanceOutcome,
+        pub source: ClanProfileProfileLastSuccessProvenanceSource,
+    }
+    ///`ClanProfileProfileLastSuccessProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileProfileLastSuccessProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display for ClanProfileProfileLastSuccessProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileProfileLastSuccessProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanProfileProfileLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileProfileLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileProfileLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileProfileLastSuccessProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileProfileLastSuccessProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display for ClanProfileProfileLastSuccessProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileProfileLastSuccessProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanProfileProfileLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileProfileLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileProfileLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileRoster`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "checkProvenance",
+    ///    "checkedAt",
+    ///    "lastSuccessAt",
+    ///    "lastSuccessProvenance"
+    ///  ],
+    ///  "properties": {
+    ///    "checkProvenance": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessProvenance": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileRoster {
+        #[serde(rename = "checkProvenance")]
+        pub check_provenance: ClanProfileRosterCheckProvenance,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        #[serde(rename = "lastSuccessProvenance")]
+        pub last_success_provenance: ::std::option::Option<
+            ClanProfileRosterLastSuccessProvenance,
+        >,
+    }
+    ///`ClanProfileRosterCheckProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileRosterCheckProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanProfileRosterCheckProvenanceOutcome,
+        pub source: ClanProfileRosterCheckProvenanceSource,
+    }
+    ///`ClanProfileRosterCheckProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileRosterCheckProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display for ClanProfileRosterCheckProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileRosterCheckProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileRosterCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileRosterCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileRosterCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileRosterCheckProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileRosterCheckProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display for ClanProfileRosterCheckProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileRosterCheckProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileRosterCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileRosterCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileRosterCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileRosterLastSuccessProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanProfileRosterLastSuccessProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanProfileRosterLastSuccessProvenanceOutcome,
+        pub source: ClanProfileRosterLastSuccessProvenanceSource,
+    }
+    ///`ClanProfileRosterLastSuccessProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileRosterLastSuccessProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display for ClanProfileRosterLastSuccessProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileRosterLastSuccessProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanProfileRosterLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileRosterLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileRosterLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanProfileRosterLastSuccessProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanProfileRosterLastSuccessProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display for ClanProfileRosterLastSuccessProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanProfileRosterLastSuccessProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanProfileRosterLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanProfileRosterLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanProfileRosterLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponse`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "clan",
+    ///    "refresh"
+    ///  ],
+    ///  "properties": {
+    ///    "clan": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "clanCreateDate",
+    ///        "clanId",
+    ///        "clanLifetimeXp",
+    ///        "clanName",
+    ///        "clanXp",
+    ///        "discordInviteCode",
+    ///        "guildPoints",
+    ///        "isRecruiting",
+    ///        "members",
+    ///        "notice",
+    ///        "profile",
+    ///        "roster",
+    ///        "tags"
+    ///      ],
+    ///      "properties": {
+    ///        "clanCreateDate": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "clanId": {
+    ///          "type": "integer",
+    ///          "maximum": 2147483647.0,
+    ///          "exclusiveMinimum": 0.0
+    ///        },
+    ///        "clanLifetimeXp": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d{0,40})$"
+    ///        },
+    ///        "clanName": {
+    ///          "type": "string",
+    ///          "maxLength": 256,
+    ///          "minLength": 1
+    ///        },
+    ///        "clanXp": {
+    ///          "type": "string",
+    ///          "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///        },
+    ///        "discordInviteCode": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ]
+    ///        },
+    ///        "guildPoints": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///        },
+    ///        "isRecruiting": {
+    ///          "type": [
+    ///            "boolean",
+    ///            "null"
+    ///          ]
+    ///        },
+    ///        "members": {
+    ///          "type": "array",
+    ///          "items": {
+    ///            "type": "object",
+    ///            "required": [
+    ///              "brawlhallaId",
+    ///              "guildPoints",
+    ///              "joinDate",
+    ///              "name",
+    ///              "rank",
+    ///              "xp"
+    ///            ],
+    ///            "properties": {
+    ///              "brawlhallaId": {
+    ///                "type": "integer",
+    ///                "maximum": 2147483647.0,
+    ///                "exclusiveMinimum": 0.0
+    ///              },
+    ///              "guildPoints": {
+    ///                "type": [
+    ///                  "string",
+    ///                  "null"
+    ///                ],
+    ///                "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///              },
+    ///              "joinDate": {
+    ///                "type": "string",
+    ///                "format": "date-time"
+    ///              },
+    ///              "name": {
+    ///                "type": "string",
+    ///                "maxLength": 256,
+    ///                "minLength": 1
+    ///              },
+    ///              "rank": {
+    ///                "type": "string",
+    ///                "maxLength": 64,
+    ///                "minLength": 1
+    ///              },
+    ///              "xp": {
+    ///                "type": "string",
+    ///                "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///              }
+    ///            },
+    ///            "additionalProperties": false
+    ///          }
+    ///        },
+    ///        "notice": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ]
+    ///        },
+    ///        "profile": {
+    ///          "type": "object",
+    ///          "required": [
+    ///            "checkProvenance",
+    ///            "checkedAt",
+    ///            "lastSuccessAt",
+    ///            "lastSuccessProvenance"
+    ///          ],
+    ///          "properties": {
+    ///            "checkProvenance": {
+    ///              "type": "object",
+    ///              "required": [
+    ///                "outcome",
+    ///                "source"
+    ///              ],
+    ///              "properties": {
+    ///                "legacyTimestamp": {
+    ///                  "type": "string",
+    ///                  "format": "date-time"
+    ///                },
+    ///                "outcome": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "success",
+    ///                    "ambiguous-failure",
+    ///                    "admission-limited",
+    ///                    "source-rate-limited",
+    ///                    "legacy-unknown"
+    ///                  ]
+    ///                },
+    ///                "source": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "v1-guild-stats",
+    ///                    "v1-guild-members",
+    ///                    "legacy-import"
+    ///                  ]
+    ///                }
+    ///              },
+    ///              "additionalProperties": false
+    ///            },
+    ///            "checkedAt": {
+    ///              "type": [
+    ///                "string",
+    ///                "null"
+    ///              ],
+    ///              "format": "date-time"
+    ///            },
+    ///            "lastSuccessAt": {
+    ///              "type": [
+    ///                "string",
+    ///                "null"
+    ///              ],
+    ///              "format": "date-time"
+    ///            },
+    ///            "lastSuccessProvenance": {
+    ///              "type": [
+    ///                "object",
+    ///                "null"
+    ///              ],
+    ///              "required": [
+    ///                "outcome",
+    ///                "source"
+    ///              ],
+    ///              "properties": {
+    ///                "legacyTimestamp": {
+    ///                  "type": "string",
+    ///                  "format": "date-time"
+    ///                },
+    ///                "outcome": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "success",
+    ///                    "ambiguous-failure",
+    ///                    "admission-limited",
+    ///                    "source-rate-limited",
+    ///                    "legacy-unknown"
+    ///                  ]
+    ///                },
+    ///                "source": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "v1-guild-stats",
+    ///                    "v1-guild-members",
+    ///                    "legacy-import"
+    ///                  ]
+    ///                }
+    ///              },
+    ///              "additionalProperties": false
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        },
+    ///        "roster": {
+    ///          "type": [
+    ///            "object",
+    ///            "null"
+    ///          ],
+    ///          "required": [
+    ///            "checkProvenance",
+    ///            "checkedAt",
+    ///            "lastSuccessAt",
+    ///            "lastSuccessProvenance"
+    ///          ],
+    ///          "properties": {
+    ///            "checkProvenance": {
+    ///              "type": "object",
+    ///              "required": [
+    ///                "outcome",
+    ///                "source"
+    ///              ],
+    ///              "properties": {
+    ///                "legacyTimestamp": {
+    ///                  "type": "string",
+    ///                  "format": "date-time"
+    ///                },
+    ///                "outcome": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "success",
+    ///                    "ambiguous-failure",
+    ///                    "admission-limited",
+    ///                    "source-rate-limited",
+    ///                    "legacy-unknown"
+    ///                  ]
+    ///                },
+    ///                "source": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "v1-guild-stats",
+    ///                    "v1-guild-members",
+    ///                    "legacy-import"
+    ///                  ]
+    ///                }
+    ///              },
+    ///              "additionalProperties": false
+    ///            },
+    ///            "checkedAt": {
+    ///              "type": [
+    ///                "string",
+    ///                "null"
+    ///              ],
+    ///              "format": "date-time"
+    ///            },
+    ///            "lastSuccessAt": {
+    ///              "type": [
+    ///                "string",
+    ///                "null"
+    ///              ],
+    ///              "format": "date-time"
+    ///            },
+    ///            "lastSuccessProvenance": {
+    ///              "type": [
+    ///                "object",
+    ///                "null"
+    ///              ],
+    ///              "required": [
+    ///                "outcome",
+    ///                "source"
+    ///              ],
+    ///              "properties": {
+    ///                "legacyTimestamp": {
+    ///                  "type": "string",
+    ///                  "format": "date-time"
+    ///                },
+    ///                "outcome": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "success",
+    ///                    "ambiguous-failure",
+    ///                    "admission-limited",
+    ///                    "source-rate-limited",
+    ///                    "legacy-unknown"
+    ///                  ]
+    ///                },
+    ///                "source": {
+    ///                  "type": "string",
+    ///                  "enum": [
+    ///                    "v1-guild-stats",
+    ///                    "v1-guild-members",
+    ///                    "legacy-import"
+    ///                  ]
+    ///                }
+    ///              },
+    ///              "additionalProperties": false
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        },
+    ///        "tags": {
+    ///          "type": [
+    ///            "array",
+    ///            "null"
+    ///          ],
+    ///          "items": {
+    ///            "type": "string"
+    ///          }
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "refresh": {
+    ///      "$ref": "#/components/schemas/RefreshOutcome"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponse {
+        pub clan: ::std::option::Option<ClanRefreshResponseClan>,
+        pub refresh: RefreshOutcome,
+    }
+    ///`ClanRefreshResponseClan`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "clanCreateDate",
+    ///    "clanId",
+    ///    "clanLifetimeXp",
+    ///    "clanName",
+    ///    "clanXp",
+    ///    "discordInviteCode",
+    ///    "guildPoints",
+    ///    "isRecruiting",
+    ///    "members",
+    ///    "notice",
+    ///    "profile",
+    ///    "roster",
+    ///    "tags"
+    ///  ],
+    ///  "properties": {
+    ///    "clanCreateDate": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "clanId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "clanLifetimeXp": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d{0,40})$"
+    ///    },
+    ///    "clanName": {
+    ///      "type": "string",
+    ///      "maxLength": 256,
+    ///      "minLength": 1
+    ///    },
+    ///    "clanXp": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    },
+    ///    "discordInviteCode": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "guildPoints": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    },
+    ///    "isRecruiting": {
+    ///      "type": [
+    ///        "boolean",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "members": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "brawlhallaId",
+    ///          "guildPoints",
+    ///          "joinDate",
+    ///          "name",
+    ///          "rank",
+    ///          "xp"
+    ///        ],
+    ///        "properties": {
+    ///          "brawlhallaId": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "guildPoints": {
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
+    ///            "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///          },
+    ///          "joinDate": {
+    ///            "type": "string",
+    ///            "format": "date-time"
+    ///          },
+    ///          "name": {
+    ///            "type": "string",
+    ///            "maxLength": 256,
+    ///            "minLength": 1
+    ///          },
+    ///          "rank": {
+    ///            "type": "string",
+    ///            "maxLength": 64,
+    ///            "minLength": 1
+    ///          },
+    ///          "xp": {
+    ///            "type": "string",
+    ///            "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///          }
+    ///        },
+    ///        "additionalProperties": false
+    ///      }
+    ///    },
+    ///    "notice": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "profile": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "checkProvenance",
+    ///        "checkedAt",
+    ///        "lastSuccessAt",
+    ///        "lastSuccessProvenance"
+    ///      ],
+    ///      "properties": {
+    ///        "checkProvenance": {
+    ///          "type": "object",
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        },
+    ///        "checkedAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessProvenance": {
+    ///          "type": [
+    ///            "object",
+    ///            "null"
+    ///          ],
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "roster": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "checkProvenance",
+    ///        "checkedAt",
+    ///        "lastSuccessAt",
+    ///        "lastSuccessProvenance"
+    ///      ],
+    ///      "properties": {
+    ///        "checkProvenance": {
+    ///          "type": "object",
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        },
+    ///        "checkedAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessAt": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "format": "date-time"
+    ///        },
+    ///        "lastSuccessProvenance": {
+    ///          "type": [
+    ///            "object",
+    ///            "null"
+    ///          ],
+    ///          "required": [
+    ///            "outcome",
+    ///            "source"
+    ///          ],
+    ///          "properties": {
+    ///            "legacyTimestamp": {
+    ///              "type": "string",
+    ///              "format": "date-time"
+    ///            },
+    ///            "outcome": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "success",
+    ///                "ambiguous-failure",
+    ///                "admission-limited",
+    ///                "source-rate-limited",
+    ///                "legacy-unknown"
+    ///              ]
+    ///            },
+    ///            "source": {
+    ///              "type": "string",
+    ///              "enum": [
+    ///                "v1-guild-stats",
+    ///                "v1-guild-members",
+    ///                "legacy-import"
+    ///              ]
+    ///            }
+    ///          },
+    ///          "additionalProperties": false
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "tags": {
+    ///      "type": [
+    ///        "array",
+    ///        "null"
+    ///      ],
+    ///      "items": {
+    ///        "type": "string"
+    ///      }
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClan {
+        #[serde(rename = "clanCreateDate")]
+        pub clan_create_date: ::chrono::DateTime<::chrono::offset::Utc>,
+        #[serde(rename = "clanId")]
+        pub clan_id: ::std::num::NonZeroU64,
+        #[serde(rename = "clanLifetimeXp")]
+        pub clan_lifetime_xp: ClanRefreshResponseClanClanLifetimeXp,
+        #[serde(rename = "clanName")]
+        pub clan_name: ClanRefreshResponseClanClanName,
+        #[serde(rename = "clanXp")]
+        pub clan_xp: ClanRefreshResponseClanClanXp,
+        #[serde(rename = "discordInviteCode")]
+        pub discord_invite_code: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "guildPoints")]
+        pub guild_points: ::std::option::Option<ClanRefreshResponseClanGuildPoints>,
+        #[serde(rename = "isRecruiting")]
+        pub is_recruiting: ::std::option::Option<bool>,
+        pub members: ::std::vec::Vec<ClanRefreshResponseClanMembersItem>,
+        pub notice: ::std::option::Option<::std::string::String>,
+        pub profile: ClanRefreshResponseClanProfile,
+        pub roster: ::std::option::Option<ClanRefreshResponseClanRoster>,
+        pub tags: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
+    }
+    ///`ClanRefreshResponseClanClanLifetimeXp`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,40})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanClanLifetimeXp(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanClanLifetimeXp {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanClanLifetimeXp>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanClanLifetimeXp) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanClanLifetimeXp {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,40})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,40})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanClanLifetimeXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanClanLifetimeXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanClanLifetimeXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanClanLifetimeXp {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanClanName`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "maxLength": 256,
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanClanName(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanClanName {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanClanName>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanClanName) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanClanName {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() > 256usize {
+                return Err("longer than 256 characters".into());
+            }
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanClanName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanClanName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanClanName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanClanName {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanClanXp`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanClanXp(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanClanXp {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanClanXp> for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanClanXp) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanClanXp {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanClanXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanClanXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanClanXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanClanXp {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanGuildPoints`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanGuildPoints(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanGuildPoints {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanGuildPoints>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanGuildPoints) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanGuildPoints {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanGuildPoints {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanMembersItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "guildPoints",
+    ///    "joinDate",
+    ///    "name",
+    ///    "rank",
+    ///    "xp"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "guildPoints": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    },
+    ///    "joinDate": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "name": {
+    ///      "type": "string",
+    ///      "maxLength": 256,
+    ///      "minLength": 1
+    ///    },
+    ///    "rank": {
+    ///      "type": "string",
+    ///      "maxLength": 64,
+    ///      "minLength": 1
+    ///    },
+    ///    "xp": {
+    ///      "type": "string",
+    ///      "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanMembersItem {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(rename = "guildPoints")]
+        pub guild_points: ::std::option::Option<
+            ClanRefreshResponseClanMembersItemGuildPoints,
+        >,
+        #[serde(rename = "joinDate")]
+        pub join_date: ::chrono::DateTime<::chrono::offset::Utc>,
+        pub name: ClanRefreshResponseClanMembersItemName,
+        pub rank: ClanRefreshResponseClanMembersItemRank,
+        pub xp: ClanRefreshResponseClanMembersItemXp,
+    }
+    ///`ClanRefreshResponseClanMembersItemGuildPoints`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanMembersItemGuildPoints(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanMembersItemGuildPoints {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanMembersItemGuildPoints>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanMembersItemGuildPoints) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanMembersItemGuildPoints {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanMembersItemGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanMembersItemGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanMembersItemGuildPoints {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for ClanRefreshResponseClanMembersItemGuildPoints {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanMembersItemName`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "maxLength": 256,
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanMembersItemName(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanMembersItemName {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanMembersItemName>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanMembersItemName) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanMembersItemName {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() > 256usize {
+                return Err("longer than 256 characters".into());
+            }
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanMembersItemName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanMembersItemName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanMembersItemName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanMembersItemName {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanMembersItemRank`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "maxLength": 64,
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanMembersItemRank(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanMembersItemRank {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanMembersItemRank>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanMembersItemRank) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanMembersItemRank {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() > 64usize {
+                return Err("longer than 64 characters".into());
+            }
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanMembersItemRank {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanMembersItemRank {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanMembersItemRank {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanMembersItemRank {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanMembersItemXp`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^(0|[1-9]\\d{0,39})$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct ClanRefreshResponseClanMembersItemXp(::std::string::String);
+    impl ::std::ops::Deref for ClanRefreshResponseClanMembersItemXp {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<ClanRefreshResponseClanMembersItemXp>
+    for ::std::string::String {
+        fn from(value: ClanRefreshResponseClanMembersItemXp) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanMembersItemXp {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            { ::regress::Regex::new("^(0|[1-9]\\d{0,39})$").unwrap() });
+            if PATTERN.find(value).is_none() {
+                return Err("doesn't match pattern \"^(0|[1-9]\\d{0,39})$\"".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for ClanRefreshResponseClanMembersItemXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanMembersItemXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanMembersItemXp {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for ClanRefreshResponseClanMembersItemXp {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`ClanRefreshResponseClanProfile`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "checkProvenance",
+    ///    "checkedAt",
+    ///    "lastSuccessAt",
+    ///    "lastSuccessProvenance"
+    ///  ],
+    ///  "properties": {
+    ///    "checkProvenance": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessProvenance": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanProfile {
+        #[serde(rename = "checkProvenance")]
+        pub check_provenance: ClanRefreshResponseClanProfileCheckProvenance,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        #[serde(rename = "lastSuccessProvenance")]
+        pub last_success_provenance: ::std::option::Option<
+            ClanRefreshResponseClanProfileLastSuccessProvenance,
+        >,
+    }
+    ///`ClanRefreshResponseClanProfileCheckProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanProfileCheckProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanRefreshResponseClanProfileCheckProvenanceOutcome,
+        pub source: ClanRefreshResponseClanProfileCheckProvenanceSource,
+    }
+    ///`ClanRefreshResponseClanProfileCheckProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanProfileCheckProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display for ClanRefreshResponseClanProfileCheckProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanProfileCheckProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanProfileCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanProfileCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanProfileCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanProfileCheckProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanProfileCheckProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display for ClanRefreshResponseClanProfileCheckProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanProfileCheckProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanProfileCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanProfileCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanProfileCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanProfileLastSuccessProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanProfileLastSuccessProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome,
+        pub source: ClanRefreshResponseClanProfileLastSuccessProvenanceSource,
+    }
+    ///`ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanProfileLastSuccessProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanProfileLastSuccessProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanProfileLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanRoster`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "checkProvenance",
+    ///    "checkedAt",
+    ///    "lastSuccessAt",
+    ///    "lastSuccessProvenance"
+    ///  ],
+    ///  "properties": {
+    ///    "checkProvenance": {
+    ///      "type": "object",
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "checkedAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time"
+    ///    },
+    ///    "lastSuccessProvenance": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "outcome",
+    ///        "source"
+    ///      ],
+    ///      "properties": {
+    ///        "legacyTimestamp": {
+    ///          "type": "string",
+    ///          "format": "date-time"
+    ///        },
+    ///        "outcome": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "success",
+    ///            "ambiguous-failure",
+    ///            "admission-limited",
+    ///            "source-rate-limited",
+    ///            "legacy-unknown"
+    ///          ]
+    ///        },
+    ///        "source": {
+    ///          "type": "string",
+    ///          "enum": [
+    ///            "v1-guild-stats",
+    ///            "v1-guild-members",
+    ///            "legacy-import"
+    ///          ]
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanRoster {
+        #[serde(rename = "checkProvenance")]
+        pub check_provenance: ClanRefreshResponseClanRosterCheckProvenance,
+        #[serde(rename = "checkedAt")]
+        pub checked_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        #[serde(rename = "lastSuccessAt")]
+        pub last_success_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        #[serde(rename = "lastSuccessProvenance")]
+        pub last_success_provenance: ::std::option::Option<
+            ClanRefreshResponseClanRosterLastSuccessProvenance,
+        >,
+    }
+    ///`ClanRefreshResponseClanRosterCheckProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanRosterCheckProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanRefreshResponseClanRosterCheckProvenanceOutcome,
+        pub source: ClanRefreshResponseClanRosterCheckProvenanceSource,
+    }
+    ///`ClanRefreshResponseClanRosterCheckProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanRosterCheckProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display for ClanRefreshResponseClanRosterCheckProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanRosterCheckProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanRosterCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanRosterCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanRosterCheckProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanRosterCheckProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanRosterCheckProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display for ClanRefreshResponseClanRosterCheckProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for ClanRefreshResponseClanRosterCheckProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanRosterCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanRosterCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanRosterCheckProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanRosterLastSuccessProvenance`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "outcome",
+    ///    "source"
+    ///  ],
+    ///  "properties": {
+    ///    "legacyTimestamp": {
+    ///      "type": "string",
+    ///      "format": "date-time"
+    ///    },
+    ///    "outcome": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "success",
+    ///        "ambiguous-failure",
+    ///        "admission-limited",
+    ///        "source-rate-limited",
+    ///        "legacy-unknown"
+    ///      ]
+    ///    },
+    ///    "source": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "v1-guild-stats",
+    ///        "v1-guild-members",
+    ///        "legacy-import"
+    ///      ]
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct ClanRefreshResponseClanRosterLastSuccessProvenance {
+        #[serde(
+            rename = "legacyTimestamp",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_timestamp: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub outcome: ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome,
+        pub source: ClanRefreshResponseClanRosterLastSuccessProvenanceSource,
+    }
+    ///`ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "success",
+    ///    "ambiguous-failure",
+    ///    "admission-limited",
+    ///    "source-rate-limited",
+    ///    "legacy-unknown"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome {
+        #[serde(rename = "success")]
+        Success,
+        #[serde(rename = "ambiguous-failure")]
+        AmbiguousFailure,
+        #[serde(rename = "admission-limited")]
+        AdmissionLimited,
+        #[serde(rename = "source-rate-limited")]
+        SourceRateLimited,
+        #[serde(rename = "legacy-unknown")]
+        LegacyUnknown,
+    }
+    impl ::std::fmt::Display
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::Success => f.write_str("success"),
+                Self::AmbiguousFailure => f.write_str("ambiguous-failure"),
+                Self::AdmissionLimited => f.write_str("admission-limited"),
+                Self::SourceRateLimited => f.write_str("source-rate-limited"),
+                Self::LegacyUnknown => f.write_str("legacy-unknown"),
+            }
+        }
+    }
+    impl ::std::str::FromStr
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "success" => Ok(Self::Success),
+                "ambiguous-failure" => Ok(Self::AmbiguousFailure),
+                "admission-limited" => Ok(Self::AdmissionLimited),
+                "source-rate-limited" => Ok(Self::SourceRateLimited),
+                "legacy-unknown" => Ok(Self::LegacyUnknown),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceOutcome {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`ClanRefreshResponseClanRosterLastSuccessProvenanceSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v1-guild-stats",
+    ///    "v1-guild-members",
+    ///    "legacy-import"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum ClanRefreshResponseClanRosterLastSuccessProvenanceSource {
+        #[serde(rename = "v1-guild-stats")]
+        V1GuildStats,
+        #[serde(rename = "v1-guild-members")]
+        V1GuildMembers,
+        #[serde(rename = "legacy-import")]
+        LegacyImport,
+    }
+    impl ::std::fmt::Display
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V1GuildStats => f.write_str("v1-guild-stats"),
+                Self::V1GuildMembers => f.write_str("v1-guild-members"),
+                Self::LegacyImport => f.write_str("legacy-import"),
+            }
+        }
+    }
+    impl ::std::str::FromStr
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v1-guild-stats" => Ok(Self::V1GuildStats),
+                "v1-guild-members" => Ok(Self::V1GuildMembers),
+                "legacy-import" => Ok(Self::LegacyImport),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str>
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for ClanRefreshResponseClanRosterLastSuccessProvenanceSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
     ///`ContractProof`
     ///
     /// <details><summary>JSON schema</summary>

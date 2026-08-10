@@ -2,6 +2,598 @@
   "components": {
     "parameters": {},
     "schemas": {
+      "ClanProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "clanCreateDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "clanId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "clanLifetimeXp": {
+            "pattern": "^(0|[1-9]\\d{0,40})$",
+            "type": "string"
+          },
+          "clanName": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "clanXp": {
+            "pattern": "^(0|[1-9]\\d{0,39})$",
+            "type": "string"
+          },
+          "discordInviteCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "guildPoints": {
+            "nullable": true,
+            "pattern": "^(0|[1-9]\\d{0,39})$",
+            "type": "string"
+          },
+          "isRecruiting": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "members": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "brawlhallaId": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "guildPoints": {
+                  "nullable": true,
+                  "pattern": "^(0|[1-9]\\d{0,39})$",
+                  "type": "string"
+                },
+                "joinDate": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "rank": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "xp": {
+                  "pattern": "^(0|[1-9]\\d{0,39})$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "brawlhallaId",
+                "name",
+                "rank",
+                "joinDate",
+                "xp",
+                "guildPoints"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "notice": {
+            "nullable": true,
+            "type": "string"
+          },
+          "profile": {
+            "additionalProperties": false,
+            "properties": {
+              "checkedAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "checkProvenance": {
+                "additionalProperties": false,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              },
+              "lastSuccessAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "lastSuccessProvenance": {
+                "additionalProperties": false,
+                "nullable": true,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "checkedAt",
+              "checkProvenance",
+              "lastSuccessAt",
+              "lastSuccessProvenance"
+            ],
+            "type": "object"
+          },
+          "roster": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "checkedAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "checkProvenance": {
+                "additionalProperties": false,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              },
+              "lastSuccessAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "lastSuccessProvenance": {
+                "additionalProperties": false,
+                "nullable": true,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "checkedAt",
+              "checkProvenance",
+              "lastSuccessAt",
+              "lastSuccessProvenance"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "clanId",
+          "clanName",
+          "clanCreateDate",
+          "clanXp",
+          "clanLifetimeXp",
+          "notice",
+          "tags",
+          "discordInviteCode",
+          "guildPoints",
+          "isRecruiting",
+          "profile",
+          "roster",
+          "members"
+        ],
+        "type": "object"
+      },
+      "ClanRefreshResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clan": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "clanCreateDate": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "clanId": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "clanLifetimeXp": {
+                "pattern": "^(0|[1-9]\\d{0,40})$",
+                "type": "string"
+              },
+              "clanName": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "clanXp": {
+                "pattern": "^(0|[1-9]\\d{0,39})$",
+                "type": "string"
+              },
+              "discordInviteCode": {
+                "nullable": true,
+                "type": "string"
+              },
+              "guildPoints": {
+                "nullable": true,
+                "pattern": "^(0|[1-9]\\d{0,39})$",
+                "type": "string"
+              },
+              "isRecruiting": {
+                "nullable": true,
+                "type": "boolean"
+              },
+              "members": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "brawlhallaId": {
+                      "exclusiveMinimum": true,
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "guildPoints": {
+                      "nullable": true,
+                      "pattern": "^(0|[1-9]\\d{0,39})$",
+                      "type": "string"
+                    },
+                    "joinDate": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "maxLength": 256,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "rank": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "xp": {
+                      "pattern": "^(0|[1-9]\\d{0,39})$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "brawlhallaId",
+                    "name",
+                    "rank",
+                    "joinDate",
+                    "xp",
+                    "guildPoints"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "notice": {
+                "nullable": true,
+                "type": "string"
+              },
+              "profile": {
+                "additionalProperties": false,
+                "properties": {
+                  "checkedAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "checkProvenance": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  },
+                  "lastSuccessAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lastSuccessProvenance": {
+                    "additionalProperties": false,
+                    "nullable": true,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "checkedAt",
+                  "checkProvenance",
+                  "lastSuccessAt",
+                  "lastSuccessProvenance"
+                ],
+                "type": "object"
+              },
+              "roster": {
+                "additionalProperties": false,
+                "nullable": true,
+                "properties": {
+                  "checkedAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "checkProvenance": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  },
+                  "lastSuccessAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lastSuccessProvenance": {
+                    "additionalProperties": false,
+                    "nullable": true,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "checkedAt",
+                  "checkProvenance",
+                  "lastSuccessAt",
+                  "lastSuccessProvenance"
+                ],
+                "type": "object"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "nullable": true,
+                "type": "array"
+              }
+            },
+            "required": [
+              "clanId",
+              "clanName",
+              "clanCreateDate",
+              "clanXp",
+              "clanLifetimeXp",
+              "notice",
+              "tags",
+              "discordInviteCode",
+              "guildPoints",
+              "isRecruiting",
+              "profile",
+              "roster",
+              "members"
+            ],
+            "type": "object"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshOutcome"
+          }
+        },
+        "required": [
+          "clan",
+          "refresh"
+        ],
+        "type": "object"
+      },
       "ContractProof": {
         "additionalProperties": false,
         "properties": {

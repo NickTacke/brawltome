@@ -153,6 +153,15 @@ export type InteractivePlayerRefreshReservation = {
   reservationTtlSeconds: number
 }
 
+export type InteractiveClanRefreshReservation = {
+  dedupeKey: string
+  operationKey: string
+  clanId: number
+  staleSections: ('profile' | 'roster')[]
+  provenance: OperationProvenance
+  reservationTtlSeconds: number
+}
+
 export type ReserveInteractiveRefreshResult =
   | { outcome: 'reserved'; operationId: string; reservationToken: string }
   | { outcome: 'already-active'; operationId: string }
@@ -165,7 +174,9 @@ export type ActiveInteractiveRefresh = {
 
 export interface InteractiveRefreshOperations {
   findActiveInteractivePlayerRefresh(dedupeKey: string): Promise<ActiveInteractiveRefresh | null>
+  findActiveInteractiveClanRefresh(dedupeKey: string): Promise<ActiveInteractiveRefresh | null>
   reserveInteractivePlayerRefresh(input: InteractivePlayerRefreshReservation): Promise<ReserveInteractiveRefreshResult>
+  reserveInteractiveClanRefresh(input: InteractiveClanRefreshReservation): Promise<ReserveInteractiveRefreshResult>
   activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult>
   activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
   rejectInteractiveRefresh(operationId: string, reservationToken: string, reason: string): Promise<TransitionResult>
@@ -191,6 +202,11 @@ export type OperationLease =
       payload: { brawlhallaId: number; staleSections: ('ranked' | 'stats')[] }
     })
   | (LeaseFields & { kind: 'leaderboard-1v1'; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
+  | (LeaseFields & {
+      kind: 'clan-refresh'
+      workClass: 'interactive'
+      payload: { clanId: number; staleSections: ('profile' | 'roster')[] }
+    })
 
 export type OperationFailure = {
   code: string
@@ -202,6 +218,7 @@ export type FencedResult = 'applied' | 'already-applied' | 'effect-conflict' | '
 export type SectionCheckpointResult = 'execute' | 'already-applied' | 'lease-lost'
 export type TransitionResult = 'transitioned' | 'lease-lost'
 export type RenewResult = 'renewed' | 'lease-lost'
+export type LeaseAuthorityResult = { outcome: 'renewed'; leaseExpiresAt: Date } | { outcome: 'lease-lost' }
 
 export interface RefreshOperationWorker {
   claim(
@@ -213,13 +230,14 @@ export interface RefreshOperationWorker {
   listAwaitingInteractiveRefreshes(): Promise<string[]>
   activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
   renew(lease: OperationLease, leaseMs: number): Promise<RenewResult>
+  renewWithAuthority(lease: OperationLease, leaseMs: number): Promise<LeaseAuthorityResult>
   beginInteractiveSection(
-    lease: Extract<OperationLease, { kind: 'interactive-player-refresh' }>,
-    section: 'ranked' | 'stats',
+    lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
+    section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<SectionCheckpointResult>
   commitInteractiveSection(
-    lease: Extract<OperationLease, { kind: 'interactive-player-refresh' }>,
-    section: 'ranked' | 'stats',
+    lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
+    section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<TransitionResult>
   commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult>
   complete(lease: OperationLease): Promise<TransitionResult>

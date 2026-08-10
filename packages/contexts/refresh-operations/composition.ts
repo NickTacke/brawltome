@@ -4,6 +4,7 @@ import { addInteractiveRefreshReservations } from './migrations/0003-interactive
 import { addInteractiveRefreshCheckpoints } from './migrations/0004-add-interactive-checkpoints'
 import { addLeaderboardOperationKind } from './migrations/0005-add-leaderboard-kind'
 import { exposeActiveLeaseFence } from './migrations/0006-expose-active-lease-fence'
+import { addClanRefresh } from './migrations/0007-add-clan-refresh'
 
 export { createPostgresRefreshOperations, type PostgresRefreshOperations } from './postgres'
 
@@ -14,4 +15,5 @@ export const refreshOperationsMigrationInventory = [
   addInteractiveRefreshCheckpoints,
   addLeaderboardOperationKind,
   exposeActiveLeaseFence,
+  addClanRefresh,
 ] as const

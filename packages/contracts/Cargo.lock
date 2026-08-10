@@ -89,6 +89,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "progenitor-client",
+ "regress",
  "reqwest",
  "serde",
  "serde_json",

@@ -1,15 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { accountsMigrationInventory } from '@brawltome/accounts/composition'
+import { clanMigrationInventory } from '@brawltome/clan/composition'
 import { playerMigrationInventory } from '@brawltome/player/composition'
+import { rankingMigrationInventory } from '@brawltome/ranking/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
+import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
 import postgres from 'postgres'
+import { globalMigrationInventory } from '../src/inventories'
 import { type Migration, checksumSql } from '../src/plan'
 import { migratePostgres } from '../src/postgres'
 
 const connectionString = process.env.DATABASE_URL
 
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
-  test('inventories refresh migrations as the stable 0001 through 0006 chain', () => {
+  test('inventories refresh migrations as the stable 0001 through 0007 chain', () => {
     expect(refreshOperationsMigrationInventory.map(({ identity }) => identity)).toEqual([
       'refresh-operations/0001',
       'refresh-operations/0002',
@@ -17,7 +22,39 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0004',
       'refresh-operations/0005',
       'refresh-operations/0006',
+      'refresh-operations/0007',
     ])
+  })
+
+  test('preserves the complete pre-Clans global history as an applied prefix', async () => {
+    const oldGlobalInventory = [
+      ...playerMigrationInventory,
+      ...refreshOperationsMigrationInventory.slice(0, 6),
+      ...requestAdmissionMigrationInventory,
+      ...accountsMigrationInventory,
+      ...rankingMigrationInventory,
+    ]
+    expect(globalMigrationInventory.slice(0, oldGlobalInventory.length)).toEqual(oldGlobalInventory)
+    expect(globalMigrationInventory.slice(oldGlobalInventory.length)).toEqual([
+      ...clanMigrationInventory,
+      refreshOperationsMigrationInventory[6],
+    ])
+
+    const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(2)
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
   })
 
   test('appends canonical ranked state after the applied Players prefix', async () => {
@@ -47,7 +84,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   })
 
-  test('appends interactive, leaderboard, and lease-fence migrations after an applied scheduling prefix', async () => {
+  test('appends interactive, leaderboard, lease-fence, and clan migrations after a scheduling prefix', async () => {
     const databaseName = `brawltome_migration_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -58,7 +95,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(4)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(5)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const history = await client<{ identity: string }[]>`
@@ -87,7 +124,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 5))).toBe(5)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(1)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 6))).toBe(1)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const [activeLeaseFence] = await client<{ function_name: string | null }[]>`
@@ -112,7 +149,6 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   })
 
   test('serializes fresh runners, applies once, reruns as a no-op, and rolls back failures', async () => {
-    const { globalMigrationInventory } = await import('../src/inventories')
     const databaseName = `brawltome_migrations_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -156,6 +192,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         const [requestAdmissionSchema] = await client<{ exists: boolean }[]>`
           SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'request_admission') AS exists
         `
+        const [clansSchema] = await client<{ exists: boolean }[]>`
+          SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'clans') AS exists
+        `
         const [playerRefreshEffects] = await client<{ table_name: string | null }[]>`
           SELECT to_regclass('players.interactive_refresh_effects')::text AS table_name
         `
@@ -185,6 +224,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(schema.exists).toBe(true)
         expect(refreshOperationsSchema.exists).toBe(true)
         expect(requestAdmissionSchema.exists).toBe(true)
+        expect(clansSchema.exists).toBe(true)
         expect(playerRefreshEffects.table_name).toBe('players.interactive_refresh_effects')
         expect(rankedProfiles.table_name).toBe('players.ranked_profiles')
         expect(rankedSoloQueue.table_name).toBe('players.ranked_solo_queue')

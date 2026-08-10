@@ -256,11 +256,11 @@ export class BhApiClient {
   }
 
   async getGuildStatsV1(guildId: number, opts: CallOptions = {}): Promise<BhV1Guild | null> {
-    return this.callV1(`/guild/stats?guild_id=${guildId}`, opts)
+    return this.callV1<BhV1Guild>(`/guild/stats?guild_id=${guildId}`, opts)
   }
 
   async getGuildMembersV1(guildId: number, opts: CallOptions = {}): Promise<BhV1GuildMembers | null> {
-    return this.callV1(`/guild/members?guild_id=${guildId}`, opts)
+    return this.callV1<BhV1GuildMembers>(`/guild/members?guild_id=${guildId}`, opts)
   }
 
   async getAllLegendsV1(opts: CallOptions = {}): Promise<BhV1Legend[]> {

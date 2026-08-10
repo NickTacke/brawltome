@@ -162,8 +162,12 @@ export function createCanonicalPlayerRefreshRouter(procedure = internalProcedure
 
 export function createV2PlayerRefreshRouter(procedure = internalProcedure) {
   return router({
-    byId: procedure.input(z.object({ id: z.number().int().positive() })).query(({ ctx, input }) => {
-      return getV2PlayerProfile(ctx.playerRepo, input.id)
+    byId: procedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+      const [player, clan] = await Promise.all([
+        getV2PlayerProfile(ctx.playerRepo, input.id),
+        ctx.clanRepo.getPlayerMembership(input.id),
+      ])
+      return player ? { ...player, clan } : null
     }),
     refresh: procedure.input(v2RefreshInputSchema).mutation(async ({ ctx, input }) => {
       const result = await requestPlayerRefresh(ctx, input)
