@@ -3,6 +3,7 @@ import {
   buildLeaderboardQueryString,
   displayedSoloStanding,
   parseLeaderboardSearchParams,
+  preferencesForLeaderboardUpdate,
   snapshotNotice,
 } from '../../../src/components/Leaderboard/utils'
 
@@ -59,6 +60,39 @@ describe('parseLeaderboardSearchParams', () => {
     expect(result.region).toBe('EU')
   })
 
+  it('uses canonical preferences when URL filters are absent or invalid', () => {
+    const preferences = {
+      version: 1 as const,
+      leaderboardBracket: '3v3' as const,
+      leaderboardRegion: 'JPN' as const,
+    }
+
+    expect(parseLeaderboardSearchParams(new URLSearchParams(), preferences)).toEqual({
+      bracket: '3v3',
+      region: 'JPN',
+      page: 1,
+    })
+    expect(parseLeaderboardSearchParams(new URLSearchParams('bracket=retired&region=retired'), preferences)).toEqual({
+      bracket: '3v3',
+      region: 'JPN',
+      page: 1,
+    })
+  })
+
+  it('keeps valid shared URL filters ahead of canonical preferences', () => {
+    const preferences = {
+      version: 1 as const,
+      leaderboardBracket: '3v3' as const,
+      leaderboardRegion: 'JPN' as const,
+    }
+
+    expect(parseLeaderboardSearchParams(new URLSearchParams('bracket=2v2&region=EU&page=4'), preferences)).toEqual({
+      bracket: '2v2',
+      region: 'EU',
+      page: 4,
+    })
+  })
+
   it('ignores legacy sort and order params', () => {
     const result = parseLeaderboardSearchParams(new URLSearchParams('sort=wins&order=asc'))
     expect(result).toEqual({ bracket: '1v1', region: 'all', page: 1 })
@@ -88,6 +122,23 @@ describe('validated snapshot presentation', () => {
     expect(snapshotNotice('stale')).toBe('Update delayed. Showing the last validated standings.')
     expect(snapshotNotice('unavailable')).toContain('first validated collection')
     expect(snapshotNotice('fresh')).toBeNull()
+  })
+})
+
+describe('preferencesForLeaderboardUpdate', () => {
+  const filters = { bracket: '1v1' as const, region: 'all' as const, page: 3 }
+
+  it('persists signed-in bracket and region changes as the complete V1 contract', () => {
+    expect(preferencesForLeaderboardUpdate(filters, { region: 'EU' }, true)).toEqual({
+      version: 1,
+      leaderboardBracket: '1v1',
+      leaderboardRegion: 'EU',
+    })
+  })
+
+  it('does not persist pagination or anonymous interaction', () => {
+    expect(preferencesForLeaderboardUpdate(filters, { page: 4 }, true)).toBeNull()
+    expect(preferencesForLeaderboardUpdate(filters, { bracket: '2v2' }, false)).toBeNull()
   })
 })
 

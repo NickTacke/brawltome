@@ -1,3 +1,4 @@
+import type { AccountPreferencesContract } from '@brawltome/contracts'
 import { buildQueryString, parseEnum, parseInteger } from '../../lib/searchParams'
 
 export const BRACKETS = [
@@ -28,6 +29,11 @@ export const REGION_IDS = REGIONS.map((r) => r.id) as readonly RegionId[]
 
 export const PAGE_SIZE = 20
 export const MAX_PAGE = 500
+export const DEFAULT_LEADERBOARD_PREFERENCES: AccountPreferencesContract = {
+  version: 1,
+  leaderboardBracket: '1v1',
+  leaderboardRegion: 'all',
+}
 
 export interface LeaderboardFilters {
   bracket: BracketId
@@ -73,11 +79,28 @@ export function isTeamEntry(entry: LeaderboardEntry): entry is TeamLeaderboardEn
   return 'brawlhallaIdOne' in entry && 'brawlhallaIdTwo' in entry
 }
 
-export function parseLeaderboardSearchParams(params: URLSearchParams): LeaderboardFilters {
+export function parseLeaderboardSearchParams(
+  params: URLSearchParams,
+  preferences: AccountPreferencesContract = DEFAULT_LEADERBOARD_PREFERENCES,
+): LeaderboardFilters {
   return {
-    bracket: parseEnum(params.get('bracket'), BRACKET_IDS, '1v1'),
-    region: parseEnum(params.get('region'), REGION_IDS, 'all'),
+    bracket: parseEnum(params.get('bracket'), BRACKET_IDS, preferences.leaderboardBracket),
+    region: parseEnum(params.get('region'), REGION_IDS, preferences.leaderboardRegion),
     page: parseInteger(params.get('page'), { min: 1, max: MAX_PAGE, default: 1 }),
+  }
+}
+
+export function preferencesForLeaderboardUpdate(
+  current: LeaderboardFilters,
+  next: Partial<LeaderboardFilters>,
+  signedIn: boolean,
+): AccountPreferencesContract | null {
+  if (!signedIn || (next.bracket === undefined && next.region === undefined)) return null
+  const merged = { ...current, ...next }
+  return {
+    version: 1,
+    leaderboardBracket: merged.bracket,
+    leaderboardRegion: merged.region,
   }
 }
 

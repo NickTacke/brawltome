@@ -10,6 +10,28 @@ export interface Account {
   createdAt: Date
 }
 
+export const LEADERBOARD_BRACKETS = ['1v1', '2v2', 'solo2v2', '3v3'] as const
+export const LEADERBOARD_REGIONS = ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+
+export interface AccountPreferences {
+  version: 1
+  leaderboardBracket: (typeof LEADERBOARD_BRACKETS)[number]
+  leaderboardRegion: (typeof LEADERBOARD_REGIONS)[number]
+}
+
+export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
+  version: 1,
+  leaderboardBracket: '1v1',
+  leaderboardRegion: 'all',
+}
+
+export class InvalidAccountPreferencesError extends Error {
+  constructor() {
+    super('Invalid account preferences')
+    this.name = 'InvalidAccountPreferencesError'
+  }
+}
+
 export interface DiscordSignInProfile {
   providerAccountId: string
   displayName: string
@@ -35,6 +57,8 @@ export interface Accounts {
   signInWithDiscord(profile: DiscordSignInProfile): Promise<AccountSignIn>
   authenticate(sessionToken: string | null): Promise<AccountAuthentication>
   signOut(sessionToken: string): Promise<void>
+  getPreferences(accountId: string | null): Promise<AccountPreferences>
+  updatePreferences(accountId: string, preferences: AccountPreferences): Promise<AccountPreferences>
 }
 
 export interface AccountsStore {
@@ -43,6 +67,8 @@ export interface AccountsStore {
   findSessionAccount(id: string): Promise<{ account: Account; expiresAt: Date } | null>
   extendSession(id: string, expiresAt: Date): Promise<void>
   deleteSession(id: string): Promise<void>
+  findPreferences(accountId: string): Promise<AccountPreferences | null>
+  upsertPreferences(accountId: string, preferences: AccountPreferences): Promise<AccountPreferences>
 }
 
 interface CreateAccountsOptions {
@@ -85,7 +111,30 @@ export function createAccounts({
     async signOut(sessionToken) {
       await store.deleteSession(hashSessionToken(sessionToken))
     },
+
+    async getPreferences(accountId) {
+      if (!accountId) return { ...DEFAULT_ACCOUNT_PREFERENCES }
+      return (await store.findPreferences(accountId)) ?? { ...DEFAULT_ACCOUNT_PREFERENCES }
+    },
+
+    async updatePreferences(accountId, preferences) {
+      if (!validPreferences(preferences)) throw new InvalidAccountPreferencesError()
+      return store.upsertPreferences(accountId, preferences)
+    },
   }
+}
+
+function validPreferences(preferences: unknown): preferences is AccountPreferences {
+  if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) return false
+  const value = preferences as Record<string, unknown>
+  const keys = Object.keys(value)
+  return (
+    keys.length === 3 &&
+    keys.every((key) => ['version', 'leaderboardBracket', 'leaderboardRegion'].includes(key)) &&
+    value.version === 1 &&
+    LEADERBOARD_BRACKETS.includes(value.leaderboardBracket as AccountPreferences['leaderboardBracket']) &&
+    LEADERBOARD_REGIONS.includes(value.leaderboardRegion as AccountPreferences['leaderboardRegion'])
+  )
 }
 
 function hashSessionToken(sessionToken: string): string {

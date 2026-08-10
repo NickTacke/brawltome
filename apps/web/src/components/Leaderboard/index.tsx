@@ -1,5 +1,6 @@
 'use client'
 
+import { saveAccountPreferences, useAccount, useAccountPreferences } from '@/lib/auth'
 import { trpc } from '@/lib/trpc'
 import {
   Card,
@@ -15,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@brawltome/ui'
+import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SoloLeaderboardRow, TeamLeaderboardRow } from './LeaderboardRow'
@@ -23,6 +25,7 @@ import { PaginationControls } from './PaginationControls'
 import {
   BRACKETS,
   type BracketId,
+  DEFAULT_LEADERBOARD_PREFERENCES,
   type LeaderboardEntry,
   type LeaderboardFilters,
   MAX_PAGE,
@@ -33,6 +36,7 @@ import {
   displayedSoloStanding,
   isTeamEntry,
   parseLeaderboardSearchParams,
+  preferencesForLeaderboardUpdate,
   snapshotNotice,
 } from './utils'
 
@@ -40,10 +44,15 @@ export function Leaderboard() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const { account, isLoading: accountLoading } = useAccount()
+  const preferenceAccountId = accountLoading ? undefined : (account?.id ?? null)
+  const { preferences, isLoading: preferencesLoading } = useAccountPreferences(preferenceAccountId)
+  const effectivePreferences = preferences ?? DEFAULT_LEADERBOARD_PREFERENCES
 
   const filters = useMemo<LeaderboardFilters>(
-    () => parseLeaderboardSearchParams(new URLSearchParams(searchParams.toString())),
-    [searchParams],
+    () => parseLeaderboardSearchParams(new URLSearchParams(searchParams.toString()), effectivePreferences),
+    [searchParams, effectivePreferences],
   )
   const { bracket, region, page } = filters
 
@@ -55,17 +64,33 @@ export function Leaderboard() {
   const [snapshotStatus, setSnapshotStatus] = useState<'fresh' | 'stale' | 'unavailable' | null>(null)
   const [observedAt, setObservedAt] = useState<string | null>(null)
   const snapshotRef = useRef<{ scopeKey: string; snapshotId: string } | null>(null)
+  const [preferenceError, setPreferenceError] = useState<string | null>(null)
+  const [preferencesSaving, setPreferencesSaving] = useState(false)
 
   const updateFilters = useCallback(
     (next: Partial<LeaderboardFilters>) => {
       const merged: LeaderboardFilters = { ...filters, ...next }
       const qs = buildLeaderboardQueryString(merged)
       router.push(`${pathname}?${qs}`, { scroll: false })
+
+      const preferenceUpdate = preferencesForLeaderboardUpdate(filters, next, account !== null)
+      if (preferenceUpdate && account) {
+        setPreferenceError(null)
+        setPreferencesSaving(true)
+        void saveAccountPreferences(queryClient, account.id, preferenceUpdate)
+          .catch((cause: unknown) => {
+            console.error('[preferences] failed to save leaderboard defaults', cause)
+            setPreferenceError('Could not save your leaderboard defaults. Your current filters still work.')
+          })
+          .finally(() => setPreferencesSaving(false))
+      }
     },
-    [router, pathname, filters],
+    [account, filters, pathname, queryClient, router],
   )
 
   useEffect(() => {
+    if (preferencesLoading) return
+
     let cancelled = false
     const scopeKey = `${bracket}:${region}`
     const scopeChanged = snapshotRef.current?.scopeKey !== scopeKey
@@ -124,7 +149,7 @@ export function Leaderboard() {
     return () => {
       cancelled = true
     }
-  }, [bracket, region, page])
+  }, [bracket, region, page, preferencesLoading])
 
   const currentKey = `${bracket}:${region}:${page}`
   const showLoading = isLoading || fetchedKey !== currentKey
@@ -150,7 +175,11 @@ export function Leaderboard() {
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground font-bold uppercase">Bracket:</span>
-            <Select value={bracket} onValueChange={(v) => updateFilters({ bracket: v as BracketId, page: 1 })}>
+            <Select
+              value={bracket}
+              disabled={accountLoading || preferencesSaving}
+              onValueChange={(v) => updateFilters({ bracket: v as BracketId, page: 1 })}
+            >
               <SelectTrigger className="w-[120px] font-bold">
                 <SelectValue placeholder="Bracket" />
               </SelectTrigger>
@@ -165,7 +194,11 @@ export function Leaderboard() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground font-bold uppercase">Region:</span>
-            <Select value={region} onValueChange={(v) => updateFilters({ region: v as RegionId, page: 1 })}>
+            <Select
+              value={region}
+              disabled={accountLoading || preferencesSaving}
+              onValueChange={(v) => updateFilters({ region: v as RegionId, page: 1 })}
+            >
               <SelectTrigger className="w-[180px] font-bold">
                 <SelectValue placeholder="Select Region" />
               </SelectTrigger>
@@ -195,6 +228,9 @@ export function Leaderboard() {
           <span className="font-semibold">{snapshotNotice(snapshotStatus)}</span>
           {observedAt && <span className="ml-2">Observed {new Date(observedAt).toLocaleString()}.</span>}
         </output>
+      )}
+      {preferenceError && (
+        <output className="block border-b border-border px-6 py-2 text-sm text-amber-300">{preferenceError}</output>
       )}
 
       <div className="overflow-x-auto">
