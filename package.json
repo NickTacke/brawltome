@@ -18,6 +18,7 @@
     "format:check": "biome format .",
     "architecture:check": "bun run --filter @brawltome/architecture check",
     "observability:validate": "sh deploy/observability/validate.sh",
+    "observability:network-preflight": "sh deploy/observability/networks/ensure.sh",
     "observability:test-alerts": "sh deploy/observability/tests/synthetic-discord-alerts.sh",
     "observability:test-pipeline": "sh deploy/observability/tests/synthetic-pipeline.sh",
     "parity:check": "bun run --filter @brawltome/launch-parity check && bun run --filter @brawltome/launch-parity test",

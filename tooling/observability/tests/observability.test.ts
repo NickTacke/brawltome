@@ -33,6 +33,14 @@ function dashboard(name: string) {
 }
 
 describe('observability deployment contract', () => {
+  test('exposes the safe network preflight operator command', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
+      scripts?: Record<string, string>
+    }
+
+    expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh deploy/observability/networks/ensure.sh')
+  })
+
   test('uses pinned dedicated services with resource and security limits', async () => {
     const compose = Bun.spawnSync({
       cmd: ['docker', 'compose', '-f', deploy('compose.yml'), 'config', '--format', 'json'],
@@ -84,6 +92,16 @@ describe('observability deployment contract', () => {
       'prometheus',
       'tempo',
     ]
+    const expectedNetworks: Record<string, string[]> = {
+      alertmanager: ['notifications', 'observability'],
+      'blackbox-exporter': ['application'],
+      grafana: ['observability'],
+      loki: ['observability'],
+      'node-exporter': ['observability'],
+      'otel-collector': ['application', 'observability'],
+      prometheus: ['application', 'observability'],
+      tempo: ['observability'],
+    }
 
     expect(Object.keys(rendered.services).sort()).toEqual(expected)
     expect(JSON.stringify(rendered)).not.toContain('merlynx')
@@ -107,9 +125,15 @@ describe('observability deployment contract', () => {
       } else {
         expect(service.ports ?? [], `${name} must not publish host ports`).toHaveLength(0)
       }
+      expect(Object.keys(service.networks ?? {}).sort(), `${name} network membership`).toEqual(expectedNetworks[name])
       expect(service.networks ?? {}).not.toHaveProperty('dokploy-ingress')
     }
     expect(rendered.networks ?? {}).not.toHaveProperty('dokploy-ingress')
+    expect(rendered.networks).toMatchObject({
+      application: { external: true, name: 'brawltome-internal' },
+      notifications: { external: true, name: 'brawltome-notifications' },
+      observability: { external: true, name: 'brawltome-observability' },
+    })
   })
 
   test('fixes retention and requires explicit quota-backed mounts', () => {

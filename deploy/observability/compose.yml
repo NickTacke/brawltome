@@ -275,8 +275,11 @@ services:
 
 networks:
   observability:
-    internal: true
-  notifications: {}
+    external: true
+    name: brawltome-observability
+  notifications:
+    external: true
+    name: brawltome-notifications
   application:
     external: true
     name: ${BRAWLTOME_NETWORK_NAME:?Set the dedicated BrawlTome application network}
