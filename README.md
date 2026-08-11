@@ -29,36 +29,33 @@
          ▼                  ▼          ▼
 ┌─────────────────────────────────────────────────┐
 │          API SERVER (Hono + tRPC)               │
-└──┬──────────┬──────────┬────────────────────────┘
-   │          │          │
-   ▼          ▼          ▼
-PostgreSQL   Redis    Brawlhalla API
-   ▲       (Streams)
-   │          │
-   │          ▼
-   │    ┌───────────────┐
-   └────│    WORKER      │
-        │  Queue consumers│
-        │  Janitor service│
-        └───────────────┘
+└──┬──────────────────────┬───────────────────────┘
+   │                      │
+   ▼                      ▼
+PostgreSQL          Brawlhalla API
+   ▲
+   │
+   │    ┌───────────────────────┐
+   └────│  OPERATIONS WORKER    │
+        │  Leased durable work  │
+        └───────────────────────┘
 ```
 
-- **API Server** enqueues jobs with concurrency 0 (no consumers)
-- **Worker Process** runs queue consumers and the Janitor
-- **Redis Streams** with priority lanes, deduplication, and dead letter queue
-- **Tiered TTL**: hot/warm/cold refresh strategy balances freshness vs API rate limits
+- **API Server** durably accepts operations and admission decisions in PostgreSQL
+- **Operations Worker** fairly claims fenced leases and executes work at least once
+- **PostgreSQL** owns jobs, schedules, retries, dead letters, deduplication, and source quotas
+- **LISTEN plus polling** provides optional low-latency wakeups without weakening recovery correctness
 
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
+| --- | --- |
 | Runtime | [Bun](https://bun.sh/) 1.2+ |
 | Backend | [Hono](https://hono.dev/) + [tRPC](https://trpc.io/) 11 |
 | Frontend | [Next.js](https://nextjs.org/) 16 (App Router, RSC) |
 | Desktop | [Tauri](https://tauri.app/) 2 (Rust + React) |
 | Discord | [discord.js](https://discord.js.org/) v14 |
-| Database | PostgreSQL 16 + [Drizzle ORM](https://orm.drizzle.team/) |
-| Queue | Redis 7 Streams |
+| Database and operational state | PostgreSQL 16 + [Drizzle ORM](https://orm.drizzle.team/) |
 | Styling | Tailwind CSS 4 + Shadcn UI (Radix) |
 | Linting | [Biome](https://biomejs.dev/) |
 
@@ -82,7 +79,7 @@ packages/
 ### Prerequisites
 
 - [Bun](https://bun.sh/) v1.2+
-- [Docker](https://www.docker.com/) (for PostgreSQL + Redis)
+- [Docker](https://www.docker.com/) (for PostgreSQL)
 - Brawlhalla API key ([dev.brawlhalla.com](https://dev.brawlhalla.com/))
 
 ### Setup
@@ -99,7 +96,6 @@ Copy `.env.example` and fill in your values:
 ```bash
 # apps/api/.env
 DATABASE_URL=postgres://brawltome:brawltome@localhost:5432/brawltome
-REDIS_URL=redis://localhost:6379
 BRAWLHALLA_API_KEY=your-key
 INTERNAL_API_SECRET=<openssl rand -hex 32>
 
@@ -124,9 +120,9 @@ bun run db:migrate
 ### Development
 
 ```bash
-bun run dev:api          # API server (localhost:3000)
-bun run dev:worker       # Background worker (queue consumers + janitor)
-bun run dev:web          # Frontend (localhost:3001)
+bun run dev:api                 # API server (localhost:3000)
+bun run dev:operations-worker   # PostgreSQL operations worker
+bun run dev:web                 # Frontend (localhost:3001)
 bun run dev:discord-bot  # Discord bot
 bun run dev:desktop      # Desktop overlay (Tauri)
 ```
@@ -149,18 +145,18 @@ The Dockerfile provides multi-stage builds with three targets:
 
 ```bash
 docker build --target api -t brawltome-api .
-docker build --target worker -t brawltome-worker .
+docker build --target operations-worker -t brawltome-operations-worker .
 docker build --target discord-bot -t brawltome-discord-bot .
 ```
 
-Multiple worker instances can run simultaneously. The Janitor uses a Redis distributed lock to ensure only one instance syncs rankings.
+Multiple worker instances can run simultaneously. PostgreSQL leases, fencing, and skip-locked claims coordinate work safely across replicas.
 
 ## Discord Bot
 
 Slash commands:
 
 | Command | Description |
-|---|---|
+| --- | --- |
 | `/player <name>` | Search and display player stats |
 | `/clan <name>` | Search and display clan info |
 | `/status` | API health check |

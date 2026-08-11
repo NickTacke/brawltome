@@ -19,8 +19,13 @@
       "@brawltome/telemetry": ["./packages/telemetry/src/index.ts"],
       "@brawltome/telemetry/node": ["./packages/telemetry/src/node.ts"],
       "@brawltome/player": ["./packages/contexts/player/index.ts"],
+      "@brawltome/player/v2-compatibility": ["./packages/contexts/player/v2-compatibility.ts"],
       "@brawltome/clan": ["./packages/contexts/clan/index.ts"],
+      "@brawltome/discovery": ["./packages/contexts/discovery/index.ts"],
+      "@brawltome/matchmaking": ["./packages/contexts/matchmaking/index.ts"],
       "@brawltome/ranking": ["./packages/contexts/ranking/index.ts"],
+      "@brawltome/request-admission": ["./packages/contexts/request-admission/index.ts"],
+      "@brawltome/refresh-operations": ["./packages/contexts/refresh-operations/index.ts"],
       "@brawltome/identity": ["./packages/contexts/identity/index.ts"],
       "@brawltome/api/router": ["./apps/api/src/router/index.ts"]
     }

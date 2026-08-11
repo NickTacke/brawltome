@@ -13,4 +13,3 @@ export {
   type LeaderboardMode,
   type RegionalLeaderboardScope,
 } from './v1-leaderboard-source'
-export { startSweep } from './commands/sweep-leaderboards'

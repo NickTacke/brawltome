@@ -212,6 +212,7 @@ function createSourceAdmission(
       domain,
       reservationKey: `${lease.operationId}:${section}:${lease.attemptNumber}:${sourceCall++}`,
       units: 1,
+      caller: lease.workClass === 'interactive' ? 'on-demand' : 'background',
     })
     if (!sourceAdmission) throw new Error('Source admission is unavailable')
     if (sourceAdmission.outcome === 'rate-limited') {
@@ -406,6 +407,7 @@ async function executeStatisticsCollection(
     domain: 'brawlhalla-v1',
     reservationKey: `${lease.operationId}:${lease.attemptNumber}:${lease.kind}`,
     units: 1,
+    caller: 'background',
   })
   if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
@@ -623,6 +625,7 @@ async function executeLeaderboard(
           domain: 'brawlhalla-v1',
           reservationKey: `${lease.operationId}:${lease.attemptNumber}:${input.mode}:${input.region}:${input.page}`,
           units: 1,
+          caller: 'background',
         })
         if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
         await renewLeaderboardLease()

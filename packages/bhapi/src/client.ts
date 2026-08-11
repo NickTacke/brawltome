@@ -1,5 +1,5 @@
 import type { Telemetry } from '@brawltome/telemetry'
-import { type Caller, RequestQueue, type RequestQueuePersistence } from './request-queue'
+import { type Caller, type RequestQueue, createBhApiRequestQueue } from './request-queue'
 import { validatePlayerGuild, validatePlayerStats, validatePlayerTeams } from './v1-validation'
 
 export class RateLimitError extends Error {
@@ -44,12 +44,17 @@ export type BhApiSourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
-  persistence?: RequestQueuePersistence
   baseUrl?: string
   fetchTimeoutMs?: number
   metrics?: BhApiMetricsSink
   telemetry?: Telemetry
+  queue?: RequestQueue
   beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
+  onRateLimited?: (event: {
+    domain: BhApiSourceDomain
+    path: string
+    retryAfterMs: number
+  }) => Promise<void>
 }
 
 export interface CallOptions {
@@ -65,6 +70,7 @@ export class BhApiClient {
   private readonly metrics?: BhApiMetricsSink
   private readonly telemetry?: Telemetry
   private readonly beforeRequest?: BhApiClientOptions['beforeRequest']
+  private readonly onRateLimited?: BhApiClientOptions['onRateLimited']
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
@@ -73,17 +79,8 @@ export class BhApiClient {
     this.metrics = opts.metrics
     this.telemetry = opts.telemetry
     this.beforeRequest = opts.beforeRequest
-    this.queue = new RequestQueue({
-      minSpacingMs: 150,
-      sustainedLimit: 180,
-      sustainedWindowMs: 15 * 60 * 1000,
-      onDemandHeadroom: opts.onDemandHeadroom ?? 30,
-      persistence: opts.persistence,
-    })
-  }
-
-  async init(): Promise<void> {
-    await this.queue.init()
+    this.onRateLimited = opts.onRateLimited
+    this.queue = opts.queue ?? createBhApiRequestQueue(opts.onDemandHeadroom)
   }
 
   remainingTokens(caller: Caller = 'background'): number {
@@ -179,7 +176,14 @@ export class BhApiClient {
       outcome = result === null ? 'not_found' : 'succeeded'
       return result
     } catch (error) {
-      if (error instanceof RateLimitError) outcome = 'rate_limited'
+      if (error instanceof RateLimitError) {
+        outcome = 'rate_limited'
+        try {
+          await this.onRateLimited?.({ domain, path, retryAfterMs: error.retryAfterMs })
+        } catch (backoffError) {
+          this.telemetry?.logger.error('source.backoff.persist_failed', backoffError, { domain })
+        }
+      }
       throw error
     } finally {
       const labels = { domain, outcome }

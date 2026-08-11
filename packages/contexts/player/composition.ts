@@ -6,7 +6,6 @@ import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
 import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overlays'
 import { addV2PlayerImport } from './migrations/0007-add-v2-player-import'
 
-export { discoverPlayer } from './commands/discover-player'
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
 export {
   createPostgresCareerPlayers,

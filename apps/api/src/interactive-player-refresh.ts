@@ -1,13 +1,13 @@
 import type { RefreshOutcomeContract } from '@brawltome/contracts'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
-import type { ActorAdmission, RefreshActor } from '@brawltome/request-admission'
+import type { ActorAdmission, AdmissionActor } from '@brawltome/request-admission'
 
 const temporarilyUnavailable = {
   outcome: 'temporarilyUnavailable' as const,
   retry: { kind: 'after' as const, afterSeconds: 30 },
 }
 
-type ActorResolution = RefreshActor | RefreshOutcomeContract
+type ActorResolution = AdmissionActor | RefreshOutcomeContract
 
 interface InteractivePlayerRefreshRequest {
   brawlhallaId: number

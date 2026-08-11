@@ -5,7 +5,6 @@
   "scripts": {
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",
-    "dev:v2-compatibility-worker": "bun run --filter @brawltome/api dev:v2-compatibility-worker",
     "dev:operations-worker": "bun run --filter @brawltome/api dev:operations-worker",
     "operations:dead-letters": "bun run --filter @brawltome/refresh-operations dead-letters --",
     "dev:desktop": "bun run --filter @brawltome/desktop dev",
@@ -30,5 +29,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0"
+  },
+  "dependencies": {
+    "hono": "^4.13.1"
   }
 }

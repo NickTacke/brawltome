@@ -5,10 +5,5 @@ export {
   type BhApiSourceDomain,
   type CallOptions,
 } from './client'
-export {
-  RequestQueue,
-  type Caller,
-  type RequestQueueOptions,
-  type RequestQueuePersistence,
-} from './request-queue'
+export { RequestQueue, type Caller, type RequestQueueOptions, createBhApiRequestQueue } from './request-queue'
 export * from './types'

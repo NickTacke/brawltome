@@ -67,7 +67,7 @@ beforeEach(async () => {
   try {
     await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions DISABLE TRIGGER USER')
     await control.unsafe(
-      'TRUNCATE request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, refresh_operations.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
+      'TRUNCATE request_admission.source_backoffs, request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, refresh_operations.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
     )
     await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions ENABLE TRIGGER USER')
   } finally {
@@ -112,7 +112,10 @@ describe('PostgreSQL interactive refresh admission', () => {
           reservationTtlSeconds: 30,
         })
         if (reserved.outcome === 'already-active') return reserved
-        const actor = await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.42' })
+        const actor = await admission.admitActor(
+          { kind: 'verified-anonymous', ip: '203.0.113.42' },
+          reserved.operationId,
+        )
         expect(actor.outcome).toBe('admitted')
         const source = await admission.admitSource({
           domain: 'brawlhalla-v0',
@@ -144,14 +147,117 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 1,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
-    expect(await admission.admitActor({ kind: 'authenticated', accountId: 'account-a', ip: '203.0.113.7' })).toEqual({
+    expect(
+      await admission.admitActorOnce({ kind: 'authenticated', accountId: 'account-a', ip: '203.0.113.7' }),
+    ).toEqual({
       outcome: 'admitted',
     })
     expect(
-      await admission.admitActor({ kind: 'authenticated', accountId: 'account-b', ip: '203.0.113.7' }),
+      await admission.admitActorOnce({ kind: 'authenticated', accountId: 'account-b', ip: '203.0.113.7' }),
     ).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: expect.any(Number) })
     expect((await admission.inspectUsage()).actorUnits).toBe(2)
     await admission.close()
+  })
+
+  test('preserves the per-account matchmaking ingest ceiling in an account-anchored window', async () => {
+    let firstCapturedAt: Date | undefined
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+      windowSeconds: 997,
+      afterWindowCaptured: async (capturedAt) => {
+        firstCapturedAt ??= capturedAt
+      },
+    })
+    try {
+      const admitted = await Promise.all(
+        Array.from({ length: 60 }, () =>
+          admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-ingest-a' }),
+        ),
+      )
+      expect(admitted.every(({ outcome }) => outcome === 'admitted')).toBe(true)
+      expect(
+        await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-ingest-a' }),
+      ).toMatchObject({
+        outcome: 'rate-limited',
+        retryAfterSeconds: expect.any(Number),
+      })
+      expect(await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-ingest-b' })).toEqual({
+        outcome: 'admitted',
+      })
+      const control = postgres(connectionString, { max: 1 })
+      try {
+        const [reservations] = await control<{ count: number }[]>`
+          SELECT count(*)::integer AS count FROM request_admission.actor_reservations
+        `
+        expect(reservations.count).toBe(0)
+        const [window] = await control<{ window_started_at: Date }[]>`
+          SELECT window_started_at FROM request_admission.actor_windows
+          WHERE domain = 'matchmaking-ingest'
+          ORDER BY window_started_at
+          LIMIT 1
+        `
+        if (!firstCapturedAt) throw new Error('Expected the actor window timestamp to be captured')
+        expect(window.window_started_at).toEqual(firstCapturedAt)
+      } finally {
+        await control.end()
+      }
+    } finally {
+      await admission.close()
+    }
+  })
+
+  test('does not let aligned refresh admission clear an active account-anchored ingest window', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+      windowSeconds: 60,
+    })
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      expect(await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-mixed-window' })).toEqual(
+        {
+          outcome: 'admitted',
+        },
+      )
+      await control`
+        UPDATE request_admission.actor_windows
+        SET units = 60, window_started_at = date_trunc('minute', clock_timestamp()) - interval '1 millisecond'
+        WHERE domain = 'matchmaking-ingest'
+      `
+      expect(await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.200' }, randomUUID())).toEqual({
+        outcome: 'admitted',
+      })
+      expect(
+        await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-mixed-window' }),
+      ).toMatchObject({ outcome: 'rate-limited' })
+    } finally {
+      await control.end()
+      await admission.close()
+    }
+  })
+
+  test('removes actor reservations after their reconciliation retention period', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+      actorReservationRetentionSeconds: 1,
+    })
+    const reservationKey = `expired-actor:${randomUUID()}`
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.201' }, reservationKey)
+      await control`
+        UPDATE request_admission.actor_reservations
+        SET admitted_at = clock_timestamp() - interval '2 seconds'
+        WHERE reservation_key = ${reservationKey}
+      `
+      await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'cleanup-trigger' })
+      expect(await admission.hasActorReservation(reservationKey)).toBe(false)
+    } finally {
+      await control.end()
+      await admission.close()
+    }
   })
 
   test('reconciles actor-admitted work after a crash before activation', async () => {
@@ -196,6 +302,145 @@ describe('PostgreSQL interactive refresh admission', () => {
     expect((await admission.inspectUsage()).actorUnits).toBe(1)
     expect(await admission.hasActorReservation(reservationKey)).toBe(true)
     await admission.close()
+  })
+
+  test('serializes distinct source reservations against one global rolling limit', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 3 },
+    })
+    try {
+      const results = await Promise.all(
+        Array.from({ length: 12 }, () =>
+          admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
+        ),
+      )
+      expect(results.filter(({ outcome }) => outcome === 'admitted')).toHaveLength(3)
+      expect(results.filter(({ outcome }) => outcome === 'rate-limited')).toHaveLength(9)
+    } finally {
+      await admission.close()
+    }
+  })
+
+  test('preserves distributed background headroom for on-demand source calls', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 3, 'brawlhalla-v1': 1 },
+      sourceBackgroundHeadroom: 1,
+    })
+    try {
+      for (let call = 0; call < 2; call++) {
+        expect(
+          await admission.admitSource({
+            domain: 'brawlhalla-v0',
+            reservationKey: randomUUID(),
+            units: 1,
+            caller: 'background',
+          }),
+        ).toMatchObject({ outcome: 'admitted' })
+      }
+      expect(
+        await admission.admitSource({
+          domain: 'brawlhalla-v0',
+          reservationKey: randomUUID(),
+          units: 1,
+          caller: 'background',
+        }),
+      ).toMatchObject({ outcome: 'rate-limited' })
+      expect(
+        await admission.admitSource({
+          domain: 'brawlhalla-v0',
+          reservationKey: randomUUID(),
+          units: 1,
+          caller: 'on-demand',
+        }),
+      ).toMatchObject({ outcome: 'admitted' })
+      expect(
+        await admission.admitSource({
+          domain: 'brawlhalla-v1',
+          reservationKey: randomUUID(),
+          units: 1,
+          caller: 'background',
+        }),
+      ).toMatchObject({ outcome: 'rate-limited' })
+      expect(
+        await admission.admitSource({
+          domain: 'brawlhalla-v1',
+          reservationKey: randomUUID(),
+          units: 1,
+          caller: 'on-demand',
+        }),
+      ).toMatchObject({ outcome: 'admitted' })
+    } finally {
+      await admission.close()
+    }
+  })
+
+  test('paces source calls globally across admission instances', async () => {
+    const options = {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+      minimumSourceSpacingMs: 75,
+    }
+    const first = createPostgresRequestAdmission(connectionString, options)
+    const second = createPostgresRequestAdmission(connectionString, options)
+    try {
+      await first.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })
+      const startedAt = performance.now()
+      await second.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })
+      expect(performance.now() - startedAt).toBeGreaterThanOrEqual(60)
+    } finally {
+      await first.close()
+      await second.close()
+    }
+  })
+
+  test('keeps source reservations inside a rolling window across an aligned boundary and restart', async () => {
+    let delayed = false
+    const options = {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 1 },
+      windowSeconds: 1,
+      afterWindowCaptured: async () => {
+        if (delayed) return
+        delayed = true
+        await Bun.sleep(1_100)
+      },
+    }
+    const first = createPostgresRequestAdmission(connectionString, options)
+    expect(await first.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })).toMatchObject({
+      outcome: 'admitted',
+    })
+    await first.close()
+
+    const restarted = createPostgresRequestAdmission(connectionString, options)
+    try {
+      expect(
+        await restarted.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
+      ).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: 1 })
+    } finally {
+      await restarted.close()
+    }
+  })
+
+  test('shares provider backoff across admission instances', async () => {
+    const first = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+    })
+    const second = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+    })
+    try {
+      await first.pauseSource('brawlhalla-v0', 30)
+      expect(
+        await second.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
+      ).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: expect.any(Number) })
+    } finally {
+      await first.close()
+      await second.close()
+    }
   })
 
   test('uses one database timestamp when a transaction crosses a window boundary', async () => {
