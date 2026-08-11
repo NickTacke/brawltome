@@ -134,7 +134,6 @@ async function removeEffectDelay(client: ReturnType<typeof postgres>): Promise<v
 function apiEnvironment(port: number): Record<string, string> {
   return {
     DATABASE_URL: connectionString,
-    REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
     INTERNAL_API_SECRET: 'runtime-process-test-secret-32-characters',
     METRICS_SCRAPE_SECRET: 'runtime-process-metrics-secret-32-chars',
     REFRESH_TRUST_COOKIE_SECRET: 'runtime-process-refresh-trust-secret-32-characters',

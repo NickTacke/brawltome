@@ -108,6 +108,22 @@ describe('V1 ranked leaderboard source', () => {
     await expect(fetchLeaderboardPage({ mode: '3v3', region: 'all' as never, page: 1 }, { fetcher })).rejects.toThrow()
   })
 
+  test('reports provider Retry-After before classifying a rate limit for durable retry', async () => {
+    const backoffs: number[] = []
+    await expect(
+      fetchLeaderboardPage(
+        { mode: '1v1', region: 'EU', page: 1 },
+        {
+          fetcher: async () => new Response('busy', { status: 429, headers: { 'retry-after': '12' } }),
+          onRateLimited: async (seconds) => {
+            backoffs.push(seconds)
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'source_unavailable', retryable: true })
+    expect(backoffs).toEqual([13])
+  })
+
   test('classifies response drift and transport failures for durable retries', async () => {
     const malformed = () => Promise.resolve(new Response(JSON.stringify({ rankings: [{}], total_pages: 1 })))
     const unavailable = () => Promise.resolve(new Response('busy', { status: 503 }))

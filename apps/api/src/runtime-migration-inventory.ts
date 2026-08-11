@@ -10,7 +10,7 @@ import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
 export const runtimeMigrationInventory = [
   ...playerMigrationInventory.slice(0, 3),
   ...refreshOperationsMigrationInventory.slice(0, 6),
-  ...requestAdmissionMigrationInventory,
+  ...requestAdmissionMigrationInventory.slice(0, 2),
   ...accountsMigrationInventory.slice(0, 2),
   rankingMigrationInventory[0],
   clanMigrationInventory[0],
@@ -42,4 +42,5 @@ export const runtimeMigrationInventory = [
   statisticsMigrationInventory[2],
   refreshOperationsMigrationInventory[15],
   statisticsMigrationInventory[3],
+  requestAdmissionMigrationInventory[2],
 ] as const

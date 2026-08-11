@@ -11,6 +11,7 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run architecture:check
+      - run: docker compose config --quiet
 
   observability:
     runs-on: ubuntu-latest
@@ -65,10 +66,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
       postgres:
         image: postgres:16
         env:
@@ -84,7 +81,6 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://brawltome:brawltome@localhost:5432/brawltome
-      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

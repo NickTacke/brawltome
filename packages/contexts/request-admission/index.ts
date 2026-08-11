@@ -1,12 +1,14 @@
-export type RefreshActor =
+export type AdmissionActor =
   | { kind: 'verified-anonymous'; ip: string }
   | { kind: 'authenticated'; accountId: string; ip: string }
   | { kind: 'discord'; discordUserId: string }
   | { kind: 'desktop'; ip: string }
+  | { kind: 'matchmaking-ingest'; accountId: string }
 
 export type ActorAdmissionResult = { outcome: 'admitted' } | { outcome: 'rate-limited'; retryAfterSeconds: number }
 
 export type SourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
+export type SourceCaller = 'on-demand' | 'background'
 
 export type SourceAdmissionResult =
   | { outcome: 'admitted'; deduplicated: boolean }
@@ -19,7 +21,8 @@ export type SourceQuotaUsage = {
 }
 
 export interface ActorAdmission {
-  admitActor(actor: RefreshActor, reservationKey?: string): Promise<ActorAdmissionResult>
+  admitActor(actor: AdmissionActor, reservationKey: string): Promise<ActorAdmissionResult>
+  admitActorOnce(actor: AdmissionActor): Promise<ActorAdmissionResult>
   hasActorReservation(reservationKey: string): Promise<boolean>
 }
 
@@ -28,5 +31,7 @@ export interface SourceAdmission {
     domain: SourceDomain
     reservationKey: string
     units: number
+    caller?: SourceCaller
   }): Promise<SourceAdmissionResult>
+  pauseSource(domain: SourceDomain, retryAfterSeconds: number): Promise<void>
 }

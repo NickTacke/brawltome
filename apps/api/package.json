@@ -8,7 +8,6 @@
   },
   "scripts": {
     "dev": "bun run --watch src/serve.ts",
-    "dev:v2-compatibility-worker": "bun run --watch src/worker.ts",
     "dev:operations-worker": "bun run --watch src/operations-worker.ts",
     "build": "bun build src/serve.ts src/operations-worker.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit"
@@ -34,7 +33,6 @@
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.39.0",
     "hono": "^4.7.0",
-    "ioredis": "^5.8.0",
     "postgres": "^3.4.0",
     "superjson": "^2.2.6",
     "zod": "^3.24.0"

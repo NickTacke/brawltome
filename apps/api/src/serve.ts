@@ -11,19 +11,12 @@ import {
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
-import {
-  createMetricsRegistry,
-  createQueue,
-  createR2Client,
-  initGameData,
-  verifyTurnstileResult,
-} from '@brawltome/shared'
+import { createR2Client, initGameData, verifyTurnstileResult } from '@brawltome/shared'
 import { createPostgresStatistics } from '@brawltome/statistics/composition'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import Redis from 'ioredis'
 import { createDatabasePlayerReferenceQueries } from './adapters/player-reference.database'
 import { SESSION_COOKIE, SESSION_COOKIE_TTL_SEC, buildSessionCookie, parseCookies } from './auth/cookies'
 import { internalSecretValid } from './auth/internal-secret'
@@ -66,22 +59,6 @@ const telemetry = createRuntimeTelemetry('api')
 const runtimeConfig = readRuntimeConfig(process.env)
 const accountsRuntime = createPostgresAccounts(databaseUrl)
 const { accounts } = accountsRuntime
-const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379')
-const metrics = createMetricsRegistry(redis)
-
-// API only enqueues -- concurrency 0 means no consumer loop
-const rankedQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
-  redis,
-  'refresh-ranked',
-  async () => {},
-  { concurrency: 0, maxDepth: 2000, dedupKey: (d) => String(d.brawlhallaId), metrics },
-)
-const statsQueue = createQueue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>(
-  redis,
-  'refresh-stats',
-  async () => {},
-  { concurrency: 0, maxDepth: 2000, dedupKey: (d) => String(d.brawlhallaId), metrics },
-)
 const playerRepo = createPlayerRepo(db)
 const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
 const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
@@ -140,12 +117,6 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
     { name: 'database-postgres', close: closeDatabase },
-    {
-      name: 'redis',
-      close: async () => {
-        await redis.quit()
-      },
-    },
     { name: 'readiness-postgres', close: postgresReadiness.close },
     { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],
@@ -159,11 +130,7 @@ console.log(
 
 const sharedCtx = {
   db,
-  redis,
-  metrics,
   telemetry,
-  rankedQueue,
-  statsQueue,
   playerRepo,
   playerReferenceQueries,
   discoveryQueries: discovery,
@@ -237,8 +204,8 @@ app.route(
   createMatchmakingRoutes({
     matchRepo,
     r2,
-    redis,
-    metrics,
+    requestAdmission,
+    telemetry,
     accounts,
     enabled: matchmakingLive,
     observeSourceCall: (domain, work) => observeSourceCall(telemetry, domain, work),
@@ -323,29 +290,6 @@ app.get('/metrics', async (c) => {
   return c.body(renderPrometheus(telemetry.metrics.snapshot()), 200, {
     'content-type': 'text/plain; version=0.0.4; charset=utf-8',
     'cache-control': 'no-store',
-  })
-})
-
-app.get('/internal/metrics', async (c) => {
-  const secret = c.req.header('x-internal-secret')
-  if (!internalSecretValid(secret, process.env.INTERNAL_API_SECRET)) {
-    return c.json({ error: 'unauthorized' }, 401)
-  }
-
-  const queues = await metrics.snapshotAllQueues()
-  const tokensOnDemand = await metrics.getScalar('bhapi:tokens_on_demand_remaining')
-  const tokensBackground = await metrics.getScalar('bhapi:tokens_background_remaining')
-  const pausedUntilMs = await metrics.getScalar('bhapi:paused_until_ms')
-  const counters = await metrics.snapshotCounters()
-
-  return c.json({
-    queues,
-    counters,
-    bhapi: {
-      tokens_on_demand_remaining: tokensOnDemand,
-      tokens_background_remaining: tokensBackground,
-      paused_until_ms: pausedUntilMs,
-    },
   })
 })
 

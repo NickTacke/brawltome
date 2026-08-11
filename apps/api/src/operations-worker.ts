@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { createPostgresAccounts } from '@brawltome/accounts/composition'
-import { BhApiClient, RateLimitError } from '@brawltome/bhapi'
+import { BhApiClient, type BhApiClientOptions, RateLimitError, createBhApiRequestQueue } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
@@ -43,8 +43,9 @@ import { createRuntimeTelemetry } from './telemetry'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) throw new Error('DATABASE_URL is required')
-const apiKey = process.env.BRAWLHALLA_API_KEY
-if (!apiKey) throw new Error('BRAWLHALLA_API_KEY is required')
+const configuredApiKey = process.env.BRAWLHALLA_API_KEY
+if (!configuredApiKey) throw new Error('BRAWLHALLA_API_KEY is required')
+const apiKey: string = configuredApiKey
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
@@ -60,7 +61,20 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
     'brawlhalla-v0': 180,
     'brawlhalla-v1': readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT),
   },
+  sourceBackgroundHeadroom: 30,
+  minimumSourceSpacingMs: 150,
 })
+const bhapiQueue = createBhApiRequestQueue()
+function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeRequest']): BhApiClient {
+  return new BhApiClient({
+    apiKey,
+    telemetry,
+    queue: bhapiQueue,
+    beforeRequest,
+    onRateLimited: ({ domain, retryAfterMs }) =>
+      requestAdmission.pauseSource(domain, Math.max(1, Math.ceil(retryAfterMs / 1_000))),
+  })
+}
 const playerRepo = createPlayerRepo(db)
 const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
@@ -230,22 +244,19 @@ try {
         sourceAdmission: requestAdmission,
         executeEffect: async (lease) => {
           if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
-          const admittedBhapi = new BhApiClient({
-            apiKey,
-            telemetry,
-            beforeRequest: async ({ domain }) => {
-              const admission = await requestAdmission.admitSource({
-                domain,
-                reservationKey: `${lease.operationId}:primary-player:${lease.attemptNumber}`,
-                units: 1,
-              })
-              if (admission.outcome === 'rate-limited') {
-                throw new RateLimitError(
-                  `${domain} PostgreSQL source admission is rate limited`,
-                  admission.retryAfterSeconds * 1_000,
-                )
-              }
-            },
+          const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
+            const admission = await requestAdmission.admitSource({
+              domain,
+              reservationKey: `${lease.operationId}:primary-player:${lease.attemptNumber}`,
+              units: 1,
+              caller: 'background',
+            })
+            if (admission.outcome === 'rate-limited') {
+              throw new RateLimitError(
+                `${domain} PostgreSQL source admission is rate limited`,
+                admission.retryAfterSeconds * 1_000,
+              )
+            }
           })
           await accounts.accounts.resolvePrimaryPlayerVerification(
             lease.payload.value,
@@ -254,10 +265,14 @@ try {
           return operations.commitProofEffect(lease)
         },
         ranking,
-        leaderboardSource: { fetchPage: fetchLeaderboardPage },
+        leaderboardSource: {
+          fetchPage: (input) =>
+            fetchLeaderboardPage(input, {
+              onRateLimited: (retryAfterSeconds) => requestAdmission.pauseSource('brawlhalla-v1', retryAfterSeconds),
+            }),
+        },
         statistics,
-        executeStatisticsCollection: (lease) =>
-          collectStatisticsEvidence(new BhApiClient({ apiKey, telemetry }), lease),
+        executeStatisticsCollection: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
         executePlayerProjection: async (lease) => {
           await discovery.deliverPendingPlayers(
             playerDiscoverySource,
@@ -298,21 +313,17 @@ try {
         },
         executeSection: async (lease, section, admitSourceCall, caller) => {
           await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
-          const admittedBhapi = new BhApiClient({
-            apiKey,
-            telemetry,
-            beforeRequest: async ({ domain }) => {
-              if (lease.workClass === 'primary-monitoring') {
-                const snapshot = await accounts.primaryMonitoring.readSnapshot()
-                const current = snapshot.targets.some(
-                  (target) =>
-                    target.assignmentId === lease.payload.assignmentId &&
-                    target.brawlhallaId === lease.payload.brawlhallaId,
-                )
-                if (!current) throw new Error('Primary Player assignment is no longer current')
-              }
-              await admitSourceCall(domain)
-            },
+          const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
+            if (lease.workClass === 'primary-monitoring') {
+              const snapshot = await accounts.primaryMonitoring.readSnapshot()
+              const current = snapshot.targets.some(
+                (target) =>
+                  target.assignmentId === lease.payload.assignmentId &&
+                  target.brawlhallaId === lease.payload.brawlhallaId,
+              )
+              if (!current) throw new Error('Primary Player assignment is no longer current')
+            }
+            await admitSourceCall(domain)
           })
           if (section === 'ranked') {
             await refreshCanonicalRankedPlayer(
@@ -369,11 +380,7 @@ try {
           }
         },
         executeRankedPulse: async (lease, admitSourceCall) => {
-          const admittedBhapi = new BhApiClient({
-            apiKey,
-            telemetry,
-            beforeRequest: ({ domain }) => admitSourceCall(domain),
-          })
+          const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
           await refreshRankedPlayerPulse(
             rankedPlayers,
             {
@@ -410,11 +417,7 @@ try {
             leaseExpiresAt: new Date(0),
           }),
         executeClanSection: async (lease, section, admitSourceCall, leaseExpiresAt) => {
-          const admittedBhapi = new BhApiClient({
-            apiKey,
-            telemetry,
-            beforeRequest: ({ domain }) => admitSourceCall(domain),
-          })
+          const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
           const result = await processRefreshClanSection(
             clans,
             admittedBhapi,

@@ -16,6 +16,7 @@ COPY packages/contexts/clan/package.json packages/contexts/clan/
 COPY packages/contexts/ranking/package.json packages/contexts/ranking/
 COPY packages/contexts/request-admission/package.json packages/contexts/request-admission/
 COPY packages/contexts/refresh-operations/package.json packages/contexts/refresh-operations/
+COPY packages/contexts/statistics/package.json packages/contexts/statistics/
 COPY packages/contexts/discovery/package.json packages/contexts/discovery/
 COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
 COPY packages/replay-format/package.json packages/replay-format/

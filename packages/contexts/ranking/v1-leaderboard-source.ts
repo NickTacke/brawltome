@@ -148,11 +148,21 @@ const sourceModes: Record<LeaderboardMode, string> = {
   '3v3': '3v3',
 }
 
+function retryAfterSeconds(response: Response): number {
+  const value = response.headers.get('retry-after') ?? ''
+  const seconds = Number.parseInt(value, 10)
+  if (Number.isFinite(seconds) && seconds > 0) return seconds + 1
+  const dateMs = Date.parse(value)
+  if (Number.isFinite(dateMs) && dateMs > Date.now()) return Math.ceil((dateMs - Date.now()) / 1_000) + 1
+  return 6
+}
+
 export async function fetchLeaderboardPage(
   input: { mode: LeaderboardMode; region: RegionalLeaderboardScope; page: number },
   dependencies: {
     fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
     timeoutMs?: number
+    onRateLimited?: (retryAfterSeconds: number) => Promise<void>
   } = {},
 ): Promise<SourceLeaderboardPage> {
   if (!leaderboardModes.includes(input.mode)) {
@@ -179,6 +189,7 @@ export async function fetchLeaderboardPage(
     )
   }
   if (!response.ok) {
+    if (response.status === 429) await dependencies.onRateLimited?.(retryAfterSeconds(response))
     if (response.status === 404) {
       throw new LeaderboardSourceError(
         'source_not_found',

@@ -58,6 +58,7 @@ export type MetricName =
   | 'source_quota_used'
   | 'source_quota_limit'
   | 'refresh_failures_total'
+  | 'matchmaking_ingest_total'
   | 'discord_interactions_total'
 
 export type MetricLabels = Readonly<Record<string, string>>
@@ -212,6 +213,21 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Refresh failures',
     labels: { kind: operationKind, failure_category: failureCategory },
+  },
+  matchmaking_ingest_total: {
+    kind: 'counter',
+    help: 'Matchmaking replay ingest outcomes',
+    labels: {
+      outcome: [
+        'succeeded',
+        'rate_limited',
+        'oversize',
+        'validation_error',
+        'parse_error',
+        'rejected',
+        'dependency_failure',
+      ],
+    },
   },
   discord_interactions_total: {
     kind: 'counter',
