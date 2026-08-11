@@ -7,7 +7,7 @@ import {
 } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
 import { createPostgresReadiness } from '../src/postgres-readiness'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 import { runtimeMigrationInventory } from '../src/runtime-migration-inventory'
 
@@ -699,6 +699,50 @@ describe('durable Refresh Operations', () => {
     expect(state.attempts.every(({ outcome, error }) => outcome && error?.code === 'proof_execution_failed')).toBe(true)
     expect(state.effects).toHaveLength(0)
     await worker.close()
+  })
+
+  test('defers retry-aware source failures without consuming the durable attempt budget', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const deferred = await operations.accept({
+      dedupeKey: `source-deferral:${randomUUID()}`,
+      operationKey: `source-deferral:${randomUUID()}`,
+      workClass: 'maintenance',
+      payload: { value: 'source-deferral' },
+      provenance: { source: 'integration-test', requestedBy: 'incident-220' },
+      maxAttempts: 1,
+    })
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      expect(
+        await runOneRefreshOperation(operations, 'source-deferral-worker', {
+          leaseMs: 1_000,
+          retryDelayMs: 1,
+          admission: testAdmission,
+          executeEffect: async () => {
+            throw new SourceAdmissionLimitedError(37)
+          },
+        }),
+      ).toBe(true)
+
+      const state = await operations.inspect(deferred.operationId)
+      expect(state.operation).toMatchObject({
+        status: 'pending',
+        attempt_count: 0,
+        last_error: {
+          code: 'source_rate_limited',
+          message: 'Source admission is rate limited',
+          retryable: true,
+        },
+      })
+      expect(state.attempts).toHaveLength(0)
+    } finally {
+      await control`
+        DELETE FROM refresh_operations.operations
+        WHERE id = ${deferred.operationId}
+      `
+      await control.end()
+      await operations.close()
+    }
   })
 
   test('coalesces missed windows once and retains anchored history after repository restart', async () => {

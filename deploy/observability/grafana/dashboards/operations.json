@@ -35,7 +35,11 @@
         "wideLayout": true
       },
       "targets": [
-        { "expr": "min by (runtime) (probe_success{job=\"readiness\"})", "legendFormat": "{{runtime}}", "refId": "A" }
+        {
+          "expr": "min by (runtime, generation) (probe_success{job=\"readiness\"})",
+          "legendFormat": "{{runtime}} {{generation}}",
+          "refId": "A"
+        }
       ],
       "title": "Runtime readiness",
       "type": "stat"
@@ -51,8 +55,8 @@
       },
       "targets": [
         {
-          "expr": "time() - max by (runtime) (worker_heartbeat_timestamp_seconds)",
-          "legendFormat": "{{runtime}}",
+          "expr": "time() - max by (runtime, generation) (worker_heartbeat_timestamp_seconds)",
+          "legendFormat": "{{runtime}} {{generation}}",
           "refId": "A"
         }
       ],
@@ -70,8 +74,8 @@
       },
       "targets": [
         {
-          "expr": "max by (work_class) (operation_oldest_pending_age_ms)",
-          "legendFormat": "{{work_class}}",
+          "expr": "max by (generation, work_class) (operation_oldest_pending_age_ms)",
+          "legendFormat": "{{generation}} {{work_class}}",
           "refId": "A"
         }
       ],
@@ -87,7 +91,13 @@
         "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "targets": [{ "expr": "max by (kind) (schedule_lateness_ms)", "legendFormat": "{{kind}}", "refId": "A" }],
+      "targets": [
+        {
+          "expr": "max by (generation, kind) (schedule_lateness_ms)",
+          "legendFormat": "{{generation}} {{kind}}",
+          "refId": "A"
+        }
+      ],
       "title": "Schedule lateness",
       "type": "timeseries"
     },
@@ -102,8 +112,8 @@
       },
       "targets": [
         {
-          "expr": "max by (work_class, kind) (operation_dead_letters)",
-          "legendFormat": "{{work_class}} / {{kind}}",
+          "expr": "max by (generation, work_class, kind) (operation_dead_letters)",
+          "legendFormat": "{{generation}} / {{work_class}} / {{kind}}",
           "refId": "A"
         }
       ],
@@ -121,8 +131,8 @@
       },
       "targets": [
         {
-          "expr": "max by (domain) (source_quota_used) / clamp_min(max by (domain) (source_quota_limit), 1)",
-          "legendFormat": "{{domain}}",
+          "expr": "max by (generation, domain) (source_quota_used) / clamp_min(max by (generation, domain) (source_quota_limit), 1)",
+          "legendFormat": "{{generation}} {{domain}}",
           "refId": "A"
         }
       ],
@@ -140,8 +150,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (kind, failure_category) (increase(refresh_failures_total[$__rate_interval]))",
-          "legendFormat": "{{kind}} / {{failure_category}}",
+          "expr": "sum by (generation, kind, failure_category) (increase(refresh_failures_total[$__rate_interval]))",
+          "legendFormat": "{{generation}} / {{kind}} / {{failure_category}}",
           "refId": "A"
         }
       ],
@@ -194,8 +204,8 @@
       },
       "targets": [
         {
-          "expr": "min by (runtime) (up{job=~\"api|operations-worker|web|discord\"})",
-          "legendFormat": "{{runtime}}",
+          "expr": "min by (runtime, generation) (up{job=~\"api|operations-worker|web|discord\"})",
+          "legendFormat": "{{runtime}} {{generation}}",
           "refId": "A"
         }
       ],

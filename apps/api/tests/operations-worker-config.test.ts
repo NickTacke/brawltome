@@ -3,6 +3,7 @@ import {
   leaderboardScheduleDefinitions,
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
+  readSourceBackgroundHeadroom,
 } from '../src/operations-worker-config'
 import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
 
@@ -57,10 +58,13 @@ describe('operations worker configuration', () => {
     }
   })
 
-  test('enforces the audited 150-request V1 source ceiling across runtimes', () => {
-    expect(readBrawlhallaV1RequestLimit(undefined)).toBe(150)
-    expect(readBrawlhallaV1RequestLimit('150')).toBe(150)
-    expect(() => readBrawlhallaV1RequestLimit('151')).toThrow('BRAWLHALLA_V1_REQUEST_LIMIT')
+  test('validates the source ceiling and explicit background headroom', () => {
+    expect(readBrawlhallaV1RequestLimit(undefined)).toBe(102)
+    expect(readBrawlhallaV1RequestLimit('102')).toBe(102)
+    expect(() => readBrawlhallaV1RequestLimit('103')).toThrow('BRAWLHALLA_V1_REQUEST_LIMIT')
+    expect(readSourceBackgroundHeadroom(undefined, 102)).toBe(30)
+    expect(readSourceBackgroundHeadroom('30', 102)).toBe(30)
+    expect(() => readSourceBackgroundHeadroom('102', 102)).toThrow('SOURCE_BACKGROUND_HEADROOM')
   })
 
   test('defines four deterministic staggered schedules in the existing leaderboard work class', () => {

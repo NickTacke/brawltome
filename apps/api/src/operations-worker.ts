@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { createPostgresAccounts } from '@brawltome/accounts/composition'
-import { BhApiClient, type BhApiClientOptions, RateLimitError, createBhApiRequestQueue } from '@brawltome/bhapi'
+import { BhApiClient, type BhApiClientOptions, createBhApiRequestQueue } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
@@ -30,10 +30,15 @@ import {
   leaderboardScheduleDefinitions,
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
+  readSourceBackgroundHeadroom,
 } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
 import { createPostgresReadiness } from './postgres-readiness'
-import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
+import {
+  SourceAdmissionLimitedError,
+  reconcileInteractiveAdmissions,
+  runOneRefreshOperation,
+} from './refresh-operations-worker'
 import { readHealthPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { runtimeMigrationInventory } from './runtime-migration-inventory'
@@ -49,6 +54,11 @@ const apiKey: string = configuredApiKey
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
+const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
+const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
+  process.env.SOURCE_BACKGROUND_HEADROOM,
+  brawlhallaV1RequestLimit,
+)
 const accounts = createPostgresAccounts(connectionString)
 const discovery = createPostgresDiscovery(connectionString)
 const operations = createPostgresRefreshOperations(connectionString, {
@@ -59,9 +69,9 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
   authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
   sourceLimits: {
     'brawlhalla-v0': 180,
-    'brawlhalla-v1': readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT),
+    'brawlhalla-v1': brawlhallaV1RequestLimit,
   },
-  sourceBackgroundHeadroom: 30,
+  sourceBackgroundHeadroom,
   minimumSourceSpacingMs: 150,
 })
 const bhapiQueue = createBhApiRequestQueue()
@@ -252,10 +262,7 @@ try {
               caller: 'background',
             })
             if (admission.outcome === 'rate-limited') {
-              throw new RateLimitError(
-                `${domain} PostgreSQL source admission is rate limited`,
-                admission.retryAfterSeconds * 1_000,
-              )
+              throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
             }
           })
           await accounts.accounts.resolvePrimaryPlayerVerification(
