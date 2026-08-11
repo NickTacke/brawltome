@@ -203,9 +203,22 @@ describe('durable Refresh Operations', () => {
       expect(snapshot.oldestPending.find(({ workClass }) => workClass === 'maintenance')?.ageMs).toBeGreaterThanOrEqual(
         0,
       )
+      const unresolvedDeadLetters = snapshot.deadLetters.find(
+        ({ workClass, kind }) => workClass === 'projection' && kind === 'proof',
+      )?.count
+      expect(unresolvedDeadLetters).toBeGreaterThanOrEqual(1)
       expect(
-        snapshot.deadLetters.find(({ workClass, kind }) => workClass === 'projection' && kind === 'proof')?.count,
-      ).toBeGreaterThanOrEqual(1)
+        await operations.discardDeadLetter({
+          operationId: dead.operationId,
+          actorId: 'operator:telemetry-test',
+          reason: 'verify resolved dead letters leave the active gauge',
+        }),
+      ).toMatchObject({ outcome: 'discarded' })
+      const resolvedSnapshot = await operations.inspectTelemetry()
+      expect(
+        resolvedSnapshot.deadLetters.find(({ workClass, kind }) => workClass === 'projection' && kind === 'proof')
+          ?.count,
+      ).toBe((unresolvedDeadLetters ?? 1) - 1)
       expect(snapshot.scheduleLateness.find(({ kind }) => kind === 'proof')?.latenessMs).toBeGreaterThan(0)
       expect(snapshot.oldestPending).toHaveLength(6)
       expect(pending.operationId).toBeTruthy()
@@ -217,6 +230,7 @@ describe('durable Refresh Operations', () => {
       await control`
         DELETE FROM refresh_operations.operations
         WHERE provenance ->> 'source' = 'telemetry-test'
+          AND status <> 'dead_letter'
       `
       await operations.close()
       await control.end()
