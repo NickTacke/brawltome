@@ -21,7 +21,7 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - run: bun test tooling/observability/tests/observability.test.ts tooling/observability/tests/storage-preflight.test.ts packages/telemetry/tests/otlp.test.ts
+      - run: bun test tooling/observability/tests/deploy-wrapper.test.ts tooling/observability/tests/observability.test.ts tooling/observability/tests/network-preflight.test.ts tooling/observability/tests/rendered-topology.test.ts tooling/observability/tests/storage-preflight.test.ts packages/telemetry/tests/otlp.test.ts
       - run: bun run observability:validate
       - run: bun run observability:test-alerts
       - run: bun run observability:test-pipeline

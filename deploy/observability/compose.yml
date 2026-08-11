@@ -250,7 +250,7 @@ services:
     secrets:
       - grafana_admin_password
     networks:
-      - observability
+      - default
       - dokploy-network
     depends_on:
       prometheus:
@@ -276,6 +276,9 @@ services:
           memory: 128M
 
 networks:
+  default:
+    external: true
+    name: brawltome-observability
   observability:
     external: true
     name: brawltome-observability
