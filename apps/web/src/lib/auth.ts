@@ -9,9 +9,8 @@ import {
   parsePrimaryPlayerVerificationStateOutput,
 } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
+import { publicApiUrl } from './api-url'
 import { trpc } from './trpc'
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 const ACCOUNT_KEY = ['account', 'current'] as const
 const ACCOUNT_PREFERENCES_KEY = ['account', 'preferences'] as const
@@ -65,7 +64,7 @@ export function usePrimaryPlayer() {
 }
 
 function authUrl(path: '/auth/discord/login' | '/auth/steam/link'): string {
-  const url = new URL(path, apiUrl)
+  const url = new URL(path, publicApiUrl)
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
     throw new Error('Invalid authentication origin')
   }
@@ -91,7 +90,7 @@ export async function saveAccountPreferences(
 }
 
 export async function signOut(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  const response = await fetch(`${apiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
+  const response = await fetch(`${publicApiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
   if (!response.ok) throw new Error(`Sign-out failed with status ${response.status}`)
 
   queryClient.removeQueries({ queryKey: ACCOUNT_PREFERENCES_KEY })

@@ -177,7 +177,7 @@ afterAll(async () => {
 
 describe('real V3 runtime lifecycle', () => {
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    test(`API ${signal} keeps liveness separate from exact-schema readiness and exits within bounds`, async () => {
+    test(`API ${signal} keeps liveness separate from known-prefix readiness and exits within bounds`, async () => {
       const control = postgres(connectionString, { max: 1 })
       const migration = refreshOperationsMigrationInventory[0]
       await control`
@@ -193,7 +193,7 @@ describe('real V3 runtime lifecycle', () => {
             UPDATE brawltome_migrations.history SET checksum = ${migration.checksum}
             WHERE identity = ${migration.identity}
           `
-        await waitFor(async () => (await healthStatus(port, 'ready')) === 200, 'API exact-schema readiness')
+        await waitFor(async () => (await healthStatus(port, 'ready')) === 200, 'API known-prefix readiness')
         const correlated = await fetch(`http://127.0.0.1:${port}/health/live`, {
           headers: { 'x-request-id': 'runtime-process-request' },
         })
@@ -229,6 +229,84 @@ describe('real V3 runtime lifecycle', () => {
       }
     }, 20_000)
   }
+
+  test('overlapping API and worker replicas preserve background separation and one durable effect', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    const [apiPortOne, apiPortTwo, workerPortOne, workerPortTwo] = await Promise.all([
+      allocatePort(),
+      allocatePort(),
+      allocatePort(),
+      allocatePort(),
+    ])
+    const apis = [
+      spawnRuntime('apps/api/src/serve.ts', apiEnvironment(apiPortOne)),
+      spawnRuntime('apps/api/src/serve.ts', apiEnvironment(apiPortTwo)),
+    ]
+    const workers: Array<ReturnType<typeof spawnRuntime>> = []
+
+    try {
+      await Promise.all([
+        waitForRuntimeReady(apis[0], apiPortOne, 'first API replica'),
+        waitForRuntimeReady(apis[1], apiPortTwo, 'second API replica'),
+      ])
+      const dedupeKey = `rolling-overlap:${randomUUID()}`
+      const operationKey = `rolling-overlap-effect:${randomUUID()}`
+      const responses = await Promise.all(
+        [apiPortOne, apiPortTwo].map((port) =>
+          fetch(`http://127.0.0.1:${port}/internal/operations/proof`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-internal-secret': apiEnvironment(port).INTERNAL_API_SECRET,
+            },
+            body: JSON.stringify({ dedupeKey, operationKey, value: 'completed-once', requestedBy: 'issue-220' }),
+          }),
+        ),
+      )
+      expect(responses.map(({ status }) => status).sort()).toEqual([200, 202])
+      const accepted = (await responses[0].json()) as { operationId: string }
+      const duplicate = (await responses[1].json()) as { operationId: string }
+      expect(duplicate.operationId).toBe(accepted.operationId)
+      await Bun.sleep(200)
+      expect((await operations.inspect(accepted.operationId)).operation.status).toBe('pending')
+
+      await installEffectDelay(control, 2)
+      workers.push(
+        spawnRuntime('apps/api/src/operations-worker.ts', workerEnvironment(workerPortOne, 4_000)),
+        spawnRuntime('apps/api/src/operations-worker.ts', workerEnvironment(workerPortTwo, 4_000)),
+      )
+      await Promise.all([
+        waitForRuntimeReady(workers[0], workerPortOne, 'first worker replica'),
+        waitForRuntimeReady(workers[1], workerPortTwo, 'second worker replica'),
+      ])
+      await waitFor(
+        async () => (await operations.inspect(accepted.operationId)).operation.status === 'leased',
+        'overlap leased work',
+      )
+      await waitFor(
+        async () => (await operations.inspect(accepted.operationId)).operation.status === 'succeeded',
+        'overlap proof effect',
+        10_000,
+      )
+
+      const state = await operations.inspect(accepted.operationId)
+      expect(state.effects).toHaveLength(1)
+      expect(state.attempts.map(({ outcome }) => outcome)).toEqual(['succeeded'])
+    } finally {
+      for (const runtime of [...apis, ...workers]) {
+        if (runtime.process.exitCode === null) runtime.process.kill('SIGTERM')
+      }
+      await Promise.all(
+        [...apis, ...workers].map(async (runtime) => {
+          if (runtime.process.exitCode === null) await waitForExit(runtime, 5_000)
+        }),
+      )
+      await removeEffectDelay(control)
+      await operations.close()
+      await control.end()
+    }
+  }, 20_000)
 
   test('operations worker SIGINT drains active durable work and commits one effect', async () => {
     const control = postgres(connectionString, { max: 1 })

@@ -10,12 +10,16 @@ type AppliedMigration = {
   checksum: string
 }
 
-export function assertExactSchemaCompatibility(
+/**
+ * Later rows are compatible only during an expand-first rollout. Contract or destructive
+ * migrations require a coordinated compatibility fence before old replicas may overlap.
+ */
+export function assertKnownSchemaPrefix(
   expected: readonly ExpectedMigration[],
   applied: readonly AppliedMigration[],
 ): void {
-  if (applied.length !== expected.length) {
-    throw new Error(`schema migration count mismatch: expected ${expected.length}, received ${applied.length}`)
+  if (applied.length < expected.length) {
+    throw new Error(`schema migration count mismatch: expected at least ${expected.length}, received ${applied.length}`)
   }
   for (const [index, migration] of expected.entries()) {
     const recorded = applied[index]
@@ -40,7 +44,7 @@ export function createPostgresReadiness(connectionString: string, expectedMigrat
         ORDER BY ordinal
       `
       const relevant = rows.filter(({ identity }) => owners.has(identity.split('/')[0]))
-      assertExactSchemaCompatibility(expectedMigrations, relevant)
+      assertKnownSchemaPrefix(expectedMigrations, relevant)
     },
     async close(): Promise<void> {
       await client.end({ timeout: 5 })
