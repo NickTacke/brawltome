@@ -31,10 +31,13 @@ function fixture(overrides: Record<string, string> = {}) {
 esac`,
   )
   executable('blockdev', `printf '%s\n' "\${MOCK_SIZE}"`)
+  executable('losetup', `printf '%s\n' "\${MOCK_BACKING}"`)
   executable(
     'stat',
     `case "$*" in
 *'-c %u:%g'*) printf '%s\n' "\${MOCK_OWNER}" ;;
+*'-c %s'*) printf '%s\n' "\${MOCK_LOGICAL_SIZE}" ;;
+*'-c %b'*) printf '%s\n' "\${MOCK_ALLOCATED_BLOCKS}" ;;
 *' /') printf '%s\n' '1' ;;
 *) printf '%s\n' "\${MOCK_DEVICE}" ;;
 esac`,
@@ -48,9 +51,12 @@ esac`,
       V3_POSTGRES_DATA_ROOT: data,
       V3_POSTGRES_MIN_FREE_BYTES: '2147483648',
       V3_POSTGRES_QUOTA_BYTES: '25769803776',
+      MOCK_ALLOCATED_BLOCKS: '50331648',
       MOCK_AVAILABLE: '20000000000',
+      MOCK_BACKING: join(directory, 'postgres.ext4'),
       MOCK_DEVICE: '9',
       MOCK_FSTYPE: 'ext4',
+      MOCK_LOGICAL_SIZE: '25769803776',
       MOCK_OPTIONS: 'rw,nosuid,nodev,noexec,relatime',
       MOCK_OWNER: '70:70',
       MOCK_SIZE: '25769803776',
@@ -79,6 +85,9 @@ describe('V3 PostgreSQL storage preflight', () => {
     ['size', { MOCK_SIZE: '25769803777' }, 'size does not match'],
     ['headroom', { MOCK_AVAILABLE: '1000' }, 'insufficient free space'],
     ['options', { MOCK_OPTIONS: 'rw,relatime' }, 'missing mount option'],
+    ['missing backing', { MOCK_BACKING: '' }, 'loop backing file is unavailable'],
+    ['backing size', { MOCK_LOGICAL_SIZE: '25769803775' }, 'backing file size does not match'],
+    ['sparse backing', { MOCK_ALLOCATED_BLOCKS: '1' }, 'backing file is sparse'],
   ])('rejects %s drift', (_name, override, message) => {
     const result = spawnSync('sh', [preflight], { encoding: 'utf8', ...fixture(override) })
     expect(result.status).toBe(1)
