@@ -17,6 +17,10 @@ export {
   importLegacyRankings,
   type LegacyRankingImportOptions,
   type LegacyRankingImportResult,
+  type LegacyRankingMigrationEntryEvidence,
+  type LegacyRankingMigrationEvidence,
+  type LegacyRankingMigrationSetEvidence,
+  readLegacyRankingMigrationEvidence,
 } from './legacy-import'
 export { fetchLeaderboardPage } from './v1-leaderboard-source'
 

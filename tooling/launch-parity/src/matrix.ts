@@ -1164,4 +1164,41 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'discovery.v2-semantic-migration',
+    area: 'operator-operations',
+    requirement:
+      'Discovery rebuilds only from canonical Players and Clans owner facts, drains replay lag, reconciles exactly, preserves representative routes, and blocks launch on any unexplained V2-to-V3 semantic mismatch.',
+    sourceIssue: '#225',
+    status: 'implemented',
+    destinations: ['bun run --filter @brawltome/database-migrations rebuild:discovery'],
+    implementation: [
+      'packages/contexts/discovery/migrations/0003-add-semantic-migration-evidence.ts',
+      'packages/contexts/discovery/postgres.ts',
+      'tooling/database-migrations/src/rebuild-discovery.ts',
+      'tooling/database-migrations/src/rebuild-discovery-cli.ts',
+      'tooling/database-migrations/src/inventories.ts',
+    ],
+    evidence: [
+      {
+        kind: 'integration',
+        path: 'packages/contexts/discovery/tests/migration-evidence.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves zero-tolerance immutable evidence, closed explanation codes, deterministic replay, concurrency, and the 1,000-detail mismatch bound.',
+      },
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/discovery-rebuild.postgres.test.ts',
+        assertion:
+          'Two isolated rehearsals produce identical semantic evidence across canonical identity, prefix, normalized exact-name, local-name, negative legacy-only, routes, accepted/rejected rankings, crash restart, replay, and orphan repair.',
+      },
+      {
+        kind: 'integration',
+        path: 'tooling/database-migrations/tests/postgres.test.ts',
+        assertion: 'Discovery/0003 appends once without changing the complete deployed migration prefix.',
+      },
+    ],
+    verificationGap:
+      'The two repository rehearsals use deterministic production-shaped fixtures only. #231 still owns consecutive restored-production rehearsals, storage headroom, elapsed duration, backup restoration, full client smoke checks, and operator cutover evidence.',
+  },
 ]

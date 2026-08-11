@@ -152,8 +152,17 @@ export function createPostgresRankedPlayers(
     async referenceById(brawlhallaId) {
       const [profile] = await client<{ brawlhalla_id: number; player_name: string }[]>`
         SELECT brawlhalla_id, player_name
-        FROM players.ranked_profiles
-        WHERE brawlhalla_id = ${brawlhallaId} AND last_success_at IS NOT NULL
+        FROM (
+          SELECT ranked.brawlhalla_id, ranked.player_name, 0 AS source_rank
+          FROM players.ranked_profiles ranked
+          WHERE ranked.brawlhalla_id = ${brawlhallaId} AND ranked.last_success_at IS NOT NULL
+          UNION ALL
+          SELECT legacy.brawlhalla_id, legacy.player_name, 1 AS source_rank
+          FROM players.legacy_discovery_profiles legacy
+          WHERE legacy.brawlhalla_id = ${brawlhallaId}
+        ) identity
+        ORDER BY source_rank
+        LIMIT 1
       `
       return profile ? { brawlhallaId: profile.brawlhalla_id, name: profile.player_name } : null
     },

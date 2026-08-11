@@ -76,6 +76,12 @@ type MemberRow = {
   guild_points: string | null
 }
 
+export type LegacyClanMigrationEvidence = {
+  status: 'not-started' | 'in-progress' | 'complete' | 'blocked'
+  sourceChecksum: string | null
+  rejectedIdentities: Array<{ clanId: number; clanName: string; reasons: string[] }>
+}
+
 export function createPostgresClans(connectionString: string) {
   const client = postgres(connectionString)
   const ensureIdentity = async (sql: typeof client, clanId: number) => {
@@ -390,6 +396,46 @@ export function createPostgresClans(connectionString: string) {
         `
         return true
       })
+    },
+
+    async legacyMigrationEvidence(): Promise<LegacyClanMigrationEvidence> {
+      const [progress] = await client<{ status: 'in-progress' | 'complete' | 'blocked'; source_checksum: string }[]>`
+        SELECT status, source_checksum FROM clans.legacy_import_progress WHERE singleton
+      `
+      const rejectedIdentities = await client<Array<{ clan_id: number; clan_name: string; reasons: string[] }>>`
+        WITH archived AS (
+          SELECT archive.source_key,
+                 CASE
+                   WHEN archive.raw_row->>'clan_id' ~ '^-?[0-9]+$'
+                    AND (archive.raw_row->>'clan_id')::numeric BETWEEN -2147483648 AND 2147483647
+                   THEN (archive.raw_row->>'clan_id')::integer
+                 END AS clan_id,
+                 archive.raw_row->>'clan_name' AS clan_name
+          FROM clans.legacy_archive archive
+          WHERE archive.source_table = 'clan'
+        )
+        SELECT archived.clan_id, archived.clan_name,
+               array_agg(rejection.code ORDER BY rejection.code) AS reasons
+        FROM archived
+        JOIN clans.legacy_import_rejections rejection
+          ON rejection.source_table = 'clan' AND rejection.source_key = archived.source_key
+        LEFT JOIN clans.profiles profile ON profile.clan_id = archived.clan_id
+        WHERE archived.clan_id IS NOT NULL
+          AND archived.clan_name IS NOT NULL
+          AND archived.clan_name ~ '[^[:space:]]'
+          AND profile.clan_id IS NULL
+        GROUP BY archived.source_key, archived.clan_id, archived.clan_name
+        ORDER BY archived.clan_id
+      `
+      return {
+        status: progress?.status ?? 'not-started',
+        sourceChecksum: progress?.source_checksum.trim() ?? null,
+        rejectedIdentities: rejectedIdentities.map((identity) => ({
+          clanId: identity.clan_id,
+          clanName: identity.clan_name,
+          reasons: identity.reasons,
+        })),
+      }
     },
 
     async close() {

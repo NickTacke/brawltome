@@ -28,6 +28,7 @@ export {
 export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
 export {
   createPostgresPlayerDiscoverySource,
+  type LegacyPlayerMigrationEvidence,
   type PostgresPlayerDiscoverySource,
 } from './discovery-postgres'
 export { createSteamPlayerEvidenceResolver } from './verification'
