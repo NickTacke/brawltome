@@ -5,6 +5,13 @@ import type {
   LaunchCohortRegion,
 } from './cohort'
 import type {
+  CareerWeaponHistoryDelta,
+  CareerWeaponHistorySnapshot,
+  LegendMetaHistoryDelta,
+  LegendMetaHistorySnapshot,
+  StatisticsHistoryEntry,
+} from './history'
+import type {
   LegendMetaArtifact,
   LegendMetaArtifactSlice,
   LegendMetaFilterBracket,
@@ -40,6 +47,21 @@ export {
   selectLaunchCohortCell,
 } from './cohort'
 export {
+  STATISTICS_HISTORY_LIMIT,
+  buildCareerWeaponUsageHistory,
+  buildLegendMetaHistory,
+  classifyAdjacentSnapshots,
+  type CareerWeaponHistoryDelta,
+  type CareerWeaponHistorySnapshot,
+  type LegendMetaHistoryDelta,
+  type LegendMetaHistorySnapshot,
+  type StatisticsHistoryCompatibilityReason,
+  type StatisticsHistoryDirection,
+  type StatisticsHistoryEntry,
+  type StatisticsSnapshotCompatibility,
+} from './history'
+export {
+  LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE,
   LEGEND_META_METHODOLOGY_DISCLOSURE,
   LEGEND_META_METHODOLOGY_VERSION,
   LEGEND_META_MINIMUM_GAMES,
@@ -294,6 +316,50 @@ export type CareerWeaponUsageView =
       latestDecision: PublicationDecisionAudit
     })
 
+export type LegendMetaHistoryViewSnapshot = LegendMetaHistorySnapshot & {
+  generationId: string
+  data: LegendMetaArtifactSlice
+}
+
+export type LegendMetaHistoryView =
+  | {
+      status: 'unavailable'
+      reason: 'not-yet-published'
+      region: LegendMetaFilterRegion
+      bracket: LegendMetaFilterBracket
+    }
+  | {
+      status: 'available'
+      region: LegendMetaFilterRegion
+      bracket: LegendMetaFilterBracket
+      entries: StatisticsHistoryEntry<LegendMetaHistoryViewSnapshot, LegendMetaHistoryDelta>[]
+    }
+
+export type CareerWeaponHistoryViewSnapshot = CareerWeaponHistorySnapshot & {
+  generationId: string
+  data: CareerWeaponUsageAggregate
+}
+
+export type CareerWeaponUsageHistoryView =
+  | {
+      status: 'unavailable'
+      reason: 'not-yet-published'
+      filters: CareerWeaponUsageFilters
+    }
+  | {
+      status: 'available'
+      filters: CareerWeaponUsageFilters
+      entries: StatisticsHistoryEntry<CareerWeaponHistoryViewSnapshot, CareerWeaponHistoryDelta>[]
+    }
+
+export interface StatisticsHistoryQueries {
+  getLegendMetaHistory(input: {
+    region: LegendMetaFilterRegion
+    bracket: LegendMetaFilterBracket
+  }): Promise<LegendMetaHistoryView>
+  getCareerWeaponUsageHistory(filters: CareerWeaponUsageFilters): Promise<CareerWeaponUsageHistoryView>
+}
+
 export type StatisticsReconciliationState = {
   legacyCohortExists: boolean
   launch: {
@@ -370,4 +436,5 @@ export type StatisticsTracer = LegacyCohortReconciliation &
   StatisticsPublicationStore &
   StatisticsLegendMetaPublicationStore &
   StatisticsQueries &
-  CareerWeaponUsageQueries
+  CareerWeaponUsageQueries &
+  StatisticsHistoryQueries

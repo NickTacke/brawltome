@@ -305,6 +305,63 @@ async function insertAcceptedPublicationFixture(input: {
   }
 }
 
+async function cloneCareerSnapshotFixture(input: { generationId: string; templateGenerationId: string }) {
+  const sql = postgres(connectionString, { max: 1 })
+  const snapshotId = randomUUID()
+  try {
+    await sql.begin(async (transaction) => {
+      const tx = transaction as unknown as typeof sql
+      await tx`
+        INSERT INTO statistics.career_weapon_usage_snapshots
+          (id, generation_id, cohort_methodology_version, methodology_version,
+           publication_decision_id, published_at)
+        SELECT ${snapshotId}, ${input.generationId}, generation.methodology_version,
+               template.methodology_version, decision.id, decision.decided_at
+        FROM statistics.publication_decisions decision
+        JOIN statistics.cohort_generations generation ON generation.id = decision.generation_id
+        JOIN statistics.career_weapon_usage_snapshots template
+          ON template.generation_id = ${input.templateGenerationId}
+        WHERE decision.generation_id = ${input.generationId}
+          AND decision.product = 'lifetime' AND decision.decision = 'accepted'
+      `
+      await tx`
+        INSERT INTO statistics.career_weapon_usage_scopes
+          (snapshot_id, region, bracket, selected_players, successful_observations, total_held_seconds)
+        SELECT ${snapshotId}, region, bracket, selected_players, successful_observations, total_held_seconds
+        FROM statistics.career_weapon_usage_scopes
+        WHERE snapshot_id = (
+          SELECT id FROM statistics.career_weapon_usage_snapshots
+          WHERE generation_id = ${input.templateGenerationId}
+        )
+      `
+      await tx`
+        INSERT INTO statistics.career_weapon_usage_rows
+          (snapshot_id, region, bracket, weapon, observed_players, held_time_seconds,
+           contributor_count, qualifying_held_seconds, median_damage_numerator,
+           median_damage_denominator, median_kos_numerator, median_kos_denominator,
+           comparison_eligible, comparison_reasons)
+        SELECT ${snapshotId}, region, bracket, weapon, observed_players, held_time_seconds,
+               contributor_count, qualifying_held_seconds, median_damage_numerator,
+               median_damage_denominator, median_kos_numerator, median_kos_denominator,
+               comparison_eligible, comparison_reasons
+        FROM statistics.career_weapon_usage_rows
+        WHERE snapshot_id = (
+          SELECT id FROM statistics.career_weapon_usage_snapshots
+          WHERE generation_id = ${input.templateGenerationId}
+        )
+      `
+      await tx`
+        UPDATE statistics.career_weapon_usage_snapshots
+        SET sealed_at = clock_timestamp()
+        WHERE id = ${snapshotId}
+      `
+    })
+  } finally {
+    await sql.end()
+  }
+  return snapshotId
+}
+
 function legendMetaAuthorization(
   lease: Extract<
     Awaited<ReturnType<ReturnType<typeof createPostgresRefreshOperations>['claim']>>,
@@ -624,6 +681,19 @@ describe('Statistics full launch cohort publication', () => {
         attempt_count: 2,
       })
 
+      const initialLegendHistory = await statistics.getLegendMetaHistory({ region: 'all', bracket: 'all' })
+      expect(initialLegendHistory).toMatchObject({
+        status: 'available',
+        region: 'all',
+        bracket: 'all',
+        entries: [
+          {
+            snapshot: { generationId: first.generationId },
+            comparisonToPrevious: null,
+          },
+        ],
+      })
+
       const allLegendMeta = await statistics.getLegendMeta({ region: 'all', bracket: 'all' })
       expect(allLegendMeta).toMatchObject({
         status: 'fresh',
@@ -671,6 +741,18 @@ describe('Statistics full launch cohort publication', () => {
       } finally {
         await overdueStatistics.close()
       }
+
+      const initialCareerHistory = await statistics.getCareerWeaponUsageHistory({ region: 'all', bracket: 'all' })
+      expect(initialCareerHistory).toMatchObject({
+        status: 'available',
+        filters: { region: 'all', bracket: 'all' },
+        entries: [
+          {
+            snapshot: { generationId: first.generationId },
+            comparisonToPrevious: null,
+          },
+        ],
+      })
 
       const freshCareer = await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })
       expect(freshCareer).toMatchObject({
@@ -811,6 +893,17 @@ describe('Statistics full launch cohort publication', () => {
         product: 'ranked',
         templateGenerationId: first.generationId,
       })
+      const thirdLifetimeOperationId = await bindPublicationFixture(operations, third.generationId, 'lifetime')
+      await insertAcceptedPublicationFixture({
+        generationId: third.generationId,
+        operationId: thirdLifetimeOperationId,
+        product: 'lifetime',
+        templateGenerationId: first.generationId,
+      })
+      const thirdCareerSnapshotId = await cloneCareerSnapshotFixture({
+        generationId: third.generationId,
+        templateGenerationId: first.generationId,
+      })
       await bindLegendMetaPublication(statistics, operations, third.generationId)
       const acceptedThirdLegendMeta = await operations.claim(
         'accepted-third-legend-meta',
@@ -854,6 +947,47 @@ describe('Statistics full launch cohort publication', () => {
         staleReason: null,
         generationId: third.generationId,
       })
+      await expect(statistics.getLegendMetaHistory({ region: 'all', bracket: 'all' })).resolves.toMatchObject({
+        status: 'available',
+        entries: [
+          {
+            snapshot: { generationId: third.generationId },
+            comparisonToPrevious: {
+              status: 'incompatible',
+              previousSnapshotId: allLegendMeta.snapshotId,
+              reasons: [{ code: 'season_identity_unavailable' }],
+            },
+          },
+          {
+            snapshot: { generationId: first.generationId },
+            comparisonToPrevious: null,
+          },
+        ],
+      })
+      const compatibleCareerHistory = await statistics.getCareerWeaponUsageHistory({ region: 'all', bracket: 'all' })
+      if (compatibleCareerHistory.status === 'unavailable') throw new Error('Career history missing')
+      expect(compatibleCareerHistory.entries).toHaveLength(2)
+      expect(compatibleCareerHistory.entries[0]?.snapshot).toMatchObject({
+        snapshotId: thirdCareerSnapshotId,
+        generationId: third.generationId,
+      })
+      const careerComparison = compatibleCareerHistory.entries[0]?.comparisonToPrevious
+      expect(careerComparison).toMatchObject({
+        status: 'available',
+        previousSnapshotId: freshCareer.snapshotId,
+      })
+      if (careerComparison?.status !== 'available') throw new Error('compatible Career delta missing')
+      expect(careerComparison.deltas.find(({ weapon }) => weapon === 'Hammer')).toMatchObject({
+        prevalence: { changeBasisPoints: 0, direction: 'unchanged' },
+        medianDamagePerMinute: {
+          change: { numerator: '0', denominator: '1' },
+          direction: 'unchanged',
+        },
+      })
+      expect(compatibleCareerHistory.entries[1]).toMatchObject({
+        snapshot: { snapshotId: freshCareer.snapshotId, generationId: first.generationId },
+        comparisonToPrevious: null,
+      })
 
       const control = postgres(connectionString, { max: 1 })
       await control`
@@ -888,9 +1022,10 @@ describe('Statistics full launch cohort publication', () => {
       statistics = createPostgresStatistics(connectionString)
       expect((await statistics.getPublication('ranked'))?.active?.generationId).toBe(third.generationId)
       expect(await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
-        status: 'stale',
-        generationId: first.generationId,
-        latestDecision: { generationId: second.generationId, outcome: 'rejected' },
+        status: 'fresh',
+        snapshotId: thirdCareerSnapshotId,
+        generationId: third.generationId,
+        latestDecision: { generationId: third.generationId, outcome: 'accepted' },
       })
     } finally {
       await statistics.close()

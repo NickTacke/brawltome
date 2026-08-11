@@ -1165,6 +1165,56 @@ export const launchParityMatrix: readonly ParityRow[] = [
     ],
   },
   {
+    id: 'statistics.compatible-history',
+    area: 'global-statistics',
+    requirement:
+      'Legend and Career colocate at most eight immutable accepted snapshots with each product, compare only compatible adjacent publications, expose exact canonical non-rank metric deltas with arithmetic direction, retain counts and coverage as snapshot values only, preserve stored eligibility, and stop with stable explanations at the first applicable compatibility break.',
+    sourceIssue: '#213',
+    status: 'verified',
+    destinations: [
+      '/stats',
+      '/stats/career-weapon-usage',
+      'statistics.legendMetaHistory',
+      'statistics.careerWeaponUsageHistory',
+    ],
+    implementation: [
+      'packages/contexts/statistics/history.ts',
+      'packages/contexts/statistics/postgres.ts',
+      'packages/contracts/src/statistics-history.ts',
+      'packages/contracts/src/statistics.ts',
+      'packages/contracts/src/career-weapon-usage.ts',
+      'apps/api/src/router/statistics.router.ts',
+      'apps/web/src/components/statistics/LegendMetaHistory.tsx',
+      'apps/web/src/components/statistics/CareerWeaponUsageHistory.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/statistics/tests/history.test.ts',
+        assertion:
+          'Pure tests prove stable compatibility classification, null-season rejection, exact canonical non-rank Legend and Career deltas, immutable eligibility, deterministic depth, and stop-at-first-break traversal.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/statistics-full-cohort.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves accepted-only ordering, explicit null-season Legend breaks, compatible Career deltas, rejected-publication exclusion, and restart persistence from immutable publications.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/statistics-history.router.test.ts',
+        assertion:
+          'Product-specific public queries validate canonical history, exact adjacent identity, explicit unavailability, and strict filter forwarding.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/statistics/StatisticsHistory.test.tsx',
+        assertion:
+          'Product-colocated history renders stable break explanations, exact units and arithmetic direction, snapshot-only counts and coverage, and lifetime/current-bracket disclosure while independent failures retain the current product view.',
+      },
+    ],
+  },
+  {
     id: 'discovery.v2-semantic-migration',
     area: 'operator-operations',
     requirement:

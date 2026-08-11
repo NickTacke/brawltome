@@ -5,6 +5,7 @@ import type { LegendMetaInput } from '@brawltome/contracts'
 import { useQuery } from '@tanstack/react-query'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useMemo } from 'react'
+import { LegendMetaHistory } from './LegendMetaHistory'
 import { LegendMetaView } from './LegendMetaView'
 import { buildLegendMetaQueryString, parseLegendMetaSearchParams } from './utils'
 
@@ -19,6 +20,10 @@ export function LegendMeta() {
   const { data, error } = useQuery({
     queryKey: ['statistics', 'legend-meta', filters.region, filters.bracket],
     queryFn: () => trpc.statistics.legendMeta.query(filters),
+  })
+  const history = useQuery({
+    queryKey: ['statistics', 'legend-meta-history', filters.region, filters.bracket],
+    queryFn: () => trpc.statistics.legendMetaHistory.query(filters),
   })
 
   const updateFilters = useCallback(
@@ -53,5 +58,20 @@ export function LegendMeta() {
     )
   }
 
-  return <LegendMetaView data={data} region={filters.region} bracket={filters.bracket} onFilterChange={updateFilters} />
+  return (
+    <div className="space-y-10">
+      <LegendMetaView data={data} region={filters.region} bracket={filters.bracket} onFilterChange={updateFilters} />
+      <LegendMetaHistory
+        history={history.data}
+        error={
+          history.error instanceof Error
+            ? history.error.message
+            : history.error
+              ? 'Unknown transport failure'
+              : undefined
+        }
+        loading={history.isLoading}
+      />
+    </div>
+  )
 }

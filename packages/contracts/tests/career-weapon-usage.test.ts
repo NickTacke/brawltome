@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  careerWeaponUsageHistoryOutputSchema,
   careerWeaponUsageInputSchema,
   careerWeaponUsageOutputSchema,
+  parseCareerWeaponUsageHistoryOutput,
   parseCareerWeaponUsageOutput,
 } from '../src/career-weapon-usage'
 
@@ -53,6 +55,37 @@ const available = {
     },
   ],
 } as const
+
+const historySnapshot = {
+  snapshotId: available.snapshotId,
+  generationId: available.generationId,
+  cohortMethodologyVersion: available.cohortMethodologyVersion,
+  methodologyVersion: available.methodologyVersion,
+  observationWindow: available.observationWindow,
+  publishedAt: available.publishedAt,
+  scope: available.filters,
+  selectedPlayers: available.selectedPlayers,
+  successfulObservations: available.successfulObservations,
+  coverage: available.coverage,
+  totalHeldSeconds: available.totalHeldSeconds,
+  rows: available.rows,
+}
+
+const previousHistorySnapshot = {
+  ...historySnapshot,
+  snapshotId: '10000000-0000-4000-8000-000000000011',
+  generationId: '10000000-0000-4000-8000-000000000012',
+  publishedAt: '2026-08-10T00:00:01Z',
+  rows: historySnapshot.rows.map((row, index) =>
+    index === 0
+      ? {
+          ...row,
+          medianDamagePerMinute: { numerator: '1', denominator: '2' },
+          medianKosPerHour: { numerator: '1', denominator: '1' },
+        }
+      : row,
+  ),
+}
 
 describe('Career Weapon Usage contract', () => {
   test('accepts exact metrics while preserving measured zero and unavailable rates', () => {
@@ -130,5 +163,150 @@ describe('Career Weapon Usage contract', () => {
     ]) {
       expect(() => parseCareerWeaponUsageOutput(malformed)).toThrow()
     }
+  })
+})
+
+describe('Career Weapon Usage history contract', () => {
+  test('accepts exact adjacent Career deltas without applying a season gate', () => {
+    const delta = {
+      weapon: 'Hammer',
+      prevalence: { changeBasisPoints: 0, direction: 'unchanged' },
+      heldTimeShare: { changeBasisPoints: 0, direction: 'unchanged' },
+      medianDamagePerMinute: {
+        change: { numerator: '-1', denominator: '2' },
+        direction: 'decrease',
+      },
+      medianKosPerHour: {
+        change: { numerator: '-1', denominator: '1' },
+        direction: 'decrease',
+      },
+    } as const
+    const output = {
+      status: 'available',
+      filters: available.filters,
+      entries: [
+        {
+          snapshot: historySnapshot,
+          comparisonToPrevious: {
+            status: 'available',
+            previousSnapshotId: previousHistorySnapshot.snapshotId,
+            deltas: [delta],
+          },
+        },
+        { snapshot: previousHistorySnapshot, comparisonToPrevious: null },
+      ],
+    } as const
+
+    expect(parseCareerWeaponUsageHistoryOutput(output)).toEqual(JSON.parse(JSON.stringify(output)))
+    for (const malformedFirstEntry of [
+      {
+        ...output.entries[0],
+        comparisonToPrevious: { ...output.entries[0].comparisonToPrevious, deltas: [] },
+      },
+      {
+        ...output.entries[0],
+        comparisonToPrevious: { ...output.entries[0].comparisonToPrevious, deltas: [delta, delta] },
+      },
+      {
+        ...output.entries[0],
+        snapshot: {
+          ...output.entries[0].snapshot,
+          coverage: { numerator: '118', denominator: '125' },
+        },
+      },
+    ]) {
+      expect(() =>
+        parseCareerWeaponUsageHistoryOutput({
+          ...output,
+          entries: [malformedFirstEntry, output.entries[1]],
+        }),
+      ).toThrow()
+    }
+  })
+
+  test('rejects deltas for stored-ineligible rows and incompatible edges', () => {
+    const insufficientDelta = {
+      weapon: 'Sword',
+      prevalence: { changeBasisPoints: 0, direction: 'unchanged' },
+      heldTimeShare: { changeBasisPoints: 0, direction: 'unchanged' },
+      medianDamagePerMinute: { change: { numerator: '0', denominator: '1' }, direction: 'unchanged' },
+      medianKosPerHour: { change: { numerator: '0', denominator: '1' }, direction: 'unchanged' },
+    } as const
+    const incompatiblePrevious = {
+      ...previousHistorySnapshot,
+      cohortMethodologyVersion: 'full-launch-cohort-v2',
+    }
+    const base = {
+      status: 'available',
+      filters: available.filters,
+      entries: [
+        {
+          snapshot: historySnapshot,
+          comparisonToPrevious: {
+            status: 'available',
+            previousSnapshotId: previousHistorySnapshot.snapshotId,
+            deltas: [insufficientDelta],
+          },
+        },
+        { snapshot: previousHistorySnapshot, comparisonToPrevious: null },
+      ],
+    } as const
+
+    expect(() => parseCareerWeaponUsageHistoryOutput(base)).toThrow()
+    expect(() =>
+      parseCareerWeaponUsageHistoryOutput({
+        ...base,
+        entries: [base.entries[0], { snapshot: incompatiblePrevious, comparisonToPrevious: null }],
+      }),
+    ).toThrow()
+  })
+
+  test('requires stable break reasons, maximum depth, and explicit unavailability', () => {
+    const incompatiblePrevious = {
+      ...previousHistorySnapshot,
+      methodologyVersion: 'career-weapon-usage-v2',
+    }
+    expect(
+      parseCareerWeaponUsageHistoryOutput({
+        status: 'available',
+        filters: available.filters,
+        entries: [
+          {
+            snapshot: historySnapshot,
+            comparisonToPrevious: {
+              status: 'incompatible',
+              previousSnapshotId: incompatiblePrevious.snapshotId,
+              reasons: [
+                {
+                  code: 'metric_methodology_mismatch',
+                  explanation: 'The product metric methodology changed between adjacent snapshots.',
+                },
+              ],
+            },
+          },
+          { snapshot: incompatiblePrevious, comparisonToPrevious: null },
+        ],
+      }).status,
+    ).toBe('available')
+    expect(() =>
+      careerWeaponUsageHistoryOutputSchema.parse({
+        status: 'available',
+        filters: available.filters,
+        entries: Array.from({ length: 9 }, (_, index) => ({
+          snapshot: {
+            ...historySnapshot,
+            snapshotId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          },
+          comparisonToPrevious: null,
+        })),
+      }),
+    ).toThrow()
+    expect(
+      parseCareerWeaponUsageHistoryOutput({
+        status: 'unavailable',
+        reason: 'not_yet_published',
+        filters: { region: 'all', bracket: 'all' },
+      }).status,
+    ).toBe('unavailable')
   })
 })

@@ -12,8 +12,15 @@ import {
   selectFullLaunchCohort,
   selectLaunchCohort,
 } from './cohort'
+import {
+  type CareerWeaponHistorySnapshot,
+  type LegendMetaHistorySnapshot,
+  buildCareerWeaponUsageHistory,
+  buildLegendMetaHistory,
+} from './history'
 import type {
   CareerWeaponUsageFilters,
+  CareerWeaponUsageHistoryView,
   CareerWeaponUsageView,
   CohortAudit,
   CohortCollectionIntent,
@@ -29,6 +36,7 @@ import type {
   LaunchCellAudit,
   LaunchCohortAudit,
   LegendMetaAvailable,
+  LegendMetaHistoryView,
   LegendMetaPublicationAuthorization,
   LegendMetaPublicationCommitResult,
   LegendMetaPublicationDecisionAudit,
@@ -144,6 +152,8 @@ type CareerWeaponRow = {
   comparison_eligible: boolean
   comparison_reasons: CareerWeaponUsageAggregate['rows'][number]['comparison']['reasons']
 }
+
+type CareerWeaponHistoryRow = CareerWeaponRow & { snapshot_id: string }
 
 type DecisionRow = {
   id: string
@@ -269,7 +279,11 @@ function summarizeProgress(
 function jsonValue(value: unknown): postgres.JSONValue {
   const serialized = JSON.stringify(value)
   if (serialized === undefined) throw new Error('Statistics audit evidence must be JSON serializable')
-  return JSON.parse(serialized) as postgres.JSONValue
+  try {
+    return JSON.parse(serialized) as postgres.JSONValue
+  } catch (error) {
+    throw new Error('Statistics audit evidence must be valid JSON', { cause: error })
+  }
 }
 
 const legendMetaReferences = referenceLegends
@@ -1461,6 +1475,50 @@ export function createPostgresStatistics(
       })
     },
 
+    async getLegendMetaHistory(input): Promise<LegendMetaHistoryView> {
+      const publications = await client<{ artifact: LegendMetaArtifact; sequence_at: Date; sequence_id: string }[]>`
+        SELECT decision.artifact, generation.created_at AS sequence_at, generation.id AS sequence_id
+        FROM statistics.legend_meta_publication_decisions decision
+        JOIN statistics.cohort_generations generation ON generation.id = decision.generation_id
+        WHERE decision.decision = 'accepted'
+        ORDER BY generation.created_at DESC, generation.id DESC
+        LIMIT 8
+      `
+      if (publications.length === 0) {
+        return { status: 'unavailable', reason: 'not-yet-published', ...input }
+      }
+      const snapshots = publications.map(({ artifact, sequence_at, sequence_id }) => {
+        const slice = artifact.slices.find(
+          ({ region, bracket }) => region === input.region && bracket === input.bracket,
+        )
+        if (!slice) throw new Error(`Legend Meta artifact is missing ${input.region}/${input.bracket}`)
+        return {
+          snapshotId: artifact.snapshotId,
+          generationId: artifact.generationId,
+          publishedAt: artifact.publishedAt,
+          observationWindow: artifact.observationWindow,
+          sequence: { at: sequence_at.toISOString(), id: sequence_id },
+          compatibility: {
+            season: { applicability: 'required' as const, identity: artifact.season.identity },
+            cohortMethodologyVersion: artifact.cohortMethodologyVersion,
+            metricMethodologyVersion: artifact.methodologyVersion,
+            scope: input,
+          },
+          rows: slice.rows.map((row) => ({
+            legend: row.legend,
+            eligible: row.eligible,
+            rank: row.rank,
+            medianRating: row.medianRating,
+            pickShareBasisPoints: row.pickShare.basisPoints,
+            adoptionBasisPoints: row.adoption.basisPoints,
+            winRateBasisPoints: row.winRate.basisPoints,
+          })),
+          data: slice,
+        } satisfies LegendMetaHistorySnapshot & { generationId: string; data: typeof slice }
+      })
+      return { status: 'available', ...input, entries: buildLegendMetaHistory(snapshots) }
+    },
+
     async getLegendMeta(input): Promise<LegendMetaQueryResult> {
       const [selection] = await client<LegendMetaSelectionRow[]>`
         WITH latest AS (
@@ -1510,6 +1568,94 @@ export function createPostgresStatistics(
 
     getCohort: () => auditLegacy(client),
     getLaunchCohort: (generationId) => auditLaunch(client, generationId),
+
+    async getCareerWeaponUsageHistory(filters): Promise<CareerWeaponUsageHistoryView> {
+      const snapshots = await client<CareerSnapshotRow[]>`
+        SELECT snapshot.id AS snapshot_id, snapshot.generation_id,
+               snapshot.cohort_methodology_version, snapshot.methodology_version,
+               generation.observation_window_starts_at, generation.observation_window_ends_at,
+               snapshot.published_at, scope.selected_players, scope.successful_observations,
+               scope.total_held_seconds
+        FROM statistics.career_weapon_usage_snapshots snapshot
+        JOIN statistics.cohort_generations generation ON generation.id = snapshot.generation_id
+        JOIN statistics.career_weapon_usage_scopes scope ON scope.snapshot_id = snapshot.id
+        WHERE snapshot.sealed_at IS NOT NULL
+          AND scope.region = ${filters.region} AND scope.bracket = ${filters.bracket}
+        ORDER BY snapshot.published_at DESC, snapshot.id DESC
+        LIMIT 8
+      `
+      if (snapshots.length === 0) {
+        return { status: 'unavailable', reason: 'not-yet-published', filters }
+      }
+      const rows = await client<CareerWeaponHistoryRow[]>`
+        SELECT snapshot_id, weapon, observed_players, held_time_seconds, contributor_count,
+               qualifying_held_seconds, median_damage_numerator, median_damage_denominator,
+               median_kos_numerator, median_kos_denominator, comparison_eligible, comparison_reasons
+        FROM statistics.career_weapon_usage_rows
+        WHERE snapshot_id = ANY(${snapshots.map(({ snapshot_id }) => snapshot_id)}::uuid[])
+          AND region = ${filters.region} AND bracket = ${filters.bracket}
+        ORDER BY snapshot_id, weapon
+      `
+      const historySnapshots = snapshots.map((snapshot) => {
+        const snapshotRows = rows.filter(({ snapshot_id }) => snapshot_id === snapshot.snapshot_id)
+        const totalHeldSeconds = BigInt(snapshot.total_held_seconds)
+        const aggregate: CareerWeaponUsageAggregate = {
+          selectedPlayers: snapshot.selected_players,
+          successfulObservations: snapshot.successful_observations,
+          coverage:
+            snapshot.selected_players > 0
+              ? exactRatio(BigInt(snapshot.successful_observations), BigInt(snapshot.selected_players))
+              : null,
+          totalHeldSeconds: snapshot.total_held_seconds,
+          rows: snapshotRows.map((row) => ({
+            weapon: row.weapon,
+            observedPlayers: row.observed_players,
+            prevalence:
+              snapshot.successful_observations > 0
+                ? exactRatio(BigInt(row.observed_players), BigInt(snapshot.successful_observations))
+                : null,
+            heldTimeSeconds: row.held_time_seconds,
+            heldTimeShare: totalHeldSeconds > 0n ? exactRatio(BigInt(row.held_time_seconds), totalHeldSeconds) : null,
+            contributorCount: row.contributor_count,
+            qualifyingHeldSeconds: row.qualifying_held_seconds,
+            medianDamagePerMinute:
+              row.median_damage_numerator !== null && row.median_damage_denominator !== null
+                ? exactRatio(BigInt(row.median_damage_numerator), BigInt(row.median_damage_denominator))
+                : null,
+            medianKosPerHour:
+              row.median_kos_numerator !== null && row.median_kos_denominator !== null
+                ? exactRatio(BigInt(row.median_kos_numerator), BigInt(row.median_kos_denominator))
+                : null,
+            comparison: { eligible: row.comparison_eligible, reasons: row.comparison_reasons },
+          })),
+        }
+        return {
+          snapshotId: snapshot.snapshot_id,
+          generationId: snapshot.generation_id,
+          publishedAt: snapshot.published_at.toISOString(),
+          observationWindow: {
+            startsAt: snapshot.observation_window_starts_at.toISOString(),
+            endsAt: snapshot.observation_window_ends_at.toISOString(),
+          },
+          compatibility: {
+            season: { applicability: 'not-applicable' as const },
+            cohortMethodologyVersion: snapshot.cohort_methodology_version,
+            metricMethodologyVersion: snapshot.methodology_version,
+            scope: filters,
+          },
+          rows: aggregate.rows.map((row) => ({
+            weapon: row.weapon,
+            eligible: row.comparison.eligible,
+            prevalence: row.prevalence,
+            heldTimeShare: row.heldTimeShare,
+            medianDamagePerMinute: row.medianDamagePerMinute,
+            medianKosPerHour: row.medianKosPerHour,
+          })),
+          data: aggregate,
+        } satisfies CareerWeaponHistorySnapshot & { generationId: string; data: CareerWeaponUsageAggregate }
+      })
+      return { status: 'available', filters, entries: buildCareerWeaponUsageHistory(historySnapshots) }
+    },
 
     async getCareerWeaponUsage(filters): Promise<CareerWeaponUsageView> {
       const [snapshot] = await client<CareerSnapshotRow[]>`
