@@ -95,11 +95,17 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
 
   const worker = services['operations-worker']
   if (isRecord(worker)) {
-    if (
-      readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1' ||
-      readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '1'
-    ) {
-      violations.push('operations-worker must retain limit-1 rollout controls')
+    if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1') {
+      violations.push('operations-worker must retain the limit-1 Brawlhalla request control')
+    }
+    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '2') {
+      violations.push('operations-worker must retain two total operation slots')
+    }
+    if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_RESERVATION') !== '1') {
+      violations.push('operations-worker must retain one reserved interactive slot')
+    }
+    if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_CONCURRENCY') !== '2') {
+      violations.push('operations-worker must retain two interactive operation slots')
     }
   }
 
