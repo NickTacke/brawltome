@@ -39,7 +39,7 @@ describe('observability deployment contract', () => {
     }
 
     expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh deploy/observability/networks/ensure.sh')
-    expect(packageJson.scripts?.['observability:grafana-tunnel']).toBe('sh deploy/observability/grafana-tunnel.sh')
+    expect(packageJson.scripts?.['observability:grafana-tunnel']).toBeUndefined()
   })
 
   test('uses pinned dedicated services with resource and security limits', async () => {
@@ -96,7 +96,7 @@ describe('observability deployment contract', () => {
     const expectedNetworks: Record<string, string[]> = {
       alertmanager: ['notifications', 'observability'],
       'blackbox-exporter': ['application'],
-      grafana: ['observability'],
+      grafana: ['dokploy-network', 'observability'],
       loki: ['observability'],
       'node-exporter': ['observability'],
       'otel-collector': ['application', 'observability'],
@@ -113,13 +113,15 @@ describe('observability deployment contract', () => {
       expect(service.deploy?.resources?.limits?.pids, `${name} PID limit`).toBeGreaterThan(0)
       expect(service.security_opt, `${name} no-new-privileges`).toContain('no-new-privileges:true')
       expect(service.ports ?? [], `${name} must not publish host ports`).toHaveLength(0)
-      if (name === 'grafana') expect(service.environment?.GF_SECURITY_COOKIE_SECURE).toBe('false')
+      if (name === 'grafana') {
+        expect(service.environment?.GF_SECURITY_COOKIE_SECURE).toBe('true')
+        expect(service.environment?.GF_SERVER_ROOT_URL).toBe('https://observability.brawltome.app')
+      }
       expect(Object.keys(service.networks ?? {}).sort(), `${name} network membership`).toEqual(expectedNetworks[name])
-      expect(service.networks ?? {}).not.toHaveProperty('dokploy-ingress')
     }
-    expect(rendered.networks ?? {}).not.toHaveProperty('dokploy-ingress')
     expect(rendered.networks).toMatchObject({
       application: { external: true, name: 'brawltome-internal' },
+      'dokploy-network': { external: true, name: 'dokploy-network' },
       notifications: { external: true, name: 'brawltome-notifications' },
       observability: { external: true, name: 'brawltome-observability' },
     })
