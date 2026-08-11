@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createHealthRoutes } from '../src/health-routes'
 import { runOperationsWorker } from '../src/operations-worker-runtime'
-import { assertExactSchemaCompatibility } from '../src/postgres-readiness'
+import { assertKnownSchemaPrefix } from '../src/postgres-readiness'
 import { createRuntimeLifecycle } from '../src/runtime-lifecycle'
 
 const testAdmission = {
@@ -304,15 +304,15 @@ describe('schema compatibility', () => {
     { identity: 'refresh-operations/0001', checksum: 'bbb' },
   ]
 
-  test('accepts only the exact identities, order, and checksums', () => {
-    expect(() => assertExactSchemaCompatibility(expected, expected)).not.toThrow()
-    expect(() => assertExactSchemaCompatibility(expected, expected.slice(0, 1))).toThrow('count mismatch')
-    expect(() => assertExactSchemaCompatibility(expected, [...expected].reverse())).toThrow('migration mismatch')
+  test('accepts an exact known prefix while rejecting missing or mutated history', () => {
+    expect(() => assertKnownSchemaPrefix(expected, expected)).not.toThrow()
     expect(() =>
-      assertExactSchemaCompatibility(expected, [expected[0], { ...expected[1], checksum: 'changed' }]),
-    ).toThrow('checksum mismatch')
-    expect(() =>
-      assertExactSchemaCompatibility(expected, [...expected, { identity: 'players/0002', checksum: 'x' }]),
-    ).toThrow('count mismatch')
+      assertKnownSchemaPrefix(expected, [...expected, { identity: 'players/0002', checksum: 'x' }]),
+    ).not.toThrow()
+    expect(() => assertKnownSchemaPrefix(expected, expected.slice(0, 1))).toThrow('count mismatch')
+    expect(() => assertKnownSchemaPrefix(expected, [...expected].reverse())).toThrow('migration mismatch')
+    expect(() => assertKnownSchemaPrefix(expected, [expected[0], { ...expected[1], checksum: 'changed' }])).toThrow(
+      'checksum mismatch',
+    )
   })
 })

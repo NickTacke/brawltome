@@ -1,8 +1,7 @@
 import type { AppRouter } from '@brawltome/api/router'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import superjson from 'superjson'
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
+import { publicApiUrl } from './api-url'
 
 function randomHex(bytes: number): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (value) => value.toString(16).padStart(2, '0')).join(
@@ -13,7 +12,7 @@ function randomHex(bytes: number): string {
 export const trpc = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${apiUrl}/trpc`,
+      url: `${publicApiUrl}/trpc`,
       transformer: superjson,
       fetch: (url, opts) => {
         const headers = new Headers(opts?.headers)

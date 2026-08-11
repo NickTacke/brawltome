@@ -4,9 +4,10 @@ import { telemetryFetch } from '@brawltome/telemetry'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import { cookies, headers } from 'next/headers'
 import superjson from 'superjson'
+import { resolveServerApiUrl } from './api-url'
 import { webTelemetry } from './telemetry'
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
+const apiUrl = resolveServerApiUrl()
 const internalSecret = process.env.INTERNAL_API_SECRET ?? ''
 const refreshTrustCookie = 'brawltome_refresh_trust'
 

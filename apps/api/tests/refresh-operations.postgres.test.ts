@@ -222,12 +222,19 @@ describe('durable Refresh Operations', () => {
     }
   })
 
-  test('checks PostgreSQL and exact runtime schema without applying changes', async () => {
+  test('accepts a later same-owner migration while rejecting known history mutation', async () => {
     const readiness = createPostgresReadiness(connectionString, refreshOperationsMigrationInventory)
     await readiness.check()
 
     const control = postgres(connectionString, { max: 1 })
+    const laterIdentity = `refresh-operations/rolling-overlap-${randomUUID()}`
     try {
+      await control`
+        INSERT INTO brawltome_migrations.history (ordinal, identity, checksum)
+        SELECT COALESCE(MAX(ordinal), -1) + 1, ${laterIdentity}, ${'f'.repeat(64)}
+        FROM brawltome_migrations.history
+      `
+      await readiness.check()
       await control`
         UPDATE brawltome_migrations.history
         SET checksum = ${'0'.repeat(64)}
@@ -241,6 +248,15 @@ describe('durable Refresh Operations', () => {
       `
       await readiness.check()
     } finally {
+      await control`
+        UPDATE brawltome_migrations.history
+        SET checksum = ${refreshOperationsMigrationInventory[0].checksum}
+        WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+      `
+      await control`
+        DELETE FROM brawltome_migrations.history
+        WHERE identity = ${laterIdentity}
+      `
       await control.end()
       await readiness.close()
     }
