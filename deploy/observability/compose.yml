@@ -235,7 +235,7 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
-      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SECURE: "false"
       GF_SECURITY_DISABLE_GRAVATAR: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
@@ -248,11 +248,8 @@ services:
       - /tmp:size=32m,noexec,nosuid,nodev
     secrets:
       - grafana_admin_password
-    networks:
-      - observability
-      - dokploy-ingress
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:13000:3000"
     depends_on:
       prometheus:
         condition: service_healthy
@@ -280,9 +277,6 @@ networks:
   observability:
     internal: true
   notifications: {}
-  dokploy-ingress:
-    external: true
-    name: ${DOKPLOY_NETWORK_NAME:-dokploy-network}
   application:
     external: true
     name: ${BRAWLTOME_NETWORK_NAME:?Set the dedicated BrawlTome application network}
