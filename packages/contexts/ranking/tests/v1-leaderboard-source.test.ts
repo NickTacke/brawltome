@@ -48,9 +48,22 @@ describe('V1 ranked leaderboard source', () => {
     })
   })
 
-  test('accepts additive unknown fields and preserves a supported row region differing from scope', () => {
+  test('accepts additive fields, preserves supported row regions, and normalizes the provider JPS alias', () => {
     const row = { ...(realShapedRows['1v1'] as object), region: 'US-E', additive: true }
     expect(decode('1v1', row).rankings[0]).toMatchObject({ region: 'US-E', rating: 2100 })
+    expect(decode('1v1', { ...row, region: 'JPS' }).rankings[0]).toMatchObject({ region: 'JPN' })
+  })
+
+  test('uses a deterministic identity label only when a present source username is blank', () => {
+    const row = {
+      ...(realShapedRows['2v2'] as object),
+      players: [player(9, 'Nix'), player(3, '  ')],
+    }
+    expect(decode('2v2', row).rankings[0].identity).toEqual({
+      type: 'fixed-two-vs-two-team',
+      players: [player(3, 'Name unavailable #3'), player(9, 'Nix')],
+    })
+    expect(() => decode('2v2', { ...row, players: [player(9, 'Nix'), { id: 3 }] })).toThrow(LeaderboardSourceError)
   })
 
   test('rejects zero, duplicate, missing, or cardinality-drifted contestants for every mode', () => {
@@ -76,7 +89,7 @@ describe('V1 ranked leaderboard source', () => {
       null,
       [],
       { rankings: [], total_pages: 0 },
-      { rankings: [{ ...valid, players: [{ id: 42, username: '  ' }] }], total_pages: 1 },
+      { rankings: [{ ...valid, players: [{ id: 42 }] }], total_pages: 1 },
       { rankings: [{ ...valid, players: undefined, id: 42, username: 'Ada' }], total_pages: 1 },
       { rankings: [{ ...valid, rating: Number.NaN }], total_pages: 1 },
       { rankings: [{ ...valid, best_rating: 2099 }], total_pages: 1 },

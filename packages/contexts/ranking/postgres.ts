@@ -25,13 +25,21 @@ type SnapshotRow = {
   observed_at: Date
   published_at: Date
   expected_next_publication_at: Date
-  page_depth: number | null
-  source: 'brawlhalla-v1-ranked-leaderboard' | 'v2-legacy'
-  source_contract_version: 1
   provenance: Record<string, unknown>
   row_count: number
   latest_failure_at: Date | null
-}
+} & (
+  | {
+      page_depth: number
+      source: 'brawlhalla-v1-ranked-leaderboard'
+      source_contract_version: 1 | 2
+    }
+  | {
+      page_depth: null
+      source: 'v2-legacy'
+      source_contract_version: 1
+    }
+)
 
 type StandingRow = {
   standing: number
@@ -306,10 +314,10 @@ export function createPostgresRanking(connectionString: string) {
           VALUES
             (${generationId}, ${effectOperationId}, ${candidate.operationKey}, ${candidate.mode},
              ${candidate.observedAt}, ${candidate.scheduleWindowAt}, ${candidate.expectedNextPublicationAt},
-             ${candidate.pageDepth}, 'brawlhalla-v1-ranked-leaderboard', 1, false,
+             ${candidate.pageDepth}, 'brawlhalla-v1-ranked-leaderboard', 2, false,
              ${sql.json({
                source: 'brawlhalla-v1-ranked-leaderboard',
-               contractVersion: 1,
+               contractVersion: 2,
                pageDepth: candidate.pageDepth,
              })})
         `

@@ -349,6 +349,11 @@ describe('immutable Ranking snapshots for every mode', () => {
     const fixedEu = await ranking.queries.getLeaderboard({ mode: '2v2', region: 'EU', page: 1 })
     if (fixedEu.status === 'unavailable') throw new Error('Expected fixed standings')
     expect(fixedEu.entries).toHaveLength(2)
+    expect(fixedEu.provenance).toEqual({
+      source: 'brawlhalla-v1-ranked-leaderboard',
+      contractVersion: 2,
+      pageDepth: 1,
+    })
     if (
       fixedEu.entries[0].identity.type !== 'fixed-two-vs-two-team' ||
       fixedEu.entries[1].identity.type !== 'fixed-two-vs-two-team'

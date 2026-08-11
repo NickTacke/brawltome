@@ -160,6 +160,7 @@ describe('durable Refresh Operations', () => {
       'request-admission/0003',
       'discovery/0003',
       'accounts/0007',
+      'rankings/0004',
     ])
   })
 

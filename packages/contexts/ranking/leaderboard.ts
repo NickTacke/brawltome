@@ -74,7 +74,7 @@ export type LeaderboardView =
       provenance:
         | {
             source: 'brawlhalla-v1-ranked-leaderboard'
-            contractVersion: 1
+            contractVersion: 1 | 2
             pageDepth: number
           }
         | {

@@ -89,6 +89,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0001',
       'rankings/0002',
       'rankings/0003',
+      'rankings/0004',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -163,6 +164,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       requestAdmissionMigrationInventory[2],
       discoveryMigrationInventory[2],
       accountsMigrationInventory[6],
+      rankingMigrationInventory[3],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -195,7 +197,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(46)
+    expect(globalMigrationInventory).toHaveLength(47)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -209,6 +211,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       requestAdmissionMigrationInventory[2],
       discoveryMigrationInventory[2],
       accountsMigrationInventory[6],
+      rankingMigrationInventory[3],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -221,7 +224,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(12)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(13)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

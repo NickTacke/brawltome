@@ -149,6 +149,7 @@ describe('V3 production topology', () => {
       OPERATIONS_LEADERBOARD_CONCURRENCY: '1',
       OPERATIONS_TOTAL_CONCURRENCY: '2',
       SOURCE_BACKGROUND_HEADROOM: '30',
+      SOURCE_UNAVAILABLE_RETRY_MS: '60000',
     })
     expect(readOperationsWorkerConfig(workerEnvironment as NodeJS.ProcessEnv).admission).toMatchObject({
       totalConcurrency: 2,
@@ -208,6 +209,7 @@ describe('V3 production topology', () => {
     const limit = readBrawlhallaV1RequestLimit(environment.BRAWLHALLA_V1_REQUEST_LIMIT)
     expect(limit).toBe(102)
     expect(readSourceBackgroundHeadroom(environment.SOURCE_BACKGROUND_HEADROOM, limit)).toBe(30)
+    expect(readOperationsWorkerConfig(environment as NodeJS.ProcessEnv).sourceUnavailableRetryMs).toBe(60_000)
   })
 
   test('uses pinned build/runtime images and excludes environment files from build context', () => {

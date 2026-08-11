@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { RateLimitError } from '@brawltome/bhapi'
+import { LeaderboardSourceError } from '@brawltome/ranking/composition'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
@@ -175,6 +176,61 @@ describe('refresh operations worker source retry', () => {
     const sourceMetrics = telemetry.metrics.snapshot().find(({ name }) => name === 'source_calls_total')
     expect(sourceMetrics?.series[0]?.labels).toEqual({ domain: 'brawlhalla-v1', outcome: 'succeeded' })
     expect(JSON.stringify(sourceMetrics)).not.toContain(lease.operationId)
+  })
+
+  test('defers retryable leaderboard source outages without consuming the final attempt', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:source-outage',
+      kind: 'leaderboard-3v3',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 3,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    let deferredMs: number | undefined
+    let failed = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
+        deferredMs = retryDelayMs
+        return 'transitioned' as const
+      },
+      fail: async () => {
+        failed = true
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      sourceUnavailableRetryMs: 60_000,
+      admission,
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async () => {
+          throw new LeaderboardSourceError('source_unavailable', 'V1 leaderboard returned 502', true)
+        },
+      },
+    })
+
+    expect(deferredMs).toBe(60_000)
+    expect(failed).toBe(false)
   })
 
   test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {

@@ -45,6 +45,7 @@ describe('rendered V3 deployment topology', () => {
     ['OPERATIONS_INTERACTIVE_CONCURRENCY', '1', 'operations-worker must retain two interactive operation slots'],
     ['OPERATIONS_LEADERBOARD_CONCURRENCY', '2', 'operations-worker must retain one leaderboard operation slot'],
     ['SOURCE_BACKGROUND_HEADROOM', '31', 'operations-worker must retain 30 source units of on-demand headroom'],
+    ['SOURCE_UNAVAILABLE_RETRY_MS', '1000', 'operations-worker must retain the 60-second source outage deferral'],
   ] as const)('rejects independent %s rollout drift', (variable, value, violation) => {
     const topology = renderedTopology()
     ;(services(topology)['v3-operations-worker'].environment as Record<string, string>)[variable] = value

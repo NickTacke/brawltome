@@ -1,3 +1,5 @@
+import { normalizeRegion } from './commands/sweep-helpers'
+
 export const regionalLeaderboardScopes = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
 export type RegionalLeaderboardScope = (typeof regionalLeaderboardScopes)[number]
 
@@ -56,18 +58,19 @@ function requiredInteger(value: unknown, field: string, minimum: number): number
   return value as number
 }
 
-function requiredName(value: unknown, field: string): string {
-  if (typeof value !== 'string' || [...value].length > 256 || !/[^\p{Separator}\p{Format}]/u.test(value)) {
-    invalid(`${field} must contain between 1 and 256 visible Unicode characters`)
+function requiredName(value: unknown, field: string, playerId: number): string {
+  if (typeof value !== 'string' || [...value].length > 256) {
+    invalid(`${field} must be a string containing at most 256 Unicode characters`)
   }
-  return value
+  return /[^\p{Separator}\p{Format}]/u.test(value) ? value : `Name unavailable #${playerId}`
 }
 
 function decodePlayer(value: unknown, field: string): SourcePlayer {
   if (!isObject(value)) invalid(`${field} must be an object`)
+  const id = requiredInteger(value.id, `${field}.id`, 1)
   return {
-    id: requiredInteger(value.id, `${field}.id`, 1),
-    username: requiredName(value.username, `${field}.username`),
+    id,
+    username: requiredName(value.username, `${field}.username`, id),
   }
 }
 
@@ -96,7 +99,7 @@ function decodeIdentity(value: unknown, mode: LeaderboardMode, index: number): S
 
 function decodeRow(value: unknown, mode: LeaderboardMode, index: number): SourceLeaderboardRow {
   if (!isObject(value)) invalid(`rankings[${index}] must be an object`)
-  const region = value.region
+  const region = typeof value.region === 'string' ? normalizeRegion(value.region) : value.region
   if (!regionalLeaderboardScopes.includes(region as RegionalLeaderboardScope)) {
     invalid(`rankings[${index}].region must be a supported region`)
   }

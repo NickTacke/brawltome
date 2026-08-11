@@ -96,7 +96,7 @@ const provenanceSchema = z.union([
   z
     .object({
       source: z.literal('brawlhalla-v1-ranked-leaderboard'),
-      contractVersion: z.literal(1),
+      contractVersion: z.union([z.literal(1), z.literal(2)]),
       pageDepth: z.int().min(1).max(20),
     })
     .strict(),

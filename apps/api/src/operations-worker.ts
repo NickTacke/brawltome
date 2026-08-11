@@ -251,6 +251,7 @@ try {
     runOne: (repository, slotWorkerId, common) =>
       runOneRefreshOperation(repository, slotWorkerId, {
         ...common,
+        sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
         executeEffect: async (lease) => {
           if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
