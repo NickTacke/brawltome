@@ -2065,10 +2065,15 @@ export function createPostgresRefreshOperations(
       const deadLetters = await client<
         { work_class: WorkClass; kind: OperationLease['kind']; count: string | number }[]
       >`
-        SELECT work_class, kind, count(*)::bigint AS count
-        FROM refresh_operations.operations
-        WHERE status = 'dead_letter'
-        GROUP BY work_class, kind
+        SELECT operation.work_class, operation.kind, count(*)::bigint AS count
+        FROM refresh_operations.operations AS operation
+        WHERE operation.status = 'dead_letter'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM refresh_operations.dead_letter_actions AS action
+            WHERE action.target_operation_id = operation.id
+          )
+        GROUP BY operation.work_class, operation.kind
       `
       const scheduleLateness = await client<{ kind: OperationLease['kind']; lateness_ms: string | number }[]>`
         SELECT kind,
