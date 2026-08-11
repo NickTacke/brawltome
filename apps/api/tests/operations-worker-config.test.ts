@@ -13,6 +13,7 @@ describe('operations worker configuration', () => {
       leaseMs: 30_000,
       pollMs: 1_000,
       retryDelayMs: 1_000,
+      sourceUnavailableRetryMs: 60_000,
       scheduleBatchSize: 100,
       discovery: {
         projectionBatchSize: 500,
@@ -47,6 +48,9 @@ describe('operations worker configuration', () => {
       expect(() => readOperationsWorkerConfig({ OPERATIONS_LEASE_MS: value })).toThrow('OPERATIONS_LEASE_MS')
     }
     expect(() => readOperationsWorkerConfig({ LEADERBOARD_PAGE_DEPTH: '21' })).toThrow('LEADERBOARD_PAGE_DEPTH')
+    expect(() => readOperationsWorkerConfig({ SOURCE_UNAVAILABLE_RETRY_MS: '999' })).toThrow(
+      'SOURCE_UNAVAILABLE_RETRY_MS',
+    )
     expect(() => readOperationsWorkerConfig({ DISCOVERY_PROJECTION_BATCH_SIZE: '1001' })).toThrow(
       'DISCOVERY_PROJECTION_BATCH_SIZE',
     )

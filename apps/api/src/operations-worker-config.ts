@@ -117,6 +117,13 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     leaseMs: positiveInteger(env.OPERATIONS_LEASE_MS, 30_000, 'OPERATIONS_LEASE_MS', 300_000),
     pollMs: positiveInteger(env.OPERATIONS_POLL_MS, 1_000, 'OPERATIONS_POLL_MS', 60_000),
     retryDelayMs: positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 1_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000),
+    sourceUnavailableRetryMs: boundedInteger(
+      env.SOURCE_UNAVAILABLE_RETRY_MS,
+      60_000,
+      'SOURCE_UNAVAILABLE_RETRY_MS',
+      1_000,
+      900_000,
+    ),
     scheduleBatchSize: positiveInteger(
       env.OPERATIONS_SCHEDULE_BATCH_SIZE,
       100,

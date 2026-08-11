@@ -53,12 +53,19 @@ describe('leaderboard contract', () => {
     expect(() => leaderboardInputSchema.parse({ mode: '1v1', region: 'all', page: 1, extra: true })).toThrow()
   })
 
-  test('round-trips strict mode-specific identity discriminants', () => {
-    for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
-      const output = { ...common, mode, entries: entries[mode] }
-      const parsed = parseLeaderboardOutput(output)
-      expect(parsed.mode).toBe(mode)
-      expect(parsed).toEqual(output as never)
+  test('round-trips strict mode-specific identities across compatible V1 contract versions', () => {
+    for (const contractVersion of [1, 2] as const) {
+      for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
+        const output = {
+          ...common,
+          mode,
+          provenance: { ...common.provenance, contractVersion },
+          entries: entries[mode],
+        }
+        const parsed = parseLeaderboardOutput(output)
+        expect(parsed.mode).toBe(mode)
+        expect(parsed).toEqual(output as never)
+      }
     }
   })
 

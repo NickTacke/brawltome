@@ -1,6 +1,7 @@
 import { initializeImmutable1v1Snapshots } from './migrations/0001-immutable-1v1-snapshots'
 import { addSupportedLeaderboardModes } from './migrations/0002-add-supported-modes'
 import { addV2LegacyRankingImport } from './migrations/0003-add-v2-legacy-import'
+import { addLeaderboardProviderCompatibility } from './migrations/0004-add-provider-compatibility'
 
 export {
   LeaderboardCandidateError,
@@ -22,10 +23,11 @@ export {
   type LegacyRankingMigrationSetEvidence,
   readLegacyRankingMigrationEvidence,
 } from './legacy-import'
-export { fetchLeaderboardPage } from './v1-leaderboard-source'
+export { LeaderboardSourceError, fetchLeaderboardPage } from './v1-leaderboard-source'
 
 export const rankingMigrationInventory = [
   initializeImmutable1v1Snapshots,
   addSupportedLeaderboardModes,
   addV2LegacyRankingImport,
+  addLeaderboardProviderCompatibility,
 ] as const

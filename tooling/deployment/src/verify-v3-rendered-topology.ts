@@ -119,6 +119,9 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'SOURCE_BACKGROUND_HEADROOM') !== '30') {
       violations.push('operations-worker must retain 30 source units of on-demand headroom')
     }
+    if (readPath(worker, 'environment', 'SOURCE_UNAVAILABLE_RETRY_MS') !== '60000') {
+      violations.push('operations-worker must retain the 60-second source outage deferral')
+    }
   }
 
   const web = services['v3-web']

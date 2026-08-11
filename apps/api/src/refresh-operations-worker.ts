@@ -1,6 +1,7 @@
 import {
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
+  LeaderboardSourceError,
   type RankingPublicationStore,
   collectAndPublishLeaderboardGeneration,
   leaderboardModeFromOperationKind,
@@ -35,6 +36,7 @@ type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 type RunOneRefreshOperationOptions = {
   leaseMs: number
   retryDelayMs: number
+  sourceUnavailableRetryMs?: number
   admission: AdmissionConfig
   renewEveryMs?: number
   sourceAdmission?: SourceAdmission
@@ -721,6 +723,16 @@ export async function runOneRefreshOperation(
           lease,
           failureDetails(error, 'source_rate_limited'),
           error.retryAfterSeconds * 1_000,
+        )
+        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
+        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_rate_limited'
+        return true
+      }
+      if (error instanceof LeaderboardSourceError && error.retryable) {
+        const transition = await operations.defer(
+          lease,
+          failureDetails(error, error.code),
+          Math.max(options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs),
         )
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
         failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_rate_limited'
