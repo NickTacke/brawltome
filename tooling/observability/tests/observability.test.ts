@@ -55,13 +55,21 @@ describe('observability deployment contract', () => {
     })
     expect(compose.exitCode, compose.stderr.toString()).toBe(0)
     const rendered = JSON.parse(compose.stdout.toString()) as {
+      networks?: Record<string, unknown>
       services: Record<
         string,
         {
           image?: string
+          environment?: Record<string, string>
           deploy?: { resources?: { limits?: { cpus?: number; memory?: string; pids?: number } } }
           security_opt?: string[]
-          ports?: unknown[]
+          ports?: Array<{
+            host_ip?: string
+            mode?: string
+            protocol?: string
+            published?: string
+            target?: number
+          }>
           networks?: Record<string, unknown>
         }
       >
@@ -85,10 +93,23 @@ describe('observability deployment contract', () => {
       expect(service.deploy?.resources?.limits?.memory, `${name} memory limit`).toBeTruthy()
       expect(service.deploy?.resources?.limits?.pids, `${name} PID limit`).toBeGreaterThan(0)
       expect(service.security_opt, `${name} no-new-privileges`).toContain('no-new-privileges:true')
-      expect(service.ports ?? [], `${name} must not publish host ports`).toHaveLength(0)
-      if (name === 'grafana') expect(service.networks).toHaveProperty('dokploy-ingress')
-      else expect(service.networks ?? {}).not.toHaveProperty('dokploy-ingress')
+      if (name === 'grafana') {
+        expect(service.ports).toEqual([
+          expect.objectContaining({
+            host_ip: '127.0.0.1',
+            mode: 'ingress',
+            protocol: 'tcp',
+            published: '13000',
+            target: 3000,
+          }),
+        ])
+        expect(service.environment?.GF_SECURITY_COOKIE_SECURE).toBe('false')
+      } else {
+        expect(service.ports ?? [], `${name} must not publish host ports`).toHaveLength(0)
+      }
+      expect(service.networks ?? {}).not.toHaveProperty('dokploy-ingress')
     }
+    expect(rendered.networks ?? {}).not.toHaveProperty('dokploy-ingress')
   })
 
   test('fixes retention and requires explicit quota-backed mounts', () => {
