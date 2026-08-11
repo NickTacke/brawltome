@@ -164,6 +164,47 @@ describe('Accounts', () => {
     expect(await accounts.authenticate('orphan')).toEqual({ status: 'anonymous' })
   })
 
+  test('uses an exact exclusive session-expiry boundary', async () => {
+    for (const { deltaMs, expectedStatus } of [
+      { deltaMs: -1, expectedStatus: 'anonymous' },
+      { deltaMs: 0, expectedStatus: 'anonymous' },
+      { deltaMs: 1, expectedStatus: 'signedIn' },
+    ] as const) {
+      const state = makeStore()
+      const accounts = makeAccounts(state.store)
+      await accounts.signInWithDiscord({
+        providerAccountId: 'discord-42',
+        displayName: 'Ada',
+        avatarHash: null,
+      })
+      const session = [...state.sessions.values()][0]
+      session.expiresAt = new Date(now.getTime() + deltaMs)
+
+      expect((await accounts.authenticate('raw-session-token')).status).toBe(expectedStatus)
+    }
+  })
+
+  test('uses an exact seven-day session-extension boundary', async () => {
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+    for (const { deltaMs, extended } of [
+      { deltaMs: -1, extended: true },
+      { deltaMs: 0, extended: false },
+      { deltaMs: 1, extended: false },
+    ] as const) {
+      const state = makeStore()
+      const accounts = makeAccounts(state.store)
+      await accounts.signInWithDiscord({
+        providerAccountId: 'discord-42',
+        displayName: 'Ada',
+        avatarHash: null,
+      })
+      const session = [...state.sessions.values()][0]
+      session.expiresAt = new Date(now.getTime() + sevenDaysMs + deltaMs)
+
+      expect(await accounts.authenticate('raw-session-token')).toMatchObject({ status: 'signedIn', extended })
+    }
+  })
+
   test('authenticates a valid session and rolls it to 30 days inside the seven-day threshold', async () => {
     const state = makeStore()
     const accounts = makeAccounts(state.store)
