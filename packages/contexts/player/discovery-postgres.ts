@@ -18,6 +18,12 @@ type LegacyRow = {
 }
 type AliasRow = { brawlhalla_id: number; display_alias: string }
 
+export type LegacyPlayerMigrationEvidence = {
+  status: 'not-started' | 'in-progress' | 'complete' | 'blocked'
+  sourceChecksum: string | null
+  rejectedIdentities: Array<{ brawlhallaId: number; playerName: string; reasons: string[] }>
+}
+
 async function sourceVersion(sql: Sql): Promise<number> {
   const [state] = await sql<{ source_version: string | number }[]>`
     SELECT source_version FROM players.discovery_state WHERE singleton
@@ -96,6 +102,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
 }
 
 export function createPostgresPlayerDiscoverySource(connectionString: string): PlayerDiscoverySource & {
+  legacyMigrationEvidence(): Promise<LegacyPlayerMigrationEvidence>
   close(): Promise<void>
 } {
   const client = postgres(connectionString)
@@ -166,6 +173,47 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
         SELECT count(*)::integer AS count FROM players.discovery_outbox WHERE delivered_at IS NULL
       `
       return row.count
+    },
+
+    async legacyMigrationEvidence(): Promise<LegacyPlayerMigrationEvidence> {
+      const [progress] = await client<{ status: 'in-progress' | 'complete' | 'blocked'; source_checksum: string }[]>`
+        SELECT status, source_checksum FROM players.legacy_import_progress WHERE singleton
+      `
+      const rejectedIdentities = await client<Array<{ brawlhalla_id: number; player_name: string; reasons: string[] }>>`
+        WITH archived AS (
+          SELECT archive.source_key, archive.raw_row,
+                 CASE
+                   WHEN archive.raw_row->>'brawlhalla_id' ~ '^-?[0-9]+$'
+                    AND (archive.raw_row->>'brawlhalla_id')::numeric BETWEEN -2147483648 AND 2147483647
+                   THEN (archive.raw_row->>'brawlhalla_id')::integer
+                 END AS brawlhalla_id,
+                 archive.raw_row->>'name' AS player_name
+          FROM players.legacy_archive archive
+          WHERE archive.source_table = 'player'
+        )
+        SELECT archived.brawlhalla_id, archived.player_name,
+               array_agg(rejection.code ORDER BY rejection.code) AS reasons
+        FROM archived
+        JOIN players.legacy_import_rejections rejection
+          ON rejection.source_table = 'player' AND rejection.source_key = archived.source_key
+        LEFT JOIN players.legacy_discovery_profiles profile
+          ON profile.brawlhalla_id = archived.brawlhalla_id
+        WHERE archived.brawlhalla_id IS NOT NULL
+          AND archived.player_name IS NOT NULL
+          AND archived.player_name ~ '[^[:space:]]'
+          AND profile.brawlhalla_id IS NULL
+        GROUP BY archived.source_key, archived.brawlhalla_id, archived.player_name
+        ORDER BY archived.brawlhalla_id
+      `
+      return {
+        status: progress?.status ?? 'not-started',
+        sourceChecksum: progress?.source_checksum.trim() ?? null,
+        rejectedIdentities: rejectedIdentities.map((identity) => ({
+          brawlhallaId: identity.brawlhalla_id,
+          playerName: identity.player_name,
+          reasons: identity.reasons,
+        })),
+      }
     },
 
     close: () => client.end(),

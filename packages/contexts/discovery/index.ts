@@ -103,6 +103,67 @@ export interface DiscoveryQueries {
   search(rawQuery: string): Promise<DiscoverySearchResult>
 }
 
+export type SemanticMigrationFixtureKind =
+  | 'canonical-identity'
+  | 'exact-prefix'
+  | 'normalized-exact-name'
+  | 'local-name'
+  | 'negative-legacy-only'
+  | 'preserved-route'
+  | 'ranking-accepted'
+  | 'ranking-rejected'
+
+export type SemanticMigrationExplanationCode =
+  | 'exact-first-ranking'
+  | 'legacy-only-not-owner-fact'
+  | 'ranking-set-rejected'
+
+export type SemanticMigrationFixture = {
+  key: string
+  kind: SemanticMigrationFixtureKind
+  expected: unknown
+  legacy: unknown
+  actual: unknown
+  explanationCode: SemanticMigrationExplanationCode | null
+}
+
+export type MigrationEvidenceInput = {
+  operationKey: string
+  sourceEvidenceHash: string
+  playerReconciliation: ReconciliationResult
+  clanReconciliation: ReconciliationResult
+  pendingPlayerEvents: number
+  pendingClanEvents: number
+  fixtures: SemanticMigrationFixture[]
+}
+
+export type SemanticMigrationMismatch = {
+  fixtureKey: string
+  fixtureKind: SemanticMigrationFixtureKind
+  explanationCode: SemanticMigrationExplanationCode | null
+  expected: unknown
+  legacy: unknown
+  actual: unknown
+  reason: string
+}
+
+export type MigrationEvidenceResult = {
+  runId: string
+  operationKey: string
+  inputHash: string
+  sourceEvidenceHash: string
+  status: 'passed' | 'blocked'
+  playerProjectionHash: string
+  clanProjectionHash: string
+  fixtureHash: string
+  fixtureCount: number
+  intentionalDifferenceCount: number
+  unexplainedMismatchCount: number
+  mismatchDetailCount: number
+  mismatchDetailsTruncated: boolean
+  mismatches: SemanticMigrationMismatch[]
+}
+
 export function normalizeDiscoveryTerm(value: string): string {
   return value
     .replace(/[%\\_]/g, '')

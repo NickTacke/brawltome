@@ -87,6 +87,36 @@ export type LegacyRankingImportOptions = {
   maxBatches?: number
 }
 
+export type LegacyRankingMigrationEntryEvidence = {
+  standing: number
+  sourceRank: number
+  identity: PublishedLeaderboardIdentity
+  region: RegionalLeaderboardScope
+  rating: number
+  peakRating: number | null
+  wins: number
+  losses: number
+  games: number
+  tier: string | null
+}
+
+export type LegacyRankingMigrationSetEvidence = {
+  mode: LeaderboardMode
+  scope: RegionalLeaderboardScope
+  status: 'accepted' | 'rejected'
+  reasons: string[]
+  snapshotId: string | null
+  rowCount: number
+  sourceChecksum: string
+  entries: LegacyRankingMigrationEntryEvidence[]
+}
+
+export type LegacyRankingMigrationEvidence = {
+  status: 'not-started' | 'in-progress' | 'complete' | 'blocked'
+  sourceChecksum: string | null
+  sets: LegacyRankingMigrationSetEvidence[]
+}
+
 const SOURCES: readonly SourceDefinition[] = [
   { table: 'player', keyExpression: 'brawlhalla_id::text' },
   {
@@ -941,6 +971,65 @@ function checkpoint(progress: ProgressRow): LegacyRankingImportResult['checkpoin
   return {
     stage: progress.stage,
     sourceKey: progress.stage === 'sets' ? progress.last_mode : progress.last_source_key,
+  }
+}
+
+export async function readLegacyRankingMigrationEvidence(
+  connectionString: string,
+): Promise<LegacyRankingMigrationEvidence> {
+  const client = postgres(connectionString, { max: 1 })
+  try {
+    const [progress] = await client<
+      {
+        status: 'in-progress' | 'complete' | 'blocked'
+        source_checksum: string
+      }[]
+    >`SELECT status, source_checksum FROM rankings.legacy_import_progress WHERE singleton`
+    const sets = await client<
+      Array<{
+        mode: LeaderboardMode
+        scope: RegionalLeaderboardScope
+        status: 'accepted' | 'rejected'
+        reasons: string[]
+        snapshot_id: string | null
+        candidate_row_count: number
+        source_checksum: string
+      }>
+    >`
+      SELECT mode, scope, status, reasons, snapshot_id, candidate_row_count, source_checksum
+      FROM rankings.legacy_import_sets
+      ORDER BY mode COLLATE "C", scope COLLATE "C"
+    `
+    const archive = await loadArchive(client)
+    const immutable = await destinationIsImmutable(client)
+    const evaluatedByIdentity = new Map(
+      leaderboardModes
+        .flatMap((mode) => evaluateMode(mode, archive, immutable))
+        .map((set) => [`${set.mode}:${set.scope}`, set] as const),
+    )
+    return {
+      status: progress?.status ?? 'not-started',
+      sourceChecksum: progress?.source_checksum.trim() ?? null,
+      sets: sets.map((set) => {
+        const evaluated = evaluatedByIdentity.get(`${set.mode}:${set.scope}`)
+        return {
+          mode: set.mode,
+          scope: set.scope,
+          status: set.status,
+          reasons: evaluated?.reasons ?? set.reasons,
+          snapshotId: set.snapshot_id,
+          rowCount: evaluated?.rows.length ?? set.candidate_row_count,
+          sourceChecksum: set.source_checksum.trim(),
+          entries:
+            evaluated?.rows.slice(0, 100).map((row) => ({
+              ...row,
+              games: row.wins + row.losses,
+            })) ?? [],
+        }
+      }),
+    }
+  } finally {
+    await client.end()
   }
 }
 

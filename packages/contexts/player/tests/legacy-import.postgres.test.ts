@@ -204,6 +204,15 @@ describe('Players V2 import', () => {
       } finally {
         await source.close()
       }
+      const migratedRoute = createPostgresRankedPlayers(connectionString)
+      try {
+        await expect(migratedRoute.referenceById(42)).resolves.toEqual({
+          brawlhallaId: 42,
+          name: 'Legacy | Forty Two',
+        })
+      } finally {
+        await migratedRoute.close()
+      }
 
       await expect(
         Promise.resolve(

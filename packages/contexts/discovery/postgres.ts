@@ -7,6 +7,8 @@ import {
   type ClanProjectionSource,
   type ClanSearchHit,
   type DiscoveryQueries,
+  type MigrationEvidenceInput,
+  type MigrationEvidenceResult,
   type PlayerDiscoveryFact,
   type PlayerProjectionEvent,
   type PlayerProjectionSnapshot,
@@ -15,6 +17,10 @@ import {
   type ProjectionOwner,
   type ReconciliationDifference,
   type ReconciliationResult,
+  type SemanticMigrationExplanationCode,
+  type SemanticMigrationFixture,
+  type SemanticMigrationFixtureKind,
+  type SemanticMigrationMismatch,
   normalizeDiscoveryTerm,
 } from './index'
 
@@ -72,6 +78,176 @@ async function replacePlayer(sql: Sql, generationId: string, fact: PlayerDiscove
 }
 
 const maxPersistedReconciliationDifferences = 1_000
+const maxPersistedSemanticMigrationMismatches = 1_000
+const maxSemanticMigrationFixtures = 5_000
+const maxSemanticMigrationFixtureBytes = 32 * 1_024
+const maxSemanticMigrationManifestBytes = 5 * 1_024 * 1_024
+const maxSemanticMigrationValueDepth = 16
+
+const semanticMigrationFixtureKinds = [
+  'canonical-identity',
+  'exact-prefix',
+  'normalized-exact-name',
+  'local-name',
+  'negative-legacy-only',
+  'preserved-route',
+  'ranking-accepted',
+  'ranking-rejected',
+] as const satisfies readonly SemanticMigrationFixtureKind[]
+
+const allowedExplanationByKind: Partial<Record<SemanticMigrationFixtureKind, SemanticMigrationExplanationCode>> = {
+  'exact-prefix': 'exact-first-ranking',
+  'negative-legacy-only': 'legacy-only-not-owner-fact',
+  'ranking-rejected': 'ranking-set-rejected',
+}
+
+function stableJson(value: unknown, ancestors = new Set<object>(), depth = 0): string {
+  if (depth > maxSemanticMigrationValueDepth) throw new Error('Discovery migration fixture values are too deep')
+  if (value === null) return 'null'
+  if (value instanceof Date) return JSON.stringify(value.toISOString())
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new Error('Discovery migration fixture values must be finite JSON data')
+  }
+  if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') {
+    const serialized = JSON.stringify(value)
+    if (serialized !== undefined) return serialized
+  }
+  if (typeof value !== 'object') throw new Error('Discovery migration fixture values must be finite JSON data')
+  if (ancestors.has(value)) throw new Error('Discovery migration fixture values must not contain cycles')
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) {
+      const items: string[] = []
+      for (let index = 0; index < value.length; index++) {
+        if (!(index in value)) throw new Error('Discovery migration fixture arrays must not be sparse')
+        items.push(stableJson(value[index], ancestors, depth + 1))
+      }
+      return `[${items.join(',')}]`
+    }
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => Buffer.compare(Buffer.from(left), Buffer.from(right)))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item, ancestors, depth + 1)}`)
+      .join(',')}}`
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+const semanticHash = (serialized: string) => createHash('sha256').update(serialized).digest('hex')
+const semanticEqual = (left: unknown, right: unknown) => stableJson(left) === stableJson(right)
+const compareSemanticFixture = (left: SemanticMigrationFixture, right: SemanticMigrationFixture) =>
+  Buffer.compare(Buffer.from(left.key), Buffer.from(right.key))
+
+function validateAndOrderSemanticFixtures(fixtures: SemanticMigrationFixture[]): {
+  orderedFixtures: SemanticMigrationFixture[]
+  serializedManifest: string
+} {
+  if (fixtures.length < 1 || fixtures.length > maxSemanticMigrationFixtures) {
+    throw new Error(`Discovery migration requires between 1 and ${maxSemanticMigrationFixtures} fixtures`)
+  }
+  const orderedFixtures = [...fixtures].sort(compareSemanticFixture)
+  const keys = new Set<string>()
+  const observedKinds = new Set<SemanticMigrationFixtureKind>()
+  let manifestBytes = 2
+  for (const fixture of orderedFixtures) {
+    if (!fixture.key || fixture.key.length > 256 || keys.has(fixture.key)) {
+      throw new Error('Discovery migration fixture keys must be unique and between 1 and 256 characters')
+    }
+    if (!(semanticMigrationFixtureKinds as readonly string[]).includes(fixture.kind)) {
+      throw new Error('Discovery migration fixture kind is unsupported')
+    }
+    keys.add(fixture.key)
+    observedKinds.add(fixture.kind)
+    const serialized = stableJson(fixture)
+    const bytes = Buffer.byteLength(serialized)
+    if (bytes > maxSemanticMigrationFixtureBytes) throw new Error('Discovery migration fixture is too large')
+    manifestBytes += bytes + 1
+    if (manifestBytes > maxSemanticMigrationManifestBytes) {
+      throw new Error('Discovery migration fixture manifest is too large')
+    }
+  }
+  const missingKinds = semanticMigrationFixtureKinds.filter((kind) => !observedKinds.has(kind))
+  if (missingKinds.length > 0) {
+    throw new Error(`Discovery migration fixture coverage is missing: ${missingKinds.join(', ')}`)
+  }
+  return { orderedFixtures, serializedManifest: stableJson(orderedFixtures) }
+}
+
+function classifySemanticFixtures(fixtures: SemanticMigrationFixture[]): {
+  intentionalDifferenceCount: number
+  mismatches: SemanticMigrationMismatch[]
+} {
+  let intentionalDifferenceCount = 0
+  const mismatches: SemanticMigrationMismatch[] = []
+  for (const fixture of fixtures) {
+    const expectedExplanation = allowedExplanationByKind[fixture.kind]
+    if (fixture.explanationCode !== null && fixture.explanationCode !== expectedExplanation) {
+      throw new Error('Explanation code does not match semantic fixture kind')
+    }
+    const legacyDiffers = !semanticEqual(fixture.legacy, fixture.actual)
+    const actualMatches = semanticEqual(fixture.expected, fixture.actual)
+    if (!actualMatches) {
+      mismatches.push({
+        fixtureKey: fixture.key,
+        fixtureKind: fixture.kind,
+        explanationCode: fixture.explanationCode,
+        expected: fixture.expected,
+        legacy: fixture.legacy,
+        actual: fixture.actual,
+        reason: 'actual-does-not-match-canonical-expectation',
+      })
+      continue
+    }
+    if (!legacyDiffers) {
+      if (fixture.explanationCode !== null) {
+        throw new Error('Semantic fixture explanation requires an observed legacy difference')
+      }
+      continue
+    }
+    const legacySearchIdentitySet = (value: unknown): string | null => {
+      if (!value || typeof value !== 'object') return null
+      const observation = value as { players?: unknown; clans?: unknown }
+      if (!Array.isArray(observation.players) || !Array.isArray(observation.clans)) return null
+      const playerIds = observation.players
+        .map((player) =>
+          player && typeof player === 'object' && typeof (player as { entityId?: unknown }).entityId === 'number'
+            ? (player as { entityId: number }).entityId
+            : null,
+        )
+        .filter((entityId): entityId is number => entityId !== null)
+        .sort((left, right) => left - right)
+      const clanIds = observation.clans
+        .filter((entityId): entityId is number => typeof entityId === 'number')
+        .sort((left, right) => left - right)
+      if (playerIds.length !== observation.players.length || clanIds.length !== observation.clans.length) return null
+      return stableJson({ playerIds, clanIds })
+    }
+    const exactFirstDifferenceIsOnlyOrdering =
+      fixture.kind === 'exact-prefix' &&
+      legacySearchIdentitySet(fixture.legacy) !== null &&
+      legacySearchIdentitySet(fixture.legacy) === legacySearchIdentitySet(fixture.actual)
+    const explainedOwnerRejection =
+      (fixture.kind === 'negative-legacy-only' || fixture.kind === 'ranking-rejected') &&
+      semanticEqual(fixture.expected, fixture.actual) &&
+      !semanticEqual(fixture.legacy, fixture.actual)
+    const explanationIsMechanical =
+      fixture.explanationCode === expectedExplanation && (exactFirstDifferenceIsOnlyOrdering || explainedOwnerRejection)
+    if (!explanationIsMechanical) {
+      mismatches.push({
+        fixtureKey: fixture.key,
+        fixtureKind: fixture.kind,
+        explanationCode: fixture.explanationCode,
+        expected: fixture.expected,
+        legacy: fixture.legacy,
+        actual: fixture.actual,
+        reason: 'legacy-difference-is-unexplained',
+      })
+      continue
+    }
+    intentionalDifferenceCount++
+  }
+  return { intentionalDifferenceCount, mismatches }
+}
 
 async function replaceClan(sql: Sql, generationId: string, fact: ClanDiscoveryFact | null, clanId: number) {
   await sql`
@@ -162,6 +338,10 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
   reconciliationEffectApplied(operationId: string): Promise<boolean>
   playerProjectionEffectState(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   clanProjectionEffectState(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
+  commitMigrationEvidence(
+    input: MigrationEvidenceInput,
+    authorizeEvidence?: () => Promise<boolean>,
+  ): Promise<MigrationEvidenceResult>
   close(): Promise<void>
 } {
   const client = postgres(connectionString)
@@ -646,6 +826,196 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     throw new Error('Discovery reconciliation exhausted retries')
   }
 
+  async function existingMigrationEvidence(sql: Sql, operationKey: string): Promise<MigrationEvidenceResult | null> {
+    const [run] = await sql<
+      Array<{
+        run_id: string
+        operation_key: string
+        input_hash: string
+        status: 'passed' | 'blocked'
+        source_evidence_hash: string
+        player_projection_hash: string
+        clan_projection_hash: string
+        fixture_hash: string
+        fixture_count: number
+        intentional_difference_count: number
+        unexplained_mismatch_count: number
+        mismatch_detail_count: number
+        mismatch_details_truncated: boolean
+        mismatch_details: SemanticMigrationMismatch[]
+      }>
+    >`
+      SELECT run_id, operation_key, input_hash, status, source_evidence_hash,
+             player_projection_hash, clan_projection_hash, fixture_hash, fixture_count,
+             intentional_difference_count, unexplained_mismatch_count,
+             mismatch_detail_count, mismatch_details_truncated, mismatch_details
+      FROM discovery.semantic_migration_runs WHERE operation_key = ${operationKey}
+    `
+    if (!run) return null
+    return {
+      runId: run.run_id,
+      operationKey: run.operation_key,
+      inputHash: run.input_hash.trim(),
+      sourceEvidenceHash: run.source_evidence_hash.trim(),
+      status: run.status,
+      playerProjectionHash: run.player_projection_hash.trim(),
+      clanProjectionHash: run.clan_projection_hash.trim(),
+      fixtureHash: run.fixture_hash.trim(),
+      fixtureCount: run.fixture_count,
+      intentionalDifferenceCount: run.intentional_difference_count,
+      unexplainedMismatchCount: run.unexplained_mismatch_count,
+      mismatchDetailCount: run.mismatch_detail_count,
+      mismatchDetailsTruncated: run.mismatch_details_truncated,
+      mismatches: run.mismatch_details,
+    }
+  }
+
+  async function assertStoredReconciliationEvidence(sql: Sql, input: MigrationEvidenceInput): Promise<void> {
+    const rows = await sql<
+      Array<{
+        run_id: string
+        entity_kind: ProjectionOwner
+        observed_source_version: string | number
+        pending_event_count: number
+        expected_hash: string
+        projected_hash_after: string
+        exact_after: boolean
+      }>
+    >`
+      SELECT run_id, entity_kind, observed_source_version, pending_event_count,
+             expected_hash, projected_hash_after, exact_after
+      FROM discovery.reconciliation_runs
+      WHERE run_id IN (${input.playerReconciliation.runId}::uuid, ${input.clanReconciliation.runId}::uuid)
+    `
+    const matches = (reconciliation: ReconciliationResult) => {
+      const stored = rows.find(({ run_id }) => run_id === reconciliation.runId)
+      return (
+        stored?.entity_kind === reconciliation.owner &&
+        Number(stored.observed_source_version) === reconciliation.observedSourceVersion &&
+        stored.pending_event_count === reconciliation.pendingEventCount &&
+        stored.expected_hash.trim() === reconciliation.expectedHash &&
+        stored.projected_hash_after.trim() === reconciliation.projectedHashAfter &&
+        stored.exact_after === reconciliation.exactAfter
+      )
+    }
+    if (!matches(input.playerReconciliation) || !matches(input.clanReconciliation)) {
+      throw new Error('Discovery migration evidence does not match stored reconciliation')
+    }
+  }
+
+  async function assertCurrentProjectionEvidence(sql: Sql, input: MigrationEvidenceInput): Promise<void> {
+    const reconciliations = [input.playerReconciliation, input.clanReconciliation]
+    for (const reconciliation of reconciliations) {
+      const [generation] = await sql<{ source_version: string | number }[]>`
+        SELECT source_version FROM discovery.generations
+        WHERE entity_kind = ${reconciliation.owner} AND active FOR UPDATE
+      `
+      const currentHash = termHash(await projectedTerms(sql, reconciliation.owner))
+      if (
+        Number(generation?.source_version) !== reconciliation.observedSourceVersion ||
+        currentHash !== reconciliation.expectedHash
+      ) {
+        throw new Error('Discovery migration evidence does not match the active projection')
+      }
+    }
+  }
+
+  async function commitMigrationEvidence(
+    input: MigrationEvidenceInput,
+    authorizeEvidence?: () => Promise<boolean>,
+  ): Promise<MigrationEvidenceResult> {
+    if (!input.operationKey || input.operationKey.length > 256) {
+      throw new Error('Discovery migration operation key must be between 1 and 256 characters')
+    }
+    if (!/^[a-f0-9]{64}$/u.test(input.sourceEvidenceHash)) {
+      throw new Error('Discovery migration source evidence hash must be SHA-256')
+    }
+    if (
+      input.playerReconciliation.owner !== 'player' ||
+      input.clanReconciliation.owner !== 'clan' ||
+      !input.playerReconciliation.exactAfter ||
+      !input.clanReconciliation.exactAfter ||
+      input.playerReconciliation.projectedHashAfter !== input.playerReconciliation.expectedHash ||
+      input.clanReconciliation.projectedHashAfter !== input.clanReconciliation.expectedHash
+    ) {
+      throw new Error('Discovery migration evidence requires exact owner reconciliation')
+    }
+    if (
+      input.pendingPlayerEvents !== 0 ||
+      input.pendingClanEvents !== 0 ||
+      input.playerReconciliation.pendingEventCount !== 0 ||
+      input.clanReconciliation.pendingEventCount !== 0
+    ) {
+      throw new Error('Discovery migration evidence requires zero owner lag')
+    }
+    const { orderedFixtures, serializedManifest } = validateAndOrderSemanticFixtures(input.fixtures)
+    const fixtureHash = semanticHash(serializedManifest)
+    const inputHash = semanticHash(
+      stableJson({
+        operationKey: input.operationKey,
+        sourceEvidenceHash: input.sourceEvidenceHash,
+        player: {
+          sourceVersion: input.playerReconciliation.observedSourceVersion,
+          expectedHash: input.playerReconciliation.expectedHash,
+          projectedHashAfter: input.playerReconciliation.projectedHashAfter,
+          pendingEventCount: input.playerReconciliation.pendingEventCount,
+        },
+        clan: {
+          sourceVersion: input.clanReconciliation.observedSourceVersion,
+          expectedHash: input.clanReconciliation.expectedHash,
+          projectedHashAfter: input.clanReconciliation.projectedHashAfter,
+          pendingEventCount: input.clanReconciliation.pendingEventCount,
+        },
+        pendingPlayerEvents: input.pendingPlayerEvents,
+        pendingClanEvents: input.pendingClanEvents,
+        fixtureHash,
+      }),
+    )
+    const classified = classifySemanticFixtures(orderedFixtures)
+    const persistedMismatches = classified.mismatches.slice(0, maxPersistedSemanticMigrationMismatches)
+    return client.begin(async (transaction) => {
+      const sql = transaction as unknown as Sql
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discovery-migration:${input.operationKey}`}, 225))`
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended('discovery:player', 200))`
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended('discovery:clan', 200))`
+      await assertStoredReconciliationEvidence(sql, input)
+      await assertCurrentProjectionEvidence(sql, input)
+      if (authorizeEvidence && !(await authorizeEvidence())) {
+        throw new Error('Discovery owner facts changed before evidence commit')
+      }
+      const existing = await existingMigrationEvidence(sql, input.operationKey)
+      if (existing) {
+        if (existing.inputHash !== inputHash) {
+          throw new Error('Discovery migration operation key was already used for different evidence')
+        }
+        return existing
+      }
+      const status = classified.mismatches.length === 0 ? ('passed' as const) : ('blocked' as const)
+      await sql`
+        INSERT INTO discovery.semantic_migration_runs
+          (operation_key, input_hash, source_evidence_hash, status,
+           player_reconciliation_run_id, clan_reconciliation_run_id, player_source_version,
+           clan_source_version, player_projection_hash, clan_projection_hash,
+           fixture_hash, fixture_count, fixture_manifest, intentional_difference_count,
+           unexplained_mismatch_count, mismatch_detail_count, mismatch_details_truncated, mismatch_details)
+        VALUES
+          (${input.operationKey}, ${inputHash}, ${input.sourceEvidenceHash}, ${status},
+           ${input.playerReconciliation.runId}::uuid, ${input.clanReconciliation.runId}::uuid,
+           ${input.playerReconciliation.observedSourceVersion},
+           ${input.clanReconciliation.observedSourceVersion}, ${input.playerReconciliation.projectedHashAfter},
+           ${input.clanReconciliation.projectedHashAfter}, ${fixtureHash}, ${orderedFixtures.length},
+           ${sql.json(orderedFixtures as never)}, ${classified.intentionalDifferenceCount},
+           ${classified.mismatches.length},
+           ${persistedMismatches.length},
+           ${classified.mismatches.length > maxPersistedSemanticMigrationMismatches},
+           ${sql.json(persistedMismatches as never)})
+      `
+      const result = await existingMigrationEvidence(sql, input.operationKey)
+      if (!result) throw new Error('Discovery migration evidence disappeared after commit')
+      return result
+    })
+  }
+
   async function reconciliationDue(owner: ProjectionOwner, intervalMs: number): Promise<boolean> {
     if (!Number.isSafeInteger(intervalMs) || intervalMs < 1) {
       throw new Error('Discovery reconciliation interval must be a positive safe integer')
@@ -705,6 +1075,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     reconciliationEffectApplied,
     playerProjectionEffectState: (operationId) => projectionEffectState('player', operationId),
     clanProjectionEffectState: (operationId) => projectionEffectState('clan', operationId),
+    commitMigrationEvidence,
     close: () => client.end(),
   }
 }
