@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { readOperationsWorkerConfig } from '../../../apps/api/src/operations-worker-config'
+import {
+  readBrawlhallaV1RequestLimit,
+  readOperationsWorkerConfig,
+  readSourceBackgroundHeadroom,
+} from '../../../apps/api/src/operations-worker-config'
 
 const root = resolve(import.meta.dir, '../../..')
 const deployment = (...parts: string[]) => resolve(root, 'deploy/v3', ...parts)
@@ -42,18 +46,18 @@ function renderCompose() {
   }
 }
 
-const runtimeServices = ['api', 'discord-bot', 'operations-worker', 'postgres', 'web'] as const
+const runtimeServices = ['postgres', 'v3-api', 'v3-discord-bot', 'v3-operations-worker', 'v3-web'] as const
 
 describe('V3 production topology', () => {
   test('renders independent one-replica units without public exposure', () => {
     const rendered = renderCompose()
     expect(Object.keys(rendered.services).sort()).toEqual([
-      'api',
-      'discord-bot',
       'migration',
-      'operations-worker',
       'postgres',
-      'web',
+      'v3-api',
+      'v3-discord-bot',
+      'v3-operations-worker',
+      'v3-web',
     ])
 
     for (const name of runtimeServices) {
@@ -64,43 +68,44 @@ describe('V3 production topology', () => {
       expect(service.ports ?? [], `${name} published ports`).toHaveLength(0)
     }
 
-    expect(rendered.services['discord-bot'].profiles).toEqual(['discord'])
+    expect(rendered.services['v3-discord-bot'].profiles).toEqual(['discord'])
     expect(JSON.stringify(rendered)).not.toContain('traefik')
     expect(JSON.stringify(rendered)).not.toContain('redis')
   })
 
-  test('uses only the dedicated application overlay', () => {
+  test('isolates data units and uses collision-free V3 runtime identities', () => {
     const rendered = renderCompose()
     const expected = {
-      api: ['application'],
-      'discord-bot': ['application'],
       migration: ['application'],
-      'operations-worker': ['application'],
       postgres: ['application'],
-      web: ['application'],
+      'v3-api': ['application', 'observability'],
+      'v3-discord-bot': ['application', 'observability'],
+      'v3-operations-worker': ['application', 'observability'],
+      'v3-web': ['application', 'observability'],
     }
     for (const [name, networks] of Object.entries(expected)) {
       expect(Object.keys(rendered.services[name].networks ?? {}).sort(), `${name} networks`).toEqual(networks)
     }
     expect(rendered.networks).toEqual({
       application: expect.objectContaining({ external: true, name: 'brawltome-v3' }),
+      observability: expect.objectContaining({ external: true, name: 'brawltome-observability' }),
     })
   })
 
   test('gates runtimes on migration and preserves health and drain semantics', () => {
     const rendered = renderCompose()
     expect(rendered.services.migration.restart).toBe('no')
-    expect(rendered.services.api.depends_on?.migration?.condition).toBe('service_completed_successfully')
-    expect(rendered.services['operations-worker'].depends_on?.migration?.condition).toBe(
+    expect(rendered.services['v3-api'].depends_on?.migration?.condition).toBe('service_completed_successfully')
+    expect(rendered.services['v3-operations-worker'].depends_on?.migration?.condition).toBe(
       'service_completed_successfully',
     )
-    expect(rendered.services.web.depends_on?.api?.condition).toBe('service_healthy')
+    expect(rendered.services['v3-web'].depends_on?.['v3-api']?.condition).toBe('service_healthy')
 
-    expect(rendered.services.api.healthcheck?.test?.join(' ')).toContain('/health/ready')
-    expect(rendered.services['operations-worker'].healthcheck?.test?.join(' ')).toContain('/health/ready')
-    expect(rendered.services.web.healthcheck?.test?.join(' ')).toContain('/api/health/ready')
-    expect(rendered.services['discord-bot'].healthcheck?.test?.join(' ')).toContain('/health/ready')
-    for (const name of ['api', 'discord-bot', 'operations-worker'] as const) {
+    expect(rendered.services['v3-api'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    expect(rendered.services['v3-operations-worker'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    expect(rendered.services['v3-web'].healthcheck?.test?.join(' ')).toContain('/api/health/ready')
+    expect(rendered.services['v3-discord-bot'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    for (const name of ['v3-api', 'v3-discord-bot', 'v3-operations-worker'] as const) {
       expect(rendered.services[name].stop_grace_period).toBe('1m10s')
     }
   })
@@ -128,25 +133,27 @@ describe('V3 production topology', () => {
       })
     }
     expect(rendered.services.migration.secrets?.map(({ source }) => source)).toEqual(['migration_database_url'])
-    expect(rendered.services.api.secrets?.map(({ source }) => source)).toContain('runtime_database_url')
-    expect(rendered.services.api.secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
-    expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).toContain(
+    expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).toContain('runtime_database_url')
+    expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
+    expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).toContain(
       'runtime_database_url',
     )
-    expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).not.toContain(
+    expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).not.toContain(
       'migration_database_url',
     )
-    const workerEnvironment = rendered.services['operations-worker'].environment
+    const workerEnvironment = rendered.services['v3-operations-worker'].environment
     expect(workerEnvironment).toMatchObject({
-      BRAWLHALLA_V1_REQUEST_LIMIT: '1',
+      BRAWLHALLA_V1_REQUEST_LIMIT: '102',
       OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
       OPERATIONS_INTERACTIVE_RESERVATION: '1',
+      OPERATIONS_LEADERBOARD_CONCURRENCY: '1',
       OPERATIONS_TOTAL_CONCURRENCY: '2',
+      SOURCE_BACKGROUND_HEADROOM: '30',
     })
     expect(readOperationsWorkerConfig(workerEnvironment as NodeJS.ProcessEnv).admission).toMatchObject({
       totalConcurrency: 2,
       interactiveReservation: 1,
-      classConcurrency: { interactive: 2 },
+      classConcurrency: { interactive: 2, leaderboard: 1 },
     })
     expect(JSON.stringify(rendered.services)).not.toContain('DATABASE_URL=')
   })
@@ -168,6 +175,39 @@ describe('V3 production topology', () => {
         }),
       ]),
     )
+  })
+
+  test('keeps the root Compose worker inside the approved source policy', () => {
+    const result = Bun.spawnSync({
+      cmd: [
+        'docker',
+        'compose',
+        '--profile',
+        'v3',
+        '-f',
+        resolve(root, 'docker-compose.yml'),
+        'config',
+        '--format',
+        'json',
+      ],
+      cwd: root,
+      env: {
+        ...process.env,
+        BRAWLHALLA_API_KEY: 'redacted-test-value',
+        INTERNAL_API_SECRET: 'redacted-test-value',
+        METRICS_SCRAPE_SECRET: 'redacted-test-value',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect(result.exitCode, result.stderr.toString()).toBe(0)
+    const rendered = JSON.parse(result.stdout.toString()) as {
+      services: { 'operations-worker': { environment: Record<string, string> } }
+    }
+    const environment = rendered.services['operations-worker'].environment
+    const limit = readBrawlhallaV1RequestLimit(environment.BRAWLHALLA_V1_REQUEST_LIMIT)
+    expect(limit).toBe(102)
+    expect(readSourceBackgroundHeadroom(environment.SOURCE_BACKGROUND_HEADROOM, limit)).toBe(30)
   })
 
   test('uses pinned build/runtime images and excludes environment files from build context', () => {

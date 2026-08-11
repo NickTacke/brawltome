@@ -82,7 +82,7 @@ type RunOneRefreshOperationOptions = {
 
 type ActiveClanAuthority = { lease: ClanLease; section: 'profile' | 'roster' } | null
 
-class SourceAdmissionLimitedError extends Error {
+export class SourceAdmissionLimitedError extends Error {
   constructor(readonly retryAfterSeconds: number) {
     super('Source admission is rate limited')
   }
@@ -292,6 +292,8 @@ async function executeInteractive(
 
   if (authorityLost.signal.aborted) return 'lease_lost'
   if (failures.length > 0) {
+    const executionFailure = failures.find((error) => sourceRetryAfterMs(error) === null)
+    if (executionFailure) throw executionFailure
     const retryAware = failures
       .map((error) => ({ error, retryAfterMs: sourceRetryAfterMs(error) }))
       .filter((failure): failure is { error: unknown; retryAfterMs: number } => failure.retryAfterMs !== null)
@@ -714,13 +716,10 @@ export async function runOneRefreshOperation(
         failureCategory = 'lease_lost'
         return true
       }
-      if (
-        error instanceof SourceAdmissionLimitedError &&
-        (lease.kind === 'statistics-ranked-collection' || lease.kind === 'statistics-lifetime-collection')
-      ) {
+      if (error instanceof SourceAdmissionLimitedError) {
         const transition = await operations.defer(
           lease,
-          { code: 'source_rate_limited', message: error.message, retryable: true },
+          failureDetails(error, 'source_rate_limited'),
           error.retryAfterSeconds * 1_000,
         )
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
@@ -755,7 +754,6 @@ export async function runOneRefreshOperation(
         }
       }
       const sourceRetryMs = sourceRetryAfterMs(error)
-      const retryDelayMs = sourceRetryMs ?? options.retryDelayMs
       const fallbackCode =
         sourceRetryMs !== null
           ? 'source_rate_limited'
@@ -784,7 +782,7 @@ export async function runOneRefreshOperation(
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'
-      if ((await operations.fail(lease, failure, retryDelayMs)) === 'lease-lost') {
+      if ((await operations.fail(lease, failure, sourceRetryMs ?? options.retryDelayMs)) === 'lease-lost') {
         attemptOutcome = 'lease_lost'
         failureCategory = 'lease_lost'
       }

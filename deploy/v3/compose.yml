@@ -70,7 +70,7 @@ services:
           memory: 512M
           pids: 128
 
-  api:
+  v3-api:
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -95,6 +95,7 @@ services:
       - refresh_trust_cookie_secret
     networks:
       - application
+      - observability
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -126,7 +127,7 @@ services:
         reservations:
           memory: 256M
 
-  web:
+  v3-web:
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -136,7 +137,7 @@ services:
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ""
     environment:
       HOSTNAME: 0.0.0.0
-      INTERNAL_API_URL: http://api:3000
+      INTERNAL_API_URL: http://v3-api:3000
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PORT: "3000"
@@ -147,8 +148,9 @@ services:
       - otel_authorization
     networks:
       - application
+      - observability
     depends_on:
-      api:
+      v3-api:
         condition: service_healthy
     healthcheck:
       test:
@@ -178,22 +180,24 @@ services:
         reservations:
           memory: 192M
 
-  operations-worker:
+  v3-operations-worker:
     build:
       context: ../..
       dockerfile: Dockerfile
       target: operations-worker
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
-      BRAWLHALLA_V1_REQUEST_LIMIT: "1"
+      BRAWLHALLA_V1_REQUEST_LIMIT: "102"
       HEALTH_PORT: "3001"
       NODE_ENV: production
       OPERATIONS_INTERACTIVE_CONCURRENCY: "2"
       OPERATIONS_INTERACTIVE_RESERVATION: "1"
+      OPERATIONS_LEADERBOARD_CONCURRENCY: "1"
       OPERATIONS_TOTAL_CONCURRENCY: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      SOURCE_BACKGROUND_HEADROOM: "30"
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
     secrets:
       - brawlhalla_api_key
@@ -202,6 +206,7 @@ services:
       - otel_authorization
     networks:
       - application
+      - observability
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -233,14 +238,14 @@ services:
         reservations:
           memory: 256M
 
-  discord-bot:
+  v3-discord-bot:
     profiles: [discord]
     build:
       context: ../..
       dockerfile: Dockerfile
       target: discord-bot
     environment:
-      API_URL: http://api:3000
+      API_URL: http://v3-api:3000
       DISCORD_CLIENT_ID: ${V3_DISCORD_CLIENT_ID:-deferred}
       DISCORD_METRICS_PORT: "3002"
       NODE_ENV: production
@@ -255,8 +260,9 @@ services:
       - otel_authorization
     networks:
       - application
+      - observability
     depends_on:
-      api:
+      v3-api:
         condition: service_healthy
     healthcheck:
       test:
@@ -290,6 +296,9 @@ networks:
   application:
     external: true
     name: brawltome-v3
+  observability:
+    external: true
+    name: brawltome-observability
 
 secrets:
   brawlhalla_api_key:

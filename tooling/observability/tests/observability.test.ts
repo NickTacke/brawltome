@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parse } from 'yaml'
 
 const root = resolve(import.meta.dir, '../../..')
 const deploy = (...parts: string[]) => resolve(root, 'deploy/observability', ...parts)
@@ -161,6 +162,46 @@ describe('observability deployment contract', () => {
     expect(read('storage', 'verify-quota-mounts.sh')).toContain('findmnt')
   })
 
+  test('scrapes V2 and V3 through distinct generation-labeled targets', () => {
+    const config = parse(read('prometheus', 'prometheus.yml')) as {
+      scrape_configs: Array<{
+        job_name: string
+        static_configs: Array<{ targets: string[]; labels?: Record<string, string> }>
+      }>
+    }
+    const job = (name: string) => config.scrape_configs.find(({ job_name }) => job_name === name)?.static_configs
+
+    expect(job('api')).toEqual([
+      { targets: ['api:3000'], labels: { runtime: 'api', generation: 'v2' } },
+      { targets: ['v3-api:3000'], labels: { runtime: 'api', generation: 'v3' } },
+    ])
+    expect(job('operations-worker')).toEqual([
+      { targets: ['operations-worker:3001'], labels: { runtime: 'operations-worker', generation: 'v2' } },
+      { targets: ['v3-operations-worker:3001'], labels: { runtime: 'operations-worker', generation: 'v3' } },
+    ])
+    expect(job('web')).toEqual([
+      { targets: ['web:3000'], labels: { runtime: 'web', generation: 'v2' } },
+      { targets: ['v3-web:3000'], labels: { runtime: 'web', generation: 'v3' } },
+    ])
+    expect(job('discord')).toEqual([
+      { targets: ['discord-bot:3002'], labels: { runtime: 'discord', generation: 'v2' } },
+    ])
+    expect(job('readiness')).toEqual(
+      expect.arrayContaining([
+        { targets: ['http://api:3000/health/ready'], labels: { runtime: 'api', generation: 'v2' } },
+        { targets: ['http://v3-api:3000/health/ready'], labels: { runtime: 'api', generation: 'v3' } },
+        {
+          targets: ['http://operations-worker:3001/health/ready'],
+          labels: { runtime: 'operations-worker', generation: 'v2' },
+        },
+        {
+          targets: ['http://v3-operations-worker:3001/health/ready'],
+          labels: { runtime: 'operations-worker', generation: 'v3' },
+        },
+      ]),
+    )
+  })
+
   test('provisions every required low-cardinality alert and firing/recovery evidence', () => {
     const rules = read('prometheus', 'rules', 'alerts.yml')
     const evidence = read('prometheus', 'tests', 'alerts.test.yml')
@@ -169,6 +210,14 @@ describe('observability deployment contract', () => {
     expect(declaredAlerts).toEqual([...requiredAlerts])
     for (const alert of requiredAlerts) expect(evidence).toContain(`alertname: ${alert}`)
     expect(rules).not.toMatch(/\b(request_id|trace_id|job_id|operation_id|user_id|guild_id)\b/)
+    for (const aggregation of [
+      'max by (runtime, generation)',
+      'sum by (runtime, generation, le)',
+      'sum by (runtime, generation)',
+      'max by (generation, work_class)',
+    ]) {
+      expect(rules).toContain(aggregation)
+    }
     expect(read('alertmanager', 'alertmanager.yml')).toContain('webhook_url_file: /run/secrets/discord_webhook_url')
     expect(read('alertmanager', 'alertmanager.yml')).toContain('send_resolved: true')
     expect(read('prometheus', 'prometheus.yml')).toContain('/run/secrets/metrics_scrape_secret')
@@ -197,6 +246,7 @@ describe('observability deployment contract', () => {
     ]) {
       expect(titles).toContain(title)
     }
+    expect(queries).toContain('generation')
     for (const metric of [
       'probe_success',
       'worker_heartbeat_timestamp_seconds',

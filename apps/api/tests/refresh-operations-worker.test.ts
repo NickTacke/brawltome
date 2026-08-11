@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { RateLimitError } from '@brawltome/bhapi'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
@@ -158,7 +159,10 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
       admission,
       telemetry,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
       ranking: {
         publishGeneration: async () => 'published' as const,
         recordCollectionFailure: async () => 'recorded' as const,
@@ -218,6 +222,7 @@ describe('refresh operations worker source retry', () => {
           sourceAdmissions++
           return { outcome: 'admitted', deduplicated: false }
         },
+        pauseSource: async () => {},
       },
       isPrimaryMonitoringTarget: async () => true,
       executeSection: async (_lease, section, admitSourceCall, caller) => {
@@ -238,7 +243,10 @@ describe('refresh operations worker source retry', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
       isPrimaryMonitoringTarget: async () => false,
       executeSection: async (_lease, section) => {
         sections.push(section)
@@ -446,7 +454,10 @@ describe('refresh operations worker source retry', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
+        pauseSource: async () => {},
+      },
       statistics: {
         preflightCollection: async () => 'missing',
         preflightCollectionAttempt: async () => 'allowed',
@@ -465,7 +476,64 @@ describe('refresh operations worker source retry', () => {
     expect(recorded).toBe(false)
   })
 
-  test('preserves source admission Retry-After for clan failures', async () => {
+  test('consumes an attempt for an upstream Statistics 429 after recording its immutable fence', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'statistics:cohort:43:ranked',
+      kind: 'statistics-ranked-collection',
+      workClass: 'global-statistics',
+      payload: { cohortId: crypto.randomUUID(), brawlhallaId: 43 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    let deferred = false
+    let failed: { failure: OperationFailure; retryDelayMs: number } | undefined
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async () => {
+        deferred = true
+        return 'transitioned' as const
+      },
+      complete: async () => 'transitioned' as const,
+      fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
+        failed = { failure, retryDelayMs }
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
+      statistics: {
+        preflightCollection: async () => 'missing',
+        preflightCollectionAttempt: async () => 'allowed',
+        recordCollectionAttempt: async () => 'recorded',
+      } as never,
+      executeStatisticsCollection: async () => {
+        throw new RateLimitError('Upstream source is rate limited', 37_000)
+      },
+    })
+
+    expect(failed).toEqual({
+      failure: { code: 'source_rate_limited', message: 'Upstream source is rate limited', retryable: true },
+      retryDelayMs: 37_000,
+    })
+    expect(deferred).toBe(false)
+  })
+
+  test('defers clan source admission without consuming its execution attempt', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -477,11 +545,12 @@ describe('refresh operations worker source retry', () => {
       provenance: { source: 'test' },
       leaseOwner: 'worker',
       leaseToken: 1,
-      attemptNumber: 1,
+      attemptNumber: 3,
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
-    const observed: { failed?: { failure: OperationFailure; retryDelayMs: number } } = {}
+    let deferred: { failure: OperationFailure; retryDelayMs: number } | undefined
+    let failed = false
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -489,8 +558,12 @@ describe('refresh operations worker source retry', () => {
       beginInteractiveSection: async () => 'execute' as const,
       commitInteractiveSection: async () => 'transitioned' as const,
       complete: async () => 'transitioned' as const,
-      fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-        observed.failed = { failure, retryDelayMs }
+      defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
+        deferred = { failure, retryDelayMs }
+        return 'transitioned' as const
+      },
+      fail: async () => {
+        failed = true
         return 'transitioned' as const
       },
     }
@@ -501,6 +574,7 @@ describe('refresh operations worker source retry', () => {
       admission,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
+        pauseSource: async () => {},
       },
       syncClanLeaseAuthority: async () => {},
       executeClanSection: async (_lease, _section, admitSourceCall) => {
@@ -508,10 +582,11 @@ describe('refresh operations worker source retry', () => {
       },
     })
 
-    expect(observed.failed).toEqual({
+    expect(deferred).toEqual({
       failure: { code: 'source_rate_limited', message: 'Source admission is rate limited', retryable: true },
       retryDelayMs: 37_000,
     })
+    expect(failed).toBe(false)
   })
 
   test('revokes active clan authority and skips publication completion after renewal loss', async () => {
@@ -556,7 +631,10 @@ describe('refresh operations worker source retry', () => {
       renewEveryMs: 1,
       retryDelayMs: 10,
       admission,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
       syncClanLeaseAuthority: async () => {},
       revokeClanLeaseAuthority: async () => {
         revoked = true
@@ -619,7 +697,7 @@ describe('refresh operations worker source retry', () => {
     expect(completed).toBe(true)
   })
 
-  test('prefers the maximum retry-aware failure after an earlier generic section failure', async () => {
+  test('preserves a genuine section failure when another section is source-limited', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -631,11 +709,12 @@ describe('refresh operations worker source retry', () => {
       provenance: { source: 'test' },
       leaseOwner: 'worker',
       leaseToken: 1,
-      attemptNumber: 1,
+      attemptNumber: 3,
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
-    const observed: { failed?: { failure: OperationFailure; retryDelayMs: number } } = {}
+    let deferred = false
+    let failed: { failure: OperationFailure; retryDelayMs: number } | undefined
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -643,8 +722,12 @@ describe('refresh operations worker source retry', () => {
       beginInteractiveSection: async () => 'execute' as const,
       commitInteractiveSection: async () => 'transitioned' as const,
       complete: async () => 'transitioned' as const,
+      defer: async () => {
+        deferred = true
+        return 'transitioned' as const
+      },
       fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-        observed.failed = { failure, retryDelayMs }
+        failed = { failure, retryDelayMs }
         return 'transitioned' as const
       },
     }
@@ -655,6 +738,7 @@ describe('refresh operations worker source retry', () => {
       admission,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 41 }),
+        pauseSource: async () => {},
       },
       syncClanLeaseAuthority: async () => {},
       executeClanSection: async (_lease, section, admitSourceCall) => {
@@ -663,9 +747,10 @@ describe('refresh operations worker source retry', () => {
       },
     })
 
-    expect(observed.failed).toEqual({
-      failure: { code: 'source_rate_limited', message: 'Source admission is rate limited', retryable: true },
-      retryDelayMs: 41_000,
+    expect(failed).toEqual({
+      failure: { code: 'clan_refresh_failed', message: 'generic profile failure', retryable: true },
+      retryDelayMs: 10,
     })
+    expect(deferred).toBe(false)
   })
 })

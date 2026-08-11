@@ -2,14 +2,15 @@
 
 import { posix } from 'node:path'
 
-const expectedServices = ['api', 'migration', 'operations-worker', 'postgres', 'web'] as const
+const expectedServices = ['migration', 'postgres', 'v3-api', 'v3-operations-worker', 'v3-web'] as const
+const observabilityServices = new Set(['v3-api', 'v3-operations-worker', 'v3-web'])
 
 const expectedBuildTargets: Record<string, string> = {
-  api: 'api',
   migration: 'migration',
-  'operations-worker': 'operations-worker',
   postgres: 'postgres',
-  web: 'web',
+  'v3-api': 'api',
+  'v3-operations-worker': 'operations-worker',
+  'v3-web': 'web',
 }
 
 const expectedSecretFiles: Record<string, string> = {
@@ -26,7 +27,7 @@ const expectedSecretFiles: Record<string, string> = {
 }
 
 const expectedServiceSecrets: Record<string, string[]> = {
-  api: [
+  'v3-api': [
     'discord_internal_api_secret',
     'internal_api_secret',
     'metrics_scrape_secret',
@@ -35,9 +36,9 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'runtime_database_url',
   ],
   migration: ['migration_database_url'],
-  'operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
+  'v3-operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
   postgres: ['postgres_owner_password', 'postgres_runtime_password'],
-  web: ['internal_api_secret', 'metrics_scrape_secret', 'otel_authorization'],
+  'v3-web': ['internal_api_secret', 'metrics_scrape_secret', 'otel_authorization'],
 }
 
 export function verifyV3RenderedTopology(document: unknown): string[] {
@@ -48,12 +49,16 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
   const violations: string[] = []
 
   checkExactKeys(violations, 'services', services, [...expectedServices])
-  checkExactKeys(violations, 'networks', networks, ['application'])
+  checkExactKeys(violations, 'networks', networks, ['application', 'observability'])
   checkExactKeys(violations, 'secrets', secrets, Object.keys(expectedSecretFiles))
 
   const application = networks.application
   if (!isRecord(application) || application.external !== true || application.name !== 'brawltome-v3') {
     violations.push('application must be external network brawltome-v3')
+  }
+  const observability = networks.observability
+  if (!isRecord(observability) || observability.external !== true || observability.name !== 'brawltome-observability') {
+    violations.push('observability must be external network brawltome-observability')
   }
 
   for (const name of expectedServices) {
@@ -62,8 +67,9 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
       violations.push(`${name} must be a service object`)
       continue
     }
-    if (!isRecord(service.networks) || !sameValues(Object.keys(service.networks), ['application'])) {
-      violations.push(`${name} must use only the application network`)
+    const expectedNetworks = observabilityServices.has(name) ? ['application', 'observability'] : ['application']
+    if (!isRecord(service.networks) || !sameValues(Object.keys(service.networks), expectedNetworks)) {
+      violations.push(`${name} networks must match the approved topology`)
     }
     if (service.ports !== undefined && (!Array.isArray(service.ports) || service.ports.length > 0)) {
       violations.push(`${name} must not publish ports`)
@@ -93,10 +99,10 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     )
   }
 
-  const worker = services['operations-worker']
+  const worker = services['v3-operations-worker']
   if (isRecord(worker)) {
-    if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1') {
-      violations.push('operations-worker must retain the limit-1 Brawlhalla request control')
+    if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '102') {
+      violations.push('operations-worker must retain the staged Brawlhalla ceiling of 102')
     }
     if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two total operation slots')
@@ -107,11 +113,17 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two interactive operation slots')
     }
+    if (readPath(worker, 'environment', 'OPERATIONS_LEADERBOARD_CONCURRENCY') !== '1') {
+      violations.push('operations-worker must retain one leaderboard operation slot')
+    }
+    if (readPath(worker, 'environment', 'SOURCE_BACKGROUND_HEADROOM') !== '30') {
+      violations.push('operations-worker must retain 30 source units of on-demand headroom')
+    }
   }
 
-  const web = services.web
+  const web = services['v3-web']
   if (isRecord(web)) {
-    if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
+    if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://v3-api:3000') {
       violations.push('web must use the internal API origin for server calls')
     }
     if (readPath(web, 'build', 'args', 'NEXT_PUBLIC_API_URL') !== 'https://v3-api.brawltome.app') {

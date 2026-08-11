@@ -24,7 +24,11 @@ function boundedInteger(value: string | undefined, fallback: number, name: strin
 }
 
 export function readBrawlhallaV1RequestLimit(value: string | undefined): number {
-  return boundedInteger(value, 150, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 150)
+  return boundedInteger(value, 102, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 102)
+}
+
+export function readSourceBackgroundHeadroom(value: string | undefined, minimumSourceLimit: number): number {
+  return boundedInteger(value, 30, 'SOURCE_BACKGROUND_HEADROOM', 0, minimumSourceLimit - 1)
 }
 
 const classEnvironment: Record<WorkClass, string> = {
