@@ -33,13 +33,25 @@ function dashboard(name: string) {
 }
 
 describe('observability deployment contract', () => {
-  test('exposes the safe network preflight operator command', () => {
+  test('exposes fail-closed observability operator commands', () => {
     const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       scripts?: Record<string, string>
     }
 
+    expect(packageJson.scripts?.['observability:deploy']).toBe('bash deploy/observability/deploy-via-dokploy.sh')
     expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh deploy/observability/networks/ensure.sh')
+    expect(packageJson.scripts?.['observability:verify-rendered-topology']).toBe(
+      'bun tooling/observability/src/verify-rendered-topology.ts',
+    )
     expect(packageJson.scripts?.['observability:grafana-tunnel']).toBeUndefined()
+
+    const deploymentScript = read('deploy-via-dokploy.sh')
+    expect(deploymentScript).toContain('curl --silent --show-error --fail-with-body --config -')
+    expect(deploymentScript).toContain('compose.getConvertedCompose')
+    expect(deploymentScript.indexOf('observability:verify-rendered-topology')).toBeLessThan(
+      deploymentScript.indexOf('api_post compose.deploy'),
+    )
+    expect(Bun.spawnSync(['bash', '-n', deploy('deploy-via-dokploy.sh')]).exitCode).toBe(0)
   })
 
   test('uses pinned dedicated services with resource and security limits', async () => {
@@ -96,7 +108,7 @@ describe('observability deployment contract', () => {
     const expectedNetworks: Record<string, string[]> = {
       alertmanager: ['notifications', 'observability'],
       'blackbox-exporter': ['application'],
-      grafana: ['dokploy-network', 'observability'],
+      grafana: ['default', 'dokploy-network'],
       loki: ['observability'],
       'node-exporter': ['observability'],
       'otel-collector': ['application', 'observability'],
@@ -121,10 +133,14 @@ describe('observability deployment contract', () => {
     }
     expect(rendered.networks).toMatchObject({
       application: { external: true, name: 'brawltome-internal' },
+      default: { external: true, name: 'brawltome-observability' },
       'dokploy-network': { external: true, name: 'dokploy-network' },
       notifications: { external: true, name: 'brawltome-notifications' },
       observability: { external: true, name: 'brawltome-observability' },
     })
+    for (const [name, service] of Object.entries(rendered.services)) {
+      if (name !== 'grafana') expect(service.networks ?? {}).not.toHaveProperty('default')
+    }
   })
 
   test('fixes retention and requires explicit quota-backed mounts', () => {
