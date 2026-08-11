@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readOperationsWorkerConfig } from '../../../apps/api/src/operations-worker-config'
 
 const root = resolve(import.meta.dir, '../../..')
 const deployment = (...parts: string[]) => resolve(root, 'deploy/v3', ...parts)
@@ -135,9 +136,17 @@ describe('V3 production topology', () => {
     expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).not.toContain(
       'migration_database_url',
     )
-    expect(rendered.services['operations-worker'].environment).toMatchObject({
+    const workerEnvironment = rendered.services['operations-worker'].environment
+    expect(workerEnvironment).toMatchObject({
       BRAWLHALLA_V1_REQUEST_LIMIT: '1',
-      OPERATIONS_TOTAL_CONCURRENCY: '1',
+      OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
+      OPERATIONS_INTERACTIVE_RESERVATION: '1',
+      OPERATIONS_TOTAL_CONCURRENCY: '2',
+    })
+    expect(readOperationsWorkerConfig(workerEnvironment as NodeJS.ProcessEnv).admission).toMatchObject({
+      totalConcurrency: 2,
+      interactiveReservation: 1,
+      classConcurrency: { interactive: 2 },
     })
     expect(JSON.stringify(rendered.services)).not.toContain('DATABASE_URL=')
   })

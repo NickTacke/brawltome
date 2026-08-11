@@ -29,6 +29,17 @@ describe('rendered V3 deployment topology', () => {
     expect(verifyV3RenderedTopology(renderedTopology())).toEqual([])
   })
 
+  test.each([
+    ['BRAWLHALLA_V1_REQUEST_LIMIT', '2', 'operations-worker must retain the limit-1 Brawlhalla request control'],
+    ['OPERATIONS_TOTAL_CONCURRENCY', '3', 'operations-worker must retain two total operation slots'],
+    ['OPERATIONS_INTERACTIVE_RESERVATION', '2', 'operations-worker must retain one reserved interactive slot'],
+    ['OPERATIONS_INTERACTIVE_CONCURRENCY', '1', 'operations-worker must retain two interactive operation slots'],
+  ] as const)('rejects independent %s rollout drift', (variable, value, violation) => {
+    const topology = renderedTopology()
+    ;(services(topology)['operations-worker'].environment as Record<string, string>)[variable] = value
+    expect(verifyV3RenderedTopology(topology)).toContain(violation)
+  })
+
   test('rejects Discord activation, public exposure, and extra networks', () => {
     const topology = renderedTopology()
     const current = services(topology)
@@ -51,6 +62,7 @@ describe('rendered V3 deployment topology', () => {
     const topology = renderedTopology()
     const current = services(topology)
     ;(current['operations-worker'].environment as Record<string, string>).BRAWLHALLA_V1_REQUEST_LIMIT = '150'
+    ;(current['operations-worker'].environment as Record<string, string>).OPERATIONS_TOTAL_CONCURRENCY = '1'
     ;(current.postgres.build as Record<string, string>).target = 'api'
     current.postgres.volumes = [{ source: '/', target: '/var/lib/postgresql/data', type: 'bind' }]
     current.api.secrets = []
@@ -60,7 +72,8 @@ describe('rendered V3 deployment topology', () => {
       expect.arrayContaining([
         expect.stringContaining('secrets must be exactly'),
         'api secrets must match approved attachments exactly',
-        'operations-worker must retain limit-1 rollout controls',
+        'operations-worker must retain the limit-1 Brawlhalla request control',
+        'operations-worker must retain two total operation slots',
         'postgres must use build target postgres',
         'postgres must bind only the approved data filesystem',
       ]),
