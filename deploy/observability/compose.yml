@@ -248,8 +248,6 @@ services:
       - /tmp:size=32m,noexec,nosuid,nodev
     secrets:
       - grafana_admin_password
-    ports:
-      - "127.0.0.1:13000:3000"
     depends_on:
       prometheus:
         condition: service_healthy

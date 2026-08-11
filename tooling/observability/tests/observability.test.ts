@@ -39,6 +39,7 @@ describe('observability deployment contract', () => {
     }
 
     expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh deploy/observability/networks/ensure.sh')
+    expect(packageJson.scripts?.['observability:grafana-tunnel']).toBe('sh deploy/observability/grafana-tunnel.sh')
   })
 
   test('uses pinned dedicated services with resource and security limits', async () => {
@@ -111,20 +112,8 @@ describe('observability deployment contract', () => {
       expect(service.deploy?.resources?.limits?.memory, `${name} memory limit`).toBeTruthy()
       expect(service.deploy?.resources?.limits?.pids, `${name} PID limit`).toBeGreaterThan(0)
       expect(service.security_opt, `${name} no-new-privileges`).toContain('no-new-privileges:true')
-      if (name === 'grafana') {
-        expect(service.ports).toEqual([
-          expect.objectContaining({
-            host_ip: '127.0.0.1',
-            mode: 'ingress',
-            protocol: 'tcp',
-            published: '13000',
-            target: 3000,
-          }),
-        ])
-        expect(service.environment?.GF_SECURITY_COOKIE_SECURE).toBe('false')
-      } else {
-        expect(service.ports ?? [], `${name} must not publish host ports`).toHaveLength(0)
-      }
+      expect(service.ports ?? [], `${name} must not publish host ports`).toHaveLength(0)
+      if (name === 'grafana') expect(service.environment?.GF_SECURITY_COOKIE_SECURE).toBe('false')
       expect(Object.keys(service.networks ?? {}).sort(), `${name} network membership`).toEqual(expectedNetworks[name])
       expect(service.networks ?? {}).not.toHaveProperty('dokploy-ingress')
     }
