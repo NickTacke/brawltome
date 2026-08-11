@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { legendSlug, legends as referenceLegends } from '@brawltome/game-data'
+import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
 import postgres from 'postgres'
 import {
   type CohortCandidateSnapshot,
@@ -13,6 +13,8 @@ import {
   selectLaunchCohort,
 } from './cohort'
 import type {
+  CareerWeaponUsageFilters,
+  CareerWeaponUsageView,
   CohortAudit,
   CohortCollectionIntent,
   CohortMemberAudit,
@@ -47,8 +49,19 @@ import {
   type LegendMetaCell,
   buildLegendMetaArtifact,
 } from './legend-meta'
-import { type CellCollectionProgress, validatePublicationDecision } from './publication'
-import { validateLifetimeEvidence, validateRankedEvidence } from './source'
+import {
+  type CellCollectionProgress,
+  type PublicationDecisionEvidence,
+  validatePublicationDecision,
+} from './publication'
+import { type LifetimeEvidence, validateLifetimeEvidence, validateRankedEvidence } from './source'
+import {
+  CAREER_WEAPON_USAGE_METHODOLOGY_VERSION,
+  type CareerWeaponUsageAggregate,
+  CareerWeaponUsageValidationError,
+  aggregateCareerWeaponUsage,
+  exactRatio,
+} from './weapon-usage'
 
 type CohortRow = {
   id: string
@@ -95,6 +108,41 @@ type MemberRow = {
   lifetime_operation_id: string | null
   ranked_succeeded_at: Date | null
   lifetime_succeeded_at: Date | null
+}
+
+type CareerObservationRow = {
+  region: LaunchCohortRegion
+  bracket: 'Platinum' | 'Diamond+'
+  evidence: LifetimeEvidence
+}
+
+type CareerScopeAggregate = CareerWeaponUsageAggregate & CareerWeaponUsageFilters
+
+type CareerSnapshotRow = {
+  snapshot_id: string
+  generation_id: string
+  cohort_methodology_version: string
+  methodology_version: string
+  observation_window_starts_at: Date
+  observation_window_ends_at: Date
+  published_at: Date
+  selected_players: number
+  successful_observations: number
+  total_held_seconds: string
+}
+
+type CareerWeaponRow = {
+  weapon: string
+  observed_players: number
+  held_time_seconds: string
+  contributor_count: number
+  qualifying_held_seconds: string
+  median_damage_numerator: string | null
+  median_damage_denominator: string | null
+  median_kos_numerator: string | null
+  median_kos_denominator: string | null
+  comparison_eligible: boolean
+  comparison_reasons: CareerWeaponUsageAggregate['rows'][number]['comparison']['reasons']
 }
 
 type DecisionRow = {
@@ -241,9 +289,24 @@ function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
   return { code: 'invalid-ranked-observation' }
 }
 
-export function createPostgresStatistics(connectionString: string, options: { now?: () => Date } = {}) {
+export function createPostgresStatistics(
+  connectionString: string,
+  options: {
+    now?: () => Date
+    legendReferences?: readonly LegendReference[]
+  } = {},
+) {
   const client = postgres(connectionString)
   const now = options.now ?? (() => new Date())
+  const legendReferences =
+    options.legendReferences ??
+    referenceLegends.map((legend) => ({
+      legendId: legend.heroId,
+      legendNameKey: legend.heroName,
+      bioName: legend.displayName,
+      weaponOne: legend.weaponOne,
+      weaponTwo: legend.weaponTwo,
+    }))
 
   async function members(sql: typeof client, cohortIds: readonly string[]): Promise<MemberRow[]> {
     if (cohortIds.length === 0) return []
@@ -427,6 +490,146 @@ export function createPostgresStatistics(connectionString: string, options: { no
       firstAttemptAt: row.first_attempt_at?.toISOString() ?? null,
       lastCompletedAt: row.last_completed_at?.toISOString() ?? null,
     }))
+  }
+
+  async function careerScopeAggregates(sql: typeof client, generationId: string): Promise<CareerScopeAggregate[]> {
+    const [duplicatePlayer] = await sql<{ brawlhalla_id: string }[]>`
+      SELECT member.brawlhalla_id
+      FROM statistics.cohort_members member
+      JOIN statistics.cohorts cohort ON cohort.id = member.cohort_id
+      WHERE cohort.generation_id = ${generationId}
+      GROUP BY member.brawlhalla_id
+      HAVING count(*) > 1
+      ORDER BY member.brawlhalla_id
+      LIMIT 1
+    `
+    if (duplicatePlayer) {
+      const brawlhallaId = Number(duplicatePlayer.brawlhalla_id)
+      if (!Number.isSafeInteger(brawlhallaId)) throw new Error('Career Weapon Usage duplicate player ID is unsafe')
+      throw new CareerWeaponUsageValidationError('duplicate-player', brawlhallaId)
+    }
+    const cells = await sql<
+      { region: LaunchCohortRegion; bracket: 'Platinum' | 'Diamond+'; selected_players: number }[]
+    >`
+      SELECT region, bracket, selected_players
+      FROM statistics.cohorts
+      WHERE generation_id = ${generationId}
+    `
+    const observations = await sql<CareerObservationRow[]>`
+      SELECT cohort.region, cohort.bracket, observation.evidence
+      FROM statistics.observations observation
+      JOIN statistics.cohorts cohort ON cohort.id = observation.cohort_id
+      WHERE cohort.generation_id = ${generationId} AND observation.product = 'lifetime'
+      ORDER BY cohort.region, cohort.bracket, observation.brawlhalla_id
+    `
+    const regionScopes = ['all', ...launchCohortRegions] as const
+    const bracketScopes = ['all', ...launchCohortBrackets] as const
+    return regionScopes.flatMap((region) =>
+      bracketScopes.map((bracket) => {
+        const matches = (value: { region: LaunchCohortRegion; bracket: 'Platinum' | 'Diamond+' }) =>
+          (region === 'all' || value.region === region) && (bracket === 'all' || value.bracket === bracket)
+        return {
+          region,
+          bracket,
+          ...aggregateCareerWeaponUsage({
+            selectedPlayers: cells.filter(matches).reduce((total, cell) => total + cell.selected_players, 0),
+            observations: observations.filter(matches).map(({ evidence }) => evidence),
+            legendReferences,
+          }),
+        }
+      }),
+    )
+  }
+
+  async function materializeCareerWeaponUsage(
+    sql: typeof client,
+    generationId: string,
+    decision: DecisionRow,
+    scopes: readonly CareerScopeAggregate[],
+  ): Promise<void> {
+    const snapshotId = randomUUID()
+    const inserted = await sql<{ id: string }[]>`
+      INSERT INTO statistics.career_weapon_usage_snapshots
+        (id, generation_id, cohort_methodology_version, methodology_version,
+         publication_decision_id, published_at)
+      SELECT ${snapshotId}, ${generationId}, generation.methodology_version,
+             ${CAREER_WEAPON_USAGE_METHODOLOGY_VERSION}, decision.id, decision.decided_at
+      FROM statistics.publication_decisions decision
+      JOIN statistics.cohort_generations generation ON generation.id = decision.generation_id
+      WHERE decision.id = ${decision.id} AND generation.id = ${generationId}
+      RETURNING id
+    `
+    if (!inserted[0]) throw new Error('Career Weapon Usage publication decision disappeared')
+    await sql`
+      INSERT INTO statistics.career_weapon_usage_scopes
+        (snapshot_id, region, bracket, selected_players, successful_observations, total_held_seconds)
+      SELECT ${snapshotId}, scope.*
+      FROM jsonb_to_recordset(${sql.json(
+        jsonValue(
+          scopes.map((scope) => ({
+            region: scope.region,
+            bracket: scope.bracket,
+            selected_players: scope.selectedPlayers,
+            successful_observations: scope.successfulObservations,
+            total_held_seconds: scope.totalHeldSeconds,
+          })),
+        ),
+      )}) AS scope(
+        region text,
+        bracket text,
+        selected_players integer,
+        successful_observations integer,
+        total_held_seconds numeric
+      )
+    `
+    await sql`
+      INSERT INTO statistics.career_weapon_usage_rows
+        (snapshot_id, region, bracket, weapon, observed_players, held_time_seconds,
+         contributor_count, qualifying_held_seconds, median_damage_numerator,
+         median_damage_denominator, median_kos_numerator, median_kos_denominator,
+         comparison_eligible, comparison_reasons)
+      SELECT ${snapshotId}, row.*
+      FROM jsonb_to_recordset(${sql.json(
+        jsonValue(
+          scopes.flatMap((scope) =>
+            scope.rows.map((row) => ({
+              region: scope.region,
+              bracket: scope.bracket,
+              weapon: row.weapon,
+              observed_players: row.observedPlayers,
+              held_time_seconds: row.heldTimeSeconds,
+              contributor_count: row.contributorCount,
+              qualifying_held_seconds: row.qualifyingHeldSeconds,
+              median_damage_numerator: row.medianDamagePerMinute?.numerator ?? null,
+              median_damage_denominator: row.medianDamagePerMinute?.denominator ?? null,
+              median_kos_numerator: row.medianKosPerHour?.numerator ?? null,
+              median_kos_denominator: row.medianKosPerHour?.denominator ?? null,
+              comparison_eligible: row.comparison.eligible,
+              comparison_reasons: row.comparison.reasons,
+            })),
+          ),
+        ),
+      )}) AS row(
+        region text,
+        bracket text,
+        weapon text,
+        observed_players integer,
+        held_time_seconds numeric,
+        contributor_count integer,
+        qualifying_held_seconds numeric,
+        median_damage_numerator numeric,
+        median_damage_denominator numeric,
+        median_kos_numerator numeric,
+        median_kos_denominator numeric,
+        comparison_eligible boolean,
+        comparison_reasons jsonb
+      )
+    `
+    await sql`
+      UPDATE statistics.career_weapon_usage_snapshots
+      SET sealed_at = clock_timestamp()
+      WHERE id = ${snapshotId} AND sealed_at IS NULL
+    `
   }
 
   async function inspectCollectionAttempt(
@@ -988,7 +1191,7 @@ export function createPostgresStatistics(connectionString: string, options: { no
           SELECT * FROM statistics.cohort_generations WHERE id = ${authorization.generationId}
         `
         if (!generation) throw new Error('Statistics publication generation disappeared')
-        const evidence = validatePublicationDecision({
+        let evidence: PublicationDecisionEvidence = validatePublicationDecision({
           generationId: generation.id,
           product: authorization.product,
           cells: await collectionProgress(sql, generation.id, authorization.product),
@@ -998,6 +1201,24 @@ export function createPostgresStatistics(connectionString: string, options: { no
           },
           capacityEnvelope: capacityEnvelope(generation),
         })
+        let careerScopes: CareerScopeAggregate[] | null = null
+        if (authorization.product === 'lifetime' && evidence.outcome === 'accepted') {
+          try {
+            careerScopes = await careerScopeAggregates(sql, generation.id)
+          } catch (error) {
+            if (!(error instanceof CareerWeaponUsageValidationError)) throw error
+            evidence = {
+              ...evidence,
+              outcome: 'rejected',
+              reasons: [
+                ...evidence.reasons,
+                error.code === 'duplicate-player'
+                  ? { code: 'career-weapon-duplicate-player', brawlhallaId: error.subjectId }
+                  : { code: 'career-weapon-unresolved-legend', legendId: error.subjectId },
+              ],
+            }
+          }
+        }
         const decisionId = randomUUID()
         const [inserted] = await sql<DecisionRow[]>`
           INSERT INTO statistics.publication_decisions
@@ -1011,6 +1232,9 @@ export function createPostgresStatistics(connectionString: string, options: { no
                     reasons, progress, observation_window, capacity_envelope, decided_at
         `
         if (!inserted) throw new Error('Statistics publication decision was not inserted')
+        if (careerScopes && evidence.outcome === 'accepted') {
+          await materializeCareerWeaponUsage(sql, generation.id, inserted, careerScopes)
+        }
         return { result: 'applied', decision: decisionAudit(inserted) }
       })
     },
@@ -1286,6 +1510,102 @@ export function createPostgresStatistics(connectionString: string, options: { no
 
     getCohort: () => auditLegacy(client),
     getLaunchCohort: (generationId) => auditLaunch(client, generationId),
+
+    async getCareerWeaponUsage(filters): Promise<CareerWeaponUsageView> {
+      const [snapshot] = await client<CareerSnapshotRow[]>`
+        SELECT snapshot.id AS snapshot_id, snapshot.generation_id,
+               snapshot.cohort_methodology_version, snapshot.methodology_version,
+               generation.observation_window_starts_at, generation.observation_window_ends_at,
+               snapshot.published_at, scope.selected_players, scope.successful_observations,
+               scope.total_held_seconds
+        FROM statistics.career_weapon_usage_snapshots snapshot
+        JOIN statistics.cohort_generations generation ON generation.id = snapshot.generation_id
+        JOIN statistics.career_weapon_usage_scopes scope ON scope.snapshot_id = snapshot.id
+        WHERE snapshot.sealed_at IS NOT NULL
+          AND scope.region = ${filters.region} AND scope.bracket = ${filters.bracket}
+        ORDER BY snapshot.published_at DESC, snapshot.id DESC
+        LIMIT 1
+      `
+      if (!snapshot) return { status: 'unavailable', reason: 'not-yet-published', filters }
+      if (snapshot.methodology_version !== CAREER_WEAPON_USAGE_METHODOLOGY_VERSION) {
+        throw new Error('Career Weapon Usage snapshot has an unsupported methodology version')
+      }
+      const [latestDecision, rows] = await Promise.all([
+        client<DecisionRow[]>`
+          SELECT id, generation_id, product, effect_operation_id, operation_key, decision,
+                 reasons, progress, observation_window, capacity_envelope, decided_at
+          FROM statistics.publication_decisions
+          WHERE product = 'lifetime'
+          ORDER BY decided_at DESC, id DESC LIMIT 1
+        `,
+        client<CareerWeaponRow[]>`
+          SELECT weapon, observed_players, held_time_seconds, contributor_count,
+                 qualifying_held_seconds, median_damage_numerator, median_damage_denominator,
+                 median_kos_numerator, median_kos_denominator, comparison_eligible, comparison_reasons
+          FROM statistics.career_weapon_usage_rows
+          WHERE snapshot_id = ${snapshot.snapshot_id}
+            AND region = ${filters.region} AND bracket = ${filters.bracket}
+          ORDER BY weapon
+        `,
+      ])
+      const latest = latestDecision[0]
+      if (!latest) throw new Error('Career Weapon Usage snapshot has no lifetime publication decision')
+      const expectedNextPublicationAt = new Date(
+        snapshot.observation_window_ends_at.getTime() + 7 * 24 * 60 * 60 * 1_000,
+      )
+      const staleReasons: Array<'newer-publication-rejected' | 'weekly-publication-overdue'> = []
+      if (latest.decision === 'rejected' && latest.generation_id !== snapshot.generation_id) {
+        staleReasons.push('newer-publication-rejected')
+      }
+      if (now().getTime() >= expectedNextPublicationAt.getTime()) {
+        staleReasons.push('weekly-publication-overdue')
+      }
+      const totalHeldSeconds = BigInt(snapshot.total_held_seconds)
+      return {
+        status: staleReasons.length > 0 ? 'stale' : 'fresh',
+        snapshotId: snapshot.snapshot_id,
+        generationId: snapshot.generation_id,
+        cohortMethodologyVersion: snapshot.cohort_methodology_version,
+        methodologyVersion: snapshot.methodology_version,
+        observationWindow: {
+          startsAt: snapshot.observation_window_starts_at.toISOString(),
+          endsAt: snapshot.observation_window_ends_at.toISOString(),
+        },
+        publishedAt: snapshot.published_at.toISOString(),
+        expectedNextPublicationAt: expectedNextPublicationAt.toISOString(),
+        filters,
+        staleReasons,
+        selectedPlayers: snapshot.selected_players,
+        successfulObservations: snapshot.successful_observations,
+        coverage:
+          snapshot.selected_players > 0
+            ? exactRatio(BigInt(snapshot.successful_observations), BigInt(snapshot.selected_players))
+            : null,
+        totalHeldSeconds: snapshot.total_held_seconds,
+        rows: rows.map((row) => ({
+          weapon: row.weapon,
+          observedPlayers: row.observed_players,
+          prevalence:
+            snapshot.successful_observations > 0
+              ? exactRatio(BigInt(row.observed_players), BigInt(snapshot.successful_observations))
+              : null,
+          heldTimeSeconds: row.held_time_seconds,
+          heldTimeShare: totalHeldSeconds > 0n ? exactRatio(BigInt(row.held_time_seconds), totalHeldSeconds) : null,
+          contributorCount: row.contributor_count,
+          qualifyingHeldSeconds: row.qualifying_held_seconds,
+          medianDamagePerMinute:
+            row.median_damage_numerator !== null && row.median_damage_denominator !== null
+              ? exactRatio(BigInt(row.median_damage_numerator), BigInt(row.median_damage_denominator))
+              : null,
+          medianKosPerHour:
+            row.median_kos_numerator !== null && row.median_kos_denominator !== null
+              ? exactRatio(BigInt(row.median_kos_numerator), BigInt(row.median_kos_denominator))
+              : null,
+          comparison: { eligible: row.comparison_eligible, reasons: row.comparison_reasons },
+        })),
+        latestDecision: decisionAudit(latest),
+      }
+    },
 
     async getPublication(product): Promise<PublicationStatus | null> {
       const [latest] = await client<DecisionRow[]>`

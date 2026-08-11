@@ -37,6 +37,8 @@ export type PublicationValidationReason =
   | { code: 'cell-coverage-below-90-percent'; region: LaunchCohortRegion; bracket: LaunchCohortBracket }
   | { code: 'observation-window-violated' }
   | { code: 'capacity-envelope-exceeded' }
+  | { code: 'career-weapon-duplicate-player'; brawlhallaId: number }
+  | { code: 'career-weapon-unresolved-legend'; legendId: number }
 
 export type PublicationDecisionEvidence = {
   generationId: string

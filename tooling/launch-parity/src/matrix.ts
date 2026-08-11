@@ -1114,4 +1114,54 @@ export const launchParityMatrix: readonly ParityRow[] = [
       },
     ],
   },
+  {
+    id: 'statistics.career-weapon-usage',
+    area: 'global-statistics',
+    requirement:
+      'Statistics independently publishes immutable Career Weapon Usage from lifetime cohort observations and renders current-bracket scope, coverage, eligibility, uncertainty, stale retention, and missing-versus-zero states without weapon-strength claims.',
+    sourceIssue: '#212',
+    status: 'verified',
+    destinations: ['/stats/career-weapon-usage', 'statistics.careerWeaponUsage', 'operations-worker'],
+    implementation: [
+      'packages/contexts/statistics/weapon-usage.ts',
+      'packages/contexts/statistics/postgres.ts',
+      'packages/contexts/statistics/migrations/0004-add-career-weapon-usage.ts',
+      'packages/contracts/src/career-weapon-usage.ts',
+      'apps/api/src/router/statistics.router.ts',
+      'apps/web/src/app/stats/career-weapon-usage/page.tsx',
+      'apps/web/src/components/statistics/CareerWeaponUsage.tsx',
+    ],
+    evidence: [
+      {
+        kind: 'unit',
+        path: 'packages/contexts/statistics/tests/weapon-usage.test.ts',
+        assertion:
+          'Worked literals prove exact prevalence, held-time share, median per-player rates, contributor and aggregate gates, measured zero, duplicate rejection, and slot-only attribution.',
+      },
+      {
+        kind: 'integration',
+        path: 'apps/api/tests/statistics-full-cohort.postgres.test.ts',
+        assertion:
+          'Dedicated PostgreSQL proves atomic immutable Career snapshots, all/current filters, independent rejection, stale retention, weekly expiry, restart, replay, fencing, and concurrency.',
+      },
+      {
+        kind: 'unit',
+        path: 'packages/contracts/tests/career-weapon-usage.test.ts',
+        assertion:
+          'The canonical contract preserves exact rational values, measured zero, unavailable rates, strict cohort filters, and explicit stale reasons.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/api/tests/career-weapon-usage.router.test.ts',
+        assertion:
+          'The public router reads Statistics only, validates producer output, forwards exact filters, and hides internal publication evidence.',
+      },
+      {
+        kind: 'unit',
+        path: 'apps/web/tests/components/statistics/CareerWeaponUsage.test.tsx',
+        assertion:
+          'Rendered output proves labeled filters, honest career/current-bracket copy, all required metrics, formulas, stale and transport warnings, measured zero, unavailable rates, and insufficient evidence.',
+      },
+    ],
+  },
 ]

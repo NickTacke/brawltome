@@ -12,6 +12,7 @@ import type {
 } from './legend-meta'
 import type { CellCollectionProgress, PublicationDecisionEvidence, PublicationProduct } from './publication'
 import type { LifetimeEvidence, RankedEvidence } from './source'
+import type { CAREER_WEAPON_USAGE_METHODOLOGY_VERSION, CareerWeaponUsageAggregate } from './weapon-usage'
 
 export {
   FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
@@ -62,6 +63,19 @@ export {
   type PublicationValidationReason,
   validatePublicationDecision,
 } from './publication'
+export {
+  CAREER_WEAPON_MIN_AGGREGATE_HELD_SECONDS,
+  CAREER_WEAPON_MIN_CONTRIBUTORS,
+  CAREER_WEAPON_USAGE_METHODOLOGY_VERSION,
+  CAREER_WEAPON_MIN_PLAYER_HELD_SECONDS,
+  CareerWeaponUsageValidationError,
+  aggregateCareerWeaponUsage,
+  exactRatio,
+  type CareerWeaponComparisonReason,
+  type CareerWeaponUsageAggregate,
+  type CareerWeaponUsageRow,
+  type CareerWeaponExactRatio,
+} from './weapon-usage'
 
 export type CollectionProduct = PublicationProduct
 export type StatisticsCollectionKind = 'statistics-ranked-collection' | 'statistics-lifetime-collection'
@@ -255,6 +269,31 @@ export interface StatisticsQueries {
   }): Promise<LegendMetaQueryResult>
 }
 
+export type CareerWeaponUsageFilters = {
+  region: 'all' | LaunchCohortRegion
+  bracket: 'all' | LaunchCohortBracket
+}
+
+export type CareerWeaponUsageView =
+  | {
+      status: 'unavailable'
+      reason: 'not-yet-published'
+      filters: CareerWeaponUsageFilters
+    }
+  | (CareerWeaponUsageAggregate & {
+      status: 'fresh' | 'stale'
+      snapshotId: string
+      generationId: string
+      cohortMethodologyVersion: string
+      methodologyVersion: typeof CAREER_WEAPON_USAGE_METHODOLOGY_VERSION
+      observationWindow: { startsAt: string; endsAt: string }
+      publishedAt: string
+      expectedNextPublicationAt: string
+      filters: CareerWeaponUsageFilters
+      staleReasons: Array<'newer-publication-rejected' | 'weekly-publication-overdue'>
+      latestDecision: PublicationDecisionAudit
+    })
+
 export type StatisticsReconciliationState = {
   legacyCohortExists: boolean
   launch: {
@@ -321,9 +360,14 @@ export interface StatisticsLegendMetaPublicationStore {
   }>
 }
 
+export interface CareerWeaponUsageQueries {
+  getCareerWeaponUsage(filters: CareerWeaponUsageFilters): Promise<CareerWeaponUsageView>
+}
+
 export type StatisticsTracer = LegacyCohortReconciliation &
   LaunchCohortReconciliation &
   StatisticsCollectionStore &
   StatisticsPublicationStore &
   StatisticsLegendMetaPublicationStore &
-  StatisticsQueries
+  StatisticsQueries &
+  CareerWeaponUsageQueries

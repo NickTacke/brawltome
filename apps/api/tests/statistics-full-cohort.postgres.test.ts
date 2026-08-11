@@ -143,23 +143,45 @@ async function seedTerminalProduct(
       SELECT collection.cohort_id, collection.brawlhalla_id, collection.product,
              operation.effect_operation_id, operation.operation_key, 1,
              generation.observation_window_starts_at + interval '2 hours', 1,
-             CASE WHEN ${product} = 'ranked' THEN jsonb_build_object(
-               'brawlhallaId', member.brawlhalla_id,
-               'games', 10,
-               'wins', 5,
-               'rating', member.source_rating,
-               'peakRating', member.source_rating,
-               'tier', 'Observed',
-               'region', cohort.region,
-               'legends', jsonb_build_array(jsonb_build_object(
-                 'legendId', 3,
+             CASE
+               WHEN collection.product = 'ranked' THEN jsonb_build_object(
+                 'brawlhallaId', member.brawlhalla_id,
                  'games', 10,
                  'wins', 5,
                  'rating', member.source_rating,
                  'peakRating', member.source_rating,
-                 'tier', 'Observed'
-               ))
-             ) ELSE '{}'::jsonb END
+                 'tier', 'Observed',
+                 'region', cohort.region,
+                 'legends', jsonb_build_array(jsonb_build_object(
+                   'legendId', 3,
+                   'games', 10,
+                   'wins', 5,
+                   'rating', member.source_rating,
+                   'peakRating', member.source_rating,
+                   'tier', 'Observed'
+                 ))
+               )
+               WHEN collection.product = 'lifetime' THEN jsonb_build_object(
+                 'brawlhallaId', member.brawlhalla_id,
+                 'games', 100,
+                 'wins', 50,
+                 'combat', jsonb_build_object(
+                   'damage_bomb', 0, 'damage_mine', 0, 'damage_spikeball', 0, 'damage_sidekick', 0,
+                   'hit_snowball', 0, 'ko_bomb', 0, 'ko_mine', 0, 'ko_sidekick', 0,
+                   'ko_snowball', 0, 'ko_spikeball', 0
+                 ),
+                 'legends', jsonb_build_array(jsonb_build_object(
+                   'legendId', 3, 'games', 100, 'wins', 50,
+                   'damageDealt', 999999, 'damageTaken', 800000, 'kos', 999, 'falls', 500,
+                   'suicides', 2, 'teamKos', 1, 'matchTime', 20000,
+                   'damageUnarmed', 50000, 'damageThrownItem', 10000,
+                   'damageWeaponOne', 600, 'damageWeaponTwo', 0, 'damageGadgets', 5000,
+                   'koUnarmed', 100, 'koWeaponOne', 1, 'koWeaponTwo', 0, 'koGadgets', 50,
+                   'timeHeldWeaponOne', 3600, 'timeHeldWeaponTwo', 1800
+                 ))
+               )
+               ELSE '{}'::jsonb
+             END
       FROM statistics.collection_operations collection
       JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
       JOIN statistics.cohort_members member
@@ -525,14 +547,22 @@ describe('Statistics full launch cohort publication', () => {
       ).toBe(true)
       await operations.complete(replacement)
 
-      expect(
-        await runOneRefreshOperation(operations, 'lifetime-publication-worker', {
-          leaseMs: 10_000,
-          retryDelayMs: 0,
-          admission,
-          statistics,
-        }),
-      ).toBe(true)
+      const careerLease = await operations.claim(
+        'career-publication-worker',
+        10_000,
+        admission,
+        'statistics-publication',
+      )
+      if (!careerLease || careerLease.kind !== 'statistics-publication') {
+        throw new Error('Career publication lease missing')
+      }
+      const concurrentCareerPublication = await Promise.all([
+        statistics.validateAndPublish(publicationAuthorization(careerLease)),
+        concurrent.validateAndPublish(publicationAuthorization(careerLease)),
+      ])
+      expect(concurrentCareerPublication.map(({ result }) => result).sort()).toEqual(['already-applied', 'applied'])
+      expect(concurrentCareerPublication.find(({ result }) => result === 'applied')?.decision?.outcome).toBe('accepted')
+      await operations.complete(careerLease)
       const completedFirst = await statistics.getLaunchCohort(first.generationId)
       expect(completedFirst?.decisions).toHaveLength(2)
       expect(completedFirst?.progress.ranked).toMatchObject({
@@ -642,6 +672,60 @@ describe('Statistics full launch cohort publication', () => {
         await overdueStatistics.close()
       }
 
+      const freshCareer = await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })
+      expect(freshCareer).toMatchObject({
+        status: 'fresh',
+        generationId: first.generationId,
+        cohortMethodologyVersion: first.methodologyVersion,
+        methodologyVersion: 'career-weapon-usage-v1',
+        observationWindow: first.observationWindow,
+        expectedNextPublicationAt: new Date(
+          new Date(first.observationWindow.endsAt).getTime() + 7 * 24 * 60 * 60 * 1_000,
+        ).toISOString(),
+        selectedPlayers: 2_250,
+        successfulObservations: 2_142,
+        coverage: { numerator: '119', denominator: '125' },
+        totalHeldSeconds: '11566800',
+        filters: { region: 'all', bracket: 'all' },
+      })
+      if (!freshCareer || freshCareer.status === 'unavailable') throw new Error('Career publication missing')
+      expect(freshCareer.rows.find(({ weapon }) => weapon === 'Hammer')).toEqual({
+        weapon: 'Hammer',
+        observedPlayers: 2_142,
+        prevalence: { numerator: '1', denominator: '1' },
+        heldTimeSeconds: '7711200',
+        heldTimeShare: { numerator: '2', denominator: '3' },
+        contributorCount: 2_142,
+        qualifyingHeldSeconds: '7711200',
+        medianDamagePerMinute: { numerator: '10', denominator: '1' },
+        medianKosPerHour: { numerator: '1', denominator: '1' },
+        comparison: { eligible: true, reasons: [] },
+      })
+      expect(freshCareer.rows.find(({ weapon }) => weapon === 'Sword')).toMatchObject({
+        observedPlayers: 2_142,
+        heldTimeShare: { numerator: '1', denominator: '3' },
+        medianDamagePerMinute: { numerator: '0', denominator: '1' },
+        medianKosPerHour: { numerator: '0', denominator: '1' },
+      })
+      expect(await statistics.getCareerWeaponUsage({ region: 'EU', bracket: 'Diamond+' })).toMatchObject({
+        status: 'fresh',
+        selectedPlayers: 125,
+        successfulObservations: 119,
+        coverage: { numerator: '119', denominator: '125' },
+        filters: { region: 'EU', bracket: 'Diamond+' },
+      })
+      const overdueCareer = createPostgresStatistics(connectionString, {
+        now: () => new Date(new Date(freshCareer.expectedNextPublicationAt).getTime() + 1),
+      })
+      try {
+        expect(await overdueCareer.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
+          status: 'stale',
+          generationId: first.generationId,
+          latestDecision: { generationId: first.generationId, outcome: 'accepted' },
+        })
+      } finally {
+        await overdueCareer.close()
+      }
       for (const statement of [
         "UPDATE statistics.publication_decisions SET decision = 'rejected'",
         'DELETE FROM statistics.publication_decisions',
@@ -651,6 +735,16 @@ describe('Statistics full launch cohort publication', () => {
         'TRUNCATE statistics.legend_meta_publication_decisions',
         'DELETE FROM statistics.legend_meta_publication_operations',
         'TRUNCATE statistics.legend_meta_publication_operations, statistics.legend_meta_publication_decisions',
+        'UPDATE statistics.career_weapon_usage_snapshots SET published_at = clock_timestamp()',
+        'UPDATE statistics.career_weapon_usage_scopes SET selected_players = selected_players + 1',
+        'UPDATE statistics.career_weapon_usage_rows SET held_time_seconds = held_time_seconds + 1',
+        `INSERT INTO statistics.career_weapon_usage_rows
+          (snapshot_id, region, bracket, weapon, observed_players, held_time_seconds,
+           contributor_count, qualifying_held_seconds, comparison_eligible, comparison_reasons)
+         SELECT snapshot_id, region, bracket, 'Fabricated', 0, 0, 0, 0, false,
+                '["contributors-below-30"]'::jsonb
+         FROM statistics.career_weapon_usage_scopes WHERE region = 'all' AND bracket = 'all' LIMIT 1`,
+        'TRUNCATE statistics.career_weapon_usage_rows',
       ]) {
         const mutation = Bun.spawn(['psql', connectionString, '-v', 'ON_ERROR_STOP=1', '-c', statement], {
           stdout: 'pipe',
@@ -665,12 +759,26 @@ describe('Statistics full launch cohort publication', () => {
         expect(stderr).toContain('statistics cohort evidence is immutable')
       }
 
-      const second = await statistics.reconcileLaunchCohort(snapshots(2))
+      const secondSnapshots = snapshots(2)
+      const duplicatedPlayerId = secondSnapshots[1]?.candidates[0]?.brawlhallaId
+      if (!duplicatedPlayerId || !secondSnapshots[0]?.candidates[124]) throw new Error('duplicate fixture missing')
+      secondSnapshots[0].candidates[124].brawlhallaId = duplicatedPlayerId
+      const second = await statistics.reconcileLaunchCohort(secondSnapshots)
       expect(second.generationId).not.toBe(first.generationId)
       await seedTerminalProduct(second, 'ranked', 118)
+      await seedTerminalProduct(second, 'lifetime', 119)
       const rejectedOperationId = await bindPublication(statistics, operations, second.generationId, 'ranked')
+      await bindPublication(statistics, operations, second.generationId, 'lifetime')
       expect(
         await runOneRefreshOperation(operations, 'rejected-publication-worker', {
+          leaseMs: 10_000,
+          retryDelayMs: 0,
+          admission,
+          statistics,
+        }),
+      ).toBe(true)
+      expect(
+        await runOneRefreshOperation(operations, 'rejected-career-publication-worker', {
           leaseMs: 10_000,
           retryDelayMs: 0,
           admission,
@@ -685,13 +793,14 @@ describe('Statistics full launch cohort publication', () => {
         latestDecision: { generationId: second.generationId, outcome: 'rejected' },
       })
       expect(publication?.latestDecision.reasons).toContainEqual({ code: 'overall-coverage-below-95-percent' })
-
-      const secondLifetimeOperationId = await bindPublicationFixture(operations, second.generationId, 'lifetime')
-      await insertAcceptedPublicationFixture({
-        generationId: second.generationId,
-        operationId: secondLifetimeOperationId,
-        product: 'lifetime',
-        templateGenerationId: first.generationId,
+      expect(await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
+        status: 'stale',
+        generationId: first.generationId,
+        latestDecision: {
+          generationId: second.generationId,
+          outcome: 'rejected',
+          reasons: [{ code: 'career-weapon-duplicate-player', brawlhallaId: duplicatedPlayerId }],
+        },
       })
 
       const third = await statistics.reconcileLaunchCohort(snapshots(3))
@@ -778,10 +887,15 @@ describe('Statistics full launch cohort publication', () => {
       await statistics.close()
       statistics = createPostgresStatistics(connectionString)
       expect((await statistics.getPublication('ranked'))?.active?.generationId).toBe(third.generationId)
+      expect(await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
+        status: 'stale',
+        generationId: first.generationId,
+        latestDecision: { generationId: second.generationId, outcome: 'rejected' },
+      })
     } finally {
       await statistics.close()
       await concurrent.close()
       await operations.close()
     }
-  }, 75_000)
+  }, 120_000)
 })

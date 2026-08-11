@@ -156,6 +156,7 @@ describe('durable Refresh Operations', () => {
       'accounts/0006',
       'statistics/0003',
       'refresh-operations/0016',
+      'statistics/0004',
     ])
   })
 

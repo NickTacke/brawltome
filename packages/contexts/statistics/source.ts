@@ -1,5 +1,7 @@
 type SourceRecord = Record<string, unknown>
 
+const MAX_LEGENDS = 100
+
 function record(value: unknown, path: string): SourceRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${path} must be an object`)
   return value as SourceRecord
@@ -24,8 +26,11 @@ function text(value: unknown, path: string): string {
   return value
 }
 
-function array(value: unknown, path: string): unknown[] {
+function array(value: unknown, path: string, maximumLength?: number): unknown[] {
   if (!Array.isArray(value)) throw new Error(`${path} must be an array`)
+  if (maximumLength !== undefined && value.length > maximumLength) {
+    throw new Error(`${path} must contain at most ${maximumLength} entries`)
+  }
   return value
 }
 
@@ -69,7 +74,7 @@ export function decodeRankedEvidence(payload: unknown, requestedBrawlhallaId: nu
   const brawlhallaId = player(source, requestedBrawlhallaId, 'ranked evidence')
   array(source.region_ranks, 'ranked evidence.region_ranks')
   const legendIds = new Set<number>()
-  const legends = array(source.legends, 'ranked evidence.legends').map((value, index) => {
+  const legends = array(source.legends, 'ranked evidence.legends', MAX_LEGENDS).map((value, index) => {
     const path = `ranked evidence.legends[${index}]`
     const legend = record(value, path)
     const legendId = positiveInteger(legend.legend_id, `${path}.legend_id`)
@@ -166,7 +171,7 @@ export function decodeLifetimeEvidence(payload: unknown, requestedBrawlhallaId: 
     lifetimeCombatFields.map((field) => [field, integer(source[field], `lifetime evidence.${field}`)]),
   ) as LifetimeEvidence['combat']
   const legendIds = new Set<number>()
-  const legends = array(source.legends, 'lifetime evidence.legends').map((value, index) => {
+  const legends = array(source.legends, 'lifetime evidence.legends', MAX_LEGENDS).map((value, index) => {
     const path = `lifetime evidence.legends[${index}]`
     const legend = record(value, path)
     const legendId = positiveInteger(legend.legend_id, `${path}.legend_id`)
@@ -206,7 +211,7 @@ export function validateRankedEvidence(evidence: unknown, requestedBrawlhallaId:
   const brawlhallaId = positiveInteger(value.brawlhallaId, 'ranked evidence.brawlhallaId')
   if (brawlhallaId !== requestedBrawlhallaId) throw new Error('ranked evidence has an unexpected player ID')
   const legendIds = new Set<number>()
-  const legends = array(value.legends, 'ranked evidence.legends').map((entry, index) => {
+  const legends = array(value.legends, 'ranked evidence.legends', MAX_LEGENDS).map((entry, index) => {
     const path = `ranked evidence.legends[${index}]`
     const legend = record(entry, path)
     const legendId = positiveInteger(legend.legendId, `${path}.legendId`)
@@ -240,7 +245,7 @@ export function validateLifetimeEvidence(evidence: unknown, requestedBrawlhallaI
     lifetimeCombatFields.map((field) => [field, integer(combatValue[field], `lifetime evidence.combat.${field}`)]),
   ) as LifetimeEvidence['combat']
   const legendIds = new Set<number>()
-  const legends = array(value.legends, 'lifetime evidence.legends').map((entry, index) => {
+  const legends = array(value.legends, 'lifetime evidence.legends', MAX_LEGENDS).map((entry, index) => {
     const path = `lifetime evidence.legends[${index}]`
     const legend = record(entry, path)
     const legendId = positiveInteger(legend.legendId, `${path}.legendId`)
