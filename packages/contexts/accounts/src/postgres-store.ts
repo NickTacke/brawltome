@@ -2,6 +2,7 @@ import postgres, { type Sql, type TransactionSql } from 'postgres'
 import {
   type Account,
   type AccountPreferences,
+  AccountsMaintenanceError,
   type AccountsStore,
   InvalidSavedPlayerError,
   LEADERBOARD_BRACKETS,
@@ -13,11 +14,12 @@ import {
   type PrimaryPlayerVerificationState,
   type SavedPlayer,
 } from './accounts'
+import { v2AuthCutoverIsFinalized } from './finalize-v2-auth-cutover'
 import {
-  type V2AuthCutoverFinalization,
-  finalizeV2AuthCutover,
-  v2AuthCutoverIsFinalized,
-} from './finalize-v2-auth-cutover'
+  ACCOUNTS_MAINTENANCE_RETRY_AFTER_SECONDS,
+  ACCOUNTS_WRITER_FENCE_WAIT,
+  ACCOUNTS_WRITER_MAINTENANCE_FENCE,
+} from './maintenance-fence'
 import {
   ensureV2UserIdentity,
   extendV2Session,
@@ -114,21 +116,42 @@ LEFT JOIN accounts.primary_player_verification_outcomes outcomes ON outcomes.att
 
 export function createPostgresAccountsStore(connectionString: string): {
   store: AccountsStore
-  finalizeV2AuthCutover: () => Promise<V2AuthCutoverFinalization>
   close: () => Promise<void>
 } {
   const client = postgres(connectionString)
   return {
     store: postgresAccountsStore(client),
-    finalizeV2AuthCutover: () => finalizeV2AuthCutover(client),
     close: () => client.end(),
   }
+}
+
+async function acquireAccountsWriterFence(transaction: TransactionSql): Promise<void> {
+  await transaction.unsafe("SELECT set_config('lock_timeout', $1, true)", [ACCOUNTS_WRITER_FENCE_WAIT])
+  try {
+    await transaction.unsafe('SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 0))', [
+      ACCOUNTS_WRITER_MAINTENANCE_FENCE,
+    ])
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '55P03') {
+      throw new AccountsMaintenanceError(ACCOUNTS_MAINTENANCE_RETRY_AFTER_SECONDS)
+    }
+    throw error
+  }
+  await transaction.unsafe("SELECT set_config('lock_timeout', '0', true)")
+}
+
+async function withAccountsWriterFence<T>(client: Sql, run: (transaction: TransactionSql) => Promise<T>): Promise<T> {
+  const result = await client.begin(async (transaction) => {
+    await acquireAccountsWriterFence(transaction)
+    return run(transaction)
+  })
+  return result as T
 }
 
 function postgresAccountsStore(client: Sql): AccountsStore {
   return {
     async upsertDiscordIdentity(profile) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         const lockKey = `discord:${profile.providerAccountId}`
         await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey])
 
@@ -199,14 +222,17 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async createSession(session) {
-      await client`
-        INSERT INTO accounts.sessions (id, account_id, expires_at)
-        VALUES (${session.id}, ${session.accountId}, ${session.expiresAt})
-      `
+      await withAccountsWriterFence(client, async (transaction) => {
+        await transaction.unsafe('INSERT INTO accounts.sessions (id, account_id, expires_at) VALUES ($1, $2, $3)', [
+          session.id,
+          session.accountId,
+          session.expiresAt,
+        ])
+      })
     },
 
     async findSessionAccount(id) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         const rows = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
         const current = rows[0]
         const cutoverFinalized = await v2AuthCutoverIsFinalized(transaction)
@@ -226,7 +252,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async extendSession(id, expiresAt) {
-      await client.begin(async (transaction) => {
+      await withAccountsWriterFence(client, async (transaction) => {
         const [session] = await transaction.unsafe<{ imported_from_v2: boolean }[]>(
           `UPDATE accounts.sessions
            SET expires_at = $2
@@ -239,7 +265,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async deleteSession(id) {
-      await client.begin(async (transaction) => {
+      await withAccountsWriterFence(client, async (transaction) => {
         await transaction.unsafe('DELETE FROM accounts.sessions WHERE id = $1', [id])
         await revokeV2Session(transaction, id)
       })
@@ -256,28 +282,30 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async upsertPreferences(accountId, preferences) {
-      const [row] = await client.unsafe<PreferencesRow[]>(
-        `INSERT INTO accounts.preferences (
-           account_id,
-           schema_version,
-           leaderboard_bracket,
-           leaderboard_region
-         ) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (account_id) DO UPDATE
-         SET schema_version = EXCLUDED.schema_version,
-             leaderboard_bracket = EXCLUDED.leaderboard_bracket,
-             leaderboard_region = EXCLUDED.leaderboard_region,
-             updated_at = now()
-         RETURNING schema_version, leaderboard_bracket, leaderboard_region`,
-        [accountId, preferences.version, preferences.leaderboardBracket, preferences.leaderboardRegion],
-      )
-      const stored = mapPreferences(row)
-      if (!stored) throw new Error('Accounts stored an unsupported preference version')
-      return stored
+      return withAccountsWriterFence(client, async (transaction) => {
+        const [row] = await transaction.unsafe<PreferencesRow[]>(
+          `INSERT INTO accounts.preferences (
+             account_id,
+             schema_version,
+             leaderboard_bracket,
+             leaderboard_region
+           ) VALUES ($1, $2, $3, $4)
+           ON CONFLICT (account_id) DO UPDATE
+           SET schema_version = EXCLUDED.schema_version,
+               leaderboard_bracket = EXCLUDED.leaderboard_bracket,
+               leaderboard_region = EXCLUDED.leaderboard_region,
+               updated_at = now()
+           RETURNING schema_version, leaderboard_bracket, leaderboard_region`,
+          [accountId, preferences.version, preferences.leaderboardBracket, preferences.leaderboardRegion],
+        )
+        const stored = mapPreferences(row)
+        if (!stored) throw new Error('Accounts stored an unsupported preference version')
+        return stored
+      })
     },
 
     async beginPrimaryPlayerVerification(input) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         await transaction.unsafe(
           `INSERT INTO accounts.primary_player_verification_attempts (
              id, account_id, proof_provider, proof_subject, idempotency_key, started_at
@@ -301,7 +329,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async completePrimaryPlayerVerification(input) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         const [owner] = await transaction.unsafe<VerificationAttemptOwnerRow[]>(
           `SELECT account_id
            FROM accounts.primary_player_verification_attempts
@@ -422,7 +450,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async savePlayer(accountId, brawlhallaId) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         await lockSavedPlayers(transaction, accountId)
         const savedPlayers = await readSavedPlayers(transaction, accountId)
         const existing = savedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
@@ -442,7 +470,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async removeSavedPlayer(accountId, brawlhallaId) {
-      await client.begin(async (transaction) => {
+      await withAccountsWriterFence(client, async (transaction) => {
         const locked = await lockSavedPlayerForUpdate(transaction, accountId, brawlhallaId)
         if (!locked) return
         await lockSavedPlayers(transaction, accountId)
@@ -463,7 +491,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async reorderSavedPlayers(accountId, orderedBrawlhallaIds) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         await lockSavedPlayerCollectionForUpdate(transaction, accountId)
         await lockSavedPlayers(transaction, accountId)
         const current = await readSavedPlayers(transaction, accountId)
@@ -511,7 +539,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async pinSavedPlayer(accountId, brawlhallaId) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         await lockSavedPlayerForPin(transaction, accountId, brawlhallaId)
         await lockSavedPlayers(transaction, accountId)
         const pinnedPlayers = await readPinnedPlayers(transaction, accountId)
@@ -550,7 +578,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async unpinSavedPlayer(accountId, brawlhallaId) {
-      await client.begin(async (transaction) => {
+      await withAccountsWriterFence(client, async (transaction) => {
         await lockSavedPlayers(transaction, accountId)
         const [removed] = await transaction.unsafe<{ position: number }[]>(
           `DELETE FROM accounts.saved_player_pins
@@ -563,7 +591,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async reorderPinnedPlayers(accountId, orderedBrawlhallaIds) {
-      return client.begin(async (transaction) => {
+      return withAccountsWriterFence(client, async (transaction) => {
         await lockSavedPlayers(transaction, accountId)
         const current = await readPinnedPlayers(transaction, accountId)
         const currentIds = current.map(({ brawlhallaId }) => brawlhallaId).sort((left, right) => left - right)

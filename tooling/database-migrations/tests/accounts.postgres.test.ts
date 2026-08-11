@@ -89,9 +89,6 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         }
 
         expect(await runtime.accounts.authenticate(conflictingRawToken)).toEqual({ status: 'anonymous' })
-        await expect(runtime.finalizeV2AuthCutover({ legacyWritersQuiesced: true })).rejects.toThrow(
-          'belongs to conflicting Accounts users',
-        )
         expect(await runtime.accounts.authenticate(results[0].sessionToken)).toMatchObject({
           status: 'signedIn',
           account: { id: accountId },
@@ -146,15 +143,11 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
       const concurrentRuntime = createPostgresAccounts(databaseUrl.toString())
       try {
-        const [signIn, finalization] = await Promise.all([
-          concurrentRuntime.accounts.signInWithDiscord({
-            providerAccountId: 'discord-concurrent',
-            displayName: 'Concurrent Ada',
-            avatarHash: null,
-          }),
-          concurrentRuntime.finalizeV2AuthCutover({ legacyWritersQuiesced: true }),
-        ])
-        expect(finalization.finalizedSessions).toBeGreaterThanOrEqual(0)
+        const signIn = await concurrentRuntime.accounts.signInWithDiscord({
+          providerAccountId: 'discord-concurrent',
+          displayName: 'Concurrent Ada',
+          avatarHash: null,
+        })
         expect(await concurrentRuntime.accounts.authenticate(signIn.sessionToken)).toMatchObject({
           status: 'signedIn',
           account: { id: signIn.account.id, displayName: 'Concurrent Ada' },
@@ -169,7 +162,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
   }, 15_000)
 
   test('copies V2 identities and valid sessions as UTC while preserving legacy tables', async () => {
-    const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
+    const { createPostgresAccounts, importLegacyAccounts } = await import('@brawltome/accounts/composition')
     const { globalMigrationInventory } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
     const databaseName = `brawltome_accounts_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -219,6 +212,14 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             user_id uuid NOT NULL,
             expires_at timestamp NOT NULL,
             created_at timestamp NOT NULL
+          );
+          CREATE TABLE public.player_link (
+            user_id uuid PRIMARY KEY,
+            brawlhalla_id integer,
+            steam_id varchar(64) NOT NULL,
+            linked_via varchar(32) NOT NULL,
+            status varchar(16) NOT NULL,
+            linked_at timestamp NOT NULL
           );
         `)
         await legacy.unsafe(
@@ -450,23 +451,17 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             WHERE id = ${unreconciledSessionId}
           `
           expect(unreconciled_count).toBe(0)
-          await legacy`
-            UPDATE accounts.oauth_identities
-            SET display_name = 'Canonical Ada', updated_at = '2100-01-01T00:00:00Z'
-            WHERE provider = 'discord' AND provider_account_id = 'discord-42'
-          `
         } finally {
           await legacy.end()
         }
 
-        const rejectedFinalization = revocationRuntime.finalizeV2AuthCutover({
-          legacyWritersQuiesced: false,
-        } as never)
-        await expect(rejectedFinalization).rejects.toThrow('Legacy auth writers must be quiescent')
+        await expect(
+          importLegacyAccounts(databaseUrl.toString(), { legacyWritersQuiesced: false } as never),
+        ).rejects.toThrow('Legacy Accounts writers must be quiescent')
         expect(await revocationRuntime.accounts.authenticate(lateRawToken)).toMatchObject({ status: 'signedIn' })
 
-        const finalization = await revocationRuntime.finalizeV2AuthCutover({ legacyWritersQuiesced: true })
-        expect(finalization).toEqual({ finalizedSessions: 2 })
+        const finalization = await importLegacyAccounts(databaseUrl.toString(), { legacyWritersQuiesced: true })
+        expect(finalization).toMatchObject({ status: 'complete', reconciliation: { exact: true } })
         expect(await revocationRuntime.accounts.authenticate(futureRawToken)).toEqual({ status: 'anonymous' })
 
         const retirement = postgres(databaseUrl.toString(), { max: 1 })
@@ -493,7 +488,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             legacy_session_count: 1,
             unreconciled_session_count: 1,
             revoked_session_count: 0,
-            display_name: 'Canonical Ada',
+            display_name: 'Late Ada',
           })
           await retirement.unsafe('DROP TABLE public.session')
         } finally {
@@ -502,16 +497,12 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
         expect(await revocationRuntime.accounts.authenticate(lateRawToken)).toMatchObject({
           status: 'signedIn',
-          account: { displayName: 'Canonical Ada' },
+          account: { displayName: 'Late Ada' },
         })
         expect(await revocationRuntime.accounts.authenticate(unreconciledRawToken)).toMatchObject({
           status: 'signedIn',
           account: { id: unreconciledAccountId, displayName: 'Unreconciled Ada' },
         })
-        expect(await revocationRuntime.finalizeV2AuthCutover({ legacyWritersQuiesced: true })).toEqual({
-          finalizedSessions: 0,
-        })
-
         const canonical = postgres(databaseUrl.toString(), { max: 1 })
         try {
           const [{ session_count }] = await canonical<{ session_count: number }[]>`
@@ -530,7 +521,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
     }
-  })
+  }, 15_000)
 
   test('round-trips launch preferences across sessions and runtimes without anonymous persistence', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts/composition')

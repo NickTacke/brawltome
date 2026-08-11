@@ -1,4 +1,5 @@
 export {
+  AccountsMaintenanceError,
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
   InvalidSavedPlayerError,

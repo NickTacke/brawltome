@@ -1,3 +1,4 @@
+import { AccountsMaintenanceError } from '@brawltome/accounts'
 import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
@@ -150,6 +151,19 @@ const sharedCtx = {
 }
 
 const app = new Hono()
+
+app.use('*', async (c, next) => {
+  try {
+    await next()
+  } catch (error) {
+    if (error instanceof AccountsMaintenanceError) {
+      return c.json({ error: 'accounts_maintenance' }, 503, {
+        'Retry-After': String(error.retryAfterSeconds),
+      })
+    }
+    throw error
+  }
+})
 
 const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3001')
   .split(',')

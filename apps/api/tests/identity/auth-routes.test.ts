@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
-import type { Account, Accounts, DiscordSignInProfile } from '@brawltome/accounts'
+import { type Account, type Accounts, AccountsMaintenanceError, type DiscordSignInProfile } from '@brawltome/accounts'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { type CreateAuthRoutesDeps, createAuthRoutes } from '../../src/auth/routes'
@@ -20,6 +20,7 @@ function makeFakes() {
   const profiles: DiscordSignInProfile[] = []
   const sessions = new Set<string>()
   const verificationAttempts: unknown[] = []
+  const authenticatedTokens: Array<string | null> = []
   const queuedVerifications: unknown[] = []
   const actorAdmissions: unknown[] = []
   let admissionOutcome: 'admitted' | 'rate-limited' = 'admitted'
@@ -35,6 +36,7 @@ function makeFakes() {
       }
     },
     async authenticate(sessionToken) {
+      authenticatedTokens.push(sessionToken)
       return sessionToken && sessions.has(sessionToken)
         ? {
             status: 'signedIn',
@@ -115,6 +117,7 @@ function makeFakes() {
     profiles,
     sessions,
     verificationAttempts,
+    authenticatedTokens,
     queuedVerifications,
     actorAdmissions,
     setAdmissionOutcome(outcome: 'admitted' | 'rate-limited') {
@@ -268,7 +271,7 @@ function steamCallbackUrl(state: string): URL {
 }
 
 describe('GET /auth/steam/callback', () => {
-  it('uses authenticated account admission without Turnstile and queues one privacy-safe attempt', async () => {
+  it('preserves an existing session cookie through authenticated admission and queues one privacy-safe attempt', async () => {
     const fakes = makeFakes()
     fakes.sessions.add('raw-session-token')
     const observedDomains: string[] = []
@@ -292,6 +295,8 @@ describe('GET /auth/steam/callback', () => {
     })
 
     expect(response.headers.get('location')).toBe('http://localhost:3001/account')
+    expect(response.headers.get('set-cookie') ?? '').not.toContain('brawltome_session=')
+    expect(fakes.authenticatedTokens).toEqual(['raw-session-token'])
     expect(observedDomains).toEqual(['steam'])
     expect(fakes.actorAdmissions).toEqual([
       {
@@ -402,6 +407,25 @@ describe('POST /auth/signout', () => {
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toContain('brawltome_session=')
     expect(setCookie).toContain('Max-Age=0')
+  })
+
+  it('returns retryable maintenance without clearing the session cookie', async () => {
+    const fakes = makeFakes()
+    fakes.sessions.add('raw-token')
+    fakes.accounts.signOut = async () => {
+      throw new AccountsMaintenanceError(5)
+    }
+    const app = buildApp(fakes)
+
+    const res = await app.request('/auth/signout', {
+      method: 'POST',
+      headers: { cookie: 'brawltome_session=raw-token', origin: 'http://localhost:3001' },
+    })
+
+    expect(res.status).toBe(503)
+    expect(res.headers.get('retry-after')).toBe('5')
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(fakes.sessions.has('raw-token')).toBe(true)
   })
 
   it('returns failure and preserves the cookie when revocation fails', async () => {
