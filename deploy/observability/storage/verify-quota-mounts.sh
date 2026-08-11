@@ -11,7 +11,9 @@ require_positive_integer() {
 	value=$2
 	case "$value" in
 	'' | *[!0-9]* | 0) fail "$name must be a positive byte count" ;;
+	0*) fail "$name must not contain leading zeroes" ;;
 	esac
+	[ "${#value}" -le 16 ] || fail "$name exceeds the supported byte count for shell arithmetic"
 }
 
 for command in findmnt mountpoint df numfmt stat; do
@@ -24,7 +26,19 @@ require_positive_integer OBSERVABILITY_LOGS_QUOTA_BYTES "${OBSERVABILITY_LOGS_QU
 require_positive_integer OBSERVABILITY_TRACES_QUOTA_BYTES "${OBSERVABILITY_TRACES_QUOTA_BYTES:-}"
 : "${PROMETHEUS_RETENTION_SIZE:?Set PROMETHEUS_RETENTION_SIZE}"
 
-prometheus_retention_bytes=$(numfmt --from=si "$PROMETHEUS_RETENTION_SIZE") || fail 'invalid PROMETHEUS_RETENTION_SIZE'
+case "$PROMETHEUS_RETENTION_SIZE" in
+*iB)
+	prometheus_retention_numfmt=${PROMETHEUS_RETENTION_SIZE%B}
+	prometheus_numfmt_mode=iec-i
+	;;
+*B)
+	prometheus_retention_numfmt=${PROMETHEUS_RETENTION_SIZE%B}
+	prometheus_numfmt_mode=iec
+	;;
+*) fail 'PROMETHEUS_RETENTION_SIZE must use a Prometheus byte unit ending in B' ;;
+esac
+prometheus_retention_bytes=$(numfmt "--from=$prometheus_numfmt_mode" -- "$prometheus_retention_numfmt") || fail 'invalid PROMETHEUS_RETENTION_SIZE'
+require_positive_integer PROMETHEUS_RETENTION_SIZE "$prometheus_retention_bytes"
 max_prometheus_retention=$((OBSERVABILITY_METRICS_QUOTA_BYTES * 80 / 100))
 [ "$prometheus_retention_bytes" -le "$max_prometheus_retention" ] || fail 'Prometheus retention size exceeds 80 percent of its quota'
 
