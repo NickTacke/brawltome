@@ -54,6 +54,23 @@ size=$(blockdev --getsize64 "$source")
   exit 1
 }
 
+backing=$(losetup --noheadings --output BACK-FILE "$source" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+[ -n "$backing" ] || {
+  printf '%s\n' "$V3_POSTGRES_DATA_ROOT loop backing file is unavailable" >&2
+  exit 1
+}
+[ "$(stat -c %s "$backing")" = "$V3_POSTGRES_QUOTA_BYTES" ] || {
+  printf '%s\n' "$V3_POSTGRES_DATA_ROOT backing file size does not match V3_POSTGRES_QUOTA_BYTES" >&2
+  exit 1
+}
+allocated_blocks=$(stat -c %b "$backing")
+positive_integer allocated_blocks "$allocated_blocks"
+allocated_bytes=$((allocated_blocks * 512))
+[ "$allocated_bytes" -ge "$V3_POSTGRES_QUOTA_BYTES" ] || {
+  printf '%s\n' "$V3_POSTGRES_DATA_ROOT backing file is sparse" >&2
+  exit 1
+}
+
 available=$(df -B1 --output=avail "$V3_POSTGRES_DATA_ROOT" | tail -n 1 | tr -d ' ')
 positive_integer available_bytes "$available"
 [ "$available" -ge "$V3_POSTGRES_MIN_FREE_BYTES" ] || {
