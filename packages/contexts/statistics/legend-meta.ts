@@ -4,31 +4,56 @@ export const LEGEND_META_METHODOLOGY_VERSION = 'current-season-legend-meta-v1'
 export const LEGEND_META_MINIMUM_PLAYERS = 30
 export const LEGEND_META_MINIMUM_GAMES = 200
 export const LEGEND_META_PUBLICATION_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000
+const LEGEND_META_FORMULAS = {
+  pickShare: 'Observed legend games divided by all observed legend games in the selected filter.',
+  adoption:
+    'Observed players with games on the legend divided by players with a successful ranked observation in the selected filter.',
+  winRate: 'Observed legend wins divided by observed legend games, weighted by games.',
+  medianRating: 'Median current 1v1 player rating among observed players with games on the legend.',
+  coverage: 'Successful ranked observations divided by selected Observed Cohort players.',
+  uncertainty: '95% Wilson score interval over observed legend wins and games.',
+} as const
+
+const LEGEND_META_ELIGIBILITY = {
+  minimumPlayers: LEGEND_META_MINIMUM_PLAYERS,
+  minimumGames: LEGEND_META_MINIMUM_GAMES,
+  rule: 'A row needs both minimums to receive a comparative rank.',
+} as const
+
+const LEGEND_META_COMMON_CAVEATS = [
+  'BrawlTome-observed values are not exhaustive or live.',
+  'Missing source observations reduce coverage and are not counted as zero games.',
+] as const
+
 export const LEGEND_META_METHODOLOGY_DISCLOSURE = {
   population: 'deterministic-observed-cohort',
   seasonalScope: 'Cumulative current-season ranked 1v1 values observed during the collection window.',
-  formulas: {
-    pickShare: 'Observed legend games divided by all observed legend games in the selected filter.',
-    adoption:
-      'Observed players with games on the legend divided by players with a successful ranked observation in the selected filter.',
-    winRate: 'Observed legend wins divided by observed legend games, weighted by games.',
-    medianRating: 'Median current 1v1 player rating among observed players with games on the legend.',
-    coverage: 'Successful ranked observations divided by selected Observed Cohort players.',
-    uncertainty: '95% Wilson score interval over observed legend wins and games.',
-  },
-  eligibility: {
-    minimumPlayers: LEGEND_META_MINIMUM_PLAYERS,
-    minimumGames: LEGEND_META_MINIMUM_GAMES,
-    rule: 'A row needs both minimums to receive a comparative rank.',
-  },
+  formulas: LEGEND_META_FORMULAS,
+  eligibility: LEGEND_META_ELIGIBILITY,
   trends: {
     status: 'disabled',
     reason: 'season-identity-unavailable',
   },
   caveats: [
-    'BrawlTome-observed values are not exhaustive or live.',
-    'Missing source observations reduce coverage and are not counted as zero games.',
+    ...LEGEND_META_COMMON_CAVEATS,
     'The source does not expose a stable season identity, so cross-publication trends are unavailable.',
+    'Observed win rate describes this cohort and does not establish legend strength or causation.',
+  ],
+} as const
+
+export const LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE = {
+  population: 'deterministic-observed-cohort',
+  seasonalScope: 'Cumulative current-season ranked 1v1 values observed during the collection window.',
+  formulas: LEGEND_META_FORMULAS,
+  eligibility: LEGEND_META_ELIGIBILITY,
+  trends: {
+    status: 'conditional',
+    requirement:
+      'Adjacent snapshots require the same authoritative season, cohort methodology, metric methodology, and scope.',
+  },
+  caveats: [
+    ...LEGEND_META_COMMON_CAVEATS,
+    'Cross-publication trends stop at the first incompatible adjacent snapshot.',
     'Observed win rate describes this cohort and does not establish legend strength or causation.',
   ],
 } as const
@@ -111,10 +136,10 @@ export type LegendMetaArtifact = {
   expectedNextPublicationAt: string
   season: {
     scope: 'current-season'
-    identity: null
+    identity: string | null
     source: 'brawlhalla-v1-ranked-1v1'
   }
-  methodology: typeof LEGEND_META_METHODOLOGY_DISCLOSURE
+  methodology: typeof LEGEND_META_METHODOLOGY_DISCLOSURE | typeof LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE
   slices: LegendMetaArtifactSlice[]
 }
 
@@ -291,6 +316,7 @@ export function buildLegendMetaArtifact(input: {
   sourceObservedAt: string
   observationWindow: { startsAt: string; endsAt: string }
   publishedAt: string
+  seasonIdentity?: string | null
   legends: readonly LegendMetaLegend[]
   cells: readonly LegendMetaCell[]
 }): LegendMetaArtifact {
@@ -323,6 +349,10 @@ export function buildLegendMetaArtifact(input: {
   const endsAt = utcTimestamp(input.observationWindow.endsAt, 'observation window end')
   const publishedAt = utcTimestamp(input.publishedAt, 'publication time')
   if (endsAt <= startsAt) throw new Error('observation window end must follow its start')
+  const seasonIdentity = input.seasonIdentity ?? null
+  if (seasonIdentity !== null && (seasonIdentity.length < 1 || seasonIdentity.length > 200)) {
+    throw new Error('season identity must contain between 1 and 200 characters')
+  }
 
   const regions: LegendMetaFilterRegion[] = ['all', ...launchCohortRegions]
   const brackets: LegendMetaFilterBracket[] = ['all', ...launchCohortBrackets]
@@ -355,10 +385,13 @@ export function buildLegendMetaArtifact(input: {
     expectedNextPublicationAt: new Date(publishedAt + LEGEND_META_PUBLICATION_INTERVAL_MS).toISOString(),
     season: {
       scope: 'current-season',
-      identity: null,
+      identity: seasonIdentity,
       source: 'brawlhalla-v1-ranked-1v1',
     },
-    methodology: LEGEND_META_METHODOLOGY_DISCLOSURE,
+    methodology:
+      seasonIdentity === null
+        ? LEGEND_META_METHODOLOGY_DISCLOSURE
+        : LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE,
     slices,
   }
 }

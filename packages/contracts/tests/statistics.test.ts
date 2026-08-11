@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type LegendMetaOutput,
+  legendMetaHistoryOutputSchema,
   legendMetaInputSchema,
   legendMetaOutputSchema,
+  parseLegendMetaHistoryOutput,
   parseLegendMetaOutput,
 } from '../src/statistics'
 
@@ -86,6 +88,29 @@ const available: LegendMetaOutput = {
   ],
 }
 
+const historySnapshot = {
+  snapshotId: available.snapshotId,
+  generationId: available.generationId,
+  methodologyVersion: available.methodologyVersion,
+  cohortMethodologyVersion: available.cohortMethodologyVersion,
+  observationWindow: available.observationWindow,
+  publishedAt: available.publishedAt,
+  season: available.season,
+  scope: available.filter,
+  selectedPlayers: available.selectedPlayers,
+  observedPlayers: available.observedPlayers,
+  observedLegendGames: available.observedLegendGames,
+  coverage: available.coverage,
+  rows: available.rows,
+}
+
+const previousHistorySnapshot = {
+  ...historySnapshot,
+  snapshotId: '10000000-0000-4000-8000-000000000011',
+  generationId: '10000000-0000-4000-8000-000000000012',
+  publishedAt: '2026-08-05T00:00:00.000Z',
+}
+
 describe('Current Season Legend Meta contract', () => {
   test('accepts only independent launch region and current 1v1 bracket filters', () => {
     expect(legendMetaInputSchema.parse({ region: 'all', bracket: 'all' })).toEqual({ region: 'all', bracket: 'all' })
@@ -99,6 +124,33 @@ describe('Current Season Legend Meta contract', () => {
 
   test('preserves exact ratios, explicit insufficiency, missing derived values, and methodology', () => {
     expect(parseLegendMetaOutput(available)).toEqual(available)
+  })
+
+  test('binds opaque authoritative seasons to conditional trend methodology', () => {
+    const authoritative = {
+      ...available,
+      season: { ...available.season, identity: 'season-38' },
+      methodology: {
+        ...available.methodology,
+        trends: {
+          status: 'conditional',
+          requirement:
+            'Adjacent snapshots require the same authoritative season, cohort methodology, metric methodology, and scope.',
+        },
+        caveats: [
+          'BrawlTome-observed values are not exhaustive or live.',
+          'Missing source observations reduce coverage and are not counted as zero games.',
+          'Cross-publication trends stop at the first incompatible adjacent snapshot.',
+          'Observed win rate describes this cohort and does not establish legend strength or causation.',
+        ],
+      },
+    }
+
+    const parsed = parseLegendMetaOutput(authoritative)
+    if (parsed.status === 'unavailable') throw new Error('expected an available Legend Meta snapshot')
+    expect(parsed.season.identity).toBe('season-38')
+    expect(() => parseLegendMetaOutput({ ...available, season: authoritative.season })).toThrow()
+    expect(() => parseLegendMetaOutput({ ...authoritative, season: available.season })).toThrow()
   })
 
   test('requires stale warnings and keeps unavailable distinct from an empty measured publication', () => {
@@ -149,5 +201,169 @@ describe('Current Season Legend Meta contract', () => {
         ),
       }),
     ).toThrow()
+  })
+})
+
+describe('Legend Meta history contract', () => {
+  test('exposes null-season snapshots but requires an explicit adjacent break without deltas', () => {
+    const output = {
+      status: 'available',
+      filter: available.filter,
+      entries: [
+        {
+          snapshot: historySnapshot,
+          comparisonToPrevious: {
+            status: 'incompatible',
+            previousSnapshotId: previousHistorySnapshot.snapshotId,
+            reasons: [
+              {
+                code: 'season_identity_unavailable',
+                explanation: 'Adjacent Legend snapshots need the same non-null authoritative season identity.',
+              },
+            ],
+          },
+        },
+        { snapshot: previousHistorySnapshot, comparisonToPrevious: null },
+      ],
+    } as const
+
+    expect(parseLegendMetaHistoryOutput(output)).toEqual(JSON.parse(JSON.stringify(output)))
+    expect(() =>
+      legendMetaHistoryOutputSchema.parse({
+        ...output,
+        entries: [
+          ...output.entries,
+          {
+            snapshot: { ...previousHistorySnapshot, snapshotId: '10000000-0000-4000-8000-000000000021' },
+            comparisonToPrevious: null,
+          },
+        ],
+      }),
+    ).toThrow()
+  })
+
+  test('accepts reproducible eligible deltas and rejects comparisons for insufficient rows', () => {
+    const authoritative = {
+      ...historySnapshot,
+      season: { ...historySnapshot.season, identity: 'season-38' },
+    }
+    const previous = {
+      ...previousHistorySnapshot,
+      season: authoritative.season,
+      rows: previousHistorySnapshot.rows.map((row, index) =>
+        index === 1
+          ? {
+              ...row,
+              rank: 2,
+              medianRating: 1_799.5,
+            }
+          : row,
+      ),
+    }
+    const delta = {
+      legend: authoritative.rows[1]?.legend,
+      pickShare: { changeBasisPoints: 0, direction: 'unchanged' },
+      adoption: { changeBasisPoints: 0, direction: 'unchanged' },
+      winRate: { changeBasisPoints: 0, direction: 'unchanged' },
+      medianRating: { change: 0.5, direction: 'increase' },
+    } as const
+    const output = {
+      status: 'available',
+      filter: available.filter,
+      entries: [
+        {
+          snapshot: authoritative,
+          comparisonToPrevious: {
+            status: 'available',
+            previousSnapshotId: previous.snapshotId,
+            deltas: [delta],
+          },
+        },
+        { snapshot: previous, comparisonToPrevious: null },
+      ],
+    } as const
+
+    expect(parseLegendMetaHistoryOutput(output)).toEqual(JSON.parse(JSON.stringify(output)))
+    for (const malformedFirstEntry of [
+      {
+        ...output.entries[0],
+        comparisonToPrevious: { ...output.entries[0].comparisonToPrevious, deltas: [] },
+      },
+      {
+        ...output.entries[0],
+        comparisonToPrevious: { ...output.entries[0].comparisonToPrevious, deltas: [delta, delta] },
+      },
+      {
+        ...output.entries[0],
+        snapshot: { ...output.entries[0].snapshot, scope: { region: 'EU', bracket: 'Platinum' } },
+      },
+      {
+        ...output.entries[0],
+        snapshot: {
+          ...output.entries[0].snapshot,
+          coverage: { ...output.entries[0].snapshot.coverage, numerator: 118 },
+        },
+      },
+    ]) {
+      expect(() =>
+        parseLegendMetaHistoryOutput({
+          ...output,
+          entries: [malformedFirstEntry, output.entries[1]],
+        }),
+      ).toThrow()
+    }
+    expect(() =>
+      parseLegendMetaHistoryOutput({
+        ...output,
+        entries: [
+          {
+            ...output.entries[0],
+            comparisonToPrevious: {
+              ...output.entries[0].comparisonToPrevious,
+              deltas: [{ ...delta, rank: { movement: 1, direction: 'increase' } }],
+            },
+          },
+          output.entries[1],
+        ],
+      }),
+    ).toThrow()
+    expect(() =>
+      parseLegendMetaHistoryOutput({
+        ...output,
+        entries: [
+          {
+            ...output.entries[0],
+            comparisonToPrevious: {
+              ...output.entries[0].comparisonToPrevious,
+              deltas: [{ ...delta, legend: authoritative.rows[0]?.legend }],
+            },
+          },
+          output.entries[1],
+        ],
+      }),
+    ).toThrow()
+  })
+
+  test('caps history at eight snapshots and keeps unavailable distinct', () => {
+    expect(() =>
+      legendMetaHistoryOutputSchema.parse({
+        status: 'available',
+        filter: available.filter,
+        entries: Array.from({ length: 9 }, (_, index) => ({
+          snapshot: {
+            ...historySnapshot,
+            snapshotId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          },
+          comparisonToPrevious: null,
+        })),
+      }),
+    ).toThrow()
+    expect(
+      parseLegendMetaHistoryOutput({
+        status: 'unavailable',
+        reason: 'not_yet_published',
+        filter: { region: 'all', bracket: 'all' },
+      }),
+    ).toMatchObject({ status: 'unavailable' })
   })
 })

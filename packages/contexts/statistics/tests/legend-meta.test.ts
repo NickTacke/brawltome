@@ -233,6 +233,32 @@ describe('Current Season Legend Meta formulas', () => {
       identity: null,
       source: 'brawlhalla-v1-ranked-1v1',
     })
+    expect(artifact.methodology.trends).toEqual({
+      status: 'disabled',
+      reason: 'season-identity-unavailable',
+    })
+
+    const authoritativeSeason = buildLegendMetaArtifact({
+      snapshotId: '10000000-0000-4000-8000-000000000011',
+      generationId: '10000000-0000-4000-8000-000000000012',
+      cohortMethodologyVersion: 'full-launch-cohort-v1',
+      sourceGenerationId: '10000000-0000-4000-8000-000000000013',
+      sourceObservedAt: '2026-08-10T00:00:00.000Z',
+      observationWindow: {
+        startsAt: '2026-08-10T00:00:00.000Z',
+        endsAt: '2026-08-17T00:00:00.000Z',
+      },
+      publishedAt: '2026-08-12T00:00:00.000Z',
+      seasonIdentity: 'season-38',
+      legends,
+      cells,
+    })
+    expect(authoritativeSeason.season.identity).toBe('season-38')
+    expect(authoritativeSeason.methodology.trends).toEqual({
+      status: 'conditional',
+      requirement:
+        'Adjacent snapshots require the same authoritative season, cohort methodology, metric methodology, and scope.',
+    })
     expect(artifact.slices.find(({ region, bracket }) => region === 'all' && bracket === 'all')).toMatchObject({
       selectedPlayers: 36,
       observedPlayers: 18,
@@ -253,6 +279,29 @@ describe('Current Season Legend Meta formulas', () => {
       observedPlayers: 1,
       observedLegendGames: 30,
     })
+  })
+
+  test('rejects invalid authoritative season identities instead of storing ambiguous compatibility keys', () => {
+    const cells = launchCohortRegions.flatMap((region) =>
+      launchCohortBrackets.map((bracket) => ({ region, bracket, selectedPlayers: 0, observations: [] })),
+    )
+    const input = {
+      snapshotId: '10000000-0000-4000-8000-000000000001',
+      generationId: '10000000-0000-4000-8000-000000000002',
+      cohortMethodologyVersion: 'full-launch-cohort-v1',
+      sourceGenerationId: '10000000-0000-4000-8000-000000000003',
+      sourceObservedAt: '2026-08-10T00:00:00.000Z',
+      observationWindow: {
+        startsAt: '2026-08-10T00:00:00.000Z',
+        endsAt: '2026-08-17T00:00:00.000Z',
+      },
+      publishedAt: '2026-08-12T00:00:00.000Z',
+      legends,
+      cells,
+    }
+
+    expect(() => buildLegendMetaArtifact({ ...input, seasonIdentity: '' })).toThrow('season identity')
+    expect(() => buildLegendMetaArtifact({ ...input, seasonIdentity: 'x'.repeat(201) })).toThrow('season identity')
   })
 
   test('rejects a player repeated across launch cells instead of double-counting all-region adoption', () => {

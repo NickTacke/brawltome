@@ -1,5 +1,6 @@
 import {
   type CareerWeaponExactRatioContract,
+  type CareerWeaponUsageHistoryOutputContract,
   type CareerWeaponUsageOutputContract,
   type CareerWeaponUsageRowContract,
   careerWeaponUsageBracketScopes,
@@ -7,6 +8,7 @@ import {
 } from '@brawltome/contracts'
 import { Card } from '@brawltome/ui'
 import type { ReactNode } from 'react'
+import { CareerWeaponUsageHistory } from './CareerWeaponUsageHistory'
 
 const regionLabels: Record<(typeof careerWeaponUsageRegionScopes)[number], string> = {
   all: 'All regions',
@@ -238,7 +240,15 @@ export function CareerWeaponUsageLoadError({
   )
 }
 
-export function CareerWeaponUsage({ view }: { view: CareerWeaponUsageOutputContract }) {
+export function CareerWeaponUsage({
+  view,
+  history,
+  historyError,
+}: {
+  view: CareerWeaponUsageOutputContract
+  history?: CareerWeaponUsageHistoryOutputContract
+  historyError?: string
+}) {
   return (
     <CareerWeaponUsageShell filters={view.filters}>
       {view.status === 'unavailable' ? (
@@ -260,6 +270,8 @@ export function CareerWeaponUsage({ view }: { view: CareerWeaponUsageOutputContr
           <SnapshotTable view={view} />
         </section>
       )}
+
+      <CareerWeaponUsageHistory history={history} error={historyError} />
 
       <section id="career-methodology" aria-labelledby="career-methodology-heading" className="space-y-3">
         <h2 id="career-methodology-heading" className="text-2xl font-semibold">

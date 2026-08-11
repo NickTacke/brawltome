@@ -9,7 +9,7 @@ import type { RankingQueries } from '@brawltome/ranking'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { R2Client } from '@brawltome/shared'
-import type { CareerWeaponUsageQueries, StatisticsQueries } from '@brawltome/statistics'
+import type { CareerWeaponUsageQueries, StatisticsHistoryQueries, StatisticsQueries } from '@brawltome/statistics'
 import type { Telemetry } from '@brawltome/telemetry'
 
 export interface Context {
@@ -25,7 +25,7 @@ export interface Context {
   refreshTrust: { trusted: boolean; grant(): void }
   verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
   rankingQueries: RankingQueries
-  statisticsQueries: StatisticsQueries & CareerWeaponUsageQueries
+  statisticsQueries: StatisticsQueries & CareerWeaponUsageQueries & StatisticsHistoryQueries
   clanRepo: ClanRepo
   accounts: Accounts
   clientIp: string
