@@ -112,6 +112,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'statistics/0001',
       'statistics/0002',
       'statistics/0003',
+      'statistics/0004',
     ])
   })
 
@@ -153,6 +154,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[5],
       statisticsMigrationInventory[2],
       refreshOperationsMigrationInventory[15],
+      statisticsMigrationInventory[3],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -185,7 +187,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(42)
+    expect(globalMigrationInventory).toHaveLength(43)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -195,6 +197,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[5],
       statisticsMigrationInventory[2],
       refreshOperationsMigrationInventory[15],
+      statisticsMigrationInventory[3],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -207,7 +210,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(8)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(9)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

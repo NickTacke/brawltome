@@ -34,6 +34,7 @@ const requiredRowIds = [
   'desktop.opponent-presentation-performance',
   'desktop.updater-install',
   'statistics.current-season-legend-meta',
+  'statistics.career-weapon-usage',
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],

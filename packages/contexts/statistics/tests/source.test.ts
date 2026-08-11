@@ -120,6 +120,13 @@ describe('Statistics V1 purpose-specific source evidence', () => {
     [{ ...lifetime, legends: [{ ...lifetimeLegend, time_held_weapon_one: undefined }] }, playerId],
     [{ ...lifetime, guild: {} }, playerId],
     [{ ...lifetime, wins: 101 }, playerId],
+    [
+      {
+        ...lifetime,
+        legends: Array.from({ length: 101 }, (_, index) => ({ ...lifetimeLegend, legend_id: index + 1 })),
+      },
+      playerId,
+    ],
   ])('rejects wrong-player, partial, guild-bearing, or contradictory lifetime evidence %#', (payload, requestedId) => {
     expect(() => decodeLifetimeEvidence(payload, requestedId)).toThrow()
   })
