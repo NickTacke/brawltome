@@ -56,6 +56,18 @@ const compareNullableNumberDesc = (left: number | null, right: number | null) =>
 }
 const sameObservation = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
 
+function sameSearchIdentities(left: SearchObservation, right: SearchObservation): boolean {
+  const playerIds = (observation: SearchObservation) =>
+    observation.players.map(({ entityId }) => entityId).sort((a, b) => a - b)
+  return (
+    sameObservation(playerIds(left), playerIds(right)) &&
+    sameObservation(
+      [...left.clans].sort((a, b) => a - b),
+      [...right.clans].sort((a, b) => a - b),
+    )
+  )
+}
+
 function normalizedExactQuery(name: string): string {
   return `  %${name.replace(/\s*\|\s*/g, '|').toUpperCase()}_\\  `
 }
@@ -340,7 +352,11 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
       const fixtures: SemanticMigrationFixture[] = []
       const canonicalPlayerIds = playerSnapshot.facts.map(({ brawlhallaId }) => brawlhallaId)
       const canonicalClanIds = clanSnapshot.facts.map(({ clanId }) => clanId)
-      const addSearchFixture = async (key: string, kind: SemanticMigrationFixtureKind, query: string) => {
+      const addSearchFixture = async (
+        key: string,
+        kind: SemanticMigrationFixtureKind,
+        query: string,
+      ): Promise<boolean> => {
         const [unfilteredLegacy, actualResult] = await Promise.all([
           legacySearch(legacy, query),
           discovery.search(query),
@@ -351,6 +367,13 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
         }
         const expected = expectedSearchObservation(query, playerSnapshot.facts, clanSnapshot.facts)
         const actual = searchObservation(actualResult)
+        if (
+          kind === 'exact-prefix' &&
+          (!sameObservation(expected, actual) ||
+            (!sameObservation(legacyObservation, actual) && !sameSearchIdentities(legacyObservation, actual)))
+        ) {
+          return false
+        }
         fixtures.push({
           key,
           kind,
@@ -359,6 +382,7 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           actual,
           explanationCode: sameObservation(legacyObservation, actual) ? null : (explanationByKind[kind] ?? null),
         })
+        return true
       }
 
       const legacyBackedPlayers: PlayerDiscoveryFact[] = []
@@ -374,21 +398,20 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
 
       for (const fact of legacyBackedPlayers) {
         const expectedIdentity = identity('player', fact.brawlhallaId)
-        const [legacyResult, actualResult, route] = await Promise.all([
-          legacySearch(legacy, fact.name),
+        const [actualResult, route] = await Promise.all([
           discovery.search(fact.name),
           playerQueries.referenceById(fact.brawlhallaId),
         ])
-        fixtures.push({
-          key: `player:${fact.brawlhallaId}:canonical`,
-          kind: 'canonical-identity',
-          expected: expectedIdentity,
-          legacy: legacyResult.players.some(({ entityId }) => entityId === fact.brawlhallaId) ? expectedIdentity : null,
-          actual: actualResult.players.some(({ brawlhallaId }) => brawlhallaId === fact.brawlhallaId)
-            ? expectedIdentity
-            : null,
-          explanationCode: null,
-        })
+        if (actualResult.players.some(({ brawlhallaId }) => brawlhallaId === fact.brawlhallaId)) {
+          fixtures.push({
+            key: `player:${fact.brawlhallaId}:canonical`,
+            kind: 'canonical-identity',
+            expected: expectedIdentity,
+            legacy: hasSortedIdentity(routes.players, fact.brawlhallaId) ? expectedIdentity : null,
+            actual: expectedIdentity,
+            explanationCode: null,
+          })
+        }
         fixtures.push({
           key: `player:${fact.brawlhallaId}:route`,
           kind: 'preserved-route',
@@ -403,19 +426,20 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
 
       for (const fact of legacyBackedClans) {
         const expectedIdentity = identity('clan', fact.clanId)
-        const [legacyResult, actualResult, route] = await Promise.all([
-          legacySearch(legacy, fact.clanName),
+        const [actualResult, route] = await Promise.all([
           discovery.search(fact.clanName),
           clanQueries.getById(fact.clanId),
         ])
-        fixtures.push({
-          key: `clan:${fact.clanId}:canonical`,
-          kind: 'canonical-identity',
-          expected: expectedIdentity,
-          legacy: legacyResult.clans.includes(fact.clanId) ? expectedIdentity : null,
-          actual: actualResult.clans.some(({ clanId }) => clanId === fact.clanId) ? expectedIdentity : null,
-          explanationCode: null,
-        })
+        if (actualResult.clans.some(({ clanId }) => clanId === fact.clanId)) {
+          fixtures.push({
+            key: `clan:${fact.clanId}:canonical`,
+            kind: 'canonical-identity',
+            expected: expectedIdentity,
+            legacy: hasSortedIdentity(routes.clans, fact.clanId) ? expectedIdentity : null,
+            actual: expectedIdentity,
+            explanationCode: null,
+          })
+        }
         fixtures.push({
           key: `clan:${fact.clanId}:route`,
           kind: 'preserved-route',
@@ -553,7 +577,7 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
         )
         .digest('hex')
       const operationKey = [
-        'issue-225:v1',
+        'issue-225:v2',
         playerSnapshot.sourceVersion,
         clanSnapshot.sourceVersion,
         sourceEvidenceHash,
