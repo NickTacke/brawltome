@@ -69,18 +69,24 @@ describe('V1 ranked leaderboard source', () => {
   test('rejects zero, duplicate, missing, or cardinality-drifted contestants for every mode', () => {
     for (const mode of ['1v1', 'solo2v2', '3v3'] as const) {
       for (const players of [[], [player(0, 'Sentinel')], [player(1, 'A'), player(2, 'B')]]) {
-        expect(() => decode(mode, { ...metrics, players })).toThrow(LeaderboardSourceError)
+        expect(() => decode(mode, { ...metrics, players })).toThrow(
+          expect.objectContaining({ code: 'source_contract_invalid', retryable: false }),
+        )
       }
     }
     for (const players of [
       [],
       [player(1, 'A')],
-      [player(1, 'A'), player(1, 'A')],
       [player(0, 'Sentinel'), player(2, 'B')],
       [player(1, 'A'), player(2, 'B'), player(3, 'C')],
     ]) {
-      expect(() => decode('2v2', { ...metrics, players })).toThrow(LeaderboardSourceError)
+      expect(() => decode('2v2', { ...metrics, players })).toThrow(
+        expect.objectContaining({ code: 'source_contract_invalid', retryable: false }),
+      )
     }
+    expect(() => decode('2v2', { ...metrics, players: [player(1, 'A'), player(1, 'A')] })).toThrow(
+      expect.objectContaining({ code: 'source_data_inconsistent', retryable: true }),
+    )
   })
 
   test('rejects malformed or drifted required semantics', () => {

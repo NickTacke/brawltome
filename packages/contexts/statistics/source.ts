@@ -26,6 +26,10 @@ function text(value: unknown, path: string): string {
   return value
 }
 
+function optionalText(value: unknown, path: string): string | null {
+  return value === undefined || value === null ? null : text(value, path)
+}
+
 function array(value: unknown, path: string, maximumLength?: number): unknown[] {
   if (!Array.isArray(value)) throw new Error(`${path} must be an array`)
   if (maximumLength !== undefined && value.length > maximumLength) {
@@ -57,7 +61,7 @@ export type RankedEvidence = {
   wins: number
   rating: number
   peakRating: number
-  tier: string
+  tier: string | null
   region: string
   legends: Array<{
     legendId: number
@@ -93,7 +97,7 @@ export function decodeRankedEvidence(payload: unknown, requestedBrawlhallaId: nu
     ...gamesAndWins(source, 'ranked evidence'),
     rating: integer(source.rating, 'ranked evidence.rating'),
     peakRating: integer(source.peak_rating, 'ranked evidence.peak_rating'),
-    tier: text(source.tier, 'ranked evidence.tier'),
+    tier: optionalText(source.tier, 'ranked evidence.tier'),
     region: text(source.region, 'ranked evidence.region'),
     legends,
   }
@@ -230,7 +234,7 @@ export function validateRankedEvidence(evidence: unknown, requestedBrawlhallaId:
     ...gamesAndWins(value, 'ranked evidence'),
     rating: integer(value.rating, 'ranked evidence.rating'),
     peakRating: integer(value.peakRating, 'ranked evidence.peakRating'),
-    tier: text(value.tier, 'ranked evidence.tier'),
+    tier: optionalText(value.tier, 'ranked evidence.tier'),
     region: text(value.region, 'ranked evidence.region'),
     legends,
   }

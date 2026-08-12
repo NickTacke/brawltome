@@ -237,6 +237,70 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
+  test('defers inconsistent leaderboard identity without consuming the final attempt', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:inconsistent-team',
+      kind: 'leaderboard-2v2',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 3,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    let deferred: { failure: OperationFailure; retryDelayMs: number } | undefined
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
+        deferred = { failure, retryDelayMs }
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      sourceUnavailableRetryMs: 1_000,
+      admission,
+      telemetry,
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async () => {
+          throw new LeaderboardSourceError(
+            'source_data_inconsistent',
+            'rankings[0].players must contain distinct player IDs',
+            true,
+          )
+        },
+      },
+    })
+
+    expect(deferred).toEqual({
+      failure: {
+        code: 'source_data_inconsistent',
+        message: 'rankings[0].players must contain distinct player IDs',
+        retryable: true,
+      },
+      retryDelayMs: 60_000,
+    })
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+    expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
+  })
+
   test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),

@@ -738,7 +738,7 @@ export async function runOneRefreshOperation(
         const transition = await operations.defer(
           lease,
           failureDetails(error, error.code),
-          Math.max(options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs),
+          Math.max(60_000, options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs),
         )
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
         failureCategory =
