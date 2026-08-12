@@ -101,6 +101,33 @@ describe('canonical clan router', () => {
     })
   })
 
+  test('keeps immutable migration evidence behind the public provenance boundary', async () => {
+    const stored = {
+      ...cached,
+      profile: {
+        ...cached.profile,
+        checkProvenance: {
+          ...cached.profile.checkProvenance,
+          sourceTable: 'clan',
+          sourceKey: '77',
+          archiveChecksum: 'a'.repeat(64),
+        },
+      },
+      roster: {
+        ...cached.roster,
+        checkProvenance: {
+          ...cached.roster.checkProvenance,
+          sourceTables: ['clan_member', 'player_clan'],
+          archiveChecksums: ['b'.repeat(64)],
+        },
+      },
+    } as typeof cached
+    const { caller } = harness({ stored })
+    const result = await caller.byId({ id: 77 })
+    expect(result?.profile.checkProvenance).toEqual({ source: 'v1-guild-stats', outcome: 'success' })
+    expect(result?.roster?.checkProvenance).toEqual({ source: 'v1-guild-members', outcome: 'success' })
+  })
+
   test('deduplicates before verification and preserves cached data in blocked outcomes', async () => {
     const active = harness({ active: true })
     await expect(active.caller.refresh({ id: 77 })).resolves.toMatchObject({
