@@ -53,6 +53,26 @@ describe('leaderboard contract', () => {
     expect(() => leaderboardInputSchema.parse({ mode: '1v1', region: 'all', page: 1, extra: true })).toThrow()
   })
 
+  test('round-trips official same-account couch teams as distinct slots', () => {
+    const output = {
+      ...common,
+      mode: '2v2' as const,
+      entries: [
+        {
+          ...entries['2v2'][0],
+          identity: {
+            type: 'fixed-two-vs-two-team' as const,
+            players: [
+              { brawlhallaId: 42, name: 'Ada' },
+              { brawlhallaId: 42, name: 'Ada•2' },
+            ] as [{ brawlhallaId: number; name: string }, { brawlhallaId: number; name: string }],
+          },
+        },
+      ],
+    }
+    expect(parseLeaderboardOutput(output)).toEqual(output)
+  })
+
   test('round-trips strict mode-specific identities across compatible V1 contract versions', () => {
     for (const contractVersion of [1, 2] as const) {
       for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
@@ -98,7 +118,7 @@ describe('leaderboard contract', () => {
     expect(() => leaderboardOutputSchema.parse({ ...common, mode: '2v2', entries: entries.solo2v2 })).toThrow()
   })
 
-  test('rejects zero IDs, noncanonical or duplicate fixed teams, inconsistent games, and unknown output fields', () => {
+  test('rejects zero IDs, descending or duplicate fixed slots, inconsistent games, and unknown output fields', () => {
     const fixed = entries['2v2'][0]
     for (const identity of [
       { type: 'fixed-two-vs-two-team', players: [{ brawlhallaId: 0, name: 'Zero' }, player] },

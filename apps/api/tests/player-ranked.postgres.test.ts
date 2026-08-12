@@ -182,6 +182,7 @@ describe('Players-owned canonical ranked state', () => {
       expect(await players.referenceById(91913839)).toEqual({
         brawlhallaId: 91913839,
         name: 'Canonical Player',
+        bestLegendNameKey: null,
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({
@@ -216,7 +217,11 @@ describe('Players-owned canonical ranked state', () => {
       await expireLease(lease.operationId)
       expect(await operations.claim('recovery-worker', 10_000, admission)).toBeNull()
       expect((await operations.inspect(lease.operationId)).operation.status).toBe('succeeded')
-      expect(await players.referenceById(brawlhallaId)).toEqual({ brawlhallaId, name: 'Canonical Player' })
+      expect(await players.referenceById(brawlhallaId)).toEqual({
+        brawlhallaId,
+        name: 'Canonical Player',
+        bestLegendNameKey: null,
+      })
     } finally {
       await Promise.all([players.close(), operations.close()])
     }
@@ -360,7 +365,10 @@ describe('Players-owned canonical ranked state', () => {
           leaseMs: 10_000,
           retryDelayMs: 1,
           admission,
-          sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+          sourceAdmission: {
+            admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+            pauseSource: async () => {},
+          },
           executeRankedPulse: async (lease) => {
             await refreshRankedPlayerPulse(
               players,

@@ -191,8 +191,11 @@ function identityKey(mode: LeaderboardMode, identity: PublishedLeaderboardIdenti
   if (mode === '3v3' && identity.type === 'three-vs-three-player') return String(identity.player.brawlhallaId)
   if (mode === '2v2' && identity.type === 'fixed-two-vs-two-team') {
     const [first, second] = identity.players
-    if (first.brawlhallaId >= second.brawlhallaId) {
-      throw new LeaderboardCandidateError('fixed 2v2 identity must use ascending distinct IDs')
+    if (
+      first.brawlhallaId > second.brawlhallaId ||
+      (first.brawlhallaId === second.brawlhallaId && first.name === second.name)
+    ) {
+      throw new LeaderboardCandidateError('fixed 2v2 identity must use canonical distinct participant slots')
     }
     return `${first.brawlhallaId}:${second.brawlhallaId}`
   }
