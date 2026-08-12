@@ -46,27 +46,6 @@ scrape_configs:
           runtime: web
           generation: v3
 
-  - job_name: availability
-    metrics_path: /probe
-    params:
-      module: [http_2xx]
-    static_configs:
-      - targets: ["https://api.brawltome.app/health"]
-        labels:
-          runtime: api
-          generation: v2
-      - targets: ["https://brawltome.app/"]
-        labels:
-          runtime: web
-          generation: v2
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox-exporter:9115
-
   - job_name: readiness
     metrics_path: /probe
     params:
