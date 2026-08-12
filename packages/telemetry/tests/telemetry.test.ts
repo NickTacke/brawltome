@@ -489,16 +489,30 @@ describe('telemetry foundation', () => {
   test('accepts every durable operation kind emitted by refresh operations', () => {
     const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0 })
 
-    for (const kind of ['player-discovery-projection', 'ranked-player-pulse'] as const) {
+    const durableKinds = [
+      ['proof', 'maintenance'],
+      ['interactive-player-refresh', 'interactive'],
+      ['clan-refresh', 'interactive'],
+      ['player-discovery-projection', 'projection'],
+      ['clan-discovery-projection', 'projection'],
+      ['discovery-reconciliation', 'maintenance'],
+      ['ranked-player-pulse', 'primary-monitoring'],
+      ['leaderboard-1v1', 'leaderboard'],
+      ['leaderboard-2v2', 'leaderboard'],
+      ['leaderboard-solo-2v2', 'leaderboard'],
+      ['leaderboard-3v3', 'leaderboard'],
+      ['statistics-ranked-collection', 'global-statistics'],
+      ['statistics-lifetime-collection', 'global-statistics'],
+      ['statistics-publication', 'global-statistics'],
+      ['statistics-legend-meta-publication', 'global-statistics'],
+    ] as const
+    for (const [kind, workClass] of durableKinds) {
       telemetry.metrics.add('operation_attempts_total', 1, {
         kind,
-        work_class: kind === 'player-discovery-projection' ? 'projection' : 'primary-monitoring',
+        work_class: workClass,
         outcome: 'succeeded',
       })
-      telemetry.metrics.set('operation_dead_letters', 0, {
-        kind,
-        work_class: kind === 'player-discovery-projection' ? 'projection' : 'primary-monitoring',
-      })
+      telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass })
     }
 
     expect(telemetry.stats().seriesDropped).toBe(0)
