@@ -1073,21 +1073,66 @@ export async function readLegacyRankingMigrationEvidence(
       FROM rankings.legacy_import_sets
       ORDER BY mode COLLATE "C", scope COLLATE "C"
     `
-      const immutable = await destinationIsImmutable(sql)
+      await destinationIsImmutable(sql)
       const evidenceSets: LegacyRankingMigrationSetEvidence[] = []
       for (const set of sets) {
-        const evaluated = await evaluateArchivedSet(sql, set.mode, set.scope, immutable)
+        const rows = set.snapshot_id
+          ? await sql<
+              Array<{
+                standing: number
+                source_rank: number
+                identity_kind: PublishedLeaderboardIdentity['type']
+                player_one_id: number
+                player_one_name: string
+                player_two_id: number | null
+                player_two_name: string | null
+                region: RegionalLeaderboardScope
+                rating: number
+                peak_rating: number | null
+                wins: number
+                losses: number
+                tier: string | null
+              }>
+            >`
+              SELECT standing, source_rank, identity_kind, player_one_id, player_one_name,
+                     player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier
+              FROM rankings.snapshot_rows
+              WHERE snapshot_id = ${set.snapshot_id} AND mode = ${set.mode}
+              ORDER BY ordinal
+              LIMIT 100
+            `
+          : []
         evidenceSets.push({
           mode: set.mode,
           scope: set.scope,
           status: set.status,
-          reasons: evaluated.reasons,
+          reasons: set.reasons,
           snapshotId: set.snapshot_id,
-          rowCount: evaluated.rows.length,
+          rowCount: set.candidate_row_count,
           sourceChecksum: set.source_checksum.trim(),
-          entries: evaluated.rows.slice(0, 100).map((row) => ({
-            ...row,
+          entries: rows.map((row) => ({
+            standing: row.standing,
+            sourceRank: row.source_rank,
+            identity:
+              row.identity_kind === 'fixed-two-vs-two-team'
+                ? {
+                    type: row.identity_kind,
+                    players: [
+                      { brawlhallaId: row.player_one_id, name: row.player_one_name },
+                      { brawlhallaId: row.player_two_id as number, name: row.player_two_name as string },
+                    ],
+                  }
+                : {
+                    type: row.identity_kind,
+                    player: { brawlhallaId: row.player_one_id, name: row.player_one_name },
+                  },
+            region: row.region,
+            rating: row.rating,
+            peakRating: row.peak_rating,
+            wins: row.wins,
+            losses: row.losses,
             games: row.wins + row.losses,
+            tier: row.tier,
           })),
         })
       }
