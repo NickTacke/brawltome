@@ -160,6 +160,10 @@ export function createPostgresRankedPlayers(
           SELECT legacy.brawlhalla_id, legacy.player_name, 1 AS source_rank
           FROM players.legacy_discovery_profiles legacy
           WHERE legacy.brawlhalla_id = ${brawlhallaId}
+          UNION ALL
+          SELECT profile.brawlhalla_id, profile.player_name, 2 AS source_rank
+          FROM players.legacy_profile_discovery profile
+          WHERE profile.brawlhalla_id = ${brawlhallaId}
         ) identity
         ORDER BY source_rank
         LIMIT 1

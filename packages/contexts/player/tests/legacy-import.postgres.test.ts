@@ -107,6 +107,15 @@ describe('Players V2 import', () => {
             bestLegendNameKey: 'bodvar',
           }),
         )
+        const reducedRoute = createPostgresRankedPlayers(databaseUrl)
+        try {
+          await expect(reducedRoute.referenceById(43)).resolves.toEqual({
+            brawlhallaId: 43,
+            name: 'Legacy Forty Three',
+          })
+        } finally {
+          await reducedRoute.close()
+        }
         const full = await importLegacyPlayers(databaseUrl)
         expect(full.status).toBe('complete')
         expect(full.reconciliation.exact).toBe(true)
