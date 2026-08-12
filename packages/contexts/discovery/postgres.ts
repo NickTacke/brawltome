@@ -469,17 +469,21 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
         SELECT generation_id, source_version
         FROM discovery.generations WHERE entity_kind = ${owner} AND active FOR UPDATE
       `
-      let appliedEvents = 0
-      let projectedVersion = Number(generation.source_version)
+      const insertedReceipts = await sql<{ event_id: string }[]>`
+        INSERT INTO discovery.event_receipts (entity_kind, event_id)
+        SELECT ${owner}, event_id
+        FROM unnest(${events.map(({ eventId }) => eventId)}::uuid[]) AS receipt(event_id)
+        ON CONFLICT DO NOTHING
+        RETURNING event_id
+      `
+      const insertedEventIds = new Set(insertedReceipts.map(({ event_id }) => event_id))
+      const snapshotVersion = Number(generation.source_version)
+      const processedEventIds = new Set<string>()
+      let projectedVersion = snapshotVersion
       for (const event of events) {
-        const inserted = await sql<{ event_id: string }[]>`
-          INSERT INTO discovery.event_receipts (entity_kind, event_id)
-          VALUES (${owner}, ${event.eventId})
-          ON CONFLICT DO NOTHING
-          RETURNING event_id
-        `
-        if (!inserted[0]) continue
-        if (event.sourceVersion >= projectedVersion) {
+        if (!insertedEventIds.has(event.eventId) || processedEventIds.has(event.eventId)) continue
+        processedEventIds.add(event.eventId)
+        if (event.sourceVersion > snapshotVersion && event.sourceVersion >= projectedVersion) {
           if (owner === 'player') {
             const playerEvent = event as PlayerProjectionEvent
             await replacePlayer(sql, generation.generation_id, playerEvent.fact, playerEvent.brawlhallaId)
@@ -489,8 +493,8 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
           }
           projectedVersion = event.sourceVersion
         }
-        appliedEvents++
       }
+      const appliedEvents = insertedReceipts.length
       await sql`
         UPDATE discovery.generations
         SET source_version = GREATEST(source_version, ${projectedVersion})
