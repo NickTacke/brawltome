@@ -666,43 +666,80 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     }))
   }
 
-  const termHash = (terms: ComparableTerm[]) => createHash('sha256').update(JSON.stringify(terms)).digest('hex')
-
-  function groupedTerms(terms: ComparableTerm[]): Map<number, ComparableTerm[]> {
-    const grouped = new Map<number, ComparableTerm[]>()
-    for (const term of terms) {
-      const entityTerms = grouped.get(term.entityId) ?? []
-      entityTerms.push(term)
-      grouped.set(term.entityId, entityTerms)
+  function termHash(terms: ComparableTerm[]): string {
+    const hash = createHash('sha256')
+    hash.update('[')
+    for (let index = 0; index < terms.length; index++) {
+      if (index > 0) hash.update(',')
+      hash.update(JSON.stringify(terms[index]))
     }
-    return grouped
+    return hash.update(']').digest('hex')
   }
 
-  function reconciliationDifferences(
-    expected: ComparableTerm[],
-    projected: ComparableTerm[],
-  ): Array<ReconciliationDifference & { expected: ComparableTerm[] | null; projected: ComparableTerm[] | null }> {
-    const expectedById = groupedTerms(expected)
-    const projectedById = groupedTerms(projected)
-    return [...new Set([...expectedById.keys(), ...projectedById.keys()])]
-      .sort((left, right) => left - right)
-      .flatMap((entityId) => {
-        const expectedFact = expectedById.get(entityId) ?? null
-        const projectedFact = projectedById.get(entityId) ?? null
-        if (JSON.stringify(expectedFact) === JSON.stringify(projectedFact)) return []
-        return [
-          {
-            entityId,
-            kind: expectedFact
-              ? projectedFact
-                ? ('mismatched' as const)
-                : ('missing' as const)
-              : ('unexpected' as const),
-            expected: expectedFact,
-            projected: projectedFact,
-          },
-        ]
+  const sameTerm = (left: ComparableTerm, right: ComparableTerm) =>
+    left.entityId === right.entityId &&
+    left.termKind === right.termKind &&
+    left.displayTerm === right.displayTerm &&
+    left.normalizedTerm === right.normalizedTerm &&
+    left.canonicalName === right.canonicalName &&
+    left.region === right.region &&
+    left.rating === right.rating &&
+    left.viewCount === right.viewCount &&
+    left.bestLegendNameKey === right.bestLegendNameKey &&
+    left.clanXp === right.clanXp &&
+    left.memberCount === right.memberCount
+
+  function entityCount(terms: ComparableTerm[]): number {
+    let count = 0
+    let previous: number | null = null
+    for (const term of terms) {
+      if (term.entityId === previous) continue
+      count++
+      previous = term.entityId
+    }
+    return count
+  }
+
+  function reconciliationDifferences(expected: ComparableTerm[], projected: ComparableTerm[]) {
+    const details: Array<
+      ReconciliationDifference & { expected: ComparableTerm[] | null; projected: ComparableTerm[] | null }
+    > = []
+    let differenceCount = 0
+    let expectedIndex = 0
+    let projectedIndex = 0
+    while (expectedIndex < expected.length || projectedIndex < projected.length) {
+      const expectedId = expected[expectedIndex]?.entityId
+      const projectedId = projected[projectedIndex]?.entityId
+      const entityId =
+        expectedId === undefined
+          ? (projectedId as number)
+          : projectedId === undefined
+            ? expectedId
+            : Math.min(expectedId, projectedId)
+      const expectedStart = expectedIndex
+      const projectedStart = projectedIndex
+      while (expected[expectedIndex]?.entityId === entityId) expectedIndex++
+      while (projected[projectedIndex]?.entityId === entityId) projectedIndex++
+      const expectedLength = expectedIndex - expectedStart
+      const projectedLength = projectedIndex - projectedStart
+      let matches = expectedLength === projectedLength
+      for (let offset = 0; matches && offset < expectedLength; offset++) {
+        matches = sameTerm(
+          expected[expectedStart + offset] as ComparableTerm,
+          projected[projectedStart + offset] as ComparableTerm,
+        )
+      }
+      if (matches) continue
+      differenceCount++
+      if (details.length === maxPersistedReconciliationDifferences) continue
+      details.push({
+        entityId,
+        kind: expectedLength > 0 ? (projectedLength > 0 ? 'mismatched' : 'missing') : 'unexpected',
+        expected: expectedLength > 0 ? expected.slice(expectedStart, expectedIndex) : null,
+        projected: projectedLength > 0 ? projected.slice(projectedStart, projectedIndex) : null,
       })
+    }
+    return { differenceCount, details }
   }
 
   async function existingReconciliation(sql: Sql, operationId: string): Promise<ReconciliationResult | null> {
@@ -786,20 +823,26 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
           `
           if (Number(active.source_version) > snapshot.sourceVersion) throw new StaleProjectionSnapshotError()
 
+          const sourceFactCount = snapshot.facts.length
           const expected = expectedTerms(owner, snapshot)
           const projectedBefore = await projectedTerms(sql, owner)
           const differences = reconciliationDifferences(expected, projectedBefore)
-          const exactBefore = differences.length === 0
-          if (!exactBefore) await replaceGeneration(sql, owner, snapshot)
-
-          const projectedAfter = await projectedTerms(sql, owner)
-          const exactAfter = JSON.stringify(expected) === JSON.stringify(projectedAfter)
-          if (!exactAfter) throw new Error('Discovery reconciliation repair did not converge exactly')
+          const exactBefore = differences.differenceCount === 0
           const expectedHash = termHash(expected)
           const projectedHashBefore = termHash(projectedBefore)
-          const projectedHashAfter = termHash(projectedAfter)
-          const projectedBeforeCount = new Set(projectedBefore.map(({ entityId }) => entityId)).size
-          const projectedAfterCount = new Set(projectedAfter.map(({ entityId }) => entityId)).size
+          const projectedBeforeCount = entityCount(projectedBefore)
+          let projectedHashAfter = projectedHashBefore
+          let projectedAfterCount = projectedBeforeCount
+          if (!exactBefore) {
+            await replaceGeneration(sql, owner, snapshot)
+            projectedBefore.length = 0
+            const projectedAfter = await projectedTerms(sql, owner)
+            const remaining = reconciliationDifferences(expected, projectedAfter)
+            if (remaining.differenceCount > 0)
+              throw new Error('Discovery reconciliation repair did not converge exactly')
+            projectedHashAfter = termHash(projectedAfter)
+            projectedAfterCount = entityCount(projectedAfter)
+          }
           const [run] = await sql<{ run_id: string }[]>`
             INSERT INTO discovery.reconciliation_runs
               (operation_id, entity_kind, observed_source_version,
@@ -811,14 +854,14 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
             VALUES
               (${operationId ?? null}::uuid, ${owner}, ${snapshot.sourceVersion},
                ${Number(active.source_version)}, ${exactBefore ? Number(active.source_version) : snapshot.sourceVersion},
-               ${snapshot.facts.length}, ${projectedBeforeCount}, ${projectedAfterCount},
+               ${sourceFactCount}, ${projectedBeforeCount}, ${projectedAfterCount},
                ${snapshot.pendingEventCount ?? 0}, ${snapshot.oldestPendingAt ?? null},
                ${expectedHash}, ${projectedHashBefore}, ${projectedHashAfter},
-               ${exactBefore}, ${exactAfter}, ${!exactBefore}, ${differences.length},
-               ${differences.length > maxPersistedReconciliationDifferences})
+               ${exactBefore}, ${true}, ${!exactBefore}, ${differences.differenceCount},
+               ${differences.differenceCount > maxPersistedReconciliationDifferences})
             RETURNING run_id
           `
-          for (const difference of differences.slice(0, maxPersistedReconciliationDifferences)) {
+          for (const difference of differences.details) {
             await sql`
               INSERT INTO discovery.reconciliation_differences
                 (run_id, entity_id, difference_kind, expected_fact, projected_fact)
@@ -838,13 +881,11 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
             projectedHashBefore,
             projectedHashAfter,
             exactBefore,
-            exactAfter,
+            exactAfter: true,
             repaired: !exactBefore,
-            differenceCount: differences.length,
-            differenceDetailsTruncated: differences.length > maxPersistedReconciliationDifferences,
-            differences: differences
-              .slice(0, maxPersistedReconciliationDifferences)
-              .map(({ entityId, kind }) => ({ entityId, kind })),
+            differenceCount: differences.differenceCount,
+            differenceDetailsTruncated: differences.differenceCount > maxPersistedReconciliationDifferences,
+            differences: differences.details.map(({ entityId, kind }) => ({ entityId, kind })),
           }
         })
       } catch (error) {
