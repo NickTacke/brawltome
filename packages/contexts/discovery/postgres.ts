@@ -26,6 +26,23 @@ import {
 
 type Sql = ReturnType<typeof postgres>
 type PlayerTerm = { kind: 'canonical' | 'segment' | 'alias'; display: string; normalized: string }
+type TermRow = {
+  entity_kind: ProjectionOwner
+  generation_id: string
+  entity_id: number
+  term_kind: string
+  display_term: string
+  normalized_term: string
+  canonical_name: string
+  region: string | null
+  rating: number | null
+  view_count: number | null
+  best_legend_name_key: string | null
+  clan_xp: string | null
+  member_count: number | null
+}
+
+const termInsertBatchSize = 4_000
 
 class StaleProjectionSnapshotError extends Error {}
 
@@ -48,33 +65,32 @@ function playerTermsFor(fact: PlayerDiscoveryFact): PlayerTerm[] {
   return terms
 }
 
+function playerTermRows(generationId: string, fact: PlayerDiscoveryFact): TermRow[] {
+  return playerTermsFor(fact).map((term) => ({
+    entity_kind: 'player',
+    generation_id: generationId,
+    entity_id: fact.brawlhallaId,
+    term_kind: term.kind,
+    display_term: term.display,
+    normalized_term: term.normalized,
+    canonical_name: fact.name,
+    region: fact.region,
+    rating: fact.rating,
+    view_count: fact.viewCount,
+    best_legend_name_key: fact.bestLegendNameKey,
+    clan_xp: null,
+    member_count: null,
+  }))
+}
+
 async function replacePlayer(sql: Sql, generationId: string, fact: PlayerDiscoveryFact | null, brawlhallaId: number) {
   await sql`
     DELETE FROM discovery.terms
     WHERE entity_kind = 'player' AND generation_id = ${generationId} AND entity_id = ${brawlhallaId}
   `
   if (!fact) return
-  const terms = playerTermsFor(fact)
-  if (terms.length === 0) return
-  await sql`
-    INSERT INTO discovery.terms ${sql(
-      terms.map((term) => ({
-        entity_kind: 'player',
-        generation_id: generationId,
-        entity_id: fact.brawlhallaId,
-        term_kind: term.kind,
-        display_term: term.display,
-        normalized_term: term.normalized,
-        canonical_name: fact.name,
-        region: fact.region,
-        rating: fact.rating,
-        view_count: fact.viewCount,
-        best_legend_name_key: fact.bestLegendNameKey,
-        clan_xp: null,
-        member_count: null,
-      })),
-    )}
-  `
+  const rows = playerTermRows(generationId, fact)
+  if (rows.length > 0) await sql`INSERT INTO discovery.terms ${sql(rows)}`
 }
 
 const maxPersistedReconciliationDifferences = 1_000
@@ -277,11 +293,19 @@ async function replaceGeneration(
     VALUES (${owner}, ${snapshot.sourceVersion}) RETURNING generation_id
   `
   if (owner === 'player') {
+    const rows: TermRow[] = []
     for (const fact of [...(snapshot as PlayerProjectionSnapshot).facts].sort(
       (left, right) => left.brawlhallaId - right.brawlhallaId,
     )) {
-      await replacePlayer(sql, generation.generation_id, fact, fact.brawlhallaId)
+      for (const row of playerTermRows(generation.generation_id, fact)) {
+        rows.push(row)
+        if (rows.length === termInsertBatchSize) {
+          await sql`INSERT INTO discovery.terms ${sql(rows)}`
+          rows.length = 0
+        }
+      }
     }
+    if (rows.length > 0) await sql`INSERT INTO discovery.terms ${sql(rows)}`
   } else {
     for (const fact of [...(snapshot as ClanProjectionSnapshot).facts].sort(
       (left, right) => left.clanId - right.clanId,
