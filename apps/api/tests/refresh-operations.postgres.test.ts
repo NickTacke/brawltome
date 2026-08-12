@@ -161,6 +161,8 @@ describe('durable Refresh Operations', () => {
       'discovery/0003',
       'accounts/0007',
       'rankings/0004',
+      'rankings/0005',
+      'rankings/0006',
     ])
   })
 
@@ -755,6 +757,65 @@ describe('durable Refresh Operations', () => {
         DELETE FROM refresh_operations.operations
         WHERE id = ${deferred.operationId}
       `
+      await control.end()
+      await operations.close()
+    }
+  })
+
+  test('supersedes obsolete pending leaderboard windows without leaving retry or alert backlog', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    const intervalMs = 60_000
+    const schedule = await operations.reconcileLeaderboardSchedule({
+      scheduleKey: `superseded-leaderboard:${randomUUID()}`,
+      operationKeyPrefix: `superseded-leaderboard:${randomUUID()}`,
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      intervalMs,
+      firstDueAt: new Date(Date.now() - 1_000).toISOString(),
+      payload: { pageDepth: 1, intervalMs },
+      provenance: { source: 'integration-test', requestedBy: 'incident-220' },
+    })
+    try {
+      const first = await operations.materializeDueSchedules()
+      const firstOperationId = first.occurrences.find(
+        ({ scheduleId }) => scheduleId === schedule.scheduleId,
+      )?.operationId
+      expect(firstOperationId).toBeTruthy()
+      const obsoleteLease = requireLease(
+        await operations.claim('obsolete-leaderboard-worker', 10_000, testAdmission, 'leaderboard-1v1'),
+      )
+      expect(obsoleteLease.operationId).toBe(firstOperationId)
+
+      await control`
+        UPDATE refresh_operations.schedules
+        SET next_due_at = clock_timestamp() - interval '1 second'
+        WHERE id = ${schedule.scheduleId}
+      `
+      const second = await operations.materializeDueSchedules()
+      expect(second.occurrences.filter(({ scheduleId }) => scheduleId === schedule.scheduleId)).toHaveLength(1)
+
+      expect(await operations.inspectDeadLetter(firstOperationId as string)).toMatchObject({
+        operation: {
+          operationId: firstOperationId,
+          lastError: { code: 'superseded_scheduled_operation', retryable: false },
+          disposition: 'discarded',
+        },
+        attempts: [{ outcome: 'dead_letter', error: { code: 'superseded_scheduled_operation' } }],
+      })
+      expect(await operations.complete(obsoleteLease)).toBe('lease-lost')
+      const history = await operations.inspectSchedule(schedule.scheduleId)
+      expect(history.occurrences.map(({ operation_status }) => operation_status)).toEqual(['dead_letter', 'pending'])
+      expect(
+        (await operations.inspectTelemetry()).deadLetters.find(
+          ({ workClass, kind }) => workClass === 'leaderboard' && kind === 'leaderboard-1v1',
+        )?.count,
+      ).toBe(0)
+      const current = requireLease(
+        await operations.claim('superseded-leaderboard-cleanup', 10_000, testAdmission, 'leaderboard-1v1'),
+      )
+      expect(await operations.complete(current)).toBe('transitioned')
+    } finally {
       await control.end()
       await operations.close()
     }
