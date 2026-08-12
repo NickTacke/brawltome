@@ -37,7 +37,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/database': ['.'],
     '@brawltome/database-migrations': [],
     '@brawltome/launch-parity': [],
-    '@brawltome/game-data': ['.', './reference-data'],
+    '@brawltome/game-data': ['.', './legends', './reference-data'],
     '@brawltome/replay-format': ['.'],
     '@brawltome/shared': ['.', './constants', './weapons'],
     '@brawltome/telemetry': ['.', './node', './propagation'],
