@@ -9,6 +9,7 @@ const read = (...parts: string[]) => readFileSync(deploy(...parts), 'utf8')
 
 const requiredAlerts = [
   'RuntimeMetricsTargetDown',
+  'PublicEndpointUnavailable',
   'RuntimeNotReady',
   'WorkerHeartbeatStale',
   'OldestRunnableJobDelayed',
@@ -162,7 +163,7 @@ describe('observability deployment contract', () => {
     expect(read('storage', 'verify-quota-mounts.sh')).toContain('findmnt')
   })
 
-  test('scrapes V2 and V3 through distinct generation-labeled targets', () => {
+  test('scrapes V3 metrics and probes supported V2 and V3 health endpoints', () => {
     const config = parse(read('prometheus', 'prometheus.yml')) as {
       scrape_configs: Array<{
         job_name: string
@@ -171,35 +172,29 @@ describe('observability deployment contract', () => {
     }
     const job = (name: string) => config.scrape_configs.find(({ job_name }) => job_name === name)?.static_configs
 
-    expect(job('api')).toEqual([
-      { targets: ['api:3000'], labels: { runtime: 'api', generation: 'v2' } },
-      { targets: ['v3-api:3000'], labels: { runtime: 'api', generation: 'v3' } },
-    ])
+    expect(job('api')).toEqual([{ targets: ['v3-api:3000'], labels: { runtime: 'api', generation: 'v3' } }])
     expect(job('operations-worker')).toEqual([
-      { targets: ['operations-worker:3001'], labels: { runtime: 'operations-worker', generation: 'v2' } },
       { targets: ['v3-operations-worker:3001'], labels: { runtime: 'operations-worker', generation: 'v3' } },
     ])
-    expect(job('web')).toEqual([
-      { targets: ['web:3000'], labels: { runtime: 'web', generation: 'v2' } },
-      { targets: ['v3-web:3000'], labels: { runtime: 'web', generation: 'v3' } },
+    expect(job('web')).toEqual([{ targets: ['v3-web:3000'], labels: { runtime: 'web', generation: 'v3' } }])
+    expect(job('discord')).toBeUndefined()
+    expect(job('availability')).toEqual([
+      {
+        targets: ['https://api.brawltome.app/health'],
+        labels: { runtime: 'api', generation: 'v2' },
+      },
+      {
+        targets: ['https://brawltome.app/'],
+        labels: { runtime: 'web', generation: 'v2' },
+      },
     ])
-    expect(job('discord')).toEqual([
-      { targets: ['discord-bot:3002'], labels: { runtime: 'discord', generation: 'v2' } },
+    expect(job('readiness')).toEqual([
+      { targets: ['http://v3-api:3000/health/ready'], labels: { runtime: 'api', generation: 'v3' } },
+      {
+        targets: ['http://v3-operations-worker:3001/health/ready'],
+        labels: { runtime: 'operations-worker', generation: 'v3' },
+      },
     ])
-    expect(job('readiness')).toEqual(
-      expect.arrayContaining([
-        { targets: ['http://api:3000/health/ready'], labels: { runtime: 'api', generation: 'v2' } },
-        { targets: ['http://v3-api:3000/health/ready'], labels: { runtime: 'api', generation: 'v3' } },
-        {
-          targets: ['http://operations-worker:3001/health/ready'],
-          labels: { runtime: 'operations-worker', generation: 'v2' },
-        },
-        {
-          targets: ['http://v3-operations-worker:3001/health/ready'],
-          labels: { runtime: 'operations-worker', generation: 'v3' },
-        },
-      ]),
-    )
   })
 
   test('provisions every required low-cardinality alert and firing/recovery evidence', () => {

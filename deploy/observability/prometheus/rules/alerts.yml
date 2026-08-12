@@ -13,6 +13,17 @@ groups:
           summary: "{{ $labels.runtime }} metrics target is unreachable"
           description: "The dedicated metrics scrape has failed for at least two minutes."
 
+      - alert: PublicEndpointUnavailable
+        expr: probe_success{job="availability"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: public-availability
+        annotations:
+          summary: "{{ $labels.runtime }} public endpoint is unavailable"
+          description: "The public endpoint probe has failed for at least two minutes."
+
       - alert: RuntimeNotReady
         expr: probe_success{job="readiness"} == 0
         for: 2m

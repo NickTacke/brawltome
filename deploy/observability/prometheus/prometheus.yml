@@ -19,10 +19,6 @@ scrape_configs:
       X-Metrics-Secret:
         files: [/run/secrets/metrics_scrape_secret]
     static_configs:
-      - targets: ["api:3000"]
-        labels:
-          runtime: api
-          generation: v2
       - targets: ["v3-api:3000"]
         labels:
           runtime: api
@@ -34,10 +30,6 @@ scrape_configs:
       X-Metrics-Secret:
         files: [/run/secrets/metrics_scrape_secret]
     static_configs:
-      - targets: ["operations-worker:3001"]
-        labels:
-          runtime: operations-worker
-          generation: v2
       - targets: ["v3-operations-worker:3001"]
         labels:
           runtime: operations-worker
@@ -49,43 +41,41 @@ scrape_configs:
       X-Metrics-Secret:
         files: [/run/secrets/metrics_scrape_secret]
     static_configs:
-      - targets: ["web:3000"]
-        labels:
-          runtime: web
-          generation: v2
       - targets: ["v3-web:3000"]
         labels:
           runtime: web
           generation: v3
 
-  - job_name: discord
-    metrics_path: /metrics
-    http_headers:
-      X-Metrics-Secret:
-        files: [/run/secrets/metrics_scrape_secret]
+  - job_name: availability
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
     static_configs:
-      - targets: ["discord-bot:3002"]
+      - targets: ["https://api.brawltome.app/health"]
         labels:
-          runtime: discord
+          runtime: api
           generation: v2
+      - targets: ["https://brawltome.app/"]
+        labels:
+          runtime: web
+          generation: v2
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
 
   - job_name: readiness
     metrics_path: /probe
     params:
       module: [http_2xx]
     static_configs:
-      - targets: ["http://api:3000/health/ready"]
-        labels:
-          runtime: api
-          generation: v2
       - targets: ["http://v3-api:3000/health/ready"]
         labels:
           runtime: api
           generation: v3
-      - targets: ["http://operations-worker:3001/health/ready"]
-        labels:
-          runtime: operations-worker
-          generation: v2
       - targets: ["http://v3-operations-worker:3001/health/ready"]
         labels:
           runtime: operations-worker
