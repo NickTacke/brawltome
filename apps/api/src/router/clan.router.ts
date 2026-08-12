@@ -28,6 +28,16 @@ function iso(value: Date | null): string | null {
   return value?.toISOString() ?? null
 }
 
+function publicProvenance(
+  value: ClanProfileContract['profile']['checkProvenance'],
+): ClanProfileContract['profile']['checkProvenance'] {
+  return {
+    source: value.source,
+    outcome: value.outcome,
+    ...(value.legacyTimestamp ? { legacyTimestamp: value.legacyTimestamp } : {}),
+  }
+}
+
 export async function mapClan(clans: ClanQueries, clanId: number): Promise<ClanProfileContract | null> {
   const clan = await clans.getById(clanId)
   if (!clan) return null
@@ -37,10 +47,22 @@ export async function mapClan(clans: ClanQueries, clanId: number): Promise<ClanP
     profile: {
       ...clan.profile,
       checkedAt: iso(clan.profile.checkedAt),
+      checkProvenance: publicProvenance(clan.profile.checkProvenance),
       lastSuccessAt: iso(clan.profile.lastSuccessAt),
+      lastSuccessProvenance: clan.profile.lastSuccessProvenance
+        ? publicProvenance(clan.profile.lastSuccessProvenance)
+        : null,
     },
     roster: clan.roster
-      ? { ...clan.roster, checkedAt: iso(clan.roster.checkedAt), lastSuccessAt: iso(clan.roster.lastSuccessAt) }
+      ? {
+          ...clan.roster,
+          checkedAt: iso(clan.roster.checkedAt),
+          checkProvenance: publicProvenance(clan.roster.checkProvenance),
+          lastSuccessAt: iso(clan.roster.lastSuccessAt),
+          lastSuccessProvenance: clan.roster.lastSuccessProvenance
+            ? publicProvenance(clan.roster.lastSuccessProvenance)
+            : null,
+        }
       : null,
     members: clan.members.map((member) => ({ ...member, joinDate: member.joinDate.toISOString() })),
   })
