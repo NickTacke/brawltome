@@ -10,6 +10,7 @@ export const playerReferenceSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     name: playerNameSchema,
+    bestLegendNameKey: z.string().min(1).nullable().optional(),
   })
   .strict()
 

@@ -11,9 +11,10 @@ import { type LegendSortKey, type RankedLegend, sortLegends } from './utils'
 interface LegendSectionProps {
   allLegends: PlayerData[]
   rankedLegends: PlayerData[]
+  rankedAvailable: boolean
 }
 
-export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps) {
+export function LegendSection({ allLegends, rankedLegends, rankedAvailable }: LegendSectionProps) {
   const [showAllLegends, setShowAllLegends] = useState(false)
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null)
   const [openedLegendIds, setOpenedLegendIds] = useState<Set<number>>(new Set())
@@ -69,7 +70,7 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
   return (
     <div id="legends-section" ref={legendsRef} className="space-y-4">
       <div className="flex justify-between items-center gap-3">
-        <h2 className="text-2xl font-bold text-foreground">Legend Statistics</h2>
+        <h3 className="text-2xl font-bold text-foreground">Legend Statistics</h3>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground font-mono">Played: {allLegends.length}</span>
           <SortControls sortKey={sortKey} onChange={setSortKey} />
@@ -82,6 +83,7 @@ export function LegendSection({ allLegends, rankedLegends }: LegendSectionProps)
             key={legend.legendId}
             legend={legend}
             rankedLegend={rankedLegends.find((r: PlayerData) => r.legendId === legend.legendId)}
+            rankedAvailable={rankedAvailable}
             isExpanded={expandedLegendId === legend.legendId}
             hasOpened={openedLegendIds.has(legend.legendId)}
             onToggle={toggleLegend}

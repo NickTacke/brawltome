@@ -15,12 +15,20 @@ import { WeaponStatRow } from './WeaponStatRow'
 interface LegendCardProps {
   legend: PlayerData
   rankedLegend: PlayerData | undefined
+  rankedAvailable: boolean
   isExpanded: boolean
   hasOpened: boolean
   onToggle: (id: number) => void
 }
 
-export function LegendCard({ legend, rankedLegend, isExpanded, hasOpened, onToggle }: LegendCardProps) {
+export function LegendCard({
+  legend,
+  rankedLegend,
+  rankedAvailable,
+  isExpanded,
+  hasOpened,
+  onToggle,
+}: LegendCardProps) {
   const wr = legend.games > 0 ? (legend.wins / legend.games) * 100 : 0
 
   return (
@@ -29,9 +37,14 @@ export function LegendCard({ legend, rankedLegend, isExpanded, hasOpened, onTogg
       // biome-ignore lint/a11y/useSemanticElements: complex expandable card layout
       role="button"
       tabIndex={0}
+      aria-expanded={isExpanded}
+      aria-controls={`legend-panel-${legend.legendId}`}
       onClick={() => onToggle(legend.legendId)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onToggle(legend.legendId)
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle(legend.legendId)
+        }
       }}
     >
       <div className="p-4 relative overflow-hidden">
@@ -86,13 +99,16 @@ export function LegendCard({ legend, rankedLegend, isExpanded, hasOpened, onTogg
         </div>
 
         <div
+          id={`legend-panel-${legend.legendId}`}
           className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out relative z-10 ${
             isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
           }`}
           aria-hidden={!isExpanded}
         >
           <div className="min-h-0 overflow-hidden">
-            {hasOpened && <LegendCardExpanded legend={legend} rankedLegend={rankedLegend} />}
+            {hasOpened && (
+              <LegendCardExpanded legend={legend} rankedLegend={rankedLegend} rankedAvailable={rankedAvailable} />
+            )}
           </div>
         </div>
       </div>
@@ -103,9 +119,10 @@ export function LegendCard({ legend, rankedLegend, isExpanded, hasOpened, onTogg
 interface LegendCardExpandedProps {
   legend: PlayerData
   rankedLegend: PlayerData | undefined
+  rankedAvailable: boolean
 }
 
-function LegendCardExpanded({ legend, rankedLegend }: LegendCardExpandedProps) {
+function LegendCardExpanded({ legend, rankedLegend, rankedAvailable }: LegendCardExpandedProps) {
   const matchTime = parseNum(legend.matchTime)
   const legendGames = parseNum(legend.games)
   const legendWins = parseNum(legend.wins)
@@ -242,7 +259,13 @@ function LegendCardExpanded({ legend, rankedLegend }: LegendCardExpandedProps) {
             Ranked Season
           </div>
 
-          {rankedLegend ? <RankedSeasonPanel rankedLegend={rankedLegend} /> : <UnrankedPanel />}
+          {rankedLegend ? (
+            <RankedSeasonPanel rankedLegend={rankedLegend} />
+          ) : rankedAvailable ? (
+            <UnrankedPanel />
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">Current Season data unavailable.</p>
+          )}
         </div>
       </div>
 

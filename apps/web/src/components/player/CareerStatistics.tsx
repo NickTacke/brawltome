@@ -1,25 +1,18 @@
-import type { PlayerCareerProfileContract } from '@brawltome/contracts'
+import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
+import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
+import { Card, Progress } from '@brawltome/ui'
+import { CombatCard } from './CombatCard'
+import { LegendSection } from './LegendSection'
+import { formatHours, getWeaponIcon } from './shared'
 
 interface CareerStatisticsProps {
   career: PlayerCareerProfileContract | null
+  currentSeason?: PlayerRankedProfileContract | null
   refreshing?: boolean
 }
 
 function observedDate(value: string): string {
   return value.slice(0, 10)
-}
-
-function Facts({ facts }: { facts: Array<[string, string | number]> }) {
-  return (
-    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {facts.map(([label, value]) => (
-        <div key={label} className="rounded-lg border border-border bg-card p-3">
-          <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd className="mt-1 font-mono font-semibold text-foreground">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  )
 }
 
 function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract; refreshing: boolean }) {
@@ -48,19 +41,34 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
   return <p className="text-sm text-muted-foreground">Updated {observedDate(career.lastSuccessAt)}.</p>
 }
 
-export function CareerStatistics({ career, refreshing = false }: CareerStatisticsProps) {
+export function CareerStatistics({ career, currentSeason = null, refreshing = false }: CareerStatisticsProps) {
   const snapshot = career?.snapshot
   const totalWeaponHeldTime = snapshot?.weapons.reduce((total, weapon) => total + weapon.heldTime, 0) ?? 0
+  const legends =
+    snapshot?.legends.map((legend) => {
+      const reference = getLegendById(legend.legendId)
+      return {
+        ...legend,
+        weaponOne: reference ? normalizeWeaponName(reference.weaponOne) : null,
+        weaponTwo: reference ? normalizeWeaponName(reference.weaponTwo) : null,
+        timeHeldWeaponOne: legend.weaponOne.heldTime,
+        timeHeldWeaponTwo: legend.weaponTwo.heldTime,
+        koWeaponOne: legend.weaponOne.kos,
+        koWeaponTwo: legend.weaponTwo.kos,
+        koUnarmed: legend.unarmed.kos,
+        damageWeaponOne: legend.weaponOne.damage,
+        damageWeaponTwo: legend.weaponTwo.damage,
+        damageUnarmed: legend.unarmed.damage,
+      }
+    }) ?? []
+  const rankedLegends = currentSeason?.snapshot?.rankedLegends ?? []
 
   return (
-    <section aria-labelledby="career-statistics-heading" className="space-y-6">
+    <section aria-labelledby="career-statistics-heading" className="space-y-8">
       <div className="space-y-2">
         <h2 id="career-statistics-heading" className="text-2xl font-bold text-foreground">
           Career Statistics
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Lifetime account, combat, legend, and weapon facts observed from complete career statistics.
-        </p>
         {career ? (
           <Freshness career={career} refreshing={refreshing} />
         ) : (
@@ -72,113 +80,57 @@ export function CareerStatistics({ career, refreshing = false }: CareerStatistic
 
       {snapshot && (
         <>
-          <section aria-labelledby="account-statistics-heading" className="space-y-3">
-            <h3 id="account-statistics-heading" className="text-xl font-bold text-foreground">
-              Account Statistics
-            </h3>
-            <Facts
-              facts={[
-                ['Account level', snapshot.account.level],
-                ['Account XP', snapshot.account.xp],
-                ['Level progress', `${(snapshot.account.xpPercentage * 100).toFixed(1)}%`],
-              ]}
-            />
-          </section>
+          <CombatCard
+            title="Career Combat Record"
+            player={{
+              ...snapshot.account,
+              totalGames: snapshot.combat.games,
+              totalWins: snapshot.combat.wins,
+              statsLastUpdated: career?.lastSuccessAt,
+            }}
+          />
 
-          <section aria-labelledby="career-combat-heading" className="space-y-3">
-            <h3 id="career-combat-heading" className="text-xl font-bold text-foreground">
-              Career Combat Record
-            </h3>
-            <Facts
-              facts={[
-                ['Lifetime games', snapshot.combat.games],
-                ['Lifetime wins', snapshot.combat.wins],
-                ['Career match time', `${snapshot.combat.matchTime}s`],
-                ['Bomb damage', snapshot.combat.damageBomb],
-                ['Mine damage', snapshot.combat.damageMine],
-                ['Spikeball damage', snapshot.combat.damageSpikeball],
-                ['Sidekick damage', snapshot.combat.damageSidekick],
-                ['Snowball hits', snapshot.combat.snowballHits],
-                ['Bomb KOs', snapshot.combat.bombKos],
-                ['Mine KOs', snapshot.combat.mineKos],
-                ['Spikeball KOs', snapshot.combat.spikeballKos],
-                ['Sidekick KOs', snapshot.combat.sidekickKos],
-                ['Snowball KOs', snapshot.combat.snowballKos],
-              ]}
-            />
-          </section>
-
-          <section aria-labelledby="career-legends-heading" className="space-y-3">
-            <h3 id="career-legends-heading" className="text-xl font-bold text-foreground">
-              Career Legend Statistics
-            </h3>
-            {snapshot.legends.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No lifetime legend observations were reported.</p>
-            ) : (
-              <div className="space-y-3">
-                {snapshot.legends.map((legend) => (
-                  <details key={legend.legendId} className="rounded-lg border border-border bg-card p-4">
-                    <summary className="cursor-pointer font-semibold capitalize text-foreground">
-                      {legend.legendNameKey}
-                    </summary>
-                    <div className="mt-4">
-                      <Facts
-                        facts={[
-                          ['Legend level', legend.level],
-                          ['Legend XP', legend.xp],
-                          ['Lifetime games', legend.games],
-                          ['Lifetime wins', legend.wins],
-                          ['Match time', `${legend.matchTime}s`],
-                          ['KOs', legend.kos],
-                          ['Falls', legend.falls],
-                          ['Suicides', legend.suicides],
-                          ['Team KOs', legend.teamKos],
-                          ['Damage dealt', legend.damageDealt],
-                          ['Damage taken', legend.damageTaken],
-                        ]}
-                      />
-                    </div>
-                  </details>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section aria-labelledby="career-weapons-heading" className="space-y-3">
-            <h3 id="career-weapons-heading" className="text-xl font-bold text-foreground">
-              Career Weapon Usage
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Lifetime weapon usage from this player&apos;s complete career statistics.
-            </p>
+          <section aria-labelledby="career-weapons-heading" className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h3 id="career-weapons-heading" className="text-2xl font-bold text-foreground">
+                Career Weapon Usage
+              </h3>
+              <span className="font-mono text-sm text-muted-foreground">Weapons: {snapshot.weapons.length}</span>
+            </div>
             {snapshot.weapons.length === 0 ? (
               <p className="text-sm text-muted-foreground">No lifetime weapon usage was reported.</p>
             ) : (
-              <div className="space-y-3">
+              <Card className="divide-y divide-border overflow-hidden border-border">
                 {snapshot.weapons.map((weapon) => {
-                  const heldShare =
-                    totalWeaponHeldTime > 0
-                      ? `${((weapon.heldTime / totalWeaponHeldTime) * 100).toFixed(1)}%`
-                      : 'Unavailable'
+                  const heldShare = totalWeaponHeldTime > 0 ? (weapon.heldTime / totalWeaponHeldTime) * 100 : 0
                   return (
-                    <details key={weapon.weapon} className="rounded-lg border border-border bg-card p-4">
-                      <summary className="cursor-pointer font-semibold text-foreground">{weapon.weapon}</summary>
-                      <div className="mt-4">
-                        <Facts
-                          facts={[
-                            ['Held time', `${weapon.heldTime}s`],
-                            ['Held share', heldShare],
-                            ['Exact damage', weapon.damage],
-                            ['KOs', weapon.kos],
-                          ]}
-                        />
+                    <div key={weapon.weapon} className="flex items-center gap-4 p-4">
+                      <img src={getWeaponIcon(weapon.weapon)} alt="" className="h-12 w-12 shrink-0 object-contain" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <h4 className="font-bold text-foreground">{weapon.weapon}</h4>
+                          <span className="font-mono text-sm text-foreground">
+                            {formatHours(weapon.heldTime)} · {heldShare.toFixed(1)}%
+                          </span>
+                        </div>
+                        <Progress value={heldShare} className="h-2 bg-muted" />
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          <span>{weapon.kos.toLocaleString('en-US')} KOs</span>
+                          <span>{BigInt(weapon.damage).toLocaleString('en-US')} damage</span>
+                        </div>
                       </div>
-                    </details>
+                    </div>
                   )
                 })}
-              </div>
+              </Card>
             )}
           </section>
+
+          <LegendSection
+            allLegends={legends}
+            rankedLegends={rankedLegends}
+            rankedAvailable={Boolean(currentSeason?.snapshot)}
+          />
         </>
       )}
     </section>

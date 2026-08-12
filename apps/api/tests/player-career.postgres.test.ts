@@ -193,6 +193,7 @@ describe('Players-owned canonical career state', () => {
       expect(await players.referenceById(91913839)).toEqual({
         brawlhallaId: 91913839,
         name: 'Measured Zero',
+        bestLegendNameKey: null,
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({

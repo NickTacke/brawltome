@@ -20,6 +20,7 @@ describe('PlayerProfileHierarchy', () => {
         player={{
           brawlhallaId: 42,
           name: 'Canonical Player',
+          bestLegendNameKey: 'bodvar',
           aliases: [],
           clan: null,
           currentSeason: unavailableRanked,
@@ -43,8 +44,9 @@ describe('PlayerProfileHierarchy', () => {
     expect(html.match(/Current Season<\/h2>/g)).toHaveLength(1)
     expect(html.match(/Career Statistics<\/h2>/g)).toHaveLength(1)
     expect(html.match(/Complete Current Season ranked facts have not been successfully observed/g)).toHaveLength(1)
-    expect(html).toContain('No additional Current Season details are available.')
+    expect(html).toContain('Rating history will appear after two complete observations.')
     expect(html).toContain('Checking for updates')
+    expect(html).toContain('rounded-2xl">b</span>')
     expect(html.toLowerCase()).not.toContain('live data')
     expect(html).not.toContain('isOwnProfile')
     expect(html).not.toContain('owner-only')

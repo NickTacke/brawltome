@@ -1,3 +1,5 @@
+import { legendSlug } from '@brawltome/game-data'
+import { getLegendById } from '@brawltome/game-data/legends'
 import postgres from 'postgres'
 import {
   type MainLegend,
@@ -137,7 +139,9 @@ export function createPostgresRankedPlayers(
     now?: () => Date
   } = {},
 ): RankedPlayerQueries & {
-  referenceById(brawlhallaId: number): Promise<{ brawlhallaId: number; name: string } | null>
+  referenceById(
+    brawlhallaId: number,
+  ): Promise<{ brawlhallaId: number; name: string; bestLegendNameKey: string | null } | null>
   recordChecked(brawlhallaId: number, effect: CanonicalRankedEffect): Promise<FencedResult>
   recordPulseChecked(brawlhallaId: number, effect: CanonicalRankedEffect): Promise<RankedWriteResult>
   pulseStatusById(brawlhallaId: number): Promise<RankedPulseSourceStatus | null>
@@ -150,25 +154,39 @@ export function createPostgresRankedPlayers(
 
   return {
     async referenceById(brawlhallaId) {
-      const [profile] = await client<{ brawlhalla_id: number; player_name: string }[]>`
-        SELECT brawlhalla_id, player_name
+      const [profile] = await client<
+        { brawlhalla_id: number; player_name: string; legend_name_key: string | null; best_legend: number | null }[]
+      >`
+        SELECT identity.brawlhalla_id, identity.player_name, identity.legend_name_key, profile.best_legend
         FROM (
-          SELECT ranked.brawlhalla_id, ranked.player_name, 0 AS source_rank
+          SELECT ranked.brawlhalla_id, ranked.player_name,
+                 ranked.ranked_main_legend_name_key AS legend_name_key, 0 AS source_rank
           FROM players.ranked_profiles ranked
           WHERE ranked.brawlhalla_id = ${brawlhallaId} AND ranked.last_success_at IS NOT NULL
           UNION ALL
-          SELECT legacy.brawlhalla_id, legacy.player_name, 1 AS source_rank
+          SELECT legacy.brawlhalla_id, legacy.player_name, NULL::text, 1 AS source_rank
           FROM players.legacy_discovery_profiles legacy
           WHERE legacy.brawlhalla_id = ${brawlhallaId}
           UNION ALL
-          SELECT profile.brawlhalla_id, profile.player_name, 2 AS source_rank
+          SELECT profile.brawlhalla_id, profile.player_name, NULL::text, 2 AS source_rank
           FROM players.legacy_profile_discovery profile
           WHERE profile.brawlhalla_id = ${brawlhallaId}
         ) identity
+        LEFT JOIN players.legacy_profile_discovery profile USING (brawlhalla_id)
         ORDER BY source_rank
         LIMIT 1
       `
-      return profile ? { brawlhallaId: profile.brawlhalla_id, name: profile.player_name } : null
+      if (!profile) return null
+      return {
+        brawlhallaId: profile.brawlhalla_id,
+        name: profile.player_name,
+        bestLegendNameKey:
+          profile.legend_name_key ??
+          (() => {
+            const legend = getLegendById(profile.best_legend ?? 0)
+            return legend ? legendSlug(legend.heroId, legend.displayName) : null
+          })(),
+      }
     },
 
     async byId(brawlhallaId) {

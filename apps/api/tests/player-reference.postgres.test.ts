@@ -27,7 +27,11 @@ describe('stored Player Reference', () => {
         )
 
         expect(await queries.byId(storedId)).toEqual({ brawlhallaId: storedId, name: 'Canonical Player' })
-        expect(await queries.byId(rankedId)).toEqual({ brawlhallaId: rankedId, name: 'Canonical Ranked Player' })
+        expect(await queries.byId(rankedId)).toEqual({
+          brawlhallaId: rankedId,
+          name: 'Canonical Ranked Player',
+          bestLegendNameKey: null,
+        })
         expect(await queries.byId(careerId)).toEqual({ brawlhallaId: careerId, name: 'Canonical Career Player' })
         expect(await queries.byId(placeholderId)).toBeNull()
         expect(await queries.byId(storedId - 1)).toBeNull()

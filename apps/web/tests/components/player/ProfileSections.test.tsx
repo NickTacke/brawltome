@@ -84,12 +84,12 @@ describe('ProfileSections', () => {
     )
 
     expect(html.indexOf('Current Season')).toBeLessThan(html.indexOf('Career Statistics'))
-    expect(html).toContain('No ranked legends, rating history, or ranked teams were observed')
+    expect(html).toContain('Rating history will appear after two complete observations.')
     expect(html).not.toContain('<details')
     expect(html).not.toContain('Competitive Snapshot')
   })
 
-  test('uses native closed disclosure and semantic headings for supported deep sections', () => {
+  test('keeps supported rating history in the primary scan path', () => {
     const html = renderToStaticMarkup(
       <ProfileSections
         identity={{ brawlhallaId: 42, name: 'Canonical Player' }}
@@ -101,12 +101,10 @@ describe('ProfileSections', () => {
     )
 
     expect(html).toContain('<section id="current-season" aria-labelledby="current-season-heading"')
-    expect(html).toContain('<details')
-    expect(html).not.toContain('<details open=""')
-    expect(html).toContain('<summary')
-    expect(html).toContain('Explore Current Season details')
-    expect(html).toContain('<h3')
+    expect(html).not.toContain('<details')
+    expect(html).not.toContain('<summary')
     expect(html).toContain('Ranked Legends')
+    expect(html).toContain('/images/legends/avatars/bodvar.png')
     expect(html).toContain('Rating History')
   })
 })
