@@ -1050,50 +1050,53 @@ export async function readLegacyRankingMigrationEvidence(
 ): Promise<LegacyRankingMigrationEvidence> {
   const client = postgres(connectionString, { max: 1 })
   try {
-    const [progress] = await client<
-      {
-        status: 'in-progress' | 'complete' | 'blocked'
-        source_checksum: string
-      }[]
-    >`SELECT status, source_checksum FROM rankings.legacy_import_progress WHERE singleton`
-    const sets = await client<
-      Array<{
-        mode: LeaderboardMode
-        scope: RegionalLeaderboardScope
-        status: 'accepted' | 'rejected'
-        reasons: string[]
-        snapshot_id: string | null
-        candidate_row_count: number
-        source_checksum: string
-      }>
-    >`
+    return client.begin('isolation level repeatable read', async (transaction) => {
+      const sql = transaction as unknown as Sql
+      const [progress] = await sql<
+        {
+          status: 'in-progress' | 'complete' | 'blocked'
+          source_checksum: string
+        }[]
+      >`SELECT status, source_checksum FROM rankings.legacy_import_progress WHERE singleton`
+      const sets = await sql<
+        Array<{
+          mode: LeaderboardMode
+          scope: RegionalLeaderboardScope
+          status: 'accepted' | 'rejected'
+          reasons: string[]
+          snapshot_id: string | null
+          candidate_row_count: number
+          source_checksum: string
+        }>
+      >`
       SELECT mode, scope, status, reasons, snapshot_id, candidate_row_count, source_checksum
       FROM rankings.legacy_import_sets
       ORDER BY mode COLLATE "C", scope COLLATE "C"
     `
-    const immutable = await destinationIsImmutable(client)
-    const evidenceSets: LegacyRankingMigrationSetEvidence[] = []
-    for (const set of sets) {
-      const evaluated = await evaluateArchivedSet(client, set.mode, set.scope, immutable)
-      evidenceSets.push({
-        mode: set.mode,
-        scope: set.scope,
-        status: set.status,
-        reasons: evaluated.reasons,
-        snapshotId: set.snapshot_id,
-        rowCount: evaluated.rows.length,
-        sourceChecksum: set.source_checksum.trim(),
-        entries: evaluated.rows.slice(0, 100).map((row) => ({
-          ...row,
-          games: row.wins + row.losses,
-        })),
-      })
-    }
-    return {
-      status: progress?.status ?? 'not-started',
-      sourceChecksum: progress?.source_checksum.trim() ?? null,
-      sets: evidenceSets,
-    }
+      const immutable = await destinationIsImmutable(sql)
+      const evidenceSets: LegacyRankingMigrationSetEvidence[] = []
+      for (const set of sets) {
+        const evaluated = await evaluateArchivedSet(sql, set.mode, set.scope, immutable)
+        evidenceSets.push({
+          mode: set.mode,
+          scope: set.scope,
+          status: set.status,
+          reasons: evaluated.reasons,
+          snapshotId: set.snapshot_id,
+          rowCount: evaluated.rows.length,
+          sourceChecksum: set.source_checksum.trim(),
+          entries: evaluated.rows.slice(0, 100).map((row) => ({
+            ...row,
+            games: row.wins + row.losses,
+          })),
+        })
+      }
+      return {
+        status: progress?.status ?? 'not-started',
+        sourceChecksum: progress?.source_checksum.trim() ?? null,
+        sets: evidenceSets,
+      }
+    })
   } finally {
     await client.end()
   }
