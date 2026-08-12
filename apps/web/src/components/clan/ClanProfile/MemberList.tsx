@@ -84,7 +84,7 @@ export function MemberList({
                   onPageChange(1)
                 }}
               >
-                <SelectTrigger className="w-[140px] font-bold h-9">
+                <SelectTrigger aria-label="Sort clan members" className="w-[140px] font-bold h-9">
                   <SelectValue placeholder="Sort By" />
                 </SelectTrigger>
                 <SelectContent>
@@ -150,6 +150,7 @@ export function MemberList({
               <span className="text-sm text-muted-foreground font-mono">Page</span>
               <Input
                 key={page}
+                aria-label="Clan member page"
                 defaultValue={page}
                 className="h-8 w-16 text-center font-mono"
                 onKeyDown={(e) => {

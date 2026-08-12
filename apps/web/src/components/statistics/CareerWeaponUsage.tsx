@@ -97,7 +97,7 @@ function Filters({ filters }: { filters: CareerWeaponUsageOutputContract['filter
           ))}
         </select>
       </div>
-      <button type="submit" className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground">
+      <button type="submit" className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-black">
         Apply filters
       </button>
     </form>

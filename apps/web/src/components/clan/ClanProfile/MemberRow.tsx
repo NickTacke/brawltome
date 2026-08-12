@@ -45,7 +45,12 @@ export function MemberRow({ member, totalClanXp }: MemberRowProps) {
   return (
     <TableRow className="border-border hover:bg-muted/50 transition-colors h-16 group">
       <TableCell className="p-0">
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+        <Link
+          href={href}
+          prefetch={false}
+          aria-label={`${fixEncoding(member.name)} clan rank: ${member.rank}`}
+          className="block w-full h-full p-4"
+        >
           <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
         </Link>
       </TableCell>
