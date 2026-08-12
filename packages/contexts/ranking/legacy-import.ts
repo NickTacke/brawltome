@@ -12,7 +12,6 @@ const IMPORT_LOCK_KEY = 223_202_001
 const DEFAULT_BATCH_SIZE = 10_000
 const MANIFEST_VERSION = 1
 const SET_MAXIMUM_SPAN_MS = 15 * 60 * 1_000
-const MAX_ARCHIVE_ROWS_IN_MEMORY = 250_000
 const EMPTY_CHECKSUM = createHash('sha256').update('').digest('hex')
 
 type Sql = ReturnType<typeof postgres>
@@ -22,11 +21,6 @@ type SourceRow = { source_key: string; raw_json: string; raw_row: RawRow }
 type SourceDefinition = {
   table: 'player' | 'player_ranked_team'
   keyExpression: string
-}
-type LoadedArchive = {
-  players: SourceRow[]
-  playerById: Map<number, SourceRow>
-  teams: SourceRow[]
 }
 type SourceManifest = {
   version: typeof MANIFEST_VERSION
@@ -85,6 +79,7 @@ export type LegacyRankingImportResult = {
 export type LegacyRankingImportOptions = {
   batchSize?: number
   maxBatches?: number
+  legacyWritersQuiesced?: true
 }
 
 export type LegacyRankingMigrationEntryEvidence = {
@@ -205,6 +200,7 @@ function timestamp(value: unknown): Date | null {
 function validateOptions(options: LegacyRankingImportOptions): {
   batchSize: number
   maxBatches: number
+  legacyWritersQuiesced: boolean
 } {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE
   const maxBatches = options.maxBatches ?? Number.POSITIVE_INFINITY
@@ -214,7 +210,7 @@ function validateOptions(options: LegacyRankingImportOptions): {
   if (maxBatches !== Number.POSITIVE_INFINITY && (!Number.isSafeInteger(maxBatches) || maxBatches < 1)) {
     throw new Error('Ranking import maxBatches must be a positive integer')
   }
-  return { batchSize, maxBatches }
+  return { batchSize, maxBatches, legacyWritersQuiesced: options.legacyWritersQuiesced === true }
 }
 
 async function computeSourceManifest(client: Sql): Promise<SourceManifest> {
@@ -241,25 +237,32 @@ async function computeSourceManifest(client: Sql): Promise<SourceManifest> {
   }
 }
 
-async function archiveRow(sql: Sql, sourceTable: SourceDefinition['table'], row: SourceRow): Promise<void> {
-  const rowChecksum = checksum(row.raw_json)
-  const inserted = await sql<{ row_checksum: string }[]>`
+async function archiveRows(sql: Sql, sourceTable: SourceDefinition['table'], rows: SourceRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const sourceKeys = rows.map((row) => row.source_key)
+  const rawRows = rows.map((row) => row.raw_json)
+  const rowChecksums = rows.map((row) => checksum(row.raw_json))
+  await sql`
     INSERT INTO rankings.legacy_archive
       (source_table, source_key, raw_row, row_checksum, content_checksum)
-    VALUES (${sourceTable}, ${row.source_key}, ${row.raw_json}::text::jsonb, ${rowChecksum},
-            encode(sha256(convert_to((${row.raw_json}::text::jsonb)::text, 'UTF8')), 'hex'))
+    SELECT ${sourceTable}, incoming.source_key, incoming.raw_json::jsonb, incoming.row_checksum,
+           encode(sha256(convert_to(incoming.raw_json::jsonb::text, 'UTF8')), 'hex')
+    FROM unnest(${sourceKeys}::text[], ${rawRows}::text[], ${rowChecksums}::text[])
+      AS incoming(source_key, raw_json, row_checksum)
     ON CONFLICT DO NOTHING
-    RETURNING row_checksum
   `
-  if (inserted.length === 1) return
-  const [existing] = await sql<{ row_checksum: string; raw_matches: boolean }[]>`
-    SELECT row_checksum, raw_row = ${row.raw_json}::text::jsonb AS raw_matches
-    FROM rankings.legacy_archive
-    WHERE source_table = ${sourceTable} AND source_key = ${row.source_key}
+  const [conflict] = await sql<{ source_key: string }[]>`
+    SELECT incoming.source_key
+    FROM unnest(${sourceKeys}::text[], ${rawRows}::text[], ${rowChecksums}::text[])
+      AS incoming(source_key, raw_json, row_checksum)
+    LEFT JOIN rankings.legacy_archive archive
+      ON archive.source_table = ${sourceTable} AND archive.source_key = incoming.source_key
+    WHERE archive.source_key IS NULL
+       OR archive.row_checksum <> incoming.row_checksum
+       OR archive.raw_row IS DISTINCT FROM incoming.raw_json::jsonb
+    LIMIT 1
   `
-  if (existing?.row_checksum.trim() !== rowChecksum || !existing.raw_matches) {
-    throw new Error(`Ranking archive conflict for ${sourceTable}/${row.source_key}`)
-  }
+  if (conflict) throw new Error(`Ranking archive conflict for ${sourceTable}/${conflict.source_key}`)
 }
 
 async function lockRankingSourcesAndReadManifest(sql: Sql): Promise<SourceManifest> {
@@ -273,23 +276,28 @@ async function archiveBatch(
   cursor: string | null,
   batchSize: number,
   frozenManifest: SourceManifest,
+  legacyWritersQuiesced: boolean,
 ): Promise<
+  | { outcome: 'evidence-immutability-unavailable' }
   | { outcome: 'source-changed'; currentManifest: SourceManifest }
   | { outcome: 'exhausted' }
   | { outcome: 'archived'; cursor: string }
 > {
   return client.begin(async (transaction) => {
     const sql = transaction as unknown as Sql
-    const currentManifest = await lockRankingSourcesAndReadManifest(sql)
-    if (stableJson(currentManifest) !== stableJson(frozenManifest)) {
-      return { outcome: 'source-changed' as const, currentManifest }
+    if (!(await evidenceIsImmutable(sql))) return { outcome: 'evidence-immutability-unavailable' as const }
+    if (!legacyWritersQuiesced) {
+      const currentManifest = await lockRankingSourcesAndReadManifest(sql)
+      if (stableJson(currentManifest) !== stableJson(frozenManifest)) {
+        return { outcome: 'source-changed' as const, currentManifest }
+      }
     }
     const rows = await sql.unsafe<SourceDatabaseRow[]>(
       `${sourceRowsSql(source, `WHERE ($1::text IS NULL OR ${source.keyExpression} > $1::text)`)} LIMIT $2`,
       [cursor, batchSize],
     )
     if (rows.length === 0) return { outcome: 'exhausted' as const }
-    for (const databaseRow of rows) await archiveRow(sql, source.table, normalizeSourceRow(databaseRow))
+    await archiveRows(sql, source.table, rows.map(normalizeSourceRow))
     return {
       outcome: 'archived' as const,
       cursor: String(rows.at(-1)?.source_key),
@@ -297,37 +305,68 @@ async function archiveBatch(
   })
 }
 
-async function loadArchive(client: Sql): Promise<LoadedArchive> {
-  const players: SourceRow[] = []
-  const playerById = new Map<number, SourceRow>()
-  const teams: SourceRow[] = []
-  let loadedRows = 0
-  for (const source of SOURCES) {
-    for await (const rows of client<Array<{ source_key: string; raw_row: RawRow }>>`
-      SELECT source_key, raw_row FROM rankings.legacy_archive
-      WHERE source_table = ${source.table} ORDER BY source_key
-    `.cursor(1_000)) {
-      for (const row of rows) {
-        loadedRows += 1
-        if (loadedRows > MAX_ARCHIVE_ROWS_IN_MEMORY) {
-          throw new Error(`Ranking legacy archive exceeds the ${MAX_ARCHIVE_ROWS_IN_MEMORY}-row memory safety bound`)
-        }
-        const sourceRow = {
-          source_key: row.source_key,
-          raw_json: stableJson(row.raw_row),
-          raw_row: row.raw_row,
-        }
-        if (source.table === 'player') {
-          players.push(sourceRow)
-          const id = row.raw_row.brawlhalla_id
-          if (positiveInteger(id)) playerById.set(id, sourceRow)
-        } else {
-          teams.push(sourceRow)
-        }
-      }
-    }
+function archivedSourceRow(row: { source_key: string; raw_row: RawRow }): SourceRow {
+  return { source_key: row.source_key, raw_json: stableJson(row.raw_row), raw_row: row.raw_row }
+}
+
+async function evaluateArchivedSet(
+  sql: Sql,
+  mode: LeaderboardMode,
+  scope: RegionalLeaderboardScope,
+  immutable: boolean,
+): Promise<EvaluatedSet> {
+  if (mode === '1v1' || mode === '3v3') {
+    const syncField = mode === '1v1' ? 'synced_at_1v1' : 'synced_at_3v3'
+    const rows = await sql<Array<{ source_key: string; raw_row: RawRow }>>`
+      SELECT source_key, raw_row
+      FROM rankings.legacy_archive
+      WHERE source_table = 'player'
+        AND raw_row->>'region' = ${scope}
+        AND raw_row->${syncField} <> 'null'::jsonb
+      ORDER BY source_key
+    `
+    return evaluatePlayerSet(mode, scope, rows.map(archivedSourceRow), immutable)
   }
-  return { players, playerById, teams }
+
+  const teamRows = await sql<Array<{ source_key: string; raw_row: RawRow }>>`
+    SELECT source_key, raw_row
+    FROM rankings.legacy_archive
+    WHERE source_table = 'player_ranked_team'
+      AND raw_row->>'region' = ${scope}
+      AND CASE
+        WHEN jsonb_typeof(raw_row->'brawlhalla_id_two') = 'number'
+          THEN (raw_row->>'brawlhalla_id_two')::numeric ${mode === '2v2' ? sql`<> 0` : sql`= 0`}
+        ELSE false
+      END
+    ORDER BY source_key
+  `
+  const playerRows = await sql<Array<{ source_key: string; raw_row: RawRow }>>`
+    WITH contestant_keys AS (
+      SELECT raw_row->>'brawlhalla_id_one' AS source_key
+      FROM rankings.legacy_archive
+      WHERE source_table = 'player_ranked_team' AND raw_row->>'region' = ${scope}
+        AND CASE
+          WHEN jsonb_typeof(raw_row->'brawlhalla_id_two') = 'number'
+            THEN (raw_row->>'brawlhalla_id_two')::numeric ${mode === '2v2' ? sql`<> 0` : sql`= 0`}
+          ELSE false
+        END
+      UNION
+      SELECT raw_row->>'brawlhalla_id_two'
+      FROM rankings.legacy_archive
+      WHERE ${mode === '2v2'} AND source_table = 'player_ranked_team' AND raw_row->>'region' = ${scope}
+    )
+    SELECT archive.source_key, archive.raw_row
+    FROM contestant_keys contestant
+    JOIN rankings.legacy_archive archive
+      ON archive.source_table = 'player' AND archive.source_key = contestant.source_key
+    ORDER BY archive.source_key
+  `
+  const players = new Map<number, SourceRow>()
+  for (const row of playerRows.map(archivedSourceRow)) {
+    const id = row.raw_row.brawlhalla_id
+    if (positiveInteger(id)) players.set(id, row)
+  }
+  return evaluateTeamSet(mode, scope, players, teamRows.map(archivedSourceRow), immutable)
 }
 
 function identityKey(identity: PublishedLeaderboardIdentity): string {
@@ -656,23 +695,7 @@ function evaluateTeamSet(
   }
 }
 
-async function destinationIsImmutable(client: Sql): Promise<boolean> {
-  const required = new Map([
-    ['generations:generations_are_immutable', 'reject_generation_change'],
-    ['generations:rankings_generations_prevent_truncate', 'reject_immutable_change'],
-    ['snapshots:snapshots_are_immutable', 'reject_immutable_change'],
-    ['snapshots:rankings_snapshots_prevent_truncate', 'reject_immutable_change'],
-    ['snapshots:snapshots_require_unfinalized_generation', 'require_unfinalized_generation'],
-    ['snapshot_rows:snapshot_rows_are_immutable', 'reject_immutable_change'],
-    ['snapshot_rows:rankings_snapshot_rows_prevent_truncate', 'reject_immutable_change'],
-    ['snapshot_rows:snapshot_rows_require_unfinalized_generation', 'require_unfinalized_snapshot_generation'],
-    ['legacy_archive:rankings_legacy_archive_immutable', 'reject_legacy_migration_evidence_change'],
-    ['legacy_archive:rankings_legacy_archive_prevent_truncate', 'reject_legacy_migration_evidence_change'],
-    ['legacy_import_sets:rankings_legacy_import_sets_immutable', 'reject_legacy_migration_evidence_change'],
-    ['legacy_import_sets:rankings_legacy_import_sets_prevent_truncate', 'reject_legacy_migration_evidence_change'],
-    ['legacy_set_sources:rankings_legacy_set_sources_immutable', 'reject_legacy_migration_evidence_change'],
-    ['legacy_set_sources:rankings_legacy_set_sources_prevent_truncate', 'reject_legacy_migration_evidence_change'],
-  ])
+async function requiredTriggersAreEnabled(client: Sql, required: ReadonlyMap<string, string>): Promise<boolean> {
   const triggerNames = [...required.keys()].map((key) => key.slice(key.indexOf(':') + 1))
   const rows = await client<Array<{ relation: string; trigger: string; function_name: string }>>`
     SELECT relation.relname AS relation, trigger.tgname AS trigger, function.proname AS function_name
@@ -691,11 +714,39 @@ async function destinationIsImmutable(client: Sql): Promise<boolean> {
   return required.size === actual.size && [...required].every(([key, functionName]) => actual.get(key) === functionName)
 }
 
-function evaluateMode(mode: LeaderboardMode, archive: LoadedArchive, immutable: boolean): EvaluatedSet[] {
-  return regionalLeaderboardScopes.map((scope) =>
-    mode === '1v1' || mode === '3v3'
-      ? evaluatePlayerSet(mode, scope, archive.players, immutable)
-      : evaluateTeamSet(mode, scope, archive.playerById, archive.teams, immutable),
+async function evidenceIsImmutable(client: Sql): Promise<boolean> {
+  await client.unsafe(
+    'LOCK TABLE rankings.legacy_archive, rankings.legacy_import_sets, rankings.legacy_set_sources IN SHARE ROW EXCLUSIVE MODE',
+  )
+  return requiredTriggersAreEnabled(
+    client,
+    new Map([
+      ['legacy_archive:rankings_legacy_archive_immutable', 'reject_legacy_migration_evidence_change'],
+      ['legacy_archive:rankings_legacy_archive_prevent_truncate', 'reject_legacy_migration_evidence_change'],
+      ['legacy_import_sets:rankings_legacy_import_sets_immutable', 'reject_legacy_migration_evidence_change'],
+      ['legacy_import_sets:rankings_legacy_import_sets_prevent_truncate', 'reject_legacy_migration_evidence_change'],
+      ['legacy_set_sources:rankings_legacy_set_sources_immutable', 'reject_legacy_migration_evidence_change'],
+      ['legacy_set_sources:rankings_legacy_set_sources_prevent_truncate', 'reject_legacy_migration_evidence_change'],
+    ]),
+  )
+}
+
+async function destinationIsImmutable(client: Sql): Promise<boolean> {
+  await client.unsafe(
+    'LOCK TABLE rankings.generations, rankings.snapshots, rankings.snapshot_rows IN SHARE ROW EXCLUSIVE MODE',
+  )
+  return requiredTriggersAreEnabled(
+    client,
+    new Map([
+      ['generations:generations_are_immutable', 'reject_generation_change'],
+      ['generations:rankings_generations_prevent_truncate', 'reject_immutable_change'],
+      ['snapshots:snapshots_are_immutable', 'reject_immutable_change'],
+      ['snapshots:rankings_snapshots_prevent_truncate', 'reject_immutable_change'],
+      ['snapshots:snapshots_require_unfinalized_generation', 'require_unfinalized_generation'],
+      ['snapshot_rows:snapshot_rows_are_immutable', 'reject_immutable_change'],
+      ['snapshot_rows:rankings_snapshot_rows_prevent_truncate', 'reject_immutable_change'],
+      ['snapshot_rows:snapshot_rows_require_unfinalized_generation', 'require_unfinalized_snapshot_generation'],
+    ]),
   )
 }
 
@@ -719,38 +770,46 @@ function storedIdentity(identity: PublishedLeaderboardIdentity) {
 }
 
 async function persistSetSources(sql: Sql, set: EvaluatedSet): Promise<void> {
-  for (const source of set.sourceKeys) {
-    await sql`
-      INSERT INTO rankings.legacy_set_sources (mode, scope, source_table, source_key)
-      VALUES (${set.mode}, ${set.scope}, ${source.table}, ${source.key})
-    `
-  }
+  if (set.sourceKeys.length === 0) return
+  await sql`
+    INSERT INTO rankings.legacy_set_sources (mode, scope, source_table, source_key)
+    SELECT ${set.mode}, ${set.scope}, source_table, source_key
+    FROM unnest(
+      ${set.sourceKeys.map((source) => source.table)}::text[],
+      ${set.sourceKeys.map((source) => source.key)}::text[]
+    ) AS source(source_table, source_key)
+  `
 }
 
 async function publishMode(
   client: Sql,
   mode: LeaderboardMode,
   sourceManifest: SourceManifest,
-  archive: LoadedArchive,
-): Promise<{ outcome: 'published' } | { outcome: 'source-changed'; currentManifest: SourceManifest }> {
+): Promise<
+  | { outcome: 'evidence-immutability-unavailable' }
+  | { outcome: 'published' }
+  | { outcome: 'source-changed'; currentManifest: SourceManifest }
+> {
   return client.begin(async (transaction) => {
     const sql = transaction as unknown as Sql
     const currentManifest = await lockRankingSourcesAndReadManifest(sql)
     if (stableJson(currentManifest) !== stableJson(sourceManifest)) {
       return { outcome: 'source-changed' as const, currentManifest }
     }
+    if (!(await evidenceIsImmutable(sql))) return { outcome: 'evidence-immutability-unavailable' as const }
     const sourceChecksum = sourceManifest.sourceChecksum
-    const evaluated = evaluateMode(mode, archive, await destinationIsImmutable(sql))
-    const accepted = evaluated.filter((set) => set.status === 'accepted')
+    const immutable = await destinationIsImmutable(sql)
+    const acceptedObservations: Date[] = []
+    for (const scope of regionalLeaderboardScopes) {
+      const set = await evaluateArchivedSet(sql, mode, scope, immutable)
+      if (set.status !== 'accepted') continue
+      if (!set.observedAt) throw new Error(`Accepted ${mode} set has no observation timestamp`)
+      acceptedObservations.push(set.observedAt)
+    }
     let generationId: string | null = null
-    if (accepted.length > 0) {
+    if (acceptedObservations.length > 0) {
       generationId = randomUUID()
-      const acceptedRange = dateRange(
-        accepted.map(({ observedAt }) => {
-          if (!observedAt) throw new Error(`Accepted ${mode} set has no observation timestamp`)
-          return observedAt
-        }),
-      )
+      const acceptedRange = dateRange(acceptedObservations)
       if (!acceptedRange) throw new Error(`Accepted ${mode} generation has no observation timestamp`)
       const observedAt = new Date(acceptedRange.maximum)
       const importedAt = new Date()
@@ -772,7 +831,8 @@ async function publishMode(
       `
     }
 
-    for (const set of evaluated) {
+    for (const scope of regionalLeaderboardScopes) {
+      const set = await evaluateArchivedSet(sql, mode, scope, immutable)
       let snapshotId: string | null = null
       if (set.status === 'accepted') {
         if (!generationId) throw new Error(`Accepted ${mode} set has no generation`)
@@ -943,6 +1003,17 @@ async function reconcile(client: Sql, manifest: SourceManifest): Promise<Reconci
   }
 }
 
+async function blockForUnavailableEvidence(client: Sql, progress: ProgressRow): Promise<void> {
+  await client`
+    UPDATE rankings.legacy_import_progress
+    SET status = 'blocked', completed_at = NULL,
+        block_reason = ${client.json(jsonValue({ code: 'evidence-immutability-unavailable' }))},
+        updated_at = clock_timestamp()
+    WHERE singleton
+  `
+  progress.status = 'blocked'
+}
+
 async function blockForSourceChange(client: Sql, progress: ProgressRow): Promise<SourceManifest> {
   const current = await client.begin(async (transaction) => {
     const sql = transaction as unknown as Sql
@@ -1000,33 +1071,28 @@ export async function readLegacyRankingMigrationEvidence(
       FROM rankings.legacy_import_sets
       ORDER BY mode COLLATE "C", scope COLLATE "C"
     `
-    const archive = await loadArchive(client)
     const immutable = await destinationIsImmutable(client)
-    const evaluatedByIdentity = new Map(
-      leaderboardModes
-        .flatMap((mode) => evaluateMode(mode, archive, immutable))
-        .map((set) => [`${set.mode}:${set.scope}`, set] as const),
-    )
+    const evidenceSets: LegacyRankingMigrationSetEvidence[] = []
+    for (const set of sets) {
+      const evaluated = await evaluateArchivedSet(client, set.mode, set.scope, immutable)
+      evidenceSets.push({
+        mode: set.mode,
+        scope: set.scope,
+        status: set.status,
+        reasons: evaluated.reasons,
+        snapshotId: set.snapshot_id,
+        rowCount: evaluated.rows.length,
+        sourceChecksum: set.source_checksum.trim(),
+        entries: evaluated.rows.slice(0, 100).map((row) => ({
+          ...row,
+          games: row.wins + row.losses,
+        })),
+      })
+    }
     return {
       status: progress?.status ?? 'not-started',
       sourceChecksum: progress?.source_checksum.trim() ?? null,
-      sets: sets.map((set) => {
-        const evaluated = evaluatedByIdentity.get(`${set.mode}:${set.scope}`)
-        return {
-          mode: set.mode,
-          scope: set.scope,
-          status: set.status,
-          reasons: evaluated?.reasons ?? set.reasons,
-          snapshotId: set.snapshot_id,
-          rowCount: evaluated?.rows.length ?? set.candidate_row_count,
-          sourceChecksum: set.source_checksum.trim(),
-          entries:
-            evaluated?.rows.slice(0, 100).map((row) => ({
-              ...row,
-              games: row.wins + row.losses,
-            })) ?? [],
-        }
-      }),
+      sets: evidenceSets,
     }
   } finally {
     await client.end()
@@ -1037,7 +1103,7 @@ export async function importLegacyRankings(
   connectionString: string,
   options: LegacyRankingImportOptions = {},
 ): Promise<LegacyRankingImportResult> {
-  const { batchSize, maxBatches } = validateOptions(options)
+  const { batchSize, maxBatches, legacyWritersQuiesced } = validateOptions(options)
   const client = postgres(connectionString, { max: 1 })
   let locked = false
   try {
@@ -1086,7 +1152,22 @@ export async function importLegacyRankings(
       const sourceIndex = progress.stage === 'archive-player' ? 0 : 1
       const source = SOURCES[sourceIndex]
       if (!source) throw new Error(`Ranking source stage ${progress.stage} is invalid`)
-      const batch = await archiveBatch(client, source, progress.last_source_key, batchSize, progress.source_manifest)
+      const batch = await archiveBatch(
+        client,
+        source,
+        progress.last_source_key,
+        batchSize,
+        progress.source_manifest,
+        legacyWritersQuiesced,
+      )
+      if (batch.outcome === 'evidence-immutability-unavailable') {
+        await blockForUnavailableEvidence(client, progress)
+        return {
+          status: 'blocked',
+          checkpoint: checkpoint(progress),
+          reconciliation: await reconcile(client, progress.source_manifest),
+        }
+      }
       if (batch.outcome === 'source-changed') {
         const blockedManifest = await blockForSourceChange(client, progress)
         return {
@@ -1114,6 +1195,18 @@ export async function importLegacyRankings(
       `
     }
 
+    if (
+      !legacyWritersQuiesced &&
+      stableJson(await computeSourceManifest(client)) !== stableJson(progress.source_manifest)
+    ) {
+      const blockedManifest = await blockForSourceChange(client, progress)
+      return {
+        status: 'blocked',
+        checkpoint: checkpoint(progress),
+        reconciliation: await reconcile(client, blockedManifest),
+      }
+    }
+
     if (progress.stage !== 'sets') {
       return {
         status: 'in-progress',
@@ -1123,34 +1216,16 @@ export async function importLegacyRankings(
     }
 
     const completedModeIndex = progress.last_mode ? leaderboardModes.indexOf(progress.last_mode) : -1
-    const [archiveSize] = await client<{ rows: number }[]>`
-      SELECT LEAST(count(*), ${MAX_ARCHIVE_ROWS_IN_MEMORY + 1})::integer AS rows
-      FROM rankings.legacy_archive
-    `
-    if (!archiveSize || archiveSize.rows > MAX_ARCHIVE_ROWS_IN_MEMORY) {
-      await client`
-        UPDATE rankings.legacy_import_progress
-        SET status = 'blocked', completed_at = NULL,
-            block_reason = ${client.json(
-              jsonValue({
-                code: 'archive-memory-safety-bound-exceeded',
-                maximumRows: MAX_ARCHIVE_ROWS_IN_MEMORY,
-                observedRows: archiveSize?.rows ?? null,
-              }),
-            )},
-            updated_at = clock_timestamp()
-        WHERE singleton
-      `
-      progress.status = 'blocked'
-      return {
-        status: 'blocked',
-        checkpoint: checkpoint(progress),
-        reconciliation: await reconcile(client, progress.source_manifest),
-      }
-    }
-    const archive = await loadArchive(client)
     for (const mode of leaderboardModes.slice(completedModeIndex + 1)) {
-      const publication = await publishMode(client, mode, progress.source_manifest, archive)
+      const publication = await publishMode(client, mode, progress.source_manifest)
+      if (publication.outcome === 'evidence-immutability-unavailable') {
+        await blockForUnavailableEvidence(client, progress)
+        return {
+          status: 'blocked',
+          checkpoint: checkpoint(progress),
+          reconciliation: await reconcile(client, progress.source_manifest),
+        }
+      }
       if (publication.outcome === 'source-changed') {
         const blockedManifest = await blockForSourceChange(client, progress)
         return {

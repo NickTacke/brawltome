@@ -2,6 +2,7 @@ import { initializeImmutable1v1Snapshots } from './migrations/0001-immutable-1v1
 import { addSupportedLeaderboardModes } from './migrations/0002-add-supported-modes'
 import { addV2LegacyRankingImport } from './migrations/0003-add-v2-legacy-import'
 import { addLeaderboardProviderCompatibility } from './migrations/0004-add-provider-compatibility'
+import { indexLegacyRankingEvaluation } from './migrations/0005-index-legacy-evaluation'
 
 export {
   LeaderboardCandidateError,
@@ -30,4 +31,5 @@ export const rankingMigrationInventory = [
   addSupportedLeaderboardModes,
   addV2LegacyRankingImport,
   addLeaderboardProviderCompatibility,
+  indexLegacyRankingEvaluation,
 ] as const

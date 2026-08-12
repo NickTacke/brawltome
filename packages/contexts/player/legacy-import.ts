@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import postgres from 'postgres'
 
 const IMPORT_LOCK_KEY = 222_197_200
-const DEFAULT_BATCH_SIZE = 500
+const DEFAULT_BATCH_SIZE = 10_000
 const MANIFEST_VERSION = 1
 const LEGACY_SOURCE = 'v2-legacy'
 const EMPTY_CHECKSUM = createHash('sha256').update('').digest('hex')
@@ -51,6 +51,7 @@ export type LegacyPlayerImportResult = {
 export type LegacyPlayerImportOptions = {
   batchSize?: number
   maxBatches?: number
+  legacyWritersQuiesced?: true
 }
 
 type ProgressRow = {
@@ -334,56 +335,96 @@ async function sourceArchiveExact(client: Sql): Promise<boolean> {
   return true
 }
 
-async function archiveRow(sql: Sql, sourceTable: string, row: SourceRow): Promise<string> {
-  const rowChecksum = checksumRawJson(row.raw_json)
-  await sql.unsafe(
-    `INSERT INTO players.legacy_archive
-      (source_table, source_key, brawlhalla_id, raw_row, row_checksum, content_checksum)
-     VALUES ($1, $2, $3, $4::text::jsonb, $5,
-       encode(sha256(convert_to(($4::text::jsonb)::text, 'UTF8')), 'hex'))
-     ON CONFLICT DO NOTHING`,
-    [sourceTable, row.source_key, row.brawlhalla_id, row.raw_json, rowChecksum],
-  )
-  const [archived] = await sql<
-    Array<{ row_checksum: string; row_type: string; content_valid: boolean; source_valid: boolean }>
-  >`
-    SELECT row_checksum, jsonb_typeof(raw_row) AS row_type,
-      content_checksum = encode(sha256(convert_to(raw_row::text, 'UTF8')), 'hex') AS content_valid,
-      raw_row = ${row.raw_json}::text::jsonb AS source_valid
-    FROM players.legacy_archive
-    WHERE source_table = ${sourceTable} AND source_key = ${row.source_key}
-  `
-  if (!archived || archived.row_checksum.trim() !== rowChecksum || !archived.content_valid || !archived.source_valid) {
-    throw new Error(`Legacy source mutation detected for ${sourceTable}/${row.source_key}`)
+async function archiveRows(sql: Sql, sourceTable: string, rows: SourceRow[]): Promise<Map<string, string>> {
+  const checksums = new Map(rows.map((row) => [row.source_key, checksumRawJson(row.raw_json)]))
+  for (let offset = 0; offset < rows.length; offset += 1_000) {
+    const chunk = rows.slice(offset, offset + 1_000)
+    const sourceKeys = chunk.map((row) => row.source_key)
+    const playerIds = chunk.map((row) => row.brawlhalla_id)
+    const rawRows = chunk.map((row) => row.raw_json)
+    const rowChecksums = chunk.map((row) => checksums.get(row.source_key) as string)
+    await sql`
+      INSERT INTO players.legacy_archive
+        (source_table, source_key, brawlhalla_id, raw_row, row_checksum, content_checksum)
+      SELECT ${sourceTable}, incoming.source_key, incoming.brawlhalla_id, incoming.raw_json::jsonb,
+             incoming.row_checksum, encode(sha256(convert_to(incoming.raw_json::jsonb::text, 'UTF8')), 'hex')
+      FROM unnest(${sourceKeys}::text[], ${playerIds}::integer[], ${rawRows}::text[], ${rowChecksums}::text[])
+        AS incoming(source_key, brawlhalla_id, raw_json, row_checksum)
+      ON CONFLICT DO NOTHING
+    `
+    const [conflict] = await sql<{ source_key: string; row_type: string | null }[]>`
+      SELECT incoming.source_key, jsonb_typeof(archive.raw_row) AS row_type
+      FROM unnest(${sourceKeys}::text[], ${rawRows}::text[], ${rowChecksums}::text[])
+        AS incoming(source_key, raw_json, row_checksum)
+      LEFT JOIN players.legacy_archive archive
+        ON archive.source_table = ${sourceTable} AND archive.source_key = incoming.source_key
+      WHERE archive.source_key IS NULL
+         OR archive.row_checksum <> incoming.row_checksum
+         OR archive.content_checksum <> encode(sha256(convert_to(archive.raw_row::text, 'UTF8')), 'hex')
+         OR archive.raw_row IS DISTINCT FROM incoming.raw_json::jsonb
+         OR jsonb_typeof(archive.raw_row) <> 'object'
+      LIMIT 1
+    `
+    if (conflict) {
+      throw new Error(
+        conflict.row_type && conflict.row_type !== 'object'
+          ? `Legacy raw archive row ${sourceTable}/${conflict.source_key} is ${conflict.row_type}, not an object`
+          : `Legacy source mutation detected for ${sourceTable}/${conflict.source_key}`,
+      )
+    }
   }
-  if (archived.row_type !== 'object') {
-    throw new Error(`Legacy raw archive row ${sourceTable}/${row.source_key} is ${archived.row_type}, not an object`)
-  }
-  return rowChecksum
+  return checksums
 }
 
-async function recordFacts(
-  sql: Sql,
+type FactInput = {
+  sourceTable: string
+  sourceKey: string
+  brawlhallaId: number | null
+  factKey: string
+  scope: string
+  observedAt: string | null
+  outcome: 'known' | 'unknown'
+  reason: string | null
+  provenance: string
+  archiveChecksum: string
+}
+type RejectionInput = {
+  sourceTable: string
+  sourceKey: string
+  code: string
+  evidence: string
+  archiveChecksum: string
+}
+type LedgerInput = {
+  sourceTable: string
+  sourceKey: string
+  archiveChecksum: string
+  outcome: 'transformed' | 'rejected'
+}
+
+function factsForRow(
   sourceTable: string,
   row: SourceRow,
   player: RawRow,
   archiveChecksum: string,
   latestHistory: RawRow | null,
-): Promise<void> {
-  const facts = Object.entries(row.raw_row)
+): FactInput[] {
+  return Object.entries(row.raw_row)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([factKey, rawValue]) => {
       const ambiguousZero = isAmbiguousZero(sourceTable, factKey, rawValue, row.raw_row, latestHistory)
       const unknown = rawValue === null || rawValue === undefined || ambiguousZero
       const scope = scopeFor(sourceTable, factKey, row.raw_row)
-      const observedAt = observedAtFor(sourceTable, factKey, row.raw_row, player)
-      const observedAtIso = observedAt?.toISOString() ?? null
-      const outcome = unknown ? 'unknown' : 'known'
+      const observedAt = observedAtFor(sourceTable, factKey, row.raw_row, player)?.toISOString() ?? null
+      const outcome = unknown ? ('unknown' as const) : ('known' as const)
       const reason = ambiguousZero ? 'legacy-default-zero-unproven' : unknown ? 'legacy-source-null' : null
       return {
+        sourceTable,
+        sourceKey: row.source_key,
+        brawlhallaId: row.brawlhalla_id,
         factKey,
         scope,
-        observedAt: observedAtIso,
+        observedAt,
         outcome,
         reason,
         provenance: stableJson({
@@ -394,79 +435,91 @@ async function recordFacts(
           scope,
           outcome,
           reason,
-          legacyTimestamp: observedAtIso,
+          legacyTimestamp: observedAt,
           ...(ambiguousZero ? { rawValue, proof: 'unproven-default' } : {}),
           ...(sourceTable === 'rating_history' && (rawValue === 0 || rawValue === '0')
             ? { proof: 'dedicated-history-observation' }
             : {}),
         }),
+        archiveChecksum,
       }
     })
-  if (facts.length === 0) return
-
-  const parameters: Array<string | number | null> = [sourceTable, row.source_key, row.brawlhalla_id, archiveChecksum]
-  const values = facts.map((fact, index) => {
-    const offset = 5 + index * 6
-    parameters.push(fact.factKey, fact.scope, fact.observedAt, fact.outcome, fact.reason, fact.provenance)
-    return `($${offset}, $${offset + 1}, $${offset + 2}::timestamptz, $${offset + 3}, $${offset + 4}, $${offset + 5}::text::jsonb)`
-  })
-  await sql.unsafe(
-    `WITH incoming (fact_key, scope, observed_at, outcome, reason, provenance) AS (
-       VALUES ${values.join(', ')}
-     )
-     INSERT INTO players.legacy_facts
-       (source_table, source_key, fact_key, brawlhalla_id, scope, source, observed_at,
-        value, outcome, reason, provenance, archive_checksum)
-     SELECT $1, $2, incoming.fact_key, $3, incoming.scope, 'v2-legacy', incoming.observed_at,
-            CASE WHEN incoming.outcome = 'known' THEN raw_fact.value ELSE NULL END,
-            incoming.outcome, incoming.reason, incoming.provenance, $4
-     FROM players.legacy_archive archive
-     CROSS JOIN LATERAL jsonb_each(archive.raw_row) raw_fact
-     JOIN incoming ON incoming.fact_key::text = raw_fact.key
-     WHERE archive.source_table = $1 AND archive.source_key = $2
-     ON CONFLICT DO NOTHING`,
-    parameters,
-  )
 }
 
-async function reject(
-  sql: Sql,
-  sourceTable: string,
-  sourceKey: string,
-  code: string,
-  evidence: unknown,
-  archiveChecksum: string,
-): Promise<void> {
+async function insertFacts(sql: Sql, facts: FactInput[]): Promise<void> {
+  for (let offset = 0; offset < facts.length; offset += 10_000) {
+    const chunk = facts.slice(offset, offset + 10_000)
+    await sql`
+      WITH incoming AS (
+        SELECT * FROM unnest(
+          ${chunk.map((fact) => fact.sourceTable)}::text[],
+          ${chunk.map((fact) => fact.sourceKey)}::text[],
+          ${chunk.map((fact) => fact.brawlhallaId)}::integer[],
+          ${chunk.map((fact) => fact.factKey)}::text[],
+          ${chunk.map((fact) => fact.scope)}::text[],
+          ${chunk.map((fact) => fact.observedAt)}::text[],
+          ${chunk.map((fact) => fact.outcome)}::text[],
+          ${chunk.map((fact) => fact.reason)}::text[],
+          ${chunk.map((fact) => fact.provenance)}::text[],
+          ${chunk.map((fact) => fact.archiveChecksum)}::text[]
+        ) AS fact(source_table, source_key, brawlhalla_id, fact_key, scope, observed_at,
+                  outcome, reason, provenance, archive_checksum)
+      )
+      INSERT INTO players.legacy_facts
+        (source_table, source_key, fact_key, brawlhalla_id, scope, source, observed_at,
+         value, outcome, reason, provenance, archive_checksum)
+      SELECT incoming.source_table, incoming.source_key, incoming.fact_key, incoming.brawlhalla_id,
+             incoming.scope, 'v2-legacy', incoming.observed_at::timestamptz,
+             CASE WHEN incoming.outcome = 'known' THEN raw_fact.value ELSE NULL END,
+             incoming.outcome, incoming.reason, incoming.provenance::jsonb, incoming.archive_checksum
+      FROM incoming
+      JOIN players.legacy_archive archive
+        ON archive.source_table = incoming.source_table AND archive.source_key = incoming.source_key
+      CROSS JOIN LATERAL jsonb_each(archive.raw_row) raw_fact
+      WHERE raw_fact.key = incoming.fact_key
+      ON CONFLICT DO NOTHING
+    `
+  }
+}
+
+async function insertRejections(sql: Sql, rejections: RejectionInput[]): Promise<void> {
+  if (rejections.length === 0) return
   await sql`
     INSERT INTO players.legacy_import_rejections
       (source_table, source_key, code, evidence, archive_checksum)
-    VALUES (${sourceTable}, ${sourceKey}, ${code}, ${sql.json(evidence as never)}, ${archiveChecksum})
+    SELECT rejection.source_table, rejection.source_key, rejection.code,
+           rejection.evidence::jsonb, rejection.archive_checksum
+    FROM unnest(
+      ${rejections.map((item) => item.sourceTable)}::text[],
+      ${rejections.map((item) => item.sourceKey)}::text[],
+      ${rejections.map((item) => item.code)}::text[],
+      ${rejections.map((item) => item.evidence)}::text[],
+      ${rejections.map((item) => item.archiveChecksum)}::text[]
+    ) AS rejection(source_table, source_key, code, evidence, archive_checksum)
     ON CONFLICT DO NOTHING
   `
 }
 
-async function finishLedger(
-  sql: Sql,
-  sourceTable: string,
-  sourceKey: string,
-  archiveChecksum: string,
-  outcome: 'transformed' | 'rejected',
-): Promise<void> {
+async function insertLedger(sql: Sql, ledger: LedgerInput[]): Promise<void> {
+  if (ledger.length === 0) return
   await sql`
-    INSERT INTO players.legacy_import_ledger
-      (source_table, source_key, archive_checksum, outcome)
-    VALUES (${sourceTable}, ${sourceKey}, ${archiveChecksum}, ${outcome})
+    INSERT INTO players.legacy_import_ledger (source_table, source_key, archive_checksum, outcome)
+    SELECT * FROM unnest(
+      ${ledger.map((item) => item.sourceTable)}::text[],
+      ${ledger.map((item) => item.sourceKey)}::text[],
+      ${ledger.map((item) => item.archiveChecksum)}::text[],
+      ${ledger.map((item) => item.outcome)}::text[]
+    ) AS evidence(source_table, source_key, archive_checksum, outcome)
     ON CONFLICT DO NOTHING
   `
 }
 
-async function readPlayerRows(sql: Sql, brawlhallaId: number): Promise<Map<string, SourceRow[]>> {
-  const relatedSources = SOURCE_DEFINITIONS.filter(({ table }) => table !== 'player')
+async function readBatchRows(sql: Sql, brawlhallaIds: number[]): Promise<Map<string, SourceRow[]>> {
   const entries = await Promise.all(
-    relatedSources.map(async (source) => {
+    SOURCE_DEFINITIONS.slice(1).map(async (source) => {
       const rows = await sql.unsafe<SourceDatabaseRow[]>(
-        sourceRowsSql(source, 'WHERE brawlhalla_id = $1', source.playerOrder),
-        [brawlhallaId],
+        sourceRowsSql(source, 'WHERE brawlhalla_id = ANY($1::integer[])', source.playerOrder),
+        [brawlhallaIds],
       )
       return [source.table, rows.map(normalizeSourceRow)] as const
     }),
@@ -485,99 +538,104 @@ function historyRejection(raw: RawRow): string | null {
   return null
 }
 
-async function importHistory(sql: Sql, row: SourceRow, archiveChecksum: string): Promise<'transformed' | 'rejected'> {
-  const code = historyRejection(row.raw_row)
-  if (code) {
-    await reject(sql, 'rating_history', row.source_key, code, { rawRow: row.raw_row }, archiveChecksum)
-    return 'rejected'
-  }
-  const raw = row.raw_row
-  const recordedAt = parseLegacyTimestamp(raw.recorded_at) as Date
+type HistoryInput = {
+  row: SourceRow
+  archiveChecksum: string
+  brawlhallaId: number
+  rating: number
+  peakRating: number
+  tier: string
+  wins: number
+  games: number
+  recordedAt: string
+  sourceOrder: number
+}
+type ProfileInput = {
+  row: SourceRow
+  archiveChecksum: string
+  brawlhallaId: number
+  playerName: string
+  region: string | null
+  rating: number | null
+  viewCount: number
+  observedAt: string
+}
+type AliasInput = {
+  row: SourceRow
+  archiveChecksum: string
+  brawlhallaId: number
+  normalizedAlias: string
+  displayAlias: string
+  observedAt: string
+}
+
+async function insertHistories(sql: Sql, histories: HistoryInput[]): Promise<void> {
+  if (histories.length === 0) return
   await sql`
     INSERT INTO players.ranked_profiles (brawlhalla_id, checked_at)
-    VALUES (${raw.brawlhalla_id as number}, ${recordedAt.toISOString()}::timestamptz)
+    SELECT DISTINCT ON (history.brawlhalla_id) history.brawlhalla_id, history.recorded_at::timestamptz
+    FROM unnest(
+      ${histories.map((item) => item.brawlhallaId)}::integer[],
+      ${histories.map((item) => item.recordedAt)}::text[],
+      ${histories.map((item) => item.sourceOrder)}::bigint[]
+    ) AS history(brawlhalla_id, recorded_at, source_order)
+    ORDER BY history.brawlhalla_id, history.recorded_at::timestamptz, history.source_order
     ON CONFLICT DO NOTHING
   `
   await sql`
     INSERT INTO players.ranked_rating_history
       (brawlhalla_id, rating, peak_rating, tier, wins, games, recorded_at,
        history_source, legacy_source_key, source_order)
-    VALUES
-      (${raw.brawlhalla_id as number}, ${raw.rating as number}, ${raw.peak_rating as number},
-       ${raw.tier as string}, ${raw.wins as number}, ${raw.games as number},
-       ${recordedAt.toISOString()}::timestamptz, 'v2-legacy', ${row.source_key}, ${raw.id as number})
+    SELECT history.brawlhalla_id, history.rating, history.peak_rating, history.tier,
+           history.wins, history.games, history.recorded_at::timestamptz,
+           'v2-legacy', history.source_key, history.source_order
+    FROM unnest(
+      ${histories.map((item) => item.brawlhallaId)}::integer[],
+      ${histories.map((item) => item.rating)}::integer[],
+      ${histories.map((item) => item.peakRating)}::integer[],
+      ${histories.map((item) => item.tier)}::text[],
+      ${histories.map((item) => item.wins)}::integer[],
+      ${histories.map((item) => item.games)}::integer[],
+      ${histories.map((item) => item.recordedAt)}::text[],
+      ${histories.map((item) => item.row.source_key)}::text[],
+      ${histories.map((item) => item.sourceOrder)}::bigint[]
+    ) AS history(brawlhalla_id, rating, peak_rating, tier, wins, games, recorded_at, source_key, source_order)
     ON CONFLICT DO NOTHING
   `
-  return 'transformed'
 }
 
-async function importDiscoveryProfile(
-  sql: Sql,
-  playerRow: SourceRow,
-  archiveChecksum: string,
-): Promise<'transformed' | 'rejected'> {
-  const raw = playerRow.raw_row
-  const observedAt = parseLegacyTimestamp(raw.last_updated)
-  if (!positiveInteger(raw.brawlhalla_id) || !visibleText(raw.name, 256) || !observedAt) {
-    await reject(
-      sql,
-      'player',
-      playerRow.source_key,
-      'player-identity-invalid',
-      { brawlhallaId: raw.brawlhalla_id, name: raw.name, lastUpdated: raw.last_updated },
-      archiveChecksum,
-    )
-    return 'rejected'
-  }
-  const rating = positiveInteger(raw.rating) ? raw.rating : null
-  const viewCount = nonNegativeInteger(raw.view_count) ? raw.view_count : 0
+async function insertProfiles(sql: Sql, profiles: ProfileInput[]): Promise<void> {
+  if (profiles.length === 0) return
   await sql`
     INSERT INTO players.legacy_discovery_profiles
       (brawlhalla_id, player_name, region, rating, view_count, observed_at, archive_checksum)
-    VALUES
-      (${raw.brawlhalla_id}, ${raw.name}, ${typeof raw.region === 'string' ? raw.region : null},
-       ${rating}, ${viewCount}, ${observedAt.toISOString()}::timestamptz, ${archiveChecksum})
+    SELECT * FROM unnest(
+      ${profiles.map((item) => item.brawlhallaId)}::integer[],
+      ${profiles.map((item) => item.playerName)}::text[],
+      ${profiles.map((item) => item.region)}::text[],
+      ${profiles.map((item) => item.rating)}::integer[],
+      ${profiles.map((item) => item.viewCount)}::integer[],
+      ${profiles.map((item) => item.observedAt)}::timestamptz[],
+      ${profiles.map((item) => item.archiveChecksum)}::text[]
+    ) AS profile(brawlhalla_id, player_name, region, rating, view_count, observed_at, archive_checksum)
     ON CONFLICT DO NOTHING
   `
-  return 'transformed'
 }
 
-async function importAlias(sql: Sql, row: SourceRow, archiveChecksum: string): Promise<'transformed' | 'rejected'> {
-  const raw = row.raw_row
-  const observedAt = parseLegacyTimestamp(raw.created_at)
-  if (!positiveInteger(raw.brawlhalla_id) || !visibleText(raw.value, 256) || !observedAt) {
-    await reject(sql, 'player_alias', row.source_key, 'alias-identity-invalid', { rawRow: raw }, archiveChecksum)
-    return 'rejected'
-  }
-  const normalized = raw.value.toLowerCase()
-  const inserted = await sql<{ display_alias: string; archive_checksum: string }[]>`
+async function insertAliases(sql: Sql, aliases: AliasInput[]): Promise<void> {
+  if (aliases.length === 0) return
+  await sql`
     INSERT INTO players.legacy_discovery_aliases
       (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
-    VALUES
-      (${raw.brawlhalla_id}, ${normalized}, ${raw.value}, ${observedAt.toISOString()}::timestamptz,
-       ${archiveChecksum})
+    SELECT * FROM unnest(
+      ${aliases.map((item) => item.brawlhallaId)}::integer[],
+      ${aliases.map((item) => item.normalizedAlias)}::text[],
+      ${aliases.map((item) => item.displayAlias)}::text[],
+      ${aliases.map((item) => item.observedAt)}::timestamptz[],
+      ${aliases.map((item) => item.archiveChecksum)}::text[]
+    ) AS alias(brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
     ON CONFLICT DO NOTHING
-    RETURNING display_alias, archive_checksum
   `
-  if (inserted.length > 0) return 'transformed'
-
-  const [existing] = await sql<{ display_alias: string; archive_checksum: string }[]>`
-    SELECT display_alias, archive_checksum
-    FROM players.legacy_discovery_aliases
-    WHERE brawlhalla_id = ${raw.brawlhalla_id} AND normalized_alias = ${normalized}
-  `
-  if (existing?.display_alias === raw.value && existing.archive_checksum.trim() === archiveChecksum) {
-    return 'transformed'
-  }
-  await reject(
-    sql,
-    'player_alias',
-    row.source_key,
-    'alias-normalization-collision',
-    { rawRow: raw, existing },
-    archiveChecksum,
-  )
-  return 'rejected'
 }
 
 async function enqueueDiscoveryBatch(sql: Sql, brawlhallaIds: number[]): Promise<void> {
@@ -596,29 +654,176 @@ async function enqueueDiscoveryBatch(sql: Sql, brawlhallaIds: number[]): Promise
   `
 }
 
-async function importPlayer(sql: Sql, playerRow: SourceRow): Promise<void> {
-  if (playerRow.brawlhalla_id === null) throw new Error(`Player source ${playerRow.source_key} has no identity`)
-  const related = await readPlayerRows(sql, playerRow.brawlhalla_id)
-  const histories = related.get('rating_history') ?? []
-  const latestHistory = histories.at(-1)?.raw_row ?? null
-  const playerChecksum = await archiveRow(sql, 'player', playerRow)
-  await recordFacts(sql, 'player', playerRow, playerRow.raw_row, playerChecksum, latestHistory)
-  const playerOutcome = await importDiscoveryProfile(sql, playerRow, playerChecksum)
-  await finishLedger(sql, 'player', playerRow.source_key, playerChecksum, playerOutcome)
+async function importPlayerBatch(sql: Sql, players: SourceRow[]): Promise<void> {
+  const playerIds = players.map((player) => player.brawlhalla_id).filter((id): id is number => id !== null)
+  const playerById = new Map(players.map((player) => [player.brawlhalla_id, player]))
+  const related = await readBatchRows(sql, playerIds)
+  const historiesByPlayer = new Map<number, SourceRow[]>()
+  for (const history of related.get('rating_history') ?? []) {
+    if (history.brawlhalla_id === null) continue
+    const rows = historiesByPlayer.get(history.brawlhalla_id) ?? []
+    rows.push(history)
+    historiesByPlayer.set(history.brawlhalla_id, rows)
+  }
+
+  const checksumByTable = new Map<string, Map<string, string>>()
+  checksumByTable.set('player', await archiveRows(sql, 'player', players))
+  for (const [sourceTable, rows] of related) {
+    checksumByTable.set(sourceTable, await archiveRows(sql, sourceTable, rows))
+  }
+
+  const facts: FactInput[] = []
+  const rejections: RejectionInput[] = []
+  const ledger: LedgerInput[] = []
+  const profiles: ProfileInput[] = []
+  const aliases: AliasInput[] = []
+  const histories: HistoryInput[] = []
+
+  for (const player of players) {
+    const checksum = checksumByTable.get('player')?.get(player.source_key)
+    if (!checksum) throw new Error(`Player archive checksum is missing for ${player.source_key}`)
+    const latestHistory =
+      player.brawlhalla_id === null ? null : (historiesByPlayer.get(player.brawlhalla_id)?.at(-1)?.raw_row ?? null)
+    facts.push(...factsForRow('player', player, player.raw_row, checksum, latestHistory))
+    const raw = player.raw_row
+    const observedAt = parseLegacyTimestamp(raw.last_updated)
+    const valid = positiveInteger(raw.brawlhalla_id) && visibleText(raw.name, 256) && observedAt !== null
+    if (valid) {
+      profiles.push({
+        row: player,
+        archiveChecksum: checksum,
+        brawlhallaId: raw.brawlhalla_id as number,
+        playerName: raw.name as string,
+        region: typeof raw.region === 'string' ? raw.region : null,
+        rating: positiveInteger(raw.rating) ? raw.rating : null,
+        viewCount: nonNegativeInteger(raw.view_count) ? raw.view_count : 0,
+        observedAt: (observedAt as Date).toISOString(),
+      })
+    } else {
+      rejections.push({
+        sourceTable: 'player',
+        sourceKey: player.source_key,
+        code: 'player-identity-invalid',
+        evidence: stableJson({ brawlhallaId: raw.brawlhalla_id, name: raw.name, lastUpdated: raw.last_updated }),
+        archiveChecksum: checksum,
+      })
+    }
+    ledger.push({
+      sourceTable: 'player',
+      sourceKey: player.source_key,
+      archiveChecksum: checksum,
+      outcome: valid ? 'transformed' : 'rejected',
+    })
+  }
 
   for (const [sourceTable, rows] of related) {
     for (const row of rows) {
-      const archiveChecksum = await archiveRow(sql, sourceTable, row)
-      await recordFacts(sql, sourceTable, row, playerRow.raw_row, archiveChecksum, latestHistory)
-      const outcome =
-        sourceTable === 'rating_history'
-          ? await importHistory(sql, row, archiveChecksum)
-          : sourceTable === 'player_alias'
-            ? await importAlias(sql, row, archiveChecksum)
-            : 'transformed'
-      await finishLedger(sql, sourceTable, row.source_key, archiveChecksum, outcome)
+      const checksum = checksumByTable.get(sourceTable)?.get(row.source_key)
+      const player = playerById.get(row.brawlhalla_id)
+      if (!checksum || !player)
+        throw new Error(`Player batch relation is incomplete for ${sourceTable}/${row.source_key}`)
+      const latestHistory =
+        row.brawlhalla_id === null ? null : (historiesByPlayer.get(row.brawlhalla_id)?.at(-1)?.raw_row ?? null)
+      facts.push(...factsForRow(sourceTable, row, player.raw_row, checksum, latestHistory))
+      let outcome: LedgerInput['outcome'] = 'transformed'
+      if (sourceTable === 'rating_history') {
+        const code = historyRejection(row.raw_row)
+        if (code) {
+          outcome = 'rejected'
+          rejections.push({
+            sourceTable,
+            sourceKey: row.source_key,
+            code,
+            evidence: stableJson({ rawRow: row.raw_row }),
+            archiveChecksum: checksum,
+          })
+        } else {
+          const raw = row.raw_row
+          histories.push({
+            row,
+            archiveChecksum: checksum,
+            brawlhallaId: raw.brawlhalla_id as number,
+            rating: raw.rating as number,
+            peakRating: raw.peak_rating as number,
+            tier: raw.tier as string,
+            wins: raw.wins as number,
+            games: raw.games as number,
+            recordedAt: (parseLegacyTimestamp(raw.recorded_at) as Date).toISOString(),
+            sourceOrder: raw.id as number,
+          })
+        }
+      } else if (sourceTable === 'player_alias') {
+        const raw = row.raw_row
+        const observedAt = parseLegacyTimestamp(raw.created_at)
+        if (!positiveInteger(raw.brawlhalla_id) || !visibleText(raw.value, 256) || !observedAt) {
+          outcome = 'rejected'
+          rejections.push({
+            sourceTable,
+            sourceKey: row.source_key,
+            code: 'alias-identity-invalid',
+            evidence: stableJson({ rawRow: raw }),
+            archiveChecksum: checksum,
+          })
+        } else {
+          aliases.push({
+            row,
+            archiveChecksum: checksum,
+            brawlhallaId: raw.brawlhalla_id,
+            normalizedAlias: raw.value.toLowerCase(),
+            displayAlias: raw.value,
+            observedAt: observedAt.toISOString(),
+          })
+        }
+      }
+      ledger.push({ sourceTable, sourceKey: row.source_key, archiveChecksum: checksum, outcome })
     }
   }
+
+  await insertFacts(sql, facts)
+  await insertProfiles(sql, profiles)
+  await insertHistories(sql, histories)
+  await insertAliases(sql, aliases)
+
+  if (aliases.length > 0) {
+    const existingAliases = await sql<
+      Array<{ brawlhalla_id: number; normalized_alias: string; display_alias: string; archive_checksum: string }>
+    >`
+      SELECT destination.brawlhalla_id, destination.normalized_alias,
+             destination.display_alias, destination.archive_checksum
+      FROM players.legacy_discovery_aliases destination
+      JOIN unnest(
+        ${aliases.map((alias) => alias.brawlhallaId)}::integer[],
+        ${aliases.map((alias) => alias.normalizedAlias)}::text[]
+      ) AS incoming(brawlhalla_id, normalized_alias)
+        USING (brawlhalla_id, normalized_alias)
+    `
+    const existingByIdentity = new Map(
+      existingAliases.map((alias) => [`${alias.brawlhalla_id}:${alias.normalized_alias}`, alias]),
+    )
+    for (const alias of aliases) {
+      const existing = existingByIdentity.get(`${alias.brawlhallaId}:${alias.normalizedAlias}`)
+      if (
+        existing?.display_alias === alias.displayAlias &&
+        existing.archive_checksum.trim() === alias.archiveChecksum
+      ) {
+        continue
+      }
+      const item = ledger.find(
+        (entry) => entry.sourceTable === 'player_alias' && entry.sourceKey === alias.row.source_key,
+      )
+      if (item) item.outcome = 'rejected'
+      rejections.push({
+        sourceTable: 'player_alias',
+        sourceKey: alias.row.source_key,
+        code: 'alias-normalization-collision',
+        evidence: stableJson({ rawRow: alias.row.raw_row, existing }),
+        archiveChecksum: alias.archiveChecksum,
+      })
+    }
+  }
+
+  await insertRejections(sql, rejections)
+  await insertLedger(sql, ledger)
 }
 
 async function reconcile(client: Sql, manifest: SourceManifest): Promise<Reconciliation> {
@@ -771,7 +976,11 @@ async function reconcile(client: Sql, manifest: SourceManifest): Promise<Reconci
   }
 }
 
-function validateOptions(options: LegacyPlayerImportOptions): { batchSize: number; maxBatches: number } {
+function validateOptions(options: LegacyPlayerImportOptions): {
+  batchSize: number
+  maxBatches: number
+  legacyWritersQuiesced: boolean
+} {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE
   const maxBatches = options.maxBatches ?? Number.POSITIVE_INFINITY
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 10_000) {
@@ -780,14 +989,21 @@ function validateOptions(options: LegacyPlayerImportOptions): { batchSize: numbe
   if (maxBatches !== Number.POSITIVE_INFINITY && (!Number.isSafeInteger(maxBatches) || maxBatches < 1)) {
     throw new Error('Player import maxBatches must be a positive integer')
   }
-  return { batchSize, maxBatches }
+  return { batchSize, maxBatches, legacyWritersQuiesced: options.legacyWritersQuiesced === true }
+}
+
+async function lockPlayerSourcesAndReadManifest(sql: Sql): Promise<SourceManifest> {
+  await sql.unsafe(
+    'LOCK TABLE public.player, public.player_alias, public.player_stats_legend, public.player_weapon_stat, public.player_ranked_legend, public.player_ranked_team, public.rating_history IN SHARE MODE',
+  )
+  return computeSourceManifest(sql)
 }
 
 export async function importLegacyPlayers(
   connectionString: string,
   options: LegacyPlayerImportOptions = {},
 ): Promise<LegacyPlayerImportResult> {
-  const { batchSize, maxBatches } = validateOptions(options)
+  const { batchSize, maxBatches, legacyWritersQuiesced } = validateOptions(options)
   const client = postgres(connectionString, { max: 1 })
   let locked = false
   try {
@@ -797,7 +1013,9 @@ export async function importLegacyPlayers(
     locked = true
     await client.unsafe('SET statement_timeout = 0')
 
-    const manifest = await computeSourceManifest(client)
+    const manifest = await client.begin(async (transaction) =>
+      lockPlayerSourcesAndReadManifest(transaction as unknown as Sql),
+    )
     let [progress] = await client<ProgressRow[]>`
       SELECT status, last_player_id, source_manifest, source_checksum
       FROM players.legacy_import_progress WHERE singleton
@@ -819,14 +1037,15 @@ export async function importLegacyPlayers(
         SET status = 'blocked', completed_at = NULL, updated_at = clock_timestamp()
         WHERE singleton
       `
-      await reject(
-        client,
-        'manifest',
-        manifest.sourceChecksum,
-        'source-manifest-changed',
-        { frozen: progress.source_manifest, current: manifest },
-        manifest.sourceChecksum,
-      )
+      await insertRejections(client, [
+        {
+          sourceTable: 'manifest',
+          sourceKey: manifest.sourceChecksum,
+          code: 'source-manifest-changed',
+          evidence: stableJson({ frozen: progress.source_manifest, current: manifest }),
+          archiveChecksum: manifest.sourceChecksum,
+        },
+      ])
       return {
         status: 'blocked',
         checkpoint:
@@ -841,36 +1060,68 @@ export async function importLegacyPlayers(
     while (!completed && batches < maxBatches) {
       const playerSource = SOURCE_DEFINITIONS[0]
       if (!playerSource || playerSource.table !== 'player') throw new Error('Legacy player source registry is invalid')
-      const playerRows = await client.unsafe<SourceDatabaseRow[]>(
-        `${sourceRowsSql(
-          playerSource,
-          'WHERE ($1::integer IS NULL OR brawlhalla_id > $1::integer)',
-          'brawlhalla_id',
-        )} LIMIT $2`,
-        [cursor, batchSize],
-      )
-      const players = playerRows.map(normalizeSourceRow)
-      if (players.length === 0) {
-        await client`
+      const batch = await client.begin(async (transaction) => {
+        const sql = transaction as unknown as Sql
+        if (!legacyWritersQuiesced) {
+          const currentManifest = await lockPlayerSourcesAndReadManifest(sql)
+          if (stableJson(currentManifest) !== stableJson(progress.source_manifest)) {
+            return { outcome: 'source-changed' as const, currentManifest }
+          }
+        }
+        const playerRows = await sql.unsafe<SourceDatabaseRow[]>(
+          `${sourceRowsSql(
+            playerSource,
+            'WHERE ($1::integer IS NULL OR brawlhalla_id > $1::integer)',
+            'brawlhalla_id',
+          )} LIMIT $2`,
+          [cursor, batchSize],
+        )
+        const players = playerRows.map(normalizeSourceRow)
+        if (players.length === 0) {
+          await sql`
+            UPDATE players.legacy_import_progress
+            SET status = 'complete', completed_at = clock_timestamp(), updated_at = clock_timestamp()
+            WHERE singleton
+          `
+          return { outcome: 'complete' as const }
+        }
+        await sql`SELECT set_config('players.suppress_discovery_outbox', 'on', true)`
+        await importPlayerBatch(sql, players)
+        await enqueueDiscoveryBatch(sql, players.map((player) => player.brawlhalla_id).filter(positiveInteger))
+        const nextCursor = players.at(-1)?.brawlhalla_id ?? null
+        await sql`
           UPDATE players.legacy_import_progress
-          SET status = 'complete', completed_at = clock_timestamp(), updated_at = clock_timestamp()
+          SET status = 'in-progress', last_player_id = ${nextCursor}, updated_at = clock_timestamp()
           WHERE singleton
         `
+        return { outcome: 'archived' as const, cursor: nextCursor }
+      })
+      if (batch.outcome === 'source-changed') {
+        await client`
+          UPDATE players.legacy_import_progress
+          SET status = 'blocked', completed_at = NULL, updated_at = clock_timestamp()
+          WHERE singleton
+        `
+        await insertRejections(client, [
+          {
+            sourceTable: 'manifest',
+            sourceKey: batch.currentManifest.sourceChecksum,
+            code: 'source-manifest-changed',
+            evidence: stableJson({ frozen: progress.source_manifest, current: batch.currentManifest }),
+            archiveChecksum: batch.currentManifest.sourceChecksum,
+          },
+        ])
+        return {
+          status: 'blocked',
+          checkpoint: cursor === null ? null : { stage: 'players', sourceKey: String(cursor) },
+          reconciliation: await reconcile(client, batch.currentManifest),
+        }
+      }
+      if (batch.outcome === 'complete') {
         completed = true
         break
       }
-      await client.begin(async (transaction) => {
-        const sql = transaction as unknown as Sql
-        await sql`SELECT set_config('players.suppress_discovery_outbox', 'on', true)`
-        for (const player of players) await importPlayer(sql, player)
-        await enqueueDiscoveryBatch(sql, players.map((player) => player.brawlhalla_id).filter(positiveInteger))
-        cursor = players.at(-1)?.brawlhalla_id ?? null
-        await sql`
-          UPDATE players.legacy_import_progress
-          SET status = 'in-progress', last_player_id = ${cursor}, updated_at = clock_timestamp()
-          WHERE singleton
-        `
-      })
+      cursor = batch.cursor
       batches += 1
     }
 
