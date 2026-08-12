@@ -169,7 +169,7 @@ export function Leaderboard() {
               disabled={accountLoading || preferencesSaving}
               onValueChange={(v) => updateFilters({ bracket: v as BracketId, page: 1 })}
             >
-              <SelectTrigger className="w-[120px] font-bold">
+              <SelectTrigger aria-label="Leaderboard bracket" className="w-[120px] font-bold">
                 <SelectValue placeholder="Bracket" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
@@ -188,7 +188,7 @@ export function Leaderboard() {
               disabled={accountLoading || preferencesSaving}
               onValueChange={(v) => updateFilters({ region: v as RegionId, page: 1 })}
             >
-              <SelectTrigger className="w-[180px] font-bold">
+              <SelectTrigger aria-label="Leaderboard region" className="w-[180px] font-bold">
                 <SelectValue placeholder="Select Region" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
