@@ -12,7 +12,7 @@ cd "$repository_root"
 compose_id=$DOKPLOY_OBSERVABILITY_COMPOSE_ID
 source_ref=$DOKPLOY_OBSERVABILITY_REF
 api_url=${DOKPLOY_URL%/}/api
-expected_command='compose --parallel 1 -p brawltome-observability-bc1eng -f ./deploy/observability/compose.yml up -d --build --remove-orphans'
+expected_command='compose --parallel 1 -p brawltome-observability-bc1eng -f ./deploy/observability/compose.yml up -d --build --remove-orphans --force-recreate'
 
 [[ $compose_id =~ ^[A-Za-z0-9_-]+$ ]] || {
   printf '%s\n' 'Dokploy compose ID contains unsupported characters.' >&2
@@ -58,7 +58,9 @@ compose = json.load(sys.stdin)
 expected_command, expected_ref = sys.argv[1:]
 if compose.get("command") != expected_command:
     raise SystemExit("serialized Dokploy command drift")
-if compose.get("customGitBranch") != expected_ref:
+if compose.get("sourceType") != "github":
+    raise SystemExit("Dokploy source type drift")
+if compose.get("branch") != expected_ref:
     raise SystemExit("immutable Dokploy source ref drift")
 ' "$expected_command" "$source_ref"
 
