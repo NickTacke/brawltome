@@ -24,6 +24,7 @@ describe('PostgreSQL-only runtime topology', () => {
         '--',
         '.',
         `:(exclude)${thisFile}`,
+        ':(exclude)tooling/deployment/tests/**',
         ':(exclude)LICENSE',
       ],
       cwd: root,
