@@ -9,7 +9,6 @@ const read = (...parts: string[]) => readFileSync(deploy(...parts), 'utf8')
 
 const requiredAlerts = [
   'RuntimeMetricsTargetDown',
-  'PublicEndpointUnavailable',
   'RuntimeNotReady',
   'WorkerHeartbeatStale',
   'OldestRunnableJobDelayed',
@@ -163,7 +162,7 @@ describe('observability deployment contract', () => {
     expect(read('storage', 'verify-quota-mounts.sh')).toContain('findmnt')
   })
 
-  test('scrapes V3 metrics and probes supported V2 and V3 health endpoints', () => {
+  test('scrapes V3 metrics and probes V3 dependency readiness', () => {
     const config = parse(read('prometheus', 'prometheus.yml')) as {
       scrape_configs: Array<{
         job_name: string
@@ -178,16 +177,7 @@ describe('observability deployment contract', () => {
     ])
     expect(job('web')).toEqual([{ targets: ['v3-web:3000'], labels: { runtime: 'web', generation: 'v3' } }])
     expect(job('discord')).toBeUndefined()
-    expect(job('availability')).toEqual([
-      {
-        targets: ['https://api.brawltome.app/health'],
-        labels: { runtime: 'api', generation: 'v2' },
-      },
-      {
-        targets: ['https://brawltome.app/'],
-        labels: { runtime: 'web', generation: 'v2' },
-      },
-    ])
+    expect(job('availability')).toBeUndefined()
     expect(job('readiness')).toEqual([
       { targets: ['http://v3-api:3000/health/ready'], labels: { runtime: 'api', generation: 'v3' } },
       {
