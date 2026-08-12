@@ -802,7 +802,13 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       if (existing) return existing
     }
     for (let attempt = 0; attempt < 3; attempt++) {
-      const snapshot = await source.snapshot()
+      let snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot | null = await source.snapshot()
+      const observedSourceVersion = snapshot.sourceVersion
+      const pendingEventCount = snapshot.pendingEventCount ?? 0
+      const oldestPendingAt = snapshot.oldestPendingAt ?? null
+      const sourceFactCount = snapshot.facts.length
+      const expected = expectedTerms(owner, snapshot)
+      snapshot = null
       try {
         return await client.begin(async (transaction) => {
           const sql = transaction as unknown as Sql
@@ -821,10 +827,8 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
             SELECT generation_id, source_version FROM discovery.generations
             WHERE entity_kind = ${owner} AND active FOR UPDATE
           `
-          if (Number(active.source_version) > snapshot.sourceVersion) throw new StaleProjectionSnapshotError()
+          if (Number(active.source_version) > observedSourceVersion) throw new StaleProjectionSnapshotError()
 
-          const sourceFactCount = snapshot.facts.length
-          const expected = expectedTerms(owner, snapshot)
           const projectedBefore = await projectedTerms(sql, owner)
           const differences = reconciliationDifferences(expected, projectedBefore)
           const exactBefore = differences.differenceCount === 0
@@ -834,7 +838,9 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
           let projectedHashAfter = projectedHashBefore
           let projectedAfterCount = projectedBeforeCount
           if (!exactBefore) {
-            await replaceGeneration(sql, owner, snapshot)
+            const repairSnapshot = await source.snapshot()
+            if (repairSnapshot.sourceVersion !== observedSourceVersion) throw new StaleProjectionSnapshotError()
+            await replaceGeneration(sql, owner, repairSnapshot)
             projectedBefore.length = 0
             const projectedAfter = await projectedTerms(sql, owner)
             const remaining = reconciliationDifferences(expected, projectedAfter)
@@ -852,10 +858,10 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
                expected_hash, projected_hash_before, projected_hash_after,
                exact_before, exact_after, repaired, difference_count, difference_details_truncated)
             VALUES
-              (${operationId ?? null}::uuid, ${owner}, ${snapshot.sourceVersion},
-               ${Number(active.source_version)}, ${exactBefore ? Number(active.source_version) : snapshot.sourceVersion},
+              (${operationId ?? null}::uuid, ${owner}, ${observedSourceVersion},
+               ${Number(active.source_version)}, ${exactBefore ? Number(active.source_version) : observedSourceVersion},
                ${sourceFactCount}, ${projectedBeforeCount}, ${projectedAfterCount},
-               ${snapshot.pendingEventCount ?? 0}, ${snapshot.oldestPendingAt ?? null},
+               ${pendingEventCount}, ${oldestPendingAt},
                ${expectedHash}, ${projectedHashBefore}, ${projectedHashAfter},
                ${exactBefore}, ${true}, ${!exactBefore}, ${differences.differenceCount},
                ${differences.differenceCount > maxPersistedReconciliationDifferences})
@@ -874,9 +880,9 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
           return {
             runId: run.run_id,
             owner,
-            observedSourceVersion: snapshot.sourceVersion,
-            pendingEventCount: snapshot.pendingEventCount ?? 0,
-            oldestPendingAt: snapshot.oldestPendingAt ?? null,
+            observedSourceVersion,
+            pendingEventCount,
+            oldestPendingAt,
             expectedHash,
             projectedHashBefore,
             projectedHashAfter,
