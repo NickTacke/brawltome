@@ -327,14 +327,16 @@ export async function importLegacyPlayerProfiles(
           await sql`
             INSERT INTO players.legacy_profile_discovery
               (brawlhalla_id, player_name, rating, best_legend, observed_at, archive_checksum)
-            SELECT * FROM unnest(
+            SELECT incoming.brawlhalla_id, incoming.player_name, incoming.rating, incoming.best_legend,
+                   (archive.raw_row->>'last_updated')::timestamp AT TIME ZONE 'UTC', incoming.archive_checksum
+            FROM unnest(
               ${validRows.map(({ row }) => row.brawlhalla_id)}::integer[],
               ${validRows.map(({ row }) => row.name as string)}::text[],
               ${validRows.map(({ row }) => (positiveInteger(row.rating) ? row.rating : null))}::integer[],
               ${validRows.map(({ row }) => (positiveInteger(row.best_legend) ? row.best_legend : null))}::integer[],
-              ${validRows.map(({ observedAt }) => observedAt)}::timestamptz[],
               ${validRows.map(({ checksum: value }) => value)}::text[]
-            ) AS profile(brawlhalla_id, player_name, rating, best_legend, observed_at, archive_checksum)
+            ) AS incoming(brawlhalla_id, player_name, rating, best_legend, archive_checksum)
+            JOIN players.legacy_profile_archive archive USING (brawlhalla_id)
             ON CONFLICT DO NOTHING
           `
         }

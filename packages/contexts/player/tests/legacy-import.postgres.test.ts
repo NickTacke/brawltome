@@ -127,8 +127,8 @@ describe('Players V2 import', () => {
         await control`
           INSERT INTO public.player (brawlhalla_id, name, last_updated, last_viewed_at)
           VALUES
-            (2, 'Two', '2026-08-03 10:00:00', '2026-08-03 10:00:00'),
-            (10, 'Ten', '2026-08-03 10:00:00', '2026-08-03 10:00:00')
+            (2, 'Two', '2026-08-03 10:00:00.123456', '2026-08-03 10:00:00.123456'),
+            (10, 'Ten', '2026-08-03 10:00:00.654321', '2026-08-03 10:00:00.654321')
         `
         const completed = await importLegacyPlayerProfiles(databaseUrl, { legacyWritersQuiesced: true })
         expect(completed).toMatchObject({ status: 'complete', reconciliation: { exact: true } })
