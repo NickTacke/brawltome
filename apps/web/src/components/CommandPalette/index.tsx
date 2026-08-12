@@ -149,6 +149,7 @@ export function CommandPalette() {
         open ? 'opacity-100' : 'pointer-events-none opacity-0'
       }`}
       aria-hidden={!open}
+      inert={!open}
     >
       <div
         className="absolute inset-0 bg-black/60"
