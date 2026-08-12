@@ -2,6 +2,7 @@ type PlayerReference = {
   brawlhallaId: number
   name: string
   bestLegendNameKey?: string | null
+  legacyRating?: number | null
 }
 
 type PlayerReferenceClient<TPlayer extends { name: string } | null, TRanked, TCareer> = {
@@ -38,6 +39,7 @@ export async function loadPlayerWithReference<TPlayer extends { name: string } |
       ...profile,
       name: reference.name,
       ...(reference.bestLegendNameKey !== undefined ? { bestLegendNameKey: reference.bestLegendNameKey } : {}),
+      ...(reference.legacyRating !== undefined ? { legacyRating: reference.legacyRating } : {}),
       currentSeason: ranked,
       career,
     },

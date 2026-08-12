@@ -113,6 +113,7 @@ describe('Players V2 import', () => {
             brawlhallaId: 43,
             name: 'Legacy Forty Three',
             bestLegendNameKey: 'bodvar',
+            legacyRating: 1800,
           })
         } finally {
           await reducedRoute.close()
@@ -324,6 +325,7 @@ describe('Players V2 import', () => {
           brawlhallaId: 42,
           name: 'Legacy | Forty Two',
           bestLegendNameKey: null,
+          legacyRating: null,
         })
       } finally {
         await migratedRoute.close()

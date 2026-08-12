@@ -21,6 +21,7 @@ describe('PlayerProfileHierarchy', () => {
           brawlhallaId: 42,
           name: 'Canonical Player',
           bestLegendNameKey: 'bodvar',
+          legacyRating: 1800,
           aliases: [],
           clan: null,
           currentSeason: unavailableRanked,
@@ -32,19 +33,22 @@ describe('PlayerProfileHierarchy', () => {
     )
 
     const identity = html.indexOf('Canonical Player')
-    const competitive = html.indexOf('Competitive Snapshot')
-    const currentSeason = html.indexOf('Current Season</h2>')
-    const career = html.indexOf('Career Statistics</h2>')
+    const ranked = html.indexOf('Ranked Performance')
+    const combat = html.indexOf('Combat Record')
 
     expect(identity).toBeGreaterThanOrEqual(0)
-    expect(identity).toBeLessThan(competitive)
-    expect(competitive).toBeLessThan(currentSeason)
-    expect(currentSeason).toBeLessThan(career)
-    expect(html.match(/Competitive Snapshot/g)).toHaveLength(1)
-    expect(html.match(/Current Season<\/h2>/g)).toHaveLength(1)
-    expect(html.match(/Career Statistics<\/h2>/g)).toHaveLength(1)
-    expect(html.match(/Complete Current Season ranked facts have not been successfully observed/g)).toHaveLength(1)
-    expect(html).toContain('Rating history will appear after two complete observations.')
+    expect(identity).toBeLessThan(ranked)
+    expect(ranked).toBeGreaterThanOrEqual(0)
+    expect(combat).toBeGreaterThan(ranked)
+    expect(html).toContain('grid grid-cols-1 lg:grid-cols-2 gap-6')
+    expect(html).toContain('V2 snapshot')
+    expect(html).toContain('1800')
+    expect(html).toContain('Current-season wins and losses are unavailable.')
+    expect(html).toContain('Career outcomes have not been observed.')
+    expect(html).not.toContain('0 Wins')
+    expect(html).not.toContain('Competitive Snapshot')
+    expect(html).not.toContain('Current Season</h2>')
+    expect(html).not.toContain('Career Statistics</h2>')
     expect(html).toContain('Checking for updates')
     expect(html).toContain('rounded-2xl">b</span>')
     expect(html.toLowerCase()).not.toContain('live data')

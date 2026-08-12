@@ -11,6 +11,7 @@ export const playerReferenceSchema = z
     brawlhallaId: brawlhallaIdSchema,
     name: playerNameSchema,
     bestLegendNameKey: z.string().min(1).nullable().optional(),
+    legacyRating: z.number().int().positive().max(2_147_483_647).nullable().optional(),
   })
   .strict()
 

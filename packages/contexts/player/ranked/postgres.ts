@@ -139,9 +139,12 @@ export function createPostgresRankedPlayers(
     now?: () => Date
   } = {},
 ): RankedPlayerQueries & {
-  referenceById(
-    brawlhallaId: number,
-  ): Promise<{ brawlhallaId: number; name: string; bestLegendNameKey: string | null } | null>
+  referenceById(brawlhallaId: number): Promise<{
+    brawlhallaId: number
+    name: string
+    bestLegendNameKey: string | null
+    legacyRating: number | null
+  } | null>
   recordChecked(brawlhallaId: number, effect: CanonicalRankedEffect): Promise<FencedResult>
   recordPulseChecked(brawlhallaId: number, effect: CanonicalRankedEffect): Promise<RankedWriteResult>
   pulseStatusById(brawlhallaId: number): Promise<RankedPulseSourceStatus | null>
@@ -155,9 +158,16 @@ export function createPostgresRankedPlayers(
   return {
     async referenceById(brawlhallaId) {
       const [profile] = await client<
-        { brawlhalla_id: number; player_name: string; legend_name_key: string | null; best_legend: number | null }[]
+        {
+          brawlhalla_id: number
+          player_name: string
+          legend_name_key: string | null
+          best_legend: number | null
+          legacy_rating: number | null
+        }[]
       >`
-        SELECT identity.brawlhalla_id, identity.player_name, identity.legend_name_key, profile.best_legend
+        SELECT identity.brawlhalla_id, identity.player_name, identity.legend_name_key,
+               profile.best_legend, profile.rating AS legacy_rating
         FROM (
           SELECT ranked.brawlhalla_id, ranked.player_name,
                  ranked.ranked_main_legend_name_key AS legend_name_key, 0 AS source_rank
@@ -186,6 +196,7 @@ export function createPostgresRankedPlayers(
             const legend = getLegendById(profile.best_legend ?? 0)
             return legend ? legendSlug(legend.heroId, legend.displayName) : null
           })(),
+        legacyRating: profile.legacy_rating,
       }
     },
 
