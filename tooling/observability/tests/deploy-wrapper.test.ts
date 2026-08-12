@@ -28,7 +28,7 @@ function fixture() {
 cat >/dev/null
 printf '%s\n' "$*" >> "$MOCK_CURL_LOG"
 case "$*" in
-  *compose.one*) printf '%s' '{"command":"compose --parallel 1 -p brawltome-observability-bc1eng -f ./deploy/observability/compose.yml up -d --build --remove-orphans","customGitBranch":"${sourceRef}"}' ;;
+  *compose.one*) printf '%s' '{"command":"compose --parallel 1 -p brawltome-observability-bc1eng -f ./deploy/observability/compose.yml up -d --build --remove-orphans --force-recreate","sourceType":"github","branch":"${sourceRef}","customGitBranch":"stale-inert-ref"}' ;;
   *domain.byComposeId*) printf '%s' '[{"host":"observability.brawltome.app","path":"/","port":3000,"https":true,"certificateType":"letsencrypt","serviceName":"grafana","domainType":"compose","internalPath":"/","stripPath":false,"forwardAuthEnabled":false}]' ;;
   *compose.getConvertedCompose*) printf '%s' '"services: {}"' ;;
   *compose.fetchSourceType*) printf '%s' '{}' ;;
@@ -100,5 +100,19 @@ describe('Dokploy observability deployment wrapper', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('unsupported characters')
     expect(existsSync(log)).toBe(false)
+  })
+
+  test('rejects an inert custom Git ref when the active GitHub branch is stale', () => {
+    const { deployMarker, env, log } = fixture()
+    const curlPath = `${env.PATH.split(':')[0]}/curl`
+    const curl = readFileSync(curlPath, 'utf8').replace(`"branch":"${sourceRef}"`, '"branch":"feature/v3-rewrite"')
+    writeFileSync(curlPath, curl)
+
+    const result = spawnSync('bash', [wrapper], { cwd: repositoryRoot, encoding: 'utf8', env })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('immutable Dokploy source ref drift')
+    expect(existsSync(deployMarker)).toBe(false)
+    expect(readFileSync(log, 'utf8')).not.toContain('compose.deploy')
   })
 })
