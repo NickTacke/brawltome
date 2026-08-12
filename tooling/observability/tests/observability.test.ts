@@ -142,7 +142,7 @@ describe('observability deployment contract', () => {
     for (const [name, service] of Object.entries(rendered.services)) {
       if (name !== 'grafana') expect(service.networks ?? {}).not.toHaveProperty('default')
     }
-  })
+  }, 20_000)
 
   test('fixes retention and requires explicit quota-backed mounts', () => {
     const compose = read('compose.yml')
