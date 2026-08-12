@@ -110,6 +110,9 @@ const semanticMigrationFixtureKinds = [
   'ranking-accepted',
   'ranking-rejected',
 ] as const satisfies readonly SemanticMigrationFixtureKind[]
+const requiredSemanticMigrationFixtureKinds = semanticMigrationFixtureKinds.filter(
+  (kind) => kind !== 'ranking-accepted' && kind !== 'ranking-rejected',
+)
 
 const allowedExplanationByKind: Partial<Record<SemanticMigrationFixtureKind, SemanticMigrationExplanationCode>> = {
   'exact-prefix': 'exact-first-ranking',
@@ -182,7 +185,8 @@ function validateAndOrderSemanticFixtures(fixtures: SemanticMigrationFixture[]):
       throw new Error('Discovery migration fixture manifest is too large')
     }
   }
-  const missingKinds = semanticMigrationFixtureKinds.filter((kind) => !observedKinds.has(kind))
+  const missingKinds: string[] = requiredSemanticMigrationFixtureKinds.filter((kind) => !observedKinds.has(kind))
+  if (!observedKinds.has('ranking-accepted') && !observedKinds.has('ranking-rejected')) missingKinds.push('ranking')
   if (missingKinds.length > 0) {
     throw new Error(`Discovery migration fixture coverage is missing: ${missingKinds.join(', ')}`)
   }

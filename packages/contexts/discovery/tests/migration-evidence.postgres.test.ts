@@ -170,6 +170,14 @@ describe('Discovery semantic migration evidence', () => {
         mismatchDetailsTruncated: false,
       })
       expect(await discovery.commitMigrationEvidence(input)).toEqual(first)
+
+      const rejectedOnly = passingInput({
+        player: input.playerReconciliation,
+        clan: input.clanReconciliation,
+      })
+      rejectedOnly.operationKey = 'issue-225-rejected-rankings-only'
+      rejectedOnly.fixtures = rejectedOnly.fixtures.filter(({ kind }) => kind !== 'ranking-accepted')
+      await expect(discovery.commitMigrationEvidence(rejectedOnly)).resolves.toMatchObject({ status: 'passed' })
     } finally {
       await discovery.close()
     }

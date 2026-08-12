@@ -443,7 +443,9 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           normalizedExactQuery(normalizedClan.clanName),
         )
       }
-      const localNameFact = legacyBackedPlayers.find(({ name }) => name.includes('|'))
+      const localNameFact = playerSnapshot.facts.find(
+        ({ brawlhallaId, name }) => name.includes('|') && hasSortedIdentity(routes.players, brawlhallaId),
+      )
       if (localNameFact) {
         const localName = localNameFact.name.split('|').at(-1)?.trim() ?? ''
         if ([...normalizeDiscoveryTerm(localName)].length >= 2) {
