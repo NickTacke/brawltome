@@ -5,6 +5,7 @@ import { addCanonicalCareerState } from './migrations/0004-add-canonical-career-
 import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
 import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overlays'
 import { addV2PlayerImport } from './migrations/0007-add-v2-player-import'
+import { addLegacyBestLegend } from './migrations/0008-add-legacy-best-legend'
 
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
 export {
@@ -34,6 +35,11 @@ export {
 export { createSteamPlayerEvidenceResolver } from './verification'
 export { createPlayerRepo } from './player.repo'
 export {
+  importLegacyPlayerProfiles,
+  type LegacyPlayerProfileImportOptions,
+  type LegacyPlayerProfileImportResult,
+} from './legacy-profile-import'
+export {
   importLegacyPlayers,
   type LegacyPlayerImportOptions,
   type LegacyPlayerImportResult,
@@ -47,4 +53,5 @@ export const playerMigrationInventory = [
   addDiscoveryFacts,
   addRankedPulseOverlays,
   addV2PlayerImport,
+  addLegacyBestLegend,
 ] as const

@@ -4,6 +4,7 @@ import postgres from 'postgres'
 import {
   createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
+  importLegacyPlayerProfiles,
   importLegacyPlayers,
   playerMigrationInventory,
 } from '../composition'
@@ -70,6 +71,109 @@ async function withFixtureDatabase(run: (databaseUrl: string) => Promise<void>):
 }
 
 describe('Players V2 import', () => {
+  test('imports only searchable profile facts with name, Elo, and avatar legend', async () => {
+    await withFixtureDatabase(async (databaseUrl) => {
+      const control = postgres(databaseUrl, { max: 1 })
+      const source = createPostgresPlayerDiscoverySource(databaseUrl)
+      try {
+        await control`UPDATE public.player SET best_legend = 3 WHERE brawlhalla_id = 43`
+        const completed = await importLegacyPlayerProfiles(databaseUrl)
+        expect(completed).toMatchObject({
+          status: 'complete',
+          reconciliation: { sourceRows: 2, archivedRows: 2, exact: true },
+        })
+        const archives = await control<Array<{ raw_row: Record<string, unknown> }>>`
+          SELECT raw_row FROM players.legacy_profile_archive ORDER BY brawlhalla_id
+        `
+        expect(archives).toHaveLength(2)
+        expect(Object.keys(archives[0].raw_row).sort()).toEqual([
+          'best_legend',
+          'brawlhalla_id',
+          'last_updated',
+          'name',
+          'rating',
+        ])
+        const [fullEvidence] = await control<Array<{ archives: number; progress: number }>>`
+          SELECT (SELECT count(*)::integer FROM players.legacy_archive) AS archives,
+                 (SELECT count(*)::integer FROM players.legacy_import_progress) AS progress
+        `
+        expect(fullEvidence).toEqual({ archives: 0, progress: 0 })
+        const snapshot = await source.snapshot()
+        expect(snapshot.facts).toContainEqual(
+          expect.objectContaining({
+            brawlhallaId: 43,
+            name: 'Legacy Forty Three',
+            rating: 1800,
+            bestLegendNameKey: 'bodvar',
+          }),
+        )
+        const full = await importLegacyPlayers(databaseUrl)
+        expect(full.status).toBe('complete')
+        expect(full.reconciliation.exact).toBe(true)
+        expect((await source.snapshot()).facts).toContainEqual(
+          expect.objectContaining({ brawlhallaId: 43, bestLegendNameKey: 'bodvar' }),
+        )
+      } finally {
+        await source.close()
+        await control.end()
+      }
+    })
+  }, 30_000)
+
+  test('reconciles numeric profile identities and blocks when evidence triggers are ineffective', async () => {
+    await withFixtureDatabase(async (databaseUrl) => {
+      const control = postgres(databaseUrl, { max: 1 })
+      try {
+        await control`
+          INSERT INTO public.player (brawlhalla_id, name, last_updated, last_viewed_at)
+          VALUES
+            (2, 'Two', '2026-08-03 10:00:00', '2026-08-03 10:00:00'),
+            (10, 'Ten', '2026-08-03 10:00:00', '2026-08-03 10:00:00')
+        `
+        const completed = await importLegacyPlayerProfiles(databaseUrl, { legacyWritersQuiesced: true })
+        expect(completed).toMatchObject({ status: 'complete', reconciliation: { exact: true } })
+      } finally {
+        await control.end()
+      }
+    })
+    await withFixtureDatabase(async (databaseUrl) => {
+      const control = postgres(databaseUrl, { max: 1 })
+      try {
+        await control`ALTER TABLE players.legacy_profile_archive ENABLE REPLICA TRIGGER players_legacy_profile_archive_immutable`
+        const blocked = await importLegacyPlayerProfiles(databaseUrl, { legacyWritersQuiesced: true })
+        expect(blocked.status).toBe('blocked')
+        expect(blocked.reconciliation.archivedRows).toBe(0)
+        const [progress] = await control<{ code: string }[]>`
+          SELECT block_reason->>'code' AS code FROM players.legacy_profile_import_progress
+        `
+        expect(progress.code).toBe('evidence-immutability-unavailable')
+      } finally {
+        await control.end()
+      }
+    })
+  }, 30_000)
+
+  test('resumes profile batches and blocks when the selected source changes', async () => {
+    await withFixtureDatabase(async (databaseUrl) => {
+      const first = await importLegacyPlayerProfiles(databaseUrl, { batchSize: 1, maxBatches: 1 })
+      expect(first.status).toBe('in-progress')
+      expect(first.checkpoint).toEqual({ stage: 'profiles', sourceKey: '42' })
+      const control = postgres(databaseUrl, { max: 1 })
+      try {
+        await control`UPDATE public.player SET name = 'Changed Profile' WHERE brawlhalla_id = 43`
+        const blocked = await importLegacyPlayerProfiles(databaseUrl)
+        expect(blocked.status).toBe('blocked')
+        expect(blocked.reconciliation.exact).toBe(false)
+        const [progress] = await control<{ code: string }[]>`
+          SELECT block_reason->>'code' AS code FROM players.legacy_profile_import_progress
+        `
+        expect(progress.code).toBe('source-manifest-changed')
+      } finally {
+        await control.end()
+      }
+    })
+  }, 30_000)
+
   test('resumes bounded batches and reconciles checksummed raw rows, unknown zeros, identities, and ordered history', async () => {
     const first = await importLegacyPlayers(connectionString, { batchSize: 1, maxBatches: 1 })
     expect(first.status).toBe('in-progress')
