@@ -2,7 +2,9 @@ import { type Database, player } from '@brawltome/database'
 import { createPlayerReferenceQueries } from '@brawltome/player/composition'
 import { eq } from 'drizzle-orm'
 
-type FindCanonicalReference = (brawlhallaId: number) => Promise<{ brawlhallaId: number; name: string } | null>
+type FindCanonicalReference = (
+  brawlhallaId: number,
+) => Promise<{ brawlhallaId: number; name: string; bestLegendNameKey?: string | null } | null>
 
 export function createDatabasePlayerReferenceQueries(
   db: Database,
@@ -11,8 +13,13 @@ export function createDatabasePlayerReferenceQueries(
 ) {
   return createPlayerReferenceQueries(async (brawlhallaId) => {
     const rankedReference = await findRankedReference(brawlhallaId)
-    if (rankedReference) return rankedReference
     const careerReference = await findCareerReference(brawlhallaId)
+    if (rankedReference) {
+      return {
+        ...rankedReference,
+        bestLegendNameKey: rankedReference.bestLegendNameKey ?? careerReference?.bestLegendNameKey ?? null,
+      }
+    }
     if (careerReference) return careerReference
     const [stored] = await db
       .select({ brawlhallaId: player.brawlhallaId, name: player.name })

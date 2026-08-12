@@ -9,5 +9,9 @@ export async function getPlayerReference(
 ): Promise<PlayerReference | null> {
   const stored = await findStoredReference(brawlhallaId)
   if (!stored || stored.name === `Player ${brawlhallaId}`) return null
-  return { brawlhallaId: stored.brawlhallaId, name: stored.name }
+  return {
+    brawlhallaId: stored.brawlhallaId,
+    name: stored.name,
+    ...(stored.bestLegendNameKey !== undefined ? { bestLegendNameKey: stored.bestLegendNameKey } : {}),
+  }
 }

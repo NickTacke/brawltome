@@ -57,21 +57,15 @@ describe('CareerStatistics', () => {
   test('labels all lifetime facts and exposes only supported weapon usage measurements', () => {
     const html = renderToStaticMarkup(<CareerStatistics career={profile} />)
 
-    for (const heading of [
-      'Career Statistics',
-      'Account Statistics',
-      'Career Combat Record',
-      'Career Legend Statistics',
-      'Career Weapon Usage',
-    ]) {
+    for (const heading of ['Career Statistics', 'Career Combat Record', 'Career Weapon Usage', 'Legend Statistics']) {
       expect(html).toContain(heading)
     }
-    expect(html).toContain('Lifetime account, combat, legend, and weapon facts')
-    expect(html).toContain('9007199254740993')
-    expect(html).toContain('Held time')
-    expect(html).toContain('Held share')
-    const weaponSection = html.slice(html.indexOf('Career Weapon Usage'))
-    for (const unsupported of ['games', 'wins', 'win rate', 'WR', 'performance', 'strength']) {
+    expect(html).toContain('Account Level')
+    expect(html).toContain('Overall Win Rate')
+    expect(html).toContain('9,007,199,254,740,993 damage')
+    expect(html).toContain('0.1h · 100.0%')
+    const weaponSection = html.slice(html.indexOf('Career Weapon Usage'), html.indexOf('Legend Statistics'))
+    for (const unsupported of [' games', ' wins', 'win rate', '>WR<', 'performance', 'strength']) {
       expect(weaponSection.toLowerCase()).not.toContain(unsupported.toLowerCase())
     }
   })
@@ -83,7 +77,7 @@ describe('CareerStatistics', () => {
 
     expect(html).toContain('Update delayed. Last successful update 2026-08-10.')
     expect(html).toContain('Career Weapon Usage')
-    expect(html).toContain('9007199254740993')
+    expect(html).toContain('9,007,199,254,740,993 damage')
   })
 
   test('shows one compact unavailable explanation and omits deep sections', () => {

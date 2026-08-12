@@ -112,6 +112,7 @@ describe('Players V2 import', () => {
           await expect(reducedRoute.referenceById(43)).resolves.toEqual({
             brawlhallaId: 43,
             name: 'Legacy Forty Three',
+            bestLegendNameKey: 'bodvar',
           })
         } finally {
           await reducedRoute.close()
@@ -322,6 +323,7 @@ describe('Players V2 import', () => {
         await expect(migratedRoute.referenceById(42)).resolves.toEqual({
           brawlhallaId: 42,
           name: 'Legacy | Forty Two',
+          bestLegendNameKey: null,
         })
       } finally {
         await migratedRoute.close()

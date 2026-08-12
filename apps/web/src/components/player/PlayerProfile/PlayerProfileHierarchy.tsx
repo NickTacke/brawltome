@@ -7,6 +7,7 @@ import { ProfileSections } from './ProfileSections'
 export interface CanonicalPlayerProfileView {
   brawlhallaId: number
   name: string
+  bestLegendNameKey?: string | null
   aliases?: Array<{ value?: unknown }>
   clan?: { clanId: number; clanName: string } | null
   currentSeason: PlayerRankedProfileContract | null
@@ -43,7 +44,11 @@ function rankedTeams(profile: PlayerRankedProfileContract | null): RankedTeam[] 
 export function PlayerProfileHierarchy({ player, refreshing, careerRefreshing }: PlayerProfileHierarchyProps) {
   const teams = rankedTeams(player.currentSeason)
   const mainLegend = player.currentSeason?.snapshot?.mainLegend
-  const topLegend = mainLegend ? { legendNameKey: mainLegend.legendNameKey } : null
+  const topLegend = mainLegend
+    ? { legendNameKey: mainLegend.legendNameKey }
+    : player.bestLegendNameKey
+      ? { legendNameKey: player.bestLegendNameKey }
+      : null
 
   return (
     <>

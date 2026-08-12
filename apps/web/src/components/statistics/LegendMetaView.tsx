@@ -41,6 +41,18 @@ function formattedRating(rating: number | null): string {
   return rating === null ? 'Unavailable' : rating.toLocaleString('en-US', { maximumFractionDigits: 1 })
 }
 
+function MetricBar({ basisPoints }: { basisPoints: number | null }) {
+  if (basisPoints === null) return <span className="text-muted-foreground">Unavailable</span>
+  return (
+    <div className="ml-auto w-24 space-y-1 text-right">
+      <span className="font-mono font-semibold text-foreground">{percentage(basisPoints)}</span>
+      <div aria-hidden="true" className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${basisPoints / 100}%` }} />
+      </div>
+    </div>
+  )
+}
+
 function FilterControls({
   region,
   bracket,
@@ -218,19 +230,29 @@ export function LegendMetaView({
                       {row.rank ?? <span className="text-xs font-normal text-muted-foreground">Not ranked</span>}
                     </td>
                     <th scope="row" className="px-4 py-4 text-left">
-                      <span className="font-semibold text-foreground">{row.legend.name}</span>
-                      {row.eligibility.status === 'insufficient-sample' && (
-                        <span className="mt-1 block text-xs font-normal text-amber-300">Insufficient sample</span>
-                      )}
+                      <span className="flex items-center gap-3">
+                        <img
+                          src={`/images/legends/avatars/${row.legend.slug}.png`}
+                          alt=""
+                          className="h-12 w-12 rounded-lg bg-muted object-cover object-top"
+                          loading="lazy"
+                        />
+                        <span>
+                          <span className="font-semibold text-foreground">{row.legend.name}</span>
+                          {row.eligibility.status === 'insufficient-sample' && (
+                            <span className="mt-1 block text-xs font-normal text-amber-300">Insufficient sample</span>
+                          )}
+                        </span>
+                      </span>
                     </th>
                     <td className="px-4 py-4 text-right" title={ratioTitle(row.pickShare)}>
-                      {percentage(row.pickShare.basisPoints)}
+                      <MetricBar basisPoints={row.pickShare.basisPoints} />
                     </td>
                     <td className="px-4 py-4 text-right" title={ratioTitle(row.adoption)}>
-                      {percentage(row.adoption.basisPoints)}
+                      <MetricBar basisPoints={row.adoption.basisPoints} />
                     </td>
                     <td className="px-4 py-4 text-right" title={ratioTitle(row.winRate)}>
-                      {percentage(row.winRate.basisPoints)}
+                      <MetricBar basisPoints={row.winRate.basisPoints} />
                     </td>
                     <td className="px-4 py-4 text-right text-muted-foreground">{uncertainty(row.uncertainty95)}</td>
                     <td className="px-4 py-4 text-right">{formattedRating(row.medianRating)}</td>

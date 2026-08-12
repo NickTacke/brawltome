@@ -6,5 +6,6 @@ export function mapPlayerReference(reference: PlayerReference | null): PlayerRef
   return parsePlayerReferenceOutput({
     brawlhallaId: reference.brawlhallaId,
     name: reference.name,
+    ...(reference.bestLegendNameKey !== undefined ? { bestLegendNameKey: reference.bestLegendNameKey } : {}),
   })
 }

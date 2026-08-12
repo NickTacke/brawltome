@@ -8,9 +8,10 @@ import { type PlayerData, WinLossBar, getVirtualLevel, getXpForLevel, parseNum }
 
 interface CombatCardProps {
   player: PlayerData
+  title?: string
 }
 
-export function CombatCard({ player }: CombatCardProps) {
+export function CombatCard({ player, title = 'Combat Record' }: CombatCardProps) {
   const [isHoveringLevel, setIsHoveringLevel] = useState(false)
 
   const totalGames = player.totalGames ?? 0
@@ -23,9 +24,7 @@ export function CombatCard({ player }: CombatCardProps) {
     <Card className="bg-linear-to-br from-card to-background border-border">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">
-            &#128202; Combat Record
-          </CardTitle>
+          <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">&#128202; {title}</CardTitle>
           {player.statsLastUpdated && (
             <Badge
               variant="outline"
