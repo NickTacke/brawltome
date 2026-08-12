@@ -31,8 +31,21 @@ type SearchObservation = {
 }
 
 type LegacyRouteEvidence = {
-  players: Map<number, { entityKind: 'player'; entityId: number }>
-  clans: Map<number, { entityKind: 'clan'; entityId: number }>
+  players: number[]
+  clans: number[]
+}
+
+function hasSortedIdentity(identities: readonly number[], identity: number): boolean {
+  let low = 0
+  let high = identities.length - 1
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    const candidate = identities[middle] as number
+    if (candidate === identity) return true
+    if (candidate < identity) low = middle + 1
+    else high = middle - 1
+  }
+  return false
 }
 
 const compareText = (left: string, right: string) => Buffer.compare(Buffer.from(left), Buffer.from(right))
@@ -81,7 +94,20 @@ function expectedSearchObservation(
     rating: number | null
     viewCount: number
   }
-  const playerCandidates: PlayerCandidate[] = []
+  const termRank = (kind: PlayerCandidate['kind']) => (kind === 'canonical' ? 0 : kind === 'segment' ? 1 : 2)
+  const comparePlayerTerms = (left: PlayerCandidate, right: PlayerCandidate) =>
+    Number(right.exact) - Number(left.exact) ||
+    Number(left.kind === 'alias') - Number(right.kind === 'alias') ||
+    termRank(left.kind) - termRank(right.kind) ||
+    compareText(left.normalized, right.normalized) ||
+    compareText(left.display, right.display)
+  const comparePlayerCandidates = (left: PlayerCandidate, right: PlayerCandidate) =>
+    Number(right.exact) - Number(left.exact) ||
+    Number(left.kind === 'alias') - Number(right.kind === 'alias') ||
+    compareNullableNumberDesc(left.rating, right.rating) ||
+    right.viewCount - left.viewCount ||
+    left.entityId - right.entityId
+  const expectedPlayers: PlayerCandidate[] = []
   for (const player of players) {
     const terms: Array<{ kind: PlayerCandidate['kind']; display: string }> = [
       { kind: 'canonical', display: player.name },
@@ -92,12 +118,13 @@ function expectedSearchObservation(
       ...player.aliases.map((alias) => ({ kind: 'alias' as const, display: alias })),
     ]
     const seen = new Set<string>()
+    let winner: PlayerCandidate | null = null
     for (const term of terms) {
       const normalized = normalizeDiscoveryTerm(term.display)
       const termIdentity = `${term.kind}:${normalized}`
       if (!normalized || seen.has(termIdentity) || !normalized.startsWith(query)) continue
       seen.add(termIdentity)
-      playerCandidates.push({
+      const candidate = {
         entityId: player.brawlhallaId,
         kind: term.kind,
         display: term.display,
@@ -105,50 +132,41 @@ function expectedSearchObservation(
         exact: normalized === query,
         rating: player.rating,
         viewCount: player.viewCount,
-      })
+      }
+      if (!winner || comparePlayerTerms(candidate, winner) < 0) winner = candidate
+    }
+    if (winner) {
+      expectedPlayers.push(winner)
+      expectedPlayers.sort(comparePlayerCandidates)
+      if (expectedPlayers.length > 40) expectedPlayers.length = 40
     }
   }
-  const termRank = (kind: PlayerCandidate['kind']) => (kind === 'canonical' ? 0 : kind === 'segment' ? 1 : 2)
-  const winnerById = new Map<number, PlayerCandidate>()
-  for (const candidate of playerCandidates.sort(
-    (left, right) =>
-      left.entityId - right.entityId ||
-      Number(right.exact) - Number(left.exact) ||
-      Number(left.kind === 'alias') - Number(right.kind === 'alias') ||
-      termRank(left.kind) - termRank(right.kind) ||
-      compareText(left.normalized, right.normalized) ||
-      compareText(left.display, right.display),
-  )) {
-    if (!winnerById.has(candidate.entityId)) winnerById.set(candidate.entityId, candidate)
+  const expectedPlayerObservation = expectedPlayers.map(({ entityId, kind, display }) => ({
+    entityId,
+    matchedAlias: kind === 'alias' ? display : null,
+  }))
+
+  const compareClans = (
+    left: { clan: ClanDiscoveryFact; normalized: string },
+    right: { clan: ClanDiscoveryFact; normalized: string },
+  ) =>
+    Number(right.normalized === query) - Number(left.normalized === query) ||
+    (BigInt(left.clan.clanXp) < BigInt(right.clan.clanXp)
+      ? 1
+      : BigInt(left.clan.clanXp) > BigInt(right.clan.clanXp)
+        ? -1
+        : left.clan.clanId - right.clan.clanId)
+  const expectedClans: Array<{ clan: ClanDiscoveryFact; normalized: string }> = []
+  for (const clan of clans) {
+    const normalized = normalizeDiscoveryTerm(clan.clanName)
+    if (!normalized.startsWith(query)) continue
+    expectedClans.push({ clan, normalized })
+    expectedClans.sort(compareClans)
+    if (expectedClans.length > 5) expectedClans.length = 5
   }
-  const expectedPlayers = [...winnerById.values()]
-    .sort(
-      (left, right) =>
-        Number(right.exact) - Number(left.exact) ||
-        Number(left.kind === 'alias') - Number(right.kind === 'alias') ||
-        compareNullableNumberDesc(left.rating, right.rating) ||
-        right.viewCount - left.viewCount ||
-        left.entityId - right.entityId,
-    )
-    .slice(0, 40)
-    .map(({ entityId, kind, display }) => ({ entityId, matchedAlias: kind === 'alias' ? display : null }))
+  const expectedClanIds = expectedClans.map(({ clan }) => clan.clanId)
 
-  const expectedClans = clans
-    .map((clan) => ({ clan, normalized: normalizeDiscoveryTerm(clan.clanName) }))
-    .filter(({ normalized }) => normalized.startsWith(query))
-    .sort(
-      (left, right) =>
-        Number(right.normalized === query) - Number(left.normalized === query) ||
-        (BigInt(left.clan.clanXp) < BigInt(right.clan.clanXp)
-          ? 1
-          : BigInt(left.clan.clanXp) > BigInt(right.clan.clanXp)
-            ? -1
-            : left.clan.clanId - right.clan.clanId),
-    )
-    .slice(0, 5)
-    .map(({ clan }) => clan.clanId)
-
-  return { players: expectedPlayers, clans: expectedClans }
+  return { players: expectedPlayerObservation, clans: expectedClanIds }
 }
 
 function historicalQuery(rawQuery: string): string {
@@ -208,8 +226,31 @@ async function legacyRoutes(client: ReturnType<typeof postgres>): Promise<Legacy
     client<{ clan_id: number }[]>`SELECT clan_id FROM public.clan ORDER BY clan_id`,
   ])
   return {
-    players: new Map(players.map(({ brawlhalla_id }) => [brawlhalla_id, identity('player', brawlhalla_id)])),
-    clans: new Map(clans.map(({ clan_id }) => [clan_id, identity('clan', clan_id)])),
+    players: players.map(({ brawlhalla_id }) => brawlhalla_id),
+    clans: clans.map(({ clan_id }) => clan_id),
+  }
+}
+
+async function discoveryOwnerState(client: ReturnType<typeof postgres>) {
+  const [state] = await client<
+    Array<{
+      player_source_version: string | number
+      clan_source_version: string | number
+      pending_player_events: number
+      pending_clan_events: number
+    }>
+  >`
+    SELECT
+      (SELECT source_version FROM players.discovery_state WHERE singleton) AS player_source_version,
+      (SELECT source_version FROM clans.discovery_state WHERE singleton) AS clan_source_version,
+      (SELECT count(*)::integer FROM players.discovery_outbox WHERE delivered_at IS NULL) AS pending_player_events,
+      (SELECT count(*)::integer FROM clans.discovery_outbox WHERE delivered_at IS NULL) AS pending_clan_events
+  `
+  return {
+    playerSourceVersion: Number(state.player_source_version),
+    clanSourceVersion: Number(state.clan_source_version),
+    pendingPlayerEvents: state.pending_player_events,
+    pendingClanEvents: state.pending_clan_events,
   }
 }
 
@@ -264,6 +305,7 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
   const ranking = createPostgresRanking(connectionString)
   const discovery = createPostgresDiscovery(connectionString)
   const legacy = postgres(connectionString, { max: 1 })
+  const stateClient = postgres(connectionString, { max: 1 })
   let legacyTransactionOpen = false
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -296,16 +338,16 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
       }
 
       const fixtures: SemanticMigrationFixture[] = []
-      const canonicalPlayerIds = new Set(playerSnapshot.facts.map(({ brawlhallaId }) => brawlhallaId))
-      const canonicalClanIds = new Set(clanSnapshot.facts.map(({ clanId }) => clanId))
+      const canonicalPlayerIds = playerSnapshot.facts.map(({ brawlhallaId }) => brawlhallaId)
+      const canonicalClanIds = clanSnapshot.facts.map(({ clanId }) => clanId)
       const addSearchFixture = async (key: string, kind: SemanticMigrationFixtureKind, query: string) => {
         const [unfilteredLegacy, actualResult] = await Promise.all([
           legacySearch(legacy, query),
           discovery.search(query),
         ])
         const legacyObservation = {
-          players: unfilteredLegacy.players.filter(({ entityId }) => canonicalPlayerIds.has(entityId)),
-          clans: unfilteredLegacy.clans.filter((entityId) => canonicalClanIds.has(entityId)),
+          players: unfilteredLegacy.players.filter(({ entityId }) => hasSortedIdentity(canonicalPlayerIds, entityId)),
+          clans: unfilteredLegacy.clans.filter((entityId) => hasSortedIdentity(canonicalClanIds, entityId)),
         }
         const expected = expectedSearchObservation(query, playerSnapshot.facts, clanSnapshot.facts)
         const actual = searchObservation(actualResult)
@@ -319,12 +361,16 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
         })
       }
 
-      const legacyBackedPlayers = playerSnapshot.facts
-        .filter(({ brawlhallaId }) => routes.players.has(brawlhallaId))
-        .slice(0, playerFixtureLimit)
-      const legacyBackedClans = clanSnapshot.facts
-        .filter(({ clanId }) => routes.clans.has(clanId))
-        .slice(0, clanFixtureLimit)
+      const legacyBackedPlayers: PlayerDiscoveryFact[] = []
+      for (const fact of playerSnapshot.facts) {
+        if (hasSortedIdentity(routes.players, fact.brawlhallaId)) legacyBackedPlayers.push(fact)
+        if (legacyBackedPlayers.length === playerFixtureLimit) break
+      }
+      const legacyBackedClans: ClanDiscoveryFact[] = []
+      for (const fact of clanSnapshot.facts) {
+        if (hasSortedIdentity(routes.clans, fact.clanId)) legacyBackedClans.push(fact)
+        if (legacyBackedClans.length === clanFixtureLimit) break
+      }
 
       for (const fact of legacyBackedPlayers) {
         const expectedIdentity = identity('player', fact.brawlhallaId)
@@ -347,7 +393,7 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           key: `player:${fact.brawlhallaId}:route`,
           kind: 'preserved-route',
           expected: expectedIdentity,
-          legacy: routes.players.get(fact.brawlhallaId) ?? null,
+          legacy: hasSortedIdentity(routes.players, fact.brawlhallaId) ? expectedIdentity : null,
           actual: route ? identity('player', route.brawlhallaId) : null,
           explanationCode: null,
         })
@@ -374,7 +420,7 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           key: `clan:${fact.clanId}:route`,
           kind: 'preserved-route',
           expected: expectedIdentity,
-          legacy: routes.clans.get(fact.clanId) ?? null,
+          legacy: hasSortedIdentity(routes.clans, fact.clanId) ? expectedIdentity : null,
           actual: route ? identity('clan', route.clanId) : null,
           explanationCode: null,
         })
@@ -473,22 +519,24 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
         }
       }
 
+      const playerFactCount = playerSnapshot.facts.length
+      const clanFactCount = clanSnapshot.facts.length
+      playerSnapshot.facts.length = 0
+      clanSnapshot.facts.length = 0
+      canonicalPlayerIds.length = 0
+      canonicalClanIds.length = 0
+      routes.players.length = 0
+      routes.clans.length = 0
+
       const [playerReconciliation, clanReconciliation] = await Promise.all([
         discovery.reconcilePlayers(playerSource),
         discovery.reconcileClans(clanSource),
       ])
-      const [finalPlayerSnapshot, finalClanSnapshot, pendingPlayerEvents, pendingClanEvents] = await Promise.all([
-        playerSource.snapshot(),
-        clanSource.snapshot(),
-        playerSource.lag(),
-        clanSource.lag(),
-      ])
+      const finalState = await discoveryOwnerState(stateClient)
       const sourceStable =
-        finalPlayerSnapshot.sourceVersion === playerSnapshot.sourceVersion &&
-        finalClanSnapshot.sourceVersion === clanSnapshot.sourceVersion &&
-        sameObservation(finalPlayerSnapshot.facts, playerSnapshot.facts) &&
-        sameObservation(finalClanSnapshot.facts, clanSnapshot.facts)
-      if (!sourceStable || pendingPlayerEvents !== 0 || pendingClanEvents !== 0) {
+        finalState.playerSourceVersion === playerSnapshot.sourceVersion &&
+        finalState.clanSourceVersion === clanSnapshot.sourceVersion
+      if (!sourceStable || finalState.pendingPlayerEvents !== 0 || finalState.pendingClanEvents !== 0) {
         if (attempt === 2) throw new Error('Discovery owner facts changed during migration verification')
         continue
       }
@@ -510,24 +558,17 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           sourceEvidenceHash,
           playerReconciliation,
           clanReconciliation,
-          pendingPlayerEvents,
-          pendingClanEvents,
+          pendingPlayerEvents: finalState.pendingPlayerEvents,
+          pendingClanEvents: finalState.pendingClanEvents,
           fixtures,
         },
         async () => {
-          const [authorizedPlayers, authorizedClans, playerLag, clanLag] = await Promise.all([
-            playerSource.snapshot(),
-            clanSource.snapshot(),
-            playerSource.lag(),
-            clanSource.lag(),
-          ])
+          const authorized = await discoveryOwnerState(stateClient)
           return (
-            playerLag === 0 &&
-            clanLag === 0 &&
-            authorizedPlayers.sourceVersion === playerSnapshot.sourceVersion &&
-            authorizedClans.sourceVersion === clanSnapshot.sourceVersion &&
-            sameObservation(authorizedPlayers.facts, playerSnapshot.facts) &&
-            sameObservation(authorizedClans.facts, clanSnapshot.facts)
+            authorized.pendingPlayerEvents === 0 &&
+            authorized.pendingClanEvents === 0 &&
+            authorized.playerSourceVersion === playerSnapshot.sourceVersion &&
+            authorized.clanSourceVersion === clanSnapshot.sourceVersion
           )
         },
       )
@@ -550,10 +591,10 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
         status: evidence.status,
         playerSourceVersion: playerSnapshot.sourceVersion,
         clanSourceVersion: clanSnapshot.sourceVersion,
-        playerFactCount: playerSnapshot.facts.length,
-        clanFactCount: clanSnapshot.facts.length,
-        pendingPlayerEvents,
-        pendingClanEvents,
+        playerFactCount,
+        clanFactCount,
+        pendingPlayerEvents: finalState.pendingPlayerEvents,
+        pendingClanEvents: finalState.pendingClanEvents,
         playerProjectionHash: evidence.playerProjectionHash,
         clanProjectionHash: evidence.clanProjectionHash,
         fixtureHash: evidence.fixtureHash,
@@ -581,6 +622,7 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
       ranking.close(),
       discovery.close(),
       legacy.end(),
+      stateClient.end(),
     ])
   }
 }
