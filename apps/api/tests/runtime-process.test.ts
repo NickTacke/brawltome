@@ -5,6 +5,7 @@ import {
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
+import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from '../src/operations-worker-config'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `brawltome_lifecycle_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -112,6 +113,19 @@ async function migrateDatabase(): Promise<void> {
   if (exitCode !== 0) throw new Error(`Migration failed\nstdout:\n${stdout}\nstderr:\n${stderr}`)
 }
 
+async function deferLeaderboardSchedules(): Promise<void> {
+  const operations = createPostgresRefreshOperations(connectionString)
+  const control = postgres(connectionString, { max: 1 })
+  try {
+    for (const definition of leaderboardScheduleDefinitions(readOperationsWorkerConfig({}).leaderboard)) {
+      await operations.reconcileLeaderboardSchedule(definition)
+    }
+    await control`UPDATE refresh_operations.schedules SET next_due_at = '2100-01-01T00:00:00Z'`
+  } finally {
+    await Promise.all([operations.close(), control.end()])
+  }
+}
+
 async function installEffectDelay(client: ReturnType<typeof postgres>, seconds: number): Promise<void> {
   await client.unsafe(`
     DROP FUNCTION IF EXISTS refresh_operations.test_delay_proof_effect() CASCADE;
@@ -167,6 +181,7 @@ beforeAll(async () => {
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
   await migrateDatabase()
+  await deferLeaderboardSchedules()
 }, 30_000)
 
 afterAll(async () => {
@@ -349,7 +364,7 @@ describe('real V3 runtime lifecycle', () => {
       )
       runtime.process.kill('SIGINT')
       const exited = await waitForExit(runtime, 4_000)
-      expect(exited.exitCode).toBe(0)
+      expect(exited.exitCode, `stdout:\n${exited.stdout}\nstderr:\n${exited.stderr}`).toBe(0)
       const state = await operations.inspect(accepted.operationId)
       expect(state.operation.status).toBe('succeeded')
       expect(state.effects).toHaveLength(1)
@@ -407,7 +422,8 @@ describe('real V3 runtime lifecycle', () => {
         'recovered operation',
       )
       recovery.process.kill('SIGTERM')
-      expect((await waitForExit(recovery, 3_000)).exitCode).toBe(0)
+      const recoveryExit = await waitForExit(recovery, 3_000)
+      expect(recoveryExit.exitCode, `stdout:\n${recoveryExit.stdout}\nstderr:\n${recoveryExit.stderr}`).toBe(0)
 
       const state = await operations.inspect(accepted.operationId)
       expect(state.operation.status).toBe('succeeded')
