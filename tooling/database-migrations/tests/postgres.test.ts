@@ -92,6 +92,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0003',
       'rankings/0004',
       'rankings/0005',
+      'rankings/0006',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -168,6 +169,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[6],
       rankingMigrationInventory[3],
       rankingMigrationInventory[4],
+      rankingMigrationInventory[5],
       playerMigrationInventory[7],
     ])
 
@@ -201,7 +203,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(49)
+    expect(globalMigrationInventory).toHaveLength(50)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -217,6 +219,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[6],
       rankingMigrationInventory[3],
       rankingMigrationInventory[4],
+      rankingMigrationInventory[5],
       playerMigrationInventory[7],
     ])
 
@@ -230,7 +233,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(15)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(16)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

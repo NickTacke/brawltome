@@ -35,9 +35,12 @@ export const fixedTwoVsTwoIdentitySchema = z
     players: z.tuple([contestantSchema, contestantSchema]),
   })
   .strict()
-  .refine(({ players }) => players[0].brawlhallaId < players[1].brawlhallaId, {
-    message: 'fixed team player IDs must be distinct and ascending',
-  })
+  .refine(
+    ({ players }) =>
+      players[0].brawlhallaId < players[1].brawlhallaId ||
+      (players[0].brawlhallaId === players[1].brawlhallaId && players[0].name !== players[1].name),
+    { message: 'fixed team participant slots must be distinct and account IDs ascending' },
+  )
 export const soloTwoVsTwoIdentitySchema = z
   .object({ type: z.literal('solo-two-vs-two-player'), player: contestantSchema })
   .strict()

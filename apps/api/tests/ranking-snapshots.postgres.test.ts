@@ -332,7 +332,16 @@ describe('immutable Ranking snapshots for every mode', () => {
           throw new Error('Expected fixed-team rows')
         }
         publication.snapshots = new Map(publication.snapshots).set('EU', [
-          euRows[0],
+          {
+            ...euRows[0],
+            identity: {
+              type: 'fixed-two-vs-two-team',
+              players: [
+                { brawlhallaId: 91_850_384, name: 'Dounia-la_put921' },
+                { brawlhallaId: 91_850_384, name: 'Dounia-la_put921•2' },
+              ],
+            },
+          },
           {
             ...euRows[1],
             identity: {
@@ -360,9 +369,18 @@ describe('immutable Ranking snapshots for every mode', () => {
     ) {
       throw new Error('Expected fixed identities')
     }
-    expect(fixedEu.entries[0].identity.players[0].brawlhallaId).toBe(
-      fixedEu.entries[1].identity.players[0].brawlhallaId,
+    const couchTeam = fixedEu.entries.find(
+      ({ identity }) =>
+        identity.type === 'fixed-two-vs-two-team' &&
+        identity.players[0].brawlhallaId === identity.players[1].brawlhallaId,
     )
+    expect(couchTeam?.identity).toEqual({
+      type: 'fixed-two-vs-two-team',
+      players: [
+        { brawlhallaId: 91_850_384, name: 'Dounia-la_put921' },
+        { brawlhallaId: 91_850_384, name: 'Dounia-la_put921•2' },
+      ],
+    })
 
     const fixed = await ranking.queries.getLeaderboard({ mode: '2v2', region: 'all', page: 1 })
     if (fixed.status === 'unavailable') throw new Error('Expected fixed standings')
@@ -803,6 +821,7 @@ describe('durable multi-mode collection operations', () => {
             }
             return result
           },
+          pauseSource: (domain, retryAfterSeconds) => sourceAdmission.pauseSource(domain, retryAfterSeconds),
         },
         ranking,
         leaderboardSource: {

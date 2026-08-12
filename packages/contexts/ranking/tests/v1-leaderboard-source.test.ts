@@ -54,6 +54,17 @@ describe('V1 ranked leaderboard source', () => {
     expect(decode('1v1', { ...row, region: 'JPS' }).rankings[0]).toMatchObject({ region: 'JPN' })
   })
 
+  test('preserves official same-account couch teams as distinct participant slots', () => {
+    const row = {
+      ...(realShapedRows['2v2'] as object),
+      players: [player(91_850_384, 'Dounia-la_put921•2'), player(91_850_384, 'Dounia-la_put921')],
+    }
+    expect(decode('2v2', row).rankings[0].identity).toEqual({
+      type: 'fixed-two-vs-two-team',
+      players: [player(91_850_384, 'Dounia-la_put921'), player(91_850_384, 'Dounia-la_put921•2')],
+    })
+  })
+
   test('uses a deterministic identity label only when a present source username is blank', () => {
     const row = {
       ...(realShapedRows['2v2'] as object),
