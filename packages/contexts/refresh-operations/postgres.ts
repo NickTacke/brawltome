@@ -1227,6 +1227,50 @@ export function createPostgresRefreshOperations(
             `
           }
 
+          if (isLeaderboardKind(schedule.kind)) {
+            const supersededFailure = {
+              code: 'superseded_scheduled_operation',
+              message: 'A newer scheduled leaderboard window is available',
+              retryable: false,
+            }
+            await sql`
+              WITH targets AS MATERIALIZED (
+                SELECT operation.id, operation.attempt_count
+                FROM refresh_operations.operations operation
+                JOIN refresh_operations.schedule_occurrences occurrence
+                  ON occurrence.id = operation.origin_schedule_occurrence_id
+                WHERE occurrence.schedule_id = ${schedule.id}
+                  AND operation.status IN ('pending', 'leased')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM refresh_operations.leaderboard_effects effect
+                    WHERE effect.operation_id = operation.effect_operation_id
+                  )
+                FOR UPDATE OF operation
+              ), finished_attempts AS (
+                UPDATE refresh_operations.attempts attempt
+                SET finished_at = ${materializedAt}, outcome = 'dead_letter', error = ${sql.json(supersededFailure)}
+                FROM targets
+                WHERE attempt.operation_id = targets.id
+                  AND attempt.attempt_number = targets.attempt_count
+                  AND attempt.finished_at IS NULL
+              ), superseded AS (
+                UPDATE refresh_operations.operations operation
+                SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
+                    completed_at = ${materializedAt}, updated_at = ${materializedAt},
+                    last_error = ${sql.json(supersededFailure)}
+                FROM targets
+                WHERE operation.id = targets.id
+                RETURNING operation.id
+              )
+              INSERT INTO refresh_operations.dead_letter_actions
+                (id, target_operation_id, disposition, actor_id, reason)
+              SELECT gen_random_uuid(), id, 'discarded', 'schedule-materializer',
+                     'Superseded by a newer scheduled leaderboard window'
+              FROM superseded
+              ON CONFLICT (target_operation_id) DO NOTHING
+            `
+          }
+
           const [completedFullRefresh] =
             schedule.kind === 'interactive-player-refresh' && schedule.resource_key
               ? await sql<{ id: string }[]>`
