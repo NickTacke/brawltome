@@ -182,7 +182,20 @@ describe('Discovery player search', () => {
         fact(1_000_000 + index, `Scale Player ${index}`, 2000 + (index % 100), index, [`Former ${index}`]),
       )
       await discovery.rebuildPlayers({ sourceVersion: 5, facts })
+      await expect(
+        discovery.applyPlayerEvents(
+          facts.slice(0, 1_000).map((player) => ({
+            eventId: randomUUID(),
+            brawlhallaId: player.brawlhallaId,
+            sourceVersion: 5,
+            fact: { ...player, name: `Covered Event ${player.brawlhallaId}` },
+          })),
+        ),
+      ).resolves.toEqual({ appliedEvents: 1_000 })
 
+      await expect(playerResults(discovery, 'scale player 0')).resolves.toEqual([
+        expect.objectContaining({ brawlhallaId: 1_000_000, name: 'Scale Player 0' }),
+      ])
       await expect(playerResults(discovery, 'scale player 10000')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 1_010_000, matchedAlias: null }),
       ])
