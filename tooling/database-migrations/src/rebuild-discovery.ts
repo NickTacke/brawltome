@@ -458,13 +458,15 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           legacySearch(legacy, rejected.playerName),
           discovery.search(rejected.playerName),
         ])
+        const legacyFound = legacyResult.players.some(({ entityId }) => entityId === rejected.brawlhallaId)
+        const actualFound = actualResult.players.some(({ brawlhallaId }) => brawlhallaId === rejected.brawlhallaId)
         fixtures.push({
           key: `player:${rejected.brawlhallaId}:legacy-only`,
           kind: 'negative-legacy-only',
           expected: false,
-          legacy: legacyResult.players.some(({ entityId }) => entityId === rejected.brawlhallaId),
-          actual: actualResult.players.some(({ brawlhallaId }) => brawlhallaId === rejected.brawlhallaId),
-          explanationCode: 'legacy-only-not-owner-fact',
+          legacy: legacyFound,
+          actual: actualFound,
+          explanationCode: legacyFound !== actualFound ? 'legacy-only-not-owner-fact' : null,
         })
       }
       for (const rejected of clanMigration.rejectedIdentities.slice(0, clanFixtureLimit)) {
@@ -472,13 +474,15 @@ export async function rebuildMigratedDiscovery(connectionString: string): Promis
           legacySearch(legacy, rejected.clanName),
           discovery.search(rejected.clanName),
         ])
+        const legacyFound = legacyResult.clans.includes(rejected.clanId)
+        const actualFound = actualResult.clans.some(({ clanId }) => clanId === rejected.clanId)
         fixtures.push({
           key: `clan:${rejected.clanId}:legacy-only`,
           kind: 'negative-legacy-only',
           expected: false,
-          legacy: legacyResult.clans.includes(rejected.clanId),
-          actual: actualResult.clans.some(({ clanId }) => clanId === rejected.clanId),
-          explanationCode: 'legacy-only-not-owner-fact',
+          legacy: legacyFound,
+          actual: actualFound,
+          explanationCode: legacyFound !== actualFound ? 'legacy-only-not-owner-fact' : null,
         })
       }
 
