@@ -62,18 +62,18 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: brawltome
-          POSTGRES_PASSWORD: brawltome
-          POSTGRES_DB: brawltome
+          POSTGRES_USER: brawltome_v3
+          POSTGRES_PASSWORD: brawltome_v3
+          POSTGRES_DB: brawltome_v3
         ports:
-          - 5432:5432
+          - 55436:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://brawltome:brawltome@localhost:5432/brawltome
+      DATABASE_URL: postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436/brawltome_v3
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

@@ -175,6 +175,25 @@ describe('Discovery player search', () => {
     }
   })
 
+  test('publishes a production-shaped player generation without per-entity database round trips', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      const facts = Array.from({ length: 10_001 }, (_, index) =>
+        fact(1_000_000 + index, `Scale Player ${index}`, 2000 + (index % 100), index, [`Former ${index}`]),
+      )
+      await discovery.rebuildPlayers({ sourceVersion: 5, facts })
+
+      await expect(playerResults(discovery, 'scale player 10000')).resolves.toEqual([
+        expect.objectContaining({ brawlhallaId: 1_010_000, matchedAlias: null }),
+      ])
+      await expect(playerResults(discovery, 'former 10000')).resolves.toEqual([
+        expect.objectContaining({ brawlhallaId: 1_010_000, matchedAlias: 'Former 10000' }),
+      ])
+    } finally {
+      await discovery.close()
+    }
+  }, 20_000)
+
   test('uses the durable source watermark so delayed events and stale rebuilds cannot overwrite newer facts', async () => {
     const discovery = createPostgresDiscovery(connectionString)
     try {
