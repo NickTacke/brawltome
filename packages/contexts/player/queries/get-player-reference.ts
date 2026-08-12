@@ -13,5 +13,6 @@ export async function getPlayerReference(
     brawlhallaId: stored.brawlhallaId,
     name: stored.name,
     ...(stored.bestLegendNameKey !== undefined ? { bestLegendNameKey: stored.bestLegendNameKey } : {}),
+    ...(stored.legacyRating !== undefined ? { legacyRating: stored.legacyRating } : {}),
   }
 }

@@ -183,6 +183,7 @@ describe('Players-owned canonical ranked state', () => {
         brawlhallaId: 91913839,
         name: 'Canonical Player',
         bestLegendNameKey: null,
+        legacyRating: null,
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({
@@ -221,6 +222,7 @@ describe('Players-owned canonical ranked state', () => {
         brawlhallaId,
         name: 'Canonical Player',
         bestLegendNameKey: null,
+        legacyRating: null,
       })
     } finally {
       await Promise.all([players.close(), operations.close()])

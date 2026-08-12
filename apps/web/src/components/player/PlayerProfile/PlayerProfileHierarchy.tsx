@@ -1,13 +1,20 @@
+import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
+import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
+import { CombatCard } from '../CombatCard'
+import { LegendSection } from '../LegendSection'
 import { RankedCard } from '../RankedCard'
-import type { RankedTeam } from '../TeamSection'
+import { RatingChart } from '../RatingChart'
+import { TeamSection } from '../TeamSection'
+import { WeaponSection } from '../WeaponSection'
+import type { PlayerData } from '../shared'
 import { ProfileHeader } from './ProfileHeader'
-import { ProfileSections } from './ProfileSections'
 
 export interface CanonicalPlayerProfileView {
   brawlhallaId: number
   name: string
   bestLegendNameKey?: string | null
+  legacyRating?: number | null
   aliases?: Array<{ value?: unknown }>
   clan?: { clanId: number; clanName: string } | null
   currentSeason: PlayerRankedProfileContract | null
@@ -28,39 +35,117 @@ function displayAliases(player: CanonicalPlayerProfileView): string[] {
     .sort((left, right) => left.localeCompare(right))
 }
 
-function rankedTeams(profile: PlayerRankedProfileContract | null): RankedTeam[] {
-  const snapshot = profile?.snapshot
-  if (!snapshot) return []
-
-  const fixedTeams = [...snapshot.fixedTeams].sort((left, right) => right.rating - left.rating)
-  const soloQueueTeams = snapshot.soloQueue.map((team) => ({
-    ...team,
-    brawlhallaIdOne: profile.brawlhallaId,
-    brawlhallaIdTwo: 0 as const,
-  }))
-  return [...fixedTeams, ...soloQueueTeams]
+function careerLegends(career: PlayerCareerProfileContract | null): PlayerData[] {
+  return (career?.snapshot?.legends ?? []).map((legend) => {
+    const reference = getLegendById(legend.legendId)
+    return {
+      ...legend,
+      bioName: legend.legendNameKey,
+      weaponOne: reference ? normalizeWeaponName(reference.weaponOne) : null,
+      weaponTwo: reference ? normalizeWeaponName(reference.weaponTwo) : null,
+      timeHeldWeaponOne: legend.weaponOne.heldTime,
+      timeHeldWeaponTwo: legend.weaponTwo.heldTime,
+      koWeaponOne: legend.weaponOne.kos,
+      koWeaponTwo: legend.weaponTwo.kos,
+      koUnarmed: legend.unarmed.kos,
+      damageWeaponOne: legend.weaponOne.damage,
+      damageWeaponTwo: legend.weaponTwo.damage,
+      damageUnarmed: legend.unarmed.damage,
+    }
+  })
 }
 
-export function PlayerProfileHierarchy({ player, refreshing, careerRefreshing }: PlayerProfileHierarchyProps) {
+function rankedTeams(profile: PlayerRankedProfileContract | null) {
+  const snapshot = profile?.snapshot
+  if (!snapshot) return []
+  return [
+    ...snapshot.fixedTeams,
+    ...snapshot.soloQueue.map((team) => ({
+      ...team,
+      brawlhallaIdOne: profile.brawlhallaId,
+      brawlhallaIdTwo: 0 as const,
+    })),
+  ].sort((left, right) => right.rating - left.rating)
+}
+
+function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): PlayerData {
+  const ranked = player.currentSeason?.snapshot
+  const career = player.career?.snapshot
+  const oneVsOne = ranked?.oneVsOne
+  return {
+    brawlhallaId: player.brawlhallaId,
+    name: player.name,
+    aliases: player.aliases ?? [],
+    clan: player.clan ?? null,
+    region: oneVsOne?.region ?? null,
+    rating: oneVsOne?.rating ?? player.legacyRating ?? null,
+    legacyRating: player.legacyRating ?? null,
+    peakRating: oneVsOne?.peakRating ?? null,
+    tier: oneVsOne?.tier ?? null,
+    rankedGames: oneVsOne?.games,
+    rankedWins: oneVsOne?.wins,
+    rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null,
+    ratingHistory: ranked?.ratingHistory ?? [],
+    rankedLegends: ranked?.rankedLegends ?? [],
+    xp: career?.account.xp ?? null,
+    level: career?.account.level ?? null,
+    xpPercentage: career?.account.xpPercentage ?? null,
+    totalGames: career?.combat.games,
+    totalWins: career?.combat.wins,
+    matchTimeTotal: career?.combat.matchTime ?? 0,
+    statsLastUpdated: player.career?.lastSuccessAt ?? null,
+    statsLegends: legends,
+  }
+}
+
+export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHierarchyProps) {
+  const allLegends = careerLegends(player.career).sort((left, right) => (right.xp ?? 0) - (left.xp ?? 0))
+  const rankedLegends = player.currentSeason?.snapshot?.rankedLegends ?? []
   const teams = rankedTeams(player.currentSeason)
-  const mainLegend = player.currentSeason?.snapshot?.mainLegend
-  const topLegend = mainLegend
-    ? { legendNameKey: mainLegend.legendNameKey }
-    : player.bestLegendNameKey
-      ? { legendNameKey: player.bestLegendNameKey }
-      : null
+  const display = v2Player(player, allLegends)
+  const weaponStats = aggregateRichWeaponStats(allLegends, rankedLegends)
+  const topLegend =
+    allLegends[0] ??
+    (player.currentSeason?.snapshot?.mainLegend
+      ? { legendNameKey: player.currentSeason.snapshot.mainLegend.legendNameKey }
+      : player.bestLegendNameKey
+        ? { legendNameKey: player.bestLegendNameKey }
+        : null)
 
   return (
     <>
-      <ProfileHeader player={player} topLegend={topLegend} aliases={displayAliases(player)} refreshing={refreshing} />
-      <RankedCard currentSeason={player.currentSeason} />
-      <ProfileSections
-        identity={{ brawlhallaId: player.brawlhallaId, name: player.name }}
-        currentSeason={player.currentSeason}
-        career={player.career}
-        rankedTeams={teams}
-        careerRefreshing={careerRefreshing}
-      />
+      <ProfileHeader player={display} topLegend={topLegend} aliases={displayAliases(player)} refreshing={refreshing} />
+
+      <div id="ranked" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <RankedCard player={display} rankedTeams={teams} />
+        <CombatCard player={display} />
+      </div>
+
+      {display.ratingHistory.length > 1 && (
+        <div id="rating-history">
+          <RatingChart data={display.ratingHistory} />
+        </div>
+      )}
+
+      <div id="weapons">
+        <WeaponSection weaponStats={weaponStats} />
+      </div>
+
+      <div id="legends">
+        <LegendSection
+          allLegends={allLegends}
+          rankedLegends={rankedLegends}
+          rankedAvailable={Boolean(player.currentSeason?.snapshot)}
+        />
+      </div>
+
+      <div id="teams">
+        <TeamSection
+          player={{ name: player.name, rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null }}
+          rankedTeams={teams}
+          brawlhallaId={player.brawlhallaId}
+        />
+      </div>
     </>
   )
 }

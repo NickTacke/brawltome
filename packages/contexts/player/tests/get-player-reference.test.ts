@@ -3,9 +3,12 @@ import { getPlayerReference } from '../queries/get-player-reference'
 
 describe('getPlayerReference', () => {
   test('returns only the canonical stored identity', async () => {
-    const result = await getPlayerReference(async () => ({ brawlhallaId: 42, name: 'Ada', rating: 0 }), 42)
+    const result = await getPlayerReference(
+      async () => ({ brawlhallaId: 42, name: 'Ada', rating: 0, legacyRating: 1800 }),
+      42,
+    )
 
-    expect(result).toEqual({ brawlhallaId: 42, name: 'Ada' })
+    expect(result).toEqual({ brawlhallaId: 42, name: 'Ada', legacyRating: 1800 })
   })
 
   test('returns null for missing and synthetic placeholder identities', async () => {

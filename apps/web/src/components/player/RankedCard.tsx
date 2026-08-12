@@ -1,180 +1,122 @@
 'use client'
 
-import { timeAgo } from '@/lib/utils'
-import type { PlayerRankedProfileContract } from '@brawltome/contracts'
-import { Badge, Card, CardContent, CardHeader } from '@brawltome/ui'
+import { formatNum, timeAgo } from '@/lib/utils'
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Clock } from 'lucide-react'
-import { WinLossBar, getRankBanner } from './shared'
-
-function freshnessWindow(seconds: number): string {
-  const hours = seconds / 3_600
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-}
-
-function observedDate(value: string): string {
-  return value.slice(0, 10)
-}
-
-function Fact({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg border border-border bg-background/40 p-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-1 font-mono font-semibold text-foreground">{value}</dd>
-    </div>
-  )
-}
+import { type PlayerData, WinLossBar, calculateEloReset, calculateGlory, getRankBanner } from './shared'
 
 interface RankedCardProps {
-  currentSeason: PlayerRankedProfileContract | null
+  player: PlayerData
+  rankedTeams: PlayerData[]
 }
 
-export function RankedCard({ currentSeason }: RankedCardProps) {
-  const snapshot = currentSeason?.snapshot
-  if (!currentSeason || !snapshot) {
-    return (
-      <section aria-labelledby="competitive-summary-heading">
-        <Card className="bg-linear-to-br from-card to-background border-border">
-          <CardHeader>
-            <div className="flex justify-between items-center gap-4">
-              <h2 id="competitive-summary-heading" className="text-lg font-bold text-foreground">
-                Competitive Snapshot
-              </h2>
-              <Badge variant="outline">Unavailable</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              Complete Current Season ranked facts have not been successfully observed. Rating, rank, and outcomes are
-              omitted rather than shown as zero.
-            </p>
-            {currentSeason?.checkedAt && <p>Last checked {timeAgo(currentSeason.checkedAt)}.</p>}
-            {currentSeason && <p>Freshness window: {freshnessWindow(currentSeason.freshForSeconds)}.</p>}
-          </CardContent>
-        </Card>
-      </section>
-    )
-  }
-
-  const oneVsOne = snapshot.oneVsOne
-  const losses = oneVsOne.games - oneVsOne.wins
-  const winRate = oneVsOne.games > 0 ? (oneVsOne.wins / oneVsOne.games) * 100 : null
-  const direction = snapshot.observedRatingDirection
-  const mainLegend = snapshot.mainLegend
-  const pulse = currentSeason.sparsePulse
+export function RankedCard({ player, rankedTeams }: RankedCardProps) {
+  const hasRating = typeof player.rating === 'number' && player.rating > 0
+  const hasOutcomes = typeof player.rankedGames === 'number' && typeof player.rankedWins === 'number'
+  const rankedGames = hasOutcomes ? player.rankedGames : 0
+  const rankedWins = hasOutcomes ? player.rankedWins : 0
+  const winrate = rankedGames > 0 ? (rankedWins / rankedGames) * 100 : null
+  const teamsTotalWins = rankedTeams.reduce((sum, team) => sum + (team.wins ?? 0), 0)
+  const knownPeaks = [player.peakRating, ...rankedTeams.map((team) => team.peakRating)].filter(
+    (rating): rating is number => typeof rating === 'number' && rating > 0,
+  )
+  const bestRating = knownPeaks.length > 0 ? Math.max(...knownPeaks) : null
+  const totalRankedWins = hasOutcomes ? rankedWins + teamsTotalWins : null
 
   return (
-    <section aria-labelledby="competitive-summary-heading">
-      <Card className="bg-linear-to-br from-card to-background border-border">
-        <CardHeader className="pb-4">
-          <div className="flex justify-between items-center gap-4">
-            <h2 id="competitive-summary-heading" className="text-lg font-bold text-foreground">
-              Competitive Snapshot
-            </h2>
+    <Card className="bg-linear-to-br from-card to-background border-border">
+      <CardHeader className="pb-4">
+        <div className="flex justify-between items-center gap-3">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">&#127942; Ranked Performance</CardTitle>
+          {player.rankedLastUpdated ? (
             <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
               <Clock className="w-3 h-3" aria-hidden="true" />
-              {currentSeason.freshness === 'fresh' ? 'Updated' : 'Update delayed'}
+              <span className="hidden sm:inline">Updated </span>
+              {timeAgo(player.rankedLastUpdated)}
             </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Complete ranked data last checked {timeAgo(currentSeason.checkedAt)}. Last successful update{' '}
-            {currentSeason.lastSuccessAt ? timeAgo(currentSeason.lastSuccessAt) : 'unavailable'}. Freshness window:{' '}
-            {freshnessWindow(currentSeason.freshForSeconds)}.
-          </p>
-        </CardHeader>
+          ) : player.legacyRating ? (
+            <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
+              V2 snapshot
+            </Badge>
+          ) : null}
+        </div>
+      </CardHeader>
 
-        <CardContent className="space-y-6 pt-2 pb-8">
-          <div className="flex gap-4 sm:gap-6">
-            <div className="w-16 sm:w-20 shrink-0">
-              <img
-                src={getRankBanner(oneVsOne.tier)}
-                alt={`${oneVsOne.tier} rank banner`}
-                className="w-full h-auto object-contain drop-shadow-lg"
-              />
-            </div>
-            <div className="flex-1 min-w-0 space-y-3">
-              <p className="text-sm sm:text-base font-bold text-muted-foreground">{oneVsOne.tier}</p>
-              <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap" aria-label="Current and peak rating">
+      <CardContent className="space-y-8 pt-6 pb-8">
+        <div className="flex gap-4 sm:gap-6">
+          <div className="w-16 sm:w-20 shrink-0">
+            <img
+              src={getRankBanner(player.tier)}
+              alt={player.tier || 'Unranked'}
+              className="w-full h-auto object-contain drop-shadow-lg"
+            />
+          </div>
+
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="text-sm sm:text-base font-bold text-muted-foreground">{player.tier || 'Unranked'}</div>
+            {hasRating ? (
+              <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
                 <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight leading-none">
-                  {oneVsOne.rating}
+                  {player.rating}
                 </span>
-                <span aria-hidden="true" className="text-2xl sm:text-3xl font-bold text-muted-foreground/30">
-                  /
-                </span>
-                <span className="text-2xl sm:text-3xl font-bold text-muted-foreground/50">{oneVsOne.peakRating}</span>
-                <span className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-wider">
-                  Peak
-                </span>
+                {typeof player.peakRating === 'number' && player.peakRating > 0 && (
+                  <>
+                    <span className="text-2xl sm:text-3xl font-bold text-muted-foreground/30 leading-none">/</span>
+                    <span className="text-2xl sm:text-3xl font-bold text-muted-foreground/50 leading-none">
+                      {player.peakRating}
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-muted-foreground/50 uppercase tracking-wider ml-1">
+                      Peak
+                    </span>
+                  </>
+                )}
               </div>
-              {winRate === null ? (
-                <p className="text-sm text-muted-foreground">
-                  Win rate unavailable until at least one game is observed.
-                </p>
-              ) : (
-                <>
-                  <WinLossBar percent={winRate} className="h-2.5 sm:h-3" />
-                  <p className="text-sm font-semibold text-foreground">
-                    {oneVsOne.wins} wins, {losses} losses ({winRate.toFixed(1)}%)
-                  </p>
-                </>
-              )}
+            ) : (
+              <div className="text-2xl font-black text-muted-foreground">Rating unavailable</div>
+            )}
+
+            {winrate === null ? (
+              <p className="text-sm text-muted-foreground">Current-season wins and losses are unavailable.</p>
+            ) : (
+              <>
+                <WinLossBar percent={winrate} className="h-2.5 sm:h-3" />
+                <div className="flex justify-between text-sm font-bold">
+                  <span className="text-foreground">
+                    {rankedWins}W <span className="font-normal text-muted-foreground">({winrate.toFixed(2)}%)</span>
+                  </span>
+                  <span className="text-foreground">
+                    {rankedGames - rankedWins}L{' '}
+                    <span className="font-normal text-muted-foreground">({(100 - winrate).toFixed(2)}%)</span>
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 pt-5 border-t border-border/50 text-center">
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Ranked Games</div>
+            <div className="text-lg sm:text-xl font-black text-foreground">
+              {hasOutcomes ? formatNum(rankedGames) : '—'}
             </div>
           </div>
-
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Fact label="Region" value={oneVsOne.region} />
-            {oneVsOne.globalRank !== null && <Fact label="Global rank" value={`#${oneVsOne.globalRank}`} />}
-            {oneVsOne.regionRank !== null && <Fact label="Region rank" value={`#${oneVsOne.regionRank}`} />}
-            {mainLegend && (
-              <Fact
-                label={mainLegend.source === 'career' ? 'Career-derived main legend' : 'Current Season main legend'}
-                value={mainLegend.legendNameKey}
-              />
-            )}
-          </dl>
-
-          <div className="space-y-2 rounded-lg border border-border p-4 text-sm">
-            <h3 className="font-semibold text-foreground">BrawlTome-observed direction</h3>
-            {direction ? (
-              <>
-                <p className="font-mono font-semibold text-foreground">
-                  {direction.direction === 'up' ? 'Up' : direction.direction === 'down' ? 'Down' : 'Unchanged'}{' '}
-                  {Math.abs(direction.ratingChange)} rating
-                </p>
-                <p className="text-muted-foreground">
-                  Direction compares {direction.observationCount} of up to 365 retained BrawlTome rating observations
-                  from canonical V0 snapshots and preserved legacy V2 history, from{' '}
-                  {observedDate(direction.fromObservedAt)} to {observedDate(direction.toObservedAt)} within the latest
-                  monotonic-games segment. Sparse pulse overlays are excluded. This is BrawlTome coverage, not complete
-                  Elo history.
-                </p>
-              </>
-            ) : (
-              <p className="text-muted-foreground">
-                Unavailable until BrawlTome owns at least two rating observations in the latest monotonic-games segment.
-                Sparse pulse overlays are excluded.
-              </p>
-            )}
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Total Glory</div>
+            <div className="text-lg sm:text-xl font-black text-foreground">
+              {totalRankedWins !== null && bestRating !== null
+                ? formatNum(calculateGlory(totalRankedWins, bestRating))
+                : '—'}
+            </div>
           </div>
-
-          <div className="space-y-2 rounded-lg border border-border p-4 text-sm text-muted-foreground">
-            <h3 className="font-semibold text-foreground">Sparse pulse coverage</h3>
-            {!pulse ? (
-              <p>No sparse pulse observation is available. Complete Current Season freshness remains independent.</p>
-            ) : pulse.lastSuccessAt ? (
-              <p>
-                At {observedDate(pulse.lastSuccessAt)}, a sparse pulse added at least one supported 1v1 or fixed-team
-                scalar. It does not update complete rank, tier, region, legends, Solo Queue, team composition, or rating
-                history.
-              </p>
-            ) : (
-              <p>
-                Last checked {observedDate(pulse.checkedAt)}. No supported scalar was observed, so last-known complete
-                Current Season facts remain visible.
-              </p>
-            )}
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Elo Reset</div>
+            <div className="text-lg sm:text-xl font-black text-foreground">
+              {hasRating ? calculateEloReset(player.rating) : '—'}
+            </div>
           </div>
-        </CardContent>
-      </Card>
-    </section>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

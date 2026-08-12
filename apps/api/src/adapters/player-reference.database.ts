@@ -2,9 +2,12 @@ import { type Database, player } from '@brawltome/database'
 import { createPlayerReferenceQueries } from '@brawltome/player/composition'
 import { eq } from 'drizzle-orm'
 
-type FindCanonicalReference = (
-  brawlhallaId: number,
-) => Promise<{ brawlhallaId: number; name: string; bestLegendNameKey?: string | null } | null>
+type FindCanonicalReference = (brawlhallaId: number) => Promise<{
+  brawlhallaId: number
+  name: string
+  bestLegendNameKey?: string | null
+  legacyRating?: number | null
+} | null>
 
 export function createDatabasePlayerReferenceQueries(
   db: Database,

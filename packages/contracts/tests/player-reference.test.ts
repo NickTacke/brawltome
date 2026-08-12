@@ -3,7 +3,11 @@ import { parsePlayerReferenceOutput, playerReferenceSchema } from '../src/player
 
 describe('Player Reference contract', () => {
   test('accepts bounded identifiers, preserves zero-free identity, and supports absence', () => {
-    expect(parsePlayerReferenceOutput({ brawlhallaId: 1, name: 'Ada' })).toEqual({ brawlhallaId: 1, name: 'Ada' })
+    expect(parsePlayerReferenceOutput({ brawlhallaId: 1, name: 'Ada', legacyRating: 1800 })).toEqual({
+      brawlhallaId: 1,
+      name: 'Ada',
+      legacyRating: 1800,
+    })
     expect(parsePlayerReferenceOutput({ brawlhallaId: 2_147_483_647, name: 'A'.repeat(256) })).toEqual({
       brawlhallaId: 2_147_483_647,
       name: 'A'.repeat(256),
@@ -26,6 +30,7 @@ describe('Player Reference contract', () => {
     { brawlhallaId: 1, name: '🦊'.repeat(257) },
     { brawlhallaId: 1, name: '\u200B\u200D' },
     { brawlhallaId: 1, name: 'Ada', rating: 0 },
+    { brawlhallaId: 1, name: 'Ada', legacyRating: 0 },
   ])('rejects invalid or persistence-shaped output %#', (value) => {
     expect(() => playerReferenceSchema.parse(value)).toThrow()
   })

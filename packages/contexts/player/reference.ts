@@ -2,6 +2,7 @@ export type PlayerReference = {
   brawlhallaId: number
   name: string
   bestLegendNameKey?: string | null
+  legacyRating?: number | null
 }
 
 export interface PlayerReferenceQueries {
