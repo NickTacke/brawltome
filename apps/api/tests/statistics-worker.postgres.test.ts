@@ -80,7 +80,6 @@ const rankedEvidence = (id: number) => ({
   wins: 12,
   rating: 2100,
   peak_rating: 2200,
-  tier: 'Diamond',
   region: 'EU',
   region_ranks: [],
   legends: [{ legend_id: 3, games: 10, wins: 6, rating: 2050, peak_rating: 2150, tier: 'Diamond' }],
@@ -141,7 +140,7 @@ describe('Statistics durable production worker', () => {
     let forbiddenCalls = 0
     let lifetimeAttempts = 0
     const source = {
-      async getPlayerStatsV1(id: number, mode: 'ranked_1v1' | 'all') {
+      async getPlayerStatsV1Payload(id: number, mode: 'ranked_1v1' | 'all') {
         calls.push(`${id}:${mode}`)
         if (mode === 'ranked_1v1') return rankedEvidence(id)
         lifetimeAttempts++

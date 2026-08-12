@@ -31,6 +31,7 @@ export type SourceLeaderboardPage = {
 
 type SourceErrorCode =
   | 'source_contract_invalid'
+  | 'source_data_inconsistent'
   | 'source_rate_limited'
   | 'source_unavailable'
   | 'source_not_found'
@@ -91,7 +92,13 @@ function decodeIdentity(value: unknown, mode: LeaderboardMode, index: number): S
   if (mode === '2v2') {
     const [first, second] = players
     if (!first || !second) invalid(`rankings[${index}].players must contain two players`)
-    if (first.id === second.id) invalid(`rankings[${index}].players must contain distinct player IDs`)
+    if (first.id === second.id) {
+      throw new LeaderboardSourceError(
+        'source_data_inconsistent',
+        `rankings[${index}].players must contain distinct player IDs`,
+        true,
+      )
+    }
     const canonical = first.id < second.id ? [first, second] : [second, first]
     return { type: 'fixed-two-vs-two-team', players: canonical as [SourcePlayer, SourcePlayer] }
   }

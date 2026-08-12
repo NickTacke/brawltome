@@ -77,6 +77,26 @@ describe('Statistics V1 purpose-specific source evidence', () => {
     })
   })
 
+  test('preserves an omitted top-level ranked tier as unknown while keeping legend tiers strict', () => {
+    const { tier: _omitted, ...withoutTier } = ranked
+    expect(decodeRankedEvidence(withoutTier, playerId)).toMatchObject({
+      brawlhallaId: playerId,
+      tier: null,
+      legends: [{ tier: 'Diamond' }],
+    })
+    expect(validateRankedEvidence(decodeRankedEvidence(withoutTier, playerId), playerId).tier).toBeNull()
+    expect(() => decodeRankedEvidence({ ...withoutTier, tier: 1 }, playerId)).toThrow('tier')
+    expect(() =>
+      decodeRankedEvidence(
+        {
+          ...withoutTier,
+          legends: [{ ...withoutTier.legends[0], tier: undefined }],
+        },
+        playerId,
+      ),
+    ).toThrow('legends[0].tier')
+  })
+
   test('accepts all-mode lifetime evidence with weapon-held facts', () => {
     const decoded = decodeLifetimeEvidence(lifetime, playerId)
     expect(decoded).toMatchObject({
