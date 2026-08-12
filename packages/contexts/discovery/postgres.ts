@@ -580,66 +580,92 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     compareText(left.normalizedTerm, right.normalizedTerm) ||
     compareText(left.displayTerm, right.displayTerm)
 
-  function expectedTerms(
-    owner: ProjectionOwner,
-    snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
-  ): ComparableTerm[] {
-    const terms =
-      owner === 'player'
-        ? (snapshot as PlayerProjectionSnapshot).facts.flatMap((fact) =>
-            playerTermsFor(fact).map((term) => ({
-              entityId: fact.brawlhallaId,
-              termKind: term.kind,
-              displayTerm: term.display,
-              normalizedTerm: term.normalized,
-              canonicalName: fact.name,
-              region: fact.region,
-              rating: fact.rating,
-              viewCount: fact.viewCount,
-              bestLegendNameKey: fact.bestLegendNameKey,
-              clanXp: null,
-              memberCount: null,
-            })),
-          )
-        : (snapshot as ClanProjectionSnapshot).facts.flatMap((fact) => {
-            const normalizedTerm = normalizeDiscoveryTerm(fact.clanName)
-            return normalizedTerm
-              ? [
-                  {
-                    entityId: fact.clanId,
-                    termKind: 'canonical',
-                    displayTerm: fact.clanName,
-                    normalizedTerm,
-                    canonicalName: fact.clanName,
-                    region: null,
-                    rating: null,
-                    viewCount: null,
-                    bestLegendNameKey: null,
-                    clanXp: fact.clanXp,
-                    memberCount: fact.memberCount,
-                  },
-                ]
-              : []
-          })
-    return terms.sort(compareTerms)
+  type TermGroup = { entityId: number; terms: ComparableTerm[] }
+  type ProjectedTermRow = {
+    entity_id: number
+    term_kind: string
+    display_term: string
+    normalized_term: string
+    canonical_name: string
+    region: string | null
+    rating: number | null
+    view_count: number | null
+    best_legend_name_key: string | null
+    clan_xp: string | null
+    member_count: number | null
   }
 
-  async function projectedTerms(sql: Sql, owner: ProjectionOwner): Promise<ComparableTerm[]> {
-    const rows = await sql<
-      Array<{
-        entity_id: number
-        term_kind: string
-        display_term: string
-        normalized_term: string
-        canonical_name: string
-        region: string | null
-        rating: number | null
-        view_count: number | null
-        best_legend_name_key: string | null
-        clan_xp: string | null
-        member_count: number | null
-      }>
-    >`
+  function* expectedTermGroups(
+    owner: ProjectionOwner,
+    snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
+  ): Generator<TermGroup> {
+    if (owner === 'player') {
+      const facts = [...(snapshot as PlayerProjectionSnapshot).facts].sort(
+        (left, right) => left.brawlhallaId - right.brawlhallaId,
+      )
+      for (const fact of facts) {
+        const terms = playerTermsFor(fact)
+          .map((term) => ({
+            entityId: fact.brawlhallaId,
+            termKind: term.kind,
+            displayTerm: term.display,
+            normalizedTerm: term.normalized,
+            canonicalName: fact.name,
+            region: fact.region,
+            rating: fact.rating,
+            viewCount: fact.viewCount,
+            bestLegendNameKey: fact.bestLegendNameKey,
+            clanXp: null,
+            memberCount: null,
+          }))
+          .sort(compareTerms)
+        if (terms.length > 0) yield { entityId: fact.brawlhallaId, terms }
+      }
+      return
+    }
+    const facts = [...(snapshot as ClanProjectionSnapshot).facts].sort((left, right) => left.clanId - right.clanId)
+    for (const fact of facts) {
+      const normalizedTerm = normalizeDiscoveryTerm(fact.clanName)
+      if (!normalizedTerm) continue
+      yield {
+        entityId: fact.clanId,
+        terms: [
+          {
+            entityId: fact.clanId,
+            termKind: 'canonical',
+            displayTerm: fact.clanName,
+            normalizedTerm,
+            canonicalName: fact.clanName,
+            region: null,
+            rating: null,
+            viewCount: null,
+            bestLegendNameKey: null,
+            clanXp: fact.clanXp,
+            memberCount: fact.memberCount,
+          },
+        ],
+      }
+    }
+  }
+
+  const comparableTerm = (row: ProjectedTermRow): ComparableTerm => ({
+    entityId: row.entity_id,
+    termKind: row.term_kind,
+    displayTerm: row.display_term,
+    normalizedTerm: row.normalized_term,
+    canonicalName: row.canonical_name,
+    region: row.region,
+    rating: row.rating,
+    viewCount: row.view_count,
+    bestLegendNameKey: row.best_legend_name_key,
+    clanXp: row.clan_xp,
+    memberCount: row.member_count,
+  })
+
+  async function* projectedTermGroups(sql: Sql, owner: ProjectionOwner): AsyncGenerator<TermGroup> {
+    let entityId: number | null = null
+    let terms: ComparableTerm[] = []
+    const query = sql<ProjectedTermRow[]>`
       SELECT term.entity_id, term.term_kind, term.display_term, term.normalized_term,
              term.canonical_name, term.region, term.rating, term.view_count,
              term.best_legend_name_key, term.clan_xp::text, term.member_count
@@ -651,95 +677,101 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       ORDER BY term.entity_id, term.term_kind COLLATE "C", term.normalized_term COLLATE "C",
                term.display_term COLLATE "C"
     `
-    return rows.map((row) => ({
-      entityId: row.entity_id,
-      termKind: row.term_kind,
-      displayTerm: row.display_term,
-      normalizedTerm: row.normalized_term,
-      canonicalName: row.canonical_name,
-      region: row.region,
-      rating: row.rating,
-      viewCount: row.view_count,
-      bestLegendNameKey: row.best_legend_name_key,
-      clanXp: row.clan_xp,
-      memberCount: row.member_count,
-    }))
+    for await (const rows of query.cursor(1_000)) {
+      for (const row of rows) {
+        if (entityId !== null && row.entity_id !== entityId) {
+          yield { entityId, terms }
+          terms = []
+        }
+        entityId = row.entity_id
+        terms.push(comparableTerm(row))
+      }
+    }
+    if (entityId !== null) yield { entityId, terms }
   }
 
-  function termHash(terms: ComparableTerm[]): string {
+  function termHasher() {
     const hash = createHash('sha256')
+    let first = true
     hash.update('[')
-    for (let index = 0; index < terms.length; index++) {
-      if (index > 0) hash.update(',')
-      hash.update(JSON.stringify(terms[index]))
+    return {
+      update(terms: ComparableTerm[]) {
+        for (const term of terms) {
+          if (!first) hash.update(',')
+          hash.update(JSON.stringify(term))
+          first = false
+        }
+      },
+      digest: () => hash.update(']').digest('hex'),
     }
-    return hash.update(']').digest('hex')
   }
 
-  const sameTerm = (left: ComparableTerm, right: ComparableTerm) =>
-    left.entityId === right.entityId &&
-    left.termKind === right.termKind &&
-    left.displayTerm === right.displayTerm &&
-    left.normalizedTerm === right.normalizedTerm &&
-    left.canonicalName === right.canonicalName &&
-    left.region === right.region &&
-    left.rating === right.rating &&
-    left.viewCount === right.viewCount &&
-    left.bestLegendNameKey === right.bestLegendNameKey &&
-    left.clanXp === right.clanXp &&
-    left.memberCount === right.memberCount
+  const sameTerms = (left: ComparableTerm[], right: ComparableTerm[]) =>
+    left.length === right.length && left.every((term, index) => JSON.stringify(term) === JSON.stringify(right[index]))
 
-  function entityCount(terms: ComparableTerm[]): number {
-    let count = 0
-    let previous: number | null = null
-    for (const term of terms) {
-      if (term.entityId === previous) continue
-      count++
-      previous = term.entityId
-    }
-    return count
-  }
-
-  function reconciliationDifferences(expected: ComparableTerm[], projected: ComparableTerm[]) {
+  async function compareProjection(
+    sql: Sql,
+    owner: ProjectionOwner,
+    snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
+  ) {
+    const expected = expectedTermGroups(owner, snapshot)[Symbol.iterator]()
+    const projected = projectedTermGroups(sql, owner)[Symbol.asyncIterator]()
+    const expectedHash = termHasher()
+    const projectedHash = termHasher()
     const details: Array<
       ReconciliationDifference & { expected: ComparableTerm[] | null; projected: ComparableTerm[] | null }
     > = []
     let differenceCount = 0
-    let expectedIndex = 0
-    let projectedIndex = 0
-    while (expectedIndex < expected.length || projectedIndex < projected.length) {
-      const expectedId = expected[expectedIndex]?.entityId
-      const projectedId = projected[projectedIndex]?.entityId
+    let projectedCount = 0
+    let expectedGroup = expected.next()
+    let projectedGroup = await projected.next()
+    while (!expectedGroup.done || !projectedGroup.done) {
+      const expectedId = expectedGroup.done ? null : expectedGroup.value.entityId
+      const projectedId = projectedGroup.done ? null : projectedGroup.value.entityId
       const entityId =
-        expectedId === undefined
+        expectedId === null
           ? (projectedId as number)
-          : projectedId === undefined
+          : projectedId === null
             ? expectedId
             : Math.min(expectedId, projectedId)
-      const expectedStart = expectedIndex
-      const projectedStart = projectedIndex
-      while (expected[expectedIndex]?.entityId === entityId) expectedIndex++
-      while (projected[projectedIndex]?.entityId === entityId) projectedIndex++
-      const expectedLength = expectedIndex - expectedStart
-      const projectedLength = projectedIndex - projectedStart
-      let matches = expectedLength === projectedLength
-      for (let offset = 0; matches && offset < expectedLength; offset++) {
-        matches = sameTerm(
-          expected[expectedStart + offset] as ComparableTerm,
-          projected[projectedStart + offset] as ComparableTerm,
-        )
+      const expectedTerms = expectedId === entityId ? expectedGroup.value.terms : null
+      const projectedTerms = projectedId === entityId ? projectedGroup.value.terms : null
+      if (expectedTerms) {
+        expectedHash.update(expectedTerms)
+        expectedGroup = expected.next()
       }
-      if (matches) continue
+      if (projectedTerms) {
+        projectedHash.update(projectedTerms)
+        projectedCount++
+        projectedGroup = await projected.next()
+      }
+      if (expectedTerms && projectedTerms && sameTerms(expectedTerms, projectedTerms)) continue
       differenceCount++
       if (details.length === maxPersistedReconciliationDifferences) continue
       details.push({
         entityId,
-        kind: expectedLength > 0 ? (projectedLength > 0 ? 'mismatched' : 'missing') : 'unexpected',
-        expected: expectedLength > 0 ? expected.slice(expectedStart, expectedIndex) : null,
-        projected: projectedLength > 0 ? projected.slice(projectedStart, projectedIndex) : null,
+        kind: expectedTerms ? (projectedTerms ? 'mismatched' : 'missing') : 'unexpected',
+        expected: expectedTerms,
+        projected: projectedTerms,
       })
     }
-    return { differenceCount, details }
+    return {
+      expectedHash: expectedHash.digest(),
+      projectedHash: projectedHash.digest(),
+      projectedCount,
+      differenceCount,
+      details,
+    }
+  }
+
+  async function projectionEvidence(sql: Sql, owner: ProjectionOwner) {
+    const hash = termHasher()
+    let projectedCount = 0
+    for await (const group of projectedTermGroups(sql, owner)) {
+      hash.update(group.terms)
+      projectedCount++
+    }
+    return { hash: hash.digest(), projectedCount }
   }
 
   async function existingReconciliation(sql: Sql, operationId: string): Promise<ReconciliationResult | null> {
@@ -807,8 +839,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       const pendingEventCount = snapshot.pendingEventCount ?? 0
       const oldestPendingAt = snapshot.oldestPendingAt ?? null
       const sourceFactCount = snapshot.facts.length
-      const expected = expectedTerms(owner, snapshot)
-      snapshot = null
+      const comparisonSnapshot = snapshot
       try {
         return await client.begin(async (transaction) => {
           const sql = transaction as unknown as Sql
@@ -829,26 +860,24 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
           `
           if (Number(active.source_version) > observedSourceVersion) throw new StaleProjectionSnapshotError()
 
-          const projectedBefore = await projectedTerms(sql, owner)
-          const differences = reconciliationDifferences(expected, projectedBefore)
+          const differences = await compareProjection(sql, owner, comparisonSnapshot)
           const exactBefore = differences.differenceCount === 0
-          const expectedHash = termHash(expected)
-          const projectedHashBefore = termHash(projectedBefore)
-          const projectedBeforeCount = entityCount(projectedBefore)
+          const expectedHash = differences.expectedHash
+          const projectedHashBefore = differences.projectedHash
+          const projectedBeforeCount = differences.projectedCount
           let projectedHashAfter = projectedHashBefore
           let projectedAfterCount = projectedBeforeCount
           if (!exactBefore) {
             const repairSnapshot = await source.snapshot()
             if (repairSnapshot.sourceVersion !== observedSourceVersion) throw new StaleProjectionSnapshotError()
             await replaceGeneration(sql, owner, repairSnapshot)
-            projectedBefore.length = 0
-            const projectedAfter = await projectedTerms(sql, owner)
-            const remaining = reconciliationDifferences(expected, projectedAfter)
-            if (remaining.differenceCount > 0)
+            const repaired = await compareProjection(sql, owner, repairSnapshot)
+            if (repaired.differenceCount > 0)
               throw new Error('Discovery reconciliation repair did not converge exactly')
-            projectedHashAfter = termHash(projectedAfter)
-            projectedAfterCount = entityCount(projectedAfter)
+            projectedHashAfter = repaired.projectedHash
+            projectedAfterCount = repaired.projectedCount
           }
+          snapshot = null
           const [run] = await sql<{ run_id: string }[]>`
             INSERT INTO discovery.reconciliation_runs
               (operation_id, entity_kind, observed_source_version,
@@ -985,10 +1014,10 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
         SELECT source_version FROM discovery.generations
         WHERE entity_kind = ${reconciliation.owner} AND active FOR UPDATE
       `
-      const currentHash = termHash(await projectedTerms(sql, reconciliation.owner))
+      const current = await projectionEvidence(sql, reconciliation.owner)
       if (
         Number(generation?.source_version) !== reconciliation.observedSourceVersion ||
-        currentHash !== reconciliation.expectedHash
+        current.hash !== reconciliation.expectedHash
       ) {
         throw new Error('Discovery migration evidence does not match the active projection')
       }
