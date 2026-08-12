@@ -133,7 +133,7 @@ describe('V1 ranked leaderboard source', () => {
           },
         },
       ),
-    ).rejects.toMatchObject({ code: 'source_unavailable', retryable: true })
+    ).rejects.toMatchObject({ code: 'source_rate_limited', retryable: true })
     expect(backoffs).toEqual([13])
   })
 

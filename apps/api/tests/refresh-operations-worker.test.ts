@@ -179,6 +179,7 @@ describe('refresh operations worker source retry', () => {
   })
 
   test('defers retryable leaderboard source outages without consuming the final attempt', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -214,6 +215,7 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
       sourceUnavailableRetryMs: 60_000,
       admission,
+      telemetry,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
         pauseSource: async () => {},
@@ -231,6 +233,8 @@ describe('refresh operations worker source retry', () => {
 
     expect(deferredMs).toBe(60_000)
     expect(failed).toBe(false)
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+    expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
   test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
@@ -533,6 +537,7 @@ describe('refresh operations worker source retry', () => {
   })
 
   test('consumes an attempt for an upstream Statistics 429 after recording its immutable fence', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -568,6 +573,7 @@ describe('refresh operations worker source retry', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
+      telemetry,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
         pauseSource: async () => {},
@@ -587,9 +593,12 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 37_000,
     })
     expect(deferred).toBe(false)
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+    expect(failures?.series[0]?.labels.failure_category).toBe('source_rate_limited')
   })
 
   test('defers clan source admission without consuming its execution attempt', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -628,6 +637,7 @@ describe('refresh operations worker source retry', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
+      telemetry,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
         pauseSource: async () => {},
@@ -643,6 +653,8 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 37_000,
     })
     expect(failed).toBe(false)
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+    expect(failures?.series[0]?.labels.failure_category).toBe('admission_deferred')
   })
 
   test('revokes active clan authority and skips publication completion after renewal loss', async () => {
@@ -751,6 +763,55 @@ describe('refresh operations worker source retry', () => {
     ).toBe(true)
     expect(built).toBe(true)
     expect(completed).toBe(true)
+  })
+
+  test('reports Legend Meta execution and lease-loss failures through bounded telemetry', async () => {
+    for (const [transition, expectedCategory] of [
+      ['transitioned', 'execution'],
+      ['lease-lost', 'lease_lost'],
+    ] as const) {
+      const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+      const lease: OperationLease = {
+        operationId: crypto.randomUUID(),
+        effectOperationId: crypto.randomUUID(),
+        effectCreatedAt: new Date().toISOString(),
+        operationKey: `statistics:legend-meta:${transition}`,
+        kind: 'statistics-legend-meta-publication',
+        workClass: 'global-statistics',
+        payload: { generationId: crypto.randomUUID() },
+        provenance: { source: 'test' },
+        leaseOwner: 'worker',
+        leaseToken: 1,
+        attemptNumber: 1,
+        maxAttempts: 3,
+        scheduleWindowAt: null,
+      }
+      const operations = {
+        claim: async () => lease,
+        renew: async () => 'renewed' as const,
+        fail: async () => transition,
+      }
+
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        telemetry,
+        statistics: {
+          preflightLegendMetaPublication: async () => 'missing' as const,
+          buildAndPublishLegendMeta: async () => {
+            throw new Error('Legend Meta publication failed')
+          },
+        } as never,
+      })
+
+      const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+      expect(failures?.series[0]?.labels).toEqual({
+        kind: 'statistics-legend-meta-publication',
+        failure_category: expectedCategory,
+      })
+      expect(telemetry.stats().seriesDropped).toBe(0)
+    }
   })
 
   test('preserves a genuine section failure when another section is source-limited', async () => {

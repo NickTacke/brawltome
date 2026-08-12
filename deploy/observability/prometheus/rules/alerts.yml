@@ -80,7 +80,7 @@ groups:
           description: "Distributed source admission is close to its fixed window limit."
 
       - alert: RefreshFailuresElevated
-        expr: sum by (generation, kind, failure_category) (increase(refresh_failures_total[15m])) > 0
+        expr: sum by (generation, kind, failure_category) (increase(refresh_failures_total{failure_category!="admission_deferred"}[15m])) > 0
         for: 1m
         labels:
           severity: warning

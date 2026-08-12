@@ -121,11 +121,10 @@ const operationKind = [
   'leaderboard-2v2',
   'leaderboard-solo-2v2',
   'leaderboard-3v3',
-  'player-discovery-projection',
-  'ranked-player-pulse',
   'statistics-ranked-collection',
   'statistics-lifetime-collection',
   'statistics-publication',
+  'statistics-legend-meta-publication',
 ] as const
 const outcome = [
   'succeeded',
@@ -142,8 +141,10 @@ const sourceDomain = ['brawlhalla-v0', 'brawlhalla-v1', 'discord', 'steam', 'tur
 const interactionKind = ['command', 'select', 'button'] as const
 const command = ['player', 'clan', 'status', 'component', 'unknown'] as const
 const failureCategory = [
+  'admission_deferred',
   'source_rate_limited',
   'source_timeout',
+  'source_unavailable',
   'invalid_payload',
   'dependency',
   'execution',

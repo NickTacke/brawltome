@@ -657,7 +657,13 @@ export async function runOneRefreshOperation(
   const telemetry = options.telemetry
   const started = performance.now()
   let attemptOutcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost' = 'succeeded'
-  let failureCategory: 'source_rate_limited' | 'execution' | 'lease_lost' | 'unknown' = 'unknown'
+  let failureCategory:
+    | 'admission_deferred'
+    | 'source_rate_limited'
+    | 'source_unavailable'
+    | 'execution'
+    | 'lease_lost'
+    | 'unknown' = 'unknown'
 
   function record(recording: (active: Telemetry) => void): void {
     if (!telemetry) return
@@ -725,7 +731,7 @@ export async function runOneRefreshOperation(
           error.retryAfterSeconds * 1_000,
         )
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_rate_limited'
+        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'admission_deferred'
         return true
       }
       if (error instanceof LeaderboardSourceError && error.retryable) {
@@ -735,7 +741,12 @@ export async function runOneRefreshOperation(
           Math.max(options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs),
         )
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_rate_limited'
+        failureCategory =
+          transition === 'lease-lost'
+            ? 'lease_lost'
+            : error.code === 'source_rate_limited'
+              ? 'source_rate_limited'
+              : 'source_unavailable'
         return true
       }
       if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {

@@ -29,7 +29,12 @@ export type SourceLeaderboardPage = {
   totalPages: number
 }
 
-type SourceErrorCode = 'source_contract_invalid' | 'source_unavailable' | 'source_not_found' | 'source_transport_failed'
+type SourceErrorCode =
+  | 'source_contract_invalid'
+  | 'source_rate_limited'
+  | 'source_unavailable'
+  | 'source_not_found'
+  | 'source_transport_failed'
 
 export class LeaderboardSourceError extends Error {
   constructor(
@@ -192,7 +197,14 @@ export async function fetchLeaderboardPage(
     )
   }
   if (!response.ok) {
-    if (response.status === 429) await dependencies.onRateLimited?.(retryAfterSeconds(response))
+    if (response.status === 429) {
+      await dependencies.onRateLimited?.(retryAfterSeconds(response))
+      throw new LeaderboardSourceError(
+        'source_rate_limited',
+        `V1 leaderboard returned 429 for ${input.mode}/${input.region}`,
+        true,
+      )
+    }
     if (response.status === 404) {
       throw new LeaderboardSourceError(
         'source_not_found',
@@ -203,7 +215,7 @@ export async function fetchLeaderboardPage(
     throw new LeaderboardSourceError(
       'source_unavailable',
       `V1 leaderboard returned ${response.status} for ${input.mode}/${input.region}`,
-      response.status === 429 || response.status >= 500,
+      response.status >= 500,
     )
   }
   let body: unknown

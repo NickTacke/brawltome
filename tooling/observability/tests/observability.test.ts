@@ -218,8 +218,15 @@ describe('observability deployment contract', () => {
     ]) {
       expect(rules).toContain(aggregation)
     }
-    expect(read('alertmanager', 'alertmanager.yml')).toContain('webhook_url_file: /run/secrets/discord_webhook_url')
-    expect(read('alertmanager', 'alertmanager.yml')).toContain('send_resolved: true')
+    const alertmanager = read('alertmanager', 'alertmanager.yml')
+    expect(alertmanager).toContain('webhook_url_file: /run/secrets/discord_webhook_url')
+    expect(alertmanager).toContain('send_resolved: true')
+    expect(alertmanager).toContain('group_by: [severity, generation, alertname]')
+    expect(alertmanager).toContain('group_wait: 30s')
+    expect(alertmanager).toContain('group_interval: 5m')
+    expect(alertmanager).toContain('Generation: {{ .Labels.generation }}')
+    expect(alertmanager).toContain('{{ with .Labels.failure_category }} | Category: {{ . }}{{ end }}')
+    expect(rules).toContain('refresh_failures_total{failure_category!="admission_deferred"}')
     expect(read('prometheus', 'prometheus.yml')).toContain('/run/secrets/metrics_scrape_secret')
     expect(read('prometheus', 'prometheus.yml')).not.toContain('internal_api_secret')
     expect(read('otel-collector', 'config.yml')).toContain('filename: /run/secrets/otel_ingest_token')

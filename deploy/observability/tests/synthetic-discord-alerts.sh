@@ -3,6 +3,7 @@ set -eu
 
 compose='docker compose -f deploy/observability/tests/compose.yml'
 alerts=$(awk '/^[[:space:]]+- alert:/{print $3}' deploy/observability/prometheus/rules/alerts.yml)
+alert_count=$(printf '%s\n' "$alerts" | awk 'NF { count++ } END { print count + 0 }')
 
 cleanup() {
 	$compose down -v --remove-orphans >/dev/null 2>&1 || true
@@ -22,6 +23,7 @@ payload() {
     $names | split("\n") | map(select(length > 0)) | map({
       labels: {
         alertname: ., severity: "warning", service: "brawltome", signal: (ascii_downcase),
+        generation: "v3", failure_category: "synthetic_failure",
         request_id: "must-not-reach-discord", trace_id: "must-not-reach-discord"
       },
       annotations: { summary: (. + " synthetic evidence") },
@@ -33,18 +35,21 @@ payload() {
 
 wait_for_events() {
 	minimum=$1
+	maximum_attempts=$2
 	attempts=0
 	until [ "$(curl -fsS http://127.0.0.1:18080/events | jq 'length')" -ge "$minimum" ]; do
 		attempts=$((attempts + 1))
-		[ "$attempts" -lt 30 ] || return 1
+		[ "$attempts" -lt "$maximum_attempts" ] || return 1
 		sleep 1
 	done
 }
 
 payload '2099-01-01T00:00:00Z' | curl -fsS -H 'content-type: application/json' --data-binary @- http://127.0.0.1:19093/api/v2/alerts >/dev/null
-wait_for_events 1
+wait_for_events "$alert_count" 60
 firing=$(curl -fsS http://127.0.0.1:18080/events)
 printf '%s' "$firing" | grep -q 'FIRING'
+printf '%s' "$firing" | grep -q 'Generation: v3'
+printf '%s' "$firing" | grep -q 'Category: synthetic_failure'
 for alert in $alerts; do
 	printf '%s' "$firing" | grep -q "$alert"
 done
@@ -55,7 +60,7 @@ fi
 
 curl -fsS -X DELETE http://127.0.0.1:18080/events >/dev/null
 payload '2025-01-01T00:00:01Z' | curl -fsS -H 'content-type: application/json' --data-binary @- http://127.0.0.1:19093/api/v2/alerts >/dev/null
-wait_for_events 1
+wait_for_events "$alert_count" 330
 resolved=$(curl -fsS http://127.0.0.1:18080/events)
 printf '%s' "$resolved" | grep -q 'RESOLVED'
 for alert in $alerts; do
