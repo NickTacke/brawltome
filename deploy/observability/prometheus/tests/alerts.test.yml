@@ -7,14 +7,15 @@ tests:
   - name: metrics target firing and recovery
     interval: 1m
     input_series:
-      - series: 'up{job="api",runtime="api",instance="api:3000"}'
+      - series: 'up{job="api",runtime="api",generation="v3",instance="v3-api:3000"}'
         values: "0 0 0 1 1 1"
     alert_rule_test:
       - eval_time: 2m
         alertname: RuntimeMetricsTargetDown
         exp_alerts:
           - exp_labels:
-              instance: api:3000
+              generation: v3
+              instance: v3-api:3000
               job: api
               runtime: api
               severity: critical
@@ -27,17 +28,42 @@ tests:
         alertname: RuntimeMetricsTargetDown
         exp_alerts: []
 
+  - name: public availability firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="availability",runtime="api",generation="v2",instance="https://api.brawltome.app/health"}'
+        values: "0 0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: PublicEndpointUnavailable
+        exp_alerts:
+          - exp_labels:
+              generation: v2
+              instance: https://api.brawltome.app/health
+              job: availability
+              runtime: api
+              severity: critical
+              service: brawltome
+              signal: public-availability
+            exp_annotations:
+              summary: "api public endpoint is unavailable"
+              description: "The public endpoint probe has failed for at least two minutes."
+      - eval_time: 3m
+        alertname: PublicEndpointUnavailable
+        exp_alerts: []
+
   - name: readiness firing and recovery
     interval: 1m
     input_series:
-      - series: 'probe_success{job="readiness",runtime="api",instance="http://api:3000/health/ready"}'
+      - series: 'probe_success{job="readiness",runtime="api",generation="v3",instance="http://v3-api:3000/health/ready"}'
         values: "0 0 0 1 1 1"
     alert_rule_test:
       - eval_time: 2m
         alertname: RuntimeNotReady
         exp_alerts:
           - exp_labels:
-              instance: http://api:3000/health/ready
+              generation: v3
+              instance: http://v3-api:3000/health/ready
               job: readiness
               runtime: api
               severity: critical
