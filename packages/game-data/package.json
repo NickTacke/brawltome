@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./legends": "./src/legends.ts",
     "./reference-data": "./src/reference-data.ts"
   },
   "scripts": {

@@ -1,3 +1,5 @@
+import { getLegendById } from '@brawltome/game-data/legends'
+import { legendSlug } from '@brawltome/game-data/reference-data'
 import postgres from 'postgres'
 import type { PlayerDiscoveryFact, PlayerDiscoverySource } from './discovery-facts'
 
@@ -15,6 +17,7 @@ type LegacyRow = {
   region: string | null
   rating: number | null
   view_count: number
+  best_legend: number | null
 }
 type AliasRow = { brawlhalla_id: number; display_alias: string }
 
@@ -39,8 +42,13 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
   const legacy = await sql<LegacyRow[]>`
-    SELECT brawlhalla_id, player_name, region, rating, view_count
+    SELECT brawlhalla_id, player_name, region, rating, view_count, NULL::integer AS best_legend
     FROM players.legacy_discovery_profiles
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+  `
+  const profileLegacy = await sql<LegacyRow[]>`
+    SELECT brawlhalla_id, player_name, NULL::text AS region, rating, 0 AS view_count, best_legend
+    FROM players.legacy_profile_discovery
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
   const canonicalAliases = await sql<AliasRow[]>`
@@ -57,7 +65,14 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   `
 
   const rankedById = new Map(ranked.map((row) => [row.brawlhalla_id, row]))
-  const legacyById = new Map(legacy.map((row) => [row.brawlhalla_id, row]))
+  const profileLegacyById = new Map(profileLegacy.map((row) => [row.brawlhalla_id, row]))
+  const legacyById = new Map(profileLegacyById)
+  for (const row of legacy) {
+    legacyById.set(row.brawlhalla_id, {
+      ...row,
+      best_legend: row.best_legend ?? profileLegacyById.get(row.brawlhalla_id)?.best_legend ?? null,
+    })
+  }
   const aliasesById = new Map<number, string[]>()
   for (const alias of [...canonicalAliases, ...legacyAliases]) {
     const aliases = aliasesById.get(alias.brawlhalla_id) ?? []
@@ -94,7 +109,12 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
               ? rawRating
               : null,
           viewCount: Math.max(0, fallback?.view_count ?? 0),
-          bestLegendNameKey: canonical?.ranked_main_legend_name_key ?? null,
+          bestLegendNameKey:
+            canonical?.ranked_main_legend_name_key ??
+            (() => {
+              const legend = getLegendById(fallback?.best_legend ?? 0)
+              return legend ? legendSlug(legend.heroId, legend.displayName) : null
+            })(),
           aliases,
         },
       ]
@@ -177,7 +197,14 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
 
     async legacyMigrationEvidence(): Promise<LegacyPlayerMigrationEvidence> {
       const [progress] = await client<{ status: 'in-progress' | 'complete' | 'blocked'; source_checksum: string }[]>`
-        SELECT status, source_checksum FROM players.legacy_import_progress WHERE singleton
+        SELECT status, source_checksum
+        FROM (
+          SELECT status, source_checksum, 0 AS source_rank FROM players.legacy_import_progress
+          UNION ALL
+          SELECT status, source_checksum, 1 AS source_rank FROM players.legacy_profile_import_progress
+        ) migration
+        ORDER BY (status = 'complete') DESC, source_rank
+        LIMIT 1
       `
       const rejectedIdentities = await client<Array<{ brawlhalla_id: number; player_name: string; reasons: string[] }>>`
         WITH archived AS (
@@ -203,7 +230,16 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
           AND archived.player_name ~ '[^[:space:]]'
           AND profile.brawlhalla_id IS NULL
         GROUP BY archived.source_key, archived.brawlhalla_id, archived.player_name
-        ORDER BY archived.brawlhalla_id
+        UNION ALL
+        SELECT archive.brawlhalla_id, archive.raw_row->>'name' AS player_name,
+               ARRAY[rejection.code] AS reasons
+        FROM players.legacy_profile_archive archive
+        JOIN players.legacy_profile_import_rejections rejection USING (brawlhalla_id)
+        LEFT JOIN players.legacy_profile_discovery profile USING (brawlhalla_id)
+        WHERE archive.raw_row->>'name' IS NOT NULL
+          AND archive.raw_row->>'name' ~ '[^[:space:]]'
+          AND profile.brawlhalla_id IS NULL
+        ORDER BY brawlhalla_id
       `
       return {
         status: progress?.status ?? 'not-started',
