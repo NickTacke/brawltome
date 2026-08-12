@@ -592,6 +592,26 @@ describe('Clans and Rankings V2 import', () => {
     })
   }, 30_000)
 
+  test('blocks Ranking writes before archiving when migration evidence immutability is unavailable', async () => {
+    await withFixtureDatabase(async (databaseUrl) => {
+      const control = postgres(databaseUrl, { max: 1 })
+      try {
+        await control`
+          ALTER TABLE rankings.legacy_archive ENABLE REPLICA TRIGGER rankings_legacy_archive_immutable
+        `
+        const blocked = await importLegacyRankings(databaseUrl)
+        expect(blocked.status).toBe('blocked')
+        expect(blocked.reconciliation).toMatchObject({ archivedRows: 0, exact: false })
+        const [progress] = await control<{ code: string }[]>`
+          SELECT block_reason->>'code' AS code FROM rankings.legacy_import_progress
+        `
+        expect(progress.code).toBe('evidence-immutability-unavailable')
+      } finally {
+        await control.end()
+      }
+    })
+  }, 30_000)
+
   test('blocks Clan writes when migration evidence immutability is unavailable', async () => {
     await withFixtureDatabase(async (databaseUrl) => {
       const control = postgres(databaseUrl, { max: 1 })
