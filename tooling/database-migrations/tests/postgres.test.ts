@@ -94,6 +94,10 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0005',
       'rankings/0006',
     ])
+    expect(globalMigrationInventory.slice(-2).map(({ identity }) => identity)).toEqual([
+      'players/0008',
+      'rankings/0006',
+    ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
       'discovery/0002',
@@ -169,8 +173,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[6],
       rankingMigrationInventory[3],
       rankingMigrationInventory[4],
-      rankingMigrationInventory[5],
       playerMigrationInventory[7],
+      rankingMigrationInventory[5],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -219,8 +223,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       accountsMigrationInventory[6],
       rankingMigrationInventory[3],
       rankingMigrationInventory[4],
-      rankingMigrationInventory[5],
       playerMigrationInventory[7],
+      rankingMigrationInventory[5],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
