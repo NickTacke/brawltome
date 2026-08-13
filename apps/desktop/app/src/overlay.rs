@@ -166,7 +166,7 @@ pub fn position_overlay_window(app: &AppHandle, probe: &AcceptanceProbe) -> taur
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
         };
-        let hwnd = window.hwnd().unwrap().0 as *mut std::ffi::c_void;
+        let hwnd = window.hwnd().unwrap().0;
         unsafe {
             let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE as isize);
