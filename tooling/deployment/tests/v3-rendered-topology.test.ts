@@ -10,6 +10,7 @@ function renderedTopology(): Record<string, unknown> {
     cwd: root,
     env: {
       ...process.env,
+      V3_DISCORD_CLIENT_ID: '123456789012345678',
       V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
       V3_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
       V3_TURNSTILE_SITE_KEY: 'test-site-key',

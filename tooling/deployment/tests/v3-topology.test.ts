@@ -16,6 +16,7 @@ function renderCompose() {
     cwd: root,
     env: {
       ...process.env,
+      V3_DISCORD_CLIENT_ID: '123456789012345678',
       V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
       V3_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
       V3_TURNSTILE_SITE_KEY: 'test-site-key',
@@ -115,6 +116,7 @@ describe('V3 production topology', () => {
     const rendered = renderCompose()
     const expectedSecretFiles = {
       brawlhalla_api_key: 'brawlhalla-api-key',
+      discord_client_secret: 'discord-client-secret',
       discord_internal_api_secret: 'discord-internal-api-secret',
       migration_database_url: 'migration-database-url',
       discord_token: 'discord-token',
@@ -135,8 +137,12 @@ describe('V3 production topology', () => {
       })
     }
     expect(rendered.services.migration.secrets?.map(({ source }) => source)).toEqual(['migration_database_url'])
+    expect(rendered.services['v3-api'].environment).toMatchObject({
+      DISCORD_CLIENT_ID: '123456789012345678',
+      DISCORD_REDIRECT_URI: 'https://api.brawltome.app/auth/discord/callback',
+    })
     expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).toEqual(
-      expect.arrayContaining(['runtime_database_url', 'turnstile_secret_key']),
+      expect.arrayContaining(['discord_client_secret', 'runtime_database_url', 'turnstile_secret_key']),
     )
     expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
     expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).toContain(

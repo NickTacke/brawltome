@@ -19,6 +19,7 @@ function executable(path: string, content: string): void {
 function fixture(
   bypassActors: unknown[] = [],
   domains: unknown[] = [
+    { host: 'api.brawltome.app', serviceName: 'v3-api' },
     { host: 'brawltome.app', serviceName: 'v3-web' },
     { host: 'v3-api.brawltome.app', serviceName: 'v3-api' },
   ],
@@ -77,6 +78,7 @@ exit 42
       DOKPLOY_V3_COMPOSE_ID: 'compose_safe-id',
       DOKPLOY_V3_PROJECT_NAME: projectName,
       DOKPLOY_V3_REF: sourceRef,
+      V3_DISCORD_CLIENT_ID: '123456789012345678',
       V3_TURNSTILE_SITE_KEY: 'test-site-key',
       MOCK_CURL_LOG: log,
       MOCK_DEPLOY_MARKER: deployMarker,
@@ -121,6 +123,16 @@ describe('V3 Dokploy deployment wrapper', () => {
     expect(result.stderr).toContain('public V3 domain metadata drift')
     expect(existsSync(gateMarker)).toBe(false)
     expect(existsSync(deployMarker)).toBe(false)
+  })
+
+  test('requires the Discord OAuth client ID before any API request', () => {
+    const { env, log } = fixture()
+    const { V3_DISCORD_CLIENT_ID: _clientId, ...withoutClientId } = env
+    const result = spawnSync('bash', [wrapper], { cwd: root, encoding: 'utf8', env: withoutClientId })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('V3_DISCORD_CLIENT_ID')
+    expect(existsSync(log)).toBe(false)
   })
 
   test('requires the public Turnstile site key before any API request', () => {

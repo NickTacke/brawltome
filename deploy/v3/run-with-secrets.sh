@@ -25,6 +25,7 @@ case "$role" in
     ;;
   api)
     read_secret DATABASE_URL "$secrets_root/runtime_database_url"
+    read_secret DISCORD_CLIENT_SECRET "$secrets_root/discord_client_secret"
     read_secret DISCORD_INTERNAL_API_SECRET "$secrets_root/discord_internal_api_secret"
     read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
     read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"

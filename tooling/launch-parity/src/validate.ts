@@ -38,7 +38,7 @@ const requiredRowIds = [
 ] as const
 const requiredShellDestinations = new Map([
   ['/', 'live'],
-  ['/stats', 'live'],
+  ['/stats', 'soon'],
   ['/matches', 'soon'],
   ['/learn', 'soon'],
   ['/tournaments', 'soon'],
