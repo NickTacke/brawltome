@@ -3,18 +3,14 @@ import type { LeaderboardMode, RankingQueries } from '@brawltome/ranking'
 import { leaderboardRouter } from '../src/router/leaderboard.router'
 import type { Context } from '../src/trpc/context'
 
-function callerFor(getLeaderboard: RankingQueries['getLeaderboard']) {
+function callerFor(
+  getLeaderboard: RankingQueries['getLeaderboard'],
+  referenceById: Context['playerReferenceQueries']['byId'] = async () => null,
+) {
   const rankingQueries: RankingQueries = { getLeaderboard }
   return leaderboardRouter.createCaller({
     rankingQueries,
-    playerRepo: new Proxy(
-      {},
-      {
-        get() {
-          throw new Error('canonical leaderboard queries must not read Players')
-        },
-      },
-    ),
+    playerReferenceQueries: { byId: referenceById },
   } as Context)
 }
 
@@ -54,35 +50,38 @@ describe('leaderboard.get', () => {
   })
 
   test('maps explicit identities and rejects malformed producer output', async () => {
-    const caller = callerFor(async (input) => ({
-      status: 'fresh',
-      snapshotId: '10000000-0000-4000-8000-000000000001',
-      generationId: '10000000-0000-4000-8000-000000000002',
-      mode: input.mode,
-      region: input.region,
-      observedAt: '2026-08-09T12:00:00Z',
-      publishedAt: '2026-08-09T12:00:01Z',
-      expectedNextPublicationAt: '2026-08-09T12:15:00Z',
-      provenance: { source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 },
-      page: 1,
-      pageSize: 20,
-      hasMore: false,
-      totalRows: 1,
-      entries: [
-        {
-          standing: 1,
-          sourceRank: 4,
-          identity: { type: 'solo-two-vs-two-player', player: { brawlhallaId: 42, name: 'Ada' } },
-          region: 'EU',
-          rating: 2100,
-          peakRating: 2200,
-          wins: 20,
-          losses: 10,
-          games: 30,
-          tier: 'Diamond',
-        },
-      ],
-    }))
+    const caller = callerFor(
+      async (input) => ({
+        status: 'fresh',
+        snapshotId: '10000000-0000-4000-8000-000000000001',
+        generationId: '10000000-0000-4000-8000-000000000002',
+        mode: input.mode,
+        region: input.region,
+        observedAt: '2026-08-09T12:00:00Z',
+        publishedAt: '2026-08-09T12:00:01Z',
+        expectedNextPublicationAt: '2026-08-09T12:15:00Z',
+        provenance: { source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 },
+        page: 1,
+        pageSize: 20,
+        hasMore: false,
+        totalRows: 1,
+        entries: [
+          {
+            standing: 1,
+            sourceRank: 4,
+            identity: { type: 'solo-two-vs-two-player', player: { brawlhallaId: 42, name: 'Ada' } },
+            region: 'EU',
+            rating: 2100,
+            peakRating: 2200,
+            wins: 20,
+            losses: 10,
+            games: 30,
+            tier: 'Diamond',
+          },
+        ],
+      }),
+      async (brawlhallaId) => ({ brawlhallaId, name: 'Ada', bestLegendNameKey: 'bodvar' }),
+    )
     await expect(caller.get({ mode: 'solo2v2', region: 'EU', page: 1 })).resolves.toMatchObject({
       mode: 'solo2v2',
       entries: [
@@ -91,7 +90,7 @@ describe('leaderboard.get', () => {
           sourceRank: 4,
           identity: {
             type: 'solo-two-vs-two-player',
-            player: { brawlhallaId: 42, name: 'Ada' },
+            player: { brawlhallaId: 42, name: 'Ada', bestLegendNameKey: 'bodvar' },
           },
         },
       ],

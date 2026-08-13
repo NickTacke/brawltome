@@ -1,15 +1,9 @@
 'use client'
 
 import { fixEncoding } from '@/lib/utils'
-import { Badge, TableCell, TableRow } from '@brawltome/ui'
+import { Avatar, AvatarFallback, AvatarImage, Badge, TableCell, TableRow } from '@brawltome/ui'
 import Link from 'next/link'
 import { type SoloLeaderboardEntry, type TeamLeaderboardEntry, getRankStyle, playerHref } from './utils'
-
-function SourceRank({ standing, sourceRank }: { standing: number; sourceRank: number }) {
-  return sourceRank !== standing ? (
-    <span className="text-[10px] font-normal text-muted-foreground">Source #{sourceRank}</span>
-  ) : null
-}
 
 function PlayerLink({ brawlhallaId, name }: { brawlhallaId: number; name: string }) {
   const href = playerHref(brawlhallaId)
@@ -38,29 +32,42 @@ export function SoloLeaderboardRow({ entry }: { entry: SoloLeaderboardEntry }) {
   return (
     <TableRow className="border-border cursor-pointer transition-colors group h-16">
       <TableCell className={`p-0 text-center ${getRankStyle(entry.standing)}`}>
-        {content(
-          <span className="flex flex-col items-center">
-            <span>#{entry.standing}</span>
-            <SourceRank standing={entry.standing} sourceRank={entry.sourceRank} />
-          </span>,
-        )}
+        {content(<span>#{entry.standing}</span>)}
       </TableCell>
       <TableCell className="p-0">
         {content(
-          <div className="flex flex-col">
-            <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
-              {fixEncoding(player.name)}
-            </span>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-muted-foreground font-mono">{entry.region}</span>
-              {entry.tier && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border"
-                >
-                  {entry.tier}
-                </Badge>
-              )}
+          <div className="flex items-center gap-3">
+            {player.bestLegendNameKey && (
+              <Avatar
+                aria-label={`${fixEncoding(player.name)} best legend: ${player.bestLegendNameKey}`}
+                className="h-10 w-10 border border-border bg-muted rounded-md"
+              >
+                <AvatarImage
+                  src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+                  alt={player.bestLegendNameKey}
+                  className="object-cover object-top"
+                  loading="lazy"
+                />
+                <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
+                  {player.bestLegendNameKey.substring(0, 2)}
+                </AvatarFallback>
+              </Avatar>
+            )}
+            <div className="flex flex-col">
+              <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
+                {fixEncoding(player.name)}
+              </span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-muted-foreground font-mono">{entry.region}</span>
+                {entry.tier && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0 h-5 font-normal bg-muted text-muted-foreground border-border"
+                  >
+                    {entry.tier}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>,
         )}
@@ -99,12 +106,7 @@ export function TeamLeaderboardRow({ entry }: { entry: TeamLeaderboardEntry }) {
   const [first, second] = entry.identity.players
   return (
     <TableRow className="border-border transition-colors group h-16">
-      <TableCell className={`text-center ${getRankStyle(entry.standing)}`}>
-        <span className="flex flex-col items-center">
-          <span>#{entry.standing}</span>
-          <SourceRank standing={entry.standing} sourceRank={entry.sourceRank} />
-        </span>
-      </TableCell>
+      <TableCell className={`text-center ${getRankStyle(entry.standing)}`}>#{entry.standing}</TableCell>
       <TableCell>
         <div className="flex flex-col">
           <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal leading-tight">

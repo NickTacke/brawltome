@@ -1,10 +1,54 @@
-import { leaderboardInputSchema } from '@brawltome/contracts'
+import { type LeaderboardOutput, leaderboardInputSchema, parseLeaderboardOutput } from '@brawltome/contracts'
 import { mapLeaderboardOutput } from '../mappers/leaderboard.mapper'
+import type { Context } from '../trpc/context'
 import { publicProcedure, router } from '../trpc/trpc'
+
+type AvailableLeaderboard = Extract<LeaderboardOutput, { status: 'fresh' | 'stale' }>
+type Contestant = AvailableLeaderboard['entries'][number]['identity'] extends infer Identity
+  ? Identity extends { player: infer Player }
+    ? Player
+    : Identity extends { players: readonly (infer Player)[] }
+      ? Player
+      : never
+  : never
+
+async function enrichBestLegends(
+  output: LeaderboardOutput,
+  references: Context['playerReferenceQueries'],
+): Promise<LeaderboardOutput> {
+  if (output.status === 'unavailable') return output
+  const contestants = output.entries.flatMap((entry) =>
+    entry.identity.type === 'fixed-two-vs-two-team' ? [...entry.identity.players] : [entry.identity.player],
+  )
+  const legendById = new Map(
+    (
+      await Promise.all(
+        [...new Set(contestants.map(({ brawlhallaId }) => brawlhallaId))].map(
+          async (brawlhallaId) =>
+            [brawlhallaId, (await references.byId(brawlhallaId))?.bestLegendNameKey ?? null] as const,
+        ),
+      )
+    ).filter((entry): entry is readonly [number, string] => entry[1] !== null),
+  )
+  const enrich = (player: Contestant) => ({
+    ...player,
+    bestLegendNameKey: legendById.get(player.brawlhallaId) ?? null,
+  })
+  return parseLeaderboardOutput({
+    ...output,
+    entries: output.entries.map((entry) => ({
+      ...entry,
+      identity:
+        entry.identity.type === 'fixed-two-vs-two-team'
+          ? { ...entry.identity, players: entry.identity.players.map(enrich) }
+          : { ...entry.identity, player: enrich(entry.identity.player) },
+    })),
+  })
+}
 
 export const leaderboardRouter = router({
   get: publicProcedure.input(leaderboardInputSchema).query(async ({ ctx, input }) => {
-    return mapLeaderboardOutput(
+    const output = mapLeaderboardOutput(
       await ctx.rankingQueries.getLeaderboard({
         mode: input.mode,
         region: input.region,
@@ -13,5 +57,6 @@ export const leaderboardRouter = router({
         snapshotId: input.snapshotId,
       }),
     )
+    return enrichBestLegends(output, ctx.playerReferenceQueries)
   }),
 })

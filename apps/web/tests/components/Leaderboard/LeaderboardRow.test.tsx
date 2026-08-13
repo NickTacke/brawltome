@@ -15,25 +15,26 @@ const metrics = {
 }
 
 describe('validated leaderboard rows', () => {
-  test('player modes render authoritative and source standings', () => {
+  test('player modes render only the displayed standing and best legend avatar', () => {
     const html = renderToStaticMarkup(
       <SoloLeaderboardRow
         entry={{
           ...metrics,
           identity: {
             type: 'three-vs-three-player',
-            player: { brawlhallaId: 42, name: 'Ada' },
+            player: { brawlhallaId: 42, name: 'Ada', bestLegendNameKey: 'bodvar' },
           },
         }}
       />,
     )
     expect(html).toContain('#3')
-    expect(html).toContain('Source #7')
+    expect(html).not.toContain('Source #')
+    expect(html).toContain('aria-label="Ada best legend: bodvar"')
     expect(html).toContain('href="/player/42"')
     expect(html).toContain('Peak: ---')
   })
 
-  test('fixed teams render both positive player links and their authoritative source rank', () => {
+  test('fixed teams render both positive player links without source ranks', () => {
     const html = renderToStaticMarkup(
       <TeamLeaderboardRow
         entry={{
@@ -49,7 +50,7 @@ describe('validated leaderboard rows', () => {
       />,
     )
     expect(html).toContain('#3')
-    expect(html).toContain('Source #7')
+    expect(html).not.toContain('Source #')
     expect(html).toContain('href="/player/42"')
     expect(html).toContain('href="/player/43"')
   })
