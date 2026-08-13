@@ -63,12 +63,12 @@ describe('operations worker configuration', () => {
   })
 
   test('validates the source ceiling and explicit background headroom', () => {
-    expect(readBrawlhallaV1RequestLimit(undefined)).toBe(102)
-    expect(readBrawlhallaV1RequestLimit('102')).toBe(102)
-    expect(() => readBrawlhallaV1RequestLimit('103')).toThrow('BRAWLHALLA_V1_REQUEST_LIMIT')
-    expect(readSourceBackgroundHeadroom(undefined, 102)).toBe(30)
-    expect(readSourceBackgroundHeadroom('30', 102)).toBe(30)
-    expect(() => readSourceBackgroundHeadroom('102', 102)).toThrow('SOURCE_BACKGROUND_HEADROOM')
+    expect(readBrawlhallaV1RequestLimit(undefined)).toBe(1_800)
+    expect(readBrawlhallaV1RequestLimit('1800')).toBe(1_800)
+    expect(() => readBrawlhallaV1RequestLimit('1801')).toThrow('BRAWLHALLA_V1_REQUEST_LIMIT')
+    expect(readSourceBackgroundHeadroom(undefined, 180)).toBe(30)
+    expect(readSourceBackgroundHeadroom('30', 180)).toBe(30)
+    expect(() => readSourceBackgroundHeadroom('180', 180)).toThrow('SOURCE_BACKGROUND_HEADROOM')
   })
 
   test('defines four deterministic staggered schedules in the existing leaderboard work class', () => {

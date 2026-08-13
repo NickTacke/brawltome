@@ -25,7 +25,7 @@ function boundedInteger(value: string | undefined, fallback: number, name: strin
 }
 
 export function readBrawlhallaV1RequestLimit(value: string | undefined): number {
-  return boundedInteger(value, 102, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 102)
+  return boundedInteger(value, 1_800, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 1_800)
 }
 
 export function readSourceBackgroundHeadroom(value: string | undefined, minimumSourceLimit: number): number {

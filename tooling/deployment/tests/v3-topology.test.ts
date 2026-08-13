@@ -152,7 +152,7 @@ describe('V3 production topology', () => {
     )
     const workerEnvironment = rendered.services['v3-operations-worker'].environment
     expect(workerEnvironment).toMatchObject({
-      BRAWLHALLA_V1_REQUEST_LIMIT: '102',
+      BRAWLHALLA_V1_REQUEST_LIMIT: '1800',
       LEADERBOARD_INTERVAL_MS: '3600000',
       LEADERBOARD_PAGE_DEPTH: '20',
       OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
@@ -218,8 +218,8 @@ describe('V3 production topology', () => {
     }
     const environment = rendered.services['operations-worker'].environment
     const limit = readBrawlhallaV1RequestLimit(environment.BRAWLHALLA_V1_REQUEST_LIMIT)
-    expect(limit).toBe(102)
-    expect(readSourceBackgroundHeadroom(environment.SOURCE_BACKGROUND_HEADROOM, limit)).toBe(30)
+    expect(limit).toBe(1_800)
+    expect(readSourceBackgroundHeadroom(environment.SOURCE_BACKGROUND_HEADROOM, Math.min(180, limit))).toBe(30)
     expect(readOperationsWorkerConfig(environment as NodeJS.ProcessEnv).sourceUnavailableRetryMs).toBe(60_000)
   })
 

@@ -57,7 +57,7 @@ const workerConfig = readOperationsWorkerConfig(process.env)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
-  brawlhallaV1RequestLimit,
+  Math.min(180, brawlhallaV1RequestLimit),
 )
 const accounts = createPostgresAccounts(connectionString)
 const discovery = createPostgresDiscovery(connectionString)
@@ -71,6 +71,7 @@ const requestAdmission = createPostgresRequestAdmission(connectionString, {
     'brawlhalla-v0': 180,
     'brawlhalla-v1': brawlhallaV1RequestLimit,
   },
+  sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60 },
   sourceBackgroundHeadroom,
   minimumSourceSpacingMs: 150,
 })

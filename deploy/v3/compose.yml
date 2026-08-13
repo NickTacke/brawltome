@@ -191,7 +191,7 @@ services:
       target: operations-worker
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
-      BRAWLHALLA_V1_REQUEST_LIMIT: "102"
+      BRAWLHALLA_V1_REQUEST_LIMIT: "1800"
       HEALTH_PORT: "3001"
       LEADERBOARD_INTERVAL_MS: "3600000"
       LEADERBOARD_PAGE_DEPTH: "20"

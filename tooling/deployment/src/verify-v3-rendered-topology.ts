@@ -105,8 +105,8 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
 
   const worker = services['v3-operations-worker']
   if (isRecord(worker)) {
-    if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '102') {
-      violations.push('operations-worker must retain the staged Brawlhalla ceiling of 102')
+    if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1800') {
+      violations.push('operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes')
     }
     if (readPath(worker, 'environment', 'LEADERBOARD_PAGE_DEPTH') !== '20') {
       violations.push('operations-worker must retain adaptive leaderboard depth 20')
