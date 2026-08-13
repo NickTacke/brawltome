@@ -126,6 +126,16 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     }
   }
 
+  const api = services['v3-api']
+  if (isRecord(api)) {
+    if (readPath(api, 'environment', 'CORS_ORIGIN') !== 'https://brawltome.app') {
+      violations.push('api must allow only the final public web origin')
+    }
+    if (readPath(api, 'environment', 'WEB_ORIGIN') !== 'https://brawltome.app') {
+      violations.push('api must use the final public web origin')
+    }
+  }
+
   const web = services['v3-web']
   if (isRecord(web)) {
     if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://v3-api:3000') {

@@ -39,6 +39,20 @@ describe('rendered V3 deployment topology', () => {
     )
   })
 
+  test('rejects preview web origins after final public cutover', () => {
+    const topology = renderedTopology()
+    const environment = services(topology)['v3-api'].environment as Record<string, string>
+    environment.CORS_ORIGIN = 'https://v3.brawltome.app'
+    environment.WEB_ORIGIN = 'https://v3.brawltome.app'
+
+    expect(verifyV3RenderedTopology(topology)).toEqual(
+      expect.arrayContaining([
+        'api must allow only the final public web origin',
+        'api must use the final public web origin',
+      ]),
+    )
+  })
+
   test.each([
     ['BRAWLHALLA_V1_REQUEST_LIMIT', '1', 'operations-worker must retain the staged Brawlhalla ceiling of 102'],
     ['OPERATIONS_TOTAL_CONCURRENCY', '3', 'operations-worker must retain two total operation slots'],
