@@ -133,7 +133,11 @@ describe('V0 career snapshot source contract', () => {
     expect(() => decodeV0CareerSnapshot(payload, 91913839, resolveLegend)).toThrow()
   })
 
-  test('rejects an unresolved legend instead of dropping its weapon facts', () => {
-    expect(() => decodeV0CareerSnapshot(completeSnapshot, 91913839, () => null)).toThrow(/reference data/)
+  test('omits an unresolved new legend without discarding the valid profile', () => {
+    const decoded = decodeV0CareerSnapshot(completeSnapshot, 91913839, () => null)
+    expect(decoded.name).toBe('Measured Zero')
+    expect(decoded.combat.matchTime).toBe(600)
+    expect(decoded.legends).toEqual([])
+    expect(decoded.weapons).toEqual([])
   })
 })

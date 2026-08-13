@@ -200,6 +200,31 @@ describe('Players-owned canonical ranked state', () => {
     }
   })
 
+  test('preserves an imported identity when V0 ranked omits the player name', async () => {
+    const brawlhallaId = 91913843
+    const control = postgres(connectionString, { max: 1 })
+    const players = createPostgresRankedPlayers(connectionString)
+    const operations = createPostgresRefreshOperations(connectionString)
+    try {
+      await control`
+        INSERT INTO players.legacy_discovery_profiles
+          (brawlhalla_id, player_name, view_count, observed_at, archive_checksum)
+        VALUES (${brawlhallaId}, 'Imported Identity', 0, clock_timestamp(), ${'a'.repeat(64)})
+      `
+      const lease = await claimRankedOperation(operations, brawlhallaId)
+      await refreshCanonicalRankedPlayer(
+        players,
+        source({ ...snapshot, brawlhalla_id: brawlhallaId, name: '', '2v2': [] }),
+        brawlhallaId,
+        { caller: 'on-demand' },
+        effectFor(lease),
+      )
+      expect(await players.referenceById(brawlhallaId)).toMatchObject({ name: 'Imported Identity' })
+    } finally {
+      await Promise.all([control.end(), players.close(), operations.close()])
+    }
+  })
+
   test('reconciles a crash after the atomic ranked effect without dead-lettering or reapplying', async () => {
     const brawlhallaId = 91913841
     const players = createPostgresRankedPlayers(connectionString)

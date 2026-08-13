@@ -39,7 +39,7 @@ export type V1RankedPulse = {
 
 export type V0RankedSnapshot = {
   brawlhallaId: number
-  name: string
+  name: string | null
   oneVsOne: RankedValues & {
     region: string
     globalRank: number | null
@@ -173,6 +173,7 @@ export function decodeV1FixedTeamPulses(payload: unknown, requestedBrawlhallaId:
 
 function playerRegion(value: unknown, path: string): string {
   const region = text(value, path)
+  if (region === 'none') return ''
   if (!PLAYER_REGIONS.has(region as (typeof REGION_BY_ID)[keyof typeof REGION_BY_ID])) {
     throw new Error(`${path} is not a supported ranked region`)
   }
@@ -252,7 +253,7 @@ export function decodeV0RankedSnapshot(payload: unknown, requestedBrawlhallaId: 
 
   return {
     brawlhallaId,
-    name: text(source.name, 'ranked.name'),
+    name: typeof source.name === 'string' && /[^\p{Separator}\p{Format}]/u.test(source.name) ? source.name : null,
     oneVsOne: {
       ...rankedValues(source, 'ranked'),
       region: playerRegion(source.region, 'ranked.region'),

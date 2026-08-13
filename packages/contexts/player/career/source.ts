@@ -120,25 +120,21 @@ export function decodeV0CareerSnapshot(
     throw new Error('career.brawlhalla_id does not match the requested player')
   }
 
-  const references: CareerLegendReference[] = []
   const legendIds = new Set<number>()
-  const legends = array(source.legends, 'career.legends').map((value, index) => {
+  const observedLegendMatchTimes: number[] = []
+  const legendEntries = array(source.legends, 'career.legends').flatMap((value, index) => {
     const path = `career.legends[${index}]`
     const legend = record(value, path)
     const legendId = integer(legend.legend_id, `${path}.legend_id`, 1)
     if (legendIds.has(legendId)) throw new Error(`career.legends contains duplicate legend ${legendId}`)
     legendIds.add(legendId)
     const legendNameKey = text(legend.legend_name_key, `${path}.legend_name_key`)
-    const reference = resolveLegend(legendId, legendNameKey)
-    if (!reference || reference.legendId !== legendId || reference.legendNameKey !== legendNameKey) {
-      throw new Error(`${path} does not resolve to consistent legend reference data`)
-    }
-    references.push(reference)
     const games = integer(legend.games, `${path}.games`)
     const wins = integer(legend.wins, `${path}.wins`)
     if (wins > games) throw new Error(`${path}.wins cannot exceed games`)
-
-    return {
+    const matchTime = integer(legend.matchtime, `${path}.matchtime`)
+    observedLegendMatchTimes.push(matchTime)
+    const snapshot = {
       legendId,
       legendNameKey,
       xp: integer(legend.xp, `${path}.xp`),
@@ -146,7 +142,7 @@ export function decodeV0CareerSnapshot(
       xpPercentage: percentage(legend.xp_percentage, `${path}.xp_percentage`),
       games,
       wins,
-      matchTime: integer(legend.matchtime, `${path}.matchtime`),
+      matchTime,
       kos: integer(legend.kos, `${path}.kos`),
       falls: integer(legend.falls, `${path}.falls`),
       suicides: integer(legend.suicides, `${path}.suicides`),
@@ -176,7 +172,12 @@ export function decodeV0CareerSnapshot(
         heldTime: integer(legend.timeheldweapontwo, `${path}.timeheldweapontwo`),
       },
     }
+    const reference = resolveLegend(legendId, legendNameKey)
+    return !reference || reference.legendId !== legendId || reference.legendNameKey !== legendNameKey
+      ? []
+      : [{ reference, legend: snapshot }]
   })
+  const legends = legendEntries.map(({ legend }) => legend)
 
   const weaponFacts = new Map<string, { heldTimes: number[]; damage: bigint; kos: number[] }>()
   const addWeapon = (weapon: string, heldTime: number, damage: string, kos: number) => {
@@ -187,11 +188,10 @@ export function decodeV0CareerSnapshot(
     fact.kos.push(kos)
     weaponFacts.set(name, fact)
   }
-  legends.forEach((legend, index) => {
-    const reference = references[index]
+  for (const { legend, reference } of legendEntries) {
     addWeapon(reference.weaponOne, legend.weaponOne.heldTime, legend.weaponOne.damage, legend.weaponOne.kos)
     addWeapon(reference.weaponTwo, legend.weaponTwo.heldTime, legend.weaponTwo.damage, legend.weaponTwo.kos)
-  })
+  }
   const weapons = Array.from(weaponFacts, ([weapon, fact]) => ({
     weapon,
     heldTime: checkedSum(fact.heldTimes, `career weapon ${weapon} held time`),
@@ -214,10 +214,7 @@ export function decodeV0CareerSnapshot(
     combat: {
       games,
       wins,
-      matchTime: checkedSum(
-        legends.map((legend) => legend.matchTime),
-        'career match time',
-      ),
+      matchTime: checkedSum(observedLegendMatchTimes, 'career match time'),
       damageBomb: decimal(source.damagebomb, 'career.damagebomb'),
       damageMine: decimal(source.damagemine, 'career.damagemine'),
       damageSpikeball: decimal(source.damagespikeball, 'career.damagespikeball'),

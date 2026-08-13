@@ -443,6 +443,22 @@ export function createPostgresRankedPlayers(
         const [previous] = await sql<{ player_name: string | null }[]>`
           SELECT player_name FROM players.ranked_profiles WHERE brawlhalla_id = ${snapshot.brawlhallaId}
         `
+        const [reference] = snapshot.name
+          ? []
+          : await sql<{ player_name: string | null }[]>`
+              SELECT player_name, 0 AS source_rank FROM players.career_profiles
+              WHERE brawlhalla_id = ${snapshot.brawlhallaId} AND last_success_at IS NOT NULL
+              UNION ALL
+              SELECT player_name, 1 AS source_rank FROM players.legacy_discovery_profiles
+              WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+              UNION ALL
+              SELECT player_name, 2 AS source_rank FROM players.legacy_profile_discovery
+              WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+              ORDER BY source_rank
+              LIMIT 1
+            `
+        const playerName = snapshot.name ?? previous?.player_name ?? reference?.player_name
+        if (!playerName) throw new Error(`ranked.name is unavailable for player ${snapshot.brawlhallaId}`)
         const one = snapshot.oneVsOne
         await sql`
           INSERT INTO players.ranked_profiles
@@ -450,7 +466,7 @@ export function createPostgresRankedPlayers(
              tier, wins, games, global_rank, region_rank, ranked_main_legend_id,
              ranked_main_legend_name_key, v0_effect_created_at, v0_effect_operation_id)
           VALUES
-            (${snapshot.brawlhallaId}, ${snapshot.name}, ${observedAt}, ${observedAt}, ${one.region},
+            (${snapshot.brawlhallaId}, ${playerName}, ${observedAt}, ${observedAt}, ${one.region},
              ${one.rating}, ${one.peakRating}, ${one.tier}, ${one.wins}, ${one.games}, ${one.globalRank},
              ${one.regionRank}, ${snapshot.rankedMainLegend?.legendId ?? null},
              ${snapshot.rankedMainLegend?.legendNameKey ?? null}, ${effect.effectCreatedAt},
@@ -487,7 +503,7 @@ export function createPostgresRankedPlayers(
             AND (effect_created_at, effect_operation_id::text) <=
               (${effect.effectCreatedAt}::timestamptz, ${effect.effectOperationId ?? effect.operationId}::text)
         `
-        if (previous?.player_name && previous.player_name !== snapshot.name) {
+        if (snapshot.name && previous?.player_name && previous.player_name !== snapshot.name) {
           await sql`
             INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
             VALUES (${snapshot.brawlhallaId}, ${previous.player_name.toLowerCase()}, ${previous.player_name}, ${observedAt})

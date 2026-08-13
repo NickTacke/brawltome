@@ -108,6 +108,15 @@ describe('V0 ranked snapshot source contract', () => {
     })
   })
 
+  test('preserves an unranked snapshot while treating its blank name as absent identity evidence', () => {
+    expect(
+      decodeV0RankedSnapshot(
+        { ...completeSnapshot, name: '', peak_rating: 0, tier: 'none', region: 'none', legends: [], '2v2': [] },
+        91913839,
+      ),
+    ).toMatchObject({ name: null, oneVsOne: { rating: 0, peakRating: 0, tier: 'none', region: '' } })
+  })
+
   test('accepts authoritative empty arrays and preserves multiple Solo Queue rows in source order', () => {
     const secondSolo = {
       ...completeSnapshot['2v2'][1],
