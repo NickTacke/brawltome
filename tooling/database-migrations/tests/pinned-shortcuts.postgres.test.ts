@@ -176,6 +176,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Player shortcuts PostgreSQL', () =>
         ])
         await Promise.all([42, 43, 44].map((id) => runtime.accounts.savePlayer(first.id, id)))
         await runtime.accounts.savePlayer(second.id, 42)
+        await clearPins(runtime, first.id)
         for (const id of [42, 43, 44]) await runtime.accounts.pinSavedPlayer(first.id, id)
         await runtime.accounts.pinSavedPlayer(second.id, 42)
 
