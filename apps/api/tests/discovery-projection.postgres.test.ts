@@ -134,6 +134,30 @@ describe('Players to Discovery projection delivery', () => {
         VALUES (10, 'Canonical | Player', now(), now(), 'EU', 2100, 2200, 'Platinum', 10, 20)
       `
 
+      const eager = await source.snapshot()
+      if (!source.withSnapshot) throw new Error('Expected streaming Player snapshot')
+      const streamed = await source.withSnapshot(async (snapshot) => {
+        const read = async () => {
+          const facts = []
+          for await (const fact of snapshot.facts()) facts.push(fact)
+          return facts
+        }
+        return {
+          sourceVersion: snapshot.sourceVersion,
+          pendingEventCount: snapshot.pendingEventCount,
+          oldestPendingAt: snapshot.oldestPendingAt,
+          first: await read(),
+          second: await read(),
+        }
+      })
+      expect(streamed).toEqual({
+        sourceVersion: eager.sourceVersion,
+        pendingEventCount: eager.pendingEventCount,
+        oldestPendingAt: eager.oldestPendingAt,
+        first: eager.facts,
+        second: eager.facts,
+      })
+
       expect(await source.lag()).toBeGreaterThan(0)
       await expect(playerResults(discovery, 'player')).resolves.toEqual([])
 

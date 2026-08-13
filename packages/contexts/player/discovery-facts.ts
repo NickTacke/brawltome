@@ -22,10 +22,18 @@ export type PlayerDiscoverySnapshot = {
   oldestPendingAt: Date | null
 }
 
+export type PlayerDiscoverySnapshotStream = {
+  sourceVersion: number
+  pendingEventCount: number
+  oldestPendingAt: Date | null
+  facts(): AsyncIterable<PlayerDiscoveryFact>
+}
+
 export interface PlayerDiscoverySource {
   pendingEvents(limit: number): Promise<PlayerDiscoveryEvent[]>
   acknowledgeEvents(eventIds: string[]): Promise<void>
   replayDeliveredEvents(eventIds: string[]): Promise<void>
   snapshot(): Promise<PlayerDiscoverySnapshot>
+  withSnapshot?<T>(consume: (snapshot: PlayerDiscoverySnapshotStream) => Promise<T>): Promise<T>
   lag(): Promise<number>
 }

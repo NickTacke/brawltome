@@ -121,4 +121,43 @@ describe('Discovery owner reconciliation', () => {
       await Promise.all([discovery.close(), control.end()])
     }
   })
+  test('reconciles a replayable Player fact stream without materializing the legacy snapshot', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({ sourceVersion: 7, facts: [fact(1, 'Stale'), fact(2, 'Unexpected')] })
+      const facts = [fact(1, 'Current', ['Former'])]
+      const streamedSource: PlayerProjectionSource = {
+        pendingEvents: async () => [],
+        acknowledgeEvents: async () => {},
+        snapshot: async () => {
+          throw new Error('legacy snapshot must not be materialized')
+        },
+        withSnapshot: async (consume) =>
+          consume({
+            sourceVersion: 7,
+            pendingEventCount: 0,
+            oldestPendingAt: null,
+            facts: async function* () {
+              for (const player of facts) yield player
+            },
+          }),
+        lag: async () => 0,
+      }
+
+      const repaired = await discovery.reconcilePlayers(streamedSource, randomUUID())
+      expect(repaired).toMatchObject({
+        owner: 'player',
+        exactBefore: false,
+        exactAfter: true,
+        repaired: true,
+        differences: [
+          { entityId: 1, kind: 'mismatched' },
+          { entityId: 2, kind: 'unexpected' },
+        ],
+      })
+      expect(repaired.projectedHashAfter).toBe(repaired.expectedHash)
+    } finally {
+      await discovery.close()
+    }
+  })
 })
