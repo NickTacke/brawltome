@@ -44,6 +44,7 @@ export type CareerWeaponSnapshot = {
 export type V0CareerSnapshot = {
   brawlhallaId: number
   name: string
+  guild: { guildId: number; guildName: string } | null
   account: { xp: number; level: number; xpPercentage: number }
   combat: {
     games: number
@@ -203,9 +204,18 @@ export function decodeV0CareerSnapshot(
   const wins = integer(source.wins, 'career.wins')
   if (wins > games) throw new Error('career.wins cannot exceed games')
 
+  const guildSource = source.clan === undefined ? null : record(source.clan, 'career.clan')
+  const guild = guildSource
+    ? {
+        guildId: integer(guildSource.clan_id, 'career.clan.clan_id', 1),
+        guildName: text(guildSource.clan_name, 'career.clan.clan_name'),
+      }
+    : null
+
   return {
     brawlhallaId,
     name: text(source.name, 'career.name'),
+    guild,
     account: {
       xp: integer(source.xp, 'career.xp'),
       level: integer(source.level, 'career.level'),

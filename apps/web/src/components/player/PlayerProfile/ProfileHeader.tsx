@@ -20,7 +20,12 @@ interface ProfileHeaderPlayer {
   brawlhallaId: number
   name: string
   currentSeason?: { snapshot: { oneVsOne: { region: string } } | null } | null
-  career?: { snapshot: { combat: { matchTime: number } } | null } | null
+  career?: {
+    snapshot: {
+      guild: { guildId: number; guildName: string } | null
+      combat: { matchTime: number }
+    } | null
+  } | null
   clan?: { clanId: number; clanName: string } | null
 }
 
@@ -32,8 +37,10 @@ interface ProfileHeaderProps {
 }
 
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
-  const lifetimeMatchTime = player.career?.snapshot?.combat.matchTime
+  const career = player.career?.snapshot
+  const playtime = career?.combat.matchTime
   const region = player.currentSeason?.snapshot?.oneVsOne.region
+  const guild = career ? career.guild : player.clan
 
   return (
     <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -64,12 +71,12 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
             <div>
               ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span>
             </div>
-            {typeof lifetimeMatchTime === 'number' && (
+            {typeof playtime === 'number' && playtime > 0 && (
               <>
                 <span>&bull;</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Lifetime playtime:</span>
-                  <span className="font-mono text-foreground">{formatHours(lifetimeMatchTime)}</span>
+                  <span className="text-muted-foreground">Playtime:</span>
+                  <span className="font-mono text-foreground">{formatHours(playtime)}</span>
                 </div>
               </>
             )}
@@ -97,17 +104,17 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
                 </DropdownMenu>
               </>
             )}
-            {player.clan && (
+            {guild && (
               <>
                 <span>&bull;</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Clan:</span>
+                  <span className="text-muted-foreground">Guild:</span>
                   <Link
-                    href={`/clan/${player.clan.clanId}`}
+                    href={`/clan/${'guildId' in guild ? guild.guildId : guild.clanId}`}
                     prefetch={false}
                     className="text-primary font-bold hover:underline"
                   >
-                    {fixEncoding(player.clan.clanName)}
+                    {fixEncoding('guildName' in guild ? guild.guildName : guild.clanName)}
                   </Link>
                 </div>
               </>

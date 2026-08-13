@@ -51,6 +51,13 @@ const careerWeaponSchema = z
   })
   .strict()
 
+const guildSchema = z
+  .object({
+    guildId: positiveInt32,
+    guildName: visibleText,
+  })
+  .strict()
+
 const accountSchema = z
   .object({
     xp: int32,
@@ -80,6 +87,7 @@ const combatSchema = z
 
 export const playerCareerSnapshotSchema = z
   .object({
+    guild: guildSchema.nullable(),
     account: accountSchema,
     combat: combatSchema,
     legends: z.array(careerLegendSchema),

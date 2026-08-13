@@ -6,6 +6,7 @@ import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
 import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overlays'
 import { addV2PlayerImport } from './migrations/0007-add-v2-player-import'
 import { addLegacyBestLegend } from './migrations/0008-add-legacy-best-legend'
+import { addCareerGuild } from './migrations/0009-add-career-guild'
 
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
 export {
@@ -54,4 +55,5 @@ export const playerMigrationInventory = [
   addRankedPulseOverlays,
   addV2PlayerImport,
   addLegacyBestLegend,
+  addCareerGuild,
 ] as const

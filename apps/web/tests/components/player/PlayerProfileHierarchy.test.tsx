@@ -20,6 +20,7 @@ const career = {
   freshness: 'fresh' as const,
   freshForSeconds: 43_200,
   snapshot: {
+    guild: { guildId: 2_616_365, guildName: 'Son of God' },
     account: { xp: 100, level: 2, xpPercentage: 0.5 },
     combat: {
       games: 10,
@@ -58,10 +59,11 @@ describe('PlayerProfileHierarchy', () => {
       />,
     )
 
-    expect(html).toContain('Lifetime playtime:')
+    expect(html).toContain('Playtime:')
+    expect(html).not.toContain('Lifetime playtime:')
     expect(html).toContain('2h')
-    expect(html).toContain('Clan:')
-    expect(html).toContain('Guild Name')
+    expect(html).toContain('Guild:')
+    expect(html).toContain('Son of God')
   })
 
   test('renders one canonical viewer-neutral profile hierarchy', () => {

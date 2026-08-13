@@ -15,6 +15,8 @@ type Sql = ReturnType<typeof postgres>
 
 type ProfileRow = {
   brawlhalla_id: number
+  guild_id: number | null
+  guild_name: string | null
   checked_at: Date
   last_success_at: Date | null
   xp: number | null
@@ -151,8 +153,8 @@ export function createPostgresCareerPlayers(
       return client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
         const [profile] = await sql<ProfileRow[]>`
-          SELECT brawlhalla_id, checked_at, last_success_at, xp, level, xp_percentage, games, wins,
-                 match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick,
+          SELECT brawlhalla_id, guild_id, guild_name, checked_at, last_success_at, xp, level, xp_percentage,
+                 games, wins, match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick,
                  snowball_hits, bomb_kos, mine_kos, spikeball_kos, sidekick_kos, snowball_kos
           FROM players.career_profiles
           WHERE brawlhalla_id = ${brawlhallaId}
@@ -197,6 +199,10 @@ export function createPostgresCareerPlayers(
           freshness,
           freshForSeconds: CAREER_FRESHNESS_SECONDS,
           snapshot: {
+            guild:
+              profile.guild_id && profile.guild_name
+                ? { guildId: profile.guild_id, guildName: profile.guild_name }
+                : null,
             account: {
               xp: profile.xp as number,
               level: profile.level as number,
@@ -290,17 +296,21 @@ export function createPostgresCareerPlayers(
         const { account, combat } = snapshot
         await sql`
           INSERT INTO players.career_profiles
-            (brawlhalla_id, player_name, checked_at, last_success_at, xp, level, xp_percentage,
-             games, wins, match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick,
-             snowball_hits, bomb_kos, mine_kos, spikeball_kos, sidekick_kos, snowball_kos)
+            (brawlhalla_id, player_name, guild_id, guild_name, checked_at, last_success_at,
+             xp, level, xp_percentage, games, wins, match_time, damage_bomb, damage_mine,
+             damage_spikeball, damage_sidekick, snowball_hits, bomb_kos, mine_kos, spikeball_kos,
+             sidekick_kos, snowball_kos)
           VALUES
-            (${snapshot.brawlhallaId}, ${snapshot.name}, ${observedAt}, ${observedAt}, ${account.xp},
+            (${snapshot.brawlhallaId}, ${snapshot.name}, ${snapshot.guild?.guildId ?? null},
+             ${snapshot.guild?.guildName ?? null}, ${observedAt}, ${observedAt}, ${account.xp},
              ${account.level}, ${account.xpPercentage}, ${combat.games}, ${combat.wins}, ${combat.matchTime},
              ${combat.damageBomb}, ${combat.damageMine}, ${combat.damageSpikeball}, ${combat.damageSidekick},
              ${combat.snowballHits}, ${combat.bombKos}, ${combat.mineKos}, ${combat.spikeballKos},
              ${combat.sidekickKos}, ${combat.snowballKos})
           ON CONFLICT (brawlhalla_id) DO UPDATE SET
             player_name = EXCLUDED.player_name,
+            guild_id = EXCLUDED.guild_id,
+            guild_name = EXCLUDED.guild_name,
             checked_at = EXCLUDED.checked_at,
             last_success_at = EXCLUDED.last_success_at,
             xp = EXCLUDED.xp,

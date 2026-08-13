@@ -20,28 +20,66 @@ describe('ProfileHeader', () => {
     expect(html).not.toContain('1h')
   })
 
-  test('preserves canonical measured-zero lifetime playtime', () => {
+  test('hides canonical measured-zero playtime', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader
-        player={{ ...player, career: { snapshot: { combat: { matchTime: 0 } } } }}
+        player={{ ...player, career: { snapshot: { guild: null, combat: { matchTime: 0 } } } }}
         topLegend={null}
         aliases={[]}
         refreshing={false}
       />,
     )
 
-    expect(html).toContain('Lifetime playtime:')
-    expect(html).toContain('0h')
+    expect(html).not.toContain('Playtime:')
+    expect(html).not.toContain('0h')
   })
 
-  test('shows canonical region, clan, and lifetime playtime together', () => {
+  test('uses imported guild only before a canonical career snapshot exists', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHeader
+        player={{ ...player, career: null, clan: { clanId: 7, clanName: 'Imported Fallback' } }}
+        topLegend={null}
+        aliases={[]}
+        refreshing={false}
+      />,
+    )
+
+    expect(html).toContain('Guild:')
+    expect(html).toContain('/clan/7')
+    expect(html).toContain('Imported Fallback')
+  })
+
+  test('does not resurrect imported guild after canonical absence', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHeader
+        player={{
+          ...player,
+          career: { snapshot: { guild: null, combat: { matchTime: 0 } } },
+          clan: { clanId: 7, clanName: 'Stale Imported Guild' },
+        }}
+        topLegend={null}
+        aliases={[]}
+        refreshing={false}
+      />,
+    )
+
+    expect(html).not.toContain('Guild:')
+    expect(html).not.toContain('Stale Imported Guild')
+  })
+
+  test('shows canonical region, guild, and V2-style playtime together', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader
         player={{
           ...player,
           currentSeason: { snapshot: { oneVsOne: { region: 'US-E' } } },
-          career: { snapshot: { combat: { matchTime: 7_200 } } },
-          clan: { clanId: 7, clanName: 'Guild Name' },
+          career: {
+            snapshot: {
+              guild: { guildId: 2_616_365, guildName: 'Son of God' },
+              combat: { matchTime: 7_200 },
+            },
+          },
+          clan: { clanId: 7, clanName: 'Imported Fallback' },
         }}
         topLegend={null}
         aliases={[]}
@@ -50,11 +88,13 @@ describe('ProfileHeader', () => {
     )
 
     expect(html).toContain('US-E')
-    expect(html).toContain('Lifetime playtime:')
+    expect(html).toContain('Playtime:')
+    expect(html).not.toContain('Lifetime playtime:')
     expect(html).toContain('2h')
-    expect(html).toContain('Clan:')
-    expect(html).toContain('/clan/7')
-    expect(html).toContain('Guild Name')
+    expect(html).toContain('Guild:')
+    expect(html).toContain('/clan/2616365')
+    expect(html).toContain('Son of God')
+    expect(html).not.toContain('Imported Fallback')
     expect(html).not.toContain('1h')
   })
 })
