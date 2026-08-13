@@ -89,8 +89,13 @@ if compose.get("customGitBranch") != expected_ref:
   printf '%s' "$domains" | python3 -c '
 import json, sys
 domains = json.load(sys.stdin)
-if domains != []:
-    raise SystemExit("internal-only V3 compose must not have domains")
+expected = {
+    ("brawltome.app", "v3-web"),
+    ("v3-api.brawltome.app", "v3-api"),
+}
+actual = {(domain.get("host"), domain.get("serviceName")) for domain in domains}
+if actual != expected:
+    raise SystemExit("public V3 domain metadata drift")
 '
 }
 

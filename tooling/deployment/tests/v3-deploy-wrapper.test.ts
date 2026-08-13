@@ -16,7 +16,13 @@ function executable(path: string, content: string): void {
   chmodSync(path, 0o755)
 }
 
-function fixture(bypassActors: unknown[] = []) {
+function fixture(
+  bypassActors: unknown[] = [],
+  domains: unknown[] = [
+    { host: 'brawltome.app', serviceName: 'v3-web' },
+    { host: 'v3-api.brawltome.app', serviceName: 'v3-api' },
+  ],
+) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-v3-wrapper-'))
   temporaryDirectories.push(directory)
   const log = join(directory, 'curl.log')
@@ -38,7 +44,7 @@ cat >/dev/null
 printf '%s\n' "$*" >> "$MOCK_CURL_LOG"
 case "$*" in
   *compose.one*) printf '%s' '${JSON.stringify({ command, customGitBranch: sourceRef })}' ;;
-  *domain.byComposeId*) printf '%s' '[]' ;;
+  *domain.byComposeId*) printf '%s' '${JSON.stringify(domains)}' ;;
   *compose.getConvertedCompose*) printf '%s' '"services: {}"' ;;
   *compose.fetchSourceType*) printf '%s' '{}' ;;
   *compose.deploy*) : > "$MOCK_DEPLOY_MARKER" ;;
@@ -104,6 +110,16 @@ describe('V3 Dokploy deployment wrapper', () => {
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('must not allow bypass actors')
+    expect(existsSync(deployMarker)).toBe(false)
+  })
+
+  test('rejects public domain drift before rendering', () => {
+    const { deployMarker, env, gateMarker } = fixture([], [{ host: 'unexpected.example', serviceName: 'v3-web' }])
+    const result = spawnSync('bash', [wrapper], { cwd: root, encoding: 'utf8', env })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('public V3 domain metadata drift')
+    expect(existsSync(gateMarker)).toBe(false)
     expect(existsSync(deployMarker)).toBe(false)
   })
 
