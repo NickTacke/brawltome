@@ -3,6 +3,7 @@ import {
   type AccountsStore,
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
+  automaticPinOrder,
   createAccounts,
 } from '../src/accounts'
 
@@ -101,6 +102,13 @@ function makeAccounts(store: AccountsStore, token = 'raw-session-token') {
 }
 
 describe('Accounts', () => {
+  test('auto-pins new non-Primary saves only while shortcut space remains', () => {
+    expect(automaticPinOrder(false, 0)).toBe(0)
+    expect(automaticPinOrder(false, 3)).toBe(3)
+    expect(automaticPinOrder(false, 4)).toBeNull()
+    expect(automaticPinOrder(true, 0)).toBeNull()
+  })
+
   test('generates unique URL-safe 32-byte session tokens', async () => {
     const state = makeStore()
     const accounts = createAccounts({ store: state.store, now: () => now })

@@ -13,6 +13,7 @@ import {
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
   type SavedPlayer,
+  automaticPinOrder,
 } from './accounts'
 import { v2AuthCutoverIsFinalized } from './finalize-v2-auth-cutover'
 import {
@@ -465,7 +466,26 @@ function postgresAccountsStore(client: Sql): AccountsStore {
           [accountId, brawlhallaId, savedPlayers.length],
         )
         if (!savedPlayer) throw new Error('Failed to save player')
-        return mapSavedPlayer(savedPlayer)
+
+        const [membership] = await transaction.unsafe<{ primary_player: boolean }[]>(
+          `SELECT EXISTS (
+             SELECT 1 FROM accounts.primary_players
+             WHERE account_id = $1 AND brawlhalla_id = $2
+           ) AS primary_player`,
+          [accountId, brawlhallaId],
+        )
+        const pinOrder = automaticPinOrder(
+          membership?.primary_player === true,
+          (await readPinnedPlayers(transaction, accountId)).length,
+        )
+        if (pinOrder !== null) {
+          await transaction.unsafe(
+            `INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position)
+             VALUES ($1, $2, $3)`,
+            [accountId, brawlhallaId, pinOrder],
+          )
+        }
+        return mapSavedPlayer({ ...savedPlayer, pin_position: pinOrder })
       })
     },
 
@@ -580,13 +600,11 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async unpinSavedPlayer(accountId, brawlhallaId) {
       await withAccountsWriterFence(client, async (transaction) => {
         await lockSavedPlayers(transaction, accountId)
-        const [removed] = await transaction.unsafe<{ position: number }[]>(
+        await transaction.unsafe(
           `DELETE FROM accounts.saved_player_pins
-           WHERE account_id = $1 AND brawlhalla_id = $2
-           RETURNING position`,
+           WHERE account_id = $1 AND brawlhalla_id = $2`,
           [accountId, brawlhallaId],
         )
-        if (!removed) return
       })
     },
 

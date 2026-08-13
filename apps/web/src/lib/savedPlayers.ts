@@ -37,7 +37,7 @@ export function savePlayer(
   accountId: string,
   brawlhallaId: number,
 ): Promise<SavedPlayersContract> {
-  return updateSavedPlayersCache(queryClient, accountId, () => trpc.account.savePlayer.mutate({ brawlhallaId }))
+  return updatePins(queryClient, accountId, () => trpc.account.savePlayer.mutate({ brawlhallaId }))
 }
 
 export async function removeSavedPlayer(

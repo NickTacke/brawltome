@@ -56,7 +56,7 @@ describe.skipIf(!hasDedicatedServer)('Saved Players PostgreSQL', () => {
           {
             brawlhallaId: 42,
             order: 0,
-            pinOrder: null,
+            pinOrder: 0,
             savedAt: expect.any(Date),
           },
         ])

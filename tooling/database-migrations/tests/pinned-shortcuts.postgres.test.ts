@@ -56,6 +56,12 @@ function pinnedIds(
   return snapshot.pinnedPlayers.map(({ brawlhallaId }) => brawlhallaId)
 }
 
+async function clearPins(runtime: ReturnType<typeof createPostgresAccounts>, accountId: string) {
+  for (const brawlhallaId of pinnedIds(await runtime.accounts.getPlayerShortcuts(accountId))) {
+    await runtime.accounts.unpinSavedPlayer(accountId, brawlhallaId)
+  }
+}
+
 async function expectDatabaseError(query: PromiseLike<unknown>, message: string) {
   let databaseError: unknown
   try {
@@ -91,7 +97,9 @@ describe.skipIf(!hasDedicatedServer)('Pinned Player shortcuts PostgreSQL', () =>
       const signedIn = await signIn(runtime, 'pin-stability')
       const accountId = signedIn.account.id
       try {
-        await Promise.all([41, 42, 43, 44, 45].map((id) => runtime.accounts.savePlayer(accountId, id)))
+        for (const id of [41, 42, 43, 44, 45]) await runtime.accounts.savePlayer(accountId, id)
+        expect(pinnedIds(await runtime.accounts.getPlayerShortcuts(accountId))).toEqual([41, 42, 43, 44])
+        await clearPins(runtime, accountId)
         for (const id of [44, 42, 45, 43]) await runtime.accounts.pinSavedPlayer(accountId, id)
 
         expect(MAX_PINNED_PLAYERS).toBe(4)
@@ -126,6 +134,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Player shortcuts PostgreSQL', () =>
       try {
         const { account } = await signIn(runtime, 'pin-concurrency')
         await Promise.all([42, 43, 44, 45].map((id) => runtime.accounts.savePlayer(account.id, id)))
+        await clearPins(runtime, account.id)
         await Promise.all(
           Array.from({ length: 8 }, () => runtime.accounts.pinSavedPlayer(account.id, 42)).concat([
             runtime.accounts.pinSavedPlayer(account.id, 43),
@@ -198,6 +207,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Player shortcuts PostgreSQL', () =>
         const { account } = await signIn(runtime, 'pin-constraints')
         await Promise.all([42, 43, 44, 45, 46].map((id) => runtime.accounts.savePlayer(account.id, id)))
         await verifyPrimary(runtime, account.id, 42)
+        await clearPins(runtime, account.id)
 
         await expectDatabaseError(
           sql`INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position) VALUES (${account.id}, 42, 0)`,
@@ -309,6 +319,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Player shortcuts PostgreSQL', () =>
       try {
         const { account } = await signIn(runtime, 'pin-first-delete-race')
         await runtime.accounts.savePlayer(account.id, 52)
+        await clearPins(runtime, account.id)
 
         let markPinned = () => {}
         const pinned = new Promise<void>((resolve) => {

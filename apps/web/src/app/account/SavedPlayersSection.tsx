@@ -135,8 +135,8 @@ export function SavedPlayersSection({
         </h2>
       </div>
       <p className="text-muted-foreground mt-2 text-xs">
-        Private bookmarks visible only to you. Saving a player does not claim ownership or create a public follow. Pin
-        up to {MAX_PINNED_PLAYERS} shortcuts.
+        Private bookmarks visible only to you. Saving a player does not claim ownership or create a public follow. New
+        saves fill up to {MAX_PINNED_PLAYERS} available shortcuts automatically; you can unpin or reorder them.
       </p>
       {!loading && !error && savedPlayers.length > 0 && (
         <p className="text-muted-foreground mt-1 text-xs">

@@ -139,7 +139,9 @@ function makeAccounts() {
         savedAt: new Date('2026-08-10T10:03:00.000Z'),
       }
       savedPlayers = [...savedPlayers, savedPlayer]
-      return savedPlayer
+      if (pinnedIds.length < 4) pinnedIds.push(brawlhallaId)
+      updatePinOrder()
+      return savedPlayers.find((player) => player.brawlhallaId === brawlhallaId) as SavedPlayer
     },
     async removeSavedPlayer(_accountId, brawlhallaId) {
       savedPlayers = savedPlayers
@@ -361,7 +363,7 @@ describe('account.savedPlayers', () => {
       {
         brawlhallaId: 42,
         order: 0,
-        pinOrder: null,
+        pinOrder: 0,
         savedAt: '2026-08-10T10:03:00.000Z',
         player: { brawlhallaId: 42, name: 'Player 42' },
         currentSeason: {
@@ -375,6 +377,15 @@ describe('account.savedPlayers', () => {
         },
       },
     ])
+  })
+
+  test('auto-pins new saves while shortcut space remains', async () => {
+    const api = caller(context(account)) as { savePlayer: (input: unknown) => Promise<unknown> }
+    let saved: ReturnType<typeof savedPlayersSchema.parse> = []
+    for (const brawlhallaId of [41, 42, 43, 44, 45]) {
+      saved = savedPlayersSchema.parse(await api.savePlayer({ brawlhallaId }))
+    }
+    expect(saved.map(({ pinOrder }) => pinOrder)).toEqual([0, 1, 2, 3, null])
   })
 
   test('supports idempotent remove and complete manual reorder through protected procedures', async () => {
