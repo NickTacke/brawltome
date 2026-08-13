@@ -27,6 +27,27 @@ describe('RankedCard', () => {
     expect(html).toContain('Updated')
   })
 
+  test('renders the provider unranked sentinel with the V2 Unranked presentation', () => {
+    const html = renderToStaticMarkup(
+      <RankedCard
+        player={{
+          ...availablePlayer,
+          rating: 0,
+          peakRating: 0,
+          tier: 'none',
+          rankedGames: 0,
+          rankedWins: 0,
+        }}
+        rankedTeams={[]}
+      />,
+    )
+
+    expect(html).toContain('/images/banners/Unranked.png')
+    expect(html).toContain('alt="Unranked"')
+    expect(html).toContain('>Unranked<')
+    expect(html).not.toContain('>none<')
+  })
+
   test('shows unavailable current-season data as plain Unranked', () => {
     const html = renderToStaticMarkup(
       <RankedCard
