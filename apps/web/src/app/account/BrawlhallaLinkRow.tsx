@@ -1,135 +1,107 @@
 'use client'
 
-import { type PlayerLinkInfo, linkSteam, unlinkPlayer } from '@/lib/auth'
-import { useQueryClient } from '@tanstack/react-query'
+import { linkSteam } from '@/lib/auth'
+import type { PrimaryPlayerVerificationStateContract } from '@brawltome/contracts'
 import { Gamepad2, Loader2 } from 'lucide-react'
-import { useState } from 'react'
 
 interface BrawlhallaLinkRowProps {
-  link: PlayerLinkInfo | null
+  state: PrimaryPlayerVerificationStateContract | null
+  loading?: boolean
 }
 
-export function BrawlhallaLinkRow({ link }: BrawlhallaLinkRowProps) {
-  const queryClient = useQueryClient()
-  const [pending, setPending] = useState(false)
+const statusCopy = {
+  failed: 'No Brawlhalla account was found for that Steam account',
+  conflict: 'This player is already verified by another account',
+} as const
 
-  const handleRelink = async () => {
-    if (pending) return
-    setPending(true)
-    try {
-      await unlinkPlayer(queryClient)
-      await linkSteam()
-    } finally {
-      setPending(false)
-    }
-  }
+export function BrawlhallaLinkRow({ state, loading = false }: BrawlhallaLinkRowProps) {
+  if (loading) return <StatusRow tone="neutral" message="Loading Primary Player..." pending />
 
-  if (!link) {
-    return (
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-white/[0.06] p-2">
-            <Gamepad2 className="text-muted-foreground h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-sm font-medium">Brawlhalla</p>
-            <p className="text-muted-foreground text-xs">Link via Steam to connect your player profile</p>
-          </div>
+  const primary = state?.primaryPlayer
+  const latestAttempt = state?.attempts[0]
+
+  return (
+    <div className="space-y-4">
+      {primary ? (
+        <StatusRow
+          tone="success"
+          message={`${primary.name ?? `Player ${primary.brawlhallaId}`} · ID ${primary.brawlhallaId}`}
+        />
+      ) : latestAttempt?.status === 'pending' ? (
+        <StatusRow tone="neutral" message="Verifying your Primary Player..." pending />
+      ) : latestAttempt?.status === 'failed' || latestAttempt?.status === 'conflict' ? (
+        <StatusRow
+          tone={latestAttempt.status === 'failed' ? 'danger' : 'warning'}
+          message={statusCopy[latestAttempt.status]}
+          retry
+        />
+      ) : (
+        <StatusRow
+          tone="neutral"
+          message="Verify through Steam to set your Primary Player"
+          retry
+          actionLabel="Verify"
+        />
+      )}
+
+      {state && state.attempts.length > 0 && (
+        <div className="border-border/50 border-t pt-3">
+          <p className="text-muted-foreground mb-2 text-[10px] font-medium uppercase tracking-wider">
+            Verification history
+          </p>
+          <ul className="space-y-1.5">
+            {state.attempts.map((attempt) => (
+              <li key={attempt.id} className="flex items-center justify-between gap-3 text-xs">
+                <span className="capitalize">{attempt.status}</span>
+                <time className="text-muted-foreground" dateTime={attempt.startedAt}>
+                  {new Date(attempt.startedAt).toLocaleDateString()}
+                </time>
+              </li>
+            ))}
+          </ul>
         </div>
+      )}
+    </div>
+  )
+}
+
+interface StatusRowProps {
+  tone: 'neutral' | 'success' | 'warning' | 'danger'
+  message: string
+  pending?: boolean
+  retry?: boolean
+  actionLabel?: string
+}
+
+const toneClasses = {
+  neutral: 'bg-white/[0.06] text-muted-foreground',
+  success: 'bg-emerald-500/10 text-emerald-400',
+  warning: 'bg-amber-500/10 text-amber-400',
+  danger: 'bg-red-500/10 text-red-400',
+} as const
+
+function StatusRow({ tone, message, pending = false, retry = false, actionLabel = 'Try Again' }: StatusRowProps) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`rounded-lg p-2 ${toneClasses[tone]}`}>
+          <Gamepad2 className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Primary Player</p>
+          <p className="text-muted-foreground truncate text-xs">{message}</p>
+        </div>
+      </div>
+      {pending && <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />}
+      {retry && (
         <button
           type="button"
           onClick={linkSteam}
-          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
+          className="shrink-0 cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1]"
         >
-          Link Steam
+          {actionLabel}
         </button>
-      </div>
-    )
-  }
-
-  if (link.status === 'pending') {
-    return (
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-white/[0.06] p-2">
-            <Gamepad2 className="text-muted-foreground h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-sm font-medium">Brawlhalla</p>
-            <p className="text-muted-foreground text-xs">Looking up your player profile...</p>
-          </div>
-        </div>
-        <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
-      </div>
-    )
-  }
-
-  if (link.status === 'failed') {
-    return (
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-red-500/10 p-2">
-            <Gamepad2 className="h-4 w-4 text-red-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-red-400">Brawlhalla</p>
-            <p className="text-xs text-red-400/70">No Brawlhalla account found for this Steam ID</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleRelink}
-          disabled={pending}
-          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Try Again
-        </button>
-      </div>
-    )
-  }
-
-  if (link.status === 'conflict') {
-    return (
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-amber-500/10 p-2">
-            <Gamepad2 className="h-4 w-4 text-amber-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-amber-400">Brawlhalla</p>
-            <p className="text-xs text-amber-400/70">This player is already linked to another account</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleRelink}
-          disabled={pending}
-          className="cursor-pointer rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Try Again
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="rounded-lg bg-emerald-500/10 p-2">
-          <Gamepad2 className="h-4 w-4 text-emerald-400" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-emerald-400">Brawlhalla</p>
-          <p className="text-xs text-emerald-400/70">ID: {link.brawlhallaId}</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => unlinkPlayer(queryClient)}
-        className="text-muted-foreground hover:text-foreground cursor-pointer text-xs underline-offset-4 transition-colors hover:underline"
-      >
-        Unlink
-      </button>
+      )}
     </div>
   )
 }

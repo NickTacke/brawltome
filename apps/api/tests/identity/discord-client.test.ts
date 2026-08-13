@@ -40,10 +40,19 @@ describe('exchangeCode', () => {
     })
 
     expect(result).toEqual({ accessToken: 'tok' })
-    expect(capturedBody).toContain('grant_type=authorization_code')
-    expect(capturedBody).toContain('code=the-code')
-    expect(capturedBody).toContain('client_id=cid')
-    expect(capturedBody).toContain('client_secret=csecret')
+    const body = capturedBody as string | null
+    if (body === null) throw new Error('Expected Discord token request body')
+    expect(body).toContain('grant_type=authorization_code')
+    expect(body).toContain('code=the-code')
+    expect(body).toContain('client_id=cid')
+    expect(body).toContain('client_secret=csecret')
+  })
+
+  it('throws on malformed successful responses', async () => {
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify({ access_token: 42 }), { status: 200 }),
+    ) as unknown as typeof fetch
+    await expect(exchangeCode({ clientId: 'c', clientSecret: 's', redirectUri: 'r', code: 'x' })).rejects.toThrow()
   })
 
   it('throws on non-200 responses', async () => {
@@ -76,6 +85,14 @@ describe('fetchDiscordUser', () => {
     ) as unknown as typeof fetch
     const result = await fetchDiscordUser('tok')
     expect(result.avatarHash).toBeNull()
+  })
+
+  it('throws on malformed successful responses', async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(JSON.stringify({ id: 'not-a-snowflake', username: '', avatar: '../abc' }), { status: 200 }),
+    ) as unknown as typeof fetch
+    await expect(fetchDiscordUser('tok')).rejects.toThrow()
   })
 
   it('throws on non-200 responses', async () => {

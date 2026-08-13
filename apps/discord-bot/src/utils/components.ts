@@ -10,8 +10,8 @@ import {
 interface PlayerOption {
   brawlhallaId: number
   name: string
-  rating: number
-  tier: string | null
+  rating: number | null
+  tier?: string | null
   region?: string | null
   bestLegendNameKey?: string | null
 }
@@ -19,7 +19,7 @@ interface PlayerOption {
 interface ClanOption {
   clanId: number
   clanName: string
-  memberCount?: number
+  memberCount: number | null
 }
 
 // Emoji cache reference (will be populated by emojis.ts)
@@ -56,7 +56,7 @@ export function buildPlayerSelectMenu(
         // Build a clean description
         const ratingStr = p.rating && p.rating > 0 ? p.rating.toString() : null
         const tierStr = p.tier && p.tier !== 'Unranked' ? p.tier : null
-        const description = ratingStr && tierStr ? `${ratingStr} • ${tierStr}` : tierStr || 'Unranked'
+        const description = ratingStr && tierStr ? `${ratingStr} • ${tierStr}` : ratingStr || tierStr || 'Unavailable'
 
         const option = new StringSelectMenuOptionBuilder()
           .setLabel(truncate(p.name, 100))
@@ -93,7 +93,7 @@ export function buildClanSelectMenu(
       clans.slice(0, 25).map((c) =>
         new StringSelectMenuOptionBuilder()
           .setLabel(truncate(c.clanName, 100))
-          .setDescription(`${c.memberCount ?? 0} members`)
+          .setDescription(c.memberCount === null ? 'Member count unavailable' : `${c.memberCount} members`)
           .setValue(c.clanId.toString())
           .setDefault(c.clanId === selectedId)
           .setEmoji('🏰'),

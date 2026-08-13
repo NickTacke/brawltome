@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'bun:test'
 import { db, player, playerRankedTeam } from '@brawltome/database'
-import { createPlayerRepo } from '@brawltome/player'
+import { createPlayerRepo } from '@brawltome/player/v2-compatibility'
 import { eq, inArray, sql } from 'drizzle-orm'
 
 const repo = createPlayerRepo(db)

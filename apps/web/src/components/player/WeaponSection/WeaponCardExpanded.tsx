@@ -23,11 +23,9 @@ export function WeaponCardExpanded({ weapon, isExpanded, panelId }: WeaponCardEx
       aria-hidden={!isExpanded}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className="pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-0">
-            <WeaponOverallStats weapon={weapon} derived={derived} />
-            <WeaponRankedStats weapon={weapon} derived={derived} />
-          </div>
+        <div className="grid grid-cols-1 gap-4 pt-4 md:grid-cols-2 md:gap-0">
+          <WeaponOverallStats weapon={weapon} derived={derived} />
+          <WeaponRankedStats weapon={weapon} derived={derived} />
         </div>
       </div>
     </div>

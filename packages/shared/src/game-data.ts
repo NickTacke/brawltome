@@ -1,35 +1,21 @@
 import type { BhApiClient } from '@brawltome/bhapi'
 import { legend } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
-import { normalizeWeaponName } from './weapons'
+import {
+  type LegendReference,
+  type LegendReferenceIndex,
+  type LegendWeaponStats,
+  type WeaponAggregate,
+  aggregateWeapons as aggregateReferenceWeapons,
+  createLegendReferenceIndex,
+  legendSlug,
+  normalizeWeaponName,
+} from '@brawltome/game-data/reference-data'
 
-export { normalizeWeaponName } from './weapons'
+export { legendSlug, normalizeWeaponName } from '@brawltome/game-data/reference-data'
+export type LegendData = LegendReference
 
-export interface LegendData {
-  legendId: number
-  legendNameKey: string
-  bioName: string
-  weaponOne: string
-  weaponTwo: string
-}
-
-let legendCache: Map<number, LegendData> = new Map()
-let legendByKey: Map<string, LegendData> = new Map()
-
-// v1's `legend_name` is an uppercase display string (e.g. "BÖDVAR", "LORD VRAXX"), but the app
-// and the avatar/icon assets key off the lowercase v0 `legend_name_key` slug. Stripping diacritics
-// and lowercasing reproduces that slug for every legend except Red Raptor, whose asset omits the space.
-const LEGEND_SLUG_OVERRIDES: Record<number, string> = { 17: 'redraptor' }
-
-export function legendSlug(legendId: number, legendName: string): string {
-  return (
-    LEGEND_SLUG_OVERRIDES[legendId] ??
-    legendName
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase()
-  )
-}
+let legendIndex: LegendReferenceIndex = createLegendReferenceIndex([])
 
 export async function initGameData(db: Database, bhapi?: BhApiClient) {
   if (bhapi) {
@@ -68,53 +54,18 @@ export async function initGameData(db: Database, bhapi?: BhApiClient) {
   // (e.g. rate-limited during a multi-app restart) and we fell back to legend rows written by an
   // older version that stored the raw uppercase v1 legend_name. legendSlug is idempotent.
   const normalized = dbLegends.map((l) => ({ ...l, legendNameKey: legendSlug(l.legendId, l.legendNameKey) }))
-  legendCache = new Map(normalized.map((l) => [l.legendId, l]))
-  legendByKey = new Map(normalized.map((l) => [l.legendNameKey, l]))
-  console.log(`[game-data] loaded ${legendCache.size} legends`)
+  legendIndex = createLegendReferenceIndex(normalized)
+  console.log(`[game-data] loaded ${normalized.length} legends`)
 }
 
 export function getLegendById(id: number): LegendData | undefined {
-  return legendCache.get(id)
+  return legendIndex.getById(id)
 }
 
 export function getLegendByKey(key: string): LegendData | undefined {
-  return legendByKey.get(key)
+  return legendIndex.getByKey(key)
 }
 
-export function aggregateWeapons(
-  legends: Array<{
-    legendId: number
-    damageWeaponOne: bigint
-    damageWeaponTwo: bigint
-    timeHeldWeaponOne: number
-    timeHeldWeaponTwo: number
-    koWeaponOne: number
-    koWeaponTwo: number
-  }>,
-): Array<{ weapon: string; timeHeld: number; damage: bigint; kos: number }> {
-  const map = new Map<string, { timeHeld: number; damage: bigint; kos: number }>()
-
-  for (const l of legends) {
-    const legendData = getLegendById(l.legendId)
-    if (!legendData) continue
-
-    const w1 = normalizeWeaponName(legendData.weaponOne)
-    const w2 = normalizeWeaponName(legendData.weaponTwo)
-
-    const e1 = map.get(w1) ?? { timeHeld: 0, damage: 0n, kos: 0 }
-    e1.timeHeld += l.timeHeldWeaponOne
-    e1.damage += l.damageWeaponOne
-    e1.kos += l.koWeaponOne
-    map.set(w1, e1)
-
-    const e2 = map.get(w2) ?? { timeHeld: 0, damage: 0n, kos: 0 }
-    e2.timeHeld += l.timeHeldWeaponTwo
-    e2.damage += l.damageWeaponTwo
-    e2.kos += l.koWeaponTwo
-    map.set(w2, e2)
-  }
-
-  return Array.from(map.entries())
-    .map(([weapon, stats]) => ({ weapon, ...stats }))
-    .sort((a, b) => b.timeHeld - a.timeHeld)
+export function aggregateWeapons(legends: LegendWeaponStats[]): WeaponAggregate[] {
+  return aggregateReferenceWeapons(legends, legendIndex)
 }

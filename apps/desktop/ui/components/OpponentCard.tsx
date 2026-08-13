@@ -1,14 +1,10 @@
-import { open } from '@tauri-apps/plugin-shell'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { opponentStatusMessage } from '../opponent-status'
 import type { Opponent } from '../types'
 import { TierBadge } from './TierBadge'
 
 interface OpponentCardProps {
   opponent: Opponent
-  refreshing: boolean
-}
-
-function formatPlaytime(hours: number): string {
-  return hours >= 1000 ? `${(hours / 1000).toFixed(1)}k hrs` : `${Math.round(hours)} hrs`
 }
 
 function winRateColor(rate: number): string {
@@ -17,21 +13,22 @@ function winRateColor(rate: number): string {
   return 'hsl(var(--overlay-danger))'
 }
 
-export function OpponentCard({ opponent, refreshing }: OpponentCardProps) {
-  const color = winRateColor(opponent.winRate)
+export function OpponentCard({ opponent }: OpponentCardProps) {
+  const status = opponentStatusMessage(opponent)
+  const refreshing = opponent.refreshState === 'refreshing'
+  const winRateColorValue = opponent.winRate === null ? null : winRateColor(opponent.winRate)
 
   return (
     <div className="w-[300px] rounded-lg border border-[hsla(var(--overlay-border)/0.7)] bg-[hsla(var(--overlay-bg)/0.82)] p-2.5 backdrop-blur-[12px]">
-      {/* Header: avatar + name/tier + link */}
       <div className="flex items-center gap-2">
         <div className="flex size-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[7px] border-2 border-[hsl(var(--overlay-border))] bg-[hsl(var(--overlay-muted-bg))]">
           {opponent.legendKey ? (
             <img
               src={`/legends/${opponent.legendKey}.png`}
-              alt={opponent.legendKey}
+              alt={`${opponent.legendKey} legend`}
               className="size-full object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
+              onError={(event) => {
+                event.currentTarget.style.display = 'none'
               }}
             />
           ) : (
@@ -41,14 +38,18 @@ export function OpponentCard({ opponent, refreshing }: OpponentCardProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] font-bold text-[hsl(var(--overlay-card-fg))]">{opponent.name}</span>
-            <span className="rounded-full border border-[hsla(var(--overlay-border)/0.6)] bg-[hsla(var(--overlay-muted-bg)/0.8)] px-1.5 py-px font-mono text-[9px] font-medium text-[hsl(var(--overlay-fg))]">
-              {opponent.region}
+            <span className="truncate text-[13px] font-bold text-[hsl(var(--overlay-card-fg))]">
+              {opponent.name ?? `Brawlhalla ID ${opponent.brawlhallaId}`}
             </span>
+            {opponent.region && (
+              <span className="rounded-full border border-[hsla(var(--overlay-border)/0.6)] bg-[hsla(var(--overlay-muted-bg)/0.8)] px-1.5 py-px font-mono text-[9px] font-medium text-[hsl(var(--overlay-fg))]">
+                {opponent.region}
+              </span>
+            )}
           </div>
           <div className="mt-px flex items-center gap-1.5">
-            <TierBadge tier={opponent.tier} />
-            <span className="text-[10px] text-[hsl(var(--overlay-muted-fg))]">{formatPlaytime(opponent.playtime)}</span>
+            {opponent.tier && <TierBadge tier={opponent.tier} />}
+            <output className="text-[10px] text-[hsl(var(--overlay-muted-fg))]">{status}</output>
           </div>
         </div>
 
@@ -58,36 +59,50 @@ export function OpponentCard({ opponent, refreshing }: OpponentCardProps) {
 
         <button
           type="button"
+          aria-label={`Open player ${opponent.brawlhallaId} on BrawlTome`}
           className="mr-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-[hsla(var(--overlay-border)/0.7)] text-[11px] text-white transition-colors hover:bg-[hsla(var(--overlay-muted-bg)/0.6)]"
-          onClick={() => open(`https://brawltome.com/player/${opponent.brawlhallaId}`)}
+          onClick={() => void openUrl(`https://brawltome.com/player/${opponent.brawlhallaId}`)}
         >
           ↗
         </button>
       </div>
 
-      {/* Separator */}
       <div className="my-2 h-px bg-[hsla(var(--overlay-border)/0.5)]" />
 
-      {/* Stats: elo / peak + WR bar */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-baseline">
-          <span className="font-mono text-[18px] font-black tracking-tight text-[hsl(var(--overlay-card-fg))]">
-            {opponent.rating}
-          </span>
-          <span className="mx-[5px] text-[12px] text-[hsl(213.3,15.1%,40%)]">/</span>
-          <span className="font-mono text-[12px] font-bold text-[hsl(213.3,15.1%,50%)]">{opponent.peakRating}</span>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9px] uppercase tracking-wide text-[hsl(213.3,15.1%,45%)]">WR</span>
-          <div className="h-[5px] w-[55px] overflow-hidden rounded-full bg-[hsla(var(--overlay-muted-bg)/0.8)]">
-            <div className="h-full rounded-full" style={{ width: `${opponent.winRate}%`, backgroundColor: color }} />
+      {opponent.rating === null ? (
+        <p className="px-1 text-[11px] text-[hsl(var(--overlay-muted-fg))]">Ranked data unavailable</p>
+      ) : (
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-baseline">
+            <span className="font-mono text-[18px] font-black tracking-tight text-[hsl(var(--overlay-card-fg))]">
+              {opponent.rating}
+            </span>
+            {opponent.peakRating !== null && (
+              <>
+                <span className="mx-[5px] text-[12px] text-[hsl(213.3,15.1%,40%)]">/</span>
+                <span className="font-mono text-[12px] font-bold text-[hsl(213.3,15.1%,50%)]">
+                  {opponent.peakRating}
+                </span>
+              </>
+            )}
           </div>
-          <span className="font-mono text-[11px] font-semibold" style={{ color }}>
-            {opponent.winRate}%
-          </span>
+
+          {opponent.winRate !== null && winRateColorValue && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] uppercase tracking-wide text-[hsl(213.3,15.1%,45%)]">WR</span>
+              <div className="h-[5px] w-[55px] overflow-hidden rounded-full bg-[hsla(var(--overlay-muted-bg)/0.8)]">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${opponent.winRate}%`, backgroundColor: winRateColorValue }}
+                />
+              </div>
+              <span className="font-mono text-[11px] font-semibold" style={{ color: winRateColorValue }}>
+                {opponent.winRate}%
+              </span>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

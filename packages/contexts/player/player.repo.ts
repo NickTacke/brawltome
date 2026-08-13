@@ -2,7 +2,6 @@ import type { Database } from '@brawltome/database'
 import {
   player,
   playerAlias,
-  playerClan,
   playerRankedLegend,
   playerRankedTeam,
   playerStatsLegend,
@@ -10,8 +9,12 @@ import {
   ratingHistory,
 } from '@brawltome/database'
 import { getLegendById } from '@brawltome/shared'
-import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm'
-import { getEffectiveBestLegend, getEffectiveBestLegendsBatch } from './queries/get-effective-best-legend'
+import { and, asc, desc, eq, gt, inArray, sql } from 'drizzle-orm'
+import {
+  getCareerMainLegend,
+  getEffectiveBestLegend,
+  getEffectiveBestLegendsBatch,
+} from './queries/get-effective-best-legend'
 
 export type Team2v2Row = {
   brawlhalla_id_one: number
@@ -36,7 +39,6 @@ export function createPlayerRepo(db: Database) {
           aliases: true,
           statsLegends: true,
           weaponStats: true,
-          clan: true,
           rankedLegends: true,
           rankedTeams: true,
         },
@@ -322,42 +324,6 @@ export function createPlayerRepo(db: Database) {
       })
     },
 
-    async upsertClan(
-      brawlhallaId: number,
-      data: {
-        clan_name: string
-        clan_id: number
-        clan_xp: string | number
-        clan_lifetime_xp: string | number
-        personal_xp: number
-      } | null,
-    ) {
-      if (data) {
-        await db
-          .insert(playerClan)
-          .values({
-            brawlhallaId,
-            clanName: data.clan_name,
-            clanId: data.clan_id,
-            clanXp: BigInt(data.clan_xp || '0'),
-            clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-            personalXp: data.personal_xp,
-          })
-          .onConflictDoUpdate({
-            target: playerClan.brawlhallaId,
-            set: {
-              clanName: data.clan_name,
-              clanId: data.clan_id,
-              clanXp: BigInt(data.clan_xp || '0'),
-              clanLifetimeXp: BigInt(data.clan_lifetime_xp),
-              personalXp: data.personal_xp,
-            },
-          })
-      } else {
-        await db.delete(playerClan).where(eq(playerClan.brawlhallaId, brawlhallaId))
-      }
-    },
-
     async get1v1LeaderboardSweep(opts: {
       region: string
       pageSize: number
@@ -496,23 +462,6 @@ export function createPlayerRepo(db: Database) {
         .from(player)
         .where(inArray(player.brawlhallaId, playerIds))
         .then((rows) => new Map(rows.filter((r) => r.region).map((r) => [r.brawlhallaId, r.region as string])))
-    },
-
-    searchPlayersByName(query: string) {
-      return db.query.player.findMany({
-        where: or(ilike(player.name, `${query}%`), ilike(player.name, `% | ${query}%`)),
-        orderBy: [desc(player.rating), desc(player.viewCount)],
-        limit: 50,
-      })
-    },
-
-    searchPlayersByAlias(query: string) {
-      return db
-        .select({ brawlhallaId: playerAlias.brawlhallaId, alias: playerAlias.value })
-        .from(playerAlias)
-        .where(ilike(playerAlias.key, `${query.toLowerCase()}%`))
-        .orderBy(asc(playerAlias.brawlhallaId), desc(playerAlias.createdAt))
-        .limit(50)
     },
 
     getPlayersByIds(ids: number[]) {
@@ -805,6 +754,10 @@ export function createPlayerRepo(db: Database) {
             valhallanConfirmedAt: sql`CASE WHEN excluded.tier LIKE 'Valhallan%' THEN NOW() ELSE player_ranked_team.valhallan_confirmed_at END`,
           },
         })
+    },
+
+    getCareerMainLegend(brawlhallaId: number) {
+      return getCareerMainLegend(db, brawlhallaId)
     },
 
     getEffectiveBestLegend(brawlhallaId: number) {

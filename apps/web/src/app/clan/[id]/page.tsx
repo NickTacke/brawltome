@@ -10,6 +10,12 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
+const parseClanId = (value: string): number | null => {
+  if (!/^[1-9]\d*$/.test(value)) return null
+  const id = Number(value)
+  return Number.isSafeInteger(id) && id <= 2_147_483_647 ? id : null
+}
+
 const getClan = cache(async (id: number) => {
   try {
     const trpc = await getServerTrpc()
@@ -21,7 +27,8 @@ const getClan = cache(async (id: number) => {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
-  const clan = await getClan(Number(id))
+  const clanId = parseClanId(id)
+  const clan = clanId === null ? null : await getClan(clanId)
 
   if (!clan) return { title: 'Clan Not Found' }
 
@@ -41,7 +48,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function Page({ params }: PageProps) {
   const { id } = await params
-  const initialData = await getClan(Number(id))
+  const clanId = parseClanId(id)
+  const initialData = clanId === null ? null : await getClan(clanId)
 
   return (
     <div className="space-y-8">

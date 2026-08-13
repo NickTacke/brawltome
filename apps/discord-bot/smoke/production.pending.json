@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "environment": "production",
+  "status": "pending",
+  "liveDeploymentClaim": false,
+  "preflightCommand": "bun run --filter @brawltome/discord-bot smoke:production",
+  "requiredInteractionChecks": [
+    "/player normal and degraded",
+    "/clan normal and degraded",
+    "/status ready and degraded",
+    "expired player select and clan pagination"
+  ]
+}

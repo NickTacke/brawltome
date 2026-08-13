@@ -1,57 +1,103 @@
 'use client'
 
+import {
+  type AccountPreferencesContract,
+  type AccountViewContract,
+  type PrimaryPlayerVerificationStateContract,
+  accountPreferencesSchema,
+  parseAccountViewOutput,
+  parsePrimaryPlayerVerificationStateOutput,
+} from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
+import { publicApiUrl } from './api-url'
 import { trpc } from './trpc'
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
+const ACCOUNT_KEY = ['account', 'current'] as const
+const ACCOUNT_PREFERENCES_KEY = ['account', 'preferences'] as const
+const accountPreferencesKey = (accountId: string | null) =>
+  [...ACCOUNT_PREFERENCES_KEY, accountId ?? 'anonymous'] as const
+const PRIMARY_PLAYER_KEY = ['account', 'primaryPlayer'] as const
 
-export interface PlayerLinkInfo {
-  brawlhallaId: number | null
-  steamId: string
-  status: 'pending' | 'linked' | 'failed' | 'conflict'
-  linkedAt: Date
+export function parseAccountResponse(value: unknown): AccountViewContract {
+  return parseAccountViewOutput(value)
 }
 
-export interface Me {
-  id: string
-  username: string
-  avatarUrl: string | null
-  createdAt: string
-  playerLink: PlayerLinkInfo | null
+export function parseAccountPreferencesResponse(value: unknown): AccountPreferencesContract {
+  return accountPreferencesSchema.parse(value)
 }
 
-const ME_KEY = ['identity', 'me'] as const
-
-export function useMe() {
+export function useAccount() {
   const query = useQuery({
-    queryKey: ME_KEY,
-    queryFn: async (): Promise<Me | null> => {
-      return (await trpc.identity.me.query()) as Me | null
-    },
+    queryKey: ACCOUNT_KEY,
+    queryFn: async () => parseAccountResponse(await trpc.account.current.query()),
     staleTime: 5 * 60 * 1000,
-    refetchInterval: (query) => {
-      const data = query.state.data as Me | null | undefined
-      if (data?.playerLink?.status === 'pending') return 2_000
-      return false
-    },
   })
-  return { user: query.data ?? null, isLoading: query.isLoading }
+  const view = query.data
+  return {
+    account: view?.status === 'signedIn' ? view.account : null,
+    isLoading: query.isLoading,
+  }
+}
+
+export function useAccountPreferences(accountId: string | null | undefined) {
+  const query = useQuery({
+    queryKey: accountPreferencesKey(accountId ?? null),
+    queryFn: async () => parseAccountPreferencesResponse(await trpc.account.preferences.query()),
+    enabled: accountId !== undefined,
+    staleTime: 5 * 60 * 1000,
+  })
+  return { preferences: query.data ?? null, isLoading: query.isLoading }
+}
+
+export function parsePrimaryPlayerResponse(value: unknown): PrimaryPlayerVerificationStateContract {
+  return parsePrimaryPlayerVerificationStateOutput(value)
+}
+
+export function usePrimaryPlayer() {
+  const query = useQuery({
+    queryKey: PRIMARY_PLAYER_KEY,
+    queryFn: async () => parsePrimaryPlayerResponse(await trpc.account.primaryPlayer.query()),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: (query) => (query.state.data?.attempts[0]?.status === 'pending' ? 2_000 : false),
+  })
+  return { state: query.data ?? null, isLoading: query.isLoading, isError: query.isError }
+}
+
+function authUrl(path: '/auth/discord/login' | '/auth/steam/link'): string {
+  const url = new URL(path, publicApiUrl)
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error('Invalid authentication origin')
+  }
+  return url.toString()
 }
 
 export function signIn(): void {
-  window.location.href = `${apiUrl}/auth/discord/login`
+  window.location.assign(authUrl('/auth/discord/login'))
 }
 
 export function linkSteam(): void {
-  window.location.href = `${apiUrl}/auth/steam/link`
+  window.location.assign(authUrl('/auth/steam/link'))
+}
+
+export async function saveAccountPreferences(
+  queryClient: ReturnType<typeof useQueryClient>,
+  accountId: string,
+  preferences: AccountPreferencesContract,
+): Promise<AccountPreferencesContract> {
+  const updated = parseAccountPreferencesResponse(await trpc.account.updatePreferences.mutate(preferences))
+  queryClient.setQueryData(accountPreferencesKey(accountId), updated)
+  return updated
 }
 
 export async function signOut(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  await fetch(`${apiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
-  await queryClient.invalidateQueries({ queryKey: ME_KEY })
-}
+  const response = await fetch(`${publicApiUrl}/auth/signout`, { method: 'POST', credentials: 'include' })
+  if (!response.ok) throw new Error(`Sign-out failed with status ${response.status}`)
 
-export async function unlinkPlayer(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  await trpc.identity.unlinkPlayer.mutate()
-  await queryClient.invalidateQueries({ queryKey: ME_KEY })
+  queryClient.removeQueries({ queryKey: ACCOUNT_PREFERENCES_KEY })
+  queryClient.removeQueries({ queryKey: ['account', 'savedPlayers'] })
+  queryClient.removeQueries({ queryKey: ['account', 'playerShortcuts'] })
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ACCOUNT_KEY }),
+    queryClient.invalidateQueries({ queryKey: PRIMARY_PLAYER_KEY }),
+  ])
 }

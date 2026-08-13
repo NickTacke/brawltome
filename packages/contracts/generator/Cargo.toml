@@ -1,0 +1,12 @@
+[package]
+name = "brawltome-contract-generator"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+prettyplease = "=0.2.37"
+progenitor = { version = "=0.14.0", default-features = false }
+serde_json = "=1.0.149"
+syn = "=2.0.117"

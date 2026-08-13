@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "environment": "staging-guild",
+  "status": "pending",
+  "liveDeploymentClaim": false,
+  "preflightCommand": "bun run --filter @brawltome/discord-bot smoke:staging-guild",
+  "requiredInteractionChecks": [
+    "/player normal and degraded",
+    "/clan normal and degraded",
+    "/status ready and degraded",
+    "expired player select and clan pagination"
+  ]
+}

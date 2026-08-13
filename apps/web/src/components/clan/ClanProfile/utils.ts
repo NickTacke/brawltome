@@ -1,8 +1,8 @@
 export interface ClanMember {
   brawlhallaId: number
   name: string
-  rating: number
-  xp: number
+  xp: string
+  guildPoints: string | null
   rank: string
   joinDate: string
 }
@@ -31,13 +31,17 @@ export function filterMembers<T extends { name: string; brawlhallaId: number }>(
   return members.filter((m) => m.name.toLowerCase().includes(needle) || String(m.brawlhallaId).includes(searchTerm))
 }
 
-export function sortMembers<T extends { rank: string; xp: number; joinDate: string }>(
+export function sortMembers<T extends { rank: string; xp: string; joinDate: string }>(
   members: T[],
   sortKey: SortKey,
 ): T[] {
   const copy = [...members]
   if (sortKey === 'xp') {
-    return copy.sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0))
+    return copy.sort((a, b) => {
+      const left = BigInt(a.xp)
+      const right = BigInt(b.xp)
+      return left === right ? 0 : left > right ? -1 : 1
+    })
   }
   return copy.sort((a, b) => {
     const rankDiff = getRankValue(b.rank) - getRankValue(a.rank)

@@ -1,0 +1,54 @@
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+query_frontend:
+  search:
+    duration_slo: 5s
+  trace_by_id:
+    duration_slo: 5s
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h
+    compacted_block_retention: 1h
+    compaction_window: 1h
+    max_block_bytes: 1073741824
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+    pool:
+      max_workers: 20
+      queue_depth: 100
+
+overrides:
+  defaults:
+    ingestion:
+      rate_strategy: local
+      rate_limit_bytes: 2000000
+      burst_size_bytes: 4000000
+      max_traces_per_user: 10000
+    global:
+      max_bytes_per_trace: 1000000
+
+usage_report:
+  reporting_enabled: false

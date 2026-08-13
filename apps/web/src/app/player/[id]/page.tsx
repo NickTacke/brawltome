@@ -1,4 +1,5 @@
 import { PlayerProfile } from '@/components/player/PlayerProfile'
+import { loadPlayerWithReference } from '@/lib/player-reference'
 import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
 import type { Metadata } from 'next'
@@ -10,41 +11,38 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
-const getPlayer = cache(async (id: number) => {
-  try {
-    const trpc = await getServerTrpc()
-    return await trpc.player.byId.query({ id })
-  } catch {
-    return null
-  }
+const getPlayerPageData = cache(async (id: number) => {
+  const trpc = await getServerTrpc()
+  return loadPlayerWithReference(trpc, id)
 })
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params
-  const player = await getPlayer(Number(id))
+  const { player } = await getPlayerPageData(Number(id))
 
   if (!player) return { title: 'Player Not Found' }
 
   const playerName = fixEncoding(player.name)
-  const playtimeHours = player.matchTimeTotal ? Math.round((player.matchTimeTotal / 3600) * 10) / 10 : 0
-  const playtimeStr = Number.isInteger(playtimeHours) ? `${playtimeHours}h` : `${playtimeHours.toFixed(1)}h`
-  const wins = player.rankedWins ?? 0
-  const games = player.rankedGames ?? 0
-  const losses = games - wins
-  const winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : '0'
-
+  const matchTime = player.career?.snapshot?.combat.matchTime
+  const playtimeHours = typeof matchTime === 'number' ? Math.round((matchTime / 3600) * 10) / 10 : null
+  const playtimeStr =
+    playtimeHours === null || playtimeHours <= 0
+      ? null
+      : Number.isInteger(playtimeHours)
+        ? `${playtimeHours}h`
+        : `${playtimeHours.toFixed(1)}h`
+  const ranked = player.currentSeason?.snapshot?.oneVsOne
   const description = [
-    `Playtime: ${playtimeStr}`,
-    `Elo: ${player.rating} / ${player.peakRating} (peak)`,
-    `Games: ${wins}W / ${losses}L (WR: ${winRate}%)`,
-  ].join('\n')
+    playtimeStr ? `Playtime: ${playtimeStr}` : null,
+    ranked
+      ? `Current Season Elo: ${ranked.rating} / ${ranked.peakRating} (peak)`
+      : 'Current Season ranked data unavailable',
+    ranked ? `Current Season Games: ${ranked.wins}W / ${ranked.games - ranked.wins}L` : null,
+  ]
+    .filter((fact): fact is string => fact !== null)
+    .join('\n')
 
-  const mostPlayed = (player.statsLegends || []).reduce(
-    (max: { games?: number; legendNameKey?: string } | null, l: { games?: number; legendNameKey?: string }) =>
-      !max || (l.games || 0) > (max.games || 0) ? l : max,
-    null,
-  )
-  const legendKey = mostPlayed?.legendNameKey?.toLowerCase() || ''
+  const legendKey = player.currentSeason?.snapshot?.mainLegend?.legendNameKey.toLowerCase() || ''
 
   return {
     title: playerName,
@@ -75,7 +73,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function Page({ params }: PageProps) {
   const { id } = await params
-  const initialData = await getPlayer(Number(id))
+  const { player: initialData } = await getPlayerPageData(Number(id))
 
   return (
     <div className="space-y-8">

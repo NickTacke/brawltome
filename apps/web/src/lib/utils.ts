@@ -32,7 +32,8 @@ export function timeAgo(date: string | Date | number): string {
 
 export function formatNum(n: number | string | bigint | undefined | null): string {
   if (n === null || n === undefined) return '0'
-  const val = typeof n === 'string' ? Number.parseInt(n, 10) : typeof n === 'bigint' ? Number(n) : n
-  if (Number.isNaN(val)) return '0'
-  return val.toLocaleString()
+  if (typeof n === 'bigint') return n.toLocaleString()
+  if (typeof n === 'string' && /^(0|[1-9]\d*)$/.test(n)) return BigInt(n).toLocaleString()
+  if (typeof n !== 'number' || Number.isNaN(n)) return '0'
+  return n.toLocaleString()
 }

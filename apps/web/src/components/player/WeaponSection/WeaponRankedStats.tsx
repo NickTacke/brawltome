@@ -59,33 +59,51 @@ export function WeaponRankedStats({ weapon: w, derived }: WeaponRankedStatsProps
             {w.ranked.mostPlayed.key && (
               <div className="flex items-center gap-2 p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
                 <Avatar className="h-6 w-6 rounded-sm">
-                  <AvatarImage src={`/images/legends/avatars/${w.ranked.mostPlayed.key}.png`} />
+                  <AvatarImage
+                    src={`/images/legends/avatars/${w.ranked.mostPlayed.key}.png`}
+                    alt={w.ranked.mostPlayed.name}
+                  />
                 </Avatar>
-                <div className="flex-1 min-w-0 flex justify-between items-center">
-                  <span className="text-[10px] text-muted-foreground">Most Played</span>
-                  <span className="text-xs font-bold text-foreground">{w.ranked.mostPlayed.games} games</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-muted-foreground">Most Played</span>
+                    <span className="text-xs font-bold text-foreground">{w.ranked.mostPlayed.games} games</span>
+                  </div>
+                  <div className="truncate text-[10px] text-muted-foreground">{w.ranked.mostPlayed.name}</div>
                 </div>
               </div>
             )}
             {w.ranked.highestElo.key && (
               <div className="flex items-center gap-2 p-1.5 rounded bg-background/20 hover:bg-background/30 transition-colors">
                 <Avatar className="h-6 w-6 rounded-sm">
-                  <AvatarImage src={`/images/legends/avatars/${w.ranked.highestElo.key}.png`} />
+                  <AvatarImage
+                    src={`/images/legends/avatars/${w.ranked.highestElo.key}.png`}
+                    alt={w.ranked.highestElo.name}
+                  />
                 </Avatar>
-                <div className="flex-1 min-w-0 flex justify-between items-center">
-                  <span className="text-[10px] text-muted-foreground">Highest Elo</span>
-                  <span className="text-xs font-bold text-foreground">{w.ranked.highestElo.elo}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-muted-foreground">Highest Elo</span>
+                    <span className="text-xs font-bold text-foreground">{w.ranked.highestElo.elo}</span>
+                  </div>
+                  <div className="truncate text-[10px] text-muted-foreground">{w.ranked.highestElo.name}</div>
                 </div>
               </div>
             )}
             {w.ranked.highestPeak.key && (
               <div className="flex items-center gap-2 p-1.5 mb-2 rounded bg-background/20 hover:bg-background/30 transition-colors">
                 <Avatar className="h-6 w-6 rounded-sm">
-                  <AvatarImage src={`/images/legends/avatars/${w.ranked.highestPeak.key}.png`} />
+                  <AvatarImage
+                    src={`/images/legends/avatars/${w.ranked.highestPeak.key}.png`}
+                    alt={w.ranked.highestPeak.name}
+                  />
                 </Avatar>
-                <div className="flex-1 min-w-0 flex justify-between items-center">
-                  <span className="text-[10px] text-muted-foreground">Highest Peak</span>
-                  <span className="text-xs font-bold text-foreground">{w.ranked.highestPeak.elo}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-muted-foreground">Highest Peak</span>
+                    <span className="text-xs font-bold text-foreground">{w.ranked.highestPeak.elo}</span>
+                  </div>
+                  <div className="truncate text-[10px] text-muted-foreground">{w.ranked.highestPeak.name}</div>
                 </div>
               </div>
             )}

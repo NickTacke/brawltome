@@ -1,4 +1,5 @@
-import { type Caller, RequestQueue, type RequestQueuePersistence } from './request-queue'
+import type { Telemetry } from '@brawltome/telemetry'
+import { type Caller, type RequestQueue, createBhApiRequestQueue } from './request-queue'
 import { validatePlayerGuild, validatePlayerStats, validatePlayerTeams } from './v1-validation'
 
 export class RateLimitError extends Error {
@@ -38,17 +39,27 @@ export interface BhApiMetricsSink {
   incrementCounter(key: string): Promise<void>
 }
 
+export type BhApiSourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
+
 export interface BhApiClientOptions {
   apiKey: string
   onDemandHeadroom?: number
-  persistence?: RequestQueuePersistence
   baseUrl?: string
   fetchTimeoutMs?: number
   metrics?: BhApiMetricsSink
+  telemetry?: Telemetry
+  queue?: RequestQueue
+  beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
+  onRateLimited?: (event: {
+    domain: BhApiSourceDomain
+    path: string
+    retryAfterMs: number
+  }) => Promise<void>
 }
 
 export interface CallOptions {
   caller?: Caller
+  onAttempt?: () => void
 }
 
 export class BhApiClient {
@@ -57,23 +68,19 @@ export class BhApiClient {
   private readonly queue: RequestQueue
   private readonly fetchTimeoutMs: number
   private readonly metrics?: BhApiMetricsSink
+  private readonly telemetry?: Telemetry
+  private readonly beforeRequest?: BhApiClientOptions['beforeRequest']
+  private readonly onRateLimited?: BhApiClientOptions['onRateLimited']
 
   constructor(opts: BhApiClientOptions) {
     this.apiKey = opts.apiKey
     this.baseUrl = opts.baseUrl ?? BASE_URL
     this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
     this.metrics = opts.metrics
-    this.queue = new RequestQueue({
-      minSpacingMs: 150,
-      sustainedLimit: 180,
-      sustainedWindowMs: 15 * 60 * 1000,
-      onDemandHeadroom: opts.onDemandHeadroom ?? 30,
-      persistence: opts.persistence,
-    })
-  }
-
-  async init(): Promise<void> {
-    await this.queue.init()
+    this.telemetry = opts.telemetry
+    this.beforeRequest = opts.beforeRequest
+    this.onRateLimited = opts.onRateLimited
+    this.queue = opts.queue ?? createBhApiRequestQueue(opts.onDemandHeadroom)
   }
 
   remainingTokens(caller: Caller = 'background'): number {
@@ -130,7 +137,7 @@ export class BhApiClient {
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
-    return this.sendRequest<T>(url, path, endpoint)
+    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v0', false, opts.onAttempt)
   }
 
   private async callV1<T>(endpoint: string, opts: CallOptions): Promise<T | null> {
@@ -146,14 +153,50 @@ export class BhApiClient {
     console.log(`[bhapi] v1 ${path} (${remaining} ${caller} tokens left)`)
 
     const url = `${this.baseUrl}/v1${endpoint}`
-    return this.sendRequest<T>(url, path, endpoint, true)
+    return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true, opts.onAttempt)
   }
 
   private async sendRequest<T>(
     url: string,
     path: string,
     endpoint: string,
+    domain: BhApiSourceDomain,
     rejectNullPayload = false,
+    onAttempt?: () => void,
+  ): Promise<T | null> {
+    await this.beforeRequest?.({ domain, path })
+    onAttempt?.()
+    const started = performance.now()
+    let outcome: 'succeeded' | 'not_found' | 'rate_limited' | 'failed' = 'failed'
+    try {
+      const performRequest = () => this.performRequest<T>(url, path, endpoint, rejectNullPayload)
+      const result = this.telemetry
+        ? await this.telemetry.trace('source.call', { domain }, performRequest)
+        : await performRequest()
+      outcome = result === null ? 'not_found' : 'succeeded'
+      return result
+    } catch (error) {
+      if (error instanceof RateLimitError) {
+        outcome = 'rate_limited'
+        try {
+          await this.onRateLimited?.({ domain, path, retryAfterMs: error.retryAfterMs })
+        } catch (backoffError) {
+          this.telemetry?.logger.error('source.backoff.persist_failed', backoffError, { domain })
+        }
+      }
+      throw error
+    } finally {
+      const labels = { domain, outcome }
+      this.telemetry?.metrics.add('source_calls_total', 1, labels)
+      this.telemetry?.metrics.observe('source_duration_ms', performance.now() - started, labels)
+    }
+  }
+
+  private async performRequest<T>(
+    url: string,
+    path: string,
+    endpoint: string,
+    rejectNullPayload: boolean,
   ): Promise<T | null> {
     const fetchStart = Date.now()
     let res: Response
@@ -225,18 +268,26 @@ export class BhApiClient {
     return payload as T
   }
 
+  getPlayerStatsV1Payload(id: number, mode: V1Mode = 'all', opts: CallOptions = {}): Promise<unknown | null> {
+    const modeQuery = mode === 'all' ? '' : `&mode=${mode}`
+    return this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
+  }
+
   async getPlayerStatsV1(
     id: number,
     mode: V1Mode = 'all',
     opts: CallOptions = {},
   ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
-    const modeQuery = mode === 'all' ? '' : `&mode=${mode}`
-    const payload = await this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
+    const payload = await this.getPlayerStatsV1Payload(id, mode, opts)
     return payload === null ? null : validatePlayerStats(payload, id, mode)
   }
 
+  getPlayerTeamsV1Payload(id: number, opts: CallOptions = {}): Promise<unknown | null> {
+    return this.callV1<unknown>(`/player/teams?brawlhalla_id=${id}`, opts)
+  }
+
   async getPlayerTeamsV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerTeams | null> {
-    const payload = await this.callV1<unknown>(`/player/teams?brawlhalla_id=${id}`, opts)
+    const payload = await this.getPlayerTeamsV1Payload(id, opts)
     return payload === null ? null : validatePlayerTeams(payload, id)
   }
 
@@ -246,11 +297,11 @@ export class BhApiClient {
   }
 
   async getGuildStatsV1(guildId: number, opts: CallOptions = {}): Promise<BhV1Guild | null> {
-    return this.callV1(`/guild/stats?guild_id=${guildId}`, opts)
+    return this.callV1<BhV1Guild>(`/guild/stats?guild_id=${guildId}`, opts)
   }
 
   async getGuildMembersV1(guildId: number, opts: CallOptions = {}): Promise<BhV1GuildMembers | null> {
-    return this.callV1(`/guild/members?guild_id=${guildId}`, opts)
+    return this.callV1<BhV1GuildMembers>(`/guild/members?guild_id=${guildId}`, opts)
   }
 
   async getAllLegendsV1(opts: CallOptions = {}): Promise<BhV1Legend[]> {

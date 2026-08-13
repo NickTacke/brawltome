@@ -13,18 +13,36 @@ import {
   DropdownMenuTrigger,
 } from '@brawltome/ui'
 import Link from 'next/link'
-import type { PlayerData } from '../shared'
 import { formatHours } from '../shared'
 import { StaleBadge } from './StaleBadge'
 
+interface ProfileHeaderPlayer {
+  brawlhallaId: number
+  name: string
+  currentSeason?: { snapshot: { oneVsOne: { region: string | null } } | null } | null
+  career?: {
+    snapshot: {
+      guild: { guildId: number; guildName: string } | null
+      combat: { matchTime: number }
+    } | null
+  } | null
+  clan?: { clanId: number; clanName: string } | null
+  matchTimeTotal?: number | null
+}
+
 interface ProfileHeaderProps {
-  player: PlayerData
-  topLegend: PlayerData | null
+  player: ProfileHeaderPlayer
+  topLegend: { legendNameKey: string } | null
   aliases: string[]
   refreshing: boolean
 }
 
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
+  const career = player.career?.snapshot
+  const playtime = career ? career.combat.matchTime : player.matchTimeTotal
+  const region = player.currentSeason?.snapshot?.oneVsOne.region
+  const guild = career ? career.guild : player.clan
+
   return (
     <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div className="flex items-center gap-6 min-w-0 w-full md:w-auto md:flex-1">
@@ -45,21 +63,21 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
             {fixEncoding(player.name)}
           </h1>
           <div className="flex flex-wrap items-center gap-4 mt-2 text-muted-foreground">
-            {player.region && (
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{player.region}</Badge>
-              </div>
+            {region && (
+              <>
+                <Badge variant="outline">{region}</Badge>
+                <span>&bull;</span>
+              </>
             )}
-            <span>&bull;</span>
             <div>
               ID: <span className="font-mono text-foreground">{player.brawlhallaId}</span>
             </div>
-            {player.matchTimeTotal > 0 && (
+            {typeof playtime === 'number' && playtime > 0 && (
               <>
                 <span>&bull;</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Playtime:</span>
-                  <span className="font-mono text-foreground">{formatHours(player.matchTimeTotal)}</span>
+                  <span className="font-mono text-foreground">{formatHours(playtime)}</span>
                 </div>
               </>
             )}
@@ -87,17 +105,17 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
                 </DropdownMenu>
               </>
             )}
-            {player.clan && (
+            {guild && (
               <>
                 <span>&bull;</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Clan:</span>
+                  <span className="text-muted-foreground">Guild:</span>
                   <Link
-                    href={`/clan/${player.clan.clanId}`}
+                    href={`/clan/${'guildId' in guild ? guild.guildId : guild.clanId}`}
                     prefetch={false}
                     className="text-primary font-bold hover:underline"
                   >
-                    {fixEncoding(player.clan.clanName)}
+                    {fixEncoding('guildName' in guild ? guild.guildName : guild.clanName)}
                   </Link>
                 </div>
               </>

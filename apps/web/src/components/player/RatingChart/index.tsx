@@ -14,10 +14,26 @@ import {
   YAxis,
 } from 'recharts'
 import { ChartTooltip } from './ChartTooltip'
-import { type ChartPoint, type RatingHistoryEntry, SEASONS, TIER_THRESHOLDS, prepareChartData } from './utils'
+import {
+  type ChartPoint,
+  type RatingHistoryEntry,
+  SEASONS,
+  type SeasonDef,
+  TIER_THRESHOLDS,
+  prepareChartData,
+} from './utils'
 
 interface RatingChartProps {
   data: RatingHistoryEntry[]
+}
+
+function seasonRange(seasons: SeasonDef[], name: string): { start: number; end: number } | null {
+  const index = seasons.findIndex((season) => season.name === name)
+  if (index === -1) return null
+  return {
+    start: seasons[index].startsAt.getTime(),
+    end: seasons[index + 1]?.startsAt.getTime() ?? Number.POSITIVE_INFINITY,
+  }
 }
 
 export function RatingChart({ data }: RatingChartProps) {
@@ -27,11 +43,9 @@ export function RatingChart({ data }: RatingChartProps) {
 
   const seasonsAsc = useMemo(() => [...SEASONS].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()), [])
 
-  const availableSeasons = seasonsAsc.filter((season, i) => {
-    const next = seasonsAsc[i + 1]
-    const start = season.startsAt.getTime()
-    const end = next ? next.startsAt.getTime() : Number.POSITIVE_INFINITY
-    return allSorted.some((d) => d.timestamp >= start && d.timestamp < end)
+  const availableSeasons = seasonsAsc.filter((season) => {
+    const range = seasonRange(seasonsAsc, season.name)
+    return range && allSorted.some((point) => point.timestamp >= range.start && point.timestamp < range.end)
   })
 
   const withSeasonDrops = useMemo(() => {
@@ -54,13 +68,9 @@ export function RatingChart({ data }: RatingChartProps) {
 
   const sorted = useMemo(() => {
     if (!selectedSeason) return withSeasonDrops
-    const idx = seasonsAsc.findIndex((s) => s.name === selectedSeason)
-    if (idx === -1) return withSeasonDrops
-    const season = seasonsAsc[idx]
-    const next = seasonsAsc[idx + 1]
-    const start = season.startsAt.getTime()
-    const end = next ? next.startsAt.getTime() : Number.POSITIVE_INFINITY
-    return withSeasonDrops.filter((d) => d.timestamp >= start && d.timestamp < end)
+    const range = seasonRange(seasonsAsc, selectedSeason)
+    if (!range) return withSeasonDrops
+    return withSeasonDrops.filter((point) => point.timestamp >= range.start && point.timestamp < range.end)
   }, [selectedSeason, withSeasonDrops, seasonsAsc])
 
   const uniqueTicks = useMemo(() => {
@@ -89,124 +99,145 @@ export function RatingChart({ data }: RatingChartProps) {
     return ts > 0 && ts >= firstTs && ts <= lastTs
   })
 
+  const accessibleRange = selectedSeason ? seasonRange(seasonsAsc, selectedSeason) : null
+  const accessibleObservations = accessibleRange
+    ? allSorted.filter((point) => point.timestamp >= accessibleRange.start && point.timestamp < accessibleRange.end)
+    : allSorted
+
   return (
-    <Card className="border-border">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-lg font-bold flex items-center gap-2">&#128200; Rating History</CardTitle>
-          {availableSeasons.length > 1 && (
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant={selectedSeason === null ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 text-xs font-mono px-2.5"
-                onClick={() => setSelectedSeason(null)}
-              >
-                All
-              </Button>
-              {[...availableSeasons].reverse().map((s) => (
+    <figure aria-labelledby="rating-history-heading">
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle id="rating-history-heading" className="text-lg font-bold flex items-center gap-2">
+              &#128200; Rating History
+            </CardTitle>
+            {availableSeasons.length > 1 && (
+              <div className="flex items-center gap-1.5">
                 <Button
-                  key={s.name}
-                  variant={selectedSeason === s.name ? 'secondary' : 'ghost'}
+                  variant={selectedSeason === null ? 'secondary' : 'ghost'}
                   size="sm"
                   className="h-7 text-xs font-mono px-2.5"
-                  onClick={() => setSelectedSeason(s.name)}
+                  onClick={() => setSelectedSeason(null)}
+                  aria-pressed={selectedSeason === null}
                 >
-                  {s.name.replace('Season ', 'S')}
+                  All
                 </Button>
-              ))}
-            </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={sorted} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <defs>
-              <linearGradient id="ratingGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-            {visibleThresholds.map((t) => (
-              <ReferenceLine
-                key={t.name}
-                y={t.minRating}
-                stroke={t.color}
-                strokeDasharray="6 4"
-                strokeOpacity={0.4}
-                label={{
-                  value: `${t.name} (${t.minRating})`,
-                  position: 'insideTopLeft',
-                  fill: t.color,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  opacity: 0.8,
-                }}
-              />
+                {[...availableSeasons].reverse().map((s) => (
+                  <Button
+                    key={s.name}
+                    variant={selectedSeason === s.name ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-7 text-xs font-mono px-2.5"
+                    onClick={() => setSelectedSeason(s.name)}
+                    aria-pressed={selectedSeason === s.name}
+                  >
+                    {s.name.replace('Season ', 'S')}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div aria-hidden="true">
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={sorted} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="ratingGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                {visibleThresholds.map((t) => (
+                  <ReferenceLine
+                    key={t.name}
+                    y={t.minRating}
+                    stroke={t.color}
+                    strokeDasharray="6 4"
+                    strokeOpacity={0.4}
+                    label={{
+                      value: `${t.name} (${t.minRating})`,
+                      position: 'insideTopLeft',
+                      fill: t.color,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      opacity: 0.8,
+                    }}
+                  />
+                ))}
+                {visibleSeasonBoundaries.map((s) => (
+                  <ReferenceLine
+                    key={s.name}
+                    x={s.startsAt.getTime()}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.6}
+                    label={{
+                      value: s.name,
+                      position: 'insideTopRight',
+                      fill: 'hsl(var(--muted-foreground))',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      opacity: 0.8,
+                    }}
+                  />
+                ))}
+                <XAxis
+                  dataKey="timestamp"
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
+                  ticks={uniqueTicks}
+                  tickFormatter={(ts: number) =>
+                    new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  }
+                  tick={{ fontSize: 11 }}
+                  className="fill-muted-foreground"
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  domain={[minRating, maxRating]}
+                  tick={{ fontSize: 11 }}
+                  className="fill-muted-foreground"
+                  tickLine={false}
+                  axisLine={false}
+                  width={45}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="rating"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2.5}
+                  fill="url(#ratingGradient)"
+                  dot={false}
+                  activeDot={{ r: 5, fill: 'hsl(var(--primary))', stroke: 'hsl(var(--background))', strokeWidth: 2 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="peakRating"
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.4}
+                  dot={false}
+                  activeDot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <ol className="sr-only">
+            {accessibleObservations.map((point) => (
+              <li key={`${point.recordedAt.toString()}:${point.rating}:${point.games}`}>
+                {point.date}: Rating {point.rating}, peak {point.peakRating},{' '}
+                {point.games > 0 ? `${point.wins} wins in ${point.games} games` : 'win rate unavailable'}.
+              </li>
             ))}
-            {visibleSeasonBoundaries.map((s) => (
-              <ReferenceLine
-                key={s.name}
-                x={s.startsAt.getTime()}
-                stroke="hsl(var(--muted-foreground))"
-                strokeDasharray="4 4"
-                strokeOpacity={0.6}
-                label={{
-                  value: s.name,
-                  position: 'insideTopRight',
-                  fill: 'hsl(var(--muted-foreground))',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  opacity: 0.8,
-                }}
-              />
-            ))}
-            <XAxis
-              dataKey="timestamp"
-              type="number"
-              domain={['dataMin', 'dataMax']}
-              ticks={uniqueTicks}
-              tickFormatter={(ts: number) =>
-                new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              }
-              tick={{ fontSize: 11 }}
-              className="fill-muted-foreground"
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis
-              domain={[minRating, maxRating]}
-              tick={{ fontSize: 11 }}
-              className="fill-muted-foreground"
-              tickLine={false}
-              axisLine={false}
-              width={45}
-            />
-            <Tooltip content={<ChartTooltip />} />
-            <Area
-              type="monotone"
-              dataKey="rating"
-              stroke="hsl(var(--primary))"
-              strokeWidth={2.5}
-              fill="url(#ratingGradient)"
-              dot={false}
-              activeDot={{ r: 5, fill: 'hsl(var(--primary))', stroke: 'hsl(var(--background))', strokeWidth: 2 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="peakRating"
-              stroke="hsl(var(--muted-foreground))"
-              strokeWidth={1.5}
-              strokeDasharray="4 4"
-              strokeOpacity={0.4}
-              dot={false}
-              activeDot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+          </ol>
+        </CardContent>
+      </Card>
+    </figure>
   )
 }

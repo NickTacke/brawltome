@@ -3,9 +3,10 @@
   "compilerOptions": {
     "outDir": "dist",
     "baseUrl": ".",
+    "types": ["bun", "node"],
     "paths": {
       "@/*": ["./ui/*"]
     }
   },
-  "include": ["ui/**/*"]
+  "include": ["ui/**/*", "src/**/*", "tests/**/*"]
 }

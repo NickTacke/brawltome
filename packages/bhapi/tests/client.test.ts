@@ -176,7 +176,6 @@ describe('searchBySteamId', () => {
       apiKey: 'test',
       baseUrl: `http://localhost:${server.port}`,
     })
-    await client.init()
     await client.searchBySteamId('foo&bar=baz')
     const parsed = new URL(lastUrl)
     expect(parsed.searchParams.get('steamid')).toBe('foo&bar=baz')
@@ -199,7 +198,6 @@ describe('fetch hardening', () => {
         baseUrl: `http://localhost:${slow.port}`,
         fetchTimeoutMs: 100,
       })
-      await client.init()
       await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Brawlhalla API timeout for/)
     } finally {
       slow.stop()
@@ -218,7 +216,6 @@ describe('fetch hardening', () => {
         apiKey: 'test',
         baseUrl: `http://localhost:${html.port}`,
       })
-      await client.init()
       await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Invalid JSON/)
     } finally {
       html.stop()
@@ -260,7 +257,6 @@ describe('fetch hardening', () => {
         fetchTimeoutMs: 100,
         metrics,
       })
-      await client.init()
       await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Brawlhalla API timeout for/)
     } finally {
       slowBody.stop()
@@ -270,7 +266,8 @@ describe('fetch hardening', () => {
     expect(counters).not.toContain('bhapi:json_errors')
   })
 
-  it('rejects with finite retryAfterMs when Retry-After is an HTTP-date (non-numeric)', async () => {
+  it('reports finite source backoff when Retry-After is an HTTP-date (non-numeric)', async () => {
+    let reportedBackoff: { domain: string; path: string; retryAfterMs: number } | undefined
     const rateLimit = Bun.serve({
       port: 0,
       fetch() {
@@ -284,8 +281,10 @@ describe('fetch hardening', () => {
       const client = new BhApiClient({
         apiKey: 'test',
         baseUrl: `http://localhost:${rateLimit.port}`,
+        onRateLimited: async (event) => {
+          reportedBackoff = event
+        },
       })
-      await client.init()
       let caught: unknown
       try {
         await client.getRankings1v1('us-e', 1)
@@ -295,6 +294,11 @@ describe('fetch hardening', () => {
       expect(caught).toBeInstanceOf(RateLimitError)
       expect(Number.isFinite((caught as RateLimitError).retryAfterMs)).toBe(true)
       expect((caught as RateLimitError).retryAfterMs).toBeGreaterThan(0)
+      expect(reportedBackoff).toEqual({
+        domain: 'brawlhalla-v0',
+        path: '/rankings/1v1/us-e/1',
+        retryAfterMs: (caught as RateLimitError).retryAfterMs,
+      })
     } finally {
       rateLimit.stop()
     }
@@ -316,7 +320,6 @@ describe('fetch hardening', () => {
         apiKey: 'test',
         baseUrl: `http://localhost:${rateLimit.port}`,
       })
-      await client.init()
       let caught: unknown
       try {
         await client.getRankings1v1('us-e', 1)
@@ -373,7 +376,6 @@ describe('v1 client', () => {
     const v1 = makeV1Server()
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      await client.init()
       const result = await client.getPlayerStatsV1(PLAYER_ID, 'all')
       expect(requestedStatsMode).toBeNull()
       expect(result).not.toBeNull()
@@ -390,7 +392,6 @@ describe('v1 client', () => {
     const v1 = makeV1Server()
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      await client.init()
       const result = await client.getPlayerStatsV1(PLAYER_ID, 'ranked_1v1')
       expect(result).not.toBeNull()
       const ranked = result as typeof V1_STATS_RANKED
@@ -410,7 +411,6 @@ describe('v1 client', () => {
     })
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedTeams.port}` })
-      await client.init()
       expect(client.getPlayerTeamsV1(PLAYER_ID)).rejects.toThrow('player ID')
     } finally {
       mismatchedTeams.stop()
@@ -421,7 +421,6 @@ describe('v1 client', () => {
     const v1 = makeV1Server()
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      await client.init()
       const result = await client.getPlayerTeamsV1(PLAYER_ID)
       expect(result?.teams.ranked_2v2[0].username_one).toBe('Lopes')
     } finally {
@@ -438,7 +437,6 @@ describe('v1 client', () => {
     })
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedGuild.port}` })
-      await client.init()
       expect(client.getPlayerGuildV1(PLAYER_ID)).rejects.toThrow('player ID')
     } finally {
       mismatchedGuild.stop()
@@ -449,7 +447,6 @@ describe('v1 client', () => {
     const v1 = makeV1Server()
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      await client.init()
       const result = await client.getGuildStatsV1(GUILD_ID)
       expect(result?.legacy_xp).toBe(4620759)
     } finally {
@@ -461,7 +458,6 @@ describe('v1 client', () => {
     const v1 = makeV1Server()
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      await client.init()
       const result = await client.getGuildMembersV1(GUILD_ID)
       expect(result?.guild_members[0].brawlhalla_id).toBe(PLAYER_ID)
     } finally {
@@ -469,17 +465,70 @@ describe('v1 client', () => {
     }
   })
 
-  it('getAllLegendsV1 paginates and concatenates both pages', async () => {
+  it('marks an actual source attempt only after distributed admission succeeds', async () => {
+    let attempts = 0
+    const blocked = new BhApiClient({
+      apiKey: 'test',
+      baseUrl: `http://localhost:${server.port}`,
+      beforeRequest: async () => {
+        throw new Error('source admission blocked')
+      },
+    })
+    await expect(blocked.getPlayerRanked(PLAYER_ID, { onAttempt: () => attempts++ })).rejects.toThrow(
+      'source admission blocked',
+    )
+    expect(attempts).toBe(0)
+
+    const admitted = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${server.port}` })
+    await admitted.getPlayerRanked(PLAYER_ID, { onAttempt: () => attempts++ })
+    expect(attempts).toBe(1)
+  })
+
+  it('admits every paginated V1 HTTP request at the request boundary', async () => {
     const v1 = makeV1Server()
+    const admitted: Array<{ domain: string; path: string }> = []
     try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      await client.init()
+      const client = new BhApiClient({
+        apiKey: 'test',
+        baseUrl: `http://localhost:${v1.port}`,
+        beforeRequest: async (request) => {
+          admitted.push(request)
+        },
+      })
       const legends = await client.getAllLegendsV1()
       expect(legends).toHaveLength(2)
       expect(legends[0].legend_name).toBe('bodvar')
       expect(legends[1].legend_name).toBe('cassidy')
+      expect(admitted).toEqual([
+        { domain: 'brawlhalla-v1', path: '/static/legends' },
+        { domain: 'brawlhalla-v1', path: '/static/legends' },
+      ])
     } finally {
       v1.stop()
+    }
+  })
+
+  it('returns sparse V1 player payloads without applying the legacy full-response validator', async () => {
+    const sparseStats = { brawlhalla_id: PLAYER_ID, rating: 2700, games: 101 }
+    const sparseTeams = {
+      brawlhalla_id: PLAYER_ID,
+      teams: { ranked_2v2: [{ brawlhalla_id_one: PLAYER_ID, brawlhalla_id_two: 42, wins: 7 }] },
+    }
+    const sparse = Bun.serve({
+      port: 0,
+      fetch(request) {
+        return new URL(request.url).pathname.endsWith('/teams')
+          ? Response.json(sparseTeams)
+          : Response.json(sparseStats)
+      },
+    })
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${sparse.port}` })
+      expect(await client.getPlayerStatsV1Payload(PLAYER_ID, 'ranked_1v1')).toEqual(sparseStats)
+      expect(await client.getPlayerTeamsV1Payload(PLAYER_ID)).toEqual(sparseTeams)
+      await expect(client.getPlayerStatsV1(PLAYER_ID, 'ranked_1v1')).rejects.toThrow('name')
+    } finally {
+      sparse.stop()
     }
   })
 
@@ -493,7 +542,6 @@ describe('v1 client', () => {
     })
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${malformedStats.port}` })
-      await client.init()
       expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('legends')
     } finally {
       malformedStats.stop()
@@ -509,7 +557,6 @@ describe('v1 client', () => {
     })
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedPlayer.port}` })
-      await client.init()
       expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('player ID')
     } finally {
       mismatchedPlayer.stop()
@@ -525,7 +572,6 @@ describe('v1 client', () => {
     })
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${nullPayload.port}` })
-      await client.init()
       expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('Invalid payload')
     } finally {
       nullPayload.stop()
@@ -541,7 +587,6 @@ describe('v1 client', () => {
     })
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${notFound.port}` })
-      await client.init()
       const result = await client.getPlayerStatsV1(PLAYER_ID)
       expect(result).toBeNull()
     } finally {

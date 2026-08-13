@@ -47,13 +47,13 @@ export default function Home() {
 
       <footer className="w-full max-w-3xl mx-auto px-4 pb-8 mt-12">
         <div className="border-t border-border pt-6">
-          <p className="text-center text-xs text-muted-foreground/60 leading-relaxed">
+          <p className="text-center text-xs text-muted-foreground leading-relaxed">
             Visual assets courtesy of{' '}
             <Link
               href="https://www.bluemammoth.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-muted-foreground/80 transition-colors underline"
+              className="hover:text-foreground transition-colors underline"
             >
               Blue Mammoth Games
             </Link>
@@ -67,7 +67,7 @@ export default function Home() {
               href="https://www.bluemammoth.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-muted-foreground/80 transition-colors underline"
+              className="hover:text-foreground transition-colors underline"
             >
               Blue Mammoth Games
             </Link>

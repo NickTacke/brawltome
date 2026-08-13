@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 const DISCORD_AUTHORIZE_URL = 'https://discord.com/api/oauth2/authorize'
 const DISCORD_TOKEN_URL = 'https://discord.com/api/oauth2/token'
 const DISCORD_USER_URL = 'https://discord.com/api/users/@me'
@@ -42,12 +44,10 @@ export async function exchangeCode(params: ExchangeCodeParams): Promise<{ access
   })
 
   if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Discord token exchange failed: ${res.status} ${text}`)
+    throw new Error(`Discord token exchange failed (${res.status})`)
   }
 
-  const data = (await res.json()) as { access_token?: string }
-  if (!data.access_token) throw new Error('Discord token exchange returned no access_token')
+  const data = z.object({ access_token: z.string().min(1) }).parse(await res.json())
   return { accessToken: data.access_token }
 }
 
@@ -57,6 +57,16 @@ export interface DiscordUserProfile {
   avatarHash: string | null
 }
 
+const discordUserSchema = z.object({
+  id: z.string().regex(/^\d+$/).max(64),
+  username: z.string().min(1).max(64),
+  avatar: z
+    .string()
+    .regex(/^[A-Za-z0-9_]+$/)
+    .max(128)
+    .nullable(),
+})
+
 export async function fetchDiscordUser(accessToken: string): Promise<DiscordUserProfile> {
   const res = await fetch(DISCORD_USER_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -64,11 +74,10 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
   })
 
   if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Discord user fetch failed: ${res.status} ${text}`)
+    throw new Error(`Discord user fetch failed (${res.status})`)
   }
 
-  const data = (await res.json()) as { id: string; username: string; avatar: string | null }
+  const data = discordUserSchema.parse(await res.json())
   return {
     discordId: data.id,
     username: data.username,

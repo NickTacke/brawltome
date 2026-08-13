@@ -1,0 +1,418 @@
+use std::io::{Read, Write};
+use std::net::TcpListener;
+
+use brawltome_contracts::generated::Client;
+use brawltome_contracts::generated::types::{
+    ClanProfile, ContractProof, ContractProofEvent, DesktopRankedLookup,
+    GetContractProofXInternalSecret, PlayerCareerProfile, PlayerRankedProfile, RefreshOutcome,
+};
+
+const VALID_PRESENT: &str = include_str!("../../tests/fixtures/valid-present.json");
+const VALID_MISSING_OPTIONAL: &str =
+    include_str!("../../tests/fixtures/valid-missing-optional.json");
+const VALID_NULL: &str = include_str!("../../tests/fixtures/valid-null.json");
+const INVALID_MISSING_NULLABLE: &str =
+    include_str!("../../tests/fixtures/invalid-missing-nullable.json");
+const INVALID_NEGATIVE: &str = include_str!("../../tests/fixtures/invalid-negative.json");
+const INVALID_OUT_OF_RANGE: &str = include_str!("../../tests/fixtures/invalid-out-of-range.json");
+const INVALID_DATE_TIME: &str = include_str!("../../tests/fixtures/invalid-date-time.json");
+const INVALID_OFFSET_DATE_TIME: &str =
+    include_str!("../../tests/fixtures/invalid-offset-date-time.json");
+const INVALID_UNION: &str = include_str!("../../tests/fixtures/invalid-union.json");
+const PLAYER_RANKED_MEASURED_ZERO: &str =
+    include_str!("../../tests/fixtures/player-ranked-measured-zero.json");
+const DESKTOP_RANKED_MEASURED_ZERO: &str =
+    include_str!("../../tests/fixtures/desktop-ranked-measured-zero.json");
+const DESKTOP_RANKED_STATES: [&str; 5] = [
+    include_str!("../../tests/fixtures/desktop-ranked-missing-accepted.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-unavailable-verification-required.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-stale-already-refreshing.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-stale-rate-limited.json"),
+    include_str!("../../tests/fixtures/desktop-ranked-stale-temporarily-unavailable.json"),
+];
+const PLAYER_CAREER_MEASURED_ZERO: &str =
+    include_str!("../../tests/fixtures/player-career-measured-zero.json");
+const REFRESH_OUTCOMES: [&str; 6] = [
+    include_str!("../../tests/fixtures/refresh-accepted.json"),
+    include_str!("../../tests/fixtures/refresh-already-refreshing.json"),
+    include_str!("../../tests/fixtures/refresh-not-needed.json"),
+    include_str!("../../tests/fixtures/refresh-verification-required.json"),
+    include_str!("../../tests/fixtures/refresh-rate-limited.json"),
+    include_str!("../../tests/fixtures/refresh-temporarily-unavailable.json"),
+];
+
+#[test]
+fn accepts_optional_nullable_zero_datetime_and_union_variants() {
+    let present: ContractProof =
+        serde_json::from_str(VALID_PRESENT).expect("valid present fixture");
+    assert_eq!(present.count, 0);
+    assert_eq!(present.required_nullable.as_deref(), Some("present"));
+    assert_eq!(present.optional_value.as_deref(), Some("optional"));
+    assert_eq!(
+        present.occurred_at.to_rfc3339(),
+        "2026-08-09T12:34:56+00:00"
+    );
+    assert!(matches!(
+        present.event,
+        ContractProofEvent::Ready { attempt: 0 }
+    ));
+
+    let missing_optional: ContractProof =
+        serde_json::from_str(VALID_MISSING_OPTIONAL).expect("valid missing optional fixture");
+    assert_eq!(missing_optional.optional_value, None);
+
+    let nullable: ContractProof = serde_json::from_str(VALID_NULL).expect("valid null fixture");
+    assert_eq!(nullable.required_nullable, None);
+    assert!(matches!(nullable.event, ContractProofEvent::Failed { .. }));
+
+    for fixture in [VALID_PRESENT, VALID_MISSING_OPTIONAL, VALID_NULL] {
+        let wire_value: serde_json::Value =
+            serde_json::from_str(fixture).expect("valid JSON fixture");
+        let generated: ContractProof =
+            serde_json::from_value(wire_value.clone()).expect("valid generated type");
+        assert_eq!(
+            serde_json::to_value(generated).expect("serialize generated type"),
+            wire_value
+        );
+    }
+}
+
+#[test]
+fn rejects_missing_nullable_out_of_range_datetime_and_unknown_union() {
+    for (name, invalid) in [
+        ("missing nullable", INVALID_MISSING_NULLABLE),
+        ("negative", INVALID_NEGATIVE),
+        ("out of range", INVALID_OUT_OF_RANGE),
+        ("date-time", INVALID_DATE_TIME),
+        ("offset date-time", INVALID_OFFSET_DATE_TIME),
+        ("union", INVALID_UNION),
+    ] {
+        assert!(
+            serde_json::from_str::<ContractProof>(invalid).is_err(),
+            "accepted invalid {name} fixture"
+        );
+    }
+}
+
+#[test]
+fn generated_ranked_profile_preserves_measured_zero_and_solo_sentinel() {
+    let wire: serde_json::Value =
+        serde_json::from_str(PLAYER_RANKED_MEASURED_ZERO).expect("valid ranked fixture");
+    let profile: PlayerRankedProfile =
+        serde_json::from_value(wire.clone()).expect("generated ranked profile");
+    assert_eq!(
+        serde_json::to_value(profile).expect("serialize ranked profile"),
+        wire
+    );
+}
+
+#[test]
+fn generated_desktop_lookup_preserves_zero_and_rejects_inconsistent_availability() {
+    let wire: serde_json::Value =
+        serde_json::from_str(DESKTOP_RANKED_MEASURED_ZERO).expect("valid desktop fixture");
+    let lookup: DesktopRankedLookup =
+        serde_json::from_value(wire.clone()).expect("generated desktop lookup");
+    assert_eq!(
+        serde_json::to_value(lookup).expect("serialize desktop lookup"),
+        wire
+    );
+
+    for fixture in DESKTOP_RANKED_STATES {
+        let state_wire: serde_json::Value =
+            serde_json::from_str(fixture).expect("valid desktop state fixture");
+        let state: DesktopRankedLookup =
+            serde_json::from_value(state_wire.clone()).expect("generated desktop state");
+        assert_eq!(
+            serde_json::to_value(state).expect("serialize desktop state"),
+            state_wire
+        );
+    }
+
+    let mut out_of_range = wire.clone();
+    out_of_range["player"]["brawlhallaId"] = serde_json::json!(2_147_483_648u64);
+    assert!(
+        serde_json::from_value::<DesktopRankedLookup>(out_of_range).is_err(),
+        "accepted out-of-range desktop player ID"
+    );
+
+    let mut inconsistent = wire;
+    inconsistent["ranked"]["lastSuccessAt"] = serde_json::Value::Null;
+    inconsistent["ranked"]["freshness"] = serde_json::json!("fresh");
+    inconsistent["ranked"]["snapshot"] = serde_json::Value::Null;
+    assert!(
+        serde_json::from_value::<DesktopRankedLookup>(inconsistent).is_err(),
+        "accepted inconsistent ranked availability"
+    );
+}
+
+#[test]
+fn generated_ranked_profile_rejects_wire_values_rejected_by_zod() {
+    for (name, pointer, invalid) in [
+        (
+            "negative rating",
+            "/snapshot/oneVsOne/rating",
+            serde_json::json!(-1),
+        ),
+        (
+            "out-of-range player ID",
+            "/brawlhallaId",
+            serde_json::json!(2_147_483_648u64),
+        ),
+        (
+            "out-of-range global rank",
+            "/snapshot/oneVsOne/globalRank",
+            serde_json::json!(2_147_483_648u64),
+        ),
+        (
+            "freshness drift",
+            "/freshForSeconds",
+            serde_json::json!(3599),
+        ),
+        (
+            "offset checked-at",
+            "/checkedAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+        (
+            "offset last-success",
+            "/lastSuccessAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+        (
+            "separator-only tier",
+            "/snapshot/oneVsOne/tier",
+            serde_json::json!(" \u{200b}"),
+        ),
+        (
+            "nonzero Solo sentinel",
+            "/snapshot/soloQueue/0/secondPlayerId",
+            serde_json::json!(1),
+        ),
+    ] {
+        let mut wire: serde_json::Value =
+            serde_json::from_str(PLAYER_RANKED_MEASURED_ZERO).expect("valid ranked fixture");
+        *wire.pointer_mut(pointer).expect("fixture pointer exists") = invalid;
+        assert!(
+            serde_json::from_value::<PlayerRankedProfile>(wire).is_err(),
+            "accepted invalid ranked {name}"
+        );
+    }
+}
+
+#[test]
+fn generated_career_profile_enforces_zod_wire_semantics() {
+    let wire: serde_json::Value =
+        serde_json::from_str(PLAYER_CAREER_MEASURED_ZERO).expect("valid career fixture");
+    let profile: PlayerCareerProfile =
+        serde_json::from_value(wire.clone()).expect("generated career profile");
+    assert_eq!(
+        serde_json::to_value(profile).expect("serialize career profile"),
+        wire
+    );
+
+    for (name, pointer, invalid) in [
+        (
+            "negative games",
+            "/snapshot/combat/games",
+            serde_json::json!(-1),
+        ),
+        (
+            "out-of-range player ID",
+            "/brawlhallaId",
+            serde_json::json!(2_147_483_648u64),
+        ),
+        (
+            "zero legend ID",
+            "/snapshot/legends/0/legendId",
+            serde_json::json!(0),
+        ),
+        (
+            "noncanonical decimal",
+            "/snapshot/combat/damageBomb",
+            serde_json::json!("01"),
+        ),
+        (
+            "fraction above one",
+            "/snapshot/account/xpPercentage",
+            serde_json::json!(1.01),
+        ),
+        (
+            "combat wins above games",
+            "/snapshot/combat/wins",
+            serde_json::json!(1),
+        ),
+        (
+            "legend wins above games",
+            "/snapshot/legends/0/wins",
+            serde_json::json!(1),
+        ),
+        (
+            "freshness drift",
+            "/freshForSeconds",
+            serde_json::json!(3600),
+        ),
+        (
+            "offset checked-at",
+            "/checkedAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+        (
+            "offset last-success",
+            "/lastSuccessAt",
+            serde_json::json!("2026-08-09T22:00:00+00:00"),
+        ),
+    ] {
+        let mut invalid_wire = wire.clone();
+        *invalid_wire
+            .pointer_mut(pointer)
+            .expect("fixture pointer exists") = invalid;
+        assert!(
+            serde_json::from_value::<PlayerCareerProfile>(invalid_wire).is_err(),
+            "accepted invalid career {name}"
+        );
+    }
+
+    let mut unavailable_wire = wire.clone();
+    unavailable_wire["lastSuccessAt"] = serde_json::Value::Null;
+    unavailable_wire["freshness"] = serde_json::json!("unavailable");
+    unavailable_wire["snapshot"] = serde_json::Value::Null;
+    let unavailable: PlayerCareerProfile =
+        serde_json::from_value(unavailable_wire.clone()).expect("valid unavailable career profile");
+    assert_eq!(
+        serde_json::to_value(unavailable).expect("serialize unavailable career profile"),
+        unavailable_wire
+    );
+
+    for (name, last_success, freshness, snapshot) in [
+        (
+            "success without snapshot",
+            wire["lastSuccessAt"].clone(),
+            serde_json::json!("fresh"),
+            serde_json::Value::Null,
+        ),
+        (
+            "unavailable with snapshot",
+            serde_json::Value::Null,
+            serde_json::json!("unavailable"),
+            wire["snapshot"].clone(),
+        ),
+        (
+            "null success marked fresh",
+            serde_json::Value::Null,
+            serde_json::json!("fresh"),
+            serde_json::Value::Null,
+        ),
+    ] {
+        let mut invalid_wire = wire.clone();
+        invalid_wire["lastSuccessAt"] = last_success;
+        invalid_wire["freshness"] = freshness;
+        invalid_wire["snapshot"] = snapshot;
+        assert!(
+            serde_json::from_value::<PlayerCareerProfile>(invalid_wire).is_err(),
+            "accepted inconsistent career availability: {name}"
+        );
+    }
+}
+
+#[test]
+fn generated_refresh_outcomes_preserve_all_six_semantic_variants() {
+    for fixture in REFRESH_OUTCOMES {
+        let wire: serde_json::Value = serde_json::from_str(fixture).expect("valid refresh fixture");
+        let outcome: RefreshOutcome =
+            serde_json::from_value(wire.clone()).expect("generated refresh outcome");
+        assert_eq!(
+            serde_json::to_value(outcome).expect("serialize refresh outcome"),
+            wire
+        );
+    }
+
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[0]).unwrap(),
+        RefreshOutcome::Accepted { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[1]).unwrap(),
+        RefreshOutcome::AlreadyRefreshing { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[2]).unwrap(),
+        RefreshOutcome::NotNeeded { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[3]).unwrap(),
+        RefreshOutcome::VerificationRequired { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[4]).unwrap(),
+        RefreshOutcome::RateLimited { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<RefreshOutcome>(REFRESH_OUTCOMES[5]).unwrap(),
+        RefreshOutcome::TemporarilyUnavailable { .. }
+    ));
+}
+
+#[test]
+fn generated_clan_contract_preserves_decimal_xp_and_section_provenance() {
+    let wire = serde_json::json!({
+        "clanId": 77,
+        "clanName": "Exact",
+        "clanCreateDate": "2026-08-09T12:00:00Z",
+        "clanXp": "900719925474099312345",
+        "clanLifetimeXp": "1801439850948198711110",
+        "notice": null,
+        "tags": null,
+        "discordInviteCode": null,
+        "guildPoints": null,
+        "isRecruiting": null,
+        "profile": {
+            "checkedAt": null,
+            "checkProvenance": { "source": "legacy-import", "outcome": "legacy-unknown" },
+            "lastSuccessAt": null,
+            "lastSuccessProvenance": null
+        },
+        "roster": null,
+        "members": []
+    });
+    let clan: ClanProfile = serde_json::from_value(wire.clone()).expect("valid generated clan");
+    assert_eq!(&*clan.clan_xp, "900719925474099312345");
+    assert_eq!(
+        serde_json::to_value(clan).expect("serialize generated clan"),
+        wire
+    );
+}
+
+#[tokio::test]
+async fn generated_client_sends_the_required_internal_secret() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+    let address = listener.local_addr().expect("read test server address");
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept generated client request");
+        let mut request = [0_u8; 4096];
+        let length = stream
+            .read(&mut request)
+            .expect("read generated client request");
+        let request = String::from_utf8_lossy(&request[..length]).to_ascii_lowercase();
+        assert!(request.starts_with("get /internal/contracts/proof "));
+        assert!(request.contains("x-internal-secret: contract-proof-secret"));
+
+        let body = VALID_NULL.as_bytes();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            body.len()
+        )
+        .expect("write test response headers");
+        stream.write_all(body).expect("write test response body");
+    });
+
+    let secret =
+        GetContractProofXInternalSecret::try_from("contract-proof-secret").expect("valid secret");
+    let response = Client::new(&format!("http://{address}"))
+        .get_contract_proof(&secret)
+        .await
+        .expect("generated client request succeeds")
+        .into_inner();
+    assert_eq!(response.required_nullable, None);
+    server.join().expect("test server completes");
+}

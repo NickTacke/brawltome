@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./legends": "./src/legends.ts",
+    "./reference-data": "./src/reference-data.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

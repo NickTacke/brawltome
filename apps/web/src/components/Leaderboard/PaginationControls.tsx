@@ -32,6 +32,7 @@ export function PaginationControls({
         {!compact && <span className="text-sm text-muted-foreground font-mono">Page</span>}
         <Input
           key={page}
+          aria-label="Leaderboard page"
           defaultValue={page}
           className="h-8 w-16 text-center font-mono"
           onKeyDown={(e) => {
