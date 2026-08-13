@@ -26,14 +26,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const matchTime = player.career?.snapshot?.combat.matchTime
   const playtimeHours = typeof matchTime === 'number' ? Math.round((matchTime / 3600) * 10) / 10 : null
   const playtimeStr =
-    playtimeHours === null
+    playtimeHours === null || playtimeHours <= 0
       ? null
       : Number.isInteger(playtimeHours)
         ? `${playtimeHours}h`
         : `${playtimeHours.toFixed(1)}h`
   const ranked = player.currentSeason?.snapshot?.oneVsOne
   const description = [
-    playtimeStr ? `Lifetime playtime: ${playtimeStr}` : null,
+    playtimeStr ? `Playtime: ${playtimeStr}` : null,
     ranked
       ? `Current Season Elo: ${ranked.rating} / ${ranked.peakRating} (peak)`
       : 'Current Season ranked data unavailable',

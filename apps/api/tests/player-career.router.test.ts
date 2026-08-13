@@ -22,6 +22,7 @@ describe('player.careerById', () => {
         freshness: 'fresh',
         freshForSeconds: 43_200,
         snapshot: {
+          guild: { guildId: 2_616_365, guildName: 'Son of God' },
           account: { xp: 0, level: 0, xpPercentage: 0 },
           combat: {
             games: 0,
@@ -48,7 +49,12 @@ describe('player.careerById', () => {
       checkedAt: '2026-08-09T22:00:00.000Z',
       lastSuccessAt: '2026-08-09T22:00:00.000Z',
       freshForSeconds: 43_200,
-      snapshot: { combat: { games: 0, damageBomb: '9007199254740993' }, legends: [], weapons: [] },
+      snapshot: {
+        guild: { guildId: 2_616_365, guildName: 'Son of God' },
+        combat: { games: 0, damageBomb: '9007199254740993' },
+        legends: [],
+        weapons: [],
+      },
     })
     await expect(caller.careerById({ id: 0 })).rejects.toThrow()
 

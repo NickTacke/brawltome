@@ -9,6 +9,7 @@ const completeSnapshot = {
   xp_percentage: 0,
   games: 10,
   wins: 4,
+  clan: { clan_id: 2_616_365, clan_name: 'Son of God' },
   damagebomb: '9007199254740993',
   damagemine: '0',
   damagespikeball: '2',
@@ -61,6 +62,7 @@ describe('V0 career snapshot source contract', () => {
     expect(decodeV0CareerSnapshot(completeSnapshot, 91913839, resolveLegend)).toEqual({
       brawlhallaId: 91913839,
       name: 'Measured Zero',
+      guild: { guildId: 2_616_365, guildName: 'Son of God' },
       account: { xp: 1234, level: 12, xpPercentage: 0 },
       combat: {
         games: 10,
@@ -107,6 +109,10 @@ describe('V0 career snapshot source contract', () => {
     })
   })
 
+  test('maps authoritative guild absence', () => {
+    expect(decodeV0CareerSnapshot({ ...completeSnapshot, clan: undefined }, 91913839, resolveLegend).guild).toBeNull()
+  })
+
   test('accepts an authoritative empty legend collection', () => {
     const decoded = decodeV0CareerSnapshot({ ...completeSnapshot, legends: [] }, 91913839, resolveLegend)
 
@@ -126,6 +132,8 @@ describe('V0 career snapshot source contract', () => {
     { ...completeSnapshot, games: undefined },
     { ...completeSnapshot, legends: undefined },
     { ...completeSnapshot, damagebomb: '01' },
+    { ...completeSnapshot, clan: { clan_id: 0, clan_name: 'Invalid' } },
+    { ...completeSnapshot, clan: { clan_id: 2_616_365, clan_name: '' } },
     { ...completeSnapshot, legends: [{ ...completeSnapshot.legends[0], legend_id: 0 }] },
     { ...completeSnapshot, legends: [completeSnapshot.legends[0], completeSnapshot.legends[0]] },
     { ...completeSnapshot, legends: [{ ...completeSnapshot.legends[0], wins: -1 }] },

@@ -213,7 +213,12 @@ describe('Players-owned canonical career state', () => {
     const brawlhallaId = 91913840
     const players = createPostgresCareerPlayers(connectionString)
     const operations = createPostgresRefreshOperations(connectionString)
-    const populated = { ...emptySnapshot, brawlhalla_id: brawlhallaId, legends: [populatedLegend] }
+    const populated = {
+      ...emptySnapshot,
+      brawlhalla_id: brawlhallaId,
+      clan: { clan_id: 2_616_365, clan_name: 'Son of God' },
+      legends: [populatedLegend],
+    }
     try {
       const firstLease = await claimCareerOperation(operations, brawlhallaId)
       await refreshCanonicalCareerPlayer(
@@ -227,6 +232,7 @@ describe('Players-owned canonical career state', () => {
       await operations.complete(firstLease)
       const first = await players.byId(brawlhallaId)
       if (!first?.lastSuccessAt) throw new Error('Expected an initial career success')
+      expect(first.snapshot?.guild).toEqual({ guildId: 2_616_365, guildName: 'Son of God' })
       expect(first.snapshot?.legends).toEqual([
         expect.objectContaining({
           legendId: 3,
@@ -269,6 +275,7 @@ describe('Players-owned canonical career state', () => {
       )
       await operations.complete(retryLease)
       const cleared = await players.byId(brawlhallaId)
+      expect(cleared?.snapshot?.guild).toBeNull()
       expect(cleared?.snapshot?.legends).toEqual([])
       expect(cleared?.snapshot?.weapons).toEqual([])
     } finally {

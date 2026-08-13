@@ -34,6 +34,7 @@ const profile: PlayerCareerProfileContract = {
   freshness: 'fresh',
   freshForSeconds: 43_200,
   snapshot: {
+    guild: { guildId: 2_616_365, guildName: 'Son of God' },
     account: { xp: 0, level: 0, xpPercentage: 0 },
     combat: {
       games: 0,
@@ -56,8 +57,11 @@ const profile: PlayerCareerProfileContract = {
 }
 
 describe('Player career profile contract', () => {
-  test('preserves measured zero, exact damage, complete collections, and twelve-hour freshness', () => {
+  test('preserves guild membership, measured zero, exact damage, collections, and freshness', () => {
     expect(parsePlayerCareerProfileOutput(profile)).toEqual(profile)
+    expect(
+      parsePlayerCareerProfileOutput({ ...profile, snapshot: { ...profile.snapshot, guild: null } }),
+    ).toMatchObject({ snapshot: { guild: null } })
     expect(
       parsePlayerCareerProfileOutput({
         ...profile,
@@ -71,6 +75,8 @@ describe('Player career profile contract', () => {
   test.each([
     { ...profile, freshForSeconds: 3600 },
     { ...profile, snapshot: { ...profile.snapshot, legends: undefined } },
+    { ...profile, snapshot: { ...profile.snapshot, guild: undefined } },
+    { ...profile, snapshot: { ...profile.snapshot, guild: { guildId: 0, guildName: 'Invalid' } } },
     {
       ...profile,
       snapshot: {
