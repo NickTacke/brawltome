@@ -11,13 +11,13 @@ const player = {
 }
 
 describe('ProfileHeader', () => {
-  test('never falls back to legacy playtime when canonical career is unavailable', () => {
+  test('falls back to positive V2 playtime when canonical career is unavailable', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader player={{ ...player, career: null }} topLegend={null} aliases={[]} refreshing={false} />,
     )
 
-    expect(html).not.toContain('Playtime:')
-    expect(html).not.toContain('1h')
+    expect(html).toContain('Playtime:')
+    expect(html).toContain('1h')
   })
 
   test('hides canonical measured-zero playtime', () => {
