@@ -74,7 +74,7 @@ afterAll(async () => {
 })
 
 const admission = {
-  totalConcurrency: 3,
+  totalConcurrency: 4,
   interactiveReservation: 2,
   classConcurrency: {
     interactive: 2,
@@ -105,7 +105,9 @@ async function claimRankedOperation(operations: PostgresRefreshOperations, brawl
   if (reserved.outcome !== 'reserved') throw new Error('Expected a reserved operation')
   await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
   const lease = await operations.claim('ranked-test-worker', 10_000, admission, 'interactive-player-refresh')
-  if (!lease || lease.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')
+  if (!lease || lease.kind !== 'interactive-player-refresh' || lease.operationId !== reserved.operationId) {
+    throw new Error('Expected an interactive lease')
+  }
   return lease
 }
 
@@ -201,7 +203,7 @@ describe('Players-owned canonical ranked state', () => {
   })
 
   test('preserves an imported identity when V0 ranked omits the player name', async () => {
-    const brawlhallaId = 91913843
+    const brawlhallaId = 91913849
     const control = postgres(connectionString, { max: 1 })
     const players = createPostgresRankedPlayers(connectionString)
     const operations = createPostgresRefreshOperations(connectionString)
@@ -212,6 +214,7 @@ describe('Players-owned canonical ranked state', () => {
         VALUES (${brawlhallaId}, 'Imported Identity', 0, clock_timestamp(), ${'a'.repeat(64)})
       `
       const lease = await claimRankedOperation(operations, brawlhallaId)
+      expect(await operations.beginInteractiveSection(lease, 'ranked')).toBe('execute')
       await refreshCanonicalRankedPlayer(
         players,
         source({ ...snapshot, brawlhalla_id: brawlhallaId, name: '', '2v2': [] }),
@@ -219,6 +222,8 @@ describe('Players-owned canonical ranked state', () => {
         { caller: 'on-demand' },
         effectFor(lease),
       )
+      expect(await operations.commitInteractiveSection(lease, 'ranked')).toBe('transitioned')
+      expect(await operations.complete(lease)).toBe('transitioned')
       expect(await players.referenceById(brawlhallaId)).toMatchObject({ name: 'Imported Identity' })
     } finally {
       await Promise.all([control.end(), players.close(), operations.close()])
