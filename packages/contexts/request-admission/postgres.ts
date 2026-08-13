@@ -15,6 +15,7 @@ const defaultActorReservationRetentionSeconds = 24 * 60 * 60
 type RequestAdmissionConfig = {
   authenticatedIpLimit: number
   sourceLimits: Record<string, number>
+  sourceWindowSeconds?: Record<string, number>
   sourceBackgroundHeadroom?: number
   minimumSourceSpacingMs?: number
   actorReservationRetentionSeconds?: number
@@ -70,13 +71,19 @@ export function createPostgresRequestAdmission(connectionString: string, config:
   const sourceLimits = Object.fromEntries(
     Object.entries(config.sourceLimits).map(([domain, limit]) => [domain, positiveInteger(`${domain} limit`, limit)]),
   ) as Record<string, number>
+  const sourceWindowSeconds = Object.fromEntries(
+    Object.entries(config.sourceWindowSeconds ?? {}).map(([domain, seconds]) => [
+      domain,
+      positiveInteger(`${domain} window seconds`, seconds),
+    ]),
+  ) as Record<string, number>
   const client = postgres(connectionString)
 
-  async function captureWindow(sql: typeof client) {
+  async function captureWindow(sql: typeof client, durationSeconds = windowSeconds) {
     const [databaseTime] = await sql<DatabaseTime[]>`SELECT clock_timestamp() AS now`
     await config.afterWindowCaptured?.(databaseTime.now)
     const windowStartedAt = new Date(
-      Math.floor(databaseTime.now.getTime() / (windowSeconds * 1_000)) * windowSeconds * 1_000,
+      Math.floor(databaseTime.now.getTime() / (durationSeconds * 1_000)) * durationSeconds * 1_000,
     )
     return { now: databaseTime.now, windowStartedAt }
   }
@@ -234,13 +241,14 @@ export function createPostgresRequestAdmission(connectionString: string, config:
     }): Promise<SourceAdmissionResult> {
       const configuredLimit = sourceLimits[input.domain]
       if (!configuredLimit) throw new Error(`Unknown source admission domain: ${input.domain}`)
+      const sourceWindow = sourceWindowSeconds[input.domain] ?? windowSeconds
       const limit =
         input.caller === 'on-demand' ? configuredLimit : Math.max(0, configuredLimit - sourceBackgroundHeadroom)
       const units = positiveInteger('source units', input.units)
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`source-domain:${input.domain}`}, 0))`
-        let window = await captureWindow(sql)
+        let window = await captureWindow(sql, sourceWindow)
         const [state] = await sql<SourceState[]>`
           SELECT last_admitted_at, paused_until FROM request_admission.source_backoffs
           WHERE domain = ${input.domain}
@@ -255,11 +263,11 @@ export function createPostgresRequestAdmission(connectionString: string, config:
           const spacingWaitMs = state.last_admitted_at.getTime() + minimumSourceSpacingMs - window.now.getTime()
           if (spacingWaitMs > 0) {
             await Bun.sleep(spacingWaitMs)
-            window = await captureWindow(sql)
+            window = await captureWindow(sql, sourceWindow)
           }
         }
 
-        const rollingStartedAt = new Date(window.now.getTime() - windowSeconds * 1_000)
+        const rollingStartedAt = new Date(window.now.getTime() - sourceWindow * 1_000)
         await sql`
           DELETE FROM request_admission.source_reservations
           WHERE domain = ${input.domain} AND admitted_at <= ${rollingStartedAt}
@@ -283,10 +291,10 @@ export function createPostgresRequestAdmission(connectionString: string, config:
         if (used + units > limit) {
           const unitsToExpire = used + units - limit
           let expiringUnits = 0
-          let retryAt = window.now.getTime() + windowSeconds * 1_000
+          let retryAt = window.now.getTime() + sourceWindow * 1_000
           for (const reservation of reservations) {
             expiringUnits += reservation.units
-            retryAt = reservation.admitted_at.getTime() + windowSeconds * 1_000
+            retryAt = reservation.admitted_at.getTime() + sourceWindow * 1_000
             if (expiringUnits >= unitsToExpire) break
           }
           return {
@@ -331,20 +339,27 @@ export function createPostgresRequestAdmission(connectionString: string, config:
 
     async inspectCurrentUsage(): Promise<SourceQuotaUsage> {
       const window = await captureWindow(client)
-      const rollingStartedAt = new Date(window.now.getTime() - windowSeconds * 1_000)
-      const rows = await client<{ domain: SourceDomain; units: number }[]>`
-        SELECT domain, coalesce(sum(units), 0)::integer AS units
+      const domains = (Object.keys(sourceLimits) as SourceDomain[]).sort()
+      const maximumWindow = Math.max(...domains.map((domain) => sourceWindowSeconds[domain] ?? windowSeconds))
+      const rollingStartedAt = new Date(window.now.getTime() - maximumWindow * 1_000)
+      const rows = await client<{ domain: SourceDomain; admitted_at: Date; units: number }[]>`
+        SELECT domain, admitted_at, units
         FROM request_admission.source_reservations
         WHERE admitted_at > ${rollingStartedAt}
-        GROUP BY domain
       `
-      const usedByDomain = new Map(rows.map((row) => [row.domain, row.units]))
       return {
         observedAt: window.now.toISOString(),
         windowStartedAt: rollingStartedAt.toISOString(),
-        domains: (Object.keys(sourceLimits) as SourceDomain[]).sort().map((domain) => ({
+        domains: domains.map((domain) => ({
           domain,
-          used: usedByDomain.get(domain) ?? 0,
+          used: rows
+            .filter(
+              (row) =>
+                row.domain === domain &&
+                row.admitted_at.getTime() >
+                  window.now.getTime() - (sourceWindowSeconds[domain] ?? windowSeconds) * 1_000,
+            )
+            .reduce((total, row) => total + row.units, 0),
           limit: sourceLimits[domain],
         })),
       }

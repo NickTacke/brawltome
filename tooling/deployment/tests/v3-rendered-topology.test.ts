@@ -54,7 +54,11 @@ describe('rendered V3 deployment topology', () => {
   })
 
   test.each([
-    ['BRAWLHALLA_V1_REQUEST_LIMIT', '1', 'operations-worker must retain the staged Brawlhalla ceiling of 102'],
+    [
+      'BRAWLHALLA_V1_REQUEST_LIMIT',
+      '1',
+      'operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes',
+    ],
     ['LEADERBOARD_PAGE_DEPTH', '1', 'operations-worker must retain adaptive leaderboard depth 20'],
     ['LEADERBOARD_INTERVAL_MS', '900000', 'operations-worker must retain hourly leaderboard cadence'],
     ['OPERATIONS_TOTAL_CONCURRENCY', '3', 'operations-worker must retain two total operation slots'],
@@ -101,7 +105,7 @@ describe('rendered V3 deployment topology', () => {
       expect.arrayContaining([
         expect.stringContaining('secrets must be exactly'),
         'v3-api secrets must match approved attachments exactly',
-        'operations-worker must retain the staged Brawlhalla ceiling of 102',
+        'operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes',
         'operations-worker must retain two total operation slots',
         'postgres must use build target postgres',
         'postgres must bind only the approved data filesystem',

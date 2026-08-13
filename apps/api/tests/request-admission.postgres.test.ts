@@ -395,6 +395,32 @@ describe('PostgreSQL interactive refresh admission', () => {
     }
   })
 
+  test('uses independent rolling windows for each source', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 1, 'brawlhalla-v1': 1 },
+      sourceWindowSeconds: { 'brawlhalla-v1': 1 },
+      windowSeconds: 60,
+    })
+    try {
+      await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })
+      await admission.admitSource({ domain: 'brawlhalla-v1', reservationKey: randomUUID(), units: 1 })
+      await Bun.sleep(1_100)
+      expect((await admission.inspectCurrentUsage()).domains).toEqual([
+        { domain: 'brawlhalla-v0', used: 1, limit: 1 },
+        { domain: 'brawlhalla-v1', used: 0, limit: 1 },
+      ])
+      expect(
+        await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
+      ).toMatchObject({ outcome: 'rate-limited' })
+      expect(
+        await admission.admitSource({ domain: 'brawlhalla-v1', reservationKey: randomUUID(), units: 1 }),
+      ).toMatchObject({ outcome: 'admitted' })
+    } finally {
+      await admission.close()
+    }
+  })
+
   test('keeps source reservations inside a rolling window across an aligned boundary and restart', async () => {
     let delayed = false
     const options = {
