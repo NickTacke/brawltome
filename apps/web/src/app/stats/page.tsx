@@ -11,10 +11,16 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6 sm:py-10">
-      <nav aria-label="Statistics views" className="mx-auto mb-4 max-w-7xl text-right">
-        <Link href="/stats/career-weapon-usage" className="font-semibold text-primary hover:underline">
-          View Career Weapon Usage
+    <div className="space-y-6">
+      <nav aria-label="Statistics views" className="flex flex-wrap gap-2 border-b border-border pb-4">
+        <Link href="/stats" aria-current="page" className="rounded-md bg-muted px-3 py-2 text-sm font-semibold">
+          Legend Meta
+        </Link>
+        <Link
+          href="/stats/career-weapon-usage"
+          className="rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          Career Weapon Usage
         </Link>
       </nav>
       <Suspense
@@ -26,6 +32,6 @@ export default function Page() {
       >
         <LegendMeta />
       </Suspense>
-    </main>
+    </div>
   )
 }

@@ -17,27 +17,30 @@ export interface WipFeature {
 export const wipFeatures = {
   matches: {
     title: 'Matches',
-    tagline: 'Match history is coming later',
-    description: 'This destination is reserved while the first V3 release focuses on public player and clan discovery.',
+    tagline: 'Full ranked history. Every replay, every stat',
+    description:
+      'Desktop overlay auto-uploads replays as you play. Per-weapon damage, dodges, movement, damage timelines, stock-by-stock. Your whole ranked career in one place',
     icon: Gamepad,
   },
   learn: {
     title: 'Learn',
-    tagline: 'Learning resources are coming later',
-    description: 'This destination remains visible, but it is not part of the first V3 release.',
+    tagline: 'Guides, combos, tech. Progression paths built for you',
+    description:
+      'Matchup writeups, combo breakdowns, tech tutorials. Personal paths by difficulty, legend, and skill (edgeguarding, neutral, recovery)',
     icon: BookBookmark,
   },
   tournaments: {
     title: 'Tournaments',
-    tagline: 'Tournament features are coming later',
-    description: 'This destination remains visible, but tournament workflows are not part of the first V3 release.',
+    tagline: 'Every Brawlhalla tournament. Official, community, and yours',
+    description:
+      'Live brackets, results, and streams from Challengermode-hosted events. Players linked to their BrawlTome profiles. Approved organizers can host tournaments directly on BrawlTome',
     icon: Cup,
   },
   feed: {
     title: 'Feed',
-    tagline: 'Social activity is coming later',
+    tagline: 'Activity and posts from players you follow',
     description:
-      'This destination remains visible, but social posting and following are not part of the first V3 release.',
+      "Rank changes, tournament runs, notable matches from followed players and clans. Plus their posts. Nothing you didn't ask to see",
     icon: UsersGroupRounded,
   },
 } as const satisfies Record<string, WipFeature>
