@@ -25,20 +25,26 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Set up SSH agent for private detection submodule
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DETECTION_DEPLOY_KEY }}
+
+      - name: Add github.com to known hosts
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - name: Initialize private detection submodule over authenticated HTTPS
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.DETECTION_REPOSITORY_TOKEN }}
+      - name: Initialize private detection submodule over SSH
+        shell: bash
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
-            throw "DETECTION_REPOSITORY_TOKEN is required for the private HTTPS submodule"
-          }
-          gh auth setup-git
           git submodule sync --recursive
+          git config submodule.apps/desktop/detection.url git@github.com:NickTacke/brawltome-detection.git
           git submodule update --init --recursive
           git submodule status --recursive
 
