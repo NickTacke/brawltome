@@ -130,8 +130,8 @@ export function LegendMetaView({
             Current Season Legend Meta
           </h1>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Cumulative ranked 1v1 outcomes observed from a deterministic BrawlTome cohort. These measurements describe
-            the observed sample, not causal legend strength.
+            Choose a region and current 1v1 bracket to compare outcomes observed from a deterministic BrawlTome cohort.
+            These measurements describe the observed sample, not causal legend strength.
           </p>
         </div>
       </header>

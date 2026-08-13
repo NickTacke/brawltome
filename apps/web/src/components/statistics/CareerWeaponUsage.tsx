@@ -7,6 +7,7 @@ import {
   careerWeaponUsageRegionScopes,
 } from '@brawltome/contracts'
 import { Card } from '@brawltome/ui'
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { CareerWeaponUsageHistory } from './CareerWeaponUsageHistory'
 
@@ -204,7 +205,22 @@ function CareerWeaponUsageShell({
   children: ReactNode
 }) {
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-8">
+    <div className="w-full space-y-6">
+      <nav aria-label="Statistics views" className="flex flex-wrap gap-2 border-b border-border pb-4">
+        <Link
+          href="/stats"
+          className="rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          Legend Meta
+        </Link>
+        <Link
+          href="/stats/career-weapon-usage"
+          aria-current="page"
+          className="rounded-md bg-muted px-3 py-2 text-sm font-semibold"
+        >
+          Career Weapon Usage
+        </Link>
+      </nav>
       <header className="space-y-3">
         <p className="text-sm font-semibold uppercase tracking-wide text-primary">Global Statistics</p>
         <h1 className="text-3xl font-bold">Career Weapon Usage</h1>
@@ -218,7 +234,7 @@ function CareerWeaponUsageShell({
         <Filters filters={filters} />
       </Card>
       {children}
-    </main>
+    </div>
   )
 }
 
