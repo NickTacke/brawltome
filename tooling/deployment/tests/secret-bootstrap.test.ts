@@ -24,6 +24,7 @@ function fixture(secretValues: Record<string, string>) {
     `#!/bin/sh
 printf 'args=%s\\n' "$*"
 printf 'database=%s\\n' "\${DATABASE_URL:-}"
+printf 'discord-client-secret=%s\\n' "\${DISCORD_CLIENT_SECRET:-}"
 printf 'discord-internal=%s\\n' "\${DISCORD_INTERNAL_API_SECRET:-}"
 printf 'internal=%s\\n' "\${INTERNAL_API_SECRET:-}"
 printf 'metrics=%s\\n' "\${METRICS_SCRAPE_SECRET:-}"
@@ -44,6 +45,7 @@ describe('V3 secret bootstrap', () => {
   test('exports API secrets without placing values in command arguments', () => {
     const values = {
       runtime_database_url: 'postgres://runtime-secret',
+      discord_client_secret: 'discord-client-secret-value',
       discord_internal_api_secret: 'discord-internal-secret-value',
       internal_api_secret: 'internal-secret-value',
       metrics_scrape_secret: 'metrics-secret-value',
@@ -71,7 +73,7 @@ describe('V3 secret bootstrap', () => {
     })
 
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('Required secret is unreadable: DISCORD_INTERNAL_API_SECRET')
+    expect(result.stderr).toContain('Required secret is unreadable: DISCORD_CLIENT_SECRET')
     expect(result.stderr).not.toContain('postgres://runtime-secret')
   })
 

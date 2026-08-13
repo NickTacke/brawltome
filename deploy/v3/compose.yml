@@ -78,6 +78,8 @@ services:
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
       CORS_ORIGIN: https://brawltome.app
+      DISCORD_CLIENT_ID: ${V3_DISCORD_CLIENT_ID:?Set the Discord OAuth client ID}
+      DISCORD_REDIRECT_URI: https://api.brawltome.app/auth/discord/callback
       MATCHMAKING_ENABLED: "false"
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -87,6 +89,7 @@ services:
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
       WEB_ORIGIN: https://brawltome.app
     secrets:
+      - discord_client_secret
       - discord_internal_api_secret
       - runtime_database_url
       - internal_api_secret
@@ -308,6 +311,9 @@ secrets:
   brawlhalla_api_key:
     name: brawltome-v3_brawlhalla_api_key
     file: /var/lib/brawltome-v3-secrets/brawlhalla-api-key
+  discord_client_secret:
+    name: brawltome-v3_discord_client_secret
+    file: /var/lib/brawltome-v3-secrets/discord-client-secret
   discord_internal_api_secret:
     name: brawltome-v3_discord_internal_api_secret
     file: /var/lib/brawltome-v3-secrets/discord-internal-api-secret
