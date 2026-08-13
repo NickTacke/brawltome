@@ -164,9 +164,12 @@ tests:
     interval: 1m
     input_series:
       - series: 'refresh_failures_total{kind="interactive-player-refresh",failure_category="source_timeout"}'
-        values: "0 1x17"
+        values: "0 1 2 3x17"
     alert_rule_test:
       - eval_time: 2m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+      - eval_time: 4m
         alertname: RefreshFailuresElevated
         exp_alerts:
           - exp_labels:
@@ -177,8 +180,8 @@ tests:
               signal: refresh-failures
             exp_annotations:
               summary: "interactive-player-refresh refresh failures detected"
-              description: "One or more refresh attempts failed in the last 15 minutes."
-      - eval_time: 17m
+              description: "More than two refresh attempts failed in the last 15 minutes."
+      - eval_time: 19m
         alertname: RefreshFailuresElevated
         exp_alerts: []
 
@@ -196,15 +199,18 @@ tests:
     interval: 1m
     input_series:
       - series: 'refresh_failures_total{kind="leaderboard-1v1",failure_category="source_rate_limited"}'
-        values: "0 1x17"
+        values: "0 1 2 3x17"
       - series: 'refresh_failures_total{kind="leaderboard-2v2",failure_category="source_unavailable"}'
-        values: "0 1x17"
+        values: "0 1 2 3x17"
       - series: 'refresh_failures_total{kind="statistics-ranked-collection",failure_category="execution"}'
-        values: "0 1x17"
+        values: "0 1 2 3x17"
       - series: 'refresh_failures_total{kind="statistics-publication",failure_category="lease_lost"}'
-        values: "0 1x17"
+        values: "0 1 2 3x17"
     alert_rule_test:
       - eval_time: 2m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+      - eval_time: 4m
         alertname: RefreshFailuresElevated
         exp_alerts:
           - exp_labels:
@@ -215,7 +221,7 @@ tests:
               signal: refresh-failures
             exp_annotations:
               summary: "leaderboard-1v1 refresh failures detected"
-              description: "One or more refresh attempts failed in the last 15 minutes."
+              description: "More than two refresh attempts failed in the last 15 minutes."
           - exp_labels:
               kind: leaderboard-2v2
               failure_category: source_unavailable
@@ -224,7 +230,7 @@ tests:
               signal: refresh-failures
             exp_annotations:
               summary: "leaderboard-2v2 refresh failures detected"
-              description: "One or more refresh attempts failed in the last 15 minutes."
+              description: "More than two refresh attempts failed in the last 15 minutes."
           - exp_labels:
               kind: statistics-ranked-collection
               failure_category: execution
@@ -233,7 +239,7 @@ tests:
               signal: refresh-failures
             exp_annotations:
               summary: "statistics-ranked-collection refresh failures detected"
-              description: "One or more refresh attempts failed in the last 15 minutes."
+              description: "More than two refresh attempts failed in the last 15 minutes."
           - exp_labels:
               kind: statistics-publication
               failure_category: lease_lost
@@ -242,8 +248,8 @@ tests:
               signal: refresh-failures
             exp_annotations:
               summary: "statistics-publication refresh failures detected"
-              description: "One or more refresh attempts failed in the last 15 minutes."
-      - eval_time: 17m
+              description: "More than two refresh attempts failed in the last 15 minutes."
+      - eval_time: 19m
         alertname: RefreshFailuresElevated
         exp_alerts: []
 
