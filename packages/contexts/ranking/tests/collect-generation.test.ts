@@ -161,32 +161,30 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     expect(recorder.published[0].pageDepth).toBe(3)
   })
 
-  test('rejects a capped collection that has not reached its adaptive boundary', async () => {
+  test('publishes a capped collection when adaptive statistics coverage remains insufficient', async () => {
     const recorder = publicationRecorder()
-    await expect(
-      collectAndPublishLeaderboardGeneration({
-        mode: '1v1',
-        authorization: auth('1v1'),
-        pageDepth: 2,
-        source: {
-          async fetchPage({ region, page }) {
-            const regionOffset = regionalLeaderboardScopes.indexOf(region) * 10_000
-            return {
-              rankings: Array.from({ length: 50 }, (_, index) => {
-                const rank = (page - 1) * 50 + index + 1
-                return row(region, '1v1', regionOffset + rank, rank, 2_100)
-              }),
-              totalPages: 10,
-            }
-          },
+    await collectAndPublishLeaderboardGeneration({
+      mode: '1v1',
+      authorization: auth('1v1'),
+      pageDepth: 2,
+      source: {
+        async fetchPage({ region, page }) {
+          const regionOffset = regionalLeaderboardScopes.indexOf(region) * 10_000
+          return {
+            rankings: Array.from({ length: 50 }, (_, index) => {
+              const rank = (page - 1) * 50 + index + 1
+              return row(region, '1v1', regionOffset + rank, rank, 2_100)
+            }),
+            totalPages: 10,
+          }
         },
-        publication: recorder.publication,
-      }),
-    ).rejects.toBeInstanceOf(LeaderboardCandidateError)
-    expect(recorder.published).toHaveLength(0)
-    expect(recorder.failures).toEqual([
-      expect.objectContaining({ mode: '1v1', scope: 'US-E', code: 'leaderboard_candidate_invalid' }),
-    ])
+      },
+      publication: recorder.publication,
+    })
+
+    expect(recorder.failures).toEqual([])
+    expect(recorder.published[0].scopePageDepths).toMatchObject({ all: 2, EU: 2, 'US-E': 2 })
+    expect(recorder.published[0].snapshots.get('EU')).toHaveLength(100)
   })
 
   test('canonicalizes fixed teams, permits one player in different teams, and deduplicates only identical teams globally', async () => {

@@ -200,9 +200,9 @@ function hasAdaptiveCoverage(mode: LeaderboardMode, pages: readonly SourceLeader
   return platinum >= STATISTICS_BRACKET_TARGET && diamondPlus >= STATISTICS_BRACKET_TARGET
 }
 
-function collectionCanPublish(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[]): boolean {
+function collectionCanPublish(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[], depth: number): boolean {
   const lastPage = pages.at(-1)
-  return Boolean(lastPage && (pages.length >= lastPage.totalPages || hasAdaptiveCoverage(mode, pages)))
+  return Boolean(lastPage && (pages.length >= Math.min(lastPage.totalPages, depth) || hasAdaptiveCoverage(mode, pages)))
 }
 
 function publishedIdentity(identity: SourceLeaderboardIdentity): PublishedLeaderboardIdentity {
@@ -244,7 +244,7 @@ function validateRegionRows(
   pages: readonly SourceLeaderboardPage[],
   depth: number,
 ) {
-  if (pages.length === 0 || pages.length > depth || !collectionCanPublish(mode, pages)) {
+  if (pages.length === 0 || pages.length > depth || !collectionCanPublish(mode, pages, depth)) {
     throw new LeaderboardCandidateError(`${mode}/${region} candidate is incomplete`)
   }
   const totalPages = pages[0]?.totalPages
@@ -377,7 +377,7 @@ export async function collectAndPublishLeaderboardGeneration(input: {
       const pages: SourceLeaderboardPage[] = []
       for (let page = 1; page <= depth; page += 1) {
         pages.push(await input.source.fetchPage({ mode: input.mode, region, page }))
-        if (collectionCanPublish(input.mode, pages)) break
+        if (collectionCanPublish(input.mode, pages, depth)) break
       }
       scopePageDepths[region] = pages.length
       collectedDepth = Math.max(collectedDepth, pages.length)
