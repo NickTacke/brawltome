@@ -782,7 +782,7 @@ describe('durable Refresh Operations', () => {
       const firstOperationId = first.occurrences.find(
         ({ scheduleId }) => scheduleId === schedule.scheduleId,
       )?.operationId
-      expect(firstOperationId).toBeTruthy()
+      if (!firstOperationId) throw new Error('Expected the first leaderboard occurrence')
       const obsoleteLease = requireLease(
         await operations.claim('obsolete-leaderboard-worker', 10_000, testAdmission, 'leaderboard-1v1'),
       )
@@ -796,7 +796,7 @@ describe('durable Refresh Operations', () => {
       const second = await operations.materializeDueSchedules()
       expect(second.occurrences.filter(({ scheduleId }) => scheduleId === schedule.scheduleId)).toHaveLength(1)
 
-      expect(await operations.inspectDeadLetter(firstOperationId as string)).toMatchObject({
+      expect(await operations.inspectDeadLetter(firstOperationId)).toMatchObject({
         operation: {
           operationId: firstOperationId,
           lastError: { code: 'superseded_scheduled_operation', retryable: false },
@@ -1169,7 +1169,7 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
-  test('allows background borrowing but restores the interactive reservation without preemption', async () => {
+  test('hard-reserves interactive capacity while background work is due', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const admission = {
       ...testAdmission,
@@ -1184,8 +1184,8 @@ describe('durable Refresh Operations', () => {
     await operations.configureAdmission(admission)
     for (let index = 0; index < 4; index += 1) {
       await operations.accept({
-        dedupeKey: `borrow:${randomUUID()}`,
-        operationKey: `borrow-effect:${randomUUID()}`,
+        dedupeKey: `reserved-capacity:${randomUUID()}`,
+        operationKey: `reserved-capacity-effect:${randomUUID()}`,
         workClass: 'maintenance',
         payload: { value: `${index}` },
         provenance: { source: 'integration-test' },
@@ -1196,7 +1196,7 @@ describe('durable Refresh Operations', () => {
       claimers.map((claimer, index) => claimer.claim(`background-${index}`, 10_000, admission)),
     )
     const backgroundLeases = concurrentClaims.filter((lease): lease is OperationLease => lease !== null)
-    expect(backgroundLeases).toHaveLength(4)
+    expect(backgroundLeases).toHaveLength(3)
     expect(backgroundLeases.every(({ workClass }) => workClass === 'maintenance')).toBe(true)
     await Promise.all(claimers.map((claimer) => claimer.close()))
 
@@ -1207,14 +1207,74 @@ describe('durable Refresh Operations', () => {
       payload: { value: 'interactive' },
       provenance: { source: 'integration-test' },
     })
-    expect(await operations.claim('interactive-blocked', 10_000, admission)).toBeNull()
-    expect(await operations.complete(backgroundLeases.pop() as OperationLease)).toBe('transitioned')
     const interactive = requireLease(await operations.claim('interactive-priority', 10_000, admission))
     expect(interactive.workClass).toBe('interactive')
 
     for (const lease of [...backgroundLeases, interactive]) {
       expect(await operations.complete(lease)).toBe('transitioned')
     }
+    const remainingBackground = requireLease(await operations.claim('remaining-background', 10_000, admission))
+    expect(await operations.complete(remainingBackground)).toBe('transitioned')
+    await operations.close()
+  })
+
+  test('keeps a two-slot worker available for Player refresh during Discovery work', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const admission = {
+      ...testAdmission,
+      totalConcurrency: 2,
+      interactiveReservation: 1,
+      classConcurrency: {
+        interactive: 2,
+        'primary-monitoring': 2,
+        leaderboard: 1,
+        'global-statistics': 1,
+        projection: 2,
+        maintenance: 1,
+      },
+    } as const
+    await operations.configureAdmission(admission)
+    await operations.accept({
+      kind: 'player-discovery-projection',
+      dedupeKey: `player-projection:${randomUUID()}`,
+      operationKey: `player-projection:${randomUUID()}`,
+      workClass: 'projection',
+      payload: { batchSize: 500 },
+      provenance: { source: 'integration-test' },
+    })
+    await operations.accept({
+      kind: 'clan-discovery-projection',
+      dedupeKey: `clan-projection:${randomUUID()}`,
+      operationKey: `clan-projection:${randomUUID()}`,
+      workClass: 'projection',
+      payload: { batchSize: 500 },
+      provenance: { source: 'integration-test' },
+    })
+
+    const discovery = requireLease(await operations.claim('discovery', 10_000, admission))
+    expect(discovery.kind).toBe('player-discovery-projection')
+    expect(await operations.claim('reserved-slot', 10_000, admission)).toBeNull()
+
+    const reserved = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: `player-refresh:${randomUUID()}`,
+      operationKey: `player-refresh:${randomUUID()}`,
+      brawlhallaId: 42,
+      staleSections: ['ranked', 'stats'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+    expect(await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)).toBe(
+      'transitioned',
+    )
+    const interactive = requireLease(await operations.claim('player-refresh', 10_000, admission))
+    expect(interactive.kind).toBe('interactive-player-refresh')
+
+    expect(await operations.complete(interactive)).toBe('transitioned')
+    expect(await operations.complete(discovery)).toBe('transitioned')
+    const remainingDiscovery = requireLease(await operations.claim('remaining-discovery', 10_000, admission))
+    expect(remainingDiscovery.kind).toBe('clan-discovery-projection')
+    expect(await operations.complete(remainingDiscovery)).toBe('transitioned')
     await operations.close()
   })
 
