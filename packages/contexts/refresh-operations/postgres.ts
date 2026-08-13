@@ -1394,13 +1394,15 @@ export function createPostgresRefreshOperations(
 
           const interactiveEligible = eligible('interactive')
           const interactiveActive = active.get('interactive') ?? 0
+          const backgroundActive = activeTotal - interactiveActive
+          const backgroundCapacity = admission.totalConcurrency - admission.interactiveReservation
           const backgroundEligible = backgroundWorkClasses.filter(eligible)
           let selectedClass: WorkClass | undefined
           let nextCredits: Map<BackgroundWorkClass, number> | undefined
 
           if (interactiveEligible && interactiveActive < admission.interactiveReservation) {
             selectedClass = 'interactive'
-          } else if (backgroundEligible.length > 0) {
+          } else if (backgroundEligible.length > 0 && backgroundActive < backgroundCapacity) {
             for (const workClass of backgroundEligible) {
               await sql`
                 INSERT INTO refresh_operations.admission_classes (work_class)
