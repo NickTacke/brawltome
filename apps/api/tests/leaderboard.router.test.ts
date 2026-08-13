@@ -80,7 +80,7 @@ describe('leaderboard.get', () => {
           },
         ],
       }),
-      async (brawlhallaId) => ({ brawlhallaId, name: 'Ada', bestLegendNameKey: 'bodvar' }),
+      async (brawlhallaId) => ({ brawlhallaId, name: 'Current Ada', bestLegendNameKey: 'bodvar' }),
     )
     await expect(caller.get({ mode: 'solo2v2', region: 'EU', page: 1 })).resolves.toMatchObject({
       mode: 'solo2v2',
@@ -90,7 +90,7 @@ describe('leaderboard.get', () => {
           sourceRank: 4,
           identity: {
             type: 'solo-two-vs-two-player',
-            player: { brawlhallaId: 42, name: 'Ada', bestLegendNameKey: 'bodvar' },
+            player: { brawlhallaId: 42, name: 'Current Ada', bestLegendNameKey: 'bodvar' },
           },
         },
       ],

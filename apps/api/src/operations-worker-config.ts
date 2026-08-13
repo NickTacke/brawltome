@@ -1,3 +1,4 @@
+import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
@@ -147,10 +148,10 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       ),
     },
     leaderboard: {
-      pageDepth: positiveInteger(env.LEADERBOARD_PAGE_DEPTH, 1, 'LEADERBOARD_PAGE_DEPTH', 20),
+      pageDepth: positiveInteger(env.LEADERBOARD_PAGE_DEPTH, defaultLeaderboardPageDepth, 'LEADERBOARD_PAGE_DEPTH', 20),
       intervalMs: boundedInteger(
         env.LEADERBOARD_INTERVAL_MS,
-        15 * 60 * 1000,
+        defaultLeaderboardIntervalMs,
         'LEADERBOARD_INTERVAL_MS',
         minLeaderboardIntervalMs,
         maxLeaderboardIntervalMs,

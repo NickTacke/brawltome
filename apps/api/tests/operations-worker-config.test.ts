@@ -20,8 +20,8 @@ describe('operations worker configuration', () => {
         reconciliationIntervalMs: 60 * 60 * 1000,
       },
       leaderboard: {
-        pageDepth: 1,
-        intervalMs: 15 * 60 * 1000,
+        pageDepth: 20,
+        intervalMs: 60 * 60 * 1000,
         firstDueAt: '2020-01-01T00:00:00.000Z',
       },
       admission: {
@@ -81,9 +81,9 @@ describe('operations worker configuration', () => {
     ])
     expect(definitions.map(({ firstDueAt }) => firstDueAt)).toEqual([
       '2020-01-01T00:00:00.000Z',
-      '2020-01-01T00:03:45.000Z',
-      '2020-01-01T00:07:30.000Z',
-      '2020-01-01T00:11:15.000Z',
+      '2020-01-01T00:15:00.000Z',
+      '2020-01-01T00:30:00.000Z',
+      '2020-01-01T00:45:00.000Z',
     ])
   })
 

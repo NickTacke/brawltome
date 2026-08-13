@@ -20,20 +20,21 @@ async function enrichBestLegends(
   const contestants = output.entries.flatMap((entry) =>
     entry.identity.type === 'fixed-two-vs-two-team' ? [...entry.identity.players] : [entry.identity.player],
   )
-  const legendById = new Map(
-    (
-      await Promise.all(
-        [...new Set(contestants.map(({ brawlhallaId }) => brawlhallaId))].map(
-          async (brawlhallaId) =>
-            [brawlhallaId, (await references.byId(brawlhallaId))?.bestLegendNameKey ?? null] as const,
-        ),
-      )
-    ).filter((entry): entry is readonly [number, string] => entry[1] !== null),
+  const referenceById = new Map(
+    await Promise.all(
+      [...new Set(contestants.map(({ brawlhallaId }) => brawlhallaId))].map(
+        async (brawlhallaId) => [brawlhallaId, await references.byId(brawlhallaId)] as const,
+      ),
+    ),
   )
-  const enrich = (player: Contestant) => ({
-    ...player,
-    bestLegendNameKey: legendById.get(player.brawlhallaId) ?? null,
-  })
+  const enrich = (player: Contestant) => {
+    const reference = referenceById.get(player.brawlhallaId)
+    return {
+      ...player,
+      name: reference?.name ?? player.name,
+      bestLegendNameKey: reference?.bestLegendNameKey ?? null,
+    }
+  }
   return parseLeaderboardOutput({
     ...output,
     entries: output.entries.map((entry) => ({

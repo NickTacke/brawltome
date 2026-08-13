@@ -117,10 +117,22 @@ function publishedProvenance(
 ): Extract<LeaderboardView, { status: 'fresh' | 'stale' }>['provenance'] {
   if (snapshot.source === 'brawlhalla-v1-ranked-leaderboard') {
     if (snapshot.page_depth === null) throw new Error('stored V1 leaderboard provenance has no page depth')
+    let pageDepth = snapshot.page_depth
+    const scopePageDepths = snapshot.provenance.scopePageDepths
+    if (scopePageDepths !== undefined) {
+      if (typeof scopePageDepths !== 'object' || scopePageDepths === null || Array.isArray(scopePageDepths)) {
+        throw new Error('stored V1 leaderboard scope depths are invalid')
+      }
+      const scopePageDepth = (scopePageDepths as Record<string, unknown>)[snapshot.scope]
+      if (!Number.isSafeInteger(scopePageDepth) || (scopePageDepth as number) < 1) {
+        throw new Error('stored V1 leaderboard scope depth is invalid')
+      }
+      pageDepth = scopePageDepth as number
+    }
     return {
       source: snapshot.source,
       contractVersion: snapshot.source_contract_version,
-      pageDepth: snapshot.page_depth,
+      pageDepth,
     }
   }
   const sourceChecksum = snapshot.provenance.sourceChecksum
@@ -363,6 +375,7 @@ export function createPostgresRanking(connectionString: string) {
                source: 'brawlhalla-v1-ranked-leaderboard',
                contractVersion: 2,
                pageDepth: candidate.pageDepth,
+               scopePageDepths: candidate.scopePageDepths,
              })})
         `
         for (const scope of requiredScopes) {

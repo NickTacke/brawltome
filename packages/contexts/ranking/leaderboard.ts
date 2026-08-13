@@ -1,3 +1,4 @@
+import { currentOneVsOneBracket } from '@brawltome/game-data'
 import {
   type LeaderboardMode,
   type RegionalLeaderboardScope,
@@ -6,9 +7,9 @@ import {
   regionalLeaderboardScopes,
 } from './v1-leaderboard-source'
 
-export const defaultLeaderboardPageDepth = 1
+export const defaultLeaderboardPageDepth = 20
 export const maxLeaderboardPageDepth = 20
-export const defaultLeaderboardIntervalMs = 15 * 60 * 1000
+export const defaultLeaderboardIntervalMs = 60 * 60 * 1000
 
 export type LeaderboardScope = 'all' | RegionalLeaderboardScope
 export type LeaderboardOperationKind =
@@ -46,6 +47,7 @@ export type LeaderboardGenerationCandidate = {
   scheduleWindowAt: Date
   expectedNextPublicationAt: Date
   pageDepth: number
+  scopePageDepths?: Partial<Record<LeaderboardScope, number>>
   snapshots: ReadonlyMap<LeaderboardScope, readonly PublishedLeaderboardRow[]>
 }
 
@@ -179,6 +181,30 @@ function validateDepth(depth: number): void {
   }
 }
 
+const STATISTICS_BRACKET_TARGET = 125
+
+function hasAdaptiveCoverage(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[]): boolean {
+  if (mode !== '1v1') {
+    const lastPage = pages.at(-1)
+    return Boolean(lastPage?.rankings.every(({ tier }) => tier !== null && !tier.startsWith('Valhallan')))
+  }
+  let platinum = 0
+  let diamondPlus = 0
+  for (const { rankings } of pages) {
+    for (const { rating } of rankings) {
+      const bracket = currentOneVsOneBracket(rating)
+      if (bracket === 'Platinum') platinum += 1
+      else if (bracket === 'Diamond+') diamondPlus += 1
+    }
+  }
+  return platinum >= STATISTICS_BRACKET_TARGET && diamondPlus >= STATISTICS_BRACKET_TARGET
+}
+
+function collectionCanPublish(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[]): boolean {
+  const lastPage = pages.at(-1)
+  return Boolean(lastPage && (pages.length >= lastPage.totalPages || hasAdaptiveCoverage(mode, pages)))
+}
+
 function publishedIdentity(identity: SourceLeaderboardIdentity): PublishedLeaderboardIdentity {
   if (identity.type === 'fixed-two-vs-two-team') {
     return {
@@ -218,11 +244,11 @@ function validateRegionRows(
   pages: readonly SourceLeaderboardPage[],
   depth: number,
 ) {
-  if (pages.length !== depth) throw new LeaderboardCandidateError(`${mode}/${region} candidate is incomplete`)
-  const totalPages = pages[0]?.totalPages
-  if (!totalPages || totalPages < depth) {
-    throw new LeaderboardCandidateError(`${mode}/${region} does not contain configured page depth ${depth}`)
+  if (pages.length === 0 || pages.length > depth || !collectionCanPublish(mode, pages)) {
+    throw new LeaderboardCandidateError(`${mode}/${region} candidate is incomplete`)
   }
+  const totalPages = pages[0]?.totalPages
+  if (!totalPages) throw new LeaderboardCandidateError(`${mode}/${region} does not contain source pages`)
   const identities = new Set<string>()
   const ranks = new Set<number>()
   const rows: PublishedLeaderboardRow[] = []
@@ -340,20 +366,27 @@ export async function collectAndPublishLeaderboardGeneration(input: {
   const clock = input.clock ?? (() => new Date())
   const observedAt = clock()
   let snapshots: ReadonlyMap<LeaderboardScope, readonly PublishedLeaderboardRow[]>
+  const scopePageDepths: Partial<Record<LeaderboardScope, number>> = {}
+  let collectedDepth = 0
   let failureScope: LeaderboardScope = 'all'
   try {
     const regional = new Map<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>()
     for (const region of regionalLeaderboardScopes) {
       failureScope = region
+      // ponytail: partial pages stay in memory; persist staging only if restart waste prevents hourly publication.
       const pages: SourceLeaderboardPage[] = []
       for (let page = 1; page <= depth; page += 1) {
         pages.push(await input.source.fetchPage({ mode: input.mode, region, page }))
+        if (collectionCanPublish(input.mode, pages)) break
       }
+      scopePageDepths[region] = pages.length
+      collectedDepth = Math.max(collectedDepth, pages.length)
       regional.set(region, validateRegionRows(input.mode, region, pages, depth))
     }
     failureScope = 'all'
     const complete = new Map<LeaderboardScope, readonly PublishedLeaderboardRow[]>(regional)
     complete.set('all', buildGlobal(input.mode, regional))
+    scopePageDepths.all = collectedDepth
     snapshots = complete
   } catch (error) {
     if (error instanceof LeaderboardLeaseLostError) throw error
@@ -377,7 +410,8 @@ export async function collectAndPublishLeaderboardGeneration(input: {
     observedAt,
     scheduleWindowAt,
     expectedNextPublicationAt: new Date(scheduleWindowAt.getTime() + intervalMs),
-    pageDepth: depth,
+    pageDepth: collectedDepth,
+    scopePageDepths,
     snapshots,
   })
   if (result === 'lease-lost') throw new LeaderboardLeaseLostError()

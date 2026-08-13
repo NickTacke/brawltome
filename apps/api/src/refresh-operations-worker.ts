@@ -40,6 +40,7 @@ type RunOneRefreshOperationOptions = {
   admission: AdmissionConfig
   renewEveryMs?: number
   sourceAdmission?: SourceAdmission
+  waitForSourceAdmission?: (retryAfterMs: number, signal: AbortSignal) => Promise<void>
   executeEffect?: (lease: ProofLease) => Promise<FencedResult>
   executeSection?(
     lease: PlayerLease,
@@ -597,6 +598,7 @@ async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
   options: RunOneRefreshOperationOptions,
+  authorityLost: AbortSignal,
 ): Promise<AttemptExecutionOutcome> {
   if (!options.ranking || !options.leaderboardSource || !options.sourceAdmission) {
     const transition = await operations.fail(
@@ -625,13 +627,18 @@ async function executeLeaderboard(
     source: {
       async fetchPage(input) {
         await renewLeaderboardLease()
-        const admission = await sourceAdmission.admitSource({
-          domain: 'brawlhalla-v1',
-          reservationKey: `${lease.operationId}:${lease.attemptNumber}:${input.mode}:${input.region}:${input.page}`,
-          units: 1,
-          caller: 'background',
-        })
-        if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
+        for (;;) {
+          const admission = await sourceAdmission.admitSource({
+            domain: 'brawlhalla-v1',
+            reservationKey: `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`,
+            units: 1,
+            caller: 'background',
+          })
+          if (admission.outcome === 'admitted') break
+          await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
+          if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+          await renewLeaderboardLease()
+        }
         await renewLeaderboardLease()
         return options.telemetry
           ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
@@ -715,7 +722,7 @@ export async function runOneRefreshOperation(
       } else if (lease.workClass === 'global-statistics') {
         attemptOutcome = await executeStatisticsCollection(operations, lease, options)
       } else {
-        attemptOutcome = await executeLeaderboard(operations, lease, options)
+        attemptOutcome = await executeLeaderboard(operations, lease, options, authorityLost.signal)
       }
       if (attemptOutcome === 'lease_lost') failureCategory = 'lease_lost'
     } catch (error) {
