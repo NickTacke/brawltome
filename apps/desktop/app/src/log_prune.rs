@@ -14,7 +14,7 @@ pub fn paths_to_delete(mut entries: Vec<(PathBuf, u64)>, keep: usize) -> Vec<Pat
         return Vec::new();
     }
     // Sort newest-first by mtime epoch.
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     entries.into_iter().skip(keep).map(|(p, _)| p).collect()
 }
 
