@@ -71,6 +71,7 @@ exit 42
       DOKPLOY_V3_COMPOSE_ID: 'compose_safe-id',
       DOKPLOY_V3_PROJECT_NAME: projectName,
       DOKPLOY_V3_REF: sourceRef,
+      V3_TURNSTILE_SITE_KEY: 'test-site-key',
       MOCK_CURL_LOG: log,
       MOCK_DEPLOY_MARKER: deployMarker,
       MOCK_GATE_MARKER: gateMarker,
@@ -104,6 +105,16 @@ describe('V3 Dokploy deployment wrapper', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('must not allow bypass actors')
     expect(existsSync(deployMarker)).toBe(false)
+  })
+
+  test('requires the public Turnstile site key before any API request', () => {
+    const { env, log } = fixture()
+    const { V3_TURNSTILE_SITE_KEY: _siteKey, ...withoutSiteKey } = env
+    const result = spawnSync('bash', [wrapper], { cwd: root, encoding: 'utf8', env: withoutSiteKey })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('V3_TURNSTILE_SITE_KEY')
+    expect(existsSync(log)).toBe(false)
   })
 
   test('rejects unsafe identifiers before any API request', () => {

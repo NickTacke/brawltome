@@ -18,6 +18,7 @@ function renderCompose() {
       ...process.env,
       V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
       V3_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
+      V3_TURNSTILE_SITE_KEY: 'test-site-key',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -124,6 +125,7 @@ describe('V3 production topology', () => {
       postgres_runtime_password: 'postgres-runtime-password',
       refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
       runtime_database_url: 'runtime-database-url',
+      turnstile_secret_key: 'turnstile-secret-key',
     }
     expect(Object.keys(rendered.secrets).sort()).toEqual(Object.keys(expectedSecretFiles).sort())
     for (const [name, file] of Object.entries(expectedSecretFiles)) {
@@ -133,7 +135,9 @@ describe('V3 production topology', () => {
       })
     }
     expect(rendered.services.migration.secrets?.map(({ source }) => source)).toEqual(['migration_database_url'])
-    expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).toContain('runtime_database_url')
+    expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).toEqual(
+      expect.arrayContaining(['runtime_database_url', 'turnstile_secret_key']),
+    )
     expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
     expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).toContain(
       'runtime_database_url',

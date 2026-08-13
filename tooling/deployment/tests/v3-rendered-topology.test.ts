@@ -12,6 +12,7 @@ function renderedTopology(): Record<string, unknown> {
       ...process.env,
       V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
       V3_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
+      V3_TURNSTILE_SITE_KEY: 'test-site-key',
     },
     stdout: 'pipe',
     stderr: 'pipe',
