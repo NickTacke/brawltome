@@ -149,6 +149,8 @@ describe('collectAndPublishLeaderboardGeneration', () => {
             const rank = (page - 1) * 50 + index + 1
             const result = row(region, 'solo2v2', regionOffset + rank, rank)
             result.tier = page === 1 ? 'Valhallan' : page === 2 && index === 0 ? null : 'Diamond'
+            if (page === 2 && index === 0) result.rating = result.best_rating = 2_100
+            if (page === 3 && index === 0) result.rating = result.best_rating = 2_400
             return result
           })
           return { rankings, totalPages: 5 }
@@ -159,6 +161,16 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
     expect(calls).toHaveLength(regionalLeaderboardScopes.length * 3)
     expect(recorder.published[0].pageDepth).toBe(3)
+    expect(recorder.published[0].snapshots.get('EU')?.[50]).toMatchObject({
+      standing: 51,
+      sourceRank: 101,
+      rating: 2_400,
+      tier: 'Diamond',
+    })
+    expect(recorder.published[0].snapshots.get('EU')?.find(({ sourceRank }) => sourceRank === 51)).toMatchObject({
+      tier: 'Diamond',
+      rating: 2_100,
+    })
   })
 
   test('publishes a capped collection when adaptive statistics coverage remains insufficient', async () => {
