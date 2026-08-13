@@ -63,7 +63,7 @@ export function MemberList({
   return (
     <div id="members">
       <Card className="bg-card/50 backdrop-blur-xs border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex flex-col items-stretch justify-between gap-4 space-y-0 sm:flex-row sm:items-center">
           <div>
             <CardTitle className="flex items-center gap-2">
               <span className="text-yellow-500">&#127942;</span> Clan Members
@@ -74,7 +74,7 @@ export function MemberList({
                 : 'Roster unavailable'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
               <Select
@@ -97,7 +97,7 @@ export function MemberList({
                 </SelectContent>
               </Select>
             </div>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search members..."
