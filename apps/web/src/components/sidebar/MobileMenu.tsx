@@ -1,7 +1,7 @@
 'use client'
 
 import type { AccountContract } from '@brawltome/contracts'
-import { BookBookmark, User } from '@solar-icons/react'
+import { BookmarkSquare, User } from '@solar-icons/react'
 import { X } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -141,7 +141,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
                       >
                         {shortcut.kind === 'all-saved' ? (
                           <span className="flex h-8 w-8 items-center justify-center">
-                            <BookBookmark className="h-6 w-6" weight="Linear" aria-hidden="true" />
+                            <BookmarkSquare className="h-6 w-6" weight="Linear" aria-hidden="true" />
                           </span>
                         ) : (
                           <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />

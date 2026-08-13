@@ -6,6 +6,10 @@ const SESSION_EXTEND_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
 export const MAX_SAVED_PLAYERS = 100
 export const MAX_PINNED_PLAYERS = 4
 
+export function automaticPinOrder(isPrimary: boolean, pinnedCount: number): number | null {
+  return !isPrimary && pinnedCount < MAX_PINNED_PLAYERS ? pinnedCount : null
+}
+
 export interface Account {
   id: string
   displayName: string

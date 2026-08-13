@@ -132,32 +132,34 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     <div className="space-y-8 pb-10">
       {turnstile}
       {refreshMessage && <output className="text-sm text-muted-foreground">{refreshMessage}</output>}
-      <NavBar showBack />
-      {account && (
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          {savedPlayersLoading && <output className="text-muted-foreground text-sm">Loading Saved Players...</output>}
-          {savedPlayersQueryError && (
-            <p role="alert" className="text-sm text-red-300">
-              Saved Players are unavailable. Try again.
-            </p>
-          )}
-          {savedPlayerError && (
-            <p role="alert" className="text-sm text-red-300">
-              {savedPlayerError}
-            </p>
-          )}
-          <output aria-live="polite" className="sr-only">
-            {savedPlayerPending ? 'Updating Saved Players.' : savedPlayerStatus}
-          </output>
-          {savedPlayersReady && (
-            <SavedPlayerButton
-              saved={isSaved}
-              pending={savedPlayerPending}
-              disabled={savedPlayerLimitReached}
-              onToggle={() => void toggleSavedPlayer()}
-            />
-          )}
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <NavBar showBack />
+        {account && (
+          <>
+            <output aria-live="polite" className="sr-only">
+              {savedPlayerPending ? 'Updating Saved Players.' : savedPlayerStatus}
+            </output>
+            {savedPlayersLoading && <output className="text-muted-foreground text-sm">Loading Saved Players...</output>}
+            {savedPlayersReady && (
+              <SavedPlayerButton
+                saved={isSaved}
+                pending={savedPlayerPending}
+                disabled={savedPlayerLimitReached}
+                onToggle={() => void toggleSavedPlayer()}
+              />
+            )}
+          </>
+        )}
+      </div>
+      {savedPlayersQueryError && (
+        <p role="alert" className="text-sm text-red-300">
+          Saved Players are unavailable. Try again.
+        </p>
+      )}
+      {savedPlayerError && (
+        <p role="alert" className="text-sm text-red-300">
+          {savedPlayerError}
+        </p>
       )}
       <PlayerProfileHierarchy
         player={displayPlayer}

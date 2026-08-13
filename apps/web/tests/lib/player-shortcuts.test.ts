@@ -48,7 +48,7 @@ describe('private Player shortcut navigation', () => {
       },
       {
         kind: 'all-saved',
-        href: '/account',
+        href: '/account#saved-players-heading',
         label: 'All Saved Players',
         accessibleLabel: 'All Saved Players',
         avatarUrl: null,

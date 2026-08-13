@@ -2,7 +2,7 @@
 
 import type { AccountContract } from '@brawltome/contracts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@brawltome/ui'
-import { BookBookmark, User } from '@solar-icons/react'
+import { BookmarkSquare, User } from '@solar-icons/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -86,7 +86,7 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
                         }`}
                       >
                         {shortcut.kind === 'all-saved' ? (
-                          <BookBookmark className="h-6 w-6" weight="Linear" aria-hidden="true" />
+                          <BookmarkSquare className="h-6 w-6" weight="Linear" aria-hidden="true" />
                         ) : (
                           <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
                         )}
