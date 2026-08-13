@@ -150,7 +150,10 @@ describe('collectAndPublishLeaderboardGeneration', () => {
             const result = row(region, 'solo2v2', regionOffset + rank, rank)
             result.tier = page === 1 ? 'Valhallan' : page === 2 && index === 0 ? null : 'Diamond'
             if (page === 2 && index === 0) result.rating = result.best_rating = 2_100
-            if (page === 3 && index === 0) result.rating = result.best_rating = 2_400
+            if (page === 3 && index < 3) {
+              result.rating = result.best_rating = 2_400
+              result.wins = index === 0 ? 30 : 20
+            }
             return result
           })
           return { rankings, totalPages: 5 }
@@ -161,12 +164,11 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
     expect(calls).toHaveLength(regionalLeaderboardScopes.length * 3)
     expect(recorder.published[0].pageDepth).toBe(3)
-    expect(recorder.published[0].snapshots.get('EU')?.[50]).toMatchObject({
-      standing: 51,
-      sourceRank: 101,
-      rating: 2_400,
-      tier: 'Diamond',
-    })
+    expect(recorder.published[0].snapshots.get('EU')?.slice(0, 3)).toMatchObject([
+      { standing: 1, sourceRank: 101, rating: 2_400, wins: 30, tier: 'Diamond' },
+      { standing: 2, sourceRank: 102, rating: 2_400, wins: 20, tier: 'Diamond' },
+      { standing: 3, sourceRank: 103, rating: 2_400, wins: 20, tier: 'Diamond' },
+    ])
     expect(recorder.published[0].snapshots.get('EU')?.find(({ sourceRank }) => sourceRank === 51)).toMatchObject({
       tier: 'Diamond',
       rating: 2_100,

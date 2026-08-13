@@ -292,7 +292,7 @@ function validateRegionRows(
     }
   }
   if (mode !== 'solo2v2') return rows
-  return rows.sort(compareRegionalRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  return rows.sort(compareSoloRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 const regionOrder = new Map(regionalLeaderboardScopes.map((region, index) => [region, index]))
@@ -301,9 +301,15 @@ function firstIdentityId(identity: PublishedLeaderboardIdentity): number {
   return identity.type === 'fixed-two-vs-two-team' ? identity.players[0].brawlhallaId : identity.player.brawlhallaId
 }
 
-function compareRegionalRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
-  const tierDifference = Number(right.tier?.startsWith('Valhallan')) - Number(left.tier?.startsWith('Valhallan'))
-  return tierDifference || compareGlobalRows(left, right)
+function compareSoloRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
+  return (
+    right.rating - left.rating ||
+    right.wins - left.wins ||
+    right.peakRating - left.peakRating ||
+    left.losses - right.losses ||
+    left.sourceRank - right.sourceRank ||
+    firstIdentityId(left.identity) - firstIdentityId(right.identity)
+  )
 }
 
 function compareGlobalRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
