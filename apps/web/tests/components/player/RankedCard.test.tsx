@@ -1,102 +1,57 @@
 import { describe, expect, test } from 'bun:test'
-import type { PlayerRankedProfileContract } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { RankedCard } from '../../../src/components/player/RankedCard'
 
-const currentSeason: PlayerRankedProfileContract = {
-  brawlhallaId: 42,
-  checkedAt: '2026-08-10T10:30:00Z',
-  lastSuccessAt: '2026-08-10T10:00:00Z',
-  freshness: 'fresh',
-  freshForSeconds: 3_600,
-  sparsePulse: {
-    checkedAt: '2026-08-10T10:20:00Z',
-    lastSuccessAt: '2026-08-10T10:20:00Z',
-  },
-  snapshot: {
-    oneVsOne: {
-      rating: 0,
-      peakRating: 782,
-      tier: 'Tin 0',
-      wins: 0,
-      games: 0,
-      region: 'US-E',
-      globalRank: null,
-      regionRank: null,
-    },
-    rankedLegends: [],
-    mainLegend: { legendId: 3, legendNameKey: 'bodvar', source: 'career' },
-    fixedTeams: [],
-    soloQueue: [],
-    ratingHistory: [
-      {
-        source: 'v0-player-snapshot',
-        rating: 0,
-        peakRating: 782,
-        tier: 'Tin 0',
-        wins: 0,
-        games: 0,
-        recordedAt: '2026-08-10T10:00:00Z',
-      },
-      {
-        source: 'legacy-v2',
-        rating: 50,
-        peakRating: 782,
-        tier: 'Tin 0',
-        wins: 0,
-        games: 0,
-        recordedAt: '2026-08-10T09:00:00Z',
-      },
-    ],
-    observedRatingDirection: {
-      direction: 'down',
-      ratingChange: -50,
-      observationCount: 2,
-      fromObservedAt: '2026-08-10T09:00:00Z',
-      toObservedAt: '2026-08-10T10:00:00Z',
-    },
-  },
+const availablePlayer = {
+  rating: 1_600,
+  peakRating: 1_650,
+  tier: 'Gold 4',
+  rankedGames: 10,
+  rankedWins: 6,
+  rankedLastUpdated: '2026-08-10T10:00:00Z',
 }
 
 describe('RankedCard', () => {
-  test('renders a coverage-qualified competitive summary without inventing zero-denominator rates', () => {
-    const html = renderToStaticMarkup(<RankedCard currentSeason={currentSeason} />)
+  test('keeps the V2 ranked summary when current-season data is available', () => {
+    const html = renderToStaticMarkup(<RankedCard player={availablePlayer} rankedTeams={[]} />)
 
-    expect(html).toContain('Competitive Snapshot')
-    expect(html).toContain('aria-label="Current and peak rating"')
-    expect(html).toContain('>0</span>')
-    expect(html).toContain('Win rate unavailable until at least one game is observed')
-    expect(html).not.toContain('Current rating</dt>')
-    expect(html).not.toContain('Win rate</dt>')
-    expect(html).not.toContain('tabindex="0"')
-    expect(html).not.toContain('0.00%')
-    expect(html).toContain('BrawlTome-observed direction')
-    expect(html).toContain('Down 50 rating')
-    expect(html).toContain('up to 365 retained BrawlTome rating observations')
-    expect(html).toContain('Sparse pulse overlays are excluded')
-    expect(html).toContain('at least one supported 1v1 or fixed-team scalar')
-    expect(html).toContain('Career-derived main legend')
-    expect(html).not.toContain('Total Glory')
-    expect(html).not.toContain('Elo Reset')
-    for (const unsupportedClaim of ['should', 'improve', 'because', 'caused']) {
-      expect(html.toLowerCase()).not.toContain(unsupportedClaim)
-    }
+    expect(html).toContain('Ranked Performance')
+    expect(html).toContain('Gold 4')
+    expect(html).toContain('1600')
+    expect(html).toContain('1650')
+    expect(html).toContain('6W')
+    expect(html).toContain('4L')
+    expect(html).toContain('Ranked Games')
+    expect(html).toContain('Total Glory')
+    expect(html).toContain('Elo Reset')
+    expect(html).toContain('Updated')
   })
 
-  test('omits unavailable competitive facts after one concise explanation', () => {
-    const unavailable: PlayerRankedProfileContract = {
-      ...currentSeason,
-      lastSuccessAt: null,
-      freshness: 'unavailable',
-      sparsePulse: null,
-      snapshot: null,
-    }
-    const html = renderToStaticMarkup(<RankedCard currentSeason={unavailable} />)
+  test('shows unavailable current-season data as plain Unranked', () => {
+    const html = renderToStaticMarkup(
+      <RankedCard
+        player={{
+          ...availablePlayer,
+          legacyRating: 1_800,
+          rating: null,
+          peakRating: null,
+          tier: null,
+          rankedGames: undefined,
+          rankedWins: undefined,
+          rankedLastUpdated: null,
+        }}
+        rankedTeams={[]}
+      />,
+    )
 
-    expect(html).toContain('Competitive Snapshot')
-    expect(html).toContain('Complete Current Season ranked facts have not been successfully observed')
-    expect(html).toContain('omitted rather than shown as zero')
-    expect(html).not.toContain('Current rating</dt>')
-    expect(html).not.toContain('Win rate</dt>')
+    expect(html).toContain('Unranked')
+    expect(html).not.toContain('V2 snapshot')
+    expect(html).not.toContain('1800')
+    expect(html).not.toContain('Rating unavailable')
+    expect(html).not.toContain('Current-season wins and losses are unavailable')
+    expect(html).not.toContain('Ranked Games')
+    expect(html).not.toContain('Total Glory')
+    expect(html).not.toContain('Elo Reset')
+    expect(html).not.toContain('Updated')
   })
 })

@@ -78,7 +78,7 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
     aliases: player.aliases ?? [],
     clan: player.clan ?? null,
     region: oneVsOne?.region ?? null,
-    rating: oneVsOne?.rating ?? player.legacyRating ?? null,
+    rating: oneVsOne?.rating ?? null,
     legacyRating: player.legacyRating ?? null,
     peakRating: oneVsOne?.peakRating ?? null,
     tier: oneVsOne?.tier ?? null,
@@ -114,7 +114,7 @@ export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHier
 
   return (
     <>
-      <ProfileHeader player={display} topLegend={topLegend} aliases={displayAliases(player)} refreshing={refreshing} />
+      <ProfileHeader player={player} topLegend={topLegend} aliases={displayAliases(player)} refreshing={refreshing} />
 
       <div id="ranked" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RankedCard player={display} rankedTeams={teams} />

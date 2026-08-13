@@ -28,13 +28,12 @@ describe('RatingChart', () => {
       />,
     )
 
-    expect(html).toContain(
-      '<figure aria-labelledby="rating-history-heading" aria-describedby="rating-history-coverage"',
-    )
+    expect(html).toContain('<figure aria-labelledby="rating-history-heading"')
     expect(html).toContain('id="rating-history-heading"')
-    expect(html).toContain('<p id="rating-history-coverage"')
+    expect(html).not.toContain('rating-history-coverage')
     expect(html).not.toContain('<figcaption')
-    expect(html).toContain('up to 365 retained BrawlTome rating observations')
+    expect(html).not.toContain('canonical V0 snapshots')
+    expect(html).not.toContain('legacy V2 history')
     expect(html).toContain('<ol class="sr-only">')
     expect(html).toContain('Rating 1550, peak 1600, win rate unavailable')
     expect(html).toContain('Rating 1600, peak 1650, 5 wins in 10 games')
