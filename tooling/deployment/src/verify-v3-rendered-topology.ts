@@ -24,6 +24,7 @@ const expectedSecretFiles: Record<string, string> = {
   postgres_runtime_password: 'postgres-runtime-password',
   refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
   runtime_database_url: 'runtime-database-url',
+  turnstile_secret_key: 'turnstile-secret-key',
 }
 
 const expectedServiceSecrets: Record<string, string[]> = {
@@ -34,6 +35,7 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'otel_authorization',
     'refresh_trust_cookie_secret',
     'runtime_database_url',
+    'turnstile_secret_key',
   ],
   migration: ['migration_database_url'],
   'v3-operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
@@ -131,6 +133,9 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     }
     if (readPath(web, 'build', 'args', 'NEXT_PUBLIC_API_URL') !== 'https://v3-api.brawltome.app') {
       violations.push('web must retain the approved future browser API origin')
+    }
+    if (!readPath(web, 'build', 'args', 'NEXT_PUBLIC_TURNSTILE_SITE_KEY')) {
+      violations.push('web must receive the public Turnstile site key at build time')
     }
   }
 

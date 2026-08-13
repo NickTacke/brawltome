@@ -9,6 +9,7 @@ cd "$repository_root"
 : "${DOKPLOY_V3_COMPOSE_ID:?Set DOKPLOY_V3_COMPOSE_ID}"
 : "${DOKPLOY_V3_PROJECT_NAME:?Set DOKPLOY_V3_PROJECT_NAME}"
 : "${DOKPLOY_V3_REF:?Set DOKPLOY_V3_REF to the immutable V3 topology tag}"
+: "${V3_TURNSTILE_SITE_KEY:?Set V3_TURNSTILE_SITE_KEY to the public Turnstile site key}"
 
 compose_id=$DOKPLOY_V3_COMPOSE_ID
 project_name=$DOKPLOY_V3_PROJECT_NAME
@@ -112,6 +113,7 @@ rendered=$(
     env \
       V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres \
       V3_PUBLIC_API_URL=https://v3-api.brawltome.app \
+      V3_TURNSTILE_SITE_KEY="$V3_TURNSTILE_SITE_KEY" \
       docker compose --file - config --format json
 )
 printf '%s' "$rendered" | bun run v3:verify-rendered-topology

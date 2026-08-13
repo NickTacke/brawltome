@@ -29,6 +29,7 @@ printf 'internal=%s\\n' "\${INTERNAL_API_SECRET:-}"
 printf 'metrics=%s\\n' "\${METRICS_SCRAPE_SECRET:-}"
 printf 'otel=%s\\n' "\${OTEL_EXPORTER_OTLP_AUTHORIZATION:-}"
 printf 'trust=%s\\n' "\${REFRESH_TRUST_COOKIE_SECRET:-}"
+printf 'turnstile=%s\\n' "\${TURNSTILE_SECRET_KEY:-}"
 `,
   )
   chmodSync(executable, 0o755)
@@ -48,6 +49,7 @@ describe('V3 secret bootstrap', () => {
       metrics_scrape_secret: 'metrics-secret-value',
       otel_authorization: 'Bearer otel-secret-value',
       refresh_trust_cookie_secret: 'trust-secret-value',
+      turnstile_secret_key: 'turnstile-secret-value',
     }
     const { bin, secrets } = fixture(values)
     const result = spawnSync('sh', [runner, 'api'], {

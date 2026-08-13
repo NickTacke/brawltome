@@ -93,6 +93,7 @@ services:
       - metrics_scrape_secret
       - otel_authorization
       - refresh_trust_cookie_secret
+      - turnstile_secret_key
     networks:
       - application
       - observability
@@ -134,7 +135,7 @@ services:
       target: web
       args:
         NEXT_PUBLIC_API_URL: ${V3_PUBLIC_API_URL:?Set the future browser-reachable V3 API URL}
-        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ""
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${V3_TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
     environment:
       HOSTNAME: 0.0.0.0
       INTERNAL_API_URL: http://v3-api:3000
@@ -335,3 +336,6 @@ secrets:
   runtime_database_url:
     name: brawltome-v3_runtime_database_url
     file: /var/lib/brawltome-v3-secrets/runtime-database-url
+  turnstile_secret_key:
+    name: brawltome-v3_turnstile_secret_key
+    file: /var/lib/brawltome-v3-secrets/turnstile-secret-key
