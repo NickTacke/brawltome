@@ -106,6 +106,12 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '102') {
       violations.push('operations-worker must retain the staged Brawlhalla ceiling of 102')
     }
+    if (readPath(worker, 'environment', 'LEADERBOARD_PAGE_DEPTH') !== '20') {
+      violations.push('operations-worker must retain adaptive leaderboard depth 20')
+    }
+    if (readPath(worker, 'environment', 'LEADERBOARD_INTERVAL_MS') !== '3600000') {
+      violations.push('operations-worker must retain hourly leaderboard cadence')
+    }
     if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two total operation slots')
     }

@@ -178,6 +178,81 @@ describe('refresh operations worker source retry', () => {
     expect(JSON.stringify(sourceMetrics)).not.toContain(lease.operationId)
   })
 
+  test('waits for leaderboard source admission and resumes without refetching collected pages', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:admission-wait',
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 3_600_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 7,
+      attemptNumber: 2,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    const reservations: string[] = []
+    const waits: number[] = []
+    let sourceCalls = 0
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => 'transitioned' as const,
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async ({ reservationKey }) => {
+          reservations.push(reservationKey)
+          return reservations.length === 1
+            ? ({ outcome: 'rate-limited', retryAfterSeconds: 12 } as const)
+            : ({ outcome: 'admitted', deduplicated: false } as const)
+        },
+        pauseSource: async () => {},
+      },
+      waitForSourceAdmission: async (retryAfterMs) => {
+        waits.push(retryAfterMs)
+      },
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async ({ region }) => {
+          sourceCalls += 1
+          const id = sourceCalls
+          return {
+            rankings: [
+              {
+                identity: { type: 'one-vs-one-player', player: { id, username: `Player ${id}` } },
+                rating: 2_100,
+                best_rating: 2_100,
+                rank: 1,
+                wins: 1,
+                losses: 0,
+                region,
+                tier: 'Diamond',
+              },
+            ],
+            totalPages: 1,
+          }
+        },
+      },
+    })
+
+    expect(waits).toEqual([12_000])
+    expect(sourceCalls).toBe(9)
+    expect(reservations[0]).toBe(`${lease.operationId}:7:1v1:US-E:1`)
+    expect(reservations[1]).toBe(reservations[0])
+  })
+
   test('defers retryable leaderboard source outages without consuming the final attempt', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const lease: OperationLease = {
