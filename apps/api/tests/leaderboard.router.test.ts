@@ -109,4 +109,58 @@ describe('leaderboard.get', () => {
     )
     await expect(malformed.get({ mode: '3v3', region: 'EU', page: 1 })).rejects.toThrow()
   })
+
+  test('preserves distinct source labels for same-account couch team slots', async () => {
+    const caller = callerFor(
+      async () => ({
+        status: 'fresh',
+        snapshotId: '10000000-0000-4000-8000-000000000001',
+        generationId: '10000000-0000-4000-8000-000000000002',
+        mode: '2v2',
+        region: 'EU',
+        observedAt: '2026-08-09T12:00:00Z',
+        publishedAt: '2026-08-09T12:00:01Z',
+        expectedNextPublicationAt: '2026-08-09T12:15:00Z',
+        provenance: { source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 2, pageDepth: 1 },
+        page: 1,
+        pageSize: 20,
+        hasMore: false,
+        totalRows: 1,
+        entries: [
+          {
+            standing: 1,
+            sourceRank: 1,
+            identity: {
+              type: 'fixed-two-vs-two-team',
+              players: [
+                { brawlhallaId: 42, name: 'Ada' },
+                { brawlhallaId: 42, name: 'Ada•2' },
+              ],
+            },
+            region: 'EU',
+            rating: 2100,
+            peakRating: 2200,
+            wins: 20,
+            losses: 10,
+            games: 30,
+            tier: 'Diamond',
+          },
+        ],
+      }),
+      async (brawlhallaId) => ({ brawlhallaId, name: 'Current Ada', bestLegendNameKey: 'bodvar' }),
+    )
+
+    await expect(caller.get({ mode: '2v2', region: 'EU', page: 1 })).resolves.toMatchObject({
+      entries: [
+        {
+          identity: {
+            players: [
+              { name: 'Ada', bestLegendNameKey: 'bodvar' },
+              { name: 'Ada•2', bestLegendNameKey: 'bodvar' },
+            ],
+          },
+        },
+      ],
+    })
+  })
 })

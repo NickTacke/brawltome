@@ -37,13 +37,23 @@ async function enrichBestLegends(
   }
   return parseLeaderboardOutput({
     ...output,
-    entries: output.entries.map((entry) => ({
-      ...entry,
-      identity:
-        entry.identity.type === 'fixed-two-vs-two-team'
-          ? { ...entry.identity, players: entry.identity.players.map(enrich) }
-          : { ...entry.identity, player: enrich(entry.identity.player) },
-    })),
+    entries: output.entries.map((entry) => {
+      const identity = entry.identity
+      if (identity.type !== 'fixed-two-vs-two-team') {
+        return { ...entry, identity: { ...identity, player: enrich(identity.player) } }
+      }
+      const sameAccount = identity.players[0].brawlhallaId === identity.players[1].brawlhallaId
+      return {
+        ...entry,
+        identity: {
+          ...identity,
+          players: identity.players.map((player) => ({
+            ...enrich(player),
+            ...(sameAccount ? { name: player.name } : {}),
+          })),
+        },
+      }
+    }),
   })
 }
 

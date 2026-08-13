@@ -1,4 +1,5 @@
 import { currentOneVsOneBracket } from '@brawltome/game-data'
+import { resolveTier } from './commands/sweep-helpers'
 import {
   type LeaderboardMode,
   type RegionalLeaderboardScope,
@@ -286,17 +287,23 @@ function validateRegionRows(
         peakRating: row.best_rating,
         wins: row.wins,
         losses: row.losses,
-        tier: row.tier,
+        tier: mode === 'solo2v2' ? resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier : row.tier,
       })
     }
   }
-  return rows
+  if (mode !== 'solo2v2') return rows
+  return rows.sort(compareRegionalRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 const regionOrder = new Map(regionalLeaderboardScopes.map((region, index) => [region, index]))
 
 function firstIdentityId(identity: PublishedLeaderboardIdentity): number {
   return identity.type === 'fixed-two-vs-two-team' ? identity.players[0].brawlhallaId : identity.player.brawlhallaId
+}
+
+function compareRegionalRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
+  const tierDifference = Number(right.tier?.startsWith('Valhallan')) - Number(left.tier?.startsWith('Valhallan'))
+  return tierDifference || compareGlobalRows(left, right)
 }
 
 function compareGlobalRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
