@@ -25,7 +25,7 @@ const rankedValuesSchema = z
 
 const oneVsOneSchema = rankedValuesSchema
   .extend({
-    region: visibleText,
+    region: visibleText.nullable(),
     globalRank: positiveInt32.nullable(),
     regionRank: positiveInt32.nullable(),
   })

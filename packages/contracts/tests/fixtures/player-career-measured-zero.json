@@ -5,6 +5,7 @@
   "freshness": "fresh",
   "freshForSeconds": 43200,
   "snapshot": {
+    "guild": null,
     "account": { "xp": 0, "level": 0, "xpPercentage": 0.5 },
     "combat": {
       "games": 0,

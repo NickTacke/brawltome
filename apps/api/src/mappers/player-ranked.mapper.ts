@@ -16,6 +16,10 @@ export function mapPlayerRankedProfile(profile: RankedPlayerProfile | null): Pla
     snapshot: profile.snapshot
       ? {
           ...profile.snapshot,
+          oneVsOne: {
+            ...profile.snapshot.oneVsOne,
+            region: profile.snapshot.oneVsOne.region || null,
+          },
           ratingHistory: profile.snapshot.ratingHistory.map((point) => ({
             ...point,
             recordedAt: point.recordedAt.toISOString(),
