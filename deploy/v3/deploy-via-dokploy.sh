@@ -9,6 +9,7 @@ cd "$repository_root"
 : "${DOKPLOY_V3_COMPOSE_ID:?Set DOKPLOY_V3_COMPOSE_ID}"
 : "${DOKPLOY_V3_PROJECT_NAME:?Set DOKPLOY_V3_PROJECT_NAME}"
 : "${DOKPLOY_V3_REF:?Set DOKPLOY_V3_REF to the immutable V3 topology tag}"
+: "${V3_DISCORD_CLIENT_ID:?Set V3_DISCORD_CLIENT_ID to the Discord OAuth client ID}"
 : "${V3_TURNSTILE_SITE_KEY:?Set V3_TURNSTILE_SITE_KEY to the public Turnstile site key}"
 
 compose_id=$DOKPLOY_V3_COMPOSE_ID
@@ -90,6 +91,7 @@ if compose.get("customGitBranch") != expected_ref:
 import json, sys
 domains = json.load(sys.stdin)
 expected = {
+    ("api.brawltome.app", "v3-api"),
     ("brawltome.app", "v3-web"),
     ("v3-api.brawltome.app", "v3-api"),
 }
@@ -116,6 +118,7 @@ print(value)
 rendered=$(
   printf '%s' "$converted_yaml" |
     env \
+      V3_DISCORD_CLIENT_ID="$V3_DISCORD_CLIENT_ID" \
       V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres \
       V3_PUBLIC_API_URL=https://v3-api.brawltome.app \
       V3_TURNSTILE_SITE_KEY="$V3_TURNSTILE_SITE_KEY" \

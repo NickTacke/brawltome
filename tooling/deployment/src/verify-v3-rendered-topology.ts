@@ -15,6 +15,7 @@ const expectedBuildTargets: Record<string, string> = {
 
 const expectedSecretFiles: Record<string, string> = {
   brawlhalla_api_key: 'brawlhalla-api-key',
+  discord_client_secret: 'discord-client-secret',
   discord_internal_api_secret: 'discord-internal-api-secret',
   migration_database_url: 'migration-database-url',
   internal_api_secret: 'internal-api-secret',
@@ -29,6 +30,7 @@ const expectedSecretFiles: Record<string, string> = {
 
 const expectedServiceSecrets: Record<string, string[]> = {
   'v3-api': [
+    'discord_client_secret',
     'discord_internal_api_secret',
     'internal_api_secret',
     'metrics_scrape_secret',
@@ -136,6 +138,13 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
   if (isRecord(api)) {
     if (readPath(api, 'environment', 'CORS_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must allow only the final public web origin')
+    }
+    const discordClientId = readPath(api, 'environment', 'DISCORD_CLIENT_ID')
+    if (typeof discordClientId !== 'string' || !/^\d{17,20}$/.test(discordClientId)) {
+      violations.push('api must receive a Discord OAuth client ID')
+    }
+    if (readPath(api, 'environment', 'DISCORD_REDIRECT_URI') !== 'https://api.brawltome.app/auth/discord/callback') {
+      violations.push('api must use the public Discord OAuth callback')
     }
     if (readPath(api, 'environment', 'WEB_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must use the final public web origin')
