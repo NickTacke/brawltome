@@ -98,6 +98,16 @@ export type LeaderboardView =
       pageSize: number
     }
 
+export type PlayerValhallanEvidence = {
+  oneVsOne: boolean
+  fixedTwoVsTwoTeams: Array<{ brawlhallaIdOne: number; brawlhallaIdTwo: number }>
+  soloTwoVsTwo: boolean
+}
+
+export type PlayerValhallanQueries = {
+  playerValhallanEvidenceById(brawlhallaId: number): Promise<PlayerValhallanEvidence | null>
+}
+
 export type RankingQueries = {
   getLeaderboard(input: {
     mode: LeaderboardMode

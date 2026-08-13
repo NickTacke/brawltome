@@ -681,6 +681,103 @@ describe('immutable Ranking snapshots for every mode', () => {
     await ranking.close()
     await operations.close()
   })
+  test('derives Player Valhallan evidence from each latest official generation', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const playerId = 77_777
+    const teammateId = 88_888
+    const publish = async (
+      mode: LeaderboardMode,
+      label: string,
+      identity: PublishedLeaderboardRow['identity'],
+      tier: string,
+      scheduleWindowAt: Date,
+    ) => {
+      const lease = await leaseOperation(operations, mode, label)
+      const publication = candidate(mode, lease.operationKey, scheduleWindowAt)
+      publication.snapshots = new Map(
+        [...publication.snapshots].map(([scope, rows]) => [scope, [{ ...rows[0], identity, tier }]]),
+      )
+      expect(await ranking.publishGeneration(authorization(lease), publication)).toBe('published')
+      await operations.complete(lease)
+    }
+    const firstWindow = new Date('2100-01-01T00:00:00Z')
+    await publish(
+      '1v1',
+      'player-valhallan-1v1',
+      { type: 'one-vs-one-player', player: { brawlhallaId: playerId, name: 'Player' } },
+      'Valhallan 1',
+      firstWindow,
+    )
+    await publish(
+      '2v2',
+      'player-valhallan-2v2',
+      {
+        type: 'fixed-two-vs-two-team',
+        players: [
+          { brawlhallaId: playerId, name: 'Player' },
+          { brawlhallaId: teammateId, name: 'Teammate' },
+        ],
+      },
+      'Valhallan 2',
+      firstWindow,
+    )
+    await publish(
+      'solo2v2',
+      'player-valhallan-solo',
+      { type: 'solo-two-vs-two-player', player: { brawlhallaId: playerId, name: 'Player' } },
+      'Valhallan 3',
+      firstWindow,
+    )
+    await publish(
+      '3v3',
+      'player-valhallan-3v3',
+      { type: 'three-vs-three-player', player: { brawlhallaId: playerId, name: 'Player' } },
+      'Valhallan 4',
+      firstWindow,
+    )
+
+    expect(await ranking.queries.playerValhallanEvidenceById(playerId)).toEqual({
+      oneVsOne: true,
+      fixedTwoVsTwoTeams: [{ brawlhallaIdOne: playerId, brawlhallaIdTwo: teammateId }],
+      soloTwoVsTwo: true,
+    })
+
+    await publish(
+      '2v2',
+      'player-valhallan-couch-2v2',
+      {
+        type: 'fixed-two-vs-two-team',
+        players: [
+          { brawlhallaId: playerId, name: 'Player' },
+          { brawlhallaId: playerId, name: 'Player•2' },
+        ],
+      },
+      'Valhallan 2',
+      new Date(firstWindow.getTime() + intervalMs),
+    )
+    expect(await ranking.queries.playerValhallanEvidenceById(playerId)).toEqual({
+      oneVsOne: true,
+      fixedTwoVsTwoTeams: [{ brawlhallaIdOne: playerId, brawlhallaIdTwo: playerId }],
+      soloTwoVsTwo: true,
+    })
+
+    await publish(
+      '1v1',
+      'player-diamond-1v1',
+      { type: 'one-vs-one-player', player: { brawlhallaId: playerId, name: 'Player' } },
+      'Diamond',
+      new Date(firstWindow.getTime() + intervalMs),
+    )
+    expect(await ranking.queries.playerValhallanEvidenceById(playerId)).toEqual({
+      oneVsOne: false,
+      fixedTwoVsTwoTeams: [{ brawlhallaIdOne: playerId, brawlhallaIdTwo: playerId }],
+      soloTwoVsTwo: true,
+    })
+
+    await ranking.close()
+    await operations.close()
+  })
 })
 
 describe('durable multi-mode collection operations', () => {
