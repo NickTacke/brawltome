@@ -93,7 +93,6 @@ domains = json.load(sys.stdin)
 expected = {
     ("api.brawltome.app", "v3-api"),
     ("brawltome.app", "v3-web"),
-    ("v3-api.brawltome.app", "v3-api"),
 }
 actual = {(domain.get("host"), domain.get("serviceName")) for domain in domains}
 if actual != expected:
@@ -120,7 +119,6 @@ rendered=$(
     env \
       V3_DISCORD_CLIENT_ID="$V3_DISCORD_CLIENT_ID" \
       V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres \
-      V3_PUBLIC_API_URL=https://v3-api.brawltome.app \
       V3_TURNSTILE_SITE_KEY="$V3_TURNSTILE_SITE_KEY" \
       docker compose --file - config --format json
 )

@@ -156,8 +156,8 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://v3-api:3000') {
       violations.push('web must use the internal API origin for server calls')
     }
-    if (readPath(web, 'build', 'args', 'NEXT_PUBLIC_API_URL') !== 'https://v3-api.brawltome.app') {
-      violations.push('web must retain the approved future browser API origin')
+    if (readPath(web, 'build', 'args', 'NEXT_PUBLIC_API_URL') !== 'https://api.brawltome.app') {
+      violations.push('web must use the canonical public API origin')
     }
     if (!readPath(web, 'build', 'args', 'NEXT_PUBLIC_TURNSTILE_SITE_KEY')) {
       violations.push('web must receive the public Turnstile site key at build time')

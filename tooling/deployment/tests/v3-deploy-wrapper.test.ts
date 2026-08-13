@@ -21,7 +21,6 @@ function fixture(
   domains: unknown[] = [
     { host: 'api.brawltome.app', serviceName: 'v3-api' },
     { host: 'brawltome.app', serviceName: 'v3-web' },
-    { host: 'v3-api.brawltome.app', serviceName: 'v3-api' },
   ],
 ) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-v3-wrapper-'))

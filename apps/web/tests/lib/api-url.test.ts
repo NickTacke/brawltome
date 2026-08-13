@@ -6,7 +6,7 @@ describe('web API URL resolution', () => {
     expect(
       resolveServerApiUrl({
         INTERNAL_API_URL: 'http://api:3000',
-        NEXT_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
+        NEXT_PUBLIC_API_URL: 'https://api.brawltome.app',
       }),
     ).toBe('http://api:3000')
   })
