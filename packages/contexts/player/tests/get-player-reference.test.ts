@@ -15,6 +15,8 @@ describe('getPlayerReference', () => {
     expect(await getPlayerReference(async () => null, 42)).toBeNull()
     expect(await getPlayerReference(async () => ({ brawlhallaId: 42, name: 'Player 42', rating: 0 }), 42)).toBeNull()
     expect(await getPlayerReference(async () => ({ brawlhallaId: 42, name: '\u200b', rating: 0 }), 42)).toBeNull()
-    expect(await getPlayerReference(async () => ({ brawlhallaId: 42, name: 'a'.repeat(257), rating: 0 }), 42)).toBeNull()
+    expect(
+      await getPlayerReference(async () => ({ brawlhallaId: 42, name: 'a'.repeat(257), rating: 0 }), 42),
+    ).toBeNull()
   })
 })
