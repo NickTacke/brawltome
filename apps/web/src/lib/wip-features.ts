@@ -1,4 +1,4 @@
-import { BookBookmark, Cup, Gamepad, type IconProps, UsersGroupRounded } from '@solar-icons/react'
+import { BookBookmark, Cup, Gamepad, type IconProps, PieChart, UsersGroupRounded } from '@solar-icons/react'
 import type { ComponentType } from 'react'
 
 export interface WipFeature {
@@ -15,6 +15,13 @@ export interface WipFeature {
  * create a page stub at `apps/web/src/app/<slug>/page.tsx`.
  */
 export const wipFeatures = {
+  stats: {
+    title: 'Statistics',
+    tagline: 'Win rates, pick rates, tier list. Real ranked data',
+    description:
+      'Legends and weapons ranked by win rate, pick rate, tier. Filter by rank bracket and region. Pulled from every ranked player we track, updated as the meta shifts',
+    icon: PieChart,
+  },
   matches: {
     title: 'Matches',
     tagline: 'Full ranked history. Every replay, every stat',
