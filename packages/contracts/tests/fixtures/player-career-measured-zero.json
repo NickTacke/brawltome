@@ -1,0 +1,50 @@
+{
+  "brawlhallaId": 91913839,
+  "checkedAt": "2026-08-09T22:00:00Z",
+  "lastSuccessAt": "2026-08-09T22:00:00Z",
+  "freshness": "fresh",
+  "freshForSeconds": 43200,
+  "snapshot": {
+    "guild": null,
+    "account": { "xp": 0, "level": 0, "xpPercentage": 0.5 },
+    "combat": {
+      "games": 0,
+      "wins": 0,
+      "matchTime": 0,
+      "damageBomb": "9007199254740993",
+      "damageMine": "0",
+      "damageSpikeball": "0",
+      "damageSidekick": "0",
+      "snowballHits": 0,
+      "bombKos": 0,
+      "mineKos": 0,
+      "spikeballKos": 0,
+      "sidekickKos": 0,
+      "snowballKos": 0
+    },
+    "legends": [
+      {
+        "legendId": 3,
+        "legendNameKey": "bodvar",
+        "xp": 0,
+        "level": 0,
+        "xpPercentage": 0.5,
+        "games": 0,
+        "wins": 0,
+        "matchTime": 0,
+        "kos": 0,
+        "falls": 0,
+        "suicides": 0,
+        "teamKos": 0,
+        "damageDealt": "9007199254740993",
+        "damageTaken": "0",
+        "unarmed": { "damage": "0", "kos": 0 },
+        "thrownItem": { "damage": "0", "kos": 0 },
+        "gadgets": { "damage": "0", "kos": 0 },
+        "weaponOne": { "damage": "9007199254740993", "kos": 0, "heldTime": 0 },
+        "weaponTwo": { "damage": "0", "kos": 0, "heldTime": 0 }
+      }
+    ],
+    "weapons": [{ "weapon": "Hammer", "heldTime": 0, "damage": "9007199254740993", "kos": 0 }]
+  }
+}

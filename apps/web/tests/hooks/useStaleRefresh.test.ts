@@ -39,8 +39,8 @@ describe('player refresh sections', () => {
     const now = Date.UTC(2026, 0, 1, 12)
     const pending = getPendingPlayerSections(
       {
-        rankedLastUpdated: new Date(now - 30 * 60_000),
-        statsLastUpdated: new Date(now - 7 * 60 * 60_000),
+        currentSeason: { lastSuccessAt: new Date(now - 30 * 60_000) },
+        career: { lastSuccessAt: new Date(now - 13 * 60 * 60_000) },
       },
       now,
     )
@@ -50,12 +50,12 @@ describe('player refresh sections', () => {
 
   it('does not finish a stats refresh when only ranked freshness advances', () => {
     const initial = {
-      rankedLastUpdated: new Date(1_000),
-      statsLastUpdated: new Date(1_000),
+      currentSeason: { lastSuccessAt: new Date(1_000) },
+      career: { lastSuccessAt: new Date(1_000) },
     }
     const next = {
-      rankedLastUpdated: new Date(2_000),
-      statsLastUpdated: new Date(1_000),
+      currentSeason: { lastSuccessAt: new Date(2_000) },
+      career: { lastSuccessAt: new Date(1_000) },
     }
 
     expect(hasCompletedPlayerRefresh(initial, next, { ranked: false, stats: true })).toBe(false)
@@ -63,22 +63,22 @@ describe('player refresh sections', () => {
 
   it('requires every pending section to advance', () => {
     const initial = {
-      rankedLastUpdated: new Date(1_000),
-      statsLastUpdated: new Date(1_000),
+      currentSeason: { lastSuccessAt: new Date(1_000) },
+      career: { lastSuccessAt: new Date(1_000) },
     }
     const pending = { ranked: true, stats: true }
 
     expect(
       hasCompletedPlayerRefresh(
         initial,
-        { rankedLastUpdated: new Date(2_000), statsLastUpdated: new Date(1_000) },
+        { currentSeason: { lastSuccessAt: new Date(2_000) }, career: { lastSuccessAt: new Date(1_000) } },
         pending,
       ),
     ).toBe(false)
     expect(
       hasCompletedPlayerRefresh(
         initial,
-        { rankedLastUpdated: new Date(2_000), statsLastUpdated: new Date(2_000) },
+        { currentSeason: { lastSuccessAt: new Date(2_000) }, career: { lastSuccessAt: new Date(2_000) } },
         pending,
       ),
     ).toBe(true)
@@ -87,11 +87,19 @@ describe('player refresh sections', () => {
   it('requires authoritative ranked and stats timestamps for discovery', () => {
     const pending = getPendingPlayerSections(null, Date.UTC(2026, 0, 1))
 
-    expect(hasCompletedPlayerRefresh(null, { rankedLastUpdated: new Date(), statsLastUpdated: null }, pending)).toBe(
-      false,
-    )
     expect(
-      hasCompletedPlayerRefresh(null, { rankedLastUpdated: new Date(), statsLastUpdated: new Date() }, pending),
+      hasCompletedPlayerRefresh(
+        null,
+        { currentSeason: { lastSuccessAt: new Date() }, career: { lastSuccessAt: null } },
+        pending,
+      ),
+    ).toBe(false)
+    expect(
+      hasCompletedPlayerRefresh(
+        null,
+        { currentSeason: { lastSuccessAt: new Date() }, career: { lastSuccessAt: new Date() } },
+        pending,
+      ),
     ).toBe(true)
   })
 })

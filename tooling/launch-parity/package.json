@@ -1,0 +1,14 @@
+{
+  "name": "@brawltome/launch-parity",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@brawltome/database-migrations",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "bun run src/cli.ts",
+    "import:accounts": "bun run src/import-accounts.ts",
+    "import:clans": "bun run src/import-clans.ts",
+    "import:clans-rankings": "bun run src/import-clans-rankings.ts",
+    "import:players": "bun run src/import-players.ts",
+    "rebuild:discovery": "bun run src/rebuild-discovery-cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brawltome/accounts": "workspace:*",
+    "@brawltome/clan": "workspace:*",
+    "@brawltome/discovery": "workspace:*",
+    "@brawltome/player": "workspace:*",
+    "@brawltome/ranking": "workspace:*",
+    "@brawltome/request-admission": "workspace:*",
+    "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/statistics": "workspace:*",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

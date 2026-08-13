@@ -1,0 +1,325 @@
+rule_files:
+  - ../rules/alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: metrics target firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'up{job="api",runtime="api",generation="v3",instance="v3-api:3000"}'
+        values: "0 0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RuntimeMetricsTargetDown
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              instance: v3-api:3000
+              job: api
+              runtime: api
+              severity: critical
+              service: brawltome
+              signal: metrics-reachability
+            exp_annotations:
+              summary: "api metrics target is unreachable"
+              description: "The dedicated metrics scrape has failed for at least two minutes."
+      - eval_time: 3m
+        alertname: RuntimeMetricsTargetDown
+        exp_alerts: []
+
+  - name: readiness firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="readiness",runtime="api",generation="v3",instance="http://v3-api:3000/health/ready"}'
+        values: "0 0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RuntimeNotReady
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              instance: http://v3-api:3000/health/ready
+              job: readiness
+              runtime: api
+              severity: critical
+              service: brawltome
+              signal: readiness
+            exp_annotations:
+              summary: "api is not ready"
+              description: "The dependency-aware readiness probe has failed for at least two minutes."
+      - eval_time: 3m
+        alertname: RuntimeNotReady
+        exp_alerts: []
+
+  - name: worker heartbeat firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'worker_heartbeat_timestamp_seconds{runtime="operations-worker"}'
+        values: "0 0 0 0 0 300 300 300"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: WorkerHeartbeatStale
+        exp_alerts:
+          - exp_labels:
+              runtime: operations-worker
+              severity: critical
+              service: brawltome
+              signal: worker-heartbeat
+            exp_annotations:
+              summary: "operations-worker heartbeat is stale"
+              description: "No successful worker loop heartbeat has been observed for more than one minute."
+      - eval_time: 5m
+        alertname: WorkerHeartbeatStale
+        exp_alerts: []
+
+  - name: oldest job firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'operation_oldest_pending_age_ms{work_class="interactive"}'
+        values: "1000000 1000000 1000000 1000000 1000000 1000000 0 0"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OldestRunnableJobDelayed
+        exp_alerts:
+          - exp_labels:
+              work_class: interactive
+              severity: warning
+              service: brawltome
+              signal: oldest-job
+            exp_annotations:
+              summary: "interactive runnable work is delayed"
+              description: "The oldest runnable operation has exceeded the initial 15-minute operator threshold."
+      - eval_time: 6m
+        alertname: OldestRunnableJobDelayed
+        exp_alerts: []
+
+  - name: schedule firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'schedule_lateness_ms{kind="leaderboard-1v1"}'
+        values: "400000 400000 400000 400000 400000 400000 0 0"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ScheduleMaterializationLate
+        exp_alerts:
+          - exp_labels:
+              kind: leaderboard-1v1
+              severity: warning
+              service: brawltome
+              signal: schedule-lateness
+            exp_annotations:
+              summary: "leaderboard-1v1 schedule is late"
+              description: "An enabled schedule has remained more than five minutes late."
+      - eval_time: 6m
+        alertname: ScheduleMaterializationLate
+        exp_alerts: []
+
+  - name: dead letters firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'operation_dead_letters{work_class="leaderboard",kind="leaderboard-1v1"}'
+        values: "1 1 0 0"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: DeadLettersPresent
+        exp_alerts:
+          - exp_labels:
+              work_class: leaderboard
+              kind: leaderboard-1v1
+              severity: critical
+              service: brawltome
+              signal: dead-letters
+            exp_annotations:
+              summary: "leaderboard-1v1 has unexplained dead letters"
+              description: "At least one durable operation is in dead-letter state."
+      - eval_time: 2m
+        alertname: DeadLettersPresent
+        exp_alerts: []
+
+  - name: source quota firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'source_quota_used{domain="brawlhalla-v0"}'
+        values: "95 95 95 20 20"
+      - series: 'source_quota_limit{domain="brawlhalla-v0"}'
+        values: "100 100 100 100 100"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: SourceQuotaNearLimit
+        exp_alerts:
+          - exp_labels:
+              domain: brawlhalla-v0
+              severity: warning
+              service: brawltome
+              signal: source-quota
+            exp_annotations:
+              summary: "brawlhalla-v0 source quota is at least 90 percent used"
+              description: "Distributed source admission is close to its fixed window limit."
+      - eval_time: 3m
+        alertname: SourceQuotaNearLimit
+        exp_alerts: []
+
+  - name: refresh failures firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="interactive-player-refresh",failure_category="source_timeout"}'
+        values: "0 1 2 3x17"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: RefreshFailuresElevated
+        exp_alerts:
+          - exp_labels:
+              kind: interactive-player-refresh
+              failure_category: source_timeout
+              severity: warning
+              service: brawltome
+              signal: refresh-failures
+            exp_annotations:
+              summary: "interactive-player-refresh refresh failures detected"
+              description: "More than two refresh attempts failed in the last 15 minutes."
+      - eval_time: 19m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+
+  - name: expected local source throttling does not page
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="leaderboard-1v1",failure_category="admission_deferred"}'
+        values: "0 1x17"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+
+  - name: real refresh failures fire by bounded category and recover
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="leaderboard-1v1",failure_category="source_rate_limited"}'
+        values: "0 1 2 3x17"
+      - series: 'refresh_failures_total{kind="leaderboard-2v2",failure_category="source_unavailable"}'
+        values: "0 1 2 3x17"
+      - series: 'refresh_failures_total{kind="statistics-ranked-collection",failure_category="execution"}'
+        values: "0 1 2 3x17"
+      - series: 'refresh_failures_total{kind="statistics-publication",failure_category="lease_lost"}'
+        values: "0 1 2 3x17"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: RefreshFailuresElevated
+        exp_alerts:
+          - exp_labels:
+              kind: leaderboard-1v1
+              failure_category: source_rate_limited
+              severity: warning
+              service: brawltome
+              signal: refresh-failures
+            exp_annotations:
+              summary: "leaderboard-1v1 refresh failures detected"
+              description: "More than two refresh attempts failed in the last 15 minutes."
+          - exp_labels:
+              kind: leaderboard-2v2
+              failure_category: source_unavailable
+              severity: warning
+              service: brawltome
+              signal: refresh-failures
+            exp_annotations:
+              summary: "leaderboard-2v2 refresh failures detected"
+              description: "More than two refresh attempts failed in the last 15 minutes."
+          - exp_labels:
+              kind: statistics-ranked-collection
+              failure_category: execution
+              severity: warning
+              service: brawltome
+              signal: refresh-failures
+            exp_annotations:
+              summary: "statistics-ranked-collection refresh failures detected"
+              description: "More than two refresh attempts failed in the last 15 minutes."
+          - exp_labels:
+              kind: statistics-publication
+              failure_category: lease_lost
+              severity: warning
+              service: brawltome
+              signal: refresh-failures
+            exp_annotations:
+              summary: "statistics-publication refresh failures detected"
+              description: "More than two refresh attempts failed in the last 15 minutes."
+      - eval_time: 19m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+
+  - name: HTTP latency firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'http_server_duration_ms_bucket{runtime="api",le="250"}'
+        values: "0x14"
+      - series: 'http_server_duration_ms_bucket{runtime="api",le="500"}'
+        values: "0+60x7 420x7"
+      - series: 'http_server_duration_ms_bucket{runtime="api",le="+Inf"}'
+        values: "0+60x7 420x7"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HttpLatencyHigh
+        exp_alerts:
+          - exp_labels:
+              runtime: api
+              severity: warning
+              service: brawltome
+              signal: http-latency
+            exp_annotations:
+              summary: "api HTTP p95 exceeds 250 ms"
+              description: "The five-minute HTTP p95 has exceeded the launch threshold."
+      - eval_time: 13m
+        alertname: HttpLatencyHigh
+        exp_alerts: []
+
+  - name: HTTP errors firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{runtime="api",status_class="2xx"}'
+        values: "0+58x7 406x7"
+      - series: 'http_server_requests_total{runtime="api",status_class="5xx"}'
+        values: "0+2x7 14x7"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HttpErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              runtime: api
+              severity: critical
+              service: brawltome
+              signal: http-errors
+            exp_annotations:
+              summary: "api HTTP 5xx rate exceeds one percent"
+              description: "The fixed launch error boundary is breached over the five-minute window."
+      - eval_time: 13m
+        alertname: HttpErrorRateHigh
+        exp_alerts: []
+
+  - name: telemetry storage firing and recovery
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/storage/prometheus"}'
+        values: "10 10 10 10 10 10 50 50"
+      - series: 'node_filesystem_size_bytes{mountpoint="/storage/prometheus"}'
+        values: "100 100 100 100 100 100 100 100"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: TelemetryStorageNearQuota
+        exp_alerts:
+          - exp_labels:
+              mountpoint: /storage/prometheus
+              severity: warning
+              service: brawltome
+              signal: telemetry-storage
+            exp_annotations:
+              summary: "Telemetry storage is at least 80 percent used"
+              description: "A dedicated quota-backed telemetry filesystem is nearing capacity."
+      - eval_time: 6m
+        alertname: TelemetryStorageNearQuota
+        exp_alerts: []

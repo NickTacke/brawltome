@@ -1,0 +1,343 @@
+services:
+  postgres:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: postgres
+    user: "70:70"
+    environment:
+      POSTGRES_DB: brawltome
+      POSTGRES_USER: brawltome_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_owner_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres_owner_password
+      - postgres_runtime_password
+    volumes:
+      - type: bind
+        source: ${V3_POSTGRES_DATA_ROOT:?Set the dedicated V3 PostgreSQL data root}
+        target: /var/lib/postgresql/data
+    tmpfs:
+      - /run/postgresql:rw,noexec,nosuid,nodev,uid=70,gid=70,mode=0750,size=16m
+      - /tmp:rw,noexec,nosuid,nodev,uid=70,gid=70,mode=0750,size=32m
+    networks:
+      - application
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U brawltome_owner -d brawltome]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    stop_grace_period: 30s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+          pids: 256
+        reservations:
+          memory: 512M
+
+  migration:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: migration
+    secrets:
+      - migration_database_url
+    networks:
+      - application
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=32m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 128
+
+  v3-api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: api
+    environment:
+      AUTHENTICATED_REFRESH_IP_LIMIT: "120"
+      CORS_ORIGIN: https://brawltome.app
+      MATCHMAKING_ENABLED: "false"
+      NODE_ENV: production
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      PORT: "3000"
+      RUNTIME_CLEANUP_RESERVE_MS: "5000"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
+      WEB_ORIGIN: https://brawltome.app
+    secrets:
+      - discord_internal_api_secret
+      - runtime_database_url
+      - internal_api_secret
+      - metrics_scrape_secret
+      - otel_authorization
+      - refresh_trust_cookie_secret
+      - turnstile_secret_key
+    networks:
+      - application
+      - observability
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - const r = await fetch('http://localhost:3000/health/ready'); if (!r.ok) process.exit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 70s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=64m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768M
+          pids: 256
+        reservations:
+          memory: 256M
+
+  v3-web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: ${V3_PUBLIC_API_URL:?Set the future browser-reachable V3 API URL}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${V3_TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
+    environment:
+      HOSTNAME: 0.0.0.0
+      INTERNAL_API_URL: http://v3-api:3000
+      NODE_ENV: production
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      PORT: "3000"
+      TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
+    secrets:
+      - internal_api_secret
+      - metrics_scrape_secret
+      - otel_authorization
+    networks:
+      - application
+      - observability
+    depends_on:
+      v3-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://localhost:3000/api/health/ready').then(r => { if (!r.ok) process.exit(1) })
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 20s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=64m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 192
+        reservations:
+          memory: 192M
+
+  v3-operations-worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: operations-worker
+    environment:
+      AUTHENTICATED_REFRESH_IP_LIMIT: "120"
+      BRAWLHALLA_V1_REQUEST_LIMIT: "102"
+      HEALTH_PORT: "3001"
+      LEADERBOARD_INTERVAL_MS: "3600000"
+      LEADERBOARD_PAGE_DEPTH: "20"
+      NODE_ENV: production
+      OPERATIONS_INTERACTIVE_CONCURRENCY: "2"
+      OPERATIONS_INTERACTIVE_RESERVATION: "1"
+      OPERATIONS_LEADERBOARD_CONCURRENCY: "1"
+      OPERATIONS_TOTAL_CONCURRENCY: "2"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      RUNTIME_CLEANUP_RESERVE_MS: "5000"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      SOURCE_BACKGROUND_HEADROOM: "30"
+      SOURCE_UNAVAILABLE_RETRY_MS: "60000"
+      TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
+    secrets:
+      - brawlhalla_api_key
+      - metrics_scrape_secret
+      - runtime_database_url
+      - otel_authorization
+    networks:
+      - application
+      - observability
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - const r = await fetch('http://localhost:3001/health/ready'); if (!r.ok) process.exit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 70s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=64m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768M
+          pids: 256
+        reservations:
+          memory: 256M
+
+  v3-discord-bot:
+    profiles: [discord]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: discord-bot
+    environment:
+      API_URL: http://v3-api:3000
+      DISCORD_CLIENT_ID: ${V3_DISCORD_CLIENT_ID:-deferred}
+      DISCORD_METRICS_PORT: "3002"
+      NODE_ENV: production
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
+    secrets:
+      - discord_internal_api_secret
+      - discord_token
+      - internal_api_secret
+      - metrics_scrape_secret
+      - otel_authorization
+    networks:
+      - application
+      - observability
+    depends_on:
+      v3-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - const r = await fetch('http://localhost:3002/health/ready'); if (!r.ok) process.exit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 70s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=64m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 192
+        reservations:
+          memory: 192M
+
+networks:
+  application:
+    external: true
+    name: brawltome-v3
+  observability:
+    external: true
+    name: brawltome-observability
+
+secrets:
+  brawlhalla_api_key:
+    name: brawltome-v3_brawlhalla_api_key
+    file: /var/lib/brawltome-v3-secrets/brawlhalla-api-key
+  discord_internal_api_secret:
+    name: brawltome-v3_discord_internal_api_secret
+    file: /var/lib/brawltome-v3-secrets/discord-internal-api-secret
+  discord_token:
+    name: brawltome-v3_discord_token
+    file: /var/lib/brawltome-v3-secrets/discord-token
+  internal_api_secret:
+    name: brawltome-v3_internal_api_secret
+    file: /var/lib/brawltome-v3-secrets/internal-api-secret
+  metrics_scrape_secret:
+    name: brawltome-v3_metrics_scrape_secret
+    file: /var/lib/brawltome-v3-secrets/metrics-scrape-secret
+  migration_database_url:
+    name: brawltome-v3_migration_database_url
+    file: /var/lib/brawltome-v3-secrets/migration-database-url
+  otel_authorization:
+    name: brawltome-v3_otel_authorization
+    file: /var/lib/brawltome-v3-secrets/otel-authorization
+  postgres_owner_password:
+    name: brawltome-v3_postgres_owner_password
+    file: /var/lib/brawltome-v3-secrets/postgres-owner-password
+  postgres_runtime_password:
+    name: brawltome-v3_postgres_runtime_password
+    file: /var/lib/brawltome-v3-secrets/postgres-runtime-password
+  refresh_trust_cookie_secret:
+    name: brawltome-v3_refresh_trust_cookie_secret
+    file: /var/lib/brawltome-v3-secrets/refresh-trust-cookie-secret
+  runtime_database_url:
+    name: brawltome-v3_runtime_database_url
+    file: /var/lib/brawltome-v3-secrets/runtime-database-url
+  turnstile_secret_key:
+    name: brawltome-v3_turnstile_secret_key
+    file: /var/lib/brawltome-v3-secrets/turnstile-secret-key

@@ -8,7 +8,6 @@ interface OverlayPanelProps {
   matchType: string
   visible: boolean
   scanning: boolean
-  refreshing: boolean
 }
 
 function SkeletonCard() {
@@ -30,7 +29,7 @@ function SkeletonCard() {
   )
 }
 
-export function OverlayPanel({ opponents, matchType, visible, scanning, refreshing }: OverlayPanelProps) {
+export function OverlayPanel({ opponents, matchType, visible, scanning }: OverlayPanelProps) {
   const panelRef = useContentBounds<HTMLDivElement>(visible)
   const { onMouseLeave } = useCursorForwarding()
 
@@ -46,7 +45,7 @@ export function OverlayPanel({ opponents, matchType, visible, scanning, refreshi
       ) : (
         <>
           {opponents.map((opponent) => (
-            <OpponentCard key={opponent.brawlhallaId} opponent={opponent} refreshing={refreshing} />
+            <OpponentCard key={opponent.brawlhallaId} opponent={opponent} />
           ))}
           {opponents.length > 0 && (
             <div className="mt-0.5 h-[3px] w-[300px] overflow-hidden rounded-full bg-[hsla(var(--overlay-muted-bg)/0.5)]">

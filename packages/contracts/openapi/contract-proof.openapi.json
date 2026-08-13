@@ -1,0 +1,1985 @@
+{
+  "components": {
+    "parameters": {},
+    "schemas": {
+      "ClanProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "clanCreateDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "clanId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "clanLifetimeXp": {
+            "pattern": "^(0|[1-9]\\d{0,40})$",
+            "type": "string"
+          },
+          "clanName": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "clanXp": {
+            "pattern": "^(0|[1-9]\\d{0,39})$",
+            "type": "string"
+          },
+          "discordInviteCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "guildPoints": {
+            "nullable": true,
+            "pattern": "^(0|[1-9]\\d{0,39})$",
+            "type": "string"
+          },
+          "isRecruiting": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "members": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "brawlhallaId": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "guildPoints": {
+                  "nullable": true,
+                  "pattern": "^(0|[1-9]\\d{0,39})$",
+                  "type": "string"
+                },
+                "joinDate": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "name": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "rank": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "xp": {
+                  "pattern": "^(0|[1-9]\\d{0,39})$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "brawlhallaId",
+                "name",
+                "rank",
+                "joinDate",
+                "xp",
+                "guildPoints"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "notice": {
+            "nullable": true,
+            "type": "string"
+          },
+          "profile": {
+            "additionalProperties": false,
+            "properties": {
+              "checkedAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "checkProvenance": {
+                "additionalProperties": false,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              },
+              "lastSuccessAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "lastSuccessProvenance": {
+                "additionalProperties": false,
+                "nullable": true,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "checkedAt",
+              "checkProvenance",
+              "lastSuccessAt",
+              "lastSuccessProvenance"
+            ],
+            "type": "object"
+          },
+          "roster": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "checkedAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "checkProvenance": {
+                "additionalProperties": false,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              },
+              "lastSuccessAt": {
+                "format": "date-time",
+                "nullable": true,
+                "type": "string"
+              },
+              "lastSuccessProvenance": {
+                "additionalProperties": false,
+                "nullable": true,
+                "properties": {
+                  "legacyTimestamp": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "success",
+                      "ambiguous-failure",
+                      "admission-limited",
+                      "source-rate-limited",
+                      "legacy-unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "v1-guild-stats",
+                      "v1-guild-members",
+                      "legacy-import"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "outcome"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "checkedAt",
+              "checkProvenance",
+              "lastSuccessAt",
+              "lastSuccessProvenance"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "clanId",
+          "clanName",
+          "clanCreateDate",
+          "clanXp",
+          "clanLifetimeXp",
+          "notice",
+          "tags",
+          "discordInviteCode",
+          "guildPoints",
+          "isRecruiting",
+          "profile",
+          "roster",
+          "members"
+        ],
+        "type": "object"
+      },
+      "ClanRefreshResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clan": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "clanCreateDate": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "clanId": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "clanLifetimeXp": {
+                "pattern": "^(0|[1-9]\\d{0,40})$",
+                "type": "string"
+              },
+              "clanName": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "clanXp": {
+                "pattern": "^(0|[1-9]\\d{0,39})$",
+                "type": "string"
+              },
+              "discordInviteCode": {
+                "nullable": true,
+                "type": "string"
+              },
+              "guildPoints": {
+                "nullable": true,
+                "pattern": "^(0|[1-9]\\d{0,39})$",
+                "type": "string"
+              },
+              "isRecruiting": {
+                "nullable": true,
+                "type": "boolean"
+              },
+              "members": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "brawlhallaId": {
+                      "exclusiveMinimum": true,
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "guildPoints": {
+                      "nullable": true,
+                      "pattern": "^(0|[1-9]\\d{0,39})$",
+                      "type": "string"
+                    },
+                    "joinDate": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "name": {
+                      "maxLength": 256,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "rank": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "xp": {
+                      "pattern": "^(0|[1-9]\\d{0,39})$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "brawlhallaId",
+                    "name",
+                    "rank",
+                    "joinDate",
+                    "xp",
+                    "guildPoints"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "notice": {
+                "nullable": true,
+                "type": "string"
+              },
+              "profile": {
+                "additionalProperties": false,
+                "properties": {
+                  "checkedAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "checkProvenance": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  },
+                  "lastSuccessAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lastSuccessProvenance": {
+                    "additionalProperties": false,
+                    "nullable": true,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "checkedAt",
+                  "checkProvenance",
+                  "lastSuccessAt",
+                  "lastSuccessProvenance"
+                ],
+                "type": "object"
+              },
+              "roster": {
+                "additionalProperties": false,
+                "nullable": true,
+                "properties": {
+                  "checkedAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "checkProvenance": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  },
+                  "lastSuccessAt": {
+                    "format": "date-time",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lastSuccessProvenance": {
+                    "additionalProperties": false,
+                    "nullable": true,
+                    "properties": {
+                      "legacyTimestamp": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "success",
+                          "ambiguous-failure",
+                          "admission-limited",
+                          "source-rate-limited",
+                          "legacy-unknown"
+                        ],
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "v1-guild-stats",
+                          "v1-guild-members",
+                          "legacy-import"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "outcome"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "checkedAt",
+                  "checkProvenance",
+                  "lastSuccessAt",
+                  "lastSuccessProvenance"
+                ],
+                "type": "object"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "nullable": true,
+                "type": "array"
+              }
+            },
+            "required": [
+              "clanId",
+              "clanName",
+              "clanCreateDate",
+              "clanXp",
+              "clanLifetimeXp",
+              "notice",
+              "tags",
+              "discordInviteCode",
+              "guildPoints",
+              "isRecruiting",
+              "profile",
+              "roster",
+              "members"
+            ],
+            "type": "object"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshOutcome"
+          }
+        },
+        "required": [
+          "clan",
+          "refresh"
+        ],
+        "type": "object"
+      },
+      "ContractProof": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int32",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "event": {
+            "$ref": "#/components/schemas/ContractProofEvent"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "optionalValue": {
+            "type": "string"
+          },
+          "requiredNullable": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "requiredNullable",
+          "occurredAt",
+          "event"
+        ],
+        "type": "object"
+      },
+      "ContractProofEvent": {
+        "discriminator": {
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "attempt": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "enum": [
+                  "ready"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "attempt"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "failed"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "message"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DesktopRankedLookup": {
+        "additionalProperties": false,
+        "properties": {
+          "player": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "bestLegendNameKey": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
+              "brawlhallaId": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "legacyRating": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "nullable": true,
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "brawlhallaId",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ranked": {
+            "$ref": "#/components/schemas/PlayerRankedProfile"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshOutcome"
+          }
+        },
+        "required": [
+          "player",
+          "ranked",
+          "refresh"
+        ],
+        "type": "object"
+      },
+      "PlayerCareerProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "brawlhallaId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "checkedAt": {
+            "format": "date-time",
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "freshForSeconds": {
+            "format": "int32",
+            "maximum": 43200,
+            "minimum": 43200,
+            "type": "integer"
+          },
+          "freshness": {
+            "enum": [
+              "fresh",
+              "stale",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "nullable": true,
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/PlayerCareerSnapshot"
+          }
+        },
+        "required": [
+          "brawlhallaId",
+          "checkedAt",
+          "lastSuccessAt",
+          "freshness",
+          "freshForSeconds",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "PlayerCareerSnapshot": {
+        "additionalProperties": false,
+        "nullable": true,
+        "properties": {
+          "account": {
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "xp": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "xpPercentage": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "xp",
+              "level",
+              "xpPercentage"
+            ],
+            "type": "object"
+          },
+          "combat": {
+            "additionalProperties": false,
+            "properties": {
+              "bombKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "damageBomb": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "damageMine": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "damageSidekick": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "damageSpikeball": {
+                "pattern": "^(0|[1-9]\\d*)$",
+                "type": "string"
+              },
+              "games": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "matchTime": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "mineKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sidekickKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snowballHits": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "snowballKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spikeballKos": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wins": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "games",
+              "wins",
+              "matchTime",
+              "damageBomb",
+              "damageMine",
+              "damageSpikeball",
+              "damageSidekick",
+              "snowballHits",
+              "bombKos",
+              "mineKos",
+              "spikeballKos",
+              "sidekickKos",
+              "snowballKos"
+            ],
+            "type": "object"
+          },
+          "guild": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "guildId": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "guildName": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "guildId",
+              "guildName"
+            ],
+            "type": "object"
+          },
+          "legends": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "damageDealt": {
+                  "pattern": "^(0|[1-9]\\d*)$",
+                  "type": "string"
+                },
+                "damageTaken": {
+                  "pattern": "^(0|[1-9]\\d*)$",
+                  "type": "string"
+                },
+                "falls": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "gadgets": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos"
+                  ],
+                  "type": "object"
+                },
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "kos": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "legendId": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "legendNameKey": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "level": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "matchTime": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "suicides": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "teamKos": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "thrownItem": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos"
+                  ],
+                  "type": "object"
+                },
+                "unarmed": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos"
+                  ],
+                  "type": "object"
+                },
+                "weaponOne": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "heldTime": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos",
+                    "heldTime"
+                  ],
+                  "type": "object"
+                },
+                "weaponTwo": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "damage": {
+                      "pattern": "^(0|[1-9]\\d*)$",
+                      "type": "string"
+                    },
+                    "heldTime": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "kos": {
+                      "format": "int32",
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "damage",
+                    "kos",
+                    "heldTime"
+                  ],
+                  "type": "object"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "xp": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "xpPercentage": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "legendId",
+                "legendNameKey",
+                "xp",
+                "level",
+                "xpPercentage",
+                "games",
+                "wins",
+                "matchTime",
+                "kos",
+                "falls",
+                "suicides",
+                "teamKos",
+                "damageDealt",
+                "damageTaken",
+                "unarmed",
+                "thrownItem",
+                "gadgets",
+                "weaponOne",
+                "weaponTwo"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "weapons": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "damage": {
+                  "pattern": "^(0|[1-9]\\d*)$",
+                  "type": "string"
+                },
+                "heldTime": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "kos": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "weapon": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "weapon",
+                "heldTime",
+                "damage",
+                "kos"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "guild",
+          "account",
+          "combat",
+          "legends",
+          "weapons"
+        ],
+        "type": "object"
+      },
+      "PlayerRankedProfile": {
+        "additionalProperties": false,
+        "nullable": true,
+        "properties": {
+          "brawlhallaId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "checkedAt": {
+            "format": "date-time",
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "freshForSeconds": {
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 3600,
+            "type": "integer"
+          },
+          "freshness": {
+            "enum": [
+              "fresh",
+              "stale",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "lastSuccessAt": {
+            "format": "date-time",
+            "nullable": true,
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/PlayerRankedSnapshot"
+          },
+          "sparsePulse": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "checkedAt": {
+                "format": "date-time",
+                "pattern": "Z$",
+                "type": "string"
+              },
+              "lastSuccessAt": {
+                "format": "date-time",
+                "nullable": true,
+                "pattern": "Z$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "checkedAt",
+              "lastSuccessAt"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "brawlhallaId",
+          "checkedAt",
+          "lastSuccessAt",
+          "freshness",
+          "freshForSeconds",
+          "sparsePulse",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "PlayerRankedSnapshot": {
+        "additionalProperties": false,
+        "nullable": true,
+        "properties": {
+          "fixedTeams": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "brawlhallaIdOne": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "brawlhallaIdTwo": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "globalRank": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "region": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "teamName": {
+                  "type": "string"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "brawlhallaIdOne",
+                "brawlhallaIdTwo",
+                "teamName",
+                "region",
+                "globalRank"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "mainLegend": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "legendId": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "legendNameKey": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "current-season",
+                  "career"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "legendId",
+              "legendNameKey",
+              "source"
+            ],
+            "type": "object"
+          },
+          "observedRatingDirection": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "direction": {
+                "enum": [
+                  "up",
+                  "down",
+                  "unchanged"
+                ],
+                "type": "string"
+              },
+              "fromObservedAt": {
+                "format": "date-time",
+                "pattern": "Z$",
+                "type": "string"
+              },
+              "observationCount": {
+                "format": "int32",
+                "maximum": 365,
+                "minimum": 2,
+                "type": "integer"
+              },
+              "ratingChange": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483647,
+                "type": "integer"
+              },
+              "toObservedAt": {
+                "format": "date-time",
+                "pattern": "Z$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "direction",
+              "ratingChange",
+              "observationCount",
+              "fromObservedAt",
+              "toObservedAt"
+            ],
+            "type": "object"
+          },
+          "oneVsOne": {
+            "additionalProperties": false,
+            "properties": {
+              "games": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "globalRank": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "nullable": true,
+                "type": "integer"
+              },
+              "peakRating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "region": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
+              "regionRank": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "nullable": true,
+                "type": "integer"
+              },
+              "tier": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "wins": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "rating",
+              "peakRating",
+              "tier",
+              "wins",
+              "games",
+              "region",
+              "globalRank",
+              "regionRank"
+            ],
+            "type": "object"
+          },
+          "rankedLegends": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "legendId": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "legendNameKey": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "legendId",
+                "legendNameKey"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ratingHistory": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "recordedAt": {
+                  "format": "date-time",
+                  "pattern": "Z$",
+                  "type": "string"
+                },
+                "source": {
+                  "enum": [
+                    "v0-player-snapshot",
+                    "legacy-v2"
+                  ],
+                  "type": "string"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "source",
+                "recordedAt"
+              ],
+              "type": "object"
+            },
+            "maxItems": 365,
+            "type": "array"
+          },
+          "soloQueue": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "games": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "globalRank": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 1,
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "peakRating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "rating": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "region": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "secondPlayerId": {
+                  "format": "int32",
+                  "maximum": 0,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "teamName": {
+                  "type": "string"
+                },
+                "tier": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "wins": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "rating",
+                "peakRating",
+                "tier",
+                "wins",
+                "games",
+                "secondPlayerId",
+                "teamName",
+                "region",
+                "globalRank"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "oneVsOne",
+          "rankedLegends",
+          "mainLegend",
+          "fixedTeams",
+          "soloQueue",
+          "ratingHistory",
+          "observedRatingDirection"
+        ],
+        "type": "object"
+      },
+      "PlayerRefreshResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "player": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "bestLegendNameKey": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
+              "brawlhallaId": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "legacyRating": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "nullable": true,
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "brawlhallaId",
+              "name"
+            ],
+            "type": "object"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshOutcome"
+          }
+        },
+        "required": [
+          "player",
+          "refresh"
+        ],
+        "type": "object"
+      },
+      "RefreshNoRetryGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "none"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "RefreshOutcome": {
+        "discriminator": {
+          "propertyName": "outcome"
+        },
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "accepted"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshPollGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "operationId",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "operationId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "alreadyRefreshing"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshPollGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "operationId",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "notNeeded"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshNoRetryGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "verificationRequired"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshVerifyGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "rateLimited"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshRetryAfterGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "temporarilyUnavailable"
+                ],
+                "type": "string"
+              },
+              "retry": {
+                "$ref": "#/components/schemas/RefreshRetryAfterGuidance"
+              }
+            },
+            "required": [
+              "outcome",
+              "retry"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "RefreshPollGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "afterSeconds": {
+            "format": "int32",
+            "maximum": 86400,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "poll"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "afterSeconds"
+        ],
+        "type": "object"
+      },
+      "RefreshRetryAfterGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "afterSeconds": {
+            "format": "int32",
+            "maximum": 86400,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "after"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "afterSeconds"
+        ],
+        "type": "object"
+      },
+      "RefreshVerifyGuidance": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "verify"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "BrawlTome Internal Contracts",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/overlay/opponent/{brawlhallaId}": {
+      "get": {
+        "operationId": "getDesktopRankedLookup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brawlhallaId",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": true,
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesktopRankedLookup"
+                }
+              }
+            },
+            "description": "Canonical ranked player snapshot with desktop refresh admission"
+          }
+        }
+      }
+    },
+    "/internal/contracts/proof": {
+      "get": {
+        "operationId": "getContractProof",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-secret",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractProof"
+                }
+              }
+            },
+            "description": "Canonical cross-language contract proof"
+          }
+        }
+      }
+    }
+  }
+}

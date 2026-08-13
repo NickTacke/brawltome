@@ -1,18 +1,10 @@
-import type { Redis } from 'ioredis'
-
 export type Caller = 'on-demand' | 'background'
-
-export interface RequestQueuePersistence {
-  redis: Redis
-  keyPrefix: string
-}
 
 export interface RequestQueueOptions {
   minSpacingMs: number
   sustainedLimit: number
   sustainedWindowMs: number
   onDemandHeadroom?: number
-  persistence?: RequestQueuePersistence
 }
 
 export class RequestQueue {
@@ -20,7 +12,6 @@ export class RequestQueue {
   private readonly sustainedLimit: number
   private readonly sustainedWindowMs: number
   private readonly onDemandHeadroom: number
-  private readonly persistence: RequestQueuePersistence | undefined
   private readonly timestamps: number[] = []
   private lastRequestTime = 0
   private pausedUntil = 0
@@ -45,35 +36,6 @@ export class RequestQueue {
     this.sustainedLimit = opts.sustainedLimit
     this.sustainedWindowMs = opts.sustainedWindowMs
     this.onDemandHeadroom = headroom
-    this.persistence = opts.persistence
-  }
-
-  async init(): Promise<void> {
-    if (!this.persistence) return
-    const { redis, keyPrefix } = this.persistence
-    const now = Date.now()
-    const cutoff = now - this.sustainedWindowMs
-
-    try {
-      await redis.zremrangebyscore(`${keyPrefix}:timestamps`, 0, cutoff)
-      const scores = await redis.zrange(`${keyPrefix}:timestamps`, 0, -1, 'WITHSCORES')
-      for (let i = 1; i < scores.length; i += 2) {
-        this.timestamps.push(Number(scores[i]))
-      }
-      this.timestamps.sort((a, b) => a - b)
-
-      const pausedStr = await redis.get(`${keyPrefix}:paused_until`)
-      if (pausedStr) {
-        const pausedUntilMs = Number(pausedStr)
-        if (pausedUntilMs > now) this.pausedUntil = pausedUntilMs
-      }
-
-      console.log(
-        `[requestqueue] restored ${this.timestamps.length} timestamp(s) and pausedUntil=${this.pausedUntil} from Redis`,
-      )
-    } catch (err) {
-      console.warn('[requestqueue] init from Redis failed; starting fresh:', err)
-    }
   }
 
   private effectiveLimit(caller: Caller): number {
@@ -102,12 +64,6 @@ export class RequestQueue {
   pause(durationMs: number): void {
     if (!Number.isFinite(durationMs) || durationMs <= 0) return
     this.pausedUntil = Math.max(this.pausedUntil, Date.now() + durationMs)
-    if (this.persistence) {
-      const { redis, keyPrefix } = this.persistence
-      redis
-        .set(`${keyPrefix}:paused_until`, String(this.pausedUntil), 'PX', Math.max(1000, durationMs + 1000))
-        .catch((err) => console.warn('[requestqueue] persist pause failed:', err))
-    }
   }
 
   async acquire(caller: Caller): Promise<number> {
@@ -130,24 +86,10 @@ export class RequestQueue {
       const now = Date.now()
       this.lastRequestTime = now
       this.timestamps.push(now)
-      this.persistTimestamp(now)
       popped.resolve(now - popped.enqueuedAt)
     }
 
     this.processing = false
-  }
-
-  private persistTimestamp(ts: number): void {
-    if (!this.persistence) return
-    const { redis, keyPrefix } = this.persistence
-    const member = `${ts}-${crypto.randomUUID().slice(0, 8)}`
-    const cutoff = ts - this.sustainedWindowMs
-    redis
-      .multi()
-      .zadd(`${keyPrefix}:timestamps`, ts, member)
-      .zremrangebyscore(`${keyPrefix}:timestamps`, 0, cutoff)
-      .exec()
-      .catch((err) => console.warn('[requestqueue] persist timestamp failed:', err))
   }
 
   private async waitForSlot(caller: Caller): Promise<void> {
@@ -186,4 +128,13 @@ export class RequestQueue {
     while (i < this.timestamps.length && this.timestamps[i] < cutoff) i++
     if (i > 0) this.timestamps.splice(0, i)
   }
+}
+
+export function createBhApiRequestQueue(onDemandHeadroom = 30): RequestQueue {
+  return new RequestQueue({
+    minSpacingMs: 150,
+    sustainedLimit: 180,
+    sustainedWindowMs: 15 * 60 * 1_000,
+    onDemandHeadroom,
+  })
 }

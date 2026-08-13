@@ -44,20 +44,32 @@ login-probe-tool = []
 [dependencies]
 brawltome-events.workspace = true
 brawltome-detection.workspace = true
+brawltome-contracts = { path = "../../../packages/contracts/rust" }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros", "time"] }
-reqwest = { version = "0.12", features = ["json"] }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "sync",
+  "macros",
+  "time",
+] }
 log.workspace = true
 tauri-plugin-log = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+base64 = "0.22"
+minisign-verify = "0.2"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }
 minidump = { version = "0.21", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -4,110 +4,96 @@ import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
-import { isStale } from '@/lib/staleness'
-import { CLAN_TTL_MS } from '@brawltome/shared/constants'
-import { useCallback, useRef, useState } from 'react'
+import { getPendingClanSections, hasCompletedClanRefresh } from '@/lib/clan-refresh'
+import type { ClanProfileContract, RefreshOutcomeContract } from '@brawltome/contracts'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClanHeader } from './ClanHeader'
 import { MemberList } from './MemberList'
 import type { SortKey } from './utils'
 
 const PAGE_SIZE = 25
-
-// biome-ignore lint/suspicious/noExplicitAny: dynamic API response
-type ClanData = any
-
 interface ClanProfileProps {
-  initialData: ClanData | null
+  initialData: ClanProfileContract | null
   id: string
 }
 
-const getTimestamp = (data: ClanData | null): number => {
-  if (!data) return 0
-  return new Date(data.lastUpdated ?? 0).getTime() || 0
-}
-
 export function ClanProfile({ initialData, id }: ClanProfileProps) {
-  const isDiscovery = !initialData
+  const clanId = Number(id)
   const [page, setPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('default')
-  const [turnstileError, setTurnstileError] = useState(false)
-  const tokenHandled = useRef(false)
+  const [poll, setPoll] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [refresh, setRefresh] = useState<RefreshOutcomeContract | null>(null)
+  const requested = useRef(false)
+  const pending = useMemo(() => getPendingClanSections(initialData), [initialData])
 
-  const queryFn = useCallback(() => getClanAction(Number(id)), [id])
-  const shouldStart = useCallback(
-    (data: ClanData | null) => isStale(data?.lastUpdated ? new Date(data.lastUpdated) : null, Date.now(), CLAN_TTL_MS),
-    [],
-  )
+  const queryFn = useCallback(() => getClanAction(clanId), [clanId])
+  const shouldStart = useCallback(() => true, [])
   const isDone = useCallback(
-    (_prev: ClanData | null, next: ClanData | null) => {
-      if (!next) return false
-      if (isDiscovery) return (next.members?.length ?? 0) > 0 && next.clanName !== `Clan ${id}`
-      const nextTs = getTimestamp(next)
-      return nextTs !== 0 && nextTs !== getTimestamp(initialData)
-    },
-    [isDiscovery, id, initialData],
+    (_previous: ClanProfileContract | null, next: ClanProfileContract | null) =>
+      hasCompletedClanRefresh(initialData, next, pending),
+    [initialData, pending],
   )
-
   const {
     data: clan,
     isRefreshing,
     error,
-  } = useStaleRefresh<ClanData | null>({
+  } = useStaleRefresh<ClanProfileContract | null>({
     initialData,
     queryFn,
     shouldStart,
     isDone,
+    startSignal: poll,
   })
 
-  const handleToken = useCallback(
-    async (token: string) => {
-      if (tokenHandled.current) return
-      tokenHandled.current = true
-      try {
-        await refreshClanAction(Number(id), token)
-      } catch {
-        tokenHandled.current = false
-      }
+  const requestRefresh = useCallback(
+    async (token?: string) => {
+      const response = await refreshClanAction(clanId, token)
+      setRefresh(response.refresh)
+      setNeedsVerification(response.refresh.outcome === 'verificationRequired')
+      setPoll(response.refresh.outcome === 'accepted' || response.refresh.outcome === 'alreadyRefreshing')
     },
-    [id],
+    [clanId],
   )
 
-  const turnstile = <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
+  useEffect(() => {
+    if (requested.current) return
+    requested.current = true
+    void requestRefresh().catch(() =>
+      setRefresh({ outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } }),
+    )
+  }, [requestRefresh])
 
-  if (error && !(error instanceof RefreshTimeoutError)) {
-    throw error
-  }
+  if (error && !(error instanceof RefreshTimeoutError)) throw error
+  const delayed =
+    error instanceof RefreshTimeoutError ||
+    refresh?.outcome === 'temporarilyUnavailable' ||
+    refresh?.outcome === 'rateLimited'
 
   if (!clan) {
-    const lookupFailed = turnstileError || error instanceof RefreshTimeoutError
     return (
       <div>
         <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          {!lookupFailed && (
-            <>
-              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-              <p>Looking up clan...</p>
-            </>
-          )}
-          {lookupFailed && <p>Clan not found.</p>}
-          {turnstile}
+          {!delayed && !needsVerification && <p>Looking up clan...</p>}
+          {delayed && <p>Clan data is unavailable. Try again later.</p>}
+          {needsVerification && <TurnstileGate onToken={requestRefresh} onError={() => setNeedsVerification(false)} />}
         </div>
       </div>
     )
   }
 
-  const members = clan.members || []
-
   return (
     <div className="space-y-8">
-      {turnstile}
+      {needsVerification && <TurnstileGate onToken={requestRefresh} onError={() => setNeedsVerification(false)} />}
       <NavBar showBack />
-      <ClanHeader clan={clan} id={id} memberCount={members.length} refreshing={isRefreshing} />
+      {delayed && <p className="text-sm text-muted-foreground">Update delayed. Last-known clan data is shown.</p>}
+      <ClanHeader clan={clan} id={id} memberCount={clan.members.length} refreshing={isRefreshing} />
       <MemberList
-        members={members}
-        totalClanXp={Number(clan.clanXp) || 0}
+        members={clan.members}
+        totalClanXp={clan.clanXp}
+        roster={clan.roster}
         page={page}
         pageSize={PAGE_SIZE}
         onPageChange={setPage}

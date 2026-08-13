@@ -1,14 +1,15 @@
+import type { Accounts } from '@brawltome/accounts'
 import { knownHeroIds, knownLevelIds } from '@brawltome/game-data'
-import type { GetCurrentUserDeps } from '@brawltome/identity'
-import { getCurrentUser } from '@brawltome/identity'
 import { type IngestDeps, IngestError, type MatchRepo, ingestReplay } from '@brawltome/matchmaking'
 import { ParseBoundsError, type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
-import { type MetricsRegistry, type R2Client, checkRateLimit } from '@brawltome/shared'
+import type { ActorAdmission } from '@brawltome/request-admission'
+import type { R2Client } from '@brawltome/shared'
+import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import type { Redis } from 'ioredis'
 import { z } from 'zod'
 import { SESSION_COOKIE, parseCookies } from '../auth/cookies'
+import { type R2SourceCallObserver, createObservedR2Put } from '../matchmaking-telemetry'
 
 const MAX_INGEST_BODY_BYTES = 256 * 1024
 
@@ -23,10 +24,11 @@ const payloadSchema = z.object({
 export interface MatchmakingRoutesDeps {
   matchRepo: MatchRepo | null
   r2: R2Client | null
-  redis: Redis
-  metrics: MetricsRegistry
-  getUserFromCookie: GetCurrentUserDeps
+  requestAdmission: ActorAdmission
+  telemetry: Telemetry
+  accounts: Accounts
   enabled: boolean
+  observeSourceCall?: R2SourceCallObserver
 }
 
 export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
@@ -39,45 +41,56 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
 
   const matchRepo = deps.matchRepo
   const r2 = deps.r2
+  const observedR2Put = createObservedR2Put(r2, deps.observeSourceCall)
+  const recordIngest = (
+    outcome:
+      | 'succeeded'
+      | 'rate_limited'
+      | 'oversize'
+      | 'validation_error'
+      | 'parse_error'
+      | 'rejected'
+      | 'dependency_failure',
+  ) => deps.telemetry.metrics.add('matchmaking_ingest_total', 1, { outcome })
 
   app.post(
     '/ingest',
     bodyLimit({
       maxSize: MAX_INGEST_BODY_BYTES,
       onError: (c) => {
-        void deps.metrics.incrementCounter('matchmaking_ingest_rejected_oversize')
+        recordIngest('oversize')
         return c.json({ code: 'oversize', detail: 'body_too_large' }, 413)
       },
     }),
     async (c) => {
       const cookies = parseCookies(c.req.header('cookie') ?? '')
       const token = cookies[SESSION_COOKIE]
-      const current = await getCurrentUser(deps.getUserFromCookie, token ?? null)
-      if (!current) return c.json({ code: 'unauthorized' }, 401)
+      const authentication = await deps.accounts.authenticate(token ?? null)
+      if (authentication.status === 'anonymous') return c.json({ code: 'unauthorized' }, 401)
 
-      const userId = current.user.id
+      const userId = authentication.account.id
 
-      const rl = await checkRateLimit(deps.redis, `user:${userId}`, 'ingest', deps.metrics)
-      if (!rl.allowed) {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_rate_limited')
-        return c.json({ code: 'rate_limited' }, 429, { 'Retry-After': String(rl.retryAfter) })
+      const admission = await deps.requestAdmission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: userId })
+      if (admission.outcome === 'rate-limited') {
+        recordIngest('rate_limited')
+        return c.json({ code: 'rate_limited' }, 429, { 'Retry-After': String(admission.retryAfterSeconds) })
       }
 
       let form: FormData
       try {
         form = await c.req.formData()
       } catch {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_validation_error')
+        recordIngest('validation_error')
         return c.json({ code: 'validation_error', detail: 'bad_multipart' }, 400)
       }
       const rawFile = form.get('raw')
       const payloadField = form.get('payload')
       if (!(rawFile instanceof File) || typeof payloadField !== 'string') {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_validation_error')
+        recordIngest('validation_error')
         return c.json({ code: 'validation_error', detail: 'multipart_shape' }, 400)
       }
       if (rawFile.size > MAX_INGEST_BODY_BYTES) {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_oversize')
+        recordIngest('oversize')
         return c.json({ code: 'oversize', detail: `raw is ${rawFile.size} bytes` }, 413)
       }
       const rawBytes = new Uint8Array(await rawFile.arrayBuffer())
@@ -85,12 +98,12 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
       try {
         parsed = payloadSchema.parse(JSON.parse(payloadField))
       } catch (err) {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_validation_error')
+        recordIngest('validation_error')
         return c.json({ code: 'validation_error', detail: err instanceof Error ? err.message : 'bad_payload' }, 400)
       }
 
       if (parsed.parsedReplay === null) {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_parse_error')
+        recordIngest('parse_error')
         return c.json({ code: 'parse_error', detail: 'pending_path_not_yet_wired' }, 501)
       }
 
@@ -100,16 +113,14 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
       try {
         serverParsed = parseReplay(rawBytes)
       } catch (err) {
-        await deps.metrics.incrementCounter('matchmaking_ingest_rejected_parse_error')
-        if (err instanceof ParseBoundsError) {
-          await deps.metrics.incrementCounter('replay:parse_errors:bound_exceeded')
-        }
+        recordIngest('parse_error')
+        if (err instanceof ParseBoundsError) deps.telemetry.logger.warn('matchmaking.ingest.parse_bounds')
         return c.json({ code: 'parse_error', detail: err instanceof Error ? err.message : 'bad_raw' }, 400)
       }
 
       const depsIngest: IngestDeps = {
         matchRepo,
-        r2Put: (key, bytes) => r2.put(key, bytes),
+        r2Put: observedR2Put,
         reparseRaw: () => serverParsed,
         knownHeroIds,
         knownLevelIds,
@@ -124,11 +135,11 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
           rawBytes,
           formatVersion: parsed.formatVersion ?? serverParsed.formatVersion,
         })
-        await deps.metrics.incrementCounter('matchmaking_ingest_ok')
+        recordIngest('succeeded')
         return c.json({ slug: result.slug, alreadyIngested: result.alreadyIngested ?? false }, 200)
       } catch (e) {
         if (e instanceof IngestError) {
-          await deps.metrics.incrementCounter(`matchmaking_ingest_rejected_${e.code}`)
+          recordIngest(e.code === 'r2_upload_failed' ? 'dependency_failure' : 'rejected')
           const status = e.code === 'r2_upload_failed' ? 503 : 400
           return c.json({ code: e.code, detail: e.detail }, status)
         }

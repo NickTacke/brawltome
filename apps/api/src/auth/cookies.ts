@@ -2,6 +2,7 @@
 export const SESSION_COOKIE = 'brawltome_session'
 export const OAUTH_STATE_COOKIE = 'brawltome_oauth_state'
 export const STEAM_STATE_COOKIE = 'brawltome_steam_state'
+export const SESSION_COOKIE_TTL_SEC = 30 * 24 * 60 * 60
 export const OAUTH_STATE_TTL_SEC = 10 * 60 // 10 minutes
 
 const isProd = process.env.NODE_ENV === 'production'

@@ -1,13 +1,24 @@
+export type OpponentFreshness = 'fresh' | 'stale' | 'unavailable' | 'missing'
+export type OpponentRefreshState =
+  | 'idle'
+  | 'refreshing'
+  | 'verificationRequired'
+  | 'rateLimited'
+  | 'temporarilyUnavailable'
+  | 'apiFailure'
+
 export interface Opponent {
   brawlhallaId: number
-  name: string
-  rating: number
-  peakRating: number
-  playtime: number // hours
-  tier: string
-  region: string
-  legendKey: string
-  winRate: number // 0-100
+  name: string | null
+  rating: number | null
+  peakRating: number | null
+  tier: string | null
+  region: string | null
+  legendKey: string | null
+  winRate: number | null
+  freshness: OpponentFreshness
+  refreshState: OpponentRefreshState
+  retryAfterSeconds: number | null
 }
 
 export interface MatchFoundEvent {
@@ -15,6 +26,7 @@ export interface MatchFoundEvent {
   opponents: Opponent[]
   isRanked: boolean
   localPlayerId: number
+  acceptanceSampleId: string | null
 }
 
 export interface MatchEndedEvent {

@@ -5,17 +5,23 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "typecheck": "tsc --noEmit"
+    "build:ci": "tauri build --no-bundle",
+    "test": "bun test tests",
+    "typecheck": "tsc --noEmit",
+    "acceptance:windows": "pwsh -File scripts/windows-acceptance.ps1",
+    "acceptance:evaluate": "bun run src/windows-acceptance.ts",
+    "updater:verify": "cargo run --locked --manifest-path Cargo.toml -p brawltome-desktop --bin verify_updater_artifact --"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-shell": "^2",
+    "@tauri-apps/plugin-opener": "^2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2",
+    "@types/bun": "^1.3.14",
     "@types/node": "^25.5.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",

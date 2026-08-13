@@ -1,12 +1,13 @@
 //! BrawlTome desktop overlay library entrypoint.
 //! Tauri builder + plugin wiring + setup callback that wires the focused modules.
 
-#[cfg(target_os = "windows")]
-mod api_client;
+pub mod api_client;
 mod detection_bridge;
 mod log_prune;
-mod overlay;
-mod tray;
+pub mod overlay;
+pub mod tray;
+pub mod updater_artifact;
+pub mod windows_acceptance;
 
 use tauri::Manager;
 
@@ -22,7 +23,9 @@ fn build_log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
     let mut builder = tauri_plugin_log::Builder::default()
         .clear_targets()
-        .target(Target::new(TargetKind::LogDir { file_name: Some(file_name) }))
+        .target(Target::new(TargetKind::LogDir {
+            file_name: Some(file_name),
+        }))
         .level(if cfg!(debug_assertions) {
             log::LevelFilter::Debug
         } else {
@@ -44,14 +47,20 @@ fn build_log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(build_log_plugin())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             overlay::set_clickthrough,
             overlay::update_content_bounds,
             detection_bridge::get_detection_state,
+            windows_acceptance::complete_acceptance_sample,
         ])
         .setup(|app| {
+            let acceptance_probe = std::sync::Arc::new(
+                windows_acceptance::AcceptanceProbe::from_environment(),
+            );
+            app.manage(acceptance_probe.clone());
+
             // Best-effort: keep the log dir bounded. Runs synchronously on
             // startup; ~tens of ms even with 10+ files, so it's fine before
             // the window is shown.
@@ -59,17 +68,21 @@ pub fn run() {
                 log_prune::prune_log_dir(&log_dir, 10);
             }
 
-            overlay::position_overlay_window(app.handle())?;
+            overlay::position_overlay_window(app.handle(), &acceptance_probe)?;
 
             let overlay_state = overlay::OverlayState::new();
-            overlay::spawn_cursor_monitor(app.handle(), overlay_state.clone());
+            overlay::spawn_cursor_monitor(
+                app.handle(),
+                overlay_state.clone(),
+                acceptance_probe.clone(),
+            );
             app.manage(overlay_state);
 
-            tray::install(app.handle())?;
+            tray::install(app.handle(), acceptance_probe.clone())?;
 
             let detection_state = detection_bridge::DetectionState::new();
             app.manage(detection_state.clone());
-            detection_bridge::spawn(app.handle(), detection_state);
+            detection_bridge::spawn(app.handle(), detection_state, acceptance_probe);
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
             // into debug builds only; this just auto-launches the panel so we

@@ -1,29 +1,38 @@
+import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanRepo } from '@brawltome/clan'
 import type { Database } from '@brawltome/database'
-import type { PlayerLinkRepo, Session, SessionRepo, UserRepo, UserWithPrimaryAccount } from '@brawltome/identity'
+import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { MatchRepo } from '@brawltome/matchmaking'
-import type { PlayerRepo } from '@brawltome/player'
-import type { MetricsRegistry, Queue, R2Client } from '@brawltome/shared'
-import type { Redis } from 'ioredis'
+import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
+import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
+import type { PlayerValhallanQueries, RankingQueries } from '@brawltome/ranking'
+import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
+import type { ActorAdmission } from '@brawltome/request-admission'
+import type { R2Client } from '@brawltome/shared'
+import type { CareerWeaponUsageQueries, StatisticsHistoryQueries, StatisticsQueries } from '@brawltome/statistics'
+import type { Telemetry } from '@brawltome/telemetry'
 
 export interface Context {
   db: Database
-  redis: Redis
-  metrics: MetricsRegistry
-  rankedQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
-  statsQueue: Queue<{ brawlhallaId: number; caller: 'on-demand' | 'background' }>
-  clanQueue: Queue<{ clanId: number; caller: 'on-demand' | 'background' }>
+  telemetry: Telemetry
   playerRepo: PlayerRepo
+  playerReferenceQueries: PlayerReferenceQueries
+  discoveryQueries: DiscoveryQueries
+  rankedPlayerQueries: RankedPlayerQueries
+  careerPlayerQueries: CareerPlayerQueries
+  refreshOperations: InteractiveRefreshOperations
+  requestAdmission: ActorAdmission
+  refreshTrust: { trusted: boolean; grant(): void }
+  verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
+  rankingQueries: RankingQueries & PlayerValhallanQueries
+  statisticsQueries: StatisticsQueries & CareerWeaponUsageQueries & StatisticsHistoryQueries
   clanRepo: ClanRepo
-  userRepo: UserRepo
-  sessionRepo: SessionRepo
-  playerLinkRepo: PlayerLinkRepo
-  steamLinkQueue: Queue<{ userId: string; steamId: string; caller: 'background' }>
+  accounts: Accounts
   clientIp: string
   isBot: boolean
   internalSecret: string | undefined
-  user: UserWithPrimaryAccount | null
-  session: Session | null
+  discordInternalSecret: string | undefined
+  account: Account | null
   matchRepo: MatchRepo | null
   r2: R2Client | null
   matchmakingEnabled: boolean

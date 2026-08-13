@@ -3,44 +3,59 @@
 import { fixEncoding } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage, Badge, TableCell, TableRow } from '@brawltome/ui'
 import Link from 'next/link'
-import { type SoloLeaderboardEntry, type TeamLeaderboardEntry, getRankStyle } from './utils'
+import { type SoloLeaderboardEntry, type TeamLeaderboardEntry, getRankStyle, playerHref } from './utils'
 
-interface SoloRowProps {
-  entry: SoloLeaderboardEntry
-  rank: number
+function PlayerLink({ brawlhallaId, name }: { brawlhallaId: number; name: string }) {
+  const href = playerHref(brawlhallaId)
+  return href ? (
+    <Link href={href} prefetch={false} className="hover:text-primary">
+      {fixEncoding(name)}
+    </Link>
+  ) : (
+    <span>{fixEncoding(name)}</span>
+  )
 }
 
-export function SoloLeaderboardRow({ entry, rank }: SoloRowProps) {
-  const wins = entry.rankedWins ?? entry.wins ?? 0
-  const games = entry.rankedGames ?? entry.games ?? 0
-  const winrate = games > 0 ? (wins / games) * 100 : 0
-  const href = `/player/${entry.brawlhallaId}`
+export function SoloLeaderboardRow({ entry }: { entry: SoloLeaderboardEntry }) {
+  const winrate = entry.games > 0 ? (entry.wins / entry.games) * 100 : null
+  const player = entry.identity.player
+  const href = playerHref(player.brawlhallaId)
+  const content = (children: React.ReactNode) =>
+    href ? (
+      <Link href={href} prefetch={false} className="block w-full h-full p-4">
+        {children}
+      </Link>
+    ) : (
+      <div className="block w-full h-full p-4">{children}</div>
+    )
+
   return (
     <TableRow className="border-border cursor-pointer transition-colors group h-16">
-      <TableCell className={`p-0 text-center ${getRankStyle(rank)}`}>
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          #{rank}
-        </Link>
+      <TableCell className={`p-0 text-center ${getRankStyle(entry.standing)}`}>
+        {content(<span>#{entry.standing}</span>)}
       </TableCell>
       <TableCell className="p-0">
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+        {content(
           <div className="flex items-center gap-3">
-            {entry.bestLegendNameKey && (
-              <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
+            {player.bestLegendNameKey && (
+              <Avatar
+                aria-label={`${fixEncoding(player.name)} best legend: ${player.bestLegendNameKey}`}
+                className="h-10 w-10 border border-border bg-muted rounded-md"
+              >
                 <AvatarImage
-                  src={`/images/legends/avatars/${entry.bestLegendNameKey}.png`}
-                  alt={entry.bestLegendNameKey}
+                  src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+                  alt={player.bestLegendNameKey}
                   className="object-cover object-top"
                   loading="lazy"
                 />
                 <AvatarFallback className="text-[10px] uppercase font-bold text-muted-foreground rounded-md">
-                  {entry.bestLegendNameKey.substring(0, 2)}
+                  {player.bestLegendNameKey.substring(0, 2)}
                 </AvatarFallback>
               </Avatar>
             )}
             <div className="flex flex-col">
               <span className="font-bold text-foreground group-hover:text-primary transition-colors text-base truncate max-w-[200px]">
-                {fixEncoding(entry.name)}
+                {fixEncoding(player.name)}
               </span>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs text-muted-foreground font-mono">{entry.region}</span>
@@ -54,64 +69,50 @@ export function SoloLeaderboardRow({ entry, rank }: SoloRowProps) {
                 )}
               </div>
             </div>
-          </div>
-        </Link>
+          </div>,
+        )}
       </TableCell>
       <TableCell className="p-0 text-center">
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+        {content(
           <div className="flex flex-col items-center">
             <span className="font-black text-foreground text-lg tracking-tight">{entry.rating}</span>
             <span className="text-[10px] text-muted-foreground uppercase font-bold">
               Peak: {entry.peakRating ?? '---'}
             </span>
-          </div>
-        </Link>
+          </div>,
+        )}
       </TableCell>
       <TableCell className="p-0 text-center">
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
+        {content(
           <div
-            className={`font-bold ${winrate >= 60 ? 'text-success' : winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`font-bold ${winrate !== null && winrate >= 60 ? 'text-success' : winrate !== null && winrate >= 50 ? 'text-primary' : 'text-muted-foreground'}`}
           >
-            {winrate.toFixed(1)}%
-          </div>
-        </Link>
+            {winrate === null ? '---' : `${winrate.toFixed(1)}%`}
+          </div>,
+        )}
       </TableCell>
       <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          {wins}
-        </Link>
+        {content(entry.wins)}
       </TableCell>
       <TableCell className="p-0 text-center hidden sm:table-cell text-muted-foreground font-mono">
-        <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          {games}
-        </Link>
+        {content(entry.games)}
       </TableCell>
     </TableRow>
   )
 }
 
-interface TeamRowProps {
-  entry: TeamLeaderboardEntry
-}
-
-export function TeamLeaderboardRow({ entry }: TeamRowProps) {
+export function TeamLeaderboardRow({ entry }: { entry: TeamLeaderboardEntry }) {
   const winrate = entry.games > 0 ? (entry.wins / entry.games) * 100 : 0
+  const [first, second] = entry.identity.players
   return (
-    <TableRow
-      key={`${entry.brawlhallaIdOne}-${entry.brawlhallaIdTwo}`}
-      className="border-border transition-colors group h-16"
-    >
-      <TableCell className={`text-center ${getRankStyle(entry.rank)}`}>#{entry.rank}</TableCell>
+    <TableRow className="border-border transition-colors group h-16">
+      <TableCell className={`text-center ${getRankStyle(entry.standing)}`}>#{entry.standing}</TableCell>
       <TableCell>
         <div className="flex flex-col">
           <div className="font-bold text-foreground text-base max-w-[420px] md:max-w-[560px] whitespace-normal leading-tight">
-            <Link href={`/player/${entry.brawlhallaIdOne}`} prefetch={false} className="hover:text-primary">
-              {fixEncoding(entry.playerOneName || 'Unknown')}
-            </Link>
+            <PlayerLink brawlhallaId={first.brawlhallaId} name={first.name} />
             <span className="opacity-50"> + </span>
-            <Link href={`/player/${entry.brawlhallaIdTwo}`} prefetch={false} className="hover:text-primary">
-              {fixEncoding(entry.playerTwoName || 'Unknown')}
-            </Link>
+            <PlayerLink brawlhallaId={second.brawlhallaId} name={second.name} />
           </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground font-mono">
             <span>{entry.region}</span>
@@ -130,7 +131,7 @@ export function TeamLeaderboardRow({ entry }: TeamRowProps) {
         <div className="flex flex-col items-center">
           <span className="font-black text-foreground text-lg tracking-tight">{entry.rating}</span>
           <span className="text-[10px] text-muted-foreground uppercase font-bold">
-            Peak: {entry.peakRating || '---'}
+            Peak: {entry.peakRating ?? '---'}
           </span>
         </div>
       </TableCell>

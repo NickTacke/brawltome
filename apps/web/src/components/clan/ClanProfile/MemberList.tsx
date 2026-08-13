@@ -1,5 +1,7 @@
 'use client'
 
+import { timeAgo } from '@/lib/utils'
+import type { ClanProfileContract } from '@brawltome/contracts'
 import {
   Button,
   Card,
@@ -21,14 +23,12 @@ import {
 } from '@brawltome/ui'
 import { Search } from 'lucide-react'
 import { MemberRow } from './MemberRow'
-import { type SortKey, filterMembers, paginateMembers, sortMembers } from './utils'
-
-// biome-ignore lint/suspicious/noExplicitAny: dynamic API response
-type Member = any
+import { type ClanMember, type SortKey, filterMembers, paginateMembers, sortMembers } from './utils'
 
 interface MemberListProps {
-  members: Member[]
-  totalClanXp: number
+  members: ClanMember[]
+  totalClanXp: string
+  roster: ClanProfileContract['roster']
   page: number
   pageSize: number
   onPageChange: (page: number) => void
@@ -41,6 +41,7 @@ interface MemberListProps {
 export function MemberList({
   members,
   totalClanXp,
+  roster,
   page,
   pageSize,
   onPageChange,
@@ -53,15 +54,27 @@ export function MemberList({
   const sorted = sortMembers(filtered, sortBy)
   const totalPages = Math.ceil(sorted.length / pageSize)
   const visible = paginateMembers(sorted, page, pageSize)
+  const rosterDelayed =
+    roster?.checkedAt !== null &&
+    roster?.checkedAt !== undefined &&
+    roster.lastSuccessAt !== null &&
+    new Date(roster.checkedAt).getTime() > new Date(roster.lastSuccessAt).getTime()
 
   return (
     <div id="members">
       <Card className="bg-card/50 backdrop-blur-xs border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-yellow-500">&#127942;</span> Clan Members
-          </CardTitle>
-          <div className="flex items-center gap-3">
+        <CardHeader className="flex flex-col items-stretch justify-between gap-4 space-y-0 sm:flex-row sm:items-center">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-yellow-500">&#127942;</span> Clan Members
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {roster?.lastSuccessAt
+                ? `${rosterDelayed ? 'Roster update delayed. Last updated' : 'Roster updated'} ${timeAgo(roster.lastSuccessAt)}`
+                : 'Roster unavailable'}
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground font-bold uppercase">Sort:</span>
               <Select
@@ -71,7 +84,7 @@ export function MemberList({
                   onPageChange(1)
                 }}
               >
-                <SelectTrigger className="w-[140px] font-bold h-9">
+                <SelectTrigger aria-label="Sort clan members" className="w-[140px] font-bold h-9">
                   <SelectValue placeholder="Sort By" />
                 </SelectTrigger>
                 <SelectContent>
@@ -84,7 +97,7 @@ export function MemberList({
                 </SelectContent>
               </Select>
             </div>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search members..."
@@ -116,7 +129,7 @@ export function MemberList({
                   </TableCell>
                 </TableRow>
               ) : (
-                visible.map((member: Member) => (
+                visible.map((member) => (
                   <MemberRow key={member.brawlhallaId} member={member} totalClanXp={totalClanXp} />
                 ))
               )}
@@ -137,6 +150,7 @@ export function MemberList({
               <span className="text-sm text-muted-foreground font-mono">Page</span>
               <Input
                 key={page}
+                aria-label="Clan member page"
                 defaultValue={page}
                 className="h-8 w-16 text-center font-mono"
                 onKeyDown={(e) => {

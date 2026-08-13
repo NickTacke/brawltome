@@ -1,0 +1,38 @@
+{
+  "player": {
+    "brawlhallaId": 91913839,
+    "name": "Measured Zero"
+  },
+  "ranked": {
+    "brawlhallaId": 91913839,
+    "checkedAt": "2026-08-09T22:00:00Z",
+    "lastSuccessAt": "2026-08-09T22:00:00Z",
+    "freshness": "fresh",
+    "freshForSeconds": 3600,
+    "snapshot": {
+      "oneVsOne": {
+        "rating": 0,
+        "peakRating": 782,
+        "tier": "Tin 0",
+        "wins": 0,
+        "games": 0,
+        "region": "US-E",
+        "globalRank": null,
+        "regionRank": null
+      },
+      "rankedLegends": [],
+      "mainLegend": null,
+      "fixedTeams": [],
+      "soloQueue": [],
+      "ratingHistory": [],
+      "observedRatingDirection": null
+    },
+    "sparsePulse": null
+  },
+  "refresh": {
+    "outcome": "notNeeded",
+    "retry": {
+      "kind": "none"
+    }
+  }
+}

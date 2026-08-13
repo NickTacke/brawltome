@@ -1,9 +1,13 @@
-import { searchLocal } from '@brawltome/ranking'
-import { z } from 'zod'
+import { discoverySearchInputSchema, discoverySearchOutputSchema } from '@brawltome/contracts'
 import { publicProcedure, router } from '../trpc/trpc'
 
-export const searchRouter = router({
-  local: publicProcedure.input(z.object({ query: z.string().min(2).max(100) })).query(async ({ ctx, input }) => {
-    return searchLocal({ playerRepo: ctx.playerRepo, clanRepo: ctx.clanRepo }, input.query)
-  }),
-})
+export function createSearchRouter(procedure = publicProcedure) {
+  return router({
+    local: procedure
+      .input(discoverySearchInputSchema)
+      .output(discoverySearchOutputSchema)
+      .query(({ ctx, input }) => ctx.discoveryQueries.search(input.query)),
+  })
+}
+
+export const searchRouter = createSearchRouter()

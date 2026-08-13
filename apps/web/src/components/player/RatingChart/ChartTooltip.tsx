@@ -7,7 +7,7 @@ export function ChartTooltip({ active, payload }: Partial<TooltipContentProps<nu
   const entry = payload[0]?.payload as ChartPoint | undefined
   if (!entry) return null
 
-  const winrate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : '0.0'
+  const winRate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : null
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-lg text-sm space-y-1.5">
@@ -24,7 +24,8 @@ export function ChartTooltip({ active, payload }: Partial<TooltipContentProps<nu
       </div>
       {entry.tier && <div className="text-xs text-muted-foreground">{entry.tier}</div>}
       <div className="text-xs text-muted-foreground border-t border-border pt-1.5 mt-1.5">
-        {entry.wins}W / {entry.games - entry.wins}L ({winrate}%) &bull; {entry.games} games
+        {entry.wins}W / {entry.games - entry.wins}L &bull;{' '}
+        {winRate === null ? 'Win rate unavailable' : `${winRate}% win rate`} &bull; {entry.games} games
       </div>
     </div>
   )

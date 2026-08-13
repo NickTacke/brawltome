@@ -8,6 +8,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@brawltome/telemetry": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.7.0"
   }

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { verifyTurnstile } from '@brawltome/shared'
+import { verifyTurnstile, verifyTurnstileResult } from '@brawltome/shared'
 
 describe('verifyTurnstile', () => {
   test('returns true for valid token', async () => {
@@ -26,6 +26,20 @@ describe('verifyTurnstile', () => {
     try {
       const result = await verifyTurnstile('bad-token', '1.2.3.4')
       expect(result).toBe(false)
+    } finally {
+      globalThis.fetch = originalFetch
+      process.env.TURNSTILE_SECRET_KEY = undefined
+    }
+  })
+
+  test('distinguishes verifier failure from invalid challenge', async () => {
+    process.env.TURNSTILE_SECRET_KEY = 'test-secret'
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('unavailable', { status: 503 })),
+    ) as unknown as typeof fetch
+    try {
+      expect(await verifyTurnstileResult('token', '1.2.3.4')).toBe('unavailable')
     } finally {
       globalThis.fetch = originalFetch
       process.env.TURNSTILE_SECRET_KEY = undefined

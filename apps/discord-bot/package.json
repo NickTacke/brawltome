@@ -6,9 +6,12 @@
     "dev": "bun run --hot src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "deploy-commands": "bun run src/deploy-commands.ts",
+    "smoke:staging-guild": "bun run src/smoke.ts staging-guild",
+    "smoke:production": "bun run src/smoke.ts production",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/telemetry": "workspace:*",
     "@trpc/client": "^11.0.0",
     "discord.js": "^14.22.0",
     "superjson": "^2.2.2"

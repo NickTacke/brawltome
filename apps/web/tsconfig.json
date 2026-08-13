@@ -9,7 +9,6 @@
     "paths": {
       "@/*": ["./src/*"],
       "@brawltome/api/router": ["../../apps/api/src/router/index.ts"],
-      "@brawltome/identity": ["../../packages/contexts/identity/index.ts"],
       "@brawltome/shared": ["../../packages/shared/src/index.ts"],
       "@brawltome/database": ["../../packages/database/src/index.ts"]
     }

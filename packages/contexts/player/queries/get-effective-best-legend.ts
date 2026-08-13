@@ -7,6 +7,16 @@ export interface EffectiveBestLegend {
   legendNameKey: string
 }
 
+export async function getCareerMainLegend(db: Database, brawlhallaId: number): Promise<EffectiveBestLegend | null> {
+  const top = await db.query.playerStatsLegend.findFirst({
+    where: eq(playerStatsLegend.brawlhallaId, brawlhallaId),
+    orderBy: [desc(playerStatsLegend.level), desc(playerStatsLegend.xp)],
+    columns: { legendId: true, legendNameKey: true },
+  })
+  if (!top?.legendNameKey) return null
+  return { legendId: top.legendId, legendNameKey: top.legendNameKey }
+}
+
 export async function getEffectiveBestLegend(db: Database, brawlhallaId: number): Promise<EffectiveBestLegend | null> {
   const p = await db.query.player.findFirst({
     where: eq(player.brawlhallaId, brawlhallaId),
@@ -17,13 +27,7 @@ export async function getEffectiveBestLegend(db: Database, brawlhallaId: number)
     return { legendId: p.bestLegend, legendNameKey: meta?.legendNameKey ?? '' }
   }
 
-  const top = await db.query.playerStatsLegend.findFirst({
-    where: eq(playerStatsLegend.brawlhallaId, brawlhallaId),
-    orderBy: [desc(playerStatsLegend.level), desc(playerStatsLegend.xp)],
-    columns: { legendId: true, legendNameKey: true },
-  })
-  if (!top) return null
-  return { legendId: top.legendId, legendNameKey: top.legendNameKey }
+  return getCareerMainLegend(db, brawlhallaId)
 }
 
 export async function getEffectiveBestLegendsBatch(

@@ -1,3 +1,4 @@
+import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
 import type React from 'react'
 import { fixEncoding } from '../../lib/utils'
 
@@ -8,26 +9,15 @@ export type Command =
       id: string
       label: string
       region: string | null
-      rating: number
+      rating: number | null
       bestLegendNameKey?: string | null
       matchedAlias?: string | null
       href: string
     }
   | { kind: 'clan'; id: string; label: string; href: string }
 
-export interface PlayerSearchResult {
-  brawlhallaId: number
-  name: string
-  region: string | null
-  rating: number
-  bestLegendNameKey?: string | null
-  matchedAlias?: string | null
-}
-
-export interface ClanSearchResult {
-  clanId: number
-  clanName: string
-}
+export type PlayerSearchResult = DiscoveryPlayerHitContract
+export type ClanSearchResult = DiscoveryClanHitContract
 
 export interface NavItem {
   label: string

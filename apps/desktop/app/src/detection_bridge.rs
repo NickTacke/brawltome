@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use brawltome_events::{DetectionConfig, DetectionService, GameEvent};
 
 #[cfg(target_os = "windows")]
-use crate::api_client;
+use crate::{api_client, windows_acceptance};
 
 /// Live snapshot of detection's lifecycle. Bridge writes; the React side reads
 /// once on mount via the `get_detection_state` Tauri command to recover from
@@ -49,6 +49,7 @@ impl DetectionState {
         }
     }
 
+    #[cfg(target_os = "windows")]
     fn on_attached(&self) {
         let mut inner = self.inner.lock().unwrap();
         inner.attached = true;
@@ -56,6 +57,7 @@ impl DetectionState {
         inner.bhid = None;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_detached(&self) {
         let mut inner = self.inner.lock().unwrap();
         inner.attached = false;
@@ -64,18 +66,22 @@ impl DetectionState {
         inner.match_active = false;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_ready(&self) {
         self.inner.lock().unwrap().ready = true;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_local_player_found(&self, bhid: u32) {
         self.inner.lock().unwrap().bhid = Some(bhid);
     }
 
+    #[cfg(target_os = "windows")]
     fn on_match_started(&self) {
         self.inner.lock().unwrap().match_active = true;
     }
 
+    #[cfg(target_os = "windows")]
     fn on_match_ended(&self) {
         self.inner.lock().unwrap().match_active = false;
     }
@@ -104,6 +110,8 @@ struct LegacyMatchFound {
     is_ranked: bool,
     #[serde(rename = "localPlayerId")]
     local_player_id: u32,
+    #[serde(rename = "acceptanceSampleId")]
+    acceptance_sample_id: Option<String>,
 }
 
 #[cfg(target_os = "windows")]
@@ -149,7 +157,11 @@ struct LegacyLocalPlayerFound {
 /// updates the shared DetectionState so a late-mounting frontend can recover
 /// the current lifecycle status via `get_detection_state`.
 #[cfg(target_os = "windows")]
-pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
+pub fn spawn(
+    app: &tauri::AppHandle,
+    state: Arc<DetectionState>,
+    acceptance_probe: Arc<windows_acceptance::AcceptanceProbe>,
+) {
     let app_handle = app.clone();
     let api_url = std::env::var("BRAWLTOME_API_URL")
         .map(|s| s.trim().to_string())
@@ -159,10 +171,7 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
         use std::collections::HashMap;
         use tauri::Emitter;
 
-        /// Delay before refetching opponent data after a match starts.
-        /// Gives the BrawlTome backend a moment to ingest fresh data
-        /// from the prior match before we re-query.
-        const REFETCH_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+        const POLL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
 
         let api = std::sync::Arc::new(api_client::ApiClient::new(api_url));
         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
@@ -183,7 +192,10 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
             }
         };
 
-        let mut opponent_cache: HashMap<u32, api_client::OpponentData> = HashMap::new();
+        let opponent_cache = std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::<
+            u32,
+            api_client::OpponentData,
+        >::new()));
         let mut pending_refetch: Option<tokio::task::JoinHandle<()>> = None;
 
         while let Some(event) = event_rx.recv().await {
@@ -193,129 +205,274 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
                 }
                 GameEvent::Attached(_) => {
                     state.on_attached();
+                    for check in [
+                        windows_acceptance::AcceptanceCheck::GameProcessDetected,
+                        windows_acceptance::AcceptanceCheck::ProcessAttached,
+                    ] {
+                        if let Err(error) = acceptance_probe.record_check(check) {
+                            log::warn!("Could not record game process attachment: {error}");
+                        }
+                    }
                     let _ = app_handle.emit("game-event", &LegacyAttached { event: "attached" });
                 }
                 GameEvent::Detached(_) => {
                     state.on_detached();
+                    acceptance_probe.abort_opponent_samples();
+                    if let Err(error) = acceptance_probe
+                        .record_check(windows_acceptance::AcceptanceCheck::ProcessDetached)
+                    {
+                        log::warn!("Could not record process detachment: {error}");
+                    }
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
-                    opponent_cache.clear();
+                    opponent_cache.lock().await.clear();
                     let _ = app_handle.emit("game-event", &LegacyDetached { event: "detached" });
                 }
                 GameEvent::Ready(_) => {
                     state.on_ready();
+                    if let Err(error) = acceptance_probe
+                        .record_check(windows_acceptance::AcceptanceCheck::DetectionReady)
+                    {
+                        log::warn!("Could not record detection readiness: {error}");
+                    }
                     let _ = app_handle.emit("game-event", &LegacyReady { event: "ready" });
                 }
                 GameEvent::LocalPlayerFound(p) => {
                     state.on_local_player_found(p.bhid);
                     let _ = app_handle.emit(
                         "game-event",
-                        &LegacyLocalPlayerFound { event: "local_player_found", bhid: p.bhid },
+                        &LegacyLocalPlayerFound {
+                            event: "local_player_found",
+                            bhid: p.bhid,
+                        },
                     );
                 }
                 GameEvent::MatchEnded(p) => {
                     state.on_match_ended();
+                    acceptance_probe.abort_opponent_samples();
                     if let Some(h) = pending_refetch.take() {
                         h.abort();
                     }
-                    opponent_cache.clear();
-                    let _ = app_handle.emit("game-event", &LegacyMatchEnded { event: "match_ended" });
+                    opponent_cache.lock().await.clear();
+                    let _ = app_handle.emit(
+                        "game-event",
+                        &LegacyMatchEnded {
+                            event: "match_ended",
+                        },
+                    );
                     let _ = p; // local_player_bhid currently unused on the React side
                 }
                 GameEvent::MatchStarted(p) => {
                     state.on_match_started();
-                    if let Some(h) = pending_refetch.take() {
-                        h.abort();
+                    if let Some(handle) = pending_refetch.take() {
+                        handle.abort();
                     }
 
-                    // Initial fetch for any uncached BhIDs.
-                    let new_bhids: Vec<u32> = p.opponent_bhids.iter()
-                        .filter(|bhid| !opponent_cache.contains_key(bhid))
-                        .copied()
-                        .collect();
-
-                    let mut fetches = Vec::new();
-                    for bhid in new_bhids {
-                        let api = api.clone();
-                        fetches.push(tokio::spawn(async move {
-                            (bhid, api.fetch_opponent(bhid).await)
-                        }));
-                    }
-                    for task in fetches {
-                        match task.await {
-                            Ok((bhid, Ok(data))) => { opponent_cache.insert(bhid, data); }
-                            Ok((bhid, Err(e))) => log::warn!("Failed to fetch bhid {bhid}: {e}"),
-                            Err(e) => log::warn!("Fetch task panicked: {e}"),
-                        }
-                    }
-
-                    let opponents: Vec<api_client::OpponentData> = p.opponent_bhids.iter()
-                        .filter_map(|bhid| opponent_cache.get(bhid).cloned())
-                        .collect();
-
-                    let is_ranked = matches!(
-                        p.match_type,
-                        brawltome_events::MatchType::Ranked1v1
-                            | brawltome_events::MatchType::Ranked2v2
-                            | brawltome_events::MatchType::Ranked3v3
-                    );
-
-                    if !opponents.is_empty() {
-                        let _ = app_handle.emit("game-event", &LegacyMatchFound {
-                            event: "match_found",
-                            opponents,
-                            is_ranked,
-                            local_player_id: p.local_player_bhid,
-                        });
-                    }
-
-                    // Schedule a refetch to pick up backend updates that arrived
-                    // after the initial fetch. Seed `fresh` with the previously
-                    // cached opponents so a partial refetch failure preserves
-                    // what the user was already seeing instead of removing them.
-                    let api_for_refetch = api.clone();
-                    let app_handle_for_refetch = app_handle.clone();
+                    let api_for_lookup = api.clone();
+                    let app_handle_for_lookup = app_handle.clone();
+                    let opponent_cache_for_lookup = opponent_cache.clone();
                     let opponent_bhids = p.opponent_bhids.clone();
                     let local_player_bhid = p.local_player_bhid;
-                    let cached_opponents: HashMap<u32, api_client::OpponentData> = p
-                        .opponent_bhids
-                        .iter()
-                        .filter_map(|bhid| {
-                            opponent_cache.get(bhid).cloned().map(|data| (*bhid, data))
-                        })
-                        .collect();
-                    pending_refetch = Some(tokio::spawn(async move {
-                        tokio::time::sleep(REFETCH_DELAY).await;
-
-                        let mut fresh = cached_opponents;
-                        let mut fetches = Vec::new();
-                        for bhid in &opponent_bhids {
-                            let api = api_for_refetch.clone();
-                            let bhid = *bhid;
-                            fetches.push(tokio::spawn(async move {
-                                (bhid, api.fetch_opponent(bhid).await)
-                            }));
+                    let acceptance_mode = match p.match_type {
+                        brawltome_events::MatchType::Ranked1v1 => {
+                            windows_acceptance::AcceptanceMode::Ranked1v1
                         }
-                        for task in fetches {
-                            match task.await {
-                                Ok((bhid, Ok(data))) => { fresh.insert(bhid, data); }
-                                Ok((bhid, Err(e))) => log::warn!("Refetch failed for bhid {bhid}: {e}"),
-                                Err(e) => log::warn!("Refetch task panicked: {e}"),
+                        brawltome_events::MatchType::Ranked2v2 => {
+                            windows_acceptance::AcceptanceMode::Ranked2v2
+                        }
+                        brawltome_events::MatchType::Ranked3v3 => {
+                            windows_acceptance::AcceptanceMode::Ranked3v3
+                        }
+                        _ => windows_acceptance::AcceptanceMode::Other,
+                    };
+                    let is_ranked =
+                        !matches!(acceptance_mode, windows_acceptance::AcceptanceMode::Other);
+                    if is_ranked {
+                        if let Err(error) = acceptance_probe.record_check(
+                            windows_acceptance::AcceptanceCheck::RankedOpponentDetected,
+                        ) {
+                            log::warn!("Could not record ranked opponent detection: {error}");
+                        }
+                    }
+                    let acceptance_sample_id =
+                        match acceptance_probe.start_opponent_sample(acceptance_mode) {
+                            Ok(sample_id) => sample_id,
+                            Err(error) => {
+                                log::warn!("Could not start opponent presentation sample: {error}");
+                                None
+                            }
+                        };
+
+                    pending_refetch = Some(tokio::spawn(async move {
+                        let mut poll_delays = HashMap::new();
+                        let mut fetches = tokio::task::JoinSet::new();
+                        for bhid in &opponent_bhids {
+                            let bhid = *bhid;
+                            let api = api_for_lookup.clone();
+                            fetches.spawn(async move { (bhid, api.fetch_opponent(bhid).await) });
+                        }
+
+                        while let Some(task) = fetches.join_next().await {
+                            match task {
+                                Ok((bhid, Ok(lookup))) => {
+                                    if let Some(delay) = lookup.poll_after {
+                                        poll_delays.insert(bhid, delay);
+                                    }
+                                    opponent_cache_for_lookup
+                                        .lock()
+                                        .await
+                                        .insert(bhid, lookup.opponent);
+                                }
+                                Ok((bhid, Err(error))) => {
+                                    log::warn!("Failed to fetch bhid {bhid}: {error}");
+                                    opponent_cache_for_lookup
+                                        .lock()
+                                        .await
+                                        .entry(bhid)
+                                        .and_modify(|cached| {
+                                            cached.refresh_state =
+                                                api_client::RefreshState::ApiFailure;
+                                        })
+                                        .or_insert_with(|| {
+                                            api_client::OpponentData::api_failure(bhid)
+                                        });
+                                }
+                                Err(error) => log::warn!("Fetch task panicked: {error}"),
+                            }
+
+                            let opponents = {
+                                let cache = opponent_cache_for_lookup.lock().await;
+                                opponent_bhids
+                                    .iter()
+                                    .filter_map(|bhid| cache.get(bhid).cloned())
+                                    .collect()
+                            };
+                            let _ = app_handle_for_lookup.emit(
+                                "game-event",
+                                &LegacyMatchFound {
+                                    event: "match_found",
+                                    opponents,
+                                    is_ranked,
+                                    local_player_id: local_player_bhid,
+                                    acceptance_sample_id: acceptance_sample_id.clone(),
+                                },
+                            );
+                        }
+
+                        let started_at = tokio::time::Instant::now();
+                        let deadline = started_at + POLL_DEADLINE;
+                        let mut pending: HashMap<u32, tokio::time::Instant> = poll_delays
+                            .into_iter()
+                            .map(|(bhid, delay)| (bhid, started_at + delay))
+                            .collect();
+
+                        while !pending.is_empty() && tokio::time::Instant::now() < deadline {
+                            let next_due = pending.values().copied().min().unwrap_or(deadline);
+                            if next_due >= deadline {
+                                tokio::time::sleep_until(deadline).await;
+                                break;
+                            }
+                            tokio::time::sleep_until(next_due).await;
+
+                            let now = tokio::time::Instant::now();
+                            let due_bhids: Vec<u32> = pending
+                                .iter()
+                                .filter_map(|(bhid, due)| (*due <= now).then_some(*bhid))
+                                .collect();
+                            let mut poll_fetches = tokio::task::JoinSet::new();
+                            for bhid in due_bhids {
+                                let api = api_for_lookup.clone();
+                                poll_fetches.spawn(async move {
+                                    (
+                                        bhid,
+                                        tokio::time::timeout_at(deadline, api.fetch_opponent(bhid))
+                                            .await,
+                                    )
+                                });
+                            }
+
+                            while let Some(task) = poll_fetches.join_next().await {
+                                let should_emit = match task {
+                                    Ok((bhid, Ok(Ok(lookup)))) => {
+                                        pending.remove(&bhid);
+                                        if let Some(delay) = lookup.poll_after {
+                                            pending
+                                                .insert(bhid, tokio::time::Instant::now() + delay);
+                                        }
+                                        opponent_cache_for_lookup
+                                            .lock()
+                                            .await
+                                            .insert(bhid, lookup.opponent);
+                                        true
+                                    }
+                                    Ok((bhid, Ok(Err(error)))) => {
+                                        log::warn!("Poll failed for bhid {bhid}: {error}");
+                                        pending.remove(&bhid);
+                                        opponent_cache_for_lookup
+                                            .lock()
+                                            .await
+                                            .entry(bhid)
+                                            .and_modify(|cached| {
+                                                cached.refresh_state =
+                                                    api_client::RefreshState::ApiFailure;
+                                            })
+                                            .or_insert_with(|| {
+                                                api_client::OpponentData::api_failure(bhid)
+                                            });
+                                        true
+                                    }
+                                    Ok((_bhid, Err(_elapsed))) => false,
+                                    Err(error) => {
+                                        log::warn!("Poll task panicked: {error}");
+                                        false
+                                    }
+                                };
+
+                                if should_emit {
+                                    let opponents = {
+                                        let cache = opponent_cache_for_lookup.lock().await;
+                                        opponent_bhids
+                                            .iter()
+                                            .filter_map(|bhid| cache.get(bhid).cloned())
+                                            .collect()
+                                    };
+                                    let _ = app_handle_for_lookup.emit(
+                                        "game-event",
+                                        &LegacyMatchFound {
+                                            event: "match_found",
+                                            opponents,
+                                            is_ranked,
+                                            local_player_id: local_player_bhid,
+                                            acceptance_sample_id: acceptance_sample_id.clone(),
+                                        },
+                                    );
+                                }
                             }
                         }
 
-                        let opponents: Vec<api_client::OpponentData> = opponent_bhids.iter()
-                            .filter_map(|bhid| fresh.get(bhid).cloned())
-                            .collect();
-
-                        if !opponents.is_empty() {
-                            let _ = app_handle_for_refetch.emit("game-event", &LegacyMatchFound {
-                                event: "match_found",
-                                opponents,
-                                is_ranked,
-                                local_player_id: local_player_bhid,
-                            });
+                        let should_emit_deadline = {
+                            let mut cache = opponent_cache_for_lookup.lock().await;
+                            api_client::finish_poll_deadline(&mut cache, &pending)
+                        };
+                        if should_emit_deadline {
+                            let opponents = {
+                                let cache = opponent_cache_for_lookup.lock().await;
+                                opponent_bhids
+                                    .iter()
+                                    .filter_map(|bhid| cache.get(bhid).cloned())
+                                    .collect()
+                            };
+                            let _ = app_handle_for_lookup.emit(
+                                "game-event",
+                                &LegacyMatchFound {
+                                    event: "match_found",
+                                    opponents,
+                                    is_ranked,
+                                    local_player_id: local_player_bhid,
+                                    acceptance_sample_id: acceptance_sample_id.clone(),
+                                },
+                            );
                         }
                     }));
                 }
@@ -329,4 +486,9 @@ pub fn spawn(app: &tauri::AppHandle, state: Arc<DetectionState>) {
 
 /// No-op on non-Windows so call sites don't need cfg gating.
 #[cfg(not(target_os = "windows"))]
-pub fn spawn(_app: &tauri::AppHandle, _state: Arc<DetectionState>) {}
+pub fn spawn(
+    _app: &tauri::AppHandle,
+    _state: Arc<DetectionState>,
+    _acceptance_probe: Arc<crate::windows_acceptance::AcceptanceProbe>,
+) {
+}

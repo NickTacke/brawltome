@@ -1,5 +1,14 @@
-export { DEDUP_TTL_CLAN_SEC } from './clan'
-export { createClanRepo, type ClanRepo } from './clan.repo'
+export {
+  processRefreshClan,
+  processRefreshClanSection,
+  type ClanRefreshResult,
+  type ClanSource,
+} from './commands/refresh-clan'
 export { getClan } from './queries/get-clan'
-export { processRefreshClan } from './commands/refresh-clan'
-export { discoverClan } from './commands/discover-clan'
+export type {
+  ClanDiscoveryEvent,
+  ClanDiscoveryFact,
+  ClanDiscoverySnapshot,
+  ClanDiscoverySource,
+} from './discovery-facts'
+export type { ClanProvenance, ClanQueries, ClanQueries as ClanRepo, ClanRefreshEffect } from './postgres'

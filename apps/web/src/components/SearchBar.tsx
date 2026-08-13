@@ -2,6 +2,7 @@
 
 import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum } from '@/lib/utils'
+import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
 import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@brawltome/ui'
 import { Shield } from 'lucide-react'
 import Link from 'next/link'
@@ -17,23 +18,8 @@ interface SearchBarProps {
 export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [debouncedQuery] = useDebounce(query, 500)
-  const [playerResults, setPlayerResults] = useState<
-    Array<{
-      brawlhallaId: number
-      name: string
-      region: string | null
-      rating: number
-      bestLegendNameKey?: string | null
-      matchedAlias?: string | null
-    }>
-  >([])
-  const [clanResults, setClanResults] = useState<
-    Array<{
-      clanId: number
-      clanName: string
-      clanXp: bigint
-    }>
-  >([])
+  const [playerResults, setPlayerResults] = useState<DiscoveryPlayerHitContract[]>([])
+  const [clanResults, setClanResults] = useState<DiscoveryClanHitContract[]>([])
   const [showClans, setShowClans] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -172,7 +158,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                               </div>
                             </div>
                           </div>
-                          <div className="text-sm font-mono text-primary">{p.rating ?? 0}</div>
+                          <div className="text-sm font-mono text-primary">{p.rating ?? 'Unavailable'}</div>
                         </Link>
                       ))}
                     </div>

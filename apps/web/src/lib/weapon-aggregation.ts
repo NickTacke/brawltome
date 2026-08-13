@@ -114,20 +114,19 @@ export function aggregateRichWeaponStats(legends: LegendInput[], rankedLegends: 
       current.KOs += parseNum(w.kos)
       current.damage += parseNum(w.dmg)
 
-      if (parseNum(l.games) > current.ranked.mostPlayed.games) {
-        current.ranked.mostPlayed = {
-          name: l.bioName || l.legendNameKey,
-          games: parseNum(l.games),
-          key: l.legendNameKey,
-        }
-      }
-
       if (ranked) {
         current.ranked.games += parseNum(ranked.games)
         current.ranked.wins += parseNum(ranked.wins)
         current.ranked.ratings.push(parseNum(ranked.rating))
         current.ranked.peakRatings.push(parseNum(ranked.peakRating))
 
+        if (parseNum(ranked.games) > current.ranked.mostPlayed.games) {
+          current.ranked.mostPlayed = {
+            name: l.bioName || l.legendNameKey,
+            games: parseNum(ranked.games),
+            key: l.legendNameKey,
+          }
+        }
         if (parseNum(ranked.rating) > current.ranked.highestElo.elo) {
           current.ranked.highestElo = {
             name: l.bioName || l.legendNameKey,

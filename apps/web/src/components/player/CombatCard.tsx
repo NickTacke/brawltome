@@ -8,14 +8,16 @@ import { type PlayerData, WinLossBar, getVirtualLevel, getXpForLevel, parseNum }
 
 interface CombatCardProps {
   player: PlayerData
+  title?: string
 }
 
-export function CombatCard({ player }: CombatCardProps) {
+export function CombatCard({ player, title = 'Combat Record' }: CombatCardProps) {
   const [isHoveringLevel, setIsHoveringLevel] = useState(false)
 
-  const totalGames = player.totalGames ?? 0
-  const totalWins = player.totalWins ?? 0
-  const overallWinrate = totalGames > 0 ? (totalWins / totalGames) * 100 : 0
+  const hasOutcomes = typeof player.totalGames === 'number' && typeof player.totalWins === 'number'
+  const totalGames = hasOutcomes ? player.totalGames : 0
+  const totalWins = hasOutcomes ? player.totalWins : 0
+  const overallWinrate = totalGames > 0 ? (totalWins / totalGames) * 100 : null
   const level = player.level
   const hasXp = player.xp !== null && player.xp !== undefined
 
@@ -23,9 +25,7 @@ export function CombatCard({ player }: CombatCardProps) {
     <Card className="bg-linear-to-br from-card to-background border-border">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">
-            &#128202; Combat Record
-          </CardTitle>
+          <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">&#128202; {title}</CardTitle>
           {player.statsLastUpdated && (
             <Badge
               variant="outline"
@@ -95,19 +95,29 @@ export function CombatCard({ player }: CombatCardProps) {
               <div className="text-muted-foreground text-xs sm:text-sm font-medium uppercase tracking-wide">
                 Total Games
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">{formatNum(totalGames)}</div>
+              <div className="text-2xl sm:text-3xl font-black text-foreground mt-1">
+                {hasOutcomes ? formatNum(totalGames) : 'Unavailable'}
+              </div>
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Overall Win Rate</span>
-              <span className="text-foreground font-bold">{overallWinrate.toFixed(1)}%</span>
+              <span className="text-foreground font-bold">
+                {overallWinrate === null ? 'Unavailable' : `${overallWinrate.toFixed(1)}%`}
+              </span>
             </div>
-            <WinLossBar percent={overallWinrate} className="h-3" />
+            {overallWinrate !== null && <WinLossBar percent={overallWinrate} className="h-3" />}
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{formatNum(totalWins)} Wins</span>
-              <span>{formatNum(totalGames - totalWins)} Losses</span>
+              {hasOutcomes ? (
+                <>
+                  <span>{formatNum(totalWins)} Wins</span>
+                  <span>{formatNum(totalGames - totalWins)} Losses</span>
+                </>
+              ) : (
+                <span>Career outcomes have not been observed.</span>
+              )}
             </div>
           </div>
 
