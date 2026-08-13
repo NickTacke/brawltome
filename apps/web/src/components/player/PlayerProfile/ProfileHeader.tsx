@@ -19,7 +19,7 @@ import { StaleBadge } from './StaleBadge'
 interface ProfileHeaderPlayer {
   brawlhallaId: number
   name: string
-  currentSeason?: { snapshot: { oneVsOne: { region: string } } | null } | null
+  currentSeason?: { snapshot: { oneVsOne: { region: string | null } } | null } | null
   career?: {
     snapshot: {
       guild: { guildId: number; guildName: string } | null

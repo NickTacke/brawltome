@@ -5155,8 +5155,23 @@ pub mod types {
     ///        "name"
     ///      ],
     ///      "properties": {
+    ///        "bestLegendNameKey": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "minLength": 1
+    ///        },
     ///        "brawlhallaId": {
     ///          "type": "integer",
+    ///          "maximum": 2147483647.0,
+    ///          "exclusiveMinimum": 0.0
+    ///        },
+    ///        "legacyRating": {
+    ///          "type": [
+    ///            "integer",
+    ///            "null"
+    ///          ],
     ///          "maximum": 2147483647.0,
     ///          "exclusiveMinimum": 0.0
     ///        },
@@ -5196,8 +5211,23 @@ pub mod types {
     ///    "name"
     ///  ],
     ///  "properties": {
+    ///    "bestLegendNameKey": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "minLength": 1
+    ///    },
     ///    "brawlhallaId": {
     ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "legacyRating": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
     ///      "maximum": 2147483647.0,
     ///      "exclusiveMinimum": 0.0
     ///    },
@@ -5213,11 +5243,100 @@ pub mod types {
     #[serde(deny_unknown_fields)]
     pub struct DesktopRankedLookupPlayer {
         #[serde(
+            rename = "bestLegendNameKey",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub best_legend_name_key: ::std::option::Option<
+            DesktopRankedLookupPlayerBestLegendNameKey,
+        >,
+        #[serde(
             rename = "brawlhallaId",
             deserialize_with = "deserialize_bounded_nonzero_u64"
         )]
         pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(
+            rename = "legacyRating",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_rating: ::std::option::Option<::std::num::NonZeroU64>,
         pub name: ::std::string::String,
+    }
+    ///`DesktopRankedLookupPlayerBestLegendNameKey`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct DesktopRankedLookupPlayerBestLegendNameKey(::std::string::String);
+    impl ::std::ops::Deref for DesktopRankedLookupPlayerBestLegendNameKey {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<DesktopRankedLookupPlayerBestLegendNameKey>
+    for ::std::string::String {
+        fn from(value: DesktopRankedLookupPlayerBestLegendNameKey) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for DesktopRankedLookupPlayerBestLegendNameKey {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for DesktopRankedLookupPlayerBestLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for DesktopRankedLookupPlayerBestLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for DesktopRankedLookupPlayerBestLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for DesktopRankedLookupPlayerBestLegendNameKey {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
     }
     ///`GetContractProofXInternalSecret`
     ///
@@ -5531,6 +5650,7 @@ pub mod types {
     ///  "required": [
     ///    "account",
     ///    "combat",
+    ///    "guild",
     ///    "legends",
     ///    "weapons"
     ///  ],
@@ -5650,6 +5770,29 @@ pub mod types {
     ///          "format": "int32",
     ///          "maximum": 2147483647.0,
     ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "guild": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "guildId",
+    ///        "guildName"
+    ///      ],
+    ///      "properties": {
+    ///        "guildId": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "guildName": {
+    ///          "type": "string",
+    ///          "minLength": 1
     ///        }
     ///      },
     ///      "additionalProperties": false
@@ -5948,6 +6091,7 @@ pub mod types {
     ///  "required": [
     ///    "account",
     ///    "combat",
+    ///    "guild",
     ///    "legends",
     ///    "weapons"
     ///  ],
@@ -6067,6 +6211,29 @@ pub mod types {
     ///          "format": "int32",
     ///          "maximum": 2147483647.0,
     ///          "minimum": 0.0
+    ///        }
+    ///      },
+    ///      "additionalProperties": false
+    ///    },
+    ///    "guild": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "guildId",
+    ///        "guildName"
+    ///      ],
+    ///      "properties": {
+    ///        "guildId": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 1.0
+    ///        },
+    ///        "guildName": {
+    ///          "type": "string",
+    ///          "minLength": 1
     ///        }
     ///      },
     ///      "additionalProperties": false
@@ -6337,6 +6504,7 @@ pub mod types {
     pub struct PlayerCareerSnapshotInner {
         pub account: PlayerCareerSnapshotInnerAccount,
         pub combat: PlayerCareerSnapshotInnerCombat,
+        pub guild: ::std::option::Option<PlayerCareerSnapshotInnerGuild>,
         pub legends: ::std::vec::Vec<PlayerCareerSnapshotInnerLegendsItem>,
         pub weapons: ::std::vec::Vec<PlayerCareerSnapshotInnerWeaponsItem>,
     }
@@ -6822,6 +6990,117 @@ pub mod types {
     }
     impl<'de> ::serde::Deserialize<'de>
     for PlayerCareerSnapshotInnerCombatDamageSpikeball {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`PlayerCareerSnapshotInnerGuild`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "guildId",
+    ///    "guildName"
+    ///  ],
+    ///  "properties": {
+    ///    "guildId": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    },
+    ///    "guildName": {
+    ///      "type": "string",
+    ///      "minLength": 1
+    ///    }
+    ///  },
+    ///  "additionalProperties": false
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlayerCareerSnapshotInnerGuild {
+        #[serde(rename = "guildId")]
+        pub guild_id: ::std::num::NonZeroU32,
+        #[serde(rename = "guildName")]
+        pub guild_name: PlayerCareerSnapshotInnerGuildGuildName,
+    }
+    ///`PlayerCareerSnapshotInnerGuildGuildName`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerCareerSnapshotInnerGuildGuildName(::std::string::String);
+    impl ::std::ops::Deref for PlayerCareerSnapshotInnerGuildGuildName {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerCareerSnapshotInnerGuildGuildName>
+    for ::std::string::String {
+        fn from(value: PlayerCareerSnapshotInnerGuildGuildName) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerSnapshotInnerGuildGuildName {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize || !value.chars().any(is_visible_character)
+            {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerSnapshotInnerGuildGuildName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerSnapshotInnerGuildGuildName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerSnapshotInnerGuildGuildName {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PlayerCareerSnapshotInnerGuildGuildName {
         fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
         where
             D: ::serde::Deserializer<'de>,
@@ -8676,7 +8955,10 @@ pub mod types {
     ///          "minimum": 0.0
     ///        },
     ///        "region": {
-    ///          "type": "string",
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
     ///          "minLength": 1
     ///        },
     ///        "regionRank": {
@@ -9124,7 +9406,10 @@ pub mod types {
     ///          "minimum": 0.0
     ///        },
     ///        "region": {
-    ///          "type": "string",
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
     ///          "minLength": 1
     ///        },
     ///        "regionRank": {
@@ -10014,7 +10299,10 @@ pub mod types {
     ///      "minimum": 0.0
     ///    },
     ///    "region": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "minLength": 1
     ///    },
     ///    "regionRank": {
@@ -10054,7 +10342,7 @@ pub mod types {
         pub peak_rating: i32,
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
         pub rating: i32,
-        pub region: PlayerRankedSnapshotInnerOneVsOneRegion,
+        pub region: ::std::option::Option<PlayerRankedSnapshotInnerOneVsOneRegion>,
         #[serde(rename = "regionRank")]
         #[serde(deserialize_with = "deserialize_optional_bounded_nonzero_u32")]
         pub region_rank: ::std::option::Option<::std::num::NonZeroU32>,
@@ -10959,8 +11247,23 @@ pub mod types {
     ///        "name"
     ///      ],
     ///      "properties": {
+    ///        "bestLegendNameKey": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "minLength": 1
+    ///        },
     ///        "brawlhallaId": {
     ///          "type": "integer",
+    ///          "maximum": 2147483647.0,
+    ///          "exclusiveMinimum": 0.0
+    ///        },
+    ///        "legacyRating": {
+    ///          "type": [
+    ///            "integer",
+    ///            "null"
+    ///          ],
     ///          "maximum": 2147483647.0,
     ///          "exclusiveMinimum": 0.0
     ///        },
@@ -10996,8 +11299,23 @@ pub mod types {
     ///    "name"
     ///  ],
     ///  "properties": {
+    ///    "bestLegendNameKey": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "minLength": 1
+    ///    },
     ///    "brawlhallaId": {
     ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "legacyRating": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
     ///      "maximum": 2147483647.0,
     ///      "exclusiveMinimum": 0.0
     ///    },
@@ -11012,9 +11330,99 @@ pub mod types {
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     #[serde(deny_unknown_fields)]
     pub struct PlayerRefreshResponsePlayer {
+        #[serde(
+            rename = "bestLegendNameKey",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub best_legend_name_key: ::std::option::Option<
+            PlayerRefreshResponsePlayerBestLegendNameKey,
+        >,
         #[serde(rename = "brawlhallaId")]
         pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(
+            rename = "legacyRating",
+            default,
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub legacy_rating: ::std::option::Option<::std::num::NonZeroU64>,
         pub name: ::std::string::String,
+    }
+    ///`PlayerRefreshResponsePlayerBestLegendNameKey`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PlayerRefreshResponsePlayerBestLegendNameKey(::std::string::String);
+    impl ::std::ops::Deref for PlayerRefreshResponsePlayerBestLegendNameKey {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PlayerRefreshResponsePlayerBestLegendNameKey>
+    for ::std::string::String {
+        fn from(value: PlayerRefreshResponsePlayerBestLegendNameKey) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PlayerRefreshResponsePlayerBestLegendNameKey {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerRefreshResponsePlayerBestLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerRefreshResponsePlayerBestLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerRefreshResponsePlayerBestLegendNameKey {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de>
+    for PlayerRefreshResponsePlayerBestLegendNameKey {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
     }
     ///`RefreshNoRetryGuidance`
     ///

@@ -147,7 +147,7 @@ fn map_lookup(expected_bhid: u32, lookup: &DesktopRankedLookup) -> Result<Oppone
                 Some(one_vs_one.rating),
                 Some(one_vs_one.peak_rating),
                 Some(one_vs_one.tier.to_string()),
-                Some(one_vs_one.region.to_string()),
+                one_vs_one.region.as_ref().map(|region| region.to_string()),
                 snapshot
                     .main_legend
                     .as_ref()

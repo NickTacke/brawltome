@@ -111,6 +111,42 @@ describe('player.rankedById', () => {
     })
   })
 
+  test('publishes an unavailable 1v1 region as null instead of failing the profile', async () => {
+    const observedAt = new Date('2026-08-09T22:00:00Z')
+    const caller = callerFor({
+      byId: async (brawlhallaId) => ({
+        brawlhallaId,
+        checkedAt: observedAt,
+        lastSuccessAt: observedAt,
+        freshness: 'fresh',
+        freshForSeconds: 3600,
+        sparsePulse: null,
+        snapshot: {
+          oneVsOne: {
+            rating: 0,
+            peakRating: 0,
+            tier: 'none',
+            wins: 0,
+            games: 0,
+            region: '',
+            globalRank: null,
+            regionRank: null,
+          },
+          rankedLegends: [],
+          mainLegend: null,
+          fixedTeams: [],
+          soloQueue: [],
+          ratingHistory: [],
+          observedRatingDirection: null,
+        },
+      }),
+    })
+
+    await expect(caller.rankedById({ id: 77_474_487 })).resolves.toMatchObject({
+      snapshot: { oneVsOne: { region: null } },
+    })
+  })
+
   test('maps Players dates into canonical output and rejects malformed producer values', async () => {
     const observedAt = new Date('2026-08-09T22:00:00Z')
     const caller = callerFor({

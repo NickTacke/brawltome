@@ -683,10 +683,22 @@
             "additionalProperties": false,
             "nullable": true,
             "properties": {
+              "bestLegendNameKey": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
               "brawlhallaId": {
                 "exclusiveMinimum": true,
                 "maximum": 2147483647,
                 "minimum": 0,
+                "type": "integer"
+              },
+              "legacyRating": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "nullable": true,
                 "type": "integer"
               },
               "name": {
@@ -881,6 +893,27 @@
               "spikeballKos",
               "sidekickKos",
               "snowballKos"
+            ],
+            "type": "object"
+          },
+          "guild": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "guildId": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "guildName": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "guildId",
+              "guildName"
             ],
             "type": "object"
           },
@@ -1142,6 +1175,7 @@
           }
         },
         "required": [
+          "guild",
           "account",
           "combat",
           "legends",
@@ -1403,6 +1437,7 @@
               },
               "region": {
                 "minLength": 1,
+                "nullable": true,
                 "type": "string"
               },
               "regionRank": {
@@ -1637,10 +1672,22 @@
             "additionalProperties": false,
             "nullable": true,
             "properties": {
+              "bestLegendNameKey": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
               "brawlhallaId": {
                 "exclusiveMinimum": true,
                 "maximum": 2147483647,
                 "minimum": 0,
+                "type": "integer"
+              },
+              "legacyRating": {
+                "exclusiveMinimum": true,
+                "maximum": 2147483647,
+                "minimum": 0,
+                "nullable": true,
                 "type": "integer"
               },
               "name": {
