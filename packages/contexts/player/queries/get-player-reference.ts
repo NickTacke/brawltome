@@ -8,7 +8,13 @@ export async function getPlayerReference(
   brawlhallaId: number,
 ): Promise<PlayerReference | null> {
   const stored = await findStoredReference(brawlhallaId)
-  if (!stored || stored.name === `Player ${brawlhallaId}`) return null
+  if (
+    !stored ||
+    stored.name === `Player ${brawlhallaId}` ||
+    [...stored.name].length > 256 ||
+    !/[^\p{Separator}\p{Format}]/u.test(stored.name)
+  )
+    return null
   return {
     brawlhallaId: stored.brawlhallaId,
     name: stored.name,

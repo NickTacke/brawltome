@@ -53,8 +53,8 @@ jobs:
       - run: bun test tooling/deployment/tests apps/web/tests/lib/api-url.test.ts apps/web/tests/lib/web-readiness.test.ts apps/api/tests/runtime-lifecycle.test.ts
       - run: bun test apps/api/tests/runtime-process.test.ts
       - run: bun test apps/api/tests/refresh-operations.postgres.test.ts
-      - run: V3_DISCORD_CLIENT_ID=123456789012345678 V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres V3_PUBLIC_API_URL=https://v3-api.brawltome.app V3_TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord -f deploy/v3/compose.yml config --quiet
-      - run: V3_DISCORD_CLIENT_ID=123456789012345678 V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres V3_PUBLIC_API_URL=https://v3-api.brawltome.app V3_TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord -f deploy/v3/compose.yml build
+      - run: V3_DISCORD_CLIENT_ID=123456789012345678 V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres V3_TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord -f deploy/v3/compose.yml config --quiet
+      - run: V3_DISCORD_CLIENT_ID=123456789012345678 V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres V3_TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord -f deploy/v3/compose.yml build
 
   launch-parity:
     runs-on: ubuntu-latest

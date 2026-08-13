@@ -137,7 +137,7 @@ services:
       dockerfile: Dockerfile
       target: web
       args:
-        NEXT_PUBLIC_API_URL: ${V3_PUBLIC_API_URL:?Set the future browser-reachable V3 API URL}
+        NEXT_PUBLIC_API_URL: https://api.brawltome.app
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${V3_TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
     environment:
       HOSTNAME: 0.0.0.0
