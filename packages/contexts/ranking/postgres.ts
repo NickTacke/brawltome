@@ -4,6 +4,8 @@ import type {
   LeaderboardGenerationCandidate,
   LeaderboardScope,
   LeaderboardView,
+  PlayerValhallanEvidence,
+  PlayerValhallanQueries,
   PublicationResult,
   PublishedLeaderboardIdentity,
   RankingPublicationAuthorization,
@@ -175,6 +177,48 @@ export function createPostgresRanking(connectionString: string) {
     return result?.result ?? 'lease-lost'
   }
 
+  async function playerValhallanEvidenceById(brawlhallaId: number): Promise<PlayerValhallanEvidence | null> {
+    if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1) throw new Error('brawlhallaId must be positive')
+    const rows = await client<
+      Array<{
+        mode: '1v1' | '2v2' | 'solo2v2'
+        player_one_id: number
+        player_two_id: number | null
+      }>
+    >`
+      WITH latest_generation AS (
+        SELECT DISTINCT ON (mode) id, mode
+        FROM rankings.generations
+        WHERE finalized
+          AND source = 'brawlhalla-v1-ranked-leaderboard'
+          AND mode IN ('1v1', '2v2', 'solo2v2')
+        ORDER BY mode, schedule_window_at DESC, id DESC
+      )
+      SELECT row.mode, row.player_one_id, row.player_two_id
+      FROM latest_generation generation
+      JOIN rankings.snapshots snapshot
+        ON snapshot.generation_id = generation.id
+        AND snapshot.mode = generation.mode
+        AND snapshot.scope = 'all'
+      JOIN rankings.snapshot_rows row
+        ON row.snapshot_id = snapshot.id
+        AND row.mode = snapshot.mode
+      WHERE row.tier LIKE 'Valhallan%'
+        AND (row.player_one_id = ${brawlhallaId} OR row.player_two_id = ${brawlhallaId})
+    `
+    if (rows.length === 0) return null
+    return {
+      oneVsOne: rows.some((row) => row.mode === '1v1'),
+      fixedTwoVsTwoTeams: rows
+        .filter(
+          (row): row is typeof row & { mode: '2v2'; player_two_id: number } =>
+            row.mode === '2v2' && row.player_two_id !== null,
+        )
+        .map((row) => ({ brawlhallaIdOne: row.player_one_id, brawlhallaIdTwo: row.player_two_id })),
+      soloTwoVsTwo: rows.some((row) => row.mode === 'solo2v2'),
+    }
+  }
+
   async function getLeaderboard(input: {
     mode: LeaderboardMode
     region: LeaderboardScope
@@ -265,7 +309,7 @@ export function createPostgresRanking(connectionString: string) {
     }
   }
 
-  const queries: RankingQueries = { getLeaderboard }
+  const queries: RankingQueries & PlayerValhallanQueries = { getLeaderboard, playerValhallanEvidenceById }
 
   return {
     queries,

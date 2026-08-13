@@ -4,6 +4,8 @@ export {
   maxLeaderboardPageDepth,
   type LeaderboardScope,
   type LeaderboardView,
+  type PlayerValhallanEvidence,
+  type PlayerValhallanQueries,
   type PublishedLeaderboardRow,
   type RankingQueries,
 } from './leaderboard'
