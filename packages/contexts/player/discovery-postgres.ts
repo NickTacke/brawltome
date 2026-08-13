@@ -1,7 +1,7 @@
 import { getLegendById } from '@brawltome/game-data/legends'
 import { legendSlug } from '@brawltome/game-data/reference-data'
 import postgres from 'postgres'
-import type { PlayerDiscoveryFact, PlayerDiscoverySource } from './discovery-facts'
+import type { PlayerDiscoveryFact, PlayerDiscoverySnapshotStream, PlayerDiscoverySource } from './discovery-facts'
 
 type Sql = ReturnType<typeof postgres>
 type FactRow = {
@@ -20,6 +20,8 @@ type LegacyRow = {
   best_legend: number | null
 }
 type AliasRow = { brawlhalla_id: number; display_alias: string }
+
+const snapshotBatchSize = 1_000
 
 export type LegacyPlayerMigrationEvidence = {
   status: 'not-started' | 'in-progress' | 'complete' | 'blocked'
@@ -170,6 +172,47 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
         UPDATE players.discovery_outbox SET delivered_at = NULL
         WHERE event_id IN ${client(eventIds)}
       `
+    },
+
+    async withSnapshot<T>(consume: (snapshot: PlayerDiscoverySnapshotStream) => Promise<T>) {
+      return (await client.begin('isolation level repeatable read read only', async (transaction) => {
+        const sql = transaction as unknown as Sql
+        const [pending] = await sql<{ pending_count: number; oldest_pending_at: Date | null }[]>`
+          SELECT count(*)::integer AS pending_count, min(created_at) AS oldest_pending_at
+          FROM players.discovery_outbox WHERE delivered_at IS NULL
+        `
+        const version = await sourceVersion(sql)
+        return consume({
+          sourceVersion: version,
+          pendingEventCount: pending.pending_count,
+          oldestPendingAt: pending.oldest_pending_at,
+          facts: async function* () {
+            let afterId = 0
+            while (true) {
+              const rows = await sql<{ brawlhalla_id: number }[]>`
+                SELECT brawlhalla_id
+                FROM (
+                  SELECT brawlhalla_id FROM players.ranked_profiles WHERE brawlhalla_id > ${afterId}
+                  UNION
+                  SELECT brawlhalla_id FROM players.legacy_discovery_profiles WHERE brawlhalla_id > ${afterId}
+                  UNION
+                  SELECT brawlhalla_id FROM players.legacy_profile_discovery WHERE brawlhalla_id > ${afterId}
+                ) candidate
+                ORDER BY brawlhalla_id
+                LIMIT ${snapshotBatchSize}
+              `
+              if (rows.length === 0) return
+              afterId = rows.at(-1)?.brawlhalla_id ?? afterId
+              for (const fact of await readFacts(
+                sql,
+                rows.map(({ brawlhalla_id }) => brawlhalla_id),
+              )) {
+                yield fact
+              }
+            }
+          },
+        })
+      })) as T
     },
 
     snapshot() {

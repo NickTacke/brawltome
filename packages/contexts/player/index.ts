@@ -18,6 +18,7 @@ export type {
   PlayerDiscoveryEvent,
   PlayerDiscoveryFact,
   PlayerDiscoverySnapshot,
+  PlayerDiscoverySnapshotStream,
   PlayerDiscoverySource,
 } from './discovery-facts'
 export type { SteamPlayerEvidence, SteamPlayerEvidenceResolver } from './verification'

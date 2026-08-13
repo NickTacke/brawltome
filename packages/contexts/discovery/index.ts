@@ -40,11 +40,18 @@ export type ClanProjectionEvent = {
 
 export type PlayerProjectionSnapshot = ProjectionSnapshot<PlayerDiscoveryFact>
 export type ClanProjectionSnapshot = ProjectionSnapshot<ClanDiscoveryFact>
+export type ProjectionSnapshotStream<T> = {
+  sourceVersion: number
+  pendingEventCount: number
+  oldestPendingAt: Date | null
+  facts(): AsyncIterable<T>
+}
 
 export interface PlayerProjectionSource {
   pendingEvents(limit: number): Promise<PlayerProjectionEvent[]>
   acknowledgeEvents(eventIds: string[]): Promise<void>
   snapshot(): Promise<PlayerProjectionSnapshot>
+  withSnapshot?<T>(consume: (snapshot: ProjectionSnapshotStream<PlayerDiscoveryFact>) => Promise<T>): Promise<T>
   lag(): Promise<number>
 }
 

@@ -15,6 +15,7 @@ import {
   type PlayerProjectionSource,
   type PlayerSearchHit,
   type ProjectionOwner,
+  type ProjectionSnapshotStream,
   type ReconciliationDifference,
   type ReconciliationResult,
   type SemanticMigrationExplanationCode,
@@ -43,6 +44,8 @@ type TermRow = {
 }
 
 const termInsertBatchSize = 4_000
+
+type ReconciliationSnapshot = ProjectionSnapshotStream<PlayerDiscoveryFact | ClanDiscoveryFact>
 
 class StaleProjectionSnapshotError extends Error {}
 
@@ -287,10 +290,10 @@ async function replaceClan(sql: Sql, generationId: string, fact: ClanDiscoveryFa
   `
 }
 
-async function replaceGeneration(
+async function replaceGenerationFromStream(
   sql: Sql,
   owner: ProjectionOwner,
-  snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
+  snapshot: ReconciliationSnapshot,
 ): Promise<void> {
   const [generation] = await sql<{ generation_id: string }[]>`
     INSERT INTO discovery.generations (entity_kind, source_version)
@@ -298,10 +301,8 @@ async function replaceGeneration(
   `
   if (owner === 'player') {
     const rows: TermRow[] = []
-    for (const fact of [...(snapshot as PlayerProjectionSnapshot).facts].sort(
-      (left, right) => left.brawlhallaId - right.brawlhallaId,
-    )) {
-      for (const row of playerTermRows(generation.generation_id, fact)) {
+    for await (const fact of snapshot.facts()) {
+      for (const row of playerTermRows(generation.generation_id, fact as PlayerDiscoveryFact)) {
         rows.push(row)
         if (rows.length === termInsertBatchSize) {
           await sql`INSERT INTO discovery.terms ${sql(rows)}`
@@ -311,10 +312,9 @@ async function replaceGeneration(
     }
     if (rows.length > 0) await sql`INSERT INTO discovery.terms ${sql(rows)}`
   } else {
-    for (const fact of [...(snapshot as ClanProjectionSnapshot).facts].sort(
-      (left, right) => left.clanId - right.clanId,
-    )) {
-      await replaceClan(sql, generation.generation_id, fact, fact.clanId)
+    for await (const fact of snapshot.facts()) {
+      const clan = fact as ClanDiscoveryFact
+      await replaceClan(sql, generation.generation_id, clan, clan.clanId)
     }
   }
   await sql`UPDATE discovery.generations SET active = false WHERE entity_kind = ${owner} AND active`
@@ -323,6 +323,32 @@ async function replaceGeneration(
     WHERE entity_kind = ${owner} AND generation_id = ${generation.generation_id}
   `
   await sql`DELETE FROM discovery.generations WHERE entity_kind = ${owner} AND NOT active`
+}
+
+function eagerSnapshot(
+  owner: ProjectionOwner,
+  snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
+): ReconciliationSnapshot {
+  const facts =
+    owner === 'player'
+      ? [...(snapshot as PlayerProjectionSnapshot).facts].sort((left, right) => left.brawlhallaId - right.brawlhallaId)
+      : [...(snapshot as ClanProjectionSnapshot).facts].sort((left, right) => left.clanId - right.clanId)
+  return {
+    sourceVersion: snapshot.sourceVersion,
+    pendingEventCount: snapshot.pendingEventCount ?? 0,
+    oldestPendingAt: snapshot.oldestPendingAt ?? null,
+    facts: async function* () {
+      for (const fact of facts) yield fact
+    },
+  }
+}
+
+async function replaceGeneration(
+  sql: Sql,
+  owner: ProjectionOwner,
+  snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
+): Promise<void> {
+  await replaceGenerationFromStream(sql, owner, eagerSnapshot(owner, snapshot))
 }
 
 export function createPostgresDiscovery(connectionString: string): DiscoveryQueries & {
@@ -599,15 +625,18 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     member_count: number | null
   }
 
-  function* expectedTermGroups(
+  async function* expectedTermGroups(
     owner: ProjectionOwner,
-    snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
-  ): Generator<TermGroup> {
+    snapshot: ReconciliationSnapshot,
+    onFact: () => void,
+  ): AsyncGenerator<TermGroup> {
+    let priorEntityId = 0
     if (owner === 'player') {
-      const facts = [...(snapshot as PlayerProjectionSnapshot).facts].sort(
-        (left, right) => left.brawlhallaId - right.brawlhallaId,
-      )
-      for (const fact of facts) {
+      for await (const value of snapshot.facts()) {
+        onFact()
+        const fact = value as PlayerDiscoveryFact
+        if (fact.brawlhallaId <= priorEntityId) throw new Error('Player reconciliation stream must be strictly ordered')
+        priorEntityId = fact.brawlhallaId
         const terms = playerTermsFor(fact)
           .map((term) => ({
             entityId: fact.brawlhallaId,
@@ -627,8 +656,11 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       }
       return
     }
-    const facts = [...(snapshot as ClanProjectionSnapshot).facts].sort((left, right) => left.clanId - right.clanId)
-    for (const fact of facts) {
+    for await (const value of snapshot.facts()) {
+      onFact()
+      const fact = value as ClanDiscoveryFact
+      if (fact.clanId <= priorEntityId) throw new Error('Clan reconciliation stream must be strictly ordered')
+      priorEntityId = fact.clanId
       const normalizedTerm = normalizeDiscoveryTerm(fact.clanName)
       if (!normalizedTerm) continue
       yield {
@@ -713,12 +745,9 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
   const sameTerms = (left: ComparableTerm[], right: ComparableTerm[]) =>
     left.length === right.length && left.every((term, index) => JSON.stringify(term) === JSON.stringify(right[index]))
 
-  async function compareProjection(
-    sql: Sql,
-    owner: ProjectionOwner,
-    snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot,
-  ) {
-    const expected = expectedTermGroups(owner, snapshot)[Symbol.iterator]()
+  async function compareProjection(sql: Sql, owner: ProjectionOwner, snapshot: ReconciliationSnapshot) {
+    let sourceFactCount = 0
+    const expected = expectedTermGroups(owner, snapshot, () => sourceFactCount++)[Symbol.asyncIterator]()
     const projected = projectedTermGroups(sql, owner)[Symbol.asyncIterator]()
     const expectedHash = termHasher()
     const projectedHash = termHasher()
@@ -727,7 +756,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     > = []
     let differenceCount = 0
     let projectedCount = 0
-    let expectedGroup = expected.next()
+    let expectedGroup = await expected.next()
     let projectedGroup = await projected.next()
     while (!expectedGroup.done || !projectedGroup.done) {
       const expectedId = expectedGroup.done ? null : expectedGroup.value.entityId
@@ -742,7 +771,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       const projectedTerms = projectedId === entityId ? projectedGroup.value.terms : null
       if (expectedTerms) {
         expectedHash.update(expectedTerms)
-        expectedGroup = expected.next()
+        expectedGroup = await expected.next()
       }
       if (projectedTerms) {
         projectedHash.update(projectedTerms)
@@ -762,6 +791,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     return {
       expectedHash: expectedHash.digest(),
       projectedHash: projectedHash.digest(),
+      sourceFactCount,
       projectedCount,
       differenceCount,
       details,
@@ -838,95 +868,99 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       if (existing) return existing
     }
     for (let attempt = 0; attempt < 3; attempt++) {
-      let snapshot: PlayerProjectionSnapshot | ClanProjectionSnapshot | null = await source.snapshot()
-      const observedSourceVersion = snapshot.sourceVersion
-      const pendingEventCount = snapshot.pendingEventCount ?? 0
-      const oldestPendingAt = snapshot.oldestPendingAt ?? null
-      const sourceFactCount = snapshot.facts.length
-      const comparisonSnapshot = snapshot
       try {
-        return await client.begin(async (transaction) => {
-          const sql = transaction as unknown as Sql
-          if (operationId) {
-            await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discovery-effect:${operationId}`}, 200))`
-            if (authorizeEffect && !(await authorizeEffect())) {
-              throw new Error('Discovery effect lease is no longer active')
+        const reconcileSnapshot = async (snapshot: ReconciliationSnapshot, streamed: boolean) => {
+          const observedSourceVersion = snapshot.sourceVersion
+          const pendingEventCount = snapshot.pendingEventCount
+          const oldestPendingAt = snapshot.oldestPendingAt
+          return client.begin(async (transaction) => {
+            const sql = transaction as unknown as Sql
+            if (operationId) {
+              await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discovery-effect:${operationId}`}, 200))`
+              if (authorizeEffect && !(await authorizeEffect())) {
+                throw new Error('Discovery effect lease is no longer active')
+              }
             }
-          }
-          await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discovery:${owner}`}, 200))`
-          if (operationId) {
-            const existing = await existingReconciliation(sql, operationId)
-            if (existing) return existing
-          }
-          const [active] = await sql<{ generation_id: string; source_version: string | number }[]>`
-            SELECT generation_id, source_version FROM discovery.generations
-            WHERE entity_kind = ${owner} AND active FOR UPDATE
-          `
-          if (Number(active.source_version) > observedSourceVersion) throw new StaleProjectionSnapshotError()
-
-          const differences = await compareProjection(sql, owner, comparisonSnapshot)
-          const exactBefore = differences.differenceCount === 0
-          const expectedHash = differences.expectedHash
-          const projectedHashBefore = differences.projectedHash
-          const projectedBeforeCount = differences.projectedCount
-          let projectedHashAfter = projectedHashBefore
-          let projectedAfterCount = projectedBeforeCount
-          if (!exactBefore) {
-            const repairSnapshot = await source.snapshot()
-            if (repairSnapshot.sourceVersion !== observedSourceVersion) throw new StaleProjectionSnapshotError()
-            await replaceGeneration(sql, owner, repairSnapshot)
-            const repaired = await compareProjection(sql, owner, repairSnapshot)
-            if (repaired.differenceCount > 0)
-              throw new Error('Discovery reconciliation repair did not converge exactly')
-            projectedHashAfter = repaired.projectedHash
-            projectedAfterCount = repaired.projectedCount
-          }
-          snapshot = null
-          const [run] = await sql<{ run_id: string }[]>`
-            INSERT INTO discovery.reconciliation_runs
-              (operation_id, entity_kind, observed_source_version,
-               projected_version_before, projected_version_after,
-               source_fact_count, projected_fact_count_before, projected_fact_count_after,
-               pending_event_count, oldest_pending_at,
-               expected_hash, projected_hash_before, projected_hash_after,
-               exact_before, exact_after, repaired, difference_count, difference_details_truncated)
-            VALUES
-              (${operationId ?? null}::uuid, ${owner}, ${observedSourceVersion},
-               ${Number(active.source_version)}, ${exactBefore ? Number(active.source_version) : observedSourceVersion},
-               ${sourceFactCount}, ${projectedBeforeCount}, ${projectedAfterCount},
-               ${pendingEventCount}, ${oldestPendingAt},
-               ${expectedHash}, ${projectedHashBefore}, ${projectedHashAfter},
-               ${exactBefore}, ${true}, ${!exactBefore}, ${differences.differenceCount},
-               ${differences.differenceCount > maxPersistedReconciliationDifferences})
-            RETURNING run_id
-          `
-          for (const difference of differences.details) {
-            await sql`
-              INSERT INTO discovery.reconciliation_differences
-                (run_id, entity_id, difference_kind, expected_fact, projected_fact)
-              VALUES
-                (${run.run_id}, ${difference.entityId}, ${difference.kind},
-                 ${difference.expected ? sql.json(difference.expected) : null},
-                 ${difference.projected ? sql.json(difference.projected) : null})
+            await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discovery:${owner}`}, 200))`
+            if (operationId) {
+              const existing = await existingReconciliation(sql, operationId)
+              if (existing) return existing
+            }
+            const [active] = await sql<{ generation_id: string; source_version: string | number }[]>`
+              SELECT generation_id, source_version FROM discovery.generations
+              WHERE entity_kind = ${owner} AND active FOR UPDATE
             `
-          }
-          return {
-            runId: run.run_id,
-            owner,
-            observedSourceVersion,
-            pendingEventCount,
-            oldestPendingAt,
-            expectedHash,
-            projectedHashBefore,
-            projectedHashAfter,
-            exactBefore,
-            exactAfter: true,
-            repaired: !exactBefore,
-            differenceCount: differences.differenceCount,
-            differenceDetailsTruncated: differences.differenceCount > maxPersistedReconciliationDifferences,
-            differences: differences.details.map(({ entityId, kind }) => ({ entityId, kind })),
-          }
-        })
+            if (Number(active.source_version) > observedSourceVersion) throw new StaleProjectionSnapshotError()
+
+            const differences = await compareProjection(sql, owner, snapshot)
+            const sourceFactCount = differences.sourceFactCount
+            const exactBefore = differences.differenceCount === 0
+            const expectedHash = differences.expectedHash
+            const projectedHashBefore = differences.projectedHash
+            const projectedBeforeCount = differences.projectedCount
+            let projectedHashAfter = projectedHashBefore
+            let projectedAfterCount = projectedBeforeCount
+            if (!exactBefore) {
+              const repairSnapshot = streamed ? snapshot : eagerSnapshot(owner, await source.snapshot())
+              if (repairSnapshot.sourceVersion !== observedSourceVersion) throw new StaleProjectionSnapshotError()
+              await replaceGenerationFromStream(sql, owner, repairSnapshot)
+              const repaired = await compareProjection(sql, owner, repairSnapshot)
+              if (repaired.differenceCount > 0)
+                throw new Error('Discovery reconciliation repair did not converge exactly')
+              projectedHashAfter = repaired.projectedHash
+              projectedAfterCount = repaired.projectedCount
+            }
+            const [run] = await sql<{ run_id: string }[]>`
+              INSERT INTO discovery.reconciliation_runs
+                (operation_id, entity_kind, observed_source_version,
+                 projected_version_before, projected_version_after,
+                 source_fact_count, projected_fact_count_before, projected_fact_count_after,
+                 pending_event_count, oldest_pending_at,
+                 expected_hash, projected_hash_before, projected_hash_after,
+                 exact_before, exact_after, repaired, difference_count, difference_details_truncated)
+              VALUES
+                (${operationId ?? null}::uuid, ${owner}, ${observedSourceVersion},
+                 ${Number(active.source_version)}, ${exactBefore ? Number(active.source_version) : observedSourceVersion},
+                 ${sourceFactCount}, ${projectedBeforeCount}, ${projectedAfterCount},
+                 ${pendingEventCount}, ${oldestPendingAt},
+                 ${expectedHash}, ${projectedHashBefore}, ${projectedHashAfter},
+                 ${exactBefore}, ${true}, ${!exactBefore}, ${differences.differenceCount},
+                 ${differences.differenceCount > maxPersistedReconciliationDifferences})
+              RETURNING run_id
+            `
+            for (const difference of differences.details) {
+              await sql`
+                INSERT INTO discovery.reconciliation_differences
+                  (run_id, entity_id, difference_kind, expected_fact, projected_fact)
+                VALUES
+                  (${run.run_id}, ${difference.entityId}, ${difference.kind},
+                   ${difference.expected ? sql.json(difference.expected) : null},
+                   ${difference.projected ? sql.json(difference.projected) : null})
+              `
+            }
+            return {
+              runId: run.run_id,
+              owner,
+              observedSourceVersion,
+              pendingEventCount,
+              oldestPendingAt,
+              expectedHash,
+              projectedHashBefore,
+              projectedHashAfter,
+              exactBefore,
+              exactAfter: true,
+              repaired: !exactBefore,
+              differenceCount: differences.differenceCount,
+              differenceDetailsTruncated: differences.differenceCount > maxPersistedReconciliationDifferences,
+              differences: differences.details.map(({ entityId, kind }) => ({ entityId, kind })),
+            }
+          })
+        }
+        const playerSource = owner === 'player' ? (source as PlayerProjectionSource) : null
+        if (playerSource?.withSnapshot) {
+          return await playerSource.withSnapshot((snapshot) => reconcileSnapshot(snapshot, true))
+        }
+        return await reconcileSnapshot(eagerSnapshot(owner, await source.snapshot()), false)
       } catch (error) {
         if (!(error instanceof StaleProjectionSnapshotError) || attempt === 2) throw error
       }
