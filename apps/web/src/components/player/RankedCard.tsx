@@ -28,17 +28,13 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
       <CardHeader className="pb-4">
         <div className="flex justify-between items-center gap-3">
           <CardTitle className="text-lg font-bold flex items-center gap-2">&#127942; Ranked Performance</CardTitle>
-          {player.rankedLastUpdated ? (
+          {player.rankedLastUpdated && (
             <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
               <Clock className="w-3 h-3" aria-hidden="true" />
               <span className="hidden sm:inline">Updated </span>
               {timeAgo(player.rankedLastUpdated)}
             </Badge>
-          ) : player.legacyRating ? (
-            <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
-              V2 snapshot
-            </Badge>
-          ) : null}
+          )}
         </div>
       </CardHeader>
 
@@ -54,7 +50,7 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
 
           <div className="flex-1 min-w-0 space-y-2">
             <div className="text-sm sm:text-base font-bold text-muted-foreground">{player.tier || 'Unranked'}</div>
-            {hasRating ? (
+            {hasRating && (
               <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
                 <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight leading-none">
                   {player.rating}
@@ -71,13 +67,9 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
                   </>
                 )}
               </div>
-            ) : (
-              <div className="text-2xl font-black text-muted-foreground">Rating unavailable</div>
             )}
 
-            {winrate === null ? (
-              <p className="text-sm text-muted-foreground">Current-season wins and losses are unavailable.</p>
-            ) : (
+            {winrate !== null && (
               <>
                 <WinLossBar percent={winrate} className="h-2.5 sm:h-3" />
                 <div className="flex justify-between text-sm font-bold">
@@ -94,28 +86,30 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 pt-5 border-t border-border/50 text-center">
-          <div className="space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Ranked Games</div>
-            <div className="text-lg sm:text-xl font-black text-foreground">
-              {hasOutcomes ? formatNum(rankedGames) : '—'}
+        {player.rankedLastUpdated && (
+          <div className="grid grid-cols-3 gap-3 pt-5 border-t border-border/50 text-center">
+            <div className="space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Ranked Games</div>
+              <div className="text-lg sm:text-xl font-black text-foreground">
+                {hasOutcomes ? formatNum(rankedGames) : '—'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Total Glory</div>
+              <div className="text-lg sm:text-xl font-black text-foreground">
+                {totalRankedWins !== null && bestRating !== null
+                  ? formatNum(calculateGlory(totalRankedWins, bestRating))
+                  : '—'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Elo Reset</div>
+              <div className="text-lg sm:text-xl font-black text-foreground">
+                {hasRating ? calculateEloReset(player.rating) : '—'}
+              </div>
             </div>
           </div>
-          <div className="space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Total Glory</div>
-            <div className="text-lg sm:text-xl font-black text-foreground">
-              {totalRankedWins !== null && bestRating !== null
-                ? formatNum(calculateGlory(totalRankedWins, bestRating))
-                : '—'}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Elo Reset</div>
-            <div className="text-lg sm:text-xl font-black text-foreground">
-              {hasRating ? calculateEloReset(player.rating) : '—'}
-            </div>
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   )

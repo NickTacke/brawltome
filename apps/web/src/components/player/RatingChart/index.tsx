@@ -105,7 +105,7 @@ export function RatingChart({ data }: RatingChartProps) {
     : allSorted
 
   return (
-    <figure aria-labelledby="rating-history-heading" aria-describedby="rating-history-coverage">
+    <figure aria-labelledby="rating-history-heading">
       <Card className="border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -138,10 +138,6 @@ export function RatingChart({ data }: RatingChartProps) {
               </div>
             )}
           </div>
-          <p id="rating-history-coverage" className="text-sm text-muted-foreground">
-            The chart shows up to 365 retained BrawlTome rating observations from canonical V0 snapshots and preserved
-            legacy V2 history. Dates mark observations, so gaps between them remain outside BrawlTome coverage.
-          </p>
         </CardHeader>
         <CardContent>
           <div aria-hidden="true">

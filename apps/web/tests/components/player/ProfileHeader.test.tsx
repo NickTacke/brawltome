@@ -34,18 +34,27 @@ describe('ProfileHeader', () => {
     expect(html).toContain('0h')
   })
 
-  test('labels playtime only from the canonical lifetime career snapshot', () => {
+  test('shows canonical region, clan, and lifetime playtime together', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader
-        player={{ ...player, career: { snapshot: { combat: { matchTime: 7_200 } } } }}
+        player={{
+          ...player,
+          currentSeason: { snapshot: { oneVsOne: { region: 'US-E' } } },
+          career: { snapshot: { combat: { matchTime: 7_200 } } },
+          clan: { clanId: 7, clanName: 'Guild Name' },
+        }}
         topLegend={null}
         aliases={[]}
         refreshing={false}
       />,
     )
 
+    expect(html).toContain('US-E')
     expect(html).toContain('Lifetime playtime:')
     expect(html).toContain('2h')
+    expect(html).toContain('Clan:')
+    expect(html).toContain('/clan/7')
+    expect(html).toContain('Guild Name')
     expect(html).not.toContain('1h')
   })
 })
