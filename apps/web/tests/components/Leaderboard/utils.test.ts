@@ -67,7 +67,7 @@ describe('validated snapshot presentation', () => {
   })
 
   it('distinguishes stale retained rows from first-publication unavailability', () => {
-    expect(snapshotNotice('stale')).toBe('Update delayed. Showing the last validated standings.')
+    expect(snapshotNotice('stale')).toBeNull()
     expect(snapshotNotice('unavailable')).toContain('first validated collection')
     expect(snapshotNotice('fresh')).toBeNull()
   })

@@ -23,6 +23,7 @@ const contestantSchema = z
   .object({
     brawlhallaId: positiveInt32,
     name: playerNameSchema,
+    bestLegendNameKey: z.string().min(1).nullable().optional(),
   })
   .strict()
 

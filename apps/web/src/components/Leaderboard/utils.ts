@@ -87,7 +87,7 @@ export function playerHref(brawlhallaId: number): string | null {
 }
 
 export function snapshotNotice(status: 'fresh' | 'stale' | 'unavailable' | null): string | null {
-  if (status === 'stale') return 'Update delayed. Showing the last validated standings.'
+  if (status === 'stale') return null
   if (status === 'unavailable') return 'Leaderboard unavailable until the first validated collection succeeds.'
   return null
 }

@@ -61,7 +61,6 @@ export function Leaderboard() {
   const [fetchedKey, setFetchedKey] = useState('')
   const [knownLastPage, setKnownLastPage] = useState<number | null>(null)
   const [snapshotStatus, setSnapshotStatus] = useState<'fresh' | 'stale' | 'unavailable' | null>(null)
-  const [observedAt, setObservedAt] = useState<string | null>(null)
   const snapshotRef = useRef<{ scopeKey: string; snapshotId: string } | null>(null)
   const [preferenceError, setPreferenceError] = useState<string | null>(null)
   const [preferencesSaving, setPreferencesSaving] = useState(false)
@@ -100,7 +99,6 @@ export function Leaderboard() {
       snapshotRef.current = null
       setEntries([])
       setSnapshotStatus(null)
-      setObservedAt(null)
     }
 
     const request = trpc.leaderboard.get.query({
@@ -118,12 +116,10 @@ export function Leaderboard() {
         if (data.status === 'unavailable') {
           snapshotRef.current = null
           setEntries([])
-          setObservedAt(null)
           setKnownLastPage(data.page)
         } else {
           snapshotRef.current = { scopeKey, snapshotId: data.snapshotId }
           setEntries(data.entries)
-          setObservedAt(data.observedAt)
           setKnownLastPage(data.hasMore ? null : data.page)
         }
         setFetchedKey(`${bracket}:${region}:${page}`)
@@ -215,7 +211,6 @@ export function Leaderboard() {
           className={`block px-6 py-3 border-b text-sm ${snapshotStatus === 'stale' ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-border bg-muted/30 text-muted-foreground'}`}
         >
           <span className="font-semibold">{snapshotNotice(snapshotStatus)}</span>
-          {observedAt && <span className="ml-2">Observed {new Date(observedAt).toLocaleString()}.</span>}
         </output>
       )}
       {preferenceError && (
