@@ -533,7 +533,9 @@ describePostgres('Accounts V2 import', () => {
         await Promise.all(writers)
         expect(await runtime.accounts.authenticate(signIn.sessionToken)).toEqual({ status: 'anonymous' })
         expect(await runtime.accounts.getSavedPlayers(legacyAccountIds.pending)).toEqual([])
-        expect(await runtime.accounts.getPlayerShortcuts(legacyAccountIds.failed)).toMatchObject({ pinnedPlayers: [] })
+        expect(await runtime.accounts.getPlayerShortcuts(legacyAccountIds.failed)).toMatchObject({
+          pinnedPlayers: [{ brawlhallaId: 602 }],
+        })
         expect(await runtime.accounts.getPlayerShortcuts(legacyAccountIds.conflict)).toMatchObject({
           pinnedPlayers: [{ brawlhallaId: 702 }, { brawlhallaId: 701 }],
         })
