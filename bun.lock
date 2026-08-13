@@ -81,6 +81,7 @@
       "name": "@brawltome/web",
       "dependencies": {
         "@brawltome/contracts": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
         "@brawltome/ui": "workspace:*",
@@ -168,6 +169,7 @@
       "dependencies": {
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/database": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "drizzle-orm": "^0.39.0",
         "postgres": "^3.4.7",
