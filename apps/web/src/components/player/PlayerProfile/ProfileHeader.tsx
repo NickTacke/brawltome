@@ -27,6 +27,7 @@ interface ProfileHeaderPlayer {
     } | null
   } | null
   clan?: { clanId: number; clanName: string } | null
+  matchTimeTotal?: number | null
 }
 
 interface ProfileHeaderProps {
@@ -38,7 +39,7 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
   const career = player.career?.snapshot
-  const playtime = career?.combat.matchTime
+  const playtime = career ? career.combat.matchTime : player.matchTimeTotal
   const region = player.currentSeason?.snapshot?.oneVsOne.region
   const guild = career ? career.guild : player.clan
 

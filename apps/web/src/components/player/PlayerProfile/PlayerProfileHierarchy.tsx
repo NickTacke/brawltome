@@ -17,6 +17,14 @@ export interface CanonicalPlayerProfileView {
   legacyRating?: number | null
   aliases?: Array<{ value?: unknown }>
   clan?: { clanId: number; clanName: string } | null
+  xp?: number | null
+  level?: number | null
+  xpPercentage?: number | null
+  totalGames?: number | null
+  totalWins?: number | null
+  matchTimeTotal?: number | null
+  statsLastUpdated?: Date | string | null
+  statsLegends?: PlayerData[]
   currentSeason: PlayerRankedProfileContract | null
   career: PlayerCareerProfileContract | null
 }
@@ -35,8 +43,9 @@ function displayAliases(player: CanonicalPlayerProfileView): string[] {
     .sort((left, right) => left.localeCompare(right))
 }
 
-function careerLegends(career: PlayerCareerProfileContract | null): PlayerData[] {
-  return (career?.snapshot?.legends ?? []).map((legend) => {
+function careerLegends(player: CanonicalPlayerProfileView): PlayerData[] {
+  if (!player.career?.snapshot) return [...(player.statsLegends ?? [])]
+  return player.career.snapshot.legends.map((legend) => {
     const reference = getLegendById(legend.legendId)
     return {
       ...legend,
@@ -87,30 +96,34 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
     rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null,
     ratingHistory: ranked?.ratingHistory ?? [],
     rankedLegends: ranked?.rankedLegends ?? [],
-    xp: career?.account.xp ?? null,
-    level: career?.account.level ?? null,
-    xpPercentage: career?.account.xpPercentage ?? null,
-    totalGames: career?.combat.games,
-    totalWins: career?.combat.wins,
-    matchTimeTotal: career?.combat.matchTime ?? 0,
-    statsLastUpdated: player.career?.lastSuccessAt ?? null,
+    xp: career ? career.account.xp : (player.xp ?? null),
+    level: career ? career.account.level : (player.level ?? null),
+    xpPercentage: career ? career.account.xpPercentage : (player.xpPercentage ?? null),
+    totalGames: career ? career.combat.games : (player.totalGames ?? undefined),
+    totalWins: career ? career.combat.wins : (player.totalWins ?? undefined),
+    matchTimeTotal: career ? career.combat.matchTime : (player.matchTimeTotal ?? 0),
+    statsLastUpdated: career ? (player.career?.lastSuccessAt ?? null) : (player.statsLastUpdated ?? null),
     statsLegends: legends,
   }
 }
 
 export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHierarchyProps) {
-  const allLegends = careerLegends(player.career).sort((left, right) => (right.xp ?? 0) - (left.xp ?? 0))
+  const allLegends = careerLegends(player).sort((left, right) => (right.xp ?? 0) - (left.xp ?? 0))
   const rankedLegends = player.currentSeason?.snapshot?.rankedLegends ?? []
   const teams = rankedTeams(player.currentSeason)
   const display = v2Player(player, allLegends)
   const weaponStats = aggregateRichWeaponStats(allLegends, rankedLegends)
-  const topLegend =
-    allLegends[0] ??
-    (player.currentSeason?.snapshot?.mainLegend
-      ? { legendNameKey: player.currentSeason.snapshot.mainLegend.legendNameKey }
-      : player.bestLegendNameKey
-        ? { legendNameKey: player.bestLegendNameKey }
-        : null)
+  const topLegend = player.career?.snapshot
+    ? (allLegends[0] ??
+      (player.currentSeason?.snapshot?.mainLegend
+        ? { legendNameKey: player.currentSeason.snapshot.mainLegend.legendNameKey }
+        : null))
+    : player.bestLegendNameKey
+      ? { legendNameKey: player.bestLegendNameKey }
+      : (allLegends[0] ??
+        (player.currentSeason?.snapshot?.mainLegend
+          ? { legendNameKey: player.currentSeason.snapshot.mainLegend.legendNameKey }
+          : null))
 
   return (
     <>

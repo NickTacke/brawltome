@@ -109,4 +109,111 @@ describe('PlayerProfileHierarchy', () => {
     expect(html).not.toContain('isOwnProfile')
     expect(html).not.toContain('owner-only')
   })
+
+  test('falls back to frozen V2 career and legend statistics when canonical career is absent', () => {
+    const html = renderToStaticMarkup(
+      <PlayerProfileHierarchy
+        player={{
+          brawlhallaId: 42,
+          name: 'Legacy Player',
+          bestLegendNameKey: 'bodvar',
+          aliases: [],
+          clan: null,
+          currentSeason: unavailableRanked,
+          career: null,
+          xp: 5_000,
+          level: 10,
+          xpPercentage: 0.25,
+          totalGames: 200,
+          totalWins: 120,
+          matchTimeTotal: 7_200,
+          statsLastUpdated: '2026-08-01T09:00:00Z',
+          statsLegends: [
+            {
+              legendId: 3,
+              legendNameKey: 'bodvar',
+              xp: 3_000,
+              level: 8,
+              xpPercentage: 0.5,
+              games: 120,
+              wins: 60,
+              matchTime: 3_600,
+            },
+          ],
+        }}
+        refreshing={false}
+        careerRefreshing={false}
+      />,
+    )
+
+    expect(html).toContain('Account Level')
+    expect(html).toContain('>10<')
+    expect(html).toContain('>200<')
+    expect(html).toContain('120 Wins')
+    expect(html).toContain('80 Losses')
+    expect(html).toContain('Legend Statistics')
+    expect(html).toContain('Playtime:')
+    expect(html).toContain('2h')
+  })
+
+  test('does not mutate V2 legend order while rendering the XP sort', () => {
+    const statsLegends = [
+      { legendId: 3, legendNameKey: 'bodvar', xp: 100 },
+      { legendId: 4, legendNameKey: 'cassidy', xp: 200 },
+    ]
+    renderToStaticMarkup(
+      <PlayerProfileHierarchy
+        player={{
+          brawlhallaId: 42,
+          name: 'Legacy Player',
+          aliases: [],
+          clan: null,
+          currentSeason: unavailableRanked,
+          career: null,
+          statsLegends,
+        }}
+        refreshing={false}
+        careerRefreshing={false}
+      />,
+    )
+
+    expect(statsLegends.map(({ legendId }) => legendId)).toEqual([3, 4])
+  })
+
+  test('treats canonical measured zeros and empty legends as authoritative over frozen V2 statistics', () => {
+    const zeroCareer = {
+      ...career,
+      snapshot: {
+        ...career.snapshot,
+        account: { xp: 0, level: 0, xpPercentage: 0 },
+        combat: { ...career.snapshot.combat, games: 0, wins: 0 },
+      },
+    }
+    const html = renderToStaticMarkup(
+      <PlayerProfileHierarchy
+        player={{
+          brawlhallaId: 42,
+          name: 'Canonical Player',
+          aliases: [],
+          clan: null,
+          currentSeason: unavailableRanked,
+          career: zeroCareer,
+          xp: 999,
+          level: 99,
+          totalGames: 999,
+          totalWins: 999,
+          statsLegends: [{ legendId: 3, legendNameKey: 'bodvar', xp: 999 }],
+        }}
+        refreshing={false}
+        careerRefreshing={false}
+      />,
+    )
+
+    expect(html).toContain('>0<')
+    expect(html).toContain('0 Wins')
+    expect(html).toContain('0 Losses')
+    expect(html).not.toContain('>99<')
+    expect(html).not.toContain('>999<')
+    expect(html).not.toContain('Legend Statistics')
+  })
 })

@@ -5,7 +5,11 @@ type PlayerReference = {
   legacyRating?: number | null
 }
 
-type PlayerReferenceClient<TPlayer extends { name: string } | null, TRanked, TCareer> = {
+type PlayerReferenceClient<
+  TPlayer extends { name: string; bestLegendNameKey?: string | null } | null,
+  TRanked,
+  TCareer extends { snapshot?: unknown } | null,
+> = {
   player: {
     referenceById: { query(input: { id: number }): Promise<PlayerReference | null> }
     rankedById: { query(input: { id: number }): Promise<TRanked> }
@@ -14,10 +18,11 @@ type PlayerReferenceClient<TPlayer extends { name: string } | null, TRanked, TCa
   }
 }
 
-export async function loadPlayerWithReference<TPlayer extends { name: string } | null, TRanked, TCareer>(
-  client: PlayerReferenceClient<TPlayer, TRanked, TCareer>,
-  id: number,
-) {
+export async function loadPlayerWithReference<
+  TPlayer extends { name: string; bestLegendNameKey?: string | null } | null,
+  TRanked,
+  TCareer extends { snapshot?: unknown } | null,
+>(client: PlayerReferenceClient<TPlayer, TRanked, TCareer>, id: number) {
   const [reference, ranked, career, player] = await Promise.all([
     client.player.referenceById.query({ id }),
     client.player.rankedById.query({ id }),
@@ -27,6 +32,7 @@ export async function loadPlayerWithReference<TPlayer extends { name: string } |
 
   if (!reference) return { reference: null, player: null }
 
+  const legacyBestLegend = player?.bestLegendNameKey
   const profile = player ?? {
     brawlhallaId: reference.brawlhallaId,
     name: reference.name,
@@ -38,7 +44,8 @@ export async function loadPlayerWithReference<TPlayer extends { name: string } |
     player: {
       ...profile,
       name: reference.name,
-      ...(reference.bestLegendNameKey !== undefined ? { bestLegendNameKey: reference.bestLegendNameKey } : {}),
+      bestLegendNameKey:
+        reference.bestLegendNameKey ?? (career?.snapshot === null || career === null ? legacyBestLegend : null) ?? null,
       ...(reference.legacyRating !== undefined ? { legacyRating: reference.legacyRating } : {}),
       currentSeason: ranked,
       career,

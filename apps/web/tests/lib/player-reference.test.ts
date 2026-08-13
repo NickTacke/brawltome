@@ -19,12 +19,49 @@ describe('loadPlayerWithReference', () => {
       reference: { brawlhallaId: 42, name: 'Canonical' },
       player: {
         name: 'Canonical',
+        bestLegendNameKey: null,
         rating: 9999,
         games: 999,
         currentSeason: { brawlhallaId: 42, lastSuccessAt: '2026-08-09T22:00:00Z' },
         career: null,
       },
     })
+  })
+
+  test('keeps the V2 best legend when canonical references have no legend evidence', async () => {
+    const result = await loadPlayerWithReference(
+      {
+        player: {
+          referenceById: {
+            query: async () => ({ brawlhallaId: 42, name: 'Canonical', bestLegendNameKey: null }),
+          },
+          rankedById: { query: async () => null },
+          careerById: { query: async () => null },
+          byId: { query: async () => ({ name: 'Legacy', bestLegendNameKey: 'bodvar' }) },
+        },
+      },
+      42,
+    )
+
+    expect(result.player?.bestLegendNameKey).toBe('bodvar')
+  })
+
+  test('does not resurrect a V2 best legend after canonical career publication', async () => {
+    const result = await loadPlayerWithReference(
+      {
+        player: {
+          referenceById: {
+            query: async () => ({ brawlhallaId: 42, name: 'Canonical', bestLegendNameKey: null }),
+          },
+          rankedById: { query: async () => null },
+          careerById: { query: async () => ({ brawlhallaId: 42, snapshot: { legends: [] } }) },
+          byId: { query: async () => ({ name: 'Legacy', bestLegendNameKey: 'bodvar' }) },
+        },
+      },
+      42,
+    )
+
+    expect(result.player?.bestLegendNameKey).toBeNull()
   })
 
   test('uses canonical identity when optional V2 profile enrichment is absent', async () => {
@@ -45,6 +82,7 @@ describe('loadPlayerWithReference', () => {
       player: {
         brawlhallaId: 42,
         name: 'Canonical',
+        bestLegendNameKey: null,
         aliases: [],
         clan: null,
         currentSeason: { brawlhallaId: 42, snapshot: null },
