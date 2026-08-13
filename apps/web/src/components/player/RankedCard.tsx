@@ -11,6 +11,7 @@ interface RankedCardProps {
 }
 
 export function RankedCard({ player, rankedTeams }: RankedCardProps) {
+  const displayTier = !player.tier || player.tier === 'none' ? 'Unranked' : player.tier
   const hasRating = typeof player.rating === 'number' && player.rating > 0
   const hasOutcomes = typeof player.rankedGames === 'number' && typeof player.rankedWins === 'number'
   const rankedGames = hasOutcomes ? player.rankedGames : 0
@@ -43,13 +44,13 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
           <div className="w-16 sm:w-20 shrink-0">
             <img
               src={getRankBanner(player.tier)}
-              alt={player.tier || 'Unranked'}
+              alt={displayTier}
               className="w-full h-auto object-contain drop-shadow-lg"
             />
           </div>
 
           <div className="flex-1 min-w-0 space-y-2">
-            <div className="text-sm sm:text-base font-bold text-muted-foreground">{player.tier || 'Unranked'}</div>
+            <div className="text-sm sm:text-base font-bold text-muted-foreground">{displayTier}</div>
             {hasRating && (
               <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
                 <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight leading-none">
