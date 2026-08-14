@@ -30,6 +30,7 @@ export function LegendCard({
   onToggle,
 }: LegendCardProps) {
   const wr = legend.games > 0 ? (legend.wins / legend.games) * 100 : 0
+  const displayName = (legend.bioName || legend.legendNameKey).replace(/^redraptor$/i, 'Red Raptor')
 
   return (
     <div
@@ -52,7 +53,7 @@ export function LegendCard({
           <Avatar className="w-12 h-12 rounded-lg shadow-sm shrink-0">
             <AvatarImage
               src={`/images/legends/avatars/${legend.legendNameKey}.png`}
-              alt={legend.legendNameKey}
+              alt={displayName}
               className="object-cover object-top"
               loading="lazy"
             />
@@ -61,7 +62,7 @@ export function LegendCard({
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold capitalize truncate text-sm">{legend.legendNameKey}</h3>
+            <h3 className="font-bold capitalize truncate text-sm">{displayName}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-mono">
               <span>{formatNum(legend.xp)} XP</span>
               <span className="opacity-30">&bull;</span>

@@ -22,15 +22,19 @@ describe('stored Player Reference', () => {
           transaction as unknown as Database,
           async (brawlhallaId) =>
             brawlhallaId === rankedId ? { brawlhallaId, name: 'Canonical Ranked Player' } : null,
-          async (brawlhallaId) =>
-            brawlhallaId === careerId ? { brawlhallaId, name: 'Canonical Career Player' } : null,
+          async (brawlhallaId) => {
+            if (brawlhallaId === rankedId) {
+              return { brawlhallaId, name: 'Career Name', bestLegendNameKey: 'ragnir' }
+            }
+            return brawlhallaId === careerId ? { brawlhallaId, name: 'Canonical Career Player' } : null
+          },
         )
 
         expect(await queries.byId(storedId)).toEqual({ brawlhallaId: storedId, name: 'Canonical Player' })
         expect(await queries.byId(rankedId)).toEqual({
           brawlhallaId: rankedId,
           name: 'Canonical Ranked Player',
-          bestLegendNameKey: null,
+          bestLegendNameKey: 'ragnir',
         })
         expect(await queries.byId(careerId)).toEqual({ brawlhallaId: careerId, name: 'Canonical Career Player' })
         expect(await queries.byId(placeholderId)).toBeNull()

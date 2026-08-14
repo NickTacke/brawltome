@@ -20,6 +20,7 @@ type LegacyRow = {
   best_legend: number | null
 }
 type AliasRow = { brawlhalla_id: number; display_alias: string }
+type CareerLegendRow = { brawlhalla_id: number; legend_name_key: string }
 
 const snapshotBatchSize = 1_000
 
@@ -42,6 +43,12 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     SELECT brawlhalla_id, player_name, region, rating, ranked_main_legend_name_key
     FROM players.ranked_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+  `
+  const careerLegends = await sql<CareerLegendRow[]>`
+    SELECT DISTINCT ON (brawlhalla_id) brawlhalla_id, legend_name_key
+    FROM players.career_legends
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+    ORDER BY brawlhalla_id, xp DESC, level DESC, ordinal
   `
   const legacy = await sql<LegacyRow[]>`
     SELECT brawlhalla_id, player_name, region, rating, view_count, NULL::integer AS best_legend
@@ -67,6 +74,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   `
 
   const rankedById = new Map(ranked.map((row) => [row.brawlhalla_id, row]))
+  const careerLegendById = new Map(careerLegends.map((row) => [row.brawlhalla_id, row.legend_name_key]))
   const profileLegacyById = new Map(profileLegacy.map((row) => [row.brawlhalla_id, row]))
   const legacyById = new Map(profileLegacyById)
   for (const row of legacy) {
@@ -113,6 +121,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
           viewCount: Math.max(0, fallback?.view_count ?? 0),
           bestLegendNameKey:
             canonical?.ranked_main_legend_name_key ??
+            careerLegendById.get(brawlhallaId) ??
             (() => {
               const legend = getLegendById(fallback?.best_legend ?? 0)
               return legend ? legendSlug(legend.heroId, legend.displayName) : null

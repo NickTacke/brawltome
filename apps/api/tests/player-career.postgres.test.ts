@@ -245,6 +245,17 @@ describe('Players-owned canonical career state', () => {
         { weapon: 'Hammer', heldTime: 500, damage: '9007199254740993', kos: 12 },
         { weapon: 'Sword', heldTime: 100, damage: '7', kos: 5 },
       ])
+      const outbox = postgres(connectionString, { max: 1 })
+      try {
+        const [events] = await outbox<{ count: number }[]>`
+          SELECT count(*)::integer AS count
+          FROM players.discovery_outbox
+          WHERE brawlhalla_id = ${brawlhallaId}
+        `
+        expect(events.count).toBe(1)
+      } finally {
+        await outbox.end()
+      }
 
       await Bun.sleep(5)
       const retryLease = await claimCareerOperation(operations, brawlhallaId)

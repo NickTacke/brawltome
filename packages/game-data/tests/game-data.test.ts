@@ -21,6 +21,14 @@ describe('legends', () => {
     expect(bodvar?.displayName).toBe('BÖDVAR')
     expect(bodvar?.weaponOne).toBe('Hammer')
     expect(bodvar?.weaponTwo).toBe('Sword')
+
+    expect(getLegendById(17)?.displayName).toBe('RED RAPTOR')
+    expect(getLegendById(71)).toMatchObject({
+      heroName: 'ActualGladiator',
+      displayName: 'AURUS',
+      weaponOne: 'Chakram',
+      weaponTwo: 'Spear',
+    })
   })
 
   test('getLegendById returns the same object as getLegendByName', () => {
