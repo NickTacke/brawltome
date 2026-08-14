@@ -12,6 +12,7 @@ export type ClanRefreshResult = { section: ClanRefreshSection; outcome: 'publish
 type RecordValue = Record<string, unknown>
 const isRecord = (value: unknown): value is RecordValue =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+const hasVisibleText = (value: string) => /[^\p{Separator}\p{Format}]/u.test(value)
 
 function integer(value: unknown, field: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
@@ -23,8 +24,14 @@ function integer(value: unknown, field: string): number {
 function text(value: unknown, field: string, maximum?: number, requireVisible = false): string {
   if (typeof value !== 'string') throw new Error(`${field} must be a string`)
   if (maximum !== undefined && [...value].length > maximum) throw new Error(`${field} is too long`)
-  if (requireVisible && !/[^\p{Separator}\p{Format}]/u.test(value)) throw new Error(`${field} must be visible`)
+  if (requireVisible && !hasVisibleText(value)) throw new Error(`${field} must be visible`)
   return value
+}
+
+function optionalText(value: unknown, field: string, maximum: number): string | null {
+  if (value == null) return null
+  const parsed = text(value, field, maximum)
+  return hasVisibleText(parsed) ? parsed : null
 }
 
 function sourceDate(value: unknown, field: string): Date {
@@ -33,10 +40,18 @@ function sourceDate(value: unknown, field: string): Date {
   return date
 }
 
+function optionalSourceDate(value: unknown, field: string): Date | null {
+  return value == null ? null : sourceDate(value, field)
+}
+
 function decimal(value: unknown, field: string): string {
   if (typeof value === 'string' && /^(0|[1-9]\d{0,39})$/.test(value)) return value
   if (Number.isSafeInteger(value) && (value as number) >= 0) return String(value)
   throw new Error(`${field} must be an exact non-negative decimal integer`)
+}
+
+function optionalDecimal(value: unknown, field: string): string | null {
+  return value == null ? null : decimal(value, field)
 }
 
 function profile(payload: unknown, clanId: number): ClanProfileWrite {
@@ -78,11 +93,11 @@ function roster(payload: unknown, clanId: number): ClanMemberWrite[] {
     ids.add(brawlhallaId)
     return {
       brawlhallaId,
-      name: text(raw.name, `guild member ${index} name`, 256, true),
-      rank: text(raw.rank, `guild member ${index} rank`, 64, true),
-      joinDate: sourceDate(raw.join_date, `guild member ${index} join_date`),
+      name: optionalText(raw.name, `guild member ${index} name`, 256),
+      rank: optionalText(raw.rank, `guild member ${index} rank`, 64),
+      joinDate: optionalSourceDate(raw.join_date, `guild member ${index} join_date`),
       xp: decimal(raw.xp, `guild member ${index} xp`),
-      guildPoints: decimal(raw.guild_points, `guild member ${index} guild_points`),
+      guildPoints: optionalDecimal(raw.guild_points, `guild member ${index} guild_points`),
     }
   })
 }

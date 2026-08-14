@@ -64,7 +64,10 @@ export async function mapClan(clans: ClanQueries, clanId: number): Promise<ClanP
             : null,
         }
       : null,
-    members: clan.members.map((member) => ({ ...member, joinDate: member.joinDate.toISOString() })),
+    members: clan.members.map((member) => ({
+      ...member,
+      joinDate: member.joinDate?.toISOString() ?? null,
+    })),
   })
 }
 

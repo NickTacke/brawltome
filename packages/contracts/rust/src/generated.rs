@@ -323,16 +323,25 @@ pub mod types {
     ///            "pattern": "^(0|[1-9]\\d{0,39})$"
     ///          },
     ///          "joinDate": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "format": "date-time"
     ///          },
     ///          "name": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "maxLength": 256,
     ///            "minLength": 1
     ///          },
     ///          "rank": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "maxLength": 64,
     ///            "minLength": 1
     ///          },
@@ -905,16 +914,25 @@ pub mod types {
     ///      "pattern": "^(0|[1-9]\\d{0,39})$"
     ///    },
     ///    "joinDate": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "format": "date-time"
     ///    },
     ///    "name": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "maxLength": 256,
     ///      "minLength": 1
     ///    },
     ///    "rank": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "maxLength": 64,
     ///      "minLength": 1
     ///    },
@@ -935,9 +953,9 @@ pub mod types {
         #[serde(rename = "guildPoints")]
         pub guild_points: ::std::option::Option<ClanProfileMembersItemGuildPoints>,
         #[serde(rename = "joinDate")]
-        pub join_date: ::chrono::DateTime<::chrono::offset::Utc>,
-        pub name: ClanProfileMembersItemName,
-        pub rank: ClanProfileMembersItemRank,
+        pub join_date: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        pub name: ::std::option::Option<ClanProfileMembersItemName>,
+        pub rank: ::std::option::Option<ClanProfileMembersItemRank>,
         pub xp: ClanProfileMembersItemXp,
     }
     ///`ClanProfileMembersItemGuildPoints`
@@ -2494,16 +2512,25 @@ pub mod types {
     ///                "pattern": "^(0|[1-9]\\d{0,39})$"
     ///              },
     ///              "joinDate": {
-    ///                "type": "string",
+    ///                "type": [
+    ///                  "string",
+    ///                  "null"
+    ///                ],
     ///                "format": "date-time"
     ///              },
     ///              "name": {
-    ///                "type": "string",
+    ///                "type": [
+    ///                  "string",
+    ///                  "null"
+    ///                ],
     ///                "maxLength": 256,
     ///                "minLength": 1
     ///              },
     ///              "rank": {
-    ///                "type": "string",
+    ///                "type": [
+    ///                  "string",
+    ///                  "null"
+    ///                ],
     ///                "maxLength": 64,
     ///                "minLength": 1
     ///              },
@@ -2826,16 +2853,25 @@ pub mod types {
     ///            "pattern": "^(0|[1-9]\\d{0,39})$"
     ///          },
     ///          "joinDate": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "format": "date-time"
     ///          },
     ///          "name": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "maxLength": 256,
     ///            "minLength": 1
     ///          },
     ///          "rank": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "maxLength": 64,
     ///            "minLength": 1
     ///          },
@@ -3419,16 +3455,25 @@ pub mod types {
     ///      "pattern": "^(0|[1-9]\\d{0,39})$"
     ///    },
     ///    "joinDate": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "format": "date-time"
     ///    },
     ///    "name": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "maxLength": 256,
     ///      "minLength": 1
     ///    },
     ///    "rank": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "maxLength": 64,
     ///      "minLength": 1
     ///    },
@@ -3451,9 +3496,9 @@ pub mod types {
             ClanRefreshResponseClanMembersItemGuildPoints,
         >,
         #[serde(rename = "joinDate")]
-        pub join_date: ::chrono::DateTime<::chrono::offset::Utc>,
-        pub name: ClanRefreshResponseClanMembersItemName,
-        pub rank: ClanRefreshResponseClanMembersItemRank,
+        pub join_date: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        pub name: ::std::option::Option<ClanRefreshResponseClanMembersItemName>,
+        pub rank: ::std::option::Option<ClanRefreshResponseClanMembersItemRank>,
         pub xp: ClanRefreshResponseClanMembersItemXp,
     }
     ///`ClanRefreshResponseClanMembersItemGuildPoints`

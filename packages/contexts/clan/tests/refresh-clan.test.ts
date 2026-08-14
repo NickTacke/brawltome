@@ -225,13 +225,18 @@ describe('Clans PostgreSQL capability', () => {
       leaseExpiresAt: new Date(Date.now() + 60_000),
     }
     let releaseSource!: () => void
+    let signalSourceEntered!: () => void
     const sourceBlocked = new Promise<void>((resolve) => {
       releaseSource = resolve
+    })
+    const sourceEntered = new Promise<void>((resolve) => {
+      signalSourceEntered = resolve
     })
     const refresh = processRefreshClanSection(
       clans,
       {
         getGuildStatsV1: async () => {
+          signalSourceEntered()
           await sourceBlocked
           return stats('Revoked Lease')
         },
@@ -243,7 +248,7 @@ describe('Clans PostgreSQL capability', () => {
       new Date(),
       effect,
     )
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await sourceEntered
     await clans.revokeRefreshEffect(effect)
     expect(
       await clans.prepareRefreshEffect({
@@ -363,6 +368,77 @@ describe('Clans PostgreSQL capability', () => {
     expect((await clans.getById(990072))?.clanLifetimeXp).toBe('19999999999999999999999999999999999999998')
   })
 
+  test('publishes sparse roster members without inventing unavailable metadata', async () => {
+    const clanId = 990075
+    await processRefreshClanSection(
+      clans,
+      {
+        getGuildStatsV1: async () => ({ ...stats('Sparse Roster'), guild_id: clanId }),
+        getGuildMembersV1: async () => null,
+      },
+      clanId,
+      'profile',
+    )
+
+    const result = await processRefreshClanSection(
+      clans,
+      {
+        getGuildStatsV1: async () => null,
+        getGuildMembersV1: async () => ({
+          guild_id: clanId,
+          guild_members: [
+            { brawlhalla_id: 3001, name: 'Known Name', xp: '123' },
+            {
+              brawlhalla_id: 3002,
+              rank: 'Officer',
+              join_date: 1_660_100_000,
+              xp: '456',
+              guild_points: '789',
+            },
+            {
+              brawlhalla_id: 3003,
+              name: ' \u200B ',
+              rank: 'Member',
+              join_date: 1_660_100_001,
+              xp: '321',
+              guild_points: '654',
+            },
+          ],
+        }),
+      },
+      clanId,
+      'roster',
+    )
+
+    expect(result.outcome).toBe('published')
+    expect((await clans.getById(clanId))?.members).toEqual([
+      {
+        brawlhallaId: 3002,
+        name: null,
+        rank: 'Officer',
+        joinDate: new Date(1_660_100_000_000),
+        xp: '456',
+        guildPoints: '789',
+      },
+      {
+        brawlhallaId: 3003,
+        name: null,
+        rank: 'Member',
+        joinDate: new Date(1_660_100_001_000),
+        xp: '321',
+        guildPoints: '654',
+      },
+      {
+        brawlhallaId: 3001,
+        name: 'Known Name',
+        rank: null,
+        joinDate: null,
+        xp: '123',
+        guildPoints: null,
+      },
+    ])
+  })
+
   test('only a complete validated empty roster clears membership', async () => {
     const failures: Array<() => Promise<unknown | null>> = [
       async () => null,
@@ -371,6 +447,7 @@ describe('Clans PostgreSQL capability', () => {
       },
       async () => ({ guild_id: 990070 }),
       async () => ({ guild_id: 990071, guild_members: [] }),
+      async () => roster([{ ...alpha, rank: 7 }]),
     ]
     const successAt = (await clans.getById(990070))?.roster?.lastSuccessAt
     for (const getGuildMembersV1 of failures) {
