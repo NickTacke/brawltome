@@ -102,7 +102,7 @@ export function createPostgresCareerPlayers(
 ): CareerPlayerQueries & {
   referenceById(
     brawlhallaId: number,
-  ): Promise<{ brawlhallaId: number; name: string; bestLegendNameKey: string | null; lastSuccessAt: Date } | null>
+  ): Promise<{ brawlhallaId: number; name: string; bestLegendNameKey: string | null } | null>
   mainLegendById(brawlhallaId: number): Promise<{ legendId: number; legendNameKey: string } | null>
   recordChecked(brawlhallaId: number, effect: CanonicalCareerEffect): Promise<FencedResult>
   applySnapshot(snapshot: V0CareerSnapshot, effect: CanonicalCareerEffect): Promise<FencedResult>
@@ -113,10 +113,8 @@ export function createPostgresCareerPlayers(
 
   return {
     async referenceById(brawlhallaId) {
-      const [profile] = await client<
-        { brawlhalla_id: number; player_name: string; legend_name_key: string | null; last_success_at: Date }[]
-      >`
-        SELECT profile.brawlhalla_id, profile.player_name, profile.last_success_at, legend.legend_name_key
+      const [profile] = await client<{ brawlhalla_id: number; player_name: string; legend_name_key: string | null }[]>`
+        SELECT profile.brawlhalla_id, profile.player_name, legend.legend_name_key
         FROM players.career_profiles profile
         LEFT JOIN LATERAL (
           SELECT legend_name_key
@@ -132,7 +130,6 @@ export function createPostgresCareerPlayers(
             brawlhallaId: profile.brawlhalla_id,
             name: profile.player_name,
             bestLegendNameKey: profile.legend_name_key,
-            lastSuccessAt: profile.last_success_at,
           }
         : null
     },
@@ -296,6 +293,10 @@ export function createPostgresCareerPlayers(
 
         const [clock] = await sql<{ observed_at: Date }[]>`SELECT clock_timestamp() AS observed_at`
         const observedAt = clock.observed_at
+        const [previous] = await sql<{ player_name: string | null }[]>`
+          SELECT player_name FROM players.career_profiles
+          WHERE brawlhalla_id = ${snapshot.brawlhallaId} FOR UPDATE
+        `
         const { account, combat } = snapshot
         await sql`
           INSERT INTO players.career_profiles
@@ -333,6 +334,15 @@ export function createPostgresCareerPlayers(
             sidekick_kos = EXCLUDED.sidekick_kos,
             snowball_kos = EXCLUDED.snowball_kos
         `
+
+        if (previous?.player_name && previous.player_name !== snapshot.name) {
+          await sql`
+            INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
+            VALUES (${snapshot.brawlhallaId}, ${previous.player_name.toLowerCase()}, ${previous.player_name}, ${observedAt})
+            ON CONFLICT (brawlhalla_id, normalized_alias) DO UPDATE
+            SET display_alias = EXCLUDED.display_alias, observed_at = EXCLUDED.observed_at
+          `
+        }
 
         await Promise.all([
           sql`DELETE FROM players.career_legends WHERE brawlhalla_id = ${snapshot.brawlhallaId}`,

@@ -194,7 +194,6 @@ describe('Players-owned canonical career state', () => {
         brawlhallaId: 91913839,
         name: 'Measured Zero',
         bestLegendNameKey: null,
-        lastSuccessAt: expect.any(Date),
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({
@@ -209,6 +208,37 @@ describe('Players-owned canonical career state', () => {
       await Promise.all([players.close(), operations.close()])
     }
   })
+
+  test('records the prior career name as a searchable alias', async () => {
+    const brawlhallaId = 91913850
+    const players = createPostgresCareerPlayers(connectionString)
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      for (const name of ['Former Career Name', 'Current Career Name']) {
+        const lease = await claimCareerOperation(operations, brawlhallaId)
+        expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('execute')
+        await refreshCanonicalCareerPlayer(
+          players,
+          source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, name }),
+          brawlhallaId,
+          { caller: 'on-demand' },
+          effectFor(lease),
+          resolveLegend,
+        )
+        expect(await operations.complete(lease)).toBe('transitioned')
+      }
+
+      expect([
+        ...(await control<{ normalized_alias: string; display_alias: string }[]>`
+          SELECT normalized_alias, display_alias
+          FROM players.discovery_aliases WHERE brawlhalla_id = ${brawlhallaId}
+        `),
+      ]).toEqual([{ normalized_alias: 'former career name', display_alias: 'Former Career Name' }])
+    } finally {
+      await Promise.all([players.close(), operations.close(), control.end()])
+    }
+  }, 15_000)
 
   test('retains the last success after a malformed attempt and authoritatively clears children on retry', async () => {
     const brawlhallaId = 91913840

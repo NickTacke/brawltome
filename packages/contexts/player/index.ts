@@ -13,7 +13,13 @@ export {
   type RankedSnapshot,
   rankedFreshness,
 } from './ranked/model'
-export type { PlayerReference, PlayerReferenceQueries } from './reference'
+export {
+  isUsablePlayerName,
+  selectCanonicalPlayerName,
+  type CanonicalPlayerNameEvidence,
+  type PlayerReference,
+  type PlayerReferenceQueries,
+} from './reference'
 export type {
   PlayerDiscoveryEvent,
   PlayerDiscoveryFact,

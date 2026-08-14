@@ -144,7 +144,6 @@ export function createPostgresRankedPlayers(
     name: string
     bestLegendNameKey: string | null
     legacyRating: number | null
-    lastSuccessAt: Date | null
   } | null>
   recordChecked(brawlhallaId: number, effect: CanonicalRankedEffect): Promise<FencedResult>
   recordPulseChecked(brawlhallaId: number, effect: CanonicalRankedEffect): Promise<RankedWriteResult>
@@ -165,23 +164,21 @@ export function createPostgresRankedPlayers(
           legend_name_key: string | null
           best_legend: number | null
           legacy_rating: number | null
-          last_success_at: Date | null
         }[]
       >`
         SELECT identity.brawlhalla_id, identity.player_name, identity.legend_name_key,
-               identity.last_success_at, profile.best_legend, profile.rating AS legacy_rating
+               profile.best_legend, profile.rating AS legacy_rating
         FROM (
           SELECT ranked.brawlhalla_id, ranked.player_name,
-                 ranked.ranked_main_legend_name_key AS legend_name_key,
-                 ranked.last_success_at, 0 AS source_rank
+                 ranked.ranked_main_legend_name_key AS legend_name_key, 0 AS source_rank
           FROM players.ranked_profiles ranked
           WHERE ranked.brawlhalla_id = ${brawlhallaId} AND ranked.last_success_at IS NOT NULL
           UNION ALL
-          SELECT legacy.brawlhalla_id, legacy.player_name, NULL::text, NULL::timestamptz, 1 AS source_rank
+          SELECT legacy.brawlhalla_id, legacy.player_name, NULL::text, 1 AS source_rank
           FROM players.legacy_discovery_profiles legacy
           WHERE legacy.brawlhalla_id = ${brawlhallaId}
           UNION ALL
-          SELECT profile.brawlhalla_id, profile.player_name, NULL::text, NULL::timestamptz, 2 AS source_rank
+          SELECT profile.brawlhalla_id, profile.player_name, NULL::text, 2 AS source_rank
           FROM players.legacy_profile_discovery profile
           WHERE profile.brawlhalla_id = ${brawlhallaId}
         ) identity
@@ -200,7 +197,6 @@ export function createPostgresRankedPlayers(
             return legend ? legendSlug(legend.heroId, legend.displayName) : null
           })(),
         legacyRating: profile.legacy_rating,
-        lastSuccessAt: profile.last_success_at,
       }
     },
 

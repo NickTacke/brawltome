@@ -437,8 +437,8 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       SELECT entity_id, canonical_name, region, rating, view_count,
              best_legend_name_key, term_kind, display_term
       FROM winners
-      ORDER BY exact_match DESC, alias_rank, rating DESC NULLS LAST,
-               view_count DESC, entity_id
+      ORDER BY exact_match DESC, alias_rank, (rating IS NULL),
+               (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
       LIMIT 40
     `
     return rows.map((row) => ({

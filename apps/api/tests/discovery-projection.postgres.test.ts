@@ -127,14 +127,33 @@ describe('Players to Discovery projection delivery', () => {
           (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
         VALUES (10, 'former', 'Former', now(), ${archiveChecksum})
       `
-      await enqueueImportedPlayers(control, [10, 11])
       await control`
         INSERT INTO players.ranked_profiles
           (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
         VALUES (10, 'Canonical | Player', now(), now(), 'EU', 2100, 2200, 'Platinum', 10, 20)
       `
+      await control`
+        INSERT INTO players.career_profiles
+          (brawlhalla_id, player_name, checked_at, last_success_at, xp, level, xp_percentage,
+           games, wins, match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick,
+           snowball_hits, bomb_kos, mine_kos, spikeball_kos, sidekick_kos, snowball_kos)
+        VALUES
+          (10, 'Career | Player', now(), now(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+          (12, 'Career Only', now(), now(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+      `
+      await enqueueImportedPlayers(control, [10, 11, 12])
 
       const eager = await source.snapshot()
+      expect(eager.facts).toContainEqual(
+        expect.objectContaining({
+          brawlhallaId: 10,
+          name: 'Career | Player',
+          aliases: expect.arrayContaining(['Canonical | Player', 'Legacy | Player']),
+        }),
+      )
+      expect(eager.facts).toContainEqual(
+        expect.objectContaining({ brawlhallaId: 12, name: 'Career Only', rating: null, bestLegendNameKey: null }),
+      )
       if (!source.withSnapshot) throw new Error('Expected streaming Player snapshot')
       const streamed = await source.withSnapshot(async (snapshot) => {
         const read = async () => {
@@ -188,8 +207,28 @@ describe('Players to Discovery projection delivery', () => {
       expect((await operations.inspect(accepted[0].operationId)).operation.status).toBe('succeeded')
       expect(await source.lag()).toBe(0)
       await expect(playerResults(discovery, 'former')).resolves.toEqual([
-        expect.objectContaining({ brawlhallaId: 10, name: 'Canonical | Player', rating: 2100, matchedAlias: 'Former' }),
+        expect.objectContaining({ brawlhallaId: 10, name: 'Career | Player', rating: 2100, matchedAlias: 'Former' }),
       ])
+      await expect(playerResults(discovery, 'canonical')).resolves.toEqual([
+        expect.objectContaining({ brawlhallaId: 10, name: 'Career | Player', matchedAlias: 'Canonical | Player' }),
+      ])
+      await expect(playerResults(discovery, 'career only')).resolves.toEqual([
+        expect.objectContaining({ brawlhallaId: 12, name: 'Career Only', rating: null }),
+      ])
+
+      await discovery.rebuildPlayers({
+        sourceVersion: eager.sourceVersion,
+        facts: eager.facts.map((fact) =>
+          fact.brawlhallaId === 10 ? { ...fact, name: 'Canonical | Player', aliases: ['Former'] } : fact,
+        ),
+      })
+      expect((await playerResults(discovery, 'career')).find(({ brawlhallaId }) => brawlhallaId === 10)).toBeUndefined()
+      await expect(discovery.reconcilePlayers(source)).resolves.toMatchObject({ repaired: true, exactAfter: true })
+      expect((await playerResults(discovery, 'career')).find(({ brawlhallaId }) => brawlhallaId === 10)).toMatchObject({
+        brawlhallaId: 10,
+        name: 'Career | Player',
+      })
+
       await expect(playerResults(discovery, 'legacy')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 11, rating: null, viewCount: 0, matchedAlias: null }),
         expect.objectContaining({ brawlhallaId: 10, matchedAlias: 'Legacy | Player' }),

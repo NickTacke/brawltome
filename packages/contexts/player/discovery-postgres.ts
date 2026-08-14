@@ -2,6 +2,7 @@ import { getLegendById } from '@brawltome/game-data/legends'
 import { legendSlug } from '@brawltome/game-data/reference-data'
 import postgres from 'postgres'
 import type { PlayerDiscoveryFact, PlayerDiscoverySnapshotStream, PlayerDiscoverySource } from './discovery-facts'
+import { isUsablePlayerName, selectCanonicalPlayerName } from './reference'
 
 type Sql = ReturnType<typeof postgres>
 type FactRow = {
@@ -11,6 +12,7 @@ type FactRow = {
   rating: number | null
   ranked_main_legend_name_key: string | null
 }
+type CareerProfileRow = { brawlhalla_id: number; player_name: string | null }
 type LegacyRow = {
   brawlhalla_id: number
   player_name: string
@@ -44,6 +46,11 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     FROM players.ranked_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+  const careers = await sql<CareerProfileRow[]>`
+    SELECT brawlhalla_id, player_name
+    FROM players.career_profiles
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+  `
   const careerLegends = await sql<CareerLegendRow[]>`
     SELECT DISTINCT ON (brawlhalla_id) brawlhalla_id, legend_name_key
     FROM players.career_legends
@@ -74,6 +81,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   `
 
   const rankedById = new Map(ranked.map((row) => [row.brawlhalla_id, row]))
+  const careerById = new Map(careers.map((row) => [row.brawlhalla_id, row]))
   const careerLegendById = new Map(careerLegends.map((row) => [row.brawlhalla_id, row.legend_name_key]))
   const profileLegacyById = new Map(profileLegacy.map((row) => [row.brawlhalla_id, row]))
   const legacyById = new Map(profileLegacyById)
@@ -90,23 +98,31 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     aliasesById.set(alias.brawlhalla_id, aliases)
   }
 
-  const identities = new Set([...rankedById.keys(), ...legacyById.keys()])
+  const identities = new Set([...rankedById.keys(), ...careerById.keys(), ...legacyById.keys()])
   return [...identities]
     .sort((left, right) => left - right)
     .flatMap((brawlhallaId) => {
       const canonical = rankedById.get(brawlhallaId)
+      const career = careerById.get(brawlhallaId)
       const fallback = legacyById.get(brawlhallaId)
-      const name = canonical?.player_name ?? fallback?.player_name
-      if (!name || [...name].length > 256 || !/[^\p{Separator}\p{Format}]/u.test(name)) return []
+      const nameEvidence = selectCanonicalPlayerName({
+        brawlhallaId,
+        ranked: canonical?.player_name ? { name: canonical.player_name } : null,
+        career: career?.player_name ? { name: career.player_name } : null,
+      })
+      const name = nameEvidence?.name ?? fallback?.player_name
+      if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
       const canonicalAvailable = canonical?.player_name !== null && canonical?.player_name !== undefined
-      const aliases = aliasesById.get(brawlhallaId) ?? []
-      if (
-        canonicalAvailable &&
-        fallback?.player_name &&
-        fallback.player_name !== name &&
-        !aliases.includes(fallback.player_name)
-      ) {
-        aliases.push(fallback.player_name)
+      const aliases = [...(aliasesById.get(brawlhallaId) ?? [])]
+      for (const candidate of [canonical?.player_name, career?.player_name, fallback?.player_name]) {
+        if (
+          candidate &&
+          candidate !== name &&
+          isUsablePlayerName(candidate, brawlhallaId) &&
+          !aliases.includes(candidate)
+        ) {
+          aliases.push(candidate)
+        }
       }
       const rawRating = canonicalAvailable ? canonical.rating : fallback?.rating
       return [
@@ -202,6 +218,8 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
                 SELECT brawlhalla_id
                 FROM (
                   SELECT brawlhalla_id FROM players.ranked_profiles WHERE brawlhalla_id > ${afterId}
+                  UNION
+                  SELECT brawlhalla_id FROM players.career_profiles WHERE brawlhalla_id > ${afterId}
                   UNION
                   SELECT brawlhalla_id FROM players.legacy_discovery_profiles WHERE brawlhalla_id > ${afterId}
                   UNION

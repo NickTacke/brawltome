@@ -51,13 +51,14 @@ const fact = (
   rating: number | null,
   viewCount: number,
   aliases: string[] = [],
+  bestLegendNameKey: string | null = null,
 ) => ({
   brawlhallaId,
   name,
   region: 'US-E',
   rating,
   viewCount,
-  bestLegendNameKey: null,
+  bestLegendNameKey,
   aliases,
 })
 
@@ -124,8 +125,8 @@ describe('Discovery player search', () => {
           SELECT entity_id, canonical_name, region, rating, view_count,
                  best_legend_name_key, term_kind, display_term
           FROM winners
-          ORDER BY exact_match DESC, alias_rank, rating DESC NULLS LAST,
-                   view_count DESC, entity_id
+          ORDER BY exact_match DESC, alias_rank, (rating IS NULL),
+                   (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
           LIMIT 40
         `
         const serializedPlan = JSON.stringify(plan)
@@ -139,11 +140,29 @@ describe('Discovery player search', () => {
     }
   })
 
+  test('places available players with best legends ahead of missing legends and unavailable ratings', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({
+        sourceVersion: 2,
+        facts: [
+          fact(1, 'Priority Unavailable', null, 1_000, [], 'bodvar'),
+          fact(2, 'Priority No Legend', 2_500, 500),
+          fact(3, 'Priority Complete', 1_800, 10, [], 'asuri'),
+        ],
+      })
+
+      expect((await playerResults(discovery, 'priority')).map(({ brawlhallaId }) => brawlhallaId)).toEqual([3, 2, 1])
+    } finally {
+      await discovery.close()
+    }
+  })
+
   test('deduplicates identities, caps stable ties at 40, and replays events idempotently', async () => {
     const discovery = createPostgresDiscovery(connectionString)
     try {
       const stableTies = Array.from({ length: 45 }, (_, index) => fact(100 + index, `Prefix ${index}`, 2000, 50))
-      await discovery.rebuildPlayers({ sourceVersion: 2, facts: [...stableTies].reverse() })
+      await discovery.rebuildPlayers({ sourceVersion: 3, facts: [...stableTies].reverse() })
 
       const capped = await playerResults(discovery, 'prefix')
       expect(capped).toHaveLength(40)
@@ -155,7 +174,7 @@ describe('Discovery player search', () => {
       const event = {
         eventId,
         brawlhallaId: 999,
-        sourceVersion: 3,
+        sourceVersion: 4,
         fact: fact(999, 'Replay Target', 2100, 70, ['Prefix', 'Prefix Previous']),
       }
       await expect(discovery.applyPlayerEvents([event, event])).resolves.toEqual({ appliedEvents: 1 })
@@ -165,7 +184,7 @@ describe('Discovery player search', () => {
       expect(prefixHits.filter(({ brawlhallaId }) => brawlhallaId === 999)).toHaveLength(1)
       expect(prefixHits.find(({ brawlhallaId }) => brawlhallaId === 999)?.matchedAlias).toBe('Prefix')
 
-      await discovery.rebuildPlayers({ sourceVersion: 4, facts: [fact(777, 'Replacement', null, 0)] })
+      await discovery.rebuildPlayers({ sourceVersion: 5, facts: [fact(777, 'Replacement', null, 0)] })
       await expect(playerResults(discovery, 'prefix')).resolves.toEqual([])
       await expect(playerResults(discovery, 'replacement')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 777, rating: null }),
@@ -181,13 +200,13 @@ describe('Discovery player search', () => {
       const facts = Array.from({ length: 10_001 }, (_, index) =>
         fact(1_000_000 + index, `Scale Player ${index}`, 2000 + (index % 100), index, [`Former ${index}`]),
       )
-      await discovery.rebuildPlayers({ sourceVersion: 5, facts })
+      await discovery.rebuildPlayers({ sourceVersion: 6, facts })
       await expect(
         discovery.applyPlayerEvents(
           facts.slice(0, 1_000).map((player) => ({
             eventId: randomUUID(),
             brawlhallaId: player.brawlhallaId,
-            sourceVersion: 5,
+            sourceVersion: 6,
             fact: { ...player, name: `Covered Event ${player.brawlhallaId}` },
           })),
         ),
