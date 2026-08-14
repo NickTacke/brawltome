@@ -41,6 +41,7 @@ const validParsed: ParsedReplay = {
   ],
   victoryFaces: null,
   gameDataChecksum: 83,
+  inputs: { entities: [], maxTimestampMs: -1 },
 }
 
 function makeEntity(id: number, name: string, team: number, heroId: number) {

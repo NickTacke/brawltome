@@ -15,6 +15,7 @@ export function parse(raw: Uint8Array): ParsedReplay {
   if (!SUPPORTED_FORMAT_VERSIONS.has(v)) throw new FormatVersionUnsupportedError(v)
   switch (v) {
     case 264:
+    case 268:
       return parse264(body)
     default:
       throw new FormatVersionUnsupportedError(v)

@@ -92,6 +92,7 @@ function parsedStub(): ParsedReplay {
     koFaces: [{ entityId: 1, timestampMs: 50 }],
     victoryFaces: null,
     gameDataChecksum: 0,
+    inputs: { entities: [], maxTimestampMs: -1 },
   }
 }
 

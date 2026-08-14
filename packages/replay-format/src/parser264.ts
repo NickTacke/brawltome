@@ -1,6 +1,7 @@
 import { BitReader } from './bitstream'
 import {
   KNOWN_STATES,
+  REPLAY_TIME_QUANTUM_MS,
   STATE_END,
   STATE_FACES,
   STATE_GAME_DATA,
@@ -11,7 +12,17 @@ import {
   STATE_RESULTS,
 } from './constants'
 import { ParseBoundsError, ParseError } from './errors'
-import type { Entity, GameSettings, Hero, KoEvent, MatchResult, ParsedReplay } from './types'
+import type {
+  Entity,
+  EntityInputs,
+  GameSettings,
+  Hero,
+  InputSection,
+  InputSnapshot,
+  KoEvent,
+  MatchResult,
+  ParsedReplay,
+} from './types'
 
 const MAX_ENTITY_EXTRA = 64
 const MAX_ENTITIES = 16
@@ -51,8 +62,11 @@ function readHero(r: BitReader): Hero {
   return { heroId, costumeId, stanceIndex, weaponSkin1, weaponSkin2, morphWeapon2 }
 }
 
-function readEntity(r: BitReader, heroCount: number): Entity {
+function readEntity(r: BitReader, heroCount: number, formatVersion: number): Entity {
   const id = r.i32()
+  // Format 268 added a u32 player-id field after the entity id, before the name.
+  // (Reverse-engineered from 10.09 replays: [id][u32 playerId][u16-len name]...)
+  const playerId = formatVersion >= 268 ? r.u32() : undefined
   const name = r.string()
   const colorSchemeId = r.u32()
   const spawnBotId = r.u32()
@@ -84,6 +98,7 @@ function readEntity(r: BitReader, heroCount: number): Entity {
   return {
     id,
     name,
+    playerId,
     team,
     isBot,
     playerData: {
@@ -101,6 +116,57 @@ function readEntity(r: BitReader, heroCount: number): Entity {
       heroes,
     },
   }
+}
+
+function readMatchResult(r: BitReader): MatchResult {
+  const lengthMs = r.u32()
+  const scores: Record<number, number> = {}
+  if (r.bool()) {
+    let scoreCount = 0
+    while (r.bool()) {
+      if (++scoreCount > MAX_SCORE_ENTRIES) throw new ParseBoundsError(`score entries exceeded ${MAX_SCORE_ENTRIES}`)
+      const entityId = r.bits(5)
+      const score = r.i16()
+      scores[entityId] = score
+    }
+  }
+  const endOfMatchFanfareId = r.u32()
+  return { lengthMs, scores, endOfMatchFanfareId }
+}
+
+function readInputSection(r: BitReader): InputSection {
+  let inputEntityCount = 0
+  let maxTimestampMs = -1
+  const inputEntities: EntityInputs[] = []
+
+  while (r.bool()) {
+    if (++inputEntityCount > MAX_INPUT_ENTITIES)
+      throw new ParseBoundsError(`input entities exceeded ${MAX_INPUT_ENTITIES}`)
+    const entityId = r.bits(5)
+    const inputCount = r.i32()
+    if (inputCount < 0 || inputCount > MAX_INPUTS_PER_ENTITY) {
+      throw new ParseBoundsError(`inputs per entity exceeded ${MAX_INPUTS_PER_ENTITY} (got ${inputCount})`)
+    }
+
+    const snapshots: InputSnapshot[] = []
+    let previousTimestampMs = -1
+    for (let index = 0; index < inputCount; index++) {
+      const timestampMs = r.i32()
+      if (timestampMs < 0 || timestampMs % REPLAY_TIME_QUANTUM_MS !== 0) {
+        throw new ParseError(`input timestamp ${timestampMs} is not aligned to the 16 ms replay clock`)
+      }
+      if (timestampMs <= previousTimestampMs) {
+        throw new ParseError(`input timestamps must be strictly increasing for entity ${entityId}`)
+      }
+      const mask = r.bool() ? r.bits(14) : 0
+      snapshots.push({ timestampMs, mask })
+      previousTimestampMs = timestampMs
+      if (timestampMs > maxTimestampMs) maxTimestampMs = timestampMs
+    }
+    inputEntities.push({ entityId, snapshots })
+  }
+
+  return { entities: inputEntities, maxTimestampMs }
 }
 
 export function parse264(envelopeBody: Uint8Array): ParsedReplay {
@@ -121,6 +187,7 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
   const results: MatchResult[] = []
   let koFaces: KoEvent[] = []
   let victoryFaces: KoEvent[] | null = null
+  let inputs: InputSection = { entities: [], maxTimestampMs: -1 }
 
   let reached = false
   while (!reached) {
@@ -150,28 +217,14 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
         let entityCount = 0
         while (r.bool()) {
           if (++entityCount > MAX_ENTITIES) throw new ParseBoundsError(`entities exceeded ${MAX_ENTITIES}`)
-          entities.push(readEntity(r, heroCount))
+          entities.push(readEntity(r, heroCount, formatVersion))
         }
         gameDataChecksum = r.u32()
         break
       }
-      case STATE_RESULTS: {
-        const lengthMs = r.u32()
-        const scores: Record<number, number> = {}
-        if (r.bool()) {
-          let scoreCount = 0
-          while (r.bool()) {
-            if (++scoreCount > MAX_SCORE_ENTRIES)
-              throw new ParseBoundsError(`score entries exceeded ${MAX_SCORE_ENTRIES}`)
-            const eid = r.bits(5)
-            const score = r.i16()
-            scores[eid] = score
-          }
-        }
-        const endOfMatchFanfareId = r.u32()
-        results.push({ lengthMs, scores, endOfMatchFanfareId })
+      case STATE_RESULTS:
+        results.push(readMatchResult(r))
         break
-      }
       case STATE_KO_FACES: {
         const arr: KoEvent[] = []
         let koCount = 0
@@ -192,24 +245,10 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
         victoryFaces = arr
         break
       }
-      case STATE_INPUTS: {
-        // Parse and discard: raw replay is in R2 for any re-parse that needs inputs.
-        let inputEntityCount = 0
-        while (r.bool()) {
-          if (++inputEntityCount > MAX_INPUT_ENTITIES)
-            throw new ParseBoundsError(`input entities exceeded ${MAX_INPUT_ENTITIES}`)
-          r.bits(5)
-          const ic = r.i32()
-          if (ic < 0 || ic > MAX_INPUTS_PER_ENTITY) {
-            throw new ParseBoundsError(`inputs per entity exceeded ${MAX_INPUTS_PER_ENTITY} (got ${ic})`)
-          }
-          for (let i = 0; i < ic; i++) {
-            r.i32()
-            if (r.bool()) r.bits(14)
-          }
-        }
+      case STATE_INPUTS:
+        // Capture per-entity 16 ms timecode snapshots (the sim's fuel).
+        inputs = readInputSection(r)
         break
-      }
       case STATE_INVALID:
         throw new ParseError('replay marked invalid (state=8)')
       default:
@@ -235,5 +274,6 @@ export function parse264(envelopeBody: Uint8Array): ParsedReplay {
     koFaces,
     victoryFaces,
     gameDataChecksum,
+    inputs,
   }
 }
