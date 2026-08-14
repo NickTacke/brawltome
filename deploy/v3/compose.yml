@@ -70,6 +70,67 @@ services:
           memory: 512M
           pids: 128
 
+  dead-letter-role:
+    profiles: [operator]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: dead-letter-role
+    user: "70:70"
+    environment:
+      PGDATABASE: brawltome
+      PGHOST: postgres
+      PGUSER: brawltome_owner
+    secrets:
+      - postgres_dead_letter_password
+      - postgres_owner_password
+    networks:
+      - application
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    restart: "no"
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=70,gid=70,mode=0750,size=16m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+          pids: 64
+
+  v3-dead-letter-cli:
+    profiles: [operator]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: dead-letter-cli
+    secrets:
+      - dead_letter_database_url
+      - dead_letter_operator_tokens
+    networks:
+      - application
+    depends_on:
+      dead-letter-role:
+        condition: service_completed_successfully
+    restart: "no"
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=32m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+          pids: 64
+
   v3-api:
     build:
       context: ../..
@@ -311,6 +372,12 @@ secrets:
   brawlhalla_api_key:
     name: brawltome-v3_brawlhalla_api_key
     file: /var/lib/brawltome-v3-secrets/brawlhalla-api-key
+  dead_letter_database_url:
+    name: brawltome-v3_dead_letter_database_url
+    file: /var/lib/brawltome-v3-secrets/dead-letter-database-url
+  dead_letter_operator_tokens:
+    name: brawltome-v3_dead_letter_operator_tokens
+    file: /var/lib/brawltome-v3-secrets/dead-letter-operator-tokens
   discord_client_secret:
     name: brawltome-v3_discord_client_secret
     file: /var/lib/brawltome-v3-secrets/discord-client-secret
@@ -332,6 +399,9 @@ secrets:
   otel_authorization:
     name: brawltome-v3_otel_authorization
     file: /var/lib/brawltome-v3-secrets/otel-authorization
+  postgres_dead_letter_password:
+    name: brawltome-v3_postgres_dead_letter_password
+    file: /var/lib/brawltome-v3-secrets/postgres-dead-letter-password
   postgres_owner_password:
     name: brawltome-v3_postgres_owner_password
     file: /var/lib/brawltome-v3-secrets/postgres-owner-password

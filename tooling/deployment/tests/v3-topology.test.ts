@@ -10,9 +10,18 @@ import {
 const root = resolve(import.meta.dir, '../../..')
 const deployment = (...parts: string[]) => resolve(root, 'deploy/v3', ...parts)
 
-function renderCompose() {
+function renderCompose(profiles = ['discord']) {
   const result = Bun.spawnSync({
-    cmd: ['docker', 'compose', '--profile', 'discord', '-f', deployment('compose.yml'), 'config', '--format', 'json'],
+    cmd: [
+      'docker',
+      'compose',
+      ...profiles.flatMap((profile) => ['--profile', profile]),
+      '-f',
+      deployment('compose.yml'),
+      'config',
+      '--format',
+      'json',
+    ],
     cwd: root,
     env: {
       ...process.env,
@@ -31,16 +40,21 @@ function renderCompose() {
       string,
       {
         build?: { args?: Record<string, string>; target?: string }
+        cap_drop?: string[]
         depends_on?: Record<string, { condition?: string }>
         deploy?: { replicas?: number; resources?: { limits?: { memory?: string; pids?: number } } }
         environment?: Record<string, string>
         healthcheck?: { test?: string[] }
+        init?: boolean
         networks?: Record<string, unknown>
         ports?: unknown[]
         profiles?: string[]
+        read_only?: boolean
         restart?: string
         secrets?: Array<{ source: string; target: string }>
+        security_opt?: string[]
         stop_grace_period?: string
+        user?: string
         volumes?: Array<{ source?: string; target?: string; type?: string }>
       }
     >
@@ -187,6 +201,71 @@ describe('V3 production topology', () => {
         }),
       ]),
     )
+  })
+
+  test('isolates profile-gated dead-letter role provisioning and CLI access', () => {
+    const rendered = renderCompose(['operator'])
+    expect(Object.keys(rendered.services).sort()).toEqual([
+      'dead-letter-role',
+      'migration',
+      'postgres',
+      'v3-api',
+      'v3-dead-letter-cli',
+      'v3-operations-worker',
+      'v3-web',
+    ])
+
+    const role = rendered.services['dead-letter-role']
+    expect(role).toMatchObject({
+      build: { target: 'dead-letter-role' },
+      profiles: ['operator'],
+      user: '70:70',
+      restart: 'no',
+      read_only: true,
+      init: true,
+      cap_drop: ['ALL'],
+      security_opt: ['no-new-privileges:true'],
+      depends_on: { migration: { condition: 'service_completed_successfully' } },
+    })
+    expect(Object.keys(role.networks ?? {})).toEqual(['application'])
+    expect(role.secrets?.map(({ source }) => source).sort()).toEqual([
+      'postgres_dead_letter_password',
+      'postgres_owner_password',
+    ])
+
+    const cli = rendered.services['v3-dead-letter-cli']
+    expect(cli).toMatchObject({
+      build: { target: 'dead-letter-cli' },
+      profiles: ['operator'],
+      restart: 'no',
+      read_only: true,
+      init: true,
+      cap_drop: ['ALL'],
+      security_opt: ['no-new-privileges:true'],
+      depends_on: { 'dead-letter-role': { condition: 'service_completed_successfully' } },
+    })
+    expect(Object.keys(cli.networks ?? {})).toEqual(['application'])
+    expect(cli.secrets?.map(({ source }) => source).sort()).toEqual([
+      'dead_letter_database_url',
+      'dead_letter_operator_tokens',
+    ])
+    expect(cli.environment ?? {}).not.toHaveProperty('DEAD_LETTER_OPERATOR_TOKEN')
+    expect(cli.ports ?? []).toHaveLength(0)
+
+    expect(rendered.secrets).toMatchObject({
+      dead_letter_database_url: {
+        file: '/var/lib/brawltome-v3-secrets/dead-letter-database-url',
+        name: 'brawltome-v3_dead_letter_database_url',
+      },
+      dead_letter_operator_tokens: {
+        file: '/var/lib/brawltome-v3-secrets/dead-letter-operator-tokens',
+        name: 'brawltome-v3_dead_letter_operator_tokens',
+      },
+      postgres_dead_letter_password: {
+        file: '/var/lib/brawltome-v3-secrets/postgres-dead-letter-password',
+        name: 'brawltome-v3_postgres_dead_letter_password',
+      },
+    })
   })
 
   test('keeps the root Compose worker inside the approved source policy', () => {

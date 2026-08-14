@@ -1,6 +1,10 @@
 FROM postgres:16.8-alpine@sha256:3b057e1c2c6dfee60a30950096f3fab33be141dbb0fdd7af3d477083de94166c AS postgres
 COPY --chmod=0555 deploy/v3/postgres/10-runtime-role.sh /docker-entrypoint-initdb.d/10-runtime-role.sh
 
+FROM postgres AS dead-letter-role
+COPY --chmod=0555 deploy/v3/postgres/configure-dead-letter-role.sh /usr/local/bin/configure-dead-letter-role
+ENTRYPOINT ["/usr/local/bin/configure-dead-letter-role"]
+
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS base
 WORKDIR /app
 
@@ -42,6 +46,11 @@ COPY --from=build /app .
 USER bun
 ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
 CMD ["migration"]
+
+FROM base AS dead-letter-cli
+COPY --from=build /app .
+USER bun
+ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh", "dead-letter-cli"]
 
 FROM base AS api
 COPY --from=build /app .

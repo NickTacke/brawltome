@@ -18,6 +18,7 @@ read_secret() {
 
 secrets_root=${BRAWLTOME_SECRETS_ROOT:-/run/secrets}
 role=${1:-}
+[ "$#" -eq 0 ] || shift
 case "$role" in
   migration)
     read_secret DATABASE_URL "$secrets_root/migration_database_url"
@@ -55,8 +56,13 @@ case "$role" in
     read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
     exec bun run apps/discord-bot/src/index.ts
     ;;
+  dead-letter-cli)
+    read_secret DEAD_LETTER_DATABASE_URL "$secrets_root/dead_letter_database_url"
+    read_secret DEAD_LETTER_OPERATOR_TOKENS "$secrets_root/dead_letter_operator_tokens"
+    exec bun run packages/contexts/refresh-operations/cli.ts "$@"
+    ;;
   *)
-    printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|web|discord-bot' >&2
+    printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|web|discord-bot|dead-letter-cli' >&2
     exit 64
     ;;
 esac
