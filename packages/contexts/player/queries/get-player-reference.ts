@@ -1,11 +1,7 @@
-import type { PlayerReference } from '../reference'
+import { type PlayerReference, isUsablePlayerName } from '../reference'
 
 type StoredPlayerReference = PlayerReference & Record<string, unknown>
 type FindStoredPlayerReference = (brawlhallaId: number) => Promise<StoredPlayerReference | null>
-
-export function isUsablePlayerName(name: string, brawlhallaId: number): boolean {
-  return name !== `Player ${brawlhallaId}` && [...name].length <= 256 && /[^\p{Separator}\p{Format}]/u.test(name)
-}
 
 export async function getPlayerReference(
   findStoredReference: FindStoredPlayerReference,

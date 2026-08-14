@@ -114,7 +114,6 @@ describe('Players V2 import', () => {
             name: 'Legacy Forty Three',
             bestLegendNameKey: 'bodvar',
             legacyRating: 1800,
-            lastSuccessAt: null,
           })
         } finally {
           await reducedRoute.close()
@@ -349,7 +348,6 @@ describe('Players V2 import', () => {
           name: 'Legacy | Forty Two',
           bestLegendNameKey: null,
           legacyRating: null,
-          lastSuccessAt: null,
         })
       } finally {
         await migratedRoute.close()

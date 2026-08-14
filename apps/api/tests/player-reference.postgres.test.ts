@@ -9,14 +9,9 @@ describe('stored Player Reference', () => {
     const placeholderId = storedId + 1
     const rankedId = storedId + 2
     const careerId = storedId + 3
-    const staleCareerId = storedId + 4
+    const careerPriorityId = storedId + 4
     const invalidCareerId = storedId + 5
-    const bothStaleId = storedId + 6
-    const storedMetadataId = storedId + 7
-    const now = new Date('2026-08-14T12:00:00.000Z')
-    const fresh = new Date('2026-08-14T11:00:00.000Z')
-    const stale = new Date('2026-08-13T00:00:00.000Z')
-    const newerStale = new Date('2026-08-13T01:00:00.000Z')
+    const storedMetadataId = storedId + 6
     const rollback = new Error('rollback Player Reference integration test')
 
     try {
@@ -36,14 +31,10 @@ describe('stored Player Reference', () => {
                 name: 'Canonical Ranked Player',
                 bestLegendNameKey: 'teros',
                 legacyRating: 2_000,
-                lastSuccessAt: fresh,
               }
             }
-            if (brawlhallaId === staleCareerId || brawlhallaId === invalidCareerId) {
-              return { brawlhallaId, name: 'Fresh Ranked Name', lastSuccessAt: fresh }
-            }
-            if (brawlhallaId === bothStaleId) {
-              return { brawlhallaId, name: 'Older Stale Ranked Name', lastSuccessAt: stale }
+            if (brawlhallaId === careerPriorityId || brawlhallaId === invalidCareerId) {
+              return { brawlhallaId, name: 'Ranked Name' }
             }
             if (brawlhallaId === storedMetadataId) {
               return {
@@ -51,30 +42,25 @@ describe('stored Player Reference', () => {
                 name: `Player ${brawlhallaId}`,
                 bestLegendNameKey: 'teros',
                 legacyRating: 1_800,
-                lastSuccessAt: fresh,
               }
             }
             return null
           },
           async (brawlhallaId) => {
             if (brawlhallaId === rankedId) {
-              return { brawlhallaId, name: 'Career Name', bestLegendNameKey: 'ragnir', lastSuccessAt: fresh }
+              return { brawlhallaId, name: 'Career Name', bestLegendNameKey: 'ragnir' }
             }
             if (brawlhallaId === careerId) {
-              return { brawlhallaId, name: 'Canonical Career Player', lastSuccessAt: fresh }
+              return { brawlhallaId, name: 'Canonical Career Player' }
             }
-            if (brawlhallaId === staleCareerId) {
-              return { brawlhallaId, name: 'Newer Stale Career Name', lastSuccessAt: newerStale }
+            if (brawlhallaId === careerPriorityId) {
+              return { brawlhallaId, name: 'Career Name' }
             }
             if (brawlhallaId === invalidCareerId) {
-              return { brawlhallaId, name: `Player ${brawlhallaId}`, lastSuccessAt: fresh }
-            }
-            if (brawlhallaId === bothStaleId) {
-              return { brawlhallaId, name: 'Newer Stale Career Name', lastSuccessAt: newerStale }
+              return { brawlhallaId, name: `Player ${brawlhallaId}` }
             }
             return null
           },
-          () => now,
         )
 
         expect(await queries.byId(storedId)).toEqual({ brawlhallaId: storedId, name: 'Canonical Player' })
@@ -85,14 +71,10 @@ describe('stored Player Reference', () => {
           legacyRating: 2_000,
         })
         expect(await queries.byId(careerId)).toEqual({ brawlhallaId: careerId, name: 'Canonical Career Player' })
-        expect(await queries.byId(staleCareerId)).toEqual({ brawlhallaId: staleCareerId, name: 'Fresh Ranked Name' })
+        expect(await queries.byId(careerPriorityId)).toEqual({ brawlhallaId: careerPriorityId, name: 'Career Name' })
         expect(await queries.byId(invalidCareerId)).toEqual({
           brawlhallaId: invalidCareerId,
-          name: 'Fresh Ranked Name',
-        })
-        expect(await queries.byId(bothStaleId)).toEqual({
-          brawlhallaId: bothStaleId,
-          name: 'Newer Stale Career Name',
+          name: 'Ranked Name',
         })
         expect(await queries.byId(storedMetadataId)).toEqual({
           brawlhallaId: storedMetadataId,
