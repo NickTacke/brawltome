@@ -1,11 +1,17 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 
-import { WorkInProgress } from '@/components/WorkInProgress'
+import { LearnHub } from './LearnHub'
 
 export const metadata: Metadata = {
-  title: 'Learn - Coming Soon',
+  title: 'Learn',
+  description: 'Master Brawlhalla — curated guides, weapon breakdowns, and rank-tailored paths.',
 }
 
 export default function Page() {
-  return <WorkInProgress slug="learn" />
+  return (
+    <Suspense fallback={null}>
+      <LearnHub />
+    </Suspense>
+  )
 }
