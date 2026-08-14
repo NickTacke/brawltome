@@ -1,6 +1,7 @@
 import type { BhApiClient } from '@brawltome/bhapi'
 import { legend } from '@brawltome/database'
 import type { Database } from '@brawltome/database'
+import { legends as generatedLegends } from '@brawltome/game-data/legends'
 import {
   type LegendReference,
   type LegendReferenceIndex,
@@ -18,6 +19,25 @@ export type LegendData = LegendReference
 let legendIndex: LegendReferenceIndex = createLegendReferenceIndex([])
 
 export async function initGameData(db: Database, bhapi?: BhApiClient) {
+  const seededLegends = generatedLegends
+    .filter(
+      (record) => record.heroId > 2 && record.isActive && record.displayName && record.weaponOne && record.weaponTwo,
+    )
+    .map((record) => ({
+      legendId: record.heroId,
+      legendNameKey: legendSlug(record.heroId, record.displayName),
+      bioName: record.displayName.toLocaleLowerCase().replace(/(^|\s)\p{L}/gu, (letter) => letter.toLocaleUpperCase()),
+      bioAka: '',
+      bioQuoteAboutAttrib: '',
+      weaponOne: record.weaponOne,
+      weaponTwo: record.weaponTwo,
+      strength: String(record.strength),
+      dexterity: String(record.dexterity),
+      defense: String(record.weight),
+      speed: String(record.speed),
+    }))
+  await db.insert(legend).values(seededLegends).onConflictDoNothing()
+
   if (bhapi) {
     try {
       const apiLegends = await bhapi.getAllLegendsV1({ caller: 'background' })
