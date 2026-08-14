@@ -172,7 +172,8 @@ export function createPostgresRankedPlayers(
           SELECT ranked.brawlhalla_id, ranked.player_name,
                  ranked.ranked_main_legend_name_key AS legend_name_key, 0 AS source_rank
           FROM players.ranked_profiles ranked
-          WHERE ranked.brawlhalla_id = ${brawlhallaId} AND ranked.last_success_at IS NOT NULL
+          WHERE ranked.brawlhalla_id = ${brawlhallaId}
+            AND ranked.last_success_at IS NOT NULL AND ranked.player_name IS NOT NULL
           UNION ALL
           SELECT legacy.brawlhalla_id, legacy.player_name, NULL::text, 1 AS source_rank
           FROM players.legacy_discovery_profiles legacy
@@ -457,8 +458,7 @@ export function createPostgresRankedPlayers(
               ORDER BY source_rank
               LIMIT 1
             `
-        const playerName = snapshot.name ?? previous?.player_name ?? reference?.player_name
-        if (!playerName) throw new Error(`ranked.name is unavailable for player ${snapshot.brawlhallaId}`)
+        const playerName = snapshot.name ?? previous?.player_name ?? reference?.player_name ?? null
         const one = snapshot.oneVsOne
         await sql`
           INSERT INTO players.ranked_profiles

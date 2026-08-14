@@ -8,6 +8,7 @@ type Sql = ReturnType<typeof postgres>
 type FactRow = {
   brawlhalla_id: number
   player_name: string | null
+  last_success_at: Date | null
   region: string | null
   rating: number | null
   ranked_main_legend_name_key: string | null
@@ -42,7 +43,7 @@ async function sourceVersion(sql: Sql): Promise<number> {
 async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDiscoveryFact[]> {
   if (requestedIds && requestedIds.length === 0) return []
   const ranked = await sql<FactRow[]>`
-    SELECT brawlhalla_id, player_name, region, rating, ranked_main_legend_name_key
+    SELECT brawlhalla_id, player_name, last_success_at, region, rating, ranked_main_legend_name_key
     FROM players.ranked_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
@@ -112,7 +113,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
       })
       const name = nameEvidence?.name ?? fallback?.player_name
       if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
-      const canonicalAvailable = canonical?.player_name !== null && canonical?.player_name !== undefined
+      const canonicalAvailable = canonical?.last_success_at !== null && canonical?.last_success_at !== undefined
       const aliases = [...(aliasesById.get(brawlhallaId) ?? [])]
       for (const candidate of [canonical?.player_name, career?.player_name, fallback?.player_name]) {
         if (
