@@ -7,6 +7,7 @@ import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overl
 import { addV2PlayerImport } from './migrations/0007-add-v2-player-import'
 import { addLegacyBestLegend } from './migrations/0008-add-legacy-best-legend'
 import { addCareerGuild } from './migrations/0009-add-career-guild'
+import { allowRankedWithoutIdentity } from './migrations/0010-allow-ranked-without-identity'
 
 export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
 export {
@@ -56,4 +57,5 @@ export const playerMigrationInventory = [
   addV2PlayerImport,
   addLegacyBestLegend,
   addCareerGuild,
+  allowRankedWithoutIdentity,
 ] as const

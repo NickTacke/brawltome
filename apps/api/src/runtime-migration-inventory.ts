@@ -50,4 +50,5 @@ export const runtimeMigrationInventory = [
   playerMigrationInventory[7],
   rankingMigrationInventory[5],
   playerMigrationInventory[8],
+  playerMigrationInventory[9],
 ] as const

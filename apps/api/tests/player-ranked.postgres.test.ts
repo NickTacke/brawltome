@@ -202,6 +202,32 @@ describe('Players-owned canonical ranked state', () => {
     }
   })
 
+  test('publishes ranked facts without inventing identity when V0 omits the player name', async () => {
+    const brawlhallaId = 91913948
+    const players = createPostgresRankedPlayers(connectionString)
+    const operations = createPostgresRefreshOperations(connectionString)
+    try {
+      const lease = await claimRankedOperation(operations, brawlhallaId)
+      expect(
+        await refreshCanonicalRankedPlayer(
+          players,
+          source({ ...snapshot, brawlhalla_id: brawlhallaId, name: '', rating: 1700, '2v2': [] }),
+          brawlhallaId,
+          { caller: 'on-demand' },
+          effectFor(lease),
+        ),
+      ).toBe('applied')
+      expect(await players.byId(brawlhallaId)).toMatchObject({
+        snapshot: { oneVsOne: { rating: 1700 } },
+      })
+      expect(await players.referenceById(brawlhallaId)).toBeNull()
+      expect(await operations.commitInteractiveSection(lease, 'ranked')).toBe('transitioned')
+      expect(await operations.complete(lease)).toBe('transitioned')
+    } finally {
+      await Promise.all([players.close(), operations.close()])
+    }
+  })
+
   test('preserves an imported identity when V0 ranked omits the player name', async () => {
     const brawlhallaId = 91913849
     const control = postgres(connectionString, { max: 1 })
