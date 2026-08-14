@@ -9,7 +9,7 @@ import {
 
 export const defaultLeaderboardPageDepth = 20
 export const maxLeaderboardPageDepth = 20
-export const defaultLeaderboardIntervalMs = 60 * 60 * 1000
+export const defaultLeaderboardIntervalMs = 15 * 60 * 1000
 
 export type LeaderboardScope = 'all' | RegionalLeaderboardScope
 export type LeaderboardOperationKind =

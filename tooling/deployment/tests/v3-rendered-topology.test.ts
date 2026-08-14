@@ -60,7 +60,7 @@ describe('rendered V3 deployment topology', () => {
       'operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes',
     ],
     ['LEADERBOARD_PAGE_DEPTH', '1', 'operations-worker must retain adaptive leaderboard depth 20'],
-    ['LEADERBOARD_INTERVAL_MS', '900000', 'operations-worker must retain hourly leaderboard cadence'],
+    ['LEADERBOARD_INTERVAL_MS', '3600000', 'operations-worker must retain 15-minute leaderboard cadence'],
     ['OPERATIONS_TOTAL_CONCURRENCY', '3', 'operations-worker must retain two total operation slots'],
     ['OPERATIONS_INTERACTIVE_RESERVATION', '2', 'operations-worker must retain one reserved interactive slot'],
     ['OPERATIONS_INTERACTIVE_CONCURRENCY', '1', 'operations-worker must retain two interactive operation slots'],
