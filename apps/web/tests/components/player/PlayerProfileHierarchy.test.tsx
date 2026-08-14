@@ -156,6 +156,55 @@ describe('PlayerProfileHierarchy', () => {
     expect(html).toContain('2h')
   })
 
+  test('renders the spaced Red Raptor name while retaining its asset slug', () => {
+    const redRaptorCareer = {
+      ...career,
+      snapshot: {
+        ...career.snapshot,
+        legends: [
+          {
+            legendId: 17,
+            legendNameKey: 'redraptor',
+            xp: 100,
+            level: 2,
+            xpPercentage: 0.5,
+            games: 10,
+            wins: 4,
+            matchTime: 600,
+            kos: 20,
+            falls: 15,
+            suicides: 0,
+            teamKos: 1,
+            damageDealt: '100',
+            damageTaken: '80',
+            unarmed: { damage: '10', kos: 2 },
+            thrownItem: { damage: '1', kos: 1 },
+            gadgets: { damage: '2', kos: 0 },
+            weaponOne: { damage: '60', kos: 12, heldTime: 500 },
+            weaponTwo: { damage: '27', kos: 5, heldTime: 100 },
+          },
+        ],
+      },
+    }
+    const html = renderToStaticMarkup(
+      <PlayerProfileHierarchy
+        player={{
+          brawlhallaId: 42,
+          name: 'Canonical Player',
+          aliases: [],
+          clan: null,
+          currentSeason: unavailableRanked,
+          career: redRaptorCareer,
+        }}
+        refreshing={false}
+        careerRefreshing={false}
+      />,
+    )
+
+    expect(html).toContain('Red Raptor')
+    expect(html).not.toContain('>redraptor</h3>')
+  })
+
   test('does not mutate V2 legend order while rendering the XP sort', () => {
     const statsLegends = [
       { legendId: 3, legendNameKey: 'bodvar', xp: 100 },

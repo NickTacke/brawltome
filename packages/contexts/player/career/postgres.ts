@@ -386,6 +386,16 @@ export function createPostgresCareerPlayers(
             )}
           `
         }
+        await sql`
+          WITH version AS (
+            UPDATE players.discovery_state
+            SET source_version = source_version + 1
+            WHERE singleton
+            RETURNING source_version
+          )
+          INSERT INTO players.discovery_outbox (brawlhalla_id, source_version)
+          SELECT ${snapshot.brawlhallaId}, source_version FROM version
+        `
         return 'applied' as const
       })
     },

@@ -222,6 +222,7 @@ export function decodeV0RankedSnapshot(payload: unknown, requestedBrawlhallaId: 
     const team = record(value, `ranked.2v2[${index}]`)
     const brawlhallaIdOne = integer(team.brawlhalla_id_one, `ranked.2v2[${index}].brawlhalla_id_one`, 1)
     const brawlhallaIdTwo = integer(team.brawlhalla_id_two, `ranked.2v2[${index}].brawlhalla_id_two`)
+    if (brawlhallaIdOne === brawlhallaId && brawlhallaIdTwo === brawlhallaId) continue
     const key =
       brawlhallaIdTwo === 0
         ? `solo:${index}`

@@ -304,6 +304,27 @@ describe('Players V2 import', () => {
       `
       expect(rejection).toEqual({ code: 'history-tier-unavailable', source_key: '102' })
 
+      await inspect`
+        INSERT INTO players.career_profiles
+          (brawlhalla_id, player_name, checked_at, last_success_at, xp, level, xp_percentage,
+           games, wins, match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick,
+           snowball_hits, bomb_kos, mine_kos, spikeball_kos, sidekick_kos, snowball_kos)
+        VALUES
+          (42, 'Legacy | Forty Two', clock_timestamp(), clock_timestamp(), 0, 0, 0,
+           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+      `
+      await inspect`
+        INSERT INTO players.career_legends
+          (brawlhalla_id, ordinal, legend_id, legend_name_key, xp, level, xp_percentage,
+           games, wins, match_time, kos, falls, suicides, team_kos, damage_dealt, damage_taken,
+           damage_unarmed, ko_unarmed, damage_thrown_item, ko_thrown_item, damage_gadgets, ko_gadgets,
+           damage_weapon_one, ko_weapon_one, time_held_weapon_one,
+           damage_weapon_two, ko_weapon_two, time_held_weapon_two)
+        VALUES
+          (42, 0, 3, 'bodvar', 3000, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+          (42, 1, 31, 'ragnir', 4000, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+      `
+
       const source = createPostgresPlayerDiscoverySource(connectionString)
       try {
         const facts = await source.snapshot()
@@ -313,6 +334,7 @@ describe('Players V2 import', () => {
             name: 'Legacy | Forty Two',
             rating: null,
             viewCount: 9,
+            bestLegendNameKey: 'ragnir',
             aliases: ['Former Name'],
           }),
         )

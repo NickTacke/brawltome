@@ -117,6 +117,21 @@ describe('V0 ranked snapshot source contract', () => {
     ).toMatchObject({ name: null, oneVsOne: { rating: 0, peakRating: 0, tier: 'none', region: '' } })
   })
 
+  test('omits impossible provider self-teams without discarding valid ranked data', () => {
+    const selfTeam = {
+      ...completeSnapshot['2v2'][0],
+      brawlhalla_id_two: completeSnapshot.brawlhalla_id,
+      teamname: 'Invalid Self Team',
+    }
+    const decoded = decodeV0RankedSnapshot(
+      { ...completeSnapshot, '2v2': [completeSnapshot['2v2'][0], selfTeam, selfTeam] },
+      completeSnapshot.brawlhalla_id,
+    )
+
+    expect(decoded.fixedTeams).toHaveLength(1)
+    expect(decoded.fixedTeams[0]).toMatchObject({ brawlhallaIdOne: 91913839, brawlhallaIdTwo: 42 })
+  })
+
   test('accepts authoritative empty arrays and preserves multiple Solo Queue rows in source order', () => {
     const secondSolo = {
       ...completeSnapshot['2v2'][1],
@@ -144,6 +159,10 @@ describe('V0 ranked snapshot source contract', () => {
     {
       ...completeSnapshot,
       '2v2': [{ ...completeSnapshot['2v2'][0], region: 99 }],
+    },
+    {
+      ...completeSnapshot,
+      '2v2': [{ ...completeSnapshot['2v2'][0], brawlhalla_id_one: 42, brawlhalla_id_two: 42 }],
     },
     {
       ...completeSnapshot,

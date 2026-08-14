@@ -911,6 +911,19 @@ const data = [
     "weaponTwo": "RocketLance",
     "isActive": true,
     "isBeta": false
+  },
+  {
+    "heroId": 71,
+    "heroName": "ActualGladiator",
+    "displayName": "AURUS",
+    "strength": 6,
+    "dexterity": 6,
+    "weight": 6,
+    "speed": 4,
+    "weaponOne": "Chakram",
+    "weaponTwo": "Spear",
+    "isActive": true,
+    "isBeta": false
   }
 ] as const
 
