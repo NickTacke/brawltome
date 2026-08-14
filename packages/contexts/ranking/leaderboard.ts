@@ -1,4 +1,3 @@
-import { currentOneVsOneBracket } from '@brawltome/game-data'
 import { resolveTier } from './commands/sweep-helpers'
 import {
   type LeaderboardMode,
@@ -182,28 +181,11 @@ function validateDepth(depth: number): void {
   }
 }
 
-const STATISTICS_BRACKET_TARGET = 125
-
-function hasAdaptiveCoverage(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[]): boolean {
-  if (mode !== '1v1') {
-    const lastPage = pages.at(-1)
-    return Boolean(lastPage?.rankings.every(({ tier }) => tier !== null && !tier.startsWith('Valhallan')))
-  }
-  let platinum = 0
-  let diamondPlus = 0
-  for (const { rankings } of pages) {
-    for (const { rating } of rankings) {
-      const bracket = currentOneVsOneBracket(rating)
-      if (bracket === 'Platinum') platinum += 1
-      else if (bracket === 'Diamond+') diamondPlus += 1
-    }
-  }
-  return platinum >= STATISTICS_BRACKET_TARGET && diamondPlus >= STATISTICS_BRACKET_TARGET
-}
-
 function collectionCanPublish(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[], depth: number): boolean {
   const lastPage = pages.at(-1)
-  return Boolean(lastPage && (pages.length >= Math.min(lastPage.totalPages, depth) || hasAdaptiveCoverage(mode, pages)))
+  if (!lastPage) return false
+  if (pages.length >= Math.min(lastPage.totalPages, depth)) return true
+  return mode === '3v3' && lastPage.rankings.every(({ tier }) => tier !== null && !tier.startsWith('Valhallan'))
 }
 
 function publishedIdentity(identity: SourceLeaderboardIdentity): PublishedLeaderboardIdentity {
@@ -287,12 +269,11 @@ function validateRegionRows(
         peakRating: row.best_rating,
         wins: row.wins,
         losses: row.losses,
-        tier: mode === 'solo2v2' ? resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier : row.tier,
+        tier: resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier,
       })
     }
   }
-  if (mode !== 'solo2v2') return rows
-  return rows.sort(compareSoloRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  return rows.sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 const regionOrder = new Map(regionalLeaderboardScopes.map((region, index) => [region, index]))
@@ -301,22 +282,19 @@ function firstIdentityId(identity: PublishedLeaderboardIdentity): number {
   return identity.type === 'fixed-two-vs-two-team' ? identity.players[0].brawlhallaId : identity.player.brawlhallaId
 }
 
-function compareSoloRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
+function comparePublishedRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
   return (
     right.rating - left.rating ||
     right.wins - left.wins ||
-    right.peakRating - left.peakRating ||
-    left.losses - right.losses ||
-    left.sourceRank - right.sourceRank ||
-    firstIdentityId(left.identity) - firstIdentityId(right.identity)
+    identityKeyForSort(left.identity).localeCompare(identityKeyForSort(right.identity), 'en', { numeric: true })
   )
 }
 
-function compareGlobalRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
+function compareDuplicateRows(left: PublishedLeaderboardRow, right: PublishedLeaderboardRow): number {
   return (
     right.rating - left.rating ||
-    right.peakRating - left.peakRating ||
     right.wins - left.wins ||
+    right.peakRating - left.peakRating ||
     left.losses - right.losses ||
     left.sourceRank - right.sourceRank ||
     (regionOrder.get(left.region) ?? 0) - (regionOrder.get(right.region) ?? 0) ||
@@ -342,10 +320,10 @@ function buildGlobal(
     for (const row of rows) {
       const key = identityKey(mode, row.identity)
       const existing = strongest.get(key)
-      if (!existing || compareGlobalRows(row, existing) < 0) strongest.set(key, row)
+      if (!existing || compareDuplicateRows(row, existing) < 0) strongest.set(key, row)
     }
   }
-  return [...strongest.values()].sort(compareGlobalRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  return [...strongest.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 function errorDetails(error: unknown): { code: string; message: string } {
