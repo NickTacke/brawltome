@@ -33,11 +33,11 @@ export type ClanProfileWrite = {
 
 export type ClanMemberWrite = {
   brawlhallaId: number
-  name: string
-  rank: string
-  joinDate: Date
+  name: string | null
+  rank: string | null
+  joinDate: Date | null
   xp: string
-  guildPoints: string
+  guildPoints: string | null
 }
 
 export type ClanPublicationResult = 'applied' | 'already-applied' | 'fenced' | 'superseded'
@@ -69,9 +69,9 @@ type RosterStateRow = {
 
 type MemberRow = {
   brawlhalla_id: number
-  name: string
-  rank: string
-  join_date: Date
+  name: string | null
+  rank: string | null
+  join_date: Date | null
   xp: string
   guild_points: string | null
 }

@@ -3,12 +3,12 @@ import { filterMembers, paginateMembers, sortMembers } from '../../../../src/com
 
 const M = (
   id: number,
-  extra: Partial<{ name: string; rating: number; xp: number; rank: string; joinDate: string }> = {},
+  extra: Partial<{ name: string; rating: number; xp: string; rank: string; joinDate: string }> = {},
 ) => ({
   brawlhallaId: id,
   name: extra.name ?? `m${id}`,
   rating: extra.rating ?? 0,
-  xp: extra.xp ?? 0,
+  xp: extra.xp ?? '0',
   rank: extra.rank ?? 'member',
   joinDate: extra.joinDate ?? '2024-01-01T00:00:00Z',
 })
@@ -57,11 +57,17 @@ describe('filterMembers', () => {
   it('returns empty when nothing matches', () => {
     expect(filterMembers(members, 'zzz')).toEqual([])
   })
+
+  it('matches a member without a name by ID only', () => {
+    const nameless = { ...M(404), name: null }
+    expect(filterMembers([nameless], '404')).toEqual([nameless])
+    expect(filterMembers([nameless], 'player')).toEqual([])
+  })
 })
 
 describe('sortMembers', () => {
   it('sorts by xp descending', () => {
-    const all = [M(1, { xp: 10 }), M(2, { xp: 50 }), M(3, { xp: 30 })]
+    const all = [M(1, { xp: '10' }), M(2, { xp: '50' }), M(3, { xp: '30' })]
     expect(sortMembers(all, 'xp').map((m) => m.brawlhallaId)).toEqual([2, 3, 1])
   })
 
@@ -76,8 +82,14 @@ describe('sortMembers', () => {
     expect(sortMembers(all, 'default').map((m) => m.brawlhallaId)).toEqual([2, 3, 5, 4, 1])
   })
 
+  it('sorts unavailable rank and join date after known members', () => {
+    const unknown = { ...M(1), rank: null, joinDate: null }
+    const known = M(2, { rank: 'member', joinDate: '2024-01-01T00:00:00Z' })
+    expect(sortMembers([unknown, known], 'default').map((member) => member.brawlhallaId)).toEqual([2, 1])
+  })
+
   it('does not mutate input', () => {
-    const all = [M(1, { xp: 10 }), M(2, { xp: 50 })]
+    const all = [M(1, { xp: '10' }), M(2, { xp: '50' })]
     const snapshot = [...all]
     sortMembers(all, 'xp')
     expect(all).toEqual(snapshot)

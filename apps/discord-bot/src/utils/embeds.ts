@@ -180,7 +180,8 @@ export function buildClanEmbed(
         const rank = start + i + 1
         const rankIcon = member.rank === 'Leader' ? '👑' : member.rank === 'Officer' ? '⭐' : `\`${rank}.\``
 
-        const memberLink = `[${escapeDiscordText(truncate(member.name, 20))}](https://brawltome.app/player/${member.brawlhallaId})`
+        const name = member.name ?? `Player ${member.brawlhallaId}`
+        const memberLink = `[${escapeDiscordText(truncate(name, 20))}](https://brawltome.app/player/${member.brawlhallaId})`
         const memberXp = ` • \`${formatDecimal(member.xp)} XP\``
 
         return `${rankIcon} **${memberLink}**${memberXp}`

@@ -24,9 +24,9 @@ const sectionSchema = z
 const clanMemberSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
-    name: z.string().min(1).max(256),
-    rank: z.string().min(1).max(64),
-    joinDate: dateTimeSchema,
+    name: z.string().min(1).max(256).nullable(),
+    rank: z.string().min(1).max(64).nullable(),
+    joinDate: dateTimeSchema.nullable(),
     xp: decimalXpSchema,
     guildPoints: decimalXpSchema.nullable(),
   })

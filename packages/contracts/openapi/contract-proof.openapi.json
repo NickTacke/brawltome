@@ -58,16 +58,19 @@
                 },
                 "joinDate": {
                   "format": "date-time",
+                  "nullable": true,
                   "type": "string"
                 },
                 "name": {
                   "maxLength": 256,
                   "minLength": 1,
+                  "nullable": true,
                   "type": "string"
                 },
                 "rank": {
                   "maxLength": 64,
                   "minLength": 1,
+                  "nullable": true,
                   "type": "string"
                 },
                 "xp": {
@@ -351,16 +354,19 @@
                     },
                     "joinDate": {
                       "format": "date-time",
+                      "nullable": true,
                       "type": "string"
                     },
                     "name": {
                       "maxLength": 256,
                       "minLength": 1,
+                      "nullable": true,
                       "type": "string"
                     },
                     "rank": {
                       "maxLength": 64,
                       "minLength": 1,
+                      "nullable": true,
                       "type": "string"
                     },
                     "xp": {

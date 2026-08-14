@@ -31,6 +31,18 @@ describe('canonical Clan contract', () => {
     expect(clanProfileSchema.parse(profile)).toEqual(profile)
   })
 
+  test('represents unavailable member metadata as null', () => {
+    const member = {
+      brawlhallaId: 42,
+      name: null,
+      rank: null,
+      joinDate: null,
+      xp: '123',
+      guildPoints: null,
+    }
+    expect(clanProfileSchema.parse({ ...profile, members: [member] }).members).toEqual([member])
+  })
+
   test('allows a 41-digit derived lifetime while rejecting unsafe numeric XP', () => {
     expect(
       clanProfileSchema.parse({ ...profile, clanLifetimeXp: '19999999999999999999999999999999999999999' })

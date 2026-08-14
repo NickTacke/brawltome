@@ -6,8 +6,8 @@ import { Crown, Shield, User, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import type { ClanMember } from './utils'
 
-const getRankIcon = (rank: string) => {
-  switch (rank.toLowerCase()) {
+const getRankIcon = (rank: string | null) => {
+  switch (rank?.toLowerCase()) {
     case 'leader':
       return <Crown className="w-5 h-5 text-yellow-500" />
     case 'officer':
@@ -27,7 +27,8 @@ const JOIN_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 })
 
-const formatJoinedDate = (value: string | Date) => JOIN_DATE_FORMATTER.format(new Date(value))
+const formatJoinedDate = (value: string | Date | null) =>
+  value ? JOIN_DATE_FORMATTER.format(new Date(value)) : 'Unavailable'
 
 interface MemberRowProps {
   member: ClanMember
@@ -35,6 +36,8 @@ interface MemberRowProps {
 }
 
 export function MemberRow({ member, totalClanXp }: MemberRowProps) {
+  const name = member.name ? fixEncoding(member.name) : `Player ${member.brawlhallaId}`
+  const rank = member.rank ?? 'Unknown'
   const total = BigInt(totalClanXp)
   const contribution = (() => {
     if (total === 0n) return null
@@ -48,7 +51,7 @@ export function MemberRow({ member, totalClanXp }: MemberRowProps) {
         <Link
           href={href}
           prefetch={false}
-          aria-label={`${fixEncoding(member.name)} clan rank: ${member.rank}`}
+          aria-label={`${name} clan rank: ${rank}`}
           className="block w-full h-full p-4"
         >
           <div className="flex items-center justify-center">{getRankIcon(member.rank)}</div>
@@ -56,9 +59,7 @@ export function MemberRow({ member, totalClanXp }: MemberRowProps) {
       </TableCell>
       <TableCell className="p-0">
         <Link href={href} prefetch={false} className="block w-full h-full p-4">
-          <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
-            {fixEncoding(member.name)}
-          </span>
+          <span className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">{name}</span>
         </Link>
       </TableCell>
       <TableCell className="p-0 text-right font-mono">
