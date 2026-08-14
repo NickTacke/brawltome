@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createHash, randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { OperationLease } from '@brawltome/refresh-operations'
 import {
   createPostgresRefreshOperations,
@@ -547,6 +550,76 @@ describe('dead-letter operations', () => {
     }
     await operations.close()
   })
+
+  test('runs every CLI command with only dedicated dead-letter privileges', async () => {
+    const role = 'brawltome_dead_letter'
+    const rolePassword = `operator-${randomUUID()}`
+    const rawToken = `raw-secret-${randomUUID()}`
+    const databaseUrl = new URL(connectionString)
+    const secretRoot = mkdtempSync(join(tmpdir(), 'brawltome-dead-letter-role-'))
+    writeFileSync(join(secretRoot, 'postgres_owner_password'), decodeURIComponent(databaseUrl.password), {
+      mode: 0o400,
+    })
+    writeFileSync(join(secretRoot, 'postgres_dead_letter_password'), rolePassword, { mode: 0o400 })
+
+    const configured = Bun.spawn(
+      ['sh', resolve(import.meta.dir, '../../../../deploy/v3/postgres/configure-dead-letter-role.sh')],
+      {
+        env: {
+          ...process.env,
+          BRAWLTOME_SECRETS_ROOT: secretRoot,
+          PGDATABASE: databaseName,
+          PGHOST: databaseUrl.hostname,
+          PGPASSWORD: decodeURIComponent(databaseUrl.password),
+          PGPORT: databaseUrl.port,
+          PGUSER: decodeURIComponent(databaseUrl.username),
+        },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    )
+    const [configuredExitCode, configuredStderr] = await Promise.all([
+      configured.exited,
+      new Response(configured.stderr).text(),
+    ])
+    expect(configuredExitCode, configuredStderr).toBe(0)
+
+    const operatorUrl = new URL(connectionString)
+    operatorUrl.username = role
+    operatorUrl.password = rolePassword
+    const env = { ...operatorEnv(rawToken), DEAD_LETTER_DATABASE_URL: operatorUrl.toString() }
+    const replayTarget = await createDeadLetter('restricted-replay')
+    const discardTarget = await createDeadLetter('restricted-discard')
+    await replayTarget.operations.close()
+    await discardTarget.operations.close()
+
+    try {
+      expect((await runCli(['list'], env)).exitCode).toBe(0)
+      expect((await runCli(['inspect', replayTarget.operationId], env)).exitCode).toBe(0)
+      expect((await runCli(['replay', replayTarget.operationId, '--reason', 'source repaired'], env)).exitCode).toBe(0)
+      expect((await runCli(['discard', discardTarget.operationId, '--reason', 'invalid request'], env)).exitCode).toBe(
+        0,
+      )
+
+      const restricted = postgres(operatorUrl.toString(), { max: 1 })
+      try {
+        await expect((async () => restricted`DELETE FROM refresh_operations.operations`)()).rejects.toMatchObject({
+          code: '42501',
+        })
+        await expect(
+          (async () => restricted`UPDATE refresh_operations.dead_letter_actions SET reason = 'tampered'`)(),
+        ).rejects.toMatchObject({ code: '42501' })
+      } finally {
+        await restricted.end()
+      }
+    } finally {
+      const owner = postgres(connectionString, { max: 1 })
+      await owner.unsafe(`DROP OWNED BY ${role}`)
+      await owner.end()
+      await admin.unsafe(`DROP ROLE IF EXISTS ${role}`)
+      rmSync(secretRoot, { force: true, recursive: true })
+    }
+  }, 15_000)
 
   test('authenticates the JSON CLI before PostgreSQL and never exposes token material', async () => {
     const rawToken = `raw-secret-${randomUUID()}`

@@ -450,6 +450,9 @@ export const launchParityMatrix: readonly ParityRow[] = [
       'packages/contexts/refresh-operations/operator-auth.ts',
       'packages/contexts/refresh-operations/postgres.ts',
       'packages/contexts/refresh-operations/migrations/0008-add-dead-letter-operations.ts',
+      'deploy/v3/postgres/configure-dead-letter-role.sh',
+      'deploy/v3/run-with-secrets.sh',
+      'deploy/v3/compose.yml',
     ],
     evidence: [
       {
@@ -457,6 +460,12 @@ export const launchParityMatrix: readonly ParityRow[] = [
         path: 'packages/contexts/refresh-operations/tests/dead-letters.postgres.test.ts',
         assertion:
           'Real PostgreSQL and spawned CLI tests prove authentication, redaction, lineage, concurrency, idempotency, and immutable audit behavior.',
+      },
+      {
+        kind: 'integration',
+        path: 'tooling/deployment/tests/v3-topology.test.ts',
+        assertion:
+          'Profile-gated role provisioning and CLI services expose no ports and receive only dedicated secrets.',
       },
       {
         kind: 'unit',
