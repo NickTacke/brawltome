@@ -30,17 +30,29 @@ const fakeDbLegend = {
   weaponTwo: 'Sword',
 }
 
-function makeDb(dbLegends: unknown[] = []) {
+function makeDb(dbLegends: Array<Record<string, unknown>> = []) {
+  const rows = [...dbLegends]
   return {
     query: {
       legend: {
-        findMany: async () => dbLegends,
+        findMany: async () => rows,
       },
     },
     insert: () => ({
-      values: () => ({
-        onConflictDoUpdate: async () => {},
-      }),
+      values: (values: Record<string, unknown> | Array<Record<string, unknown>>) => {
+        const incoming = Array.isArray(values) ? values : [values]
+        const upsert = (overwrite: boolean) => {
+          for (const value of incoming) {
+            const index = rows.findIndex((row) => row.legendId === value.legendId)
+            if (index < 0) rows.push(value)
+            else if (overwrite) rows[index] = { ...rows[index], ...value }
+          }
+        }
+        return {
+          onConflictDoNothing: async () => upsert(false),
+          onConflictDoUpdate: async () => upsert(true),
+        }
+      },
     }),
   }
 }
@@ -57,10 +69,13 @@ describe('initGameData', () => {
     expect(getLegendById(3)).toBeDefined()
   })
 
-  it('API empty + DB empty -> resolves without throwing', async () => {
-    const bhapi = { getAllLegendsV1: async () => [] }
+  it('seeds committed legends when the API list lags', async () => {
+    const bhapi = { getAllLegendsV1: async () => [fakeApiLegend] }
     const db = makeDb([])
     await expect(initGameData(db as never, bhapi as never)).resolves.toBeUndefined()
+    expect(getLegendById(71)).toMatchObject({ legendNameKey: 'aurus', bioName: 'Aurus' })
+    expect(getLegendById(1)).toBeUndefined()
+    expect(getLegendById(2)).toBeUndefined()
   })
 
   it('no bhapi -> loads from DB', async () => {
