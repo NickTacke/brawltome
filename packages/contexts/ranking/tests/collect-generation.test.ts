@@ -256,6 +256,39 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     expect(recorder.published[0].snapshots.get('EU')).toHaveLength(100)
   })
 
+  test('deduplicates repeated regional identities using rating then wins while preserving source rank', async () => {
+    const recorder = publicationRecorder()
+    await collectAndPublishLeaderboardGeneration({
+      mode: 'solo2v2',
+      authorization: auth('solo2v2'),
+      pageDepth: 2,
+      source: {
+        async fetchPage({ region, page }) {
+          const offset = regionalLeaderboardScopes.indexOf(region) * 10_000
+          return {
+            rankings: Array.from({ length: 50 }, (_, index) => {
+              const rank = (page - 1) * 50 + index + 1
+              const id = page === 2 && index === 0 ? offset + 1 : offset + rank
+              const result = row(region, 'solo2v2', id, rank, id === offset + 1 ? 2_400 : 2_000)
+              if (page === 2 && index === 0) result.wins = 30
+              return result
+            }),
+            totalPages: 2,
+          }
+        },
+      },
+      publication: recorder.publication,
+    })
+
+    expect(recorder.published[0].snapshots.get('EU')).toHaveLength(99)
+    expect(recorder.published[0].snapshots.get('EU')?.[0]).toMatchObject({
+      standing: 1,
+      sourceRank: 51,
+      rating: 2_400,
+      wins: 30,
+    })
+  })
+
   test('chooses a cross-region duplicate by wins before peak rating', async () => {
     const recorder = publicationRecorder()
     await collectAndPublishLeaderboardGeneration({
