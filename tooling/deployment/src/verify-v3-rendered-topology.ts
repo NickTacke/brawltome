@@ -111,8 +111,8 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'LEADERBOARD_PAGE_DEPTH') !== '20') {
       violations.push('operations-worker must retain adaptive leaderboard depth 20')
     }
-    if (readPath(worker, 'environment', 'LEADERBOARD_INTERVAL_MS') !== '3600000') {
-      violations.push('operations-worker must retain hourly leaderboard cadence')
+    if (readPath(worker, 'environment', 'LEADERBOARD_INTERVAL_MS') !== '900000') {
+      violations.push('operations-worker must retain 15-minute leaderboard cadence')
     }
     if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two total operation slots')

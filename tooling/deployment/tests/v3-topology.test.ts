@@ -153,7 +153,7 @@ describe('V3 production topology', () => {
     const workerEnvironment = rendered.services['v3-operations-worker'].environment
     expect(workerEnvironment).toMatchObject({
       BRAWLHALLA_V1_REQUEST_LIMIT: '1800',
-      LEADERBOARD_INTERVAL_MS: '3600000',
+      LEADERBOARD_INTERVAL_MS: '900000',
       LEADERBOARD_PAGE_DEPTH: '20',
       OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
       OPERATIONS_INTERACTIVE_RESERVATION: '1',
