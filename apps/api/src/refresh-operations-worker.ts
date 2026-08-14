@@ -29,6 +29,7 @@ type StatisticsCollectionLease = Extract<
 >
 type StatisticsPublicationLease = Extract<StatisticsLease, { kind: 'statistics-publication' }>
 type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'statistics-legend-meta-publication' }>
+type ReplaySimulationLease = Extract<OperationLease, { kind: 'replay-simulation' }>
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
@@ -72,6 +73,10 @@ type RunOneRefreshOperationOptions = {
   executePlayerProjection?(lease: ProjectionLease): Promise<void>
   executeClanProjection?(lease: ProjectionLease): Promise<void>
   executeDiscoveryReconciliation?(lease: ReconciliationLease): Promise<void>
+  executeReplaySimulation?(lease: ReplaySimulationLease, signal: AbortSignal): Promise<{ detailedStatsKey: string }>
+  executionSignal?: AbortSignal
+  claimKind?: OperationLease['kind']
+  excludedKinds?: readonly OperationLease['kind'][]
   projectionEffectState?(
     kind: ProjectionLease['kind'],
     effectOperationId: string,
@@ -100,6 +105,24 @@ function sourceRetryAfterMs(error: unknown): number | null {
     return Math.max(0, error.retryAfterMs)
   }
   return null
+}
+
+function combineAbortSignals(signals: readonly AbortSignal[]): AbortSignal {
+  const activeSignals = signals.filter((signal) => !signal.aborted)
+  if (activeSignals.length !== signals.length) return AbortSignal.abort()
+  if (activeSignals.length === 1) return activeSignals[0]
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(activeSignals)
+  const controller = new AbortController()
+  const cleanups: Array<() => void> = []
+  const abort = () => {
+    for (const cleanup of cleanups.splice(0)) cleanup()
+    controller.abort()
+  }
+  for (const signal of activeSignals) {
+    signal.addEventListener('abort', abort, { once: true })
+    cleanups.push(() => signal.removeEventListener('abort', abort))
+  }
+  return controller.signal
 }
 
 function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise<void> {
@@ -194,6 +217,35 @@ async function executeProof(
     const transition = await operations.fail(
       lease,
       { code: 'effect_conflict', message: 'Operation key belongs to a different effect', retryable: false },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
+async function executeReplaySimulation(
+  operations: RefreshOperationWorker,
+  lease: ReplaySimulationLease,
+  options: RunOneRefreshOperationOptions,
+  signal: AbortSignal,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.executeReplaySimulation) {
+    const transition = await operations.fail(
+      lease,
+      { code: 'replay_executor_unavailable', message: 'Replay simulator executor is not configured', retryable: false },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  const { detailedStatsKey } = await options.executeReplaySimulation(lease, signal)
+  if (signal.aborted) return 'lease_lost'
+  const effect = await operations.commitReplaySimulationEffect(lease, detailedStatsKey)
+  if (effect === 'lease-lost') return 'lease_lost'
+  if (effect === 'effect-conflict') {
+    const transition = await operations.fail(
+      lease,
+      { code: 'effect_conflict', message: 'Replay simulation key belongs to a different effect', retryable: false },
       0,
     )
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
@@ -646,7 +698,8 @@ export async function runOneRefreshOperation(
   workerId: string,
   options: RunOneRefreshOperationOptions,
 ): Promise<boolean> {
-  const claimed = await operations.claim(workerId, options.leaseMs, options.admission)
+  const excludedKinds = options.claimKind ? [] : (options.excludedKinds ?? (['replay-simulation'] as const))
+  const claimed = await operations.claim(workerId, options.leaseMs, options.admission, options.claimKind, excludedKinds)
   if (!claimed) return false
   const lease: OperationLease = claimed
 
@@ -698,6 +751,13 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeDiscoveryReconciliation(operations, lease, options)
       } else if (lease.kind === 'ranked-player-pulse') {
         attemptOutcome = await executeRankedPulse(operations, lease, options)
+      } else if (lease.kind === 'replay-simulation') {
+        attemptOutcome = await executeReplaySimulation(
+          operations,
+          lease,
+          options,
+          combineAbortSignals([authorityLost.signal, ...(options.executionSignal ? [options.executionSignal] : [])]),
+        )
       } else if (lease.kind === 'statistics-publication') {
         attemptOutcome = await executeStatisticsPublication(operations, lease, options)
       } else if (lease.kind === 'statistics-legend-meta-publication') {
@@ -780,7 +840,9 @@ export async function runOneRefreshOperation(
                             ? 'statistics_publication_failed'
                             : lease.kind === 'statistics-legend-meta-publication'
                               ? 'statistics_legend_meta_publication_failed'
-                              : 'leaderboard_collection_failed'
+                              : lease.kind === 'replay-simulation'
+                                ? 'replay_simulation_failed'
+                                : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'

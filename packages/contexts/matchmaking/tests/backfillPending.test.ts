@@ -92,6 +92,7 @@ function parsedStub(): ParsedReplay {
     koFaces: [{ entityId: 1, timestampMs: 50 }],
     victoryFaces: null,
     gameDataChecksum: 0,
+    inputs: { entities: [], maxTimestampMs: -1 },
   }
 }
 
@@ -106,6 +107,7 @@ function mockRepo(overrides: Partial<MatchRepo> = {}): MatchRepo {
     insertPlayers: mock(async () => {}),
     insertEvents: mock(async () => {}),
     listPendingByFormatVersion: mock(async () => []),
+    listMissingDetailedStats: mock(async () => []),
     markParsed: mock(async () => {}),
     updatePlayerCosmetics: mock(async () => {}),
     deleteMatch: mock(async () => {}),

@@ -13,3 +13,14 @@ export {
 export { backfillPending, type BackfillDeps } from './commands/backfillPending'
 export { matchHistory, encodeCursor, decodeCursor } from './queries/matchHistory'
 export { matchDetail } from './queries/matchDetail'
+export {
+  analyzeReplay,
+  createReplaySimulatorIdentity,
+  replaySimulatorCompatibilityVersion,
+  replaySimulatorGameBuild,
+  replaySimulatorIdentity,
+  replaySimulatorPatchedSwfSha256,
+  replaySimulatorSchemaVersion,
+  replaySimulatorSupportedFormats,
+  type ReplaySimulatorIdentity,
+} from './replay-analysis'

@@ -78,7 +78,7 @@ services:
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
       CORS_ORIGIN: https://v3.brawltome.app
-      MATCHMAKING_ENABLED: "false"
+      MATCHMAKING_ENABLED: "true"
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PORT: "3000"
@@ -93,6 +93,10 @@ services:
       - metrics_scrape_secret
       - otel_authorization
       - refresh_trust_cookie_secret
+      - r2_access_key_id
+      - r2_secret_access_key
+      - r2_endpoint
+      - r2_bucket
     networks:
       - application
     depends_on:
@@ -188,9 +192,11 @@ services:
       BRAWLHALLA_V1_REQUEST_LIMIT: "1"
       HEALTH_PORT: "3001"
       NODE_ENV: production
+      OPERATIONS_EXECUTION_SLOTS: "2"
       OPERATIONS_INTERACTIVE_CONCURRENCY: "2"
       OPERATIONS_INTERACTIVE_RESERVATION: "1"
-      OPERATIONS_TOTAL_CONCURRENCY: "2"
+      OPERATIONS_REPLAY_SIMULATION_CONCURRENCY: "1"
+      OPERATIONS_TOTAL_CONCURRENCY: "3"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
@@ -232,6 +238,133 @@ services:
           pids: 256
         reservations:
           memory: 256M
+
+  replay-simulator-worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: replay-simulator-worker
+    environment:
+      BRAWLTOME_REPOSITORY_REVISION: ${V3_REPOSITORY_REVISION:?Set deployed git revision}
+      HEALTH_PORT: "3003"
+      NODE_ENV: production
+      OPERATIONS_EXECUTION_SLOTS: "1"
+      OPERATIONS_INTERACTIVE_CONCURRENCY: "2"
+      OPERATIONS_INTERACTIVE_RESERVATION: "1"
+      OPERATIONS_REPLAY_SIMULATION_CONCURRENCY: "1"
+      OPERATIONS_TOTAL_CONCURRENCY: "3"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      REPLAY_SIMULATION_TIMEOUT_MS: "300000"
+      REPLAY_SIMULATOR_RUNTIME_URL: http://replay-simulator-runtime:3004
+      RUNTIME_CLEANUP_RESERVE_MS: "5000"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
+    secrets:
+      - metrics_scrape_secret
+      - runtime_database_url
+      - otel_authorization
+      - r2_access_key_id
+      - r2_secret_access_key
+      - r2_endpoint
+      - r2_bucket
+    networks:
+      - application
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      replay-simulator-runtime:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - const r = await fetch('http://localhost:3003/health/ready'); if (!r.ok) process.exit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 70s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=64m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+          pids: 256
+        reservations:
+          memory: 256M
+
+  replay-simulator-runtime:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: replay-simulator-runtime
+      args:
+        REPLAY_SIMULATOR_RUNTIME_BASE: brawlhalla-replay-spike:steam-replay
+    user: "10001:10001"
+    environment:
+      GAME_DIR: /game
+      HEALTH_PORT: "3004"
+      HOME: /home/runner
+      NODE_ENV: production
+      PLAYBACK_MODE: seek-end
+      PROTON_DIR: /proton
+      REPLAY_SIMULATION_TIMEOUT_MS: "300000"
+      REPLAY_SIMULATOR_TERM_GRACE_MS: "10000"
+      RUNTIME_CLEANUP_RESERVE_MS: "5000"
+      RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      STEAM_ROOT: /home/runner/.steam/debian-installation
+    volumes:
+      - type: volume
+        source: brawlhalla-replay-spike-home
+        target: /home/runner
+      - type: volume
+        source: brawlhalla-replay-spike-game
+        target: /game
+      - type: volume
+        source: brawlhalla-replay-spike-proton
+        target: /proton
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/bun
+        - -e
+        - const r = await fetch('http://localhost:3004/health/ready'); if (!r.ok) process.exit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 70s
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - apparmor:brawlhalla-steam
+      - seccomp:unconfined
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0750,size=512m
+      - /dev/shm:rw,nosuid,nodev,uid=10001,gid=10001,mode=1777,size=512m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 6G
+          pids: 1024
+        reservations:
+          memory: 1G
 
   discord-bot:
     profiles: [discord]
@@ -291,6 +424,14 @@ networks:
     external: true
     name: brawltome-v3
 
+volumes:
+  brawlhalla-replay-spike-home:
+    external: true
+  brawlhalla-replay-spike-game:
+    external: true
+  brawlhalla-replay-spike-proton:
+    external: true
+
 secrets:
   brawlhalla_api_key:
     name: brawltome-v3_brawlhalla_api_key
@@ -319,6 +460,18 @@ secrets:
   postgres_runtime_password:
     name: brawltome-v3_postgres_runtime_password
     file: /var/lib/brawltome-v3-secrets/postgres-runtime-password
+  r2_access_key_id:
+    name: brawltome-v3_r2_access_key_id
+    file: /var/lib/brawltome-v3-secrets/r2-access-key-id
+  r2_secret_access_key:
+    name: brawltome-v3_r2_secret_access_key
+    file: /var/lib/brawltome-v3-secrets/r2-secret-access-key
+  r2_endpoint:
+    name: brawltome-v3_r2_endpoint
+    file: /var/lib/brawltome-v3-secrets/r2-endpoint
+  r2_bucket:
+    name: brawltome-v3_r2_bucket
+    file: /var/lib/brawltome-v3-secrets/r2-bucket
   refresh_trust_cookie_secret:
     name: brawltome-v3_refresh_trust_cookie_secret
     file: /var/lib/brawltome-v3-secrets/refresh-trust-cookie-secret

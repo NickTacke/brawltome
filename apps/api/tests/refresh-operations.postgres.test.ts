@@ -87,6 +87,15 @@ beforeAll(async () => {
         VALUES (${ordinal}, ${migration.identity}, ${migration.checksum})
       `
     }
+    await setup.unsafe(`
+      CREATE TABLE public.matches (
+        slug text PRIMARY KEY,
+        replay_storage_key text NOT NULL,
+        detailed_stats_key text,
+        sim_version integer,
+        sim_ran_at timestamptz
+      );
+    `)
   } finally {
     await setup.end()
   }
@@ -156,6 +165,7 @@ describe('durable Refresh Operations', () => {
       'accounts/0006',
       'statistics/0003',
       'refresh-operations/0016',
+      'refresh-operations/0017',
       'statistics/0004',
       'request-admission/0003',
       'discovery/0003',
@@ -206,7 +216,7 @@ describe('durable Refresh Operations', () => {
         snapshot.deadLetters.find(({ workClass, kind }) => workClass === 'projection' && kind === 'proof')?.count,
       ).toBeGreaterThanOrEqual(1)
       expect(snapshot.scheduleLateness.find(({ kind }) => kind === 'proof')?.latenessMs).toBeGreaterThan(0)
-      expect(snapshot.oldestPending).toHaveLength(6)
+      expect(snapshot.oldestPending).toHaveLength(7)
       expect(pending.operationId).toBeTruthy()
     } finally {
       await control`
@@ -339,6 +349,105 @@ describe('durable Refresh Operations', () => {
       }),
     ).toBe(true)
     await worker.close()
+  })
+
+  test('claims only replay jobs for simulator workers and fences detailed stats publication', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      await control`
+        INSERT INTO public.matches (slug, replay_storage_key)
+        VALUES ('ABC123xyz', 'replays/ABC123xyz.replay')
+      `
+      const accepted = await operations.accept({
+        kind: 'replay-simulation',
+        dedupeKey: 'replay-simulation:ABC123xyz',
+        operationKey: 'replay-simulation:ABC123xyz',
+        workClass: 'replay-simulation',
+        payload: { slug: 'ABC123xyz', replayStorageKey: 'replays/ABC123xyz.replay', formatVersion: 268 },
+        provenance: { source: 'integration-test', requestedBy: 'replay-simulator' },
+      })
+      expect(await operations.claim('normal-worker', 1_000, testAdmission, undefined, ['replay-simulation'])).toBeNull()
+
+      const stale = requireLease(
+        await operations.claim('replay-worker-a', 1_000, testAdmission, 'replay-simulation'),
+        'replay-simulation',
+      )
+      const immutableKey = `stats/ABC123xyz/${'a'.repeat(64)}.json`
+      await expire(stale.operationId)
+      expect(await operations.commitReplaySimulationEffect(stale, immutableKey)).toBe('lease-lost')
+
+      const current = requireLease(
+        await operations.claim('replay-worker-b', 1_000, testAdmission, 'replay-simulation'),
+        'replay-simulation',
+      )
+      expect(await operations.commitReplaySimulationEffect(current, immutableKey)).toBe('applied')
+      expect(await operations.complete(current)).toBe('transitioned')
+      const [match] = await control<{ detailed_stats_key: string; sim_version: number; sim_ran_at: Date }[]>`
+        SELECT detailed_stats_key, sim_version, sim_ran_at FROM public.matches WHERE slug = 'ABC123xyz'
+      `
+      expect(match).toMatchObject({ detailed_stats_key: immutableKey, sim_version: 1 })
+      expect(match.sim_ran_at).toBeInstanceOf(Date)
+      expect((await operations.inspect(accepted.operationId)).replaySimulationEffects).toHaveLength(1)
+    } finally {
+      await control`DELETE FROM public.matches WHERE slug = 'ABC123xyz'`
+      await operations.close()
+      await control.end()
+    }
+  })
+
+  test('rejects proof replay-simulation work and idempotently preserves terminal replay roots', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const operationKey = 'replay-simulation:T3rmRoot1'
+    try {
+      await expect(
+        operations.accept({
+          dedupeKey: `proof:${randomUUID()}`,
+          operationKey: `proof:${randomUUID()}`,
+          workClass: 'replay-simulation' as never,
+          payload: { value: 'not allowed' },
+          provenance: { source: 'integration-test' },
+        }),
+      ).rejects.toThrow('proof operations cannot use replay-simulation work class')
+      await expect(
+        operations.createSchedule({
+          scheduleKey: `proof-schedule:${randomUUID()}`,
+          operationKeyPrefix: `proof-schedule:${randomUUID()}`,
+          workClass: 'replay-simulation' as never,
+          intervalMs: 60_000,
+          firstDueAt: new Date(Date.now() + 60_000).toISOString(),
+          payload: { value: 'not allowed' },
+          provenance: { source: 'integration-test' },
+        }),
+      ).rejects.toThrow('proof schedules cannot use replay-simulation work class')
+
+      const first = await operations.accept({
+        kind: 'replay-simulation',
+        dedupeKey: 'replay-simulation:T3rmRoot1',
+        operationKey,
+        workClass: 'replay-simulation',
+        payload: { slug: 'T3rmRoot1', replayStorageKey: 'replays/T3rmRoot1.replay', formatVersion: 268 },
+        provenance: { source: 'integration-test' },
+        maxAttempts: 1,
+      })
+      const lease = requireLease(await operations.claim('replay-terminal', 1, testAdmission, 'replay-simulation'))
+      await expire(lease.operationId)
+      expect(await operations.claim('replay-terminal', 1, testAdmission, 'replay-simulation')).toBeNull()
+      const state = await operations.inspect(first.operationId)
+      expect(state.operation).toMatchObject({ status: 'dead_letter' })
+
+      const second = await operations.accept({
+        kind: 'replay-simulation',
+        dedupeKey: 'replay-simulation:T3rmRoot1:again',
+        operationKey,
+        workClass: 'replay-simulation',
+        payload: { slug: 'T3rmRoot1', replayStorageKey: 'replays/T3rmRoot1.replay', formatVersion: 268 },
+        provenance: { source: 'integration-test' },
+      })
+      expect(second).toEqual({ outcome: 'already-active', operationId: first.operationId })
+    } finally {
+      await operations.close()
+    }
   })
 
   test('rejects expired and superseded leases and detects conflicting effect keys', async () => {

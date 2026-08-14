@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { ParsedReplay } from '@brawltome/replay-format'
-import { IngestError, ingestReplay } from '../commands/ingestReplay'
+import { ingestReplay } from '../commands/ingestReplay'
 import type { MatchRepo } from '../match.repo'
 
 const validParsed: ParsedReplay = {
@@ -41,6 +41,7 @@ const validParsed: ParsedReplay = {
   ],
   victoryFaces: null,
   gameDataChecksum: 83,
+  inputs: { entities: [], maxTimestampMs: -1 },
 }
 
 function makeEntity(id: number, name: string, team: number, heroId: number) {
@@ -86,6 +87,7 @@ function mockRepo(overrides: Partial<MatchRepo> = {}): MatchRepo {
     insertPlayers: mock(async () => {}),
     insertEvents: mock(async () => {}),
     listPendingByFormatVersion: mock(async () => []),
+    listMissingDetailedStats: mock(async () => []),
     markParsed: mock(async () => {}),
     updatePlayerCosmetics: mock(async () => {}),
     deleteMatch: mock(async () => {}),
@@ -151,6 +153,62 @@ describe('ingestReplay', () => {
       },
     )
     expect(res).toEqual({ slug: 'EXISTING99', alreadyIngested: true })
+  })
+
+  test('enqueues format-268 replay simulation work after insert', async () => {
+    const acceptReplaySimulation = mock(async () => {})
+    const parsed268 = { ...validParsed, formatVersion: 268 }
+    const res = await ingestReplay(
+      {
+        matchRepo: mockRepo(),
+        r2Put: mock(async () => {}),
+        reparseRaw: () => parsed268,
+        acceptReplaySimulation,
+      },
+      {
+        userId: 'u1',
+        parsedReplay: parsed268,
+        entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
+        rawBytes: fakeRaw,
+        formatVersion: 268,
+      },
+    )
+    expect(acceptReplaySimulation).toHaveBeenCalledWith({
+      slug: res.slug,
+      replayStorageKey: `replays/${res.slug}.replay`,
+      formatVersion: 268,
+    })
+  })
+
+  test('dedupe hit re-ensures missing format-268 replay simulation work', async () => {
+    const acceptReplaySimulation = mock(async () => {})
+    const existing = {
+      slug: 'ABC123xyz',
+      formatVersion: 268,
+      replayStorageKey: 'replays/ABC123xyz.replay',
+      detailedStatsKey: null,
+    } as MatchRow
+    const res = await ingestReplay(
+      {
+        matchRepo: mockRepo({ findByDedupeHash: mock(async () => existing) }),
+        r2Put: mock(async () => {}),
+        reparseRaw: () => validParsed,
+        acceptReplaySimulation,
+      },
+      {
+        userId: 'u1',
+        parsedReplay: validParsed,
+        entityBhids: { 1: 100, 2: 101, 3: 102, 4: 103 },
+        rawBytes: fakeRaw,
+        formatVersion: 268,
+      },
+    )
+    expect(res).toEqual({ slug: 'ABC123xyz', alreadyIngested: true })
+    expect(acceptReplaySimulation).toHaveBeenCalledWith({
+      slug: 'ABC123xyz',
+      replayStorageKey: 'replays/ABC123xyz.replay',
+      formatVersion: 268,
+    })
   })
 
   test('happy path uploads to R2 and writes match, players, events', async () => {

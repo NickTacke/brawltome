@@ -2,59 +2,73 @@
 set -eu
 
 read_secret() {
-  variable=$1
-  path=$2
-  [ -r "$path" ] || {
-    printf '%s\n' "Required secret is unreadable: $variable" >&2
-    exit 1
-  }
-  value=$(cat "$path")
-  [ -n "$value" ] || {
-    printf '%s\n' "Required secret is empty: $variable" >&2
-    exit 1
-  }
-  export "$variable=$value"
+	variable=$1
+	path=$2
+	[ -r "$path" ] || {
+		printf '%s\n' "Required secret is unreadable: $variable" >&2
+		exit 1
+	}
+	value=$(cat "$path")
+	[ -n "$value" ] || {
+		printf '%s\n' "Required secret is empty: $variable" >&2
+		exit 1
+	}
+	export "$variable=$value"
 }
 
 secrets_root=${BRAWLTOME_SECRETS_ROOT:-/run/secrets}
 role=${1:-}
 case "$role" in
-  migration)
-    read_secret DATABASE_URL "$secrets_root/migration_database_url"
-    exec bun run db:migrate
-    ;;
-  api)
-    read_secret DATABASE_URL "$secrets_root/runtime_database_url"
-    read_secret DISCORD_INTERNAL_API_SECRET "$secrets_root/discord_internal_api_secret"
-    read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
-    read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
-    read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
-    read_secret REFRESH_TRUST_COOKIE_SECRET "$secrets_root/refresh_trust_cookie_secret"
-    exec bun run apps/api/src/serve.ts
-    ;;
-  operations-worker)
-    read_secret BRAWLHALLA_API_KEY "$secrets_root/brawlhalla_api_key"
-    read_secret DATABASE_URL "$secrets_root/runtime_database_url"
-    read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
-    read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
-    exec bun run apps/api/src/operations-worker.ts
-    ;;
-  web)
-    read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
-    read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
-    read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
-    exec node apps/web/server.js
-    ;;
-  discord-bot)
-    read_secret DISCORD_INTERNAL_API_SECRET "$secrets_root/discord_internal_api_secret"
-    read_secret DISCORD_TOKEN "$secrets_root/discord_token"
-    read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
-    read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
-    read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
-    exec bun run apps/discord-bot/src/index.ts
-    ;;
-  *)
-    printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|web|discord-bot' >&2
-    exit 64
-    ;;
+migration)
+	read_secret DATABASE_URL "$secrets_root/migration_database_url"
+	exec bun run db:migrate
+	;;
+api)
+	read_secret DATABASE_URL "$secrets_root/runtime_database_url"
+	read_secret DISCORD_INTERNAL_API_SECRET "$secrets_root/discord_internal_api_secret"
+	read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
+	read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
+	read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
+	read_secret REFRESH_TRUST_COOKIE_SECRET "$secrets_root/refresh_trust_cookie_secret"
+	read_secret R2_ACCESS_KEY_ID "$secrets_root/r2_access_key_id"
+	read_secret R2_SECRET_ACCESS_KEY "$secrets_root/r2_secret_access_key"
+	read_secret R2_ENDPOINT "$secrets_root/r2_endpoint"
+	read_secret R2_BUCKET "$secrets_root/r2_bucket"
+	exec bun run apps/api/src/serve.ts
+	;;
+operations-worker)
+	read_secret BRAWLHALLA_API_KEY "$secrets_root/brawlhalla_api_key"
+	read_secret DATABASE_URL "$secrets_root/runtime_database_url"
+	read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
+	read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
+	exec bun run apps/api/src/operations-worker.ts
+	;;
+replay-simulator-worker)
+	read_secret DATABASE_URL "$secrets_root/runtime_database_url"
+	read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
+	read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
+	read_secret R2_ACCESS_KEY_ID "$secrets_root/r2_access_key_id"
+	read_secret R2_SECRET_ACCESS_KEY "$secrets_root/r2_secret_access_key"
+	read_secret R2_ENDPOINT "$secrets_root/r2_endpoint"
+	read_secret R2_BUCKET "$secrets_root/r2_bucket"
+	exec bun run apps/api/src/replay-simulator-worker.ts
+	;;
+web)
+	read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
+	read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
+	read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
+	exec node apps/web/server.js
+	;;
+discord-bot)
+	read_secret DISCORD_INTERNAL_API_SECRET "$secrets_root/discord_internal_api_secret"
+	read_secret DISCORD_TOKEN "$secrets_root/discord_token"
+	read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
+	read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
+	read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
+	exec bun run apps/discord-bot/src/index.ts
+	;;
+*)
+	printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|replay-simulator-worker|web|discord-bot' >&2
+	exit 64
+	;;
 esac

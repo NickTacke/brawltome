@@ -9,6 +9,7 @@ import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
 describe('operations worker configuration', () => {
   test('uses conservative runtime defaults and rejects unsafe values', () => {
     expect(readOperationsWorkerConfig({})).toEqual({
+      executionSlots: 7,
       leaseMs: 30_000,
       pollMs: 1_000,
       retryDelayMs: 1_000,
@@ -32,6 +33,7 @@ describe('operations worker configuration', () => {
           'global-statistics': 1,
           projection: 2,
           maintenance: 1,
+          'replay-simulation': 1,
         },
         backgroundWeights: {
           'primary-monitoring': 8,
@@ -97,6 +99,20 @@ describe('operations worker configuration', () => {
     ).toThrow('classConcurrency.interactive')
     expect(() => readOperationsWorkerConfig({ OPERATIONS_MAINTENANCE_WEIGHT: '0' })).toThrow(
       'OPERATIONS_MAINTENANCE_WEIGHT',
+    )
+    expect(
+      readOperationsWorkerConfig({
+        OPERATIONS_TOTAL_CONCURRENCY: '3',
+        OPERATIONS_EXECUTION_SLOTS: '2',
+        OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
+        OPERATIONS_PROJECTION_CONCURRENCY: '2',
+      }),
+    ).toMatchObject({
+      executionSlots: 2,
+      admission: { totalConcurrency: 3 },
+    })
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_REPLAY_SIMULATION_CONCURRENCY: '2' })).toThrow(
+      'classConcurrency.replay-simulation',
     )
   })
 

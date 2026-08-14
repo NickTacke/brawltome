@@ -34,6 +34,8 @@ python-testing/
 
 # Brawlhalla replay samples used for local reverse-engineering
 *.replay
+!packages/replay-format/tests/fixtures/small-terminus-268.replay
+!packages/contexts/matchmaking/tests/fixtures/replay-analysis/SmallTerminus.replay
 
 # Local reverse-engineering scratch (SWZ dumps, SWF copies, experiments)
 research/

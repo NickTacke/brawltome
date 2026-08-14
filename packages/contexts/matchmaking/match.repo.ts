@@ -1,6 +1,6 @@
 import type { Database } from '@brawltome/database'
 import { matchEvents, matchPlayers, matches } from '@brawltome/database'
-import { and, desc, eq, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm'
 import type { MatchEventRow, MatchPlayerRow, MatchRow, MatchSlug } from './match'
 
 export type Cursor = { uploadedAt: Date; slug: string }
@@ -15,6 +15,7 @@ export interface MatchRepo {
   insertPlayers(rows: Omit<MatchPlayerRow, 'id'>[]): Promise<void>
   insertEvents(rows: Omit<MatchEventRow, 'id'>[]): Promise<void>
   listPendingByFormatVersion(formatVersion: number, limit: number): Promise<MatchRow[]>
+  listMissingDetailedStats(formatVersion: 268, limit: number): Promise<MatchRow[]>
   markParsed(slug: MatchSlug, patch: Partial<MatchRow>): Promise<void>
   updatePlayerCosmetics(slug: MatchSlug, replayEntityId: number, patch: Partial<MatchPlayerRow>): Promise<void>
   deleteMatch(slug: MatchSlug): Promise<void>
@@ -91,6 +92,20 @@ function buildRepo(db: Database): MatchRepo {
         .select()
         .from(matches)
         .where(and(eq(matches.parseStatus, 'pending'), eq(matches.formatVersion, formatVersion)))
+        .limit(limit)) as MatchRow[]
+    },
+
+    async listMissingDetailedStats(formatVersion, limit) {
+      return (await db
+        .select()
+        .from(matches)
+        .where(
+          and(
+            eq(matches.parseStatus, 'parsed'),
+            eq(matches.formatVersion, formatVersion),
+            isNull(matches.detailedStatsKey),
+          ),
+        )
         .limit(limit)) as MatchRow[]
     },
 

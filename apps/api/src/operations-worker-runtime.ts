@@ -5,6 +5,7 @@ import { runOneRefreshOperation } from './refresh-operations-worker'
 import type { RuntimeLifecycle } from './runtime-lifecycle'
 
 type WorkerConfig = {
+  executionSlots: number
   leaseMs: number
   pollMs: number
   retryDelayMs: number
@@ -270,6 +271,6 @@ export async function runOperationsWorker({
 
   await Promise.all([
     scheduleLoop(),
-    ...Array.from({ length: config.admission.totalConcurrency }, (_, slot) => operationLoop(slot)),
+    ...Array.from({ length: config.executionSlots }, (_, slot) => operationLoop(slot)),
   ])
 }

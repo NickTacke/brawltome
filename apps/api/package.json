@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "bun run --watch src/serve.ts",
     "dev:operations-worker": "bun run --watch src/operations-worker.ts",
-    "build": "bun build src/serve.ts src/operations-worker.ts --outdir dist --target bun",
+    "dev:replay-simulator-worker": "bun run --watch src/replay-simulator-worker.ts",
+    "dev:replay-simulator-runtime": "bun run --watch src/replay-simulator-runtime.ts",
+    "build": "bun build src/serve.ts src/operations-worker.ts src/replay-simulator-worker.ts src/replay-simulator-runtime.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

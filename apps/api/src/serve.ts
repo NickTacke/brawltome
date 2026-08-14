@@ -219,6 +219,7 @@ app.route(
     matchRepo,
     r2,
     requestAdmission,
+    refreshOperations,
     telemetry,
     accounts,
     enabled: matchmakingLive,

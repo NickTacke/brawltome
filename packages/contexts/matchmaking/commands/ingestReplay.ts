@@ -35,13 +35,24 @@ const PLAYLIST_ENTITY_COUNTS: Record<number, number[]> = {
 const MAX_DURATION_MS = 30 * 60 * 1000
 const MAX_RAW_BYTES = 200 * 1024
 
+export type ReplaySimulationWork = {
+  slug: MatchSlug
+  replayStorageKey: string
+  formatVersion: 268
+}
+
 export interface IngestDeps {
   matchRepo: MatchRepo
   r2Put: (key: string, bytes: Uint8Array) => Promise<void>
   reparseRaw: (raw: Uint8Array) => ParsedReplay
+  acceptReplaySimulation?: (work: ReplaySimulationWork) => Promise<void>
   knownLevelIds?: ReadonlySet<number>
   knownHeroIds?: ReadonlySet<number>
   knownPlaylistIds?: ReadonlySet<number>
+}
+
+async function ensureReplaySimulation(deps: IngestDeps, match: ReplaySimulationWork): Promise<void> {
+  await deps.acceptReplaySimulation?.(match)
 }
 
 export interface IngestInput {
@@ -119,7 +130,16 @@ export async function ingestReplay(deps: IngestDeps, input: IngestInput): Promis
     fanfareId: pr.results[0].endOfMatchFanfareId,
   })
   const existing = await matchRepo.findByDedupeHash(dedupeHash)
-  if (existing) return { slug: existing.slug, alreadyIngested: true }
+  if (existing) {
+    if (existing.formatVersion === 268 && !existing.detailedStatsKey) {
+      await ensureReplaySimulation(deps, {
+        slug: existing.slug,
+        replayStorageKey: existing.replayStorageKey,
+        formatVersion: 268,
+      })
+    }
+    return { slug: existing.slug, alreadyIngested: true }
+  }
 
   const slug = generateSlug()
   const replayStorageKey = `replays/${slug}.replay`
@@ -191,6 +211,10 @@ export async function ingestReplay(deps: IngestDeps, input: IngestInput): Promis
     await tx.insertPlayers(players)
     await tx.insertEvents(events)
   })
+
+  if (formatVersion === 268) {
+    await ensureReplaySimulation(deps, { slug, replayStorageKey, formatVersion: 268 })
+  }
 
   return { slug }
 }

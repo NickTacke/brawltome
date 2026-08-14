@@ -2,13 +2,23 @@
 
 import { posix } from 'node:path'
 
-const expectedServices = ['api', 'migration', 'operations-worker', 'postgres', 'web'] as const
+const expectedServices = [
+  'api',
+  'migration',
+  'operations-worker',
+  'postgres',
+  'replay-simulator-runtime',
+  'replay-simulator-worker',
+  'web',
+] as const
 
 const expectedBuildTargets: Record<string, string> = {
   api: 'api',
   migration: 'migration',
   'operations-worker': 'operations-worker',
   postgres: 'postgres',
+  'replay-simulator-runtime': 'replay-simulator-runtime',
+  'replay-simulator-worker': 'replay-simulator-worker',
   web: 'web',
 }
 
@@ -21,6 +31,10 @@ const expectedSecretFiles: Record<string, string> = {
   otel_authorization: 'otel-authorization',
   postgres_owner_password: 'postgres-owner-password',
   postgres_runtime_password: 'postgres-runtime-password',
+  r2_access_key_id: 'r2-access-key-id',
+  r2_bucket: 'r2-bucket',
+  r2_endpoint: 'r2-endpoint',
+  r2_secret_access_key: 'r2-secret-access-key',
   refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
   runtime_database_url: 'runtime-database-url',
 }
@@ -32,11 +46,25 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'metrics_scrape_secret',
     'otel_authorization',
     'refresh_trust_cookie_secret',
+    'r2_access_key_id',
+    'r2_bucket',
+    'r2_endpoint',
+    'r2_secret_access_key',
     'runtime_database_url',
   ],
   migration: ['migration_database_url'],
   'operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
   postgres: ['postgres_owner_password', 'postgres_runtime_password'],
+  'replay-simulator-runtime': [],
+  'replay-simulator-worker': [
+    'metrics_scrape_secret',
+    'otel_authorization',
+    'r2_access_key_id',
+    'r2_bucket',
+    'r2_endpoint',
+    'r2_secret_access_key',
+    'runtime_database_url',
+  ],
   web: ['internal_api_secret', 'metrics_scrape_secret', 'otel_authorization'],
 }
 
@@ -48,7 +76,13 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
   const violations: string[] = []
 
   checkExactKeys(violations, 'services', services, [...expectedServices])
+  const volumes = isRecord(document.volumes) ? document.volumes : {}
   checkExactKeys(violations, 'networks', networks, ['application'])
+  checkExactKeys(violations, 'volumes', volumes, [
+    'brawlhalla-replay-spike-game',
+    'brawlhalla-replay-spike-home',
+    'brawlhalla-replay-spike-proton',
+  ])
   checkExactKeys(violations, 'secrets', secrets, Object.keys(expectedSecretFiles))
 
   const application = networks.application
@@ -79,6 +113,8 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     if (name !== 'migration' && readPath(service, 'deploy', 'replicas') !== 1) {
       violations.push(`${name} must have exactly one replica`)
     }
+    checkHealthcheck(violations, name, service)
+    checkResourcePolicy(violations, name, service)
     const target = expectedBuildTargets[name]
     if (target && readPath(service, 'build', 'target') !== target) {
       violations.push(`${name} must use build target ${target}`)
@@ -93,19 +129,67 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     )
   }
 
+  for (const volumeName of [
+    'brawlhalla-replay-spike-game',
+    'brawlhalla-replay-spike-home',
+    'brawlhalla-replay-spike-proton',
+  ]) {
+    const volume = volumes[volumeName]
+    if (!isRecord(volume) || volume.external !== true) violations.push(`${volumeName} must be an external volume`)
+  }
+
   const worker = services['operations-worker']
   if (isRecord(worker)) {
     if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1') {
       violations.push('operations-worker must retain the limit-1 Brawlhalla request control')
     }
-    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '2') {
-      violations.push('operations-worker must retain two total operation slots')
+    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '3') {
+      violations.push('operations-worker admission must include the replay slot')
+    }
+    if (readPath(worker, 'environment', 'OPERATIONS_EXECUTION_SLOTS') !== '2') {
+      violations.push('operations-worker must retain two general execution slots')
     }
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_RESERVATION') !== '1') {
       violations.push('operations-worker must retain one reserved interactive slot')
     }
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two interactive operation slots')
+    }
+    if (readPath(worker, 'environment', 'OPERATIONS_REPLAY_SIMULATION_CONCURRENCY') !== '1') {
+      violations.push('operations-worker must configure one replay simulation class slot')
+    }
+  }
+
+  const replay = services['replay-simulator-worker']
+  if (isRecord(replay)) {
+    if (readPath(replay, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '3') {
+      violations.push('replay-simulator-worker admission must match operations-worker total concurrency')
+    }
+    if (readPath(replay, 'environment', 'OPERATIONS_EXECUTION_SLOTS') !== '1') {
+      violations.push('replay-simulator-worker must run one execution slot')
+    }
+    if (readPath(replay, 'environment', 'OPERATIONS_REPLAY_SIMULATION_CONCURRENCY') !== '1') {
+      violations.push('replay-simulator-worker must configure one replay simulation class slot')
+    }
+    if (readPath(replay, 'environment', 'REPLAY_SIMULATOR_RUNTIME_URL') !== 'http://replay-simulator-runtime:3004') {
+      violations.push('replay-simulator-worker must call the private runtime service')
+    }
+    const revision = readPath(replay, 'environment', 'BRAWLTOME_REPOSITORY_REVISION')
+    if (typeof revision !== 'string' || !/^[0-9a-f]{7,64}$/i.test(revision)) {
+      violations.push('replay-simulator-worker must receive a validated repository revision')
+    }
+  }
+
+  const replayRuntime = services['replay-simulator-runtime']
+  if (isRecord(replayRuntime)) {
+    if (readPath(replayRuntime, 'environment', 'PLAYBACK_MODE') !== 'seek-end') {
+      violations.push('replay-simulator-runtime must use seek-end playback')
+    }
+    if (
+      readPath(replayRuntime, 'build', 'args', 'REPLAY_SIMULATOR_RUNTIME_BASE') !==
+      'brawlhalla-replay-spike:steam-replay'
+    ) {
+      violations.push('replay-simulator-runtime must validate the approved Steam replay base image')
     }
   }
 
@@ -143,6 +227,43 @@ function checkExactKeys(
     violations.push(`${subject} must be exactly: ${[...expected].sort().join(', ')}`)
 }
 
+function checkHealthcheck(violations: string[], name: string, service: Record<string, unknown>): void {
+  if (name === 'migration') return
+  const healthcheck = service.healthcheck
+  if (!isRecord(healthcheck)) {
+    violations.push(`${name} must define a healthcheck`)
+    return
+  }
+  const expectedPort =
+    name === 'replay-simulator-runtime' ? '3004' : name === 'replay-simulator-worker' ? '3003' : undefined
+  if (!expectedPort) return
+  const command = Array.isArray(healthcheck.test) ? healthcheck.test.join(' ') : ''
+  if (!command.includes(`localhost:${expectedPort}/health/ready`)) {
+    violations.push(`${name} healthcheck must verify readiness on its private health port`)
+  }
+  if (healthcheck.interval !== '10s' || healthcheck.timeout !== '3s' || healthcheck.retries !== 12) {
+    violations.push(`${name} healthcheck timing must match the approved policy`)
+  }
+}
+
+function checkResourcePolicy(violations: string[], name: string, service: Record<string, unknown>): void {
+  const limits = readPath(service, 'deploy', 'resources', 'limits')
+  if (!isRecord(limits)) {
+    violations.push(`${name} must define resource limits`)
+    return
+  }
+  if (name === 'replay-simulator-runtime') {
+    const cpu = String(limits.cpus)
+    const memory = String(limits.memory)
+    if ((cpu !== '2.0' && cpu !== '2') || (memory !== '6G' && memory !== '6442450944') || limits.pids !== 1024) {
+      violations.push('replay-simulator-runtime resources must be exactly 2 CPU, 6G memory, and 1024 PIDs')
+    }
+    if (!asStringArray(service.tmpfs).some((mount) => mount.includes('/dev/shm') && mount.includes('size=512m'))) {
+      violations.push('replay-simulator-runtime must reserve 512M shm')
+    }
+  }
+}
+
 function checkRuntimeHardening(violations: string[], name: string, service: Record<string, unknown>): void {
   if (service.read_only !== true) violations.push(`${name} root filesystem must remain read-only`)
   if (service.privileged !== undefined) violations.push(`${name} must not set privileged mode`)
@@ -152,13 +273,19 @@ function checkRuntimeHardening(violations: string[], name: string, service: Reco
   }
   if (name === 'postgres') {
     if (service.user !== '70:70') violations.push('postgres must run as 70:70')
+  } else if (name === 'replay-simulator-runtime') {
+    if (service.user !== '10001:10001') violations.push('replay-simulator-runtime must run as 10001:10001')
   } else if (service.user !== undefined) {
     violations.push(`${name} must not override the image user`)
   }
   if (service.init !== true) violations.push(`${name} must retain an init process`)
   if (!sameValues(asStringArray(service.cap_drop), ['ALL'])) violations.push(`${name} must drop all capabilities`)
-  if (!sameValues(asStringArray(service.security_opt), ['no-new-privileges:true'])) {
-    violations.push(`${name} must retain no-new-privileges`)
+  const expectedSecurityOpt =
+    name === 'replay-simulator-runtime'
+      ? ['apparmor:brawlhalla-steam', 'no-new-privileges:true', 'seccomp:unconfined']
+      : ['no-new-privileges:true']
+  if (!sameValues(asStringArray(service.security_opt), expectedSecurityOpt)) {
+    violations.push(`${name} must retain approved security options`)
   }
   if (service.command != null || service.entrypoint != null) {
     violations.push(`${name} must not override the image command or entrypoint`)
@@ -166,6 +293,10 @@ function checkRuntimeHardening(violations: string[], name: string, service: Reco
   if (name === 'postgres') {
     if (!hasBind(service.volumes, '/srv/brawltome-v3/postgres', '/var/lib/postgresql/data')) {
       violations.push('postgres must bind only the approved data filesystem')
+    }
+  } else if (name === 'replay-simulator-runtime') {
+    if (!hasReplayVolumes(service.volumes)) {
+      violations.push('replay-simulator-runtime must mount only approved external replay volumes')
     }
   } else if (service.volumes !== undefined && (!Array.isArray(service.volumes) || service.volumes.length > 0)) {
     violations.push(`${name} must not add volumes`)
@@ -186,6 +317,10 @@ function checkSecretEnvironment(violations: string[], name: string, value: unkno
     'METRICS_SCRAPE_SECRET',
     'OTEL_EXPORTER_OTLP_AUTHORIZATION',
     'POSTGRES_PASSWORD',
+    'R2_ACCESS_KEY_ID',
+    'R2_BUCKET',
+    'R2_ENDPOINT',
+    'R2_SECRET_ACCESS_KEY',
     'REFRESH_TRUST_COOKIE_SECRET',
   ])
   if (Object.keys(value).some((key) => secretNames.has(key))) {
@@ -226,6 +361,21 @@ function hasBind(value: unknown, source: string, target: string): boolean {
   )
 }
 
+function hasReplayVolumes(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== 3 || value.some((item) => !isRecord(item))) return false
+  const expected = new Map([
+    ['brawlhalla-replay-spike-home', '/home/runner'],
+    ['brawlhalla-replay-spike-game', '/game'],
+    ['brawlhalla-replay-spike-proton', '/proton'],
+  ])
+  for (const item of value) {
+    if (item.type !== 'volume' || typeof item.source !== 'string' || typeof item.target !== 'string') return false
+    if (expected.get(item.source) !== item.target) return false
+    expected.delete(item.source)
+  }
+  return expected.size === 0
+}
+
 function hasTraefikLabels(value: unknown): boolean {
   return isRecord(value) && Object.keys(value).some((key) => key.toLowerCase().startsWith('traefik.'))
 }
@@ -244,6 +394,7 @@ function readPath(value: Record<string, unknown>, ...path: string[]): unknown {
 }
 
 function sameSecretAttachments(value: unknown, expected: string[]): boolean {
+  if (expected.length === 0 && value === undefined) return true
   if (!Array.isArray(value) || value.some((item) => !isRecord(item))) return false
   const actual = value.map((item) => String(item.source))
   return sameValues(actual, expected) && value.every((item) => item.target === `/run/secrets/${String(item.source)}`)

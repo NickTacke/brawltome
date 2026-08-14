@@ -10,7 +10,7 @@ function sampleRate(value: string | undefined): number {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.1
 }
 
-export function createRuntimeTelemetry(service: 'api' | 'operations-worker') {
+export function createRuntimeTelemetry(service: 'api' | 'operations-worker' | 'replay-simulator-worker') {
   return createNodeRuntimeTelemetry({
     service,
     endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,

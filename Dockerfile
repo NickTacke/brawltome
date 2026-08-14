@@ -57,6 +57,24 @@ STOPSIGNAL SIGTERM
 ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
 CMD ["operations-worker"]
 
+FROM base AS replay-simulator-worker
+COPY --from=build /app .
+USER bun
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
+CMD ["replay-simulator-worker"]
+
+FROM brawlhalla-replay-spike:steam-replay AS replay-simulator-runtime
+ARG REPLAY_SIMULATOR_RUNTIME_BASE=brawlhalla-replay-spike:steam-replay
+WORKDIR /app
+USER root
+RUN test "$REPLAY_SIMULATOR_RUNTIME_BASE" = "brawlhalla-replay-spike:steam-replay"
+COPY --from=base /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=build --chown=10001:10001 /app /app
+USER 10001:10001
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/local/bin/bun", "run", "/app/apps/api/src/replay-simulator-runtime.ts"]
+
 FROM base AS discord-bot
 COPY --from=build /app .
 USER bun

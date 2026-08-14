@@ -13,6 +13,7 @@ describe('matchmaking ingest route', () => {
           return { outcome: 'rate-limited' as const, retryAfterSeconds: 37 }
         },
       } as never,
+      refreshOperations: { accept: async () => ({ outcome: 'accepted', operationId: 'op' }) } as never,
       telemetry: {
         metrics: {
           add: (name: string, _value: number, labels: Record<string, string>) => metrics.push({ name, labels }),
@@ -49,6 +50,7 @@ describe('matchmaking ingest route', () => {
           return { outcome: 'admitted' as const }
         },
       } as never,
+      refreshOperations: { accept: async () => ({ outcome: 'accepted', operationId: 'op' }) } as never,
       telemetry: {} as never,
       accounts: { authenticate: async () => ({ status: 'anonymous' as const }) } as never,
       enabled: true,

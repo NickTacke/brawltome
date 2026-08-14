@@ -153,6 +153,7 @@ describe('runtime lifecycle', () => {
       lifecycle,
       workerId: 'test-worker',
       config: {
+        executionSlots: 1,
         leaseMs: 30,
         pollMs: 1,
         retryDelayMs: 1,
@@ -195,6 +196,7 @@ describe('runtime lifecycle', () => {
       lifecycle,
       workerId: 'reconciliation-worker',
       config: {
+        executionSlots: 1,
         leaseMs: 30,
         pollMs: 1,
         retryDelayMs: 1,
@@ -241,6 +243,7 @@ describe('runtime lifecycle', () => {
       lifecycle,
       workerId: 'failing-materialization-worker',
       config: {
+        executionSlots: 1,
         leaseMs: 30,
         pollMs: 1,
         retryDelayMs: 1,
@@ -274,6 +277,7 @@ describe('runtime lifecycle', () => {
       lifecycle,
       workerId: 'polling-worker',
       config: {
+        executionSlots: 1,
         leaseMs: 30,
         pollMs: 1,
         retryDelayMs: 1,

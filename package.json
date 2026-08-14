@@ -6,6 +6,8 @@
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",
     "dev:operations-worker": "bun run --filter @brawltome/api dev:operations-worker",
+    "dev:replay-simulator-worker": "bun run --filter @brawltome/api dev:replay-simulator-worker",
+    "dev:replay-simulator-runtime": "bun run --filter @brawltome/api dev:replay-simulator-runtime",
     "operations:dead-letters": "bun run --filter @brawltome/refresh-operations dead-letters --",
     "dev:desktop": "bun run --filter @brawltome/desktop dev",
     "dev:discord-bot": "bun run --filter @brawltome/discord-bot dev",

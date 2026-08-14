@@ -48,7 +48,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/contracts': ['.'],
     '@brawltome/discovery': ['.', './composition'],
     '@brawltome/identity': ['.', './composition'],
-    '@brawltome/matchmaking': ['.'],
+    '@brawltome/matchmaking': ['.', './ingest', './match-repo', './replay-analysis'],
     '@brawltome/player': ['.', './composition'],
     '@brawltome/ranking': ['.', './composition'],
     '@brawltome/request-admission': ['.', './composition'],
@@ -116,6 +116,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
         'packages/contexts/matchmaking/package.json',
         'packages/contexts/matchmaking/commands/ingestReplay.ts',
         'packages/contexts/matchmaking/commands/backfillPending.ts',
+        'packages/contexts/matchmaking/replay-analysis.ts',
         'packages/contexts/matchmaking/tests/ingestReplay.test.ts',
         'packages/contexts/matchmaking/tests/backfillPending.test.ts',
       ],
@@ -241,6 +242,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       files: [
         'apps/api/package.json',
         'apps/api/src/serve.ts',
+        'apps/api/src/replay-simulator-worker.ts',
         'apps/api/src/routes/matchmaking.routes.ts',
         'apps/api/src/trpc/context.ts',
         'apps/api/tests/game-data.test.ts',
@@ -257,6 +259,8 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       dependency: '@brawltome/matchmaking',
       files: [
         'apps/api/package.json',
+        'apps/api/src/operations-worker.ts',
+        'apps/api/src/replay-simulator-worker.ts',
         'apps/api/src/serve.ts',
         'apps/api/src/router/matchmaking.router.ts',
         'apps/api/src/routes/matchmaking.routes.ts',
@@ -273,6 +277,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       dependency: '@brawltome/replay-format',
       files: [
         'apps/api/package.json',
+        'apps/api/src/replay-simulator-worker.ts',
         'apps/api/src/routes/matchmaking.routes.ts',
         'apps/api/scripts/ingest-replay.ts',
       ],

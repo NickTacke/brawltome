@@ -158,7 +158,10 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
       admission,
       telemetry,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
       ranking: {
         publishGeneration: async () => 'published' as const,
         recordCollectionFailure: async () => 'recorded' as const,
@@ -218,6 +221,7 @@ describe('refresh operations worker source retry', () => {
           sourceAdmissions++
           return { outcome: 'admitted', deduplicated: false }
         },
+        pauseSource: async () => {},
       },
       isPrimaryMonitoringTarget: async () => true,
       executeSection: async (_lease, section, admitSourceCall, caller) => {
@@ -238,7 +242,10 @@ describe('refresh operations worker source retry', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
       isPrimaryMonitoringTarget: async () => false,
       executeSection: async (_lease, section) => {
         sections.push(section)
@@ -446,7 +453,10 @@ describe('refresh operations worker source retry', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
+        pauseSource: async () => {},
+      },
       statistics: {
         preflightCollection: async () => 'missing',
         preflightCollectionAttempt: async () => 'allowed',
@@ -501,6 +511,7 @@ describe('refresh operations worker source retry', () => {
       admission,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
+        pauseSource: async () => {},
       },
       syncClanLeaseAuthority: async () => {},
       executeClanSection: async (_lease, _section, admitSourceCall) => {
@@ -556,7 +567,10 @@ describe('refresh operations worker source retry', () => {
       renewEveryMs: 1,
       retryDelayMs: 10,
       admission,
-      sourceAdmission: { admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) },
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
       syncClanLeaseAuthority: async () => {},
       revokeClanLeaseAuthority: async () => {
         revoked = true
@@ -568,6 +582,85 @@ describe('refresh operations worker source retry', () => {
 
     expect(revoked).toBe(true)
     expect(committed).toBe(false)
+  })
+
+  test('excludes replay work by default and runs replay work only through explicit claim kind', async () => {
+    const replayLease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'replay-simulation:ABC123xyz',
+      kind: 'replay-simulation',
+      workClass: 'replay-simulation',
+      payload: { slug: 'ABC123xyz', replayStorageKey: 'replays/ABC123xyz.replay', formatVersion: 268 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    let defaultExcluded: readonly OperationLease['kind'][] | undefined
+    const normalOperations = {
+      claim: async (
+        _workerId: string,
+        _leaseMs: number,
+        _admission: AdmissionConfig,
+        _kind?: OperationLease['kind'],
+        excludedKinds?: readonly OperationLease['kind'][],
+      ) => {
+        defaultExcluded = excludedKinds
+        return null
+      },
+    }
+    expect(
+      await runOneRefreshOperation(normalOperations as never, 'normal-worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+      }),
+    ).toBe(false)
+    expect(defaultExcluded).toEqual(['replay-simulation'])
+
+    let claimedKind: OperationLease['kind'] | undefined
+    let committed = false
+    let completed = false
+    const replayOperations = {
+      claim: async (
+        _workerId: string,
+        _leaseMs: number,
+        _admission: AdmissionConfig,
+        kind?: OperationLease['kind'],
+      ) => {
+        claimedKind = kind
+        return replayLease
+      },
+      renew: async () => 'renewed' as const,
+      commitReplaySimulationEffect: async (_lease: OperationLease, detailedStatsKey: string) => {
+        expect(detailedStatsKey).toMatch(/^stats\/ABC123xyz\/[0-9a-f]{64}\.json$/)
+        committed = true
+        return 'applied' as const
+      },
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+    expect(
+      await runOneRefreshOperation(replayOperations as never, 'replay-worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        claimKind: 'replay-simulation',
+        executeReplaySimulation: async () => ({
+          detailedStatsKey: `stats/ABC123xyz/${'a'.repeat(64)}.json`,
+        }),
+      }),
+    ).toBe(true)
+    expect(claimedKind).toBe('replay-simulation')
+    expect(committed).toBe(true)
+    expect(completed).toBe(true)
   })
 
   test('dispatches the fenced Legend Meta publication without treating it as source collection', async () => {
@@ -655,6 +748,7 @@ describe('refresh operations worker source retry', () => {
       admission,
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 41 }),
+        pauseSource: async () => {},
       },
       syncClanLeaseAuthority: async () => {},
       executeClanSection: async (_lease, section, admitSourceCall) => {

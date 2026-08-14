@@ -5,6 +5,7 @@ export const workClasses = [
   'global-statistics',
   'projection',
   'maintenance',
+  'replay-simulation',
 ] as const
 
 export type WorkClass = (typeof workClasses)[number]
@@ -32,7 +33,9 @@ export type OperationProvenance = {
 export type AdmissionConfig = {
   totalConcurrency: number
   interactiveReservation: number
-  classConcurrency: Record<WorkClass, number>
+  classConcurrency: Record<Exclude<WorkClass, 'replay-simulation'>, number> & {
+    'replay-simulation'?: number
+  }
   backgroundWeights: Record<BackgroundWorkClass, number>
 }
 
@@ -46,7 +49,10 @@ export function validateAdmissionConfig(config: AdmissionConfig): AdmissionConfi
   integer(config.totalConcurrency, 'totalConcurrency', 2, 10_000)
   integer(config.interactiveReservation, 'interactiveReservation', 1, config.totalConcurrency - 1)
   for (const workClass of workClasses) {
-    integer(config.classConcurrency[workClass], `classConcurrency.${workClass}`, 1, config.totalConcurrency)
+    integer(config.classConcurrency[workClass] ?? 1, `classConcurrency.${workClass}`, 1, config.totalConcurrency)
+  }
+  if ((config.classConcurrency['replay-simulation'] ?? 1) !== 1) {
+    throw new Error('classConcurrency.replay-simulation must be exactly 1')
   }
   if (config.classConcurrency.interactive < config.interactiveReservation) {
     throw new Error('classConcurrency.interactive must cover interactiveReservation')
@@ -76,6 +82,12 @@ export type StatisticsPublicationKind = 'statistics-publication'
 export type StatisticsPublicationPayload = { generationId: string; product: 'ranked' | 'lifetime' }
 export type StatisticsLegendMetaPublicationKind = 'statistics-legend-meta-publication'
 export type StatisticsLegendMetaPublicationPayload = { generationId: string }
+export type ReplaySimulationKind = 'replay-simulation'
+export type ReplaySimulationPayload = {
+  slug: string
+  replayStorageKey: string
+  formatVersion: 268
+}
 
 export type LeaderboardOperationPayload = {
   pageDepth: number
@@ -102,11 +114,13 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
   return payload
 }
 
+export type NonReplayWorkClass = Exclude<WorkClass, 'replay-simulation'>
+
 export type AcceptProofOperation = {
   kind?: 'proof'
   dedupeKey: string
   operationKey: string
-  workClass: WorkClass
+  workClass: NonReplayWorkClass
   payload: { value: string }
   provenance: OperationProvenance
   maxAttempts?: number
@@ -138,6 +152,16 @@ export type AcceptDiscoveryProjection = {
   operationKey: string
   workClass: 'projection'
   payload: { batchSize: number }
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type AcceptReplaySimulation = {
+  kind: ReplaySimulationKind
+  dedupeKey: string
+  operationKey: string
+  workClass: 'replay-simulation'
+  payload: ReplaySimulationPayload
   provenance: OperationProvenance
   maxAttempts?: number
 }
@@ -188,6 +212,7 @@ export type AcceptOperation =
   | AcceptLeaderboardOperation
   | AcceptDiscoveryProjection
   | AcceptDiscoveryReconciliation
+  | AcceptReplaySimulation
 
 export type AcceptOperationResult = {
   outcome: 'accepted' | 'already-active'
@@ -198,7 +223,7 @@ export type CreateProofSchedule = {
   kind?: 'proof'
   scheduleKey: string
   operationKeyPrefix: string
-  workClass: WorkClass
+  workClass: NonReplayWorkClass
   intervalMs: number
   firstDueAt: string
   payload: { value: string }
@@ -328,7 +353,7 @@ type LeaseFields = {
 }
 
 export type OperationLease =
-  | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
+  | (LeaseFields & { kind: 'proof'; workClass: NonReplayWorkClass; payload: { value: string } })
   | (LeaseFields & {
       kind: 'interactive-player-refresh'
       workClass: 'interactive'
@@ -384,6 +409,7 @@ export type OperationLease =
       payload: StatisticsLegendMetaPublicationPayload
     })
   | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
+  | (LeaseFields & { kind: ReplaySimulationKind; workClass: 'replay-simulation'; payload: ReplaySimulationPayload })
 
 export type OperationFailure = {
   code: string
@@ -474,6 +500,12 @@ export type DeadLetterInspection = {
     leaseToken: number
     createdAt: string
   }[]
+  replaySimulationEffects: {
+    operationKey: string
+    leaseToken: number
+    detailedStatsKey: string
+    createdAt: string
+  }[]
   schedule: {
     scheduleId: string
     scheduleKey: string
@@ -525,6 +557,7 @@ export interface RefreshOperationWorker {
     leaseMs: number,
     admission: AdmissionConfig,
     kind?: OperationLease['kind'],
+    excludedKinds?: readonly OperationLease['kind'][],
   ): Promise<OperationLease | null>
   listAwaitingInteractiveRefreshes(): Promise<string[]>
   activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
@@ -539,6 +572,10 @@ export interface RefreshOperationWorker {
     section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<TransitionResult>
   commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult>
+  commitReplaySimulationEffect(
+    lease: Extract<OperationLease, { kind: 'replay-simulation' }>,
+    detailedStatsKey: string,
+  ): Promise<FencedResult>
   discoveryLeaseActive(lease: Extract<OperationLease, { workClass: 'projection' }>): Promise<boolean>
   retryAppliedDiscoveryProjection(
     lease: Extract<OperationLease, { payload: { batchSize: number } }>,

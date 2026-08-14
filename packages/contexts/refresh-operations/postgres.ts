@@ -203,13 +203,27 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+  if (row.kind === 'replay-simulation') {
+    if (
+      row.work_class !== 'replay-simulation' ||
+      !('slug' in row.payload) ||
+      !('replayStorageKey' in row.payload) ||
+      !('formatVersion' in row.payload) ||
+      row.payload.formatVersion !== 268
+    ) {
+      throw new Error('invalid durable replay simulation operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
   if (row.kind === 'statistics-legend-meta-publication') {
     if (row.work_class !== 'global-statistics' || !('generationId' in row.payload) || 'product' in row.payload) {
       throw new Error('invalid durable Statistics Legend Meta publication operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
-  if (row.kind !== 'proof' || !('value' in row.payload)) throw new Error('invalid durable proof operation')
+  if (row.kind !== 'proof' || !('value' in row.payload) || row.work_class === 'replay-simulation') {
+    throw new Error('invalid durable proof operation')
+  }
   return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
 }
 
@@ -266,6 +280,7 @@ type AcceptedOrScheduledOperationKind =
   | LeaderboardOperationKind
   | DiscoveryProjectionKind
   | 'discovery-reconciliation'
+  | 'replay-simulation'
 
 function operationKind(input: { kind?: AcceptedOrScheduledOperationKind }): AcceptedOrScheduledOperationKind {
   return input.kind ?? 'proof'
@@ -304,6 +319,10 @@ function validateScheduleIdentity(input: {
 function validateSchedule(input: CreateSchedule): Date {
   const firstDueAt = validateScheduleIdentity(input)
   const kind = operationKind(input)
+  const workClass = input.workClass as WorkClass
+  if (kind === 'proof' && workClass === 'replay-simulation') {
+    throw new Error('proof schedules cannot use replay-simulation work class')
+  }
   if (isLeaderboardKind(kind)) {
     const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
     if (payload.intervalMs !== input.intervalMs) {
@@ -333,7 +352,7 @@ function admissionConfigDocument(config: AdmissionConfig) {
     totalConcurrency: config.totalConcurrency,
     interactiveReservation: config.interactiveReservation,
     classConcurrency: Object.fromEntries(
-      workClasses.map((workClass) => [workClass, config.classConcurrency[workClass]]),
+      workClasses.map((workClass) => [workClass, config.classConcurrency[workClass] ?? 1]),
     ),
     backgroundWeights: Object.fromEntries(
       backgroundWorkClasses.map((workClass) => [workClass, config.backgroundWeights[workClass]]),
@@ -945,6 +964,9 @@ export function createPostgresRefreshOperations(
 
     async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
       const kind = operationKind(input)
+      if (kind === 'proof' && input.workClass === 'replay-simulation') {
+        throw new Error('proof operations cannot use replay-simulation work class')
+      }
       if (isLeaderboardKind(kind)) {
         if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
         validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
@@ -966,10 +988,32 @@ export function createPostgresRefreshOperations(
         if (input.workClass !== 'projection') throw new Error('discovery reconciliation requires projection work class')
         if (owner !== 'player' && owner !== 'clan') throw new Error('discovery reconciliation owner is invalid')
       }
+      if (kind === 'replay-simulation') {
+        const payload = input.payload as { slug: string; replayStorageKey: string; formatVersion: number }
+        if (input.workClass !== 'replay-simulation')
+          throw new Error('replay simulation requires replay-simulation work class')
+        if (!/^[A-Za-z0-9]{9}$/.test(payload.slug)) throw new Error('replay simulation slug is invalid')
+        if (payload.replayStorageKey !== `replays/${payload.slug}.replay`) {
+          throw new Error('replay simulation storage key must be canonical')
+        }
+        if (payload.formatVersion !== 268) throw new Error('replay simulation supports format 268 only')
+      }
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
           const operationId = randomUUID()
+          if (kind === 'replay-simulation') {
+            const [existingRoot] = await sql<{ id: string; status: string }[]>`
+              SELECT id, status
+              FROM refresh_operations.operations
+              WHERE kind = 'replay-simulation'
+                AND operation_key = ${input.operationKey}
+                AND replayed_from_operation_id IS NULL
+                AND status IN ('pending', 'leased', 'succeeded', 'dead_letter')
+              FOR UPDATE
+            `
+            if (existingRoot) return { outcome: 'already-active' as const, operationId: existingRoot.id }
+          }
           const inserted = await sql<{ id: string }[]>`
             INSERT INTO refresh_operations.operations
               (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
@@ -1306,14 +1350,24 @@ export function createPostgresRefreshOperations(
       leaseMs: number,
       admission: AdmissionConfig,
       kind?: OperationLease['kind'],
+      excludedKinds: readonly OperationLease['kind'][] = [],
     ): Promise<OperationLease | null> {
       validateAdmissionConfig(admission)
       const policy = admissionConfigHash(admission)
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
-          const dueKindFilter = kind ? sql`AND kind = ${kind}` : sql``
-          const candidateKindFilter = kind ? sql`AND operation.kind = ${kind}` : sql``
+          if (kind && excludedKinds.length > 0) throw new Error('claim cannot combine kind and excludedKinds')
+          const dueKindFilter = kind
+            ? sql`AND kind = ${kind}`
+            : excludedKinds.length > 0
+              ? sql`AND kind NOT IN ${sql(excludedKinds)}`
+              : sql``
+          const candidateKindFilter = kind
+            ? sql`AND operation.kind = ${kind}`
+            : excludedKinds.length > 0
+              ? sql`AND operation.kind NOT IN ${sql(excludedKinds)}`
+              : sql``
           await sql`SELECT pg_advisory_xact_lock(${admissionLockId})`
           await sql`
             INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
@@ -1346,7 +1400,7 @@ export function createPostgresRefreshOperations(
           `
           const due = new Set(dueRows.map((row) => row.work_class))
           const eligible = (workClass: WorkClass) =>
-            due.has(workClass) && (active.get(workClass) ?? 0) < admission.classConcurrency[workClass]
+            due.has(workClass) && (active.get(workClass) ?? 0) < (admission.classConcurrency[workClass] ?? 1)
 
           const interactiveEligible = eligible('interactive')
           const interactiveActive = active.get('interactive') ?? 0
@@ -1354,7 +1408,9 @@ export function createPostgresRefreshOperations(
           let selectedClass: WorkClass | undefined
           let nextCredits: Map<BackgroundWorkClass, number> | undefined
 
-          if (interactiveEligible && interactiveActive < admission.interactiveReservation) {
+          if (kind === 'replay-simulation' && eligible('replay-simulation')) {
+            selectedClass = 'replay-simulation'
+          } else if (interactiveEligible && interactiveActive < admission.interactiveReservation) {
             selectedClass = 'interactive'
           } else if (backgroundEligible.length > 0) {
             for (const workClass of backgroundEligible) {
@@ -1441,7 +1497,12 @@ export function createPostgresRefreshOperations(
                         FROM refresh_operations.statistics_legend_meta_publication_effects
                         WHERE operation_id = ${candidate.effect_operation_id}
                       `
-                  : []
+                  : candidate.kind === 'replay-simulation'
+                    ? await sql<{ operation_id: string }[]>`
+                        SELECT operation_id FROM refresh_operations.replay_simulation_effects
+                        WHERE operation_id = ${candidate.effect_operation_id}
+                      `
+                    : []
             const [interactiveEffect] =
               candidate.kind === 'interactive-player-refresh' || candidate.kind === 'clan-refresh'
                 ? await sql<{ complete: boolean }[]>`
@@ -1676,6 +1737,31 @@ export function createPostgresRefreshOperations(
       })
     },
 
+    async commitReplaySimulationEffect(
+      lease: Extract<OperationLease, { kind: 'replay-simulation' }>,
+      detailedStatsKey: string,
+    ): Promise<FencedResult> {
+      if (lease.kind !== 'replay-simulation') throw new Error('commitReplaySimulationEffect requires replay simulation')
+      const detailedStatsPrefix = `stats/${lease.payload.slug}/`
+      const detailedStatsSuffix = detailedStatsKey.startsWith(detailedStatsPrefix)
+        ? detailedStatsKey.slice(detailedStatsPrefix.length)
+        : ''
+      if (!/^[0-9a-f]{64}\.json$/.test(detailedStatsSuffix)) {
+        throw new Error('detailed stats key must be immutable and scoped to the replay slug')
+      }
+      const [result] = await client<{ outcome: FencedResult }[]>`
+        SELECT refresh_operations.record_replay_simulation_effect(
+          ${lease.operationId}::uuid,
+          ${lease.operationKey},
+          ${lease.leaseOwner},
+          ${lease.leaseToken},
+          ${detailedStatsKey}
+        ) AS outcome
+      `
+      if (!result) throw new Error('replay simulation publication returned no result')
+      return result.outcome
+    },
+
     async discoveryLeaseActive(lease: Extract<OperationLease, { workClass: 'projection' }>): Promise<boolean> {
       const [result] = await client<{ active: boolean }[]>`
         SELECT EXISTS (
@@ -1868,6 +1954,7 @@ export function createPostgresRefreshOperations(
           leaderboardEffects,
           statisticsEffects,
           statisticsPublicationEffects,
+          replaySimulationEffects,
           scheduleRows,
           actionRows,
         ] = await Promise.all([
@@ -1931,6 +2018,19 @@ export function createPostgresRefreshOperations(
           UNION ALL
           SELECT operation_key, lease_token, created_at
           FROM refresh_operations.statistics_legend_meta_publication_effects
+          WHERE operation_id = ${row.effect_operation_id}
+          ORDER BY created_at
+        `,
+          sql<
+            {
+              operation_key: string
+              lease_token: string | number
+              detailed_stats_key: string
+              created_at: Date
+            }[]
+          >`
+          SELECT operation_key, lease_token, detailed_stats_key, created_at
+          FROM refresh_operations.replay_simulation_effects
           WHERE operation_id = ${row.effect_operation_id}
           ORDER BY created_at
         `,
@@ -2015,6 +2115,12 @@ export function createPostgresRefreshOperations(
           statisticsPublicationEffects: statisticsPublicationEffects.map((effect) => ({
             operationKey: effect.operation_key,
             leaseToken: Number(effect.lease_token),
+            createdAt: effect.created_at.toISOString(),
+          })),
+          replaySimulationEffects: replaySimulationEffects.map((effect) => ({
+            operationKey: effect.operation_key,
+            leaseToken: Number(effect.lease_token),
+            detailedStatsKey: effect.detailed_stats_key,
             createdAt: effect.created_at.toISOString(),
           })),
           schedule: schedule
@@ -2131,7 +2237,10 @@ export function createPostgresRefreshOperations(
       const leaderboardEffects = await client`
         SELECT * FROM refresh_operations.leaderboard_effects WHERE operation_id = ${operationId}
       `
-      return { operation, attempts, effects, leaderboardEffects }
+      const replaySimulationEffects = await client`
+        SELECT * FROM refresh_operations.replay_simulation_effects WHERE operation_id = ${operationId}
+      `
+      return { operation, attempts, effects, leaderboardEffects, replaySimulationEffects }
     },
 
     async inspectSchedule(scheduleId: string) {

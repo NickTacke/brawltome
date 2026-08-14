@@ -29,6 +29,10 @@ printf 'internal=%s\\n' "\${INTERNAL_API_SECRET:-}"
 printf 'metrics=%s\\n' "\${METRICS_SCRAPE_SECRET:-}"
 printf 'otel=%s\\n' "\${OTEL_EXPORTER_OTLP_AUTHORIZATION:-}"
 printf 'trust=%s\\n' "\${REFRESH_TRUST_COOKIE_SECRET:-}"
+printf 'r2-access=%s\\n' "\${R2_ACCESS_KEY_ID:-}"
+printf 'r2-secret=%s\\n' "\${R2_SECRET_ACCESS_KEY:-}"
+printf 'r2-endpoint=%s\\n' "\${R2_ENDPOINT:-}"
+printf 'r2-bucket=%s\\n' "\${R2_BUCKET:-}"
 `,
   )
   chmodSync(executable, 0o755)
@@ -48,6 +52,10 @@ describe('V3 secret bootstrap', () => {
       metrics_scrape_secret: 'metrics-secret-value',
       otel_authorization: 'Bearer otel-secret-value',
       refresh_trust_cookie_secret: 'trust-secret-value',
+      r2_access_key_id: 'r2-access-key-value',
+      r2_secret_access_key: 'r2-secret-key-value',
+      r2_endpoint: 'https://r2.example.test',
+      r2_bucket: 'r2-bucket-value',
     }
     const { bin, secrets } = fixture(values)
     const result = spawnSync('sh', [runner, 'api'], {

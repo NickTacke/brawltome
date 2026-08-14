@@ -34,6 +34,7 @@ const classEnvironment: Record<WorkClass, string> = {
   'global-statistics': 'OPERATIONS_GLOBAL_STATISTICS_CONCURRENCY',
   projection: 'OPERATIONS_PROJECTION_CONCURRENCY',
   maintenance: 'OPERATIONS_MAINTENANCE_CONCURRENCY',
+  'replay-simulation': 'OPERATIONS_REPLAY_SIMULATION_CONCURRENCY',
 }
 
 const weightEnvironment: Record<BackgroundWorkClass, string> = {
@@ -79,6 +80,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     'global-statistics': 1,
     projection: 2,
     maintenance: 1,
+    'replay-simulation': 1,
   }
   const weightDefaults: Record<BackgroundWorkClass, number> = {
     'primary-monitoring': 8,
@@ -109,7 +111,15 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     ) as Record<BackgroundWorkClass, number>,
   }
 
+  const executionSlots = positiveInteger(
+    env.OPERATIONS_EXECUTION_SLOTS,
+    Math.max(1, admission.totalConcurrency - (admission.classConcurrency['replay-simulation'] ?? 1)),
+    'OPERATIONS_EXECUTION_SLOTS',
+    admission.totalConcurrency,
+  )
+
   return {
+    executionSlots,
     leaseMs: positiveInteger(env.OPERATIONS_LEASE_MS, 30_000, 'OPERATIONS_LEASE_MS', 300_000),
     pollMs: positiveInteger(env.OPERATIONS_POLL_MS, 1_000, 'OPERATIONS_POLL_MS', 60_000),
     retryDelayMs: positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 1_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000),

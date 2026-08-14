@@ -1,6 +1,9 @@
 import type { Accounts } from '@brawltome/accounts'
 import { knownHeroIds, knownLevelIds } from '@brawltome/game-data'
-import { type IngestDeps, IngestError, type MatchRepo, ingestReplay } from '@brawltome/matchmaking'
+import { type IngestDeps, IngestError, ingestReplay } from '@brawltome/matchmaking/ingest'
+import type { MatchRepo } from '@brawltome/matchmaking/match-repo'
+import { replaySimulatorCompatibilityVersion } from '@brawltome/matchmaking/replay-analysis'
+import type { PostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { ParseBoundsError, type ParsedReplay, parse as parseReplay } from '@brawltome/replay-format'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { R2Client } from '@brawltome/shared'
@@ -25,6 +28,7 @@ export interface MatchmakingRoutesDeps {
   matchRepo: MatchRepo | null
   r2: R2Client | null
   requestAdmission: ActorAdmission
+  refreshOperations: Pick<PostgresRefreshOperations, 'accept'>
   telemetry: Telemetry
   accounts: Accounts
   enabled: boolean
@@ -124,6 +128,17 @@ export function createMatchmakingRoutes(deps: MatchmakingRoutesDeps): Hono {
         reparseRaw: () => serverParsed,
         knownHeroIds,
         knownLevelIds,
+        acceptReplaySimulation: async (work) => {
+          await deps.refreshOperations.accept({
+            kind: 'replay-simulation',
+            dedupeKey: `replay-simulation:${replaySimulatorCompatibilityVersion}:${work.slug}`,
+            operationKey: `replay-simulation:${replaySimulatorCompatibilityVersion}:${work.slug}`,
+            workClass: 'replay-simulation',
+            payload: work,
+            provenance: { source: 'matchmaking-ingest', requestedBy: 'replay-simulator' },
+            maxAttempts: 3,
+          })
+        },
       }
       const entityBhids = Object.fromEntries(Object.entries(parsed.entityBhids).map(([k, v]) => [Number(k), v]))
 

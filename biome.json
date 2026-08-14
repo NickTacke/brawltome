@@ -30,6 +30,7 @@
       ".pi-subagents",
       "drizzle",
       "research",
+      "apps/desktop/app/gen/schemas",
       "packages/game-data/src/generated",
       "packages/contracts/openapi",
       "apps/web/next-env.d.ts"

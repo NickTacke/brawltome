@@ -862,7 +862,7 @@ export function statusClassOf(status: number): (typeof statusClass)[number] {
 
 export function instrumentHttpHandler(
   telemetry: Telemetry,
-  runtimeName: 'api' | 'operations-worker' | 'web' | 'discord',
+  runtimeName: 'api' | 'operations-worker' | 'replay-simulator-worker' | 'web' | 'discord',
   handler: (request: Request) => Response | Promise<Response>,
   options: { acceptIncoming?: (request: Request) => boolean } = {},
 ): (request: Request) => Promise<Response> {

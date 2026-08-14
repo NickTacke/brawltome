@@ -7,6 +7,7 @@ import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawlto
 import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
+import { createMatchRepo, replaySimulatorCompatibilityVersion } from '@brawltome/matchmaking'
 import {
   createPlayerRepo,
   createPostgresCareerPlayers,
@@ -76,6 +77,7 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
   })
 }
 const playerRepo = createPlayerRepo(db)
+const matchRepo = createMatchRepo(db)
 const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
@@ -211,11 +213,25 @@ try {
         }
       }
       const reconciledStatistics = await reconcileStatisticsCohort(statistics, operations, ranking.queries)
+      let reconciledReplaySimulations = 0
+      for (const match of await matchRepo.listMissingDetailedStats(268, 100)) {
+        const accepted = await operations.accept({
+          kind: 'replay-simulation',
+          dedupeKey: `replay-simulation:${replaySimulatorCompatibilityVersion}:${match.slug}`,
+          operationKey: `replay-simulation:${replaySimulatorCompatibilityVersion}:${match.slug}`,
+          workClass: 'replay-simulation',
+          payload: { slug: match.slug, replayStorageKey: match.replayStorageKey, formatVersion: 268 },
+          provenance: { source: 'matchmaking-reconciliation', requestedBy: 'replay-simulator' },
+          maxAttempts: 3,
+        })
+        if (accepted.outcome === 'accepted') reconciledReplaySimulations++
+      }
       if (leaderboardSchedulesReconciled) {
         return (
           interactiveAdmissions +
           reconciledDiscovery +
           reconciledStatistics +
+          reconciledReplaySimulations +
           primaryMonitoring.created +
           primaryMonitoring.retired
         )
@@ -230,6 +246,7 @@ try {
         interactiveAdmissions +
         reconciledDiscovery +
         reconciledStatistics +
+        reconciledReplaySimulations +
         reconciledSchedules +
         primaryMonitoring.created +
         primaryMonitoring.retired

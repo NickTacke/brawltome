@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./ingest": "./commands/ingestReplay.ts",
+    "./match-repo": "./match.repo.ts",
+    "./replay-analysis": "./replay-analysis.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

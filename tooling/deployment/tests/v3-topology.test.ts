@@ -14,6 +14,7 @@ function renderCompose() {
       ...process.env,
       V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
       V3_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
+      V3_REPOSITORY_REVISION: 'abcdef1234567890',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -27,7 +28,7 @@ function renderCompose() {
       {
         build?: { args?: Record<string, string>; target?: string }
         depends_on?: Record<string, { condition?: string }>
-        deploy?: { replicas?: number; resources?: { limits?: { memory?: string; pids?: number } } }
+        deploy?: { replicas?: number; resources?: { limits?: { cpus?: string; memory?: string; pids?: number } } }
         environment?: Record<string, string>
         healthcheck?: { test?: string[] }
         networks?: Record<string, unknown>
@@ -35,14 +36,25 @@ function renderCompose() {
         profiles?: string[]
         restart?: string
         secrets?: Array<{ source: string; target: string }>
+        security_opt?: string[]
         stop_grace_period?: string
+        tmpfs?: string[]
         volumes?: Array<{ source?: string; target?: string; type?: string }>
       }
     >
   }
 }
 
-const runtimeServices = ['api', 'discord-bot', 'operations-worker', 'postgres', 'web'] as const
+const runtimeServices = [
+  'api',
+  'discord-bot',
+  'operations-worker',
+  'postgres',
+  'replay-simulator-runtime',
+  'replay-simulator-worker',
+  'web',
+] as const
+const forbiddenStateStore = ['re', 'dis'].join('')
 
 describe('V3 production topology', () => {
   test('renders independent one-replica units without public exposure', () => {
@@ -53,6 +65,8 @@ describe('V3 production topology', () => {
       'migration',
       'operations-worker',
       'postgres',
+      'replay-simulator-runtime',
+      'replay-simulator-worker',
       'web',
     ])
 
@@ -66,7 +80,7 @@ describe('V3 production topology', () => {
 
     expect(rendered.services['discord-bot'].profiles).toEqual(['discord'])
     expect(JSON.stringify(rendered)).not.toContain('traefik')
-    expect(JSON.stringify(rendered)).not.toContain('redis')
+    expect(JSON.stringify(rendered)).not.toContain(forbiddenStateStore)
   })
 
   test('uses only the dedicated application overlay', () => {
@@ -77,6 +91,8 @@ describe('V3 production topology', () => {
       migration: ['application'],
       'operations-worker': ['application'],
       postgres: ['application'],
+      'replay-simulator-runtime': ['application'],
+      'replay-simulator-worker': ['application'],
       web: ['application'],
     }
     for (const [name, networks] of Object.entries(expected)) {
@@ -94,13 +110,27 @@ describe('V3 production topology', () => {
     expect(rendered.services['operations-worker'].depends_on?.migration?.condition).toBe(
       'service_completed_successfully',
     )
+    expect(rendered.services['replay-simulator-worker'].depends_on?.migration?.condition).toBe(
+      'service_completed_successfully',
+    )
+    expect(rendered.services['replay-simulator-worker'].depends_on?.['replay-simulator-runtime']?.condition).toBe(
+      'service_healthy',
+    )
     expect(rendered.services.web.depends_on?.api?.condition).toBe('service_healthy')
 
     expect(rendered.services.api.healthcheck?.test?.join(' ')).toContain('/health/ready')
     expect(rendered.services['operations-worker'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    expect(rendered.services['replay-simulator-worker'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    expect(rendered.services['replay-simulator-runtime'].healthcheck?.test?.join(' ')).toContain('/health/ready')
     expect(rendered.services.web.healthcheck?.test?.join(' ')).toContain('/api/health/ready')
     expect(rendered.services['discord-bot'].healthcheck?.test?.join(' ')).toContain('/health/ready')
-    for (const name of ['api', 'discord-bot', 'operations-worker'] as const) {
+    for (const name of [
+      'api',
+      'discord-bot',
+      'operations-worker',
+      'replay-simulator-runtime',
+      'replay-simulator-worker',
+    ] as const) {
       expect(rendered.services[name].stop_grace_period).toBe('1m10s')
     }
   })
@@ -117,6 +147,10 @@ describe('V3 production topology', () => {
       otel_authorization: 'otel-authorization',
       postgres_owner_password: 'postgres-owner-password',
       postgres_runtime_password: 'postgres-runtime-password',
+      r2_access_key_id: 'r2-access-key-id',
+      r2_bucket: 'r2-bucket',
+      r2_endpoint: 'r2-endpoint',
+      r2_secret_access_key: 'r2-secret-access-key',
       refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
       runtime_database_url: 'runtime-database-url',
     }
@@ -129,6 +163,9 @@ describe('V3 production topology', () => {
     }
     expect(rendered.services.migration.secrets?.map(({ source }) => source)).toEqual(['migration_database_url'])
     expect(rendered.services.api.secrets?.map(({ source }) => source)).toContain('runtime_database_url')
+    expect(rendered.services.api.secrets?.map(({ source }) => source)).toEqual(
+      expect.arrayContaining(['r2_access_key_id', 'r2_bucket', 'r2_endpoint', 'r2_secret_access_key']),
+    )
     expect(rendered.services.api.secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
     expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).toContain(
       'runtime_database_url',
@@ -136,24 +173,61 @@ describe('V3 production topology', () => {
     expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).not.toContain(
       'migration_database_url',
     )
+    expect(rendered.services['replay-simulator-worker'].secrets?.map(({ source }) => source).sort()).toEqual([
+      'metrics_scrape_secret',
+      'otel_authorization',
+      'r2_access_key_id',
+      'r2_bucket',
+      'r2_endpoint',
+      'r2_secret_access_key',
+      'runtime_database_url',
+    ])
+    expect(rendered.services['replay-simulator-runtime'].secrets ?? []).toEqual([])
     const workerEnvironment = rendered.services['operations-worker'].environment
     expect(workerEnvironment).toMatchObject({
       BRAWLHALLA_V1_REQUEST_LIMIT: '1',
+      OPERATIONS_EXECUTION_SLOTS: '2',
       OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
       OPERATIONS_INTERACTIVE_RESERVATION: '1',
-      OPERATIONS_TOTAL_CONCURRENCY: '2',
+      OPERATIONS_REPLAY_SIMULATION_CONCURRENCY: '1',
+      OPERATIONS_TOTAL_CONCURRENCY: '3',
     })
     expect(readOperationsWorkerConfig(workerEnvironment as NodeJS.ProcessEnv).admission).toMatchObject({
-      totalConcurrency: 2,
+      totalConcurrency: 3,
       interactiveReservation: 1,
-      classConcurrency: { interactive: 2 },
+      classConcurrency: { interactive: 2, 'replay-simulation': 1 },
     })
+    expect(rendered.services['replay-simulator-worker'].volumes ?? []).toEqual([])
+    expect(rendered.services['replay-simulator-worker'].security_opt).toEqual(['no-new-privileges:true'])
+    expect(rendered.services['replay-simulator-runtime'].security_opt?.sort()).toEqual([
+      'apparmor:brawlhalla-steam',
+      'no-new-privileges:true',
+      'seccomp:unconfined',
+    ])
+    expect(rendered.services['replay-simulator-runtime'].volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'brawlhalla-replay-spike-home', target: '/home/runner', type: 'volume' }),
+        expect.objectContaining({ source: 'brawlhalla-replay-spike-game', target: '/game', type: 'volume' }),
+        expect.objectContaining({ source: 'brawlhalla-replay-spike-proton', target: '/proton', type: 'volume' }),
+      ]),
+    )
+    expect(rendered.services['replay-simulator-runtime'].deploy?.resources?.limits).toMatchObject({
+      cpus: 2,
+      memory: '6442450944',
+      pids: 1024,
+    })
+    expect(rendered.services['replay-simulator-runtime'].tmpfs?.join('\n')).toContain('/dev/shm')
+    expect(rendered.services['replay-simulator-runtime'].tmpfs?.join('\n')).toContain('size=512m')
     expect(JSON.stringify(rendered.services)).not.toContain('DATABASE_URL=')
   })
 
   test('separates migration ownership from runtime data access', () => {
     const rendered = renderCompose()
     expect(rendered.services.postgres.build?.target).toBe('postgres')
+    expect(rendered.services['replay-simulator-runtime'].build?.target).toBe('replay-simulator-runtime')
+    expect(rendered.services['replay-simulator-runtime'].build?.args?.REPLAY_SIMULATOR_RUNTIME_BASE).toBe(
+      'brawlhalla-replay-spike:steam-replay',
+    )
     expect(rendered.services.postgres.environment).toMatchObject({ POSTGRES_USER: 'brawltome_owner' })
     expect(rendered.services.postgres.secrets?.map(({ source }) => source).sort()).toEqual([
       'postgres_owner_password',
@@ -177,8 +251,10 @@ describe('V3 production topology', () => {
     expect(dockerfile).toContain('oven/bun:1.3.14@sha256:')
     expect(dockerfile).toContain('node:22.14.0-bookworm-slim@sha256:')
     expect(dockerfile).toContain('postgres:16.8-alpine@sha256:')
+    expect(dockerfile).toContain('FROM brawlhalla-replay-spike:steam-replay AS replay-simulator-runtime')
     expect(dockerfile).toContain('AS postgres')
     expect(dockerfile).toContain('AS web')
+    expect(dockerfile).toContain('RUN test "$REPLAY_SIMULATOR_RUNTIME_BASE" = "brawlhalla-replay-spike:steam-replay"')
     expect(dockerfile).toContain('/app/packages/contracts/node_modules packages/contracts/node_modules')
     expect(dockerfile).toContain('apps/web/.next/standalone')
     expect(dockerignore).toContain('**/.env*')

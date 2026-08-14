@@ -1,4 +1,8 @@
-// Pre-match countdown duration baked into replay timestamps (360 frames at 60fps).
+// Replay timecodes advance in exact 16 ms slots. This is distinct from the
+// renderer's nominal frame rate and preserves every serialized input change.
+export const REPLAY_TIME_QUANTUM_MS = 16
+
+// Pre-match countdown duration baked into replay timestamps.
 export const INTRO_OFFSET_MS = 6016
 
 export const STATE_INPUTS = 1
@@ -21,4 +25,6 @@ export const KNOWN_STATES = new Set<number>([
   STATE_INVALID,
 ])
 
-export const SUPPORTED_FORMAT_VERSIONS = new Set<number>([264])
+// 264 = 10.05-era replays. 268 = 10.09-era (current) — adds a u32 playerId
+// field to each entity (verified against the 5 shipped 10.09 replays).
+export const SUPPORTED_FORMAT_VERSIONS = new Set<number>([264, 268])

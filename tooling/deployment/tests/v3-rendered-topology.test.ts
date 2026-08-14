@@ -12,6 +12,7 @@ function renderedTopology(): Record<string, unknown> {
       ...process.env,
       V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
       V3_PUBLIC_API_URL: 'https://v3-api.brawltome.app',
+      V3_REPOSITORY_REVISION: 'abcdef1234567890',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -25,13 +26,13 @@ function services(topology: Record<string, unknown>): Record<string, Record<stri
 }
 
 describe('rendered V3 deployment topology', () => {
-  test('accepts the exact internal-only four-unit rollout', () => {
+  test('accepts the exact internal-only simulator split rollout', () => {
     expect(verifyV3RenderedTopology(renderedTopology())).toEqual([])
   })
 
   test.each([
     ['BRAWLHALLA_V1_REQUEST_LIMIT', '2', 'operations-worker must retain the limit-1 Brawlhalla request control'],
-    ['OPERATIONS_TOTAL_CONCURRENCY', '3', 'operations-worker must retain two total operation slots'],
+    ['OPERATIONS_TOTAL_CONCURRENCY', '2', 'operations-worker admission must include the replay slot'],
     ['OPERATIONS_INTERACTIVE_RESERVATION', '2', 'operations-worker must retain one reserved interactive slot'],
     ['OPERATIONS_INTERACTIVE_CONCURRENCY', '1', 'operations-worker must retain two interactive operation slots'],
   ] as const)('rejects independent %s rollout drift', (variable, value, violation) => {
@@ -73,7 +74,7 @@ describe('rendered V3 deployment topology', () => {
         expect.stringContaining('secrets must be exactly'),
         'api secrets must match approved attachments exactly',
         'operations-worker must retain the limit-1 Brawlhalla request control',
-        'operations-worker must retain two total operation slots',
+        'operations-worker admission must include the replay slot',
         'postgres must use build target postgres',
         'postgres must bind only the approved data filesystem',
       ]),
