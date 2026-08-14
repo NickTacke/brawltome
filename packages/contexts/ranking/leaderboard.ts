@@ -232,9 +232,8 @@ function validateRegionRows(
   }
   const totalPages = pages[0]?.totalPages
   if (!totalPages) throw new LeaderboardCandidateError(`${mode}/${region} does not contain source pages`)
-  const identities = new Set<string>()
+  const rowsByIdentity = new Map<string, PublishedLeaderboardRow>()
   const ranks = new Set<number>()
-  const rows: PublishedLeaderboardRow[] = []
   let priorRank = 0
   for (const [pageIndex, page] of pages.entries()) {
     if (page.totalPages !== totalPages) {
@@ -250,17 +249,14 @@ function validateRegionRows(
     for (const row of page.rankings) {
       const identity = publishedIdentity(row.identity)
       const key = identityKey(mode, identity)
-      if (identities.has(key))
-        throw new LeaderboardCandidateError(`${mode}/${region} contains duplicate identity ${key}`)
       if (ranks.has(row.rank))
         throw new LeaderboardCandidateError(`${mode}/${region} contains duplicate source rank ${row.rank}`)
       if (row.rank <= priorRank) {
         throw new LeaderboardCandidateError(`${mode}/${region} source ranks are not strictly increasing`)
       }
-      identities.add(key)
       ranks.add(row.rank)
       priorRank = row.rank
-      rows.push({
+      const candidate = {
         standing: row.rank,
         sourceRank: row.rank,
         identity,
@@ -270,10 +266,12 @@ function validateRegionRows(
         wins: row.wins,
         losses: row.losses,
         tier: resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier,
-      })
+      }
+      const existing = rowsByIdentity.get(key)
+      if (!existing || compareDuplicateRows(candidate, existing) < 0) rowsByIdentity.set(key, candidate)
     }
   }
-  return rows.sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  return [...rowsByIdentity.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 const regionOrder = new Map(regionalLeaderboardScopes.map((region, index) => [region, index]))
