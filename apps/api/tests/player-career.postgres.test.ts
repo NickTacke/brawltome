@@ -194,6 +194,7 @@ describe('Players-owned canonical career state', () => {
         brawlhallaId: 91913839,
         name: 'Measured Zero',
         bestLegendNameKey: null,
+        lastSuccessAt: expect.any(Date),
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({

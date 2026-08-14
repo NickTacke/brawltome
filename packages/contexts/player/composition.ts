@@ -28,6 +28,7 @@ export {
   type V1RankedPulseSource,
 } from './ranked/refresh'
 export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
+export { isUsablePlayerName } from './queries/get-player-reference'
 export {
   createPostgresPlayerDiscoverySource,
   type LegacyPlayerMigrationEvidence,

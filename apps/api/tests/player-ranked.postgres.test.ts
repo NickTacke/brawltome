@@ -186,6 +186,7 @@ describe('Players-owned canonical ranked state', () => {
         name: 'Canonical Player',
         bestLegendNameKey: null,
         legacyRating: null,
+        lastSuccessAt: expect.any(Date),
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({
@@ -253,6 +254,7 @@ describe('Players-owned canonical ranked state', () => {
         name: 'Canonical Player',
         bestLegendNameKey: null,
         legacyRating: null,
+        lastSuccessAt: expect.any(Date),
       })
     } finally {
       await Promise.all([players.close(), operations.close()])
