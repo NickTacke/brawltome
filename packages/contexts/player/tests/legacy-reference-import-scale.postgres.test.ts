@@ -7,6 +7,7 @@ import { legacyPlayerSchemaSql } from './fixtures/legacy-player-migration'
 const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
 const databaseName = `bt_reference_scale_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 16)}`
 const scaleTest = process.env.RUN_MIGRATION_SCALE_TESTS === '1' ? test : test.skip
+const playerCount = 70_001
 let admin: ReturnType<typeof postgres>
 let connectionString = ''
 
@@ -39,12 +40,13 @@ beforeAll(async () => {
     await setup`
       INSERT INTO public.player (brawlhalla_id, name, last_updated, last_viewed_at)
       SELECT identity, 'Scale Player ' || identity, '2026-08-01', '2026-08-01'
-      FROM generate_series(1, 1001) AS identity
+      FROM generate_series(1, ${playerCount}) AS identity
     `
     await setup`
       INSERT INTO public.player_alias (brawlhalla_id, key, value, created_at)
-      SELECT identity, 'legacy', 'Alias ' || identity, '2026-08-01'
-      FROM generate_series(1, 1001) AS identity
+      SELECT identity, alias.key, 'Alias ' || alias.suffix || ' ' || identity, '2026-08-01'
+      FROM generate_series(1, ${playerCount}) AS identity
+      CROSS JOIN (VALUES ('legacy-a', 'A'), ('legacy-b', 'B')) AS alias(key, suffix)
     `
     await setup`
       INSERT INTO public.rating_history
@@ -52,19 +54,19 @@ beforeAll(async () => {
       SELECT identity, identity, 1500, 1600,
              CASE WHEN identity % 10 = 0 THEN NULL ELSE 'Gold' END,
              10, 5, '2026-08-01'
-      FROM generate_series(1, 1001) AS identity
+      FROM generate_series(1, ${playerCount}) AS identity
     `
     await setup`SELECT set_config('players.suppress_discovery_outbox', 'off', false)`
   } finally {
     await setup.end()
   }
-}, 120_000)
+}, 600_000)
 
 afterAll(async () => {
   if (!admin) return
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
-}, 120_000)
+}, 600_000)
 
 describe('compact V2 Player reference-history scale', () => {
   scaleTest(
@@ -72,27 +74,27 @@ describe('compact V2 Player reference-history scale', () => {
     async () => {
       const first = await importLegacyReferenceHistory(connectionString, {
         legacyWritersQuiesced: true,
-        batchSize: 100,
+        batchSize: 10_000,
         maxBatches: 1,
       })
       expect(first).toMatchObject({
         status: 'in-progress',
         checkpoint: { stage: 'player_alias' },
-        reconciliation: { sourceRows: 2002, archivedRows: 100 },
+        reconciliation: { sourceRows: 210_003, archivedRows: 10_000 },
       })
 
       const completed = await importLegacyReferenceHistory(connectionString, {
         legacyWritersQuiesced: true,
-        batchSize: 100,
+        batchSize: 10_000,
       })
       expect(completed).toEqual({
         status: 'complete',
         checkpoint: null,
         reconciliation: {
-          sourceRows: 2002,
-          archivedRows: 2002,
-          importedAliases: 1001,
-          importedHistory: 1001,
+          sourceRows: 210_003,
+          archivedRows: 210_003,
+          importedAliases: 140_002,
+          importedHistory: 70_001,
           rejectedRows: 0,
           sourceExact: true,
           destinationExact: true,
@@ -105,11 +107,11 @@ describe('compact V2 Player reference-history scale', () => {
           SELECT count(*)::integer AS events, count(DISTINCT source_version)::integer AS versions
           FROM players.discovery_outbox
         `
-        expect(outbox).toEqual({ events: 2002, versions: 22 })
+        expect(outbox).toEqual({ events: 140_002, versions: 23 })
       } finally {
         await verify.end()
       }
     },
-    120_000,
+    600_000,
   )
 })
