@@ -61,6 +61,12 @@ type ValuesRow = {
   games: number
 }
 
+type HistoryRow = Omit<ValuesRow, 'tier'> & {
+  tier: string | null
+  recorded_at: Date
+  history_source: 'v0-player-snapshot' | 'v2-legacy'
+}
+
 type PulseValuesRow = {
   pulse_rating: number | null
   pulse_peak_rating: number | null
@@ -289,7 +295,7 @@ export function createPostgresRankedPlayers(
           WHERE brawlhalla_id = ${brawlhallaId}
           ORDER BY ordinal
         `,
-          sql<Array<ValuesRow & { recorded_at: Date; history_source: 'v0-player-snapshot' | 'v2-legacy' }>>`
+          sql<HistoryRow[]>`
           SELECT rating, peak_rating, tier, wins, games, recorded_at, history_source
           FROM players.ranked_rating_history
           WHERE brawlhalla_id = ${brawlhallaId}
@@ -315,7 +321,11 @@ export function createPostgresRankedPlayers(
         const mainLegend =
           rankedMainLegend ?? (careerMainLegend ? { ...careerMainLegend, source: 'career' as const } : null)
         const ratingHistory = historyRows.map((row) => ({
-          ...values(row),
+          rating: row.rating,
+          peakRating: row.peak_rating,
+          tier: row.tier,
+          wins: row.wins,
+          games: row.games,
           source: row.history_source === 'v2-legacy' ? ('legacy-v2' as const) : ('v0-player-snapshot' as const),
           recordedAt: row.recorded_at,
         }))
