@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { CAREER_FRESHNESS_SECONDS, type CareerPlayerProfile, type CareerPlayerQueries, careerFreshness } from './model'
-import type { V0CareerSnapshot } from './source'
+import { type V0CareerSnapshot, decodeV0CareerNameCandidate } from './source'
 
 export type CanonicalCareerEffect = {
   operationId: string
@@ -297,6 +297,25 @@ export function createPostgresCareerPlayers(
           SELECT player_name FROM players.career_profiles
           WHERE brawlhalla_id = ${snapshot.brawlhallaId} FOR UPDATE
         `
+        const evidenceRows = await sql<{ player_name: string }[]>`
+          SELECT player_name FROM players.ranked_profiles
+          WHERE brawlhalla_id = ${snapshot.brawlhallaId} AND last_success_at IS NOT NULL AND player_name IS NOT NULL
+          UNION ALL
+          SELECT display_alias FROM players.discovery_aliases WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+          UNION ALL
+          SELECT player_name FROM players.legacy_discovery_profiles WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+          UNION ALL
+          SELECT display_alias FROM players.legacy_discovery_aliases WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+          UNION ALL
+          SELECT player_name FROM players.legacy_profile_discovery WHERE brawlhalla_id = ${snapshot.brawlhallaId}
+        `
+        const nameEvidence = new Set(evidenceRows.map((row) => row.player_name))
+        if (previous?.player_name) nameEvidence.add(previous.player_name)
+        const candidate = decodeV0CareerNameCandidate(snapshot.name)
+        const playerName = candidate && nameEvidence.has(candidate) ? candidate : snapshot.name
+        const previousCandidate = previous?.player_name ? decodeV0CareerNameCandidate(previous.player_name) : null
+        const previousName =
+          previousCandidate && nameEvidence.has(previousCandidate) ? previousCandidate : previous?.player_name
         const { account, combat } = snapshot
         await sql`
           INSERT INTO players.career_profiles
@@ -305,7 +324,7 @@ export function createPostgresCareerPlayers(
              damage_spikeball, damage_sidekick, snowball_hits, bomb_kos, mine_kos, spikeball_kos,
              sidekick_kos, snowball_kos)
           VALUES
-            (${snapshot.brawlhallaId}, ${snapshot.name}, ${snapshot.guild?.guildId ?? null},
+            (${snapshot.brawlhallaId}, ${playerName}, ${snapshot.guild?.guildId ?? null},
              ${snapshot.guild?.guildName ?? null}, ${observedAt}, ${observedAt}, ${account.xp},
              ${account.level}, ${account.xpPercentage}, ${combat.games}, ${combat.wins}, ${combat.matchTime},
              ${combat.damageBomb}, ${combat.damageMine}, ${combat.damageSpikeball}, ${combat.damageSidekick},
@@ -335,10 +354,10 @@ export function createPostgresCareerPlayers(
             snowball_kos = EXCLUDED.snowball_kos
         `
 
-        if (previous?.player_name && previous.player_name !== snapshot.name) {
+        if (previousName && previousName !== playerName) {
           await sql`
             INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
-            VALUES (${snapshot.brawlhallaId}, ${previous.player_name.toLowerCase()}, ${previous.player_name}, ${observedAt})
+            VALUES (${snapshot.brawlhallaId}, ${previousName.toLowerCase()}, ${previousName}, ${observedAt})
             ON CONFLICT (brawlhalla_id, normalized_alias) DO UPDATE
             SET display_alias = EXCLUDED.display_alias, observed_at = EXCLUDED.observed_at
           `
