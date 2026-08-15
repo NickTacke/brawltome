@@ -210,6 +210,19 @@ fn generated_career_profile_enforces_zod_wire_semantics() {
         wire
     );
 
+    let mut missing_source = wire.clone();
+    missing_source
+        .as_object_mut()
+        .expect("career fixture object")
+        .remove("snapshotSource");
+    assert!(serde_json::from_value::<PlayerCareerProfile>(missing_source).is_err());
+
+    let mut historical = wire.clone();
+    historical["snapshotSource"] = serde_json::json!("legacy-v2");
+    assert!(serde_json::from_value::<PlayerCareerProfile>(historical.clone()).is_err());
+    historical["freshness"] = serde_json::json!("stale");
+    assert!(serde_json::from_value::<PlayerCareerProfile>(historical).is_ok());
+
     for (name, pointer, invalid) in [
         (
             "negative games",
@@ -274,6 +287,7 @@ fn generated_career_profile_enforces_zod_wire_semantics() {
 
     let mut unavailable_wire = wire.clone();
     unavailable_wire["lastSuccessAt"] = serde_json::Value::Null;
+    unavailable_wire["snapshotSource"] = serde_json::Value::Null;
     unavailable_wire["freshness"] = serde_json::json!("unavailable");
     unavailable_wire["snapshot"] = serde_json::Value::Null;
     let unavailable: PlayerCareerProfile =

@@ -14,6 +14,21 @@ describe('canonical player section polling', () => {
     expect(getPendingPlayerSections(player, now + 1)).toEqual({ ranked: true, stats: true })
   })
 
+  test('always refreshes recent imported history and completes when canonical source replaces it', () => {
+    const observedAt = '2026-08-10T10:00:00Z'
+    const historical = {
+      currentSeason: { lastSuccessAt: observedAt },
+      career: { lastSuccessAt: observedAt, snapshotSource: 'legacy-v2' as const },
+    }
+    const canonical = {
+      currentSeason: { lastSuccessAt: observedAt },
+      career: { lastSuccessAt: observedAt, snapshotSource: 'v0-player-snapshot' as const },
+    }
+
+    expect(getPendingPlayerSections(historical, Date.parse(observedAt))).toEqual({ ranked: false, stats: true })
+    expect(hasCompletedPlayerRefresh(historical, canonical, { ranked: false, stats: true })).toBe(true)
+  })
+
   test('does not let one successful section satisfy polling for another pending section', () => {
     const initial = {
       currentSeason: { lastSuccessAt: '2026-08-10T09:00:00Z' },
