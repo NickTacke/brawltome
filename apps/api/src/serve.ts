@@ -4,11 +4,7 @@ import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createMatchRepo } from '@brawltome/matchmaking'
-import {
-  createPlayerRepo,
-  createPostgresCareerPlayers,
-  createPostgresRankedPlayers,
-} from '@brawltome/player/composition'
+import { createPostgresCareerPlayers, createPostgresRankedPlayers } from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
@@ -60,7 +56,6 @@ const telemetry = createRuntimeTelemetry('api')
 const runtimeConfig = readRuntimeConfig(process.env)
 const accountsRuntime = createPostgresAccounts(databaseUrl)
 const { accounts } = accountsRuntime
-const playerRepo = createPlayerRepo(db)
 const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
 const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
@@ -132,7 +127,6 @@ console.log(
 const sharedCtx = {
   db,
   telemetry,
-  playerRepo,
   playerReferenceQueries,
   discoveryQueries: discovery,
   rankedPlayerQueries,

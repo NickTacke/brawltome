@@ -5,17 +5,7 @@ import type { Context } from '../src/trpc/context'
 
 function callerFor(getCareerWeaponUsage: CareerWeaponUsageQueries['getCareerWeaponUsage']) {
   const statisticsQueries: CareerWeaponUsageQueries = { getCareerWeaponUsage }
-  return statisticsRouter.createCaller({
-    statisticsQueries,
-    playerRepo: new Proxy(
-      {},
-      {
-        get() {
-          throw new Error('Career Weapon Usage must not read mutable Players state')
-        },
-      },
-    ),
-  } as unknown as Context)
+  return statisticsRouter.createCaller({ statisticsQueries } as unknown as Context)
 }
 
 const available: CareerWeaponUsageView = {

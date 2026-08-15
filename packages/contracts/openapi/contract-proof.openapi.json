@@ -689,6 +689,12 @@
             "additionalProperties": false,
             "nullable": true,
             "properties": {
+              "aliases": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
               "bestLegendNameKey": {
                 "minLength": 1,
                 "nullable": true,
@@ -713,7 +719,8 @@
             },
             "required": [
               "brawlhallaId",
-              "name"
+              "name",
+              "aliases"
             ],
             "type": "object"
           },
@@ -1689,6 +1696,12 @@
             "additionalProperties": false,
             "nullable": true,
             "properties": {
+              "aliases": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
               "bestLegendNameKey": {
                 "minLength": 1,
                 "nullable": true,
@@ -1713,7 +1726,8 @@
             },
             "required": [
               "brawlhallaId",
-              "name"
+              "name",
+              "aliases"
             ],
             "type": "object"
           },

@@ -37,6 +37,7 @@ function harness(
     actorLimited?: boolean
     active?: boolean
     stored?: typeof cached
+    membership?: { clanId: number; clanName: string } | null
     discordCredential?: boolean
     now?: () => number
   } = {},
@@ -50,7 +51,10 @@ function harness(
     discordInternalSecret: options.discordCredential === false ? undefined : discordSecret,
     clientIp: '203.0.113.1',
     user: null,
-    clanRepo: { getById: async () => options.stored ?? cached },
+    clanRepo: {
+      getById: async () => options.stored ?? cached,
+      getPlayerMembership: async () => options.membership ?? null,
+    },
     refreshOperations: {
       findActiveInteractiveClanRefresh: async (dedupeKey: string) => {
         activeDedupeKey = dedupeKey
@@ -98,6 +102,14 @@ describe('canonical clan router', () => {
       clanXp: '900719925474099312345',
       profile: { lastSuccessAt: '1970-01-01T00:00:00.000Z' },
       roster: { lastSuccessAt: '1970-01-01T00:00:00.000Z' },
+    })
+  })
+
+  test('publishes Clans-owned membership by Player identity', async () => {
+    const { caller } = harness({ membership: { clanId: 77, clanName: 'Current Clan' } })
+    await expect(caller.membershipByPlayerId({ id: 42 })).resolves.toEqual({
+      clanId: 77,
+      clanName: 'Current Clan',
     })
   })
 

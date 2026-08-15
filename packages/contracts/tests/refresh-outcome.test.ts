@@ -87,7 +87,7 @@ describe('canonical refresh outcome', () => {
 
   test('returns unchanged cached PlayerReference for every outcome and rejects persistence fields', () => {
     for (const refresh of outcomes) {
-      const response = { player: { brawlhallaId: 42, name: 'Cached Ada' }, refresh }
+      const response = { player: { brawlhallaId: 42, name: 'Cached Ada', aliases: [] }, refresh }
       expect(parsePlayerRefreshResponseOutput(response)).toEqual(response)
     }
     expect(playerRefreshResponseSchema.parse({ player: null, refresh: outcomes[2] })).toEqual({
@@ -96,7 +96,7 @@ describe('canonical refresh outcome', () => {
     })
     expect(() =>
       playerRefreshResponseSchema.parse({
-        player: { brawlhallaId: 42, name: 'Cached Ada', rating: 2000 },
+        player: { brawlhallaId: 42, name: 'Cached Ada', aliases: [], rating: 2000 },
         refresh: outcomes[3],
       }),
     ).toThrow()

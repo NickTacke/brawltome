@@ -1,5 +1,5 @@
 {
-  "player": { "brawlhallaId": 42, "name": "Unavailable Ada" },
+  "player": { "brawlhallaId": 42, "name": "Unavailable Ada", "aliases": [] },
   "ranked": {
     "brawlhallaId": 42,
     "checkedAt": "2026-08-09T22:00:00Z",

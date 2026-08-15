@@ -5196,10 +5196,17 @@ pub mod types {
     ///        "null"
     ///      ],
     ///      "required": [
+    ///        "aliases",
     ///        "brawlhallaId",
     ///        "name"
     ///      ],
     ///      "properties": {
+    ///        "aliases": {
+    ///          "type": "array",
+    ///          "items": {
+    ///            "type": "string"
+    ///          }
+    ///        },
     ///        "bestLegendNameKey": {
     ///          "type": [
     ///            "string",
@@ -5252,10 +5259,17 @@ pub mod types {
     ///{
     ///  "type": "object",
     ///  "required": [
+    ///    "aliases",
     ///    "brawlhallaId",
     ///    "name"
     ///  ],
     ///  "properties": {
+    ///    "aliases": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "string"
+    ///      }
+    ///    },
     ///    "bestLegendNameKey": {
     ///      "type": [
     ///        "string",
@@ -5287,6 +5301,7 @@ pub mod types {
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     #[serde(deny_unknown_fields)]
     pub struct DesktopRankedLookupPlayer {
+        pub aliases: ::std::vec::Vec<::std::string::String>,
         #[serde(
             rename = "bestLegendNameKey",
             default,
@@ -11423,10 +11438,17 @@ pub mod types {
     ///        "null"
     ///      ],
     ///      "required": [
+    ///        "aliases",
     ///        "brawlhallaId",
     ///        "name"
     ///      ],
     ///      "properties": {
+    ///        "aliases": {
+    ///          "type": "array",
+    ///          "items": {
+    ///            "type": "string"
+    ///          }
+    ///        },
     ///        "bestLegendNameKey": {
     ///          "type": [
     ///            "string",
@@ -11475,10 +11497,17 @@ pub mod types {
     ///{
     ///  "type": "object",
     ///  "required": [
+    ///    "aliases",
     ///    "brawlhallaId",
     ///    "name"
     ///  ],
     ///  "properties": {
+    ///    "aliases": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "string"
+    ///      }
+    ///    },
     ///    "bestLegendNameKey": {
     ///      "type": [
     ///        "string",
@@ -11510,6 +11539,7 @@ pub mod types {
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
     #[serde(deny_unknown_fields)]
     pub struct PlayerRefreshResponsePlayer {
+        pub aliases: ::std::vec::Vec<::std::string::String>,
         #[serde(
             rename = "bestLegendNameKey",
             default,

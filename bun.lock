@@ -165,10 +165,7 @@
     "packages/contexts/player": {
       "name": "@brawltome/player",
       "dependencies": {
-        "@brawltome/database": "workspace:*",
         "@brawltome/game-data": "workspace:*",
-        "@brawltome/shared": "workspace:*",
-        "drizzle-orm": "^0.39.0",
         "postgres": "^3.4.7",
       },
       "devDependencies": {

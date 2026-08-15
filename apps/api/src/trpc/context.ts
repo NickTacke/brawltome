@@ -4,7 +4,6 @@ import type { Database } from '@brawltome/database'
 import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { MatchRepo } from '@brawltome/matchmaking'
 import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
-import type { PlayerRepo } from '@brawltome/player/v2-compatibility'
 import type { PlayerValhallanQueries, RankingQueries } from '@brawltome/ranking'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
@@ -15,7 +14,6 @@ import type { Telemetry } from '@brawltome/telemetry'
 export interface Context {
   db: Database
   telemetry: Telemetry
-  playerRepo: PlayerRepo
   playerReferenceQueries: PlayerReferenceQueries
   discoveryQueries: DiscoveryQueries
   rankedPlayerQueries: RankedPlayerQueries

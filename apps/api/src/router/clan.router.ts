@@ -9,6 +9,8 @@ import {
   clanRefreshInputSchema,
   clanRefreshResponseSchema,
   discordClanRefreshInputSchema,
+  playerClanMembershipSchema,
+  playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'
 import type { Context } from '../trpc/context'
 import { discordBotProcedure, internalProcedure, router } from '../trpc/trpc'
@@ -207,6 +209,13 @@ export function createClanRouter(
       .input(clanByIdInputSchema)
       .output(clanProfileSchema.nullable())
       .query(({ ctx, input }) => mapClan(ctx.clanRepo, input.id)),
+    membershipByPlayerId: procedure
+      .input(playerReferenceByIdInputSchema)
+      .output(playerClanMembershipSchema.nullable())
+      .query(async ({ ctx, input }) => {
+        const membership = await ctx.clanRepo.getPlayerMembership(input.id)
+        return membership ? { clanId: membership.clanId, clanName: membership.clanName } : null
+      }),
     refresh: procedure
       .input(clanRefreshInputSchema)
       .output(clanRefreshResponseSchema)

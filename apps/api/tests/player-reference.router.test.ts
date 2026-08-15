@@ -17,11 +17,15 @@ describe('player.referenceById', () => {
     const caller = callerFor({
       async byId(id) {
         calls.push(id)
-        return { brawlhallaId: id, name: 'Ada' }
+        return { brawlhallaId: id, name: 'Ada', aliases: ['Former Ada'] }
       },
     })
 
-    await expect(caller.referenceById({ id: 42 })).resolves.toEqual({ brawlhallaId: 42, name: 'Ada' })
+    await expect(caller.referenceById({ id: 42 })).resolves.toEqual({
+      brawlhallaId: 42,
+      name: 'Ada',
+      aliases: ['Former Ada'],
+    })
     expect(calls).toEqual([42])
 
     await expect(caller.referenceById({ id: 0 })).rejects.toThrow()
@@ -32,7 +36,7 @@ describe('player.referenceById', () => {
   test('preserves absence and rejects malformed producer output', async () => {
     await expect(callerFor({ byId: async () => null }).referenceById({ id: 42 })).resolves.toBeNull()
     await expect(
-      callerFor({ byId: async (id) => ({ brawlhallaId: id, name: '' }) }).referenceById({ id: 42 }),
+      callerFor({ byId: async (id) => ({ brawlhallaId: id, name: '', aliases: [] }) }).referenceById({ id: 42 }),
     ).rejects.toThrow()
   })
 })

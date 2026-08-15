@@ -78,9 +78,9 @@ describe('initGameData', () => {
     expect(getLegendById(2)).toBeUndefined()
   })
 
-  it('no bhapi -> loads from DB', async () => {
-    const db = makeDb([fakeDbLegend])
+  it('no bhapi -> loads and normalizes stale DB slugs', async () => {
+    const db = makeDb([{ ...fakeDbLegend, legendNameKey: 'LÖRD VRÄXX' }])
     await expect(initGameData(db as never)).resolves.toBeUndefined()
-    expect(getLegendById(3)).toBeDefined()
+    expect(getLegendById(3)?.legendNameKey).toBe('lord vraxx')
   })
 })

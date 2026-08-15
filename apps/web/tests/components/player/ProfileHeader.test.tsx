@@ -7,17 +7,15 @@ const player = {
   name: 'Canonical Player',
   region: null,
   clan: null,
-  matchTimeTotal: 3_600,
 }
 
 describe('ProfileHeader', () => {
-  test('falls back to positive V2 playtime when canonical career is unavailable', () => {
+  test('does not invent playtime when canonical career is unavailable', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader player={{ ...player, career: null }} topLegend={null} aliases={[]} refreshing={false} />,
     )
 
-    expect(html).toContain('Playtime:')
-    expect(html).toContain('1h')
+    expect(html).not.toContain('Playtime:')
   })
 
   test('hides canonical measured-zero playtime', () => {
@@ -34,10 +32,10 @@ describe('ProfileHeader', () => {
     expect(html).not.toContain('0h')
   })
 
-  test('uses imported guild only before a canonical career snapshot exists', () => {
+  test('uses Clans-owned membership before a canonical career snapshot exists', () => {
     const html = renderToStaticMarkup(
       <ProfileHeader
-        player={{ ...player, career: null, clan: { clanId: 7, clanName: 'Imported Fallback' } }}
+        player={{ ...player, career: null, clan: { clanId: 7, clanName: 'Current Membership' } }}
         topLegend={null}
         aliases={[]}
         refreshing={false}
@@ -46,7 +44,7 @@ describe('ProfileHeader', () => {
 
     expect(html).toContain('Guild:')
     expect(html).toContain('/clan/7')
-    expect(html).toContain('Imported Fallback')
+    expect(html).toContain('Current Membership')
   })
 
   test('does not resurrect imported guild after canonical absence', () => {
@@ -79,7 +77,7 @@ describe('ProfileHeader', () => {
               combat: { matchTime: 7_200 },
             },
           },
-          clan: { clanId: 7, clanName: 'Imported Fallback' },
+          clan: { clanId: 7, clanName: 'Current Membership' },
         }}
         topLegend={null}
         aliases={[]}
@@ -94,7 +92,6 @@ describe('ProfileHeader', () => {
     expect(html).toContain('Guild:')
     expect(html).toContain('/clan/2616365')
     expect(html).toContain('Son of God')
-    expect(html).not.toContain('Imported Fallback')
-    expect(html).not.toContain('1h')
+    expect(html).not.toContain('Current Membership')
   })
 })

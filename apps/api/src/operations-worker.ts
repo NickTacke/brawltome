@@ -8,7 +8,6 @@ import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
 import {
-  createPlayerRepo,
   createPostgresCareerPlayers,
   createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
@@ -86,7 +85,6 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
       requestAdmission.pauseSource(domain, Math.max(1, Math.ceil(retryAfterMs / 1_000))),
   })
 }
-const playerRepo = createPlayerRepo(db)
 const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
@@ -321,7 +319,6 @@ try {
           )
         },
         executeSection: async (lease, section, admitSourceCall, caller) => {
-          await playerRepo.createPlaceholder(lease.payload.brawlhallaId)
           const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
             if (lease.workClass === 'primary-monitoring') {
               const snapshot = await accounts.primaryMonitoring.readSnapshot()

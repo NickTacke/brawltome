@@ -15,16 +15,8 @@ export interface CanonicalPlayerProfileView {
   name: string
   bestLegendNameKey?: string | null
   legacyRating?: number | null
-  aliases?: Array<{ value?: unknown }>
-  clan?: { clanId: number; clanName: string } | null
-  xp?: number | null
-  level?: number | null
-  xpPercentage?: number | null
-  totalGames?: number | null
-  totalWins?: number | null
-  matchTimeTotal?: number | null
-  statsLastUpdated?: Date | string | null
-  statsLegends?: PlayerData[]
+  aliases: string[]
+  clan: { clanId: number; clanName: string } | null
   currentSeason: PlayerRankedProfileContract | null
   career: PlayerCareerProfileContract | null
 }
@@ -35,16 +27,8 @@ interface PlayerProfileHierarchyProps {
   careerRefreshing: boolean
 }
 
-function displayAliases(player: CanonicalPlayerProfileView): string[] {
-  return (player.aliases ?? [])
-    .map((alias) => alias.value)
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .filter((value) => value.trim() !== player.name)
-    .sort((left, right) => left.localeCompare(right))
-}
-
 function careerLegends(player: CanonicalPlayerProfileView): PlayerData[] {
-  if (!player.career?.snapshot) return [...(player.statsLegends ?? [])]
+  if (!player.career?.snapshot) return []
   return player.career.snapshot.legends.map((legend) => {
     const reference = getLegendById(legend.legendId)
     return {
@@ -84,8 +68,8 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
   return {
     brawlhallaId: player.brawlhallaId,
     name: player.name,
-    aliases: player.aliases ?? [],
-    clan: player.clan ?? null,
+    aliases: player.aliases,
+    clan: player.clan,
     region: oneVsOne?.region ?? null,
     rating: oneVsOne?.rating ?? null,
     legacyRating: player.legacyRating ?? null,
@@ -96,13 +80,13 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
     rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null,
     ratingHistory: ranked?.ratingHistory ?? [],
     rankedLegends: ranked?.rankedLegends ?? [],
-    xp: career ? career.account.xp : (player.xp ?? null),
-    level: career ? career.account.level : (player.level ?? null),
-    xpPercentage: career ? career.account.xpPercentage : (player.xpPercentage ?? null),
-    totalGames: career ? career.combat.games : (player.totalGames ?? undefined),
-    totalWins: career ? career.combat.wins : (player.totalWins ?? undefined),
-    matchTimeTotal: career ? career.combat.matchTime : (player.matchTimeTotal ?? 0),
-    statsLastUpdated: career ? (player.career?.lastSuccessAt ?? null) : (player.statsLastUpdated ?? null),
+    xp: career?.account.xp ?? null,
+    level: career?.account.level ?? null,
+    xpPercentage: career?.account.xpPercentage ?? null,
+    totalGames: career?.combat.games,
+    totalWins: career?.combat.wins,
+    matchTimeTotal: career?.combat.matchTime ?? 0,
+    statsLastUpdated: career ? (player.career?.lastSuccessAt ?? null) : null,
     statsLegends: legends,
   }
 }
@@ -127,7 +111,12 @@ export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHier
 
   return (
     <>
-      <ProfileHeader player={player} topLegend={topLegend} aliases={displayAliases(player)} refreshing={refreshing} />
+      <ProfileHeader
+        player={player}
+        topLegend={topLegend}
+        aliases={player.aliases.toSorted((left, right) => left.localeCompare(right))}
+        refreshing={refreshing}
+      />
 
       <div id="ranked" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RankedCard player={display} rankedTeams={teams} />

@@ -22,7 +22,9 @@ import { accountRouter } from '../src/router/account.router'
 interface TestContext {
   account: Account | null
   accounts: Accounts
-  playerReferenceQueries: { byId(id: number): Promise<{ brawlhallaId: number; name: string } | null> }
+  playerReferenceQueries: {
+    byId(id: number): Promise<{ brawlhallaId: number; name: string; aliases: string[] } | null>
+  }
   rankedPlayerQueries: { byId(id: number): Promise<unknown> }
 }
 
@@ -191,7 +193,7 @@ function context(currentAccount: Account | null, accountService = makeAccounts()
     accounts: accountService,
     playerReferenceQueries: {
       async byId(id) {
-        return id === 404 ? null : { brawlhallaId: id, name: `Player ${id}` }
+        return id === 404 ? null : { brawlhallaId: id, name: `Player ${id}`, aliases: [] }
       },
     },
     rankedPlayerQueries: {
@@ -365,7 +367,7 @@ describe('account.savedPlayers', () => {
         order: 0,
         pinOrder: 0,
         savedAt: '2026-08-10T10:03:00.000Z',
-        player: { brawlhallaId: 42, name: 'Player 42' },
+        player: { brawlhallaId: 42, name: 'Player 42', aliases: [] },
         currentSeason: {
           brawlhallaId: 42,
           checkedAt: '2026-08-10T10:00:00.000Z',

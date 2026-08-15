@@ -4,17 +4,13 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./composition": "./composition.ts",
-    "./v2-compatibility": "./v2-compatibility.ts"
+    "./composition": "./composition.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@brawltome/database": "workspace:*",
     "@brawltome/game-data": "workspace:*",
-    "@brawltome/shared": "workspace:*",
-    "drizzle-orm": "^0.39.0",
     "postgres": "^3.4.7"
   },
   "devDependencies": {

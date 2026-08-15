@@ -7,7 +7,6 @@ import {
   playerRefreshResponseSchema,
 } from '@brawltome/contracts'
 import { CAREER_FRESHNESS_SECONDS, RANKED_FRESHNESS_SECONDS } from '@brawltome/player'
-import { getV2PlayerProfile } from '@brawltome/player/v2-compatibility'
 import { z } from 'zod'
 import { requestInteractivePlayerRefresh } from '../interactive-player-refresh'
 import type { Context } from '../trpc/context'
@@ -138,13 +137,6 @@ export function createCanonicalPlayerRefreshRouter(
 
 export function createV2PlayerRefreshRouter(procedure = internalProcedure) {
   return router({
-    byId: procedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
-      const [player, clan] = await Promise.all([
-        getV2PlayerProfile(ctx.playerRepo, input.id),
-        ctx.clanRepo.getPlayerMembership(input.id),
-      ])
-      return player ? { ...player, clan } : null
-    }),
     refresh: procedure.input(v2RefreshInputSchema).mutation(async ({ ctx, input }) => {
       const result = await requestPlayerRefresh(ctx, input)
       return {

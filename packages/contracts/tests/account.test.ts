@@ -93,7 +93,7 @@ describe('savedPlayersSchema', () => {
         order: 0,
         pinOrder: 0,
         savedAt: '2026-08-10T09:00:00.000Z',
-        player: { brawlhallaId: 42, name: 'Ada' },
+        player: { brawlhallaId: 42, name: 'Ada', aliases: [] },
         currentSeason: {
           brawlhallaId: 42,
           checkedAt: '2026-08-10T10:00:00.000Z',
