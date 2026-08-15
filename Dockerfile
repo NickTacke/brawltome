@@ -43,8 +43,6 @@ COPY packages/contexts/request-admission/package.json packages/contexts/request-
 COPY packages/contexts/refresh-operations/package.json packages/contexts/refresh-operations/
 COPY packages/contexts/statistics/package.json packages/contexts/statistics/
 COPY packages/contexts/discovery/package.json packages/contexts/discovery/
-COPY packages/contexts/matchmaking/package.json packages/contexts/matchmaking/
-COPY packages/replay-format/package.json packages/replay-format/
 COPY packages/game-data/package.json packages/game-data/
 COPY packages/contracts/package.json packages/contracts/
 COPY tooling/architecture/package.json tooling/architecture/

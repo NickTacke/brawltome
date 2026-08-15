@@ -21,11 +21,9 @@
         "@brawltome/database": "workspace:*",
         "@brawltome/discovery": "workspace:*",
         "@brawltome/game-data": "workspace:*",
-        "@brawltome/matchmaking": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
-        "@brawltome/replay-format": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/shared": "workspace:*",
         "@brawltome/statistics": "workspace:*",
@@ -151,17 +149,6 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/matchmaking": {
-      "name": "@brawltome/matchmaking",
-      "dependencies": {
-        "@brawltome/database": "workspace:*",
-        "@brawltome/replay-format": "workspace:*",
-        "drizzle-orm": "^0.39.0",
-      },
-      "devDependencies": {
-        "typescript": "^5.7.0",
-      },
-    },
     "packages/contexts/player": {
       "name": "@brawltome/player",
       "dependencies": {
@@ -234,12 +221,6 @@
     },
     "packages/game-data": {
       "name": "@brawltome/game-data",
-      "devDependencies": {
-        "typescript": "^5.7.0",
-      },
-    },
-    "packages/replay-format": {
-      "name": "@brawltome/replay-format",
       "devDependencies": {
         "typescript": "^5.7.0",
       },
@@ -416,15 +397,11 @@
 
     "@brawltome/launch-parity": ["@brawltome/launch-parity@workspace:tooling/launch-parity"],
 
-    "@brawltome/matchmaking": ["@brawltome/matchmaking@workspace:packages/contexts/matchmaking"],
-
     "@brawltome/player": ["@brawltome/player@workspace:packages/contexts/player"],
 
     "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/contexts/ranking"],
 
     "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/contexts/refresh-operations"],
-
-    "@brawltome/replay-format": ["@brawltome/replay-format@workspace:packages/replay-format"],
 
     "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/contexts/request-admission"],
 
