@@ -285,6 +285,13 @@ describe('Players V2 import', () => {
       `
       expect([...history]).toEqual([
         {
+          legacy_source_key: '102',
+          source_order: '102',
+          rating: 1700,
+          wins: 2,
+          recorded_at: new Date('2026-07-02T00:00:00Z'),
+        },
+        {
           legacy_source_key: '101',
           source_order: '101',
           rating: 1600,
@@ -299,10 +306,10 @@ describe('Players V2 import', () => {
           recorded_at: new Date('2026-07-01T00:00:00Z'),
         },
       ])
-      const [rejection] = await inspect<{ code: string; source_key: string }[]>`
+      const rejections = await inspect<{ code: string; source_key: string }[]>`
         SELECT code, source_key FROM players.legacy_import_rejections WHERE source_table = 'rating_history'
       `
-      expect(rejection).toEqual({ code: 'history-tier-unavailable', source_key: '102' })
+      expect(rejections).toHaveLength(0)
 
       await inspect`
         INSERT INTO players.career_profiles
@@ -380,6 +387,7 @@ describe('Players V2 import', () => {
         expect(profile?.snapshot?.oneVsOne.rating).toBe(1900)
         expect(profile?.snapshot?.ratingHistory.map(({ rating, source }) => ({ rating, source }))).toEqual([
           { rating: 1900, source: 'v0-player-snapshot' },
+          { rating: 1700, source: 'legacy-v2' },
           { rating: 1600, source: 'legacy-v2' },
           { rating: 1500, source: 'legacy-v2' },
         ])

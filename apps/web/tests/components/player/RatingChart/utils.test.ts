@@ -101,8 +101,8 @@ describe('getCurrentSeason', () => {
 
   it('uses the SEASONS config by default', () => {
     expect(SEASONS.length).toBeGreaterThan(0)
-    const result = getCurrentSeason(new Date(Date.UTC(2030, 0, 1)))
-    expect(SEASONS).toContain(result)
+    const result = getCurrentSeason(new Date('2026-06-24T14:00:00Z'))
+    expect(result).toMatchObject({ id: 41, name: 'Season 41' })
   })
 })
 

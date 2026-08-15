@@ -1578,6 +1578,7 @@
                 },
                 "tier": {
                   "minLength": 1,
+                  "nullable": true,
                   "type": "string"
                 },
                 "wins": {

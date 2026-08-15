@@ -10,6 +10,7 @@ import { addCareerGuild } from './migrations/0009-add-career-guild'
 import { allowRankedWithoutIdentity } from './migrations/0010-allow-ranked-without-identity'
 import { reconcileCareerNameMojibake } from './migrations/0011-reconcile-career-name-mojibake'
 import { addHistoricalCareerSource } from './migrations/0012-add-historical-career-source'
+import { addCompactReferenceImport } from './migrations/0013-add-compact-reference-import'
 
 export {
   createPostgresCareerPlayers,
@@ -43,6 +44,11 @@ export {
   type LegacyCareerImportResult,
 } from './legacy-career-import'
 export {
+  importLegacyReferenceHistory,
+  type LegacyReferenceImportOptions,
+  type LegacyReferenceImportResult,
+} from './legacy-reference-import'
+export {
   importLegacyPlayerProfiles,
   type LegacyPlayerProfileImportOptions,
   type LegacyPlayerProfileImportResult,
@@ -66,4 +72,5 @@ export const playerMigrationInventory = [
   allowRankedWithoutIdentity,
   reconcileCareerNameMojibake,
   addHistoricalCareerSource,
+  addCompactReferenceImport,
 ] as const

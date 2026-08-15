@@ -94,7 +94,7 @@ describe('Player ranked profile contract', () => {
             source: 'legacy-v2' as const,
             rating: 1_600,
             peakRating: 1_650,
-            tier: 'Gold 4',
+            tier: null,
             wins: 5,
             games: 10,
             recordedAt: '2026-08-09T20:00:00Z',

@@ -14,7 +14,7 @@ export type RatingHistoryPoint = {
   source: 'v0-player-snapshot' | 'legacy-v2'
   rating: number
   peakRating: number
-  tier: string
+  tier: string | null
   wins: number
   games: number
   recordedAt: Date

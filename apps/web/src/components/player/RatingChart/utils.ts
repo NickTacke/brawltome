@@ -9,6 +9,7 @@ export interface SeasonDef {
 export const SEASONS: SeasonDef[] = [
   { id: 39, name: 'Season 39', startsAt: new Date(0) },
   { id: 40, name: 'Season 40', startsAt: new Date('2026-03-25T14:00:00Z') },
+  { id: 41, name: 'Season 41', startsAt: new Date('2026-06-24T14:00:00Z') },
 ]
 
 export interface TierThreshold {
