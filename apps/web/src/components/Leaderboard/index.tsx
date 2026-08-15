@@ -3,6 +3,7 @@
 import { saveAccountPreferences, useAccount, useAccountPreferences } from '@/lib/auth'
 import { trpc } from '@/lib/trpc'
 import {
+  Button,
   Card,
   Select,
   SelectContent,
@@ -39,6 +40,20 @@ import {
   snapshotNotice,
 } from './utils'
 
+export function LeaderboardErrorState({ onRetryAction }: { onRetryAction: () => void }) {
+  return (
+    <Card
+      role="alert"
+      className="w-full max-w-4xl mx-auto mt-12 bg-destructive/10 border-destructive text-destructive-foreground p-6 text-center"
+    >
+      <p>Unable to load leaderboard data.</p>
+      <Button type="button" variant="outline" className="mt-4" onClick={onRetryAction}>
+        Try again
+      </Button>
+    </Card>
+  )
+}
+
 export function Leaderboard() {
   const router = useRouter()
   const pathname = usePathname()
@@ -57,13 +72,14 @@ export function Leaderboard() {
 
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
   const [fetchedKey, setFetchedKey] = useState('')
   const [knownLastPage, setKnownLastPage] = useState<number | null>(null)
   const [snapshotStatus, setSnapshotStatus] = useState<'fresh' | 'stale' | 'unavailable' | null>(null)
   const snapshotRef = useRef<{ scopeKey: string; snapshotId: string } | null>(null)
   const [preferenceError, setPreferenceError] = useState<string | null>(null)
   const [preferencesSaving, setPreferencesSaving] = useState(false)
+  const [requestVersion, setRequestVersion] = useState(0)
 
   const updateFilters = useCallback(
     (next: Partial<LeaderboardFilters>) => {
@@ -93,7 +109,7 @@ export function Leaderboard() {
     const scopeKey = `${bracket}:${region}`
     const scopeChanged = snapshotRef.current?.scopeKey !== scopeKey
     setIsLoading(true)
-    setError(null)
+    setFailed(false)
     setKnownLastPage(null)
     if (scopeChanged) {
       snapshotRef.current = null
@@ -125,29 +141,31 @@ export function Leaderboard() {
         setFetchedKey(`${bracket}:${region}:${page}`)
         setIsLoading(false)
       })
-      .catch((err) => {
+      .catch((cause: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Unknown transport failure')
+        console.error(`[leaderboard] request version ${requestVersion} failed`, cause)
+        setFailed(true)
         setIsLoading(false)
       })
 
     return () => {
       cancelled = true
     }
-  }, [bracket, region, page, preferencesLoading])
+  }, [bracket, region, page, preferencesLoading, requestVersion])
 
   const currentKey = `${bracket}:${region}:${page}`
   const showLoading = isLoading || fetchedKey !== currentKey
   const effectiveMaxPage = knownLastPage ?? MAX_PAGE
 
-  if (error) {
+  if (failed) {
     return (
-      <Card
-        role="alert"
-        className="w-full max-w-4xl mx-auto mt-12 bg-destructive/10 border-destructive text-destructive-foreground p-6 text-center"
-      >
-        Unable to load leaderboard data: {error}
-      </Card>
+      <LeaderboardErrorState
+        onRetryAction={() => {
+          setFailed(false)
+          setIsLoading(true)
+          setRequestVersion((version) => version + 1)
+        }}
+      />
     )
   }
 
