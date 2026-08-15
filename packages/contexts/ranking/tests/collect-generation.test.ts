@@ -289,14 +289,21 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     })
   })
 
-  test('chooses a cross-region duplicate by wins before peak rating', async () => {
+  test('preserves requested rosters and chooses the Global duplicate by wins before peak rating', async () => {
     const recorder = publicationRecorder()
     await collectAndPublishLeaderboardGeneration({
       mode: '1v1',
       authorization: auth('1v1'),
       source: {
         async fetchPage({ region }) {
-          const result = row(region, '1v1', 7, 1, 2_400)
+          const duplicate = region === 'EU' || region === 'US-E'
+          const result = row(
+            duplicate ? 'US-E' : region,
+            '1v1',
+            duplicate ? 7 : regionalLeaderboardScopes.indexOf(region) + 100,
+            1,
+            2_400,
+          )
           result.wins = region === 'EU' ? 30 : 20
           result.best_rating = region === 'US-E' ? 2_500 : 2_450
           return { rankings: [result], totalPages: 1 }
@@ -305,9 +312,13 @@ describe('collectAndPublishLeaderboardGeneration', () => {
       publication: recorder.publication,
     })
 
-    expect(recorder.published[0].snapshots.get('all')).toMatchObject([
-      { standing: 1, region: 'EU', wins: 30, peakRating: 2_450 },
-    ])
+    expect(recorder.published[0].snapshots.get('EU')).toMatchObject([{ region: 'US-E', wins: 30 }])
+    expect(recorder.published[0].snapshots.get('US-E')).toMatchObject([{ region: 'US-E', wins: 20, peakRating: 2_500 }])
+    expect(
+      recorder.published[0].snapshots
+        .get('all')
+        ?.filter(({ identity }) => identity.type === 'one-vs-one-player' && identity.player.brawlhallaId === 7),
+    ).toMatchObject([{ standing: 1, region: 'US-E', wins: 30, peakRating: 2_450 }])
   })
 
   test('canonicalizes fixed teams, permits one player in different teams, and deduplicates only identical teams globally', async () => {
