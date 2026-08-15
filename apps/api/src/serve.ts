@@ -3,12 +3,11 @@ import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
-import { createMatchRepo } from '@brawltome/matchmaking'
 import { createPostgresCareerPlayers, createPostgresRankedPlayers } from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
-import { createR2Client, initGameData, verifyTurnstileResult } from '@brawltome/shared'
+import { initGameData, verifyTurnstileResult } from '@brawltome/shared'
 import { createPostgresStatistics } from '@brawltome/statistics/composition'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
@@ -26,12 +25,10 @@ import {
 import { createAuthRoutes } from './auth/routes'
 import { requestWithVerifiedClientIp } from './client-ip'
 import { createHealthRoutes } from './health-routes'
-import { readMatchmakingConfig } from './matchmaking-config'
 import { createPostgresReadiness } from './postgres-readiness'
 import { appRouter } from './router'
 import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
-import { createMatchmakingRoutes } from './routes/matchmaking.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
@@ -74,10 +71,6 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
 const ranking = createPostgresRanking(databaseUrl)
 const statistics = createPostgresStatistics(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
-const matchmakingConfig = readMatchmakingConfig()
-const r2 = createR2Client(matchmakingConfig.r2)
-const matchmakingLive = matchmakingConfig.enabled && !!r2
-const matchRepo = matchmakingLive ? createMatchRepo(db) : null
 const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationInventory)
 let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -118,12 +111,6 @@ const lifecycle = createRuntimeLifecycle({
   ],
 })
 
-console.log(
-  `[api] matchmaking: ${matchmakingLive ? 'ENABLED' : 'disabled'}${
-    matchmakingConfig.enabled && !r2 ? ' (R2 not configured)' : ''
-  }`,
-)
-
 const sharedCtx = {
   db,
   telemetry,
@@ -139,9 +126,6 @@ const sharedCtx = {
   statisticsQueries: statistics,
   clanRepo,
   accounts,
-  matchRepo,
-  r2,
-  matchmakingEnabled: matchmakingLive,
 }
 
 const app = new Hono()
@@ -205,19 +189,6 @@ app.route(
 app.route(
   '/internal/operations',
   createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
-)
-
-app.route(
-  '/api/matches',
-  createMatchmakingRoutes({
-    matchRepo,
-    r2,
-    requestAdmission,
-    telemetry,
-    accounts,
-    enabled: matchmakingLive,
-    observeSourceCall: (domain, work) => observeSourceCall(telemetry, domain, work),
-  }),
 )
 
 app.use(

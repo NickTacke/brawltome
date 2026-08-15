@@ -48,8 +48,6 @@ function actorDimensions(actor: AdmissionActor, authenticatedIpLimit: number) {
       return [{ domain: 'discord-refresh', key: hash(actor.discordUserId), limit: 20 }]
     case 'desktop':
       return [{ domain: 'desktop-ranked-refresh', key: hash(actor.ip), limit: 60 }]
-    case 'matchmaking-ingest':
-      return [{ domain: 'matchmaking-ingest', key: hash(actor.accountId), limit: 60 }]
   }
 }
 

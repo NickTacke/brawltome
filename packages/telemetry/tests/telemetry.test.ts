@@ -470,8 +470,6 @@ describe('telemetry foundation', () => {
       work_class: 'global-statistics',
       outcome: 'succeeded',
     })
-    telemetry.metrics.add('matchmaking_ingest_total', 1, { outcome: 'rate_limited' })
-
     const output = renderPrometheus([...telemetry.metrics.snapshot(), ...operationTelemetry.metrics.snapshot()])
     expect(output).toContain('http_server_requests_total{method="GET",route="trpc",runtime="api",status_class="2xx"} 1')
     expect(output).toContain('http_server_duration_ms_bucket')
@@ -480,7 +478,6 @@ describe('telemetry foundation', () => {
     expect(output).toContain('kind="clan-discovery-projection"')
     expect(output).toContain('kind="discovery-reconciliation"')
     expect(output).toContain('kind="statistics-publication"')
-    expect(output).toContain('matchmaking_ingest_total{outcome="rate_limited"} 1')
     expect(output).not.toContain('statistics-player-42')
     expect(telemetry.stats().seriesDropped).toBe(2)
     expect(operationTelemetry.stats().seriesDropped).toBe(1)

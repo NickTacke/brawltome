@@ -21,7 +21,6 @@
       "@brawltome/player": ["./packages/contexts/player/index.ts"],
       "@brawltome/clan": ["./packages/contexts/clan/index.ts"],
       "@brawltome/discovery": ["./packages/contexts/discovery/index.ts"],
-      "@brawltome/matchmaking": ["./packages/contexts/matchmaking/index.ts"],
       "@brawltome/ranking": ["./packages/contexts/ranking/index.ts"],
       "@brawltome/request-admission": ["./packages/contexts/request-admission/index.ts"],
       "@brawltome/refresh-operations": ["./packages/contexts/refresh-operations/index.ts"],
