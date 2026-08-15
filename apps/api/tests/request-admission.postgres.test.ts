@@ -159,84 +159,6 @@ describe('PostgreSQL interactive refresh admission', () => {
     await admission.close()
   })
 
-  test('preserves the per-account matchmaking ingest ceiling in an account-anchored window', async () => {
-    let firstCapturedAt: Date | undefined
-    const admission = createPostgresRequestAdmission(connectionString, {
-      authenticatedIpLimit: 120,
-      sourceLimits: { 'brawlhalla-v0': 180 },
-      windowSeconds: 997,
-      afterWindowCaptured: async (capturedAt) => {
-        firstCapturedAt ??= capturedAt
-      },
-    })
-    try {
-      const admitted = await Promise.all(
-        Array.from({ length: 60 }, () =>
-          admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-ingest-a' }),
-        ),
-      )
-      expect(admitted.every(({ outcome }) => outcome === 'admitted')).toBe(true)
-      expect(
-        await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-ingest-a' }),
-      ).toMatchObject({
-        outcome: 'rate-limited',
-        retryAfterSeconds: expect.any(Number),
-      })
-      expect(await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-ingest-b' })).toEqual({
-        outcome: 'admitted',
-      })
-      const control = postgres(connectionString, { max: 1 })
-      try {
-        const [reservations] = await control<{ count: number }[]>`
-          SELECT count(*)::integer AS count FROM request_admission.actor_reservations
-        `
-        expect(reservations.count).toBe(0)
-        const [window] = await control<{ window_started_at: Date }[]>`
-          SELECT window_started_at FROM request_admission.actor_windows
-          WHERE domain = 'matchmaking-ingest'
-          ORDER BY window_started_at
-          LIMIT 1
-        `
-        if (!firstCapturedAt) throw new Error('Expected the actor window timestamp to be captured')
-        expect(window.window_started_at).toEqual(firstCapturedAt)
-      } finally {
-        await control.end()
-      }
-    } finally {
-      await admission.close()
-    }
-  })
-
-  test('does not let aligned refresh admission clear an active account-anchored ingest window', async () => {
-    const admission = createPostgresRequestAdmission(connectionString, {
-      authenticatedIpLimit: 120,
-      sourceLimits: { 'brawlhalla-v0': 180 },
-      windowSeconds: 60,
-    })
-    const control = postgres(connectionString, { max: 1 })
-    try {
-      expect(await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-mixed-window' })).toEqual(
-        {
-          outcome: 'admitted',
-        },
-      )
-      await control`
-        UPDATE request_admission.actor_windows
-        SET units = 60, window_started_at = date_trunc('minute', clock_timestamp()) - interval '1 millisecond'
-        WHERE domain = 'matchmaking-ingest'
-      `
-      expect(await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.200' }, randomUUID())).toEqual({
-        outcome: 'admitted',
-      })
-      expect(
-        await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'account-mixed-window' }),
-      ).toMatchObject({ outcome: 'rate-limited' })
-    } finally {
-      await control.end()
-      await admission.close()
-    }
-  })
-
   test('removes actor reservations after their reconciliation retention period', async () => {
     const admission = createPostgresRequestAdmission(connectionString, {
       authenticatedIpLimit: 120,
@@ -252,7 +174,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         SET admitted_at = clock_timestamp() - interval '2 seconds'
         WHERE reservation_key = ${reservationKey}
       `
-      await admission.admitActorOnce({ kind: 'matchmaking-ingest', accountId: 'cleanup-trigger' })
+      await admission.admitActorOnce({ kind: 'desktop', ip: '203.0.113.202' })
       expect(await admission.hasActorReservation(reservationKey)).toBe(false)
     } finally {
       await control.end()

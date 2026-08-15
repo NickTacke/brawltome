@@ -186,14 +186,10 @@ describe('V3 dependency architecture', () => {
     expect(result.staleExceptions).toEqual([])
     expect(result.appliedExceptions.map(({ id }) => id).sort()).toEqual(
       [
-        'v2-api-matchmaking-package',
-        'v2-api-replay-package',
         'v2-api-router-export',
         'v2-api-shared-package',
         'v2-discord-api-router-app-import',
         'v2-discord-api-router-undeclared',
-        'v2-matchmaking-database-adapter',
-        'v2-matchmaking-replay-package',
         'v2-shared-bhapi-adapter',
         'v2-shared-database-adapter',
         'v2-shared-game-data-foundation',

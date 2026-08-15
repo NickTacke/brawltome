@@ -58,7 +58,6 @@ export type MetricName =
   | 'source_quota_used'
   | 'source_quota_limit'
   | 'refresh_failures_total'
-  | 'matchmaking_ingest_total'
   | 'discord_interactions_total'
 
 export type MetricLabels = Readonly<Record<string, string>>
@@ -94,7 +93,6 @@ const route = [
   'metrics',
   'auth',
   'operations',
-  'matches',
   'overlay',
   'web',
   'api',
@@ -137,7 +135,7 @@ const outcome = [
   'deduplicated',
   'not_found',
 ] as const
-const sourceDomain = ['brawlhalla-v0', 'brawlhalla-v1', 'discord', 'steam', 'turnstile', 'r2', 'api'] as const
+const sourceDomain = ['brawlhalla-v0', 'brawlhalla-v1', 'discord', 'steam', 'turnstile', 'api'] as const
 const interactionKind = ['command', 'select', 'button'] as const
 const command = ['player', 'clan', 'status', 'component', 'unknown'] as const
 const failureCategory = [
@@ -214,21 +212,6 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Refresh failures',
     labels: { kind: operationKind, failure_category: failureCategory },
-  },
-  matchmaking_ingest_total: {
-    kind: 'counter',
-    help: 'Matchmaking replay ingest outcomes',
-    labels: {
-      outcome: [
-        'succeeded',
-        'rate_limited',
-        'oversize',
-        'validation_error',
-        'parse_error',
-        'rejected',
-        'dependency_failure',
-      ],
-    },
   },
   discord_interactions_total: {
     kind: 'counter',
@@ -851,7 +834,6 @@ export function normalizeHttpRoute(pathname: string): (typeof route)[number] {
   if (pathname.startsWith('/trpc')) return 'trpc'
   if (pathname.startsWith('/auth')) return 'auth'
   if (pathname.startsWith('/internal/operations')) return 'operations'
-  if (pathname.startsWith('/api/matches')) return 'matches'
   if (pathname.startsWith('/api/overlay')) return 'overlay'
   return 'other'
 }
@@ -928,7 +910,7 @@ export type TelemetryFetch = (input: RequestInfo | URL, init?: RequestInit) => P
 
 export async function telemetryFetch(
   telemetry: Telemetry,
-  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'r2' | 'brawlhalla-v0' | 'brawlhalla-v1',
+  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'brawlhalla-v0' | 'brawlhalla-v1',
   fetcher: TelemetryFetch,
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -957,7 +939,7 @@ export async function telemetryFetch(
 
 export async function observeSourceCall<T>(
   telemetry: Telemetry,
-  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'r2' | 'brawlhalla-v0' | 'brawlhalla-v1',
+  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'brawlhalla-v0' | 'brawlhalla-v1',
   work: () => Promise<T>,
 ): Promise<T> {
   const started = performance.now()

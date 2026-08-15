@@ -141,7 +141,6 @@ services:
       CORS_ORIGIN: https://brawltome.app
       DISCORD_CLIENT_ID: ${V3_DISCORD_CLIENT_ID:?Set the Discord OAuth client ID}
       DISCORD_REDIRECT_URI: https://api.brawltome.app/auth/discord/callback
-      MATCHMAKING_ENABLED: "false"
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PORT: "3000"
