@@ -344,6 +344,8 @@ fn enforce_career_wire_semantics(source: String) -> String {
             ::chrono::DateTime<::chrono::offset::Utc>,
         >,
         pub snapshot: PlayerCareerSnapshot,
+        #[serde(rename = "snapshotSource")]
+        pub snapshot_source: ::std::option::Option<PlayerCareerProfileSnapshotSource>,
     }"#;
     assert!(
         career.contains(profile),
@@ -364,12 +366,26 @@ fn enforce_career_wire_semantics(source: String) -> String {
             ::chrono::DateTime<::chrono::offset::Utc>,
         >,
         pub snapshot: PlayerCareerSnapshot,
+        #[serde(rename = "snapshotSource")]
+        pub snapshot_source: ::std::option::Option<PlayerCareerProfileSnapshotSource>,
     }
     impl<'de> ::serde::Deserialize<'de> for PlayerCareerProfile {
         fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
         where
             D: ::serde::Deserializer<'de>,
         {
+            fn deserialize_required_snapshot_source<'wire, D>(
+                deserializer: D,
+            ) -> ::std::result::Result<
+                ::std::option::Option<PlayerCareerProfileSnapshotSource>,
+                D::Error,
+            >
+            where
+                D: ::serde::Deserializer<'wire>,
+            {
+                <::std::option::Option<PlayerCareerProfileSnapshotSource> as ::serde::Deserialize>::deserialize(deserializer)
+            }
+
             #[derive(::serde::Deserialize)]
             #[serde(deny_unknown_fields)]
             struct Wire {
@@ -383,16 +399,28 @@ fn enforce_career_wire_semantics(source: String) -> String {
                 #[serde(rename = "lastSuccessAt", deserialize_with = "deserialize_optional_utc_datetime")]
                 last_success_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
                 snapshot: PlayerCareerSnapshot,
+                #[serde(
+                    rename = "snapshotSource",
+                    deserialize_with = "deserialize_required_snapshot_source"
+                )]
+                snapshot_source: ::std::option::Option<PlayerCareerProfileSnapshotSource>,
             }
             let wire = <Wire as ::serde::Deserialize>::deserialize(deserializer)?;
             let unavailable = wire.last_success_at.is_none()
+                && wire.snapshot_source.is_none()
                 && matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
                 && wire.snapshot.0.is_none();
             let available = wire.last_success_at.is_some()
+                && wire.snapshot_source.is_some()
                 && !matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
                 && wire.snapshot.0.is_some();
             if !unavailable && !available {
                 return Err(<D::Error as ::serde::de::Error>::custom("career availability fields are inconsistent"));
+            }
+            if matches!(wire.snapshot_source.as_ref(), Some(PlayerCareerProfileSnapshotSource::LegacyV2))
+                && !matches!(wire.freshness, PlayerCareerProfileFreshness::Stale)
+            {
+                return Err(<D::Error as ::serde::de::Error>::custom("legacy career snapshots must remain stale"));
             }
             if let Some(snapshot) = &wire.snapshot.0 {
                 if snapshot.combat.wins > snapshot.combat.games
@@ -408,6 +436,7 @@ fn enforce_career_wire_semantics(source: String) -> String {
                 freshness: wire.freshness,
                 last_success_at: wire.last_success_at,
                 snapshot: wire.snapshot,
+                snapshot_source: wire.snapshot_source,
             })
         }
     }"#;

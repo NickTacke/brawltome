@@ -3,6 +3,7 @@ export {
   type CareerPlayerProfile,
   type CareerPlayerQueries,
   type CareerSnapshot,
+  type CareerSnapshotSource,
   careerFreshness,
 } from './career/model'
 export {
