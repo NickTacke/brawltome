@@ -10,7 +10,6 @@ import { addCareerGuild } from './migrations/0009-add-career-guild'
 import { allowRankedWithoutIdentity } from './migrations/0010-allow-ranked-without-identity'
 import { reconcileCareerNameMojibake } from './migrations/0011-reconcile-career-name-mojibake'
 
-export { processRefreshRanked, processRefreshStats, type PlayerRefreshEffect } from './commands/refresh-player'
 export {
   createPostgresCareerPlayers,
   type CanonicalCareerEffect,
