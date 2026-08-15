@@ -43,6 +43,28 @@ const career = {
 }
 
 describe('PlayerProfileHierarchy', () => {
+  test('renders contextual states when profile sections have no data', () => {
+    const html = renderToStaticMarkup(
+      <PlayerProfileHierarchy
+        player={{
+          brawlhallaId: 42,
+          name: 'Canonical Player',
+          aliases: [],
+          clan: null,
+          currentSeason: unavailableRanked,
+          career,
+        }}
+        refreshing={false}
+        careerRefreshing={false}
+      />,
+    )
+
+    expect(html).toContain('Rating history will appear after two complete observations.')
+    expect(html).toContain('No weapon statistics are available yet.')
+    expect(html).toContain('No legend statistics are available yet.')
+    expect(html).toContain('No ranked 2v2 teams are available yet.')
+  })
+
   test('passes canonical career data to the V2-style header', () => {
     const html = renderToStaticMarkup(
       <PlayerProfileHierarchy
