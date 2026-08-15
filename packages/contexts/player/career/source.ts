@@ -1,5 +1,7 @@
 const INT32_MAX = 2_147_483_647
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)$/
+const UTF8_AS_LATIN1_SEQUENCE = /[\u00c2-\u00f4][\u0080-\u00bf]/u
+const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 type RecordValue = Record<string, unknown>
 
@@ -101,6 +103,20 @@ function decimal(value: unknown, path: string): string {
     throw new Error(`${path} must be a canonical non-negative decimal string`)
   }
   return value
+}
+
+// ponytail: derive one whole-string Latin-1 layer; persistence requires exact stored evidence before using it.
+export function decodeV0CareerNameCandidate(value: string): string | null {
+  const characters = [...value]
+  if (characters.some((character) => character.charCodeAt(0) > 0xff) || !UTF8_AS_LATIN1_SEQUENCE.test(value)) {
+    return null
+  }
+  try {
+    const decoded = UTF8_DECODER.decode(Uint8Array.from(characters, (character) => character.charCodeAt(0)))
+    return decoded !== value && !UTF8_AS_LATIN1_SEQUENCE.test(decoded) ? decoded : null
+  } catch {
+    return null
+  }
 }
 
 function checkedSum(values: number[], path: string): number {
