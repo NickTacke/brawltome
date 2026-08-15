@@ -113,6 +113,19 @@ describe('V0 career snapshot source contract', () => {
     expect(decodeV0CareerSnapshot({ ...completeSnapshot, clan }, 91913839, resolveLegend).guild).toBeNull()
   })
 
+  test.each([
+    ['MÃ¼ller', 'Müller'],
+    ['Müller', 'Müller'],
+    ['Player 😀', 'Player 😀'],
+    ['日本語', '日本語'],
+    ['Привет', 'Привет'],
+    ['Â©', 'Â©'],
+    ['MÃ(ller', 'MÃ(ller'],
+    ['MÃ\u0083Â¼ller', 'MÃ\u0083Â¼ller'],
+  ])('normalizes a recognized V0 name %p to %p', (name, expected) => {
+    expect(decodeV0CareerSnapshot({ ...completeSnapshot, name }, 91913839, resolveLegend).name).toBe(expected)
+  })
+
   test('accepts an authoritative empty legend collection', () => {
     const decoded = decodeV0CareerSnapshot({ ...completeSnapshot, legends: [] }, 91913839, resolveLegend)
 

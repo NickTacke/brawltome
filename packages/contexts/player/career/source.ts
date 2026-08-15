@@ -1,5 +1,7 @@
 const INT32_MAX = 2_147_483_647
 const DECIMAL_PATTERN = /^(0|[1-9]\d*)$/
+const UTF8_AS_LATIN1_SEQUENCE = /[\u00c2-\u00f4][\u0080-\u00bf]/u
+const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 type RecordValue = Record<string, unknown>
 
@@ -101,6 +103,23 @@ function decimal(value: unknown, path: string): string {
     throw new Error(`${path} must be a canonical non-negative decimal string`)
   }
   return value
+}
+
+// ponytail: repair one whole-string Latin-1 layer; expand only from reviewed production samples.
+export function normalizeV0CareerName(value: string): string {
+  const characters = [...value]
+  if (characters.some((character) => character.charCodeAt(0) > 0xff) || !UTF8_AS_LATIN1_SEQUENCE.test(value)) {
+    return value
+  }
+  try {
+    const decoded = UTF8_DECODER.decode(Uint8Array.from(characters, (character) => character.charCodeAt(0)))
+    const hasNonAsciiLetterOrMark = [...decoded].some(
+      (character) => character.charCodeAt(0) > 0x7f && /[\p{Letter}\p{Mark}]/u.test(character),
+    )
+    return decoded !== value && !UTF8_AS_LATIN1_SEQUENCE.test(decoded) && hasNonAsciiLetterOrMark ? decoded : value
+  } catch {
+    return value
+  }
 }
 
 function checkedSum(values: number[], path: string): number {
@@ -214,7 +233,7 @@ export function decodeV0CareerSnapshot(
 
   return {
     brawlhallaId,
-    name: text(source.name, 'career.name'),
+    name: normalizeV0CareerName(text(source.name, 'career.name')),
     guild,
     account: {
       xp: integer(source.xp, 'career.xp'),

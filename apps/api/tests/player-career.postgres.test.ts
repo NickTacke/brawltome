@@ -241,6 +241,73 @@ describe('Players-owned canonical career state', () => {
     }
   }, 15_000)
 
+  test('repairs source mojibake without preserving the corrupted prior name as an alias', async () => {
+    const brawlhallaId = 91913851
+    const players = createPostgresCareerPlayers(connectionString)
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      const initialLease = await claimCareerOperation(operations, brawlhallaId)
+      await refreshCanonicalCareerPlayer(
+        players,
+        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, name: 'Müller' }),
+        brawlhallaId,
+        { caller: 'on-demand' },
+        effectFor(initialLease),
+        resolveLegend,
+      )
+      await operations.complete(initialLease)
+      await control`
+        UPDATE players.career_profiles SET player_name = 'MÃ¼ller'
+        WHERE brawlhalla_id = ${brawlhallaId}
+      `
+
+      const repairLease = await claimCareerOperation(operations, brawlhallaId)
+      await refreshCanonicalCareerPlayer(
+        players,
+        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, name: 'MÃ¼ller' }),
+        brawlhallaId,
+        { caller: 'on-demand' },
+        effectFor(repairLease),
+        resolveLegend,
+      )
+      await operations.complete(repairLease)
+
+      const [profile] = await control<{ player_name: string }[]>`
+        SELECT player_name FROM players.career_profiles WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      const aliases = await control`
+        SELECT display_alias FROM players.discovery_aliases WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      expect(profile.player_name).toBe('Müller')
+      expect([...aliases]).toEqual([])
+
+      await control`
+        UPDATE players.career_profiles SET player_name = 'FranÃ§ois'
+        WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      const renamedLease = await claimCareerOperation(operations, brawlhallaId)
+      await refreshCanonicalCareerPlayer(
+        players,
+        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, name: 'MÃ¼ller' }),
+        brawlhallaId,
+        { caller: 'on-demand' },
+        effectFor(renamedLease),
+        resolveLegend,
+      )
+      await operations.complete(renamedLease)
+
+      expect([
+        ...(await control<{ normalized_alias: string; display_alias: string }[]>`
+          SELECT normalized_alias, display_alias
+          FROM players.discovery_aliases WHERE brawlhalla_id = ${brawlhallaId}
+        `),
+      ]).toEqual([{ normalized_alias: 'françois', display_alias: 'François' }])
+    } finally {
+      await Promise.all([players.close(), operations.close(), control.end()])
+    }
+  }, 15_000)
+
   test('retains the last success after a malformed attempt and authoritatively clears children on retry', async () => {
     const brawlhallaId = 91913840
     const players = createPostgresCareerPlayers(connectionString)
