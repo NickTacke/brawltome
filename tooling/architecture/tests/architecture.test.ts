@@ -194,7 +194,6 @@ describe('V3 dependency architecture', () => {
         'v2-discord-api-router-undeclared',
         'v2-matchmaking-database-adapter',
         'v2-matchmaking-replay-package',
-        'v2-player-bhapi-adapter',
         'v2-player-compatibility-export',
         'v2-player-database-adapter',
         'v2-player-shared-package',
