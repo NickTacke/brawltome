@@ -328,6 +328,25 @@ describe('Players-owned canonical career state', () => {
         SELECT player_name FROM players.career_profiles WHERE brawlhalla_id = ${brawlhallaId}
       `
       expect(ambiguousProfile.player_name).toBe('Ã©')
+
+      await control`
+        INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias)
+        VALUES (${brawlhallaId}, 'é', 'é')
+      `
+      const corroboratedAmbiguousLease = await claimCareerOperation(operations, brawlhallaId)
+      await refreshCanonicalCareerPlayer(
+        players,
+        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, name: 'Ã©' }),
+        brawlhallaId,
+        { caller: 'on-demand' },
+        effectFor(corroboratedAmbiguousLease),
+        resolveLegend,
+      )
+      await operations.complete(corroboratedAmbiguousLease)
+      const [corroboratedAmbiguousProfile] = await control<{ player_name: string }[]>`
+        SELECT player_name FROM players.career_profiles WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      expect(corroboratedAmbiguousProfile.player_name).toBe('é')
     } finally {
       await Promise.all([players.close(), operations.close(), control.end()])
     }
