@@ -82,7 +82,6 @@
       "dependencies": {
         "@brawltome/contracts": "workspace:*",
         "@brawltome/game-data": "workspace:*",
-        "@brawltome/shared": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
         "@brawltome/ui": "workspace:*",
         "@heroicons/react": "^2.2.0",
@@ -157,7 +156,6 @@
       "dependencies": {
         "@brawltome/database": "workspace:*",
         "@brawltome/replay-format": "workspace:*",
-        "@brawltome/shared": "workspace:*",
         "drizzle-orm": "^0.39.0",
       },
       "devDependencies": {
