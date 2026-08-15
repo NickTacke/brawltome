@@ -125,12 +125,16 @@ describe('Players to Discovery projection delivery', () => {
       await control`
         INSERT INTO players.legacy_discovery_aliases
           (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
-        VALUES (10, 'former', 'Former', now(), ${archiveChecksum})
+        VALUES
+          (10, 'former', 'Former', now(), ${archiveChecksum}),
+          (13, 'mã¼ller', 'MÃ¼ller', now(), ${archiveChecksum})
       `
       await control`
         INSERT INTO players.ranked_profiles
           (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
-        VALUES (10, 'Canonical | Player', now(), now(), 'EU', 2100, 2200, 'Platinum', 10, 20)
+        VALUES
+          (10, 'Canonical | Player', now(), now(), 'EU', 2100, 2200, 'Platinum', 10, 20),
+          (13, 'MÃ¼ller', now(), now(), 'EU', 2100, 2200, 'Platinum', 10, 20)
       `
       await control`
         INSERT INTO players.career_profiles
@@ -139,9 +143,10 @@ describe('Players to Discovery projection delivery', () => {
            snowball_hits, bomb_kos, mine_kos, spikeball_kos, sidekick_kos, snowball_kos)
         VALUES
           (10, 'Career | Player', now(), now(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-          (12, 'Career Only', now(), now(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+          (12, 'Career Only', now(), now(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+          (13, 'Müller', now(), now(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
       `
-      await enqueueImportedPlayers(control, [10, 11, 12])
+      await enqueueImportedPlayers(control, [10, 11, 12, 13])
 
       const eager = await source.snapshot()
       expect(eager.facts).toContainEqual(
@@ -154,6 +159,7 @@ describe('Players to Discovery projection delivery', () => {
       expect(eager.facts).toContainEqual(
         expect.objectContaining({ brawlhallaId: 12, name: 'Career Only', rating: null, bestLegendNameKey: null }),
       )
+      expect(eager.facts).toContainEqual(expect.objectContaining({ brawlhallaId: 13, name: 'Müller', aliases: [] }))
       if (!source.withSnapshot) throw new Error('Expected streaming Player snapshot')
       const streamed = await source.withSnapshot(async (snapshot) => {
         const read = async () => {
@@ -215,6 +221,7 @@ describe('Players to Discovery projection delivery', () => {
       await expect(playerResults(discovery, 'career only')).resolves.toEqual([
         expect.objectContaining({ brawlhallaId: 12, name: 'Career Only', rating: null }),
       ])
+      await expect(playerResults(discovery, 'mã¼ller')).resolves.toEqual([])
 
       await discovery.rebuildPlayers({
         sourceVersion: eager.sourceVersion,
