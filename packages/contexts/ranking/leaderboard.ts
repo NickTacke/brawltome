@@ -260,6 +260,7 @@ function validateRegionRows(
         standing: row.rank,
         sourceRank: row.rank,
         identity,
+        // Requested scope controls roster membership; row region is current-player metadata.
         region: row.region,
         rating: row.rating,
         peakRating: row.best_rating,
