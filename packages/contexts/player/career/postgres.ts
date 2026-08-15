@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { CAREER_FRESHNESS_SECONDS, type CareerPlayerProfile, type CareerPlayerQueries, careerFreshness } from './model'
-import type { V0CareerSnapshot } from './source'
+import { type V0CareerSnapshot, normalizeV0CareerName } from './source'
 
 export type CanonicalCareerEffect = {
   operationId: string
@@ -297,6 +297,7 @@ export function createPostgresCareerPlayers(
           SELECT player_name FROM players.career_profiles
           WHERE brawlhalla_id = ${snapshot.brawlhallaId} FOR UPDATE
         `
+        const previousName = previous?.player_name ? normalizeV0CareerName(previous.player_name) : null
         const { account, combat } = snapshot
         await sql`
           INSERT INTO players.career_profiles
@@ -335,10 +336,10 @@ export function createPostgresCareerPlayers(
             snowball_kos = EXCLUDED.snowball_kos
         `
 
-        if (previous?.player_name && previous.player_name !== snapshot.name) {
+        if (previousName && previousName !== snapshot.name) {
           await sql`
             INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
-            VALUES (${snapshot.brawlhallaId}, ${previous.player_name.toLowerCase()}, ${previous.player_name}, ${observedAt})
+            VALUES (${snapshot.brawlhallaId}, ${previousName.toLowerCase()}, ${previousName}, ${observedAt})
             ON CONFLICT (brawlhalla_id, normalized_alias) DO UPDATE
             SET display_alias = EXCLUDED.display_alias, observed_at = EXCLUDED.observed_at
           `
