@@ -113,7 +113,7 @@ async function expire(operationId: string) {
 
 describe('durable Refresh Operations', () => {
   test('preserves the deployed runtime prefix and appends later migrations in dependency order', () => {
-    expect(runtimeMigrationInventory.map(({ identity }) => identity)).toEqual([
+    expect(runtimeMigrationInventory.map(({ identity }): string => identity)).toEqual([
       'players/0001',
       'players/0002',
       'players/0003',
@@ -167,6 +167,7 @@ describe('durable Refresh Operations', () => {
       'players/0009',
       'players/0010',
       'clans/0004',
+      'players/0011',
     ])
   })
 
