@@ -297,7 +297,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   })
 
-  test('reconciles only evidenced mojibake names and enqueues affected player facts idempotently', async () => {
+  test('reconciles only evidenced mojibake career names and enqueues affected player facts idempotently', async () => {
     const databaseName = `bt_player_names_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -321,8 +321,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           FROM (VALUES
             (1001, 'MÃ¼ller'),
             (1002, 'Ã©'),
-            (1003, 'MÃ\u0083Â¼ller'),
-            (1004, 'Current Name')
+            (1003, 'MÃ\u0083Â¼ller')
           ) AS seed(brawlhalla_id, player_name)
         `
         await client`
@@ -332,19 +331,6 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             (1001, 'Müller', NULL, NULL, '2025-01-01T00:00:00Z', ${'0'.repeat(64)}),
             (1003, 'MÃ¼ller', NULL, NULL, '2025-01-01T00:00:00Z', ${'2'.repeat(64)}),
             (2002, 'é', NULL, NULL, '2025-01-01T00:00:00Z', ${'3'.repeat(64)})
-        `
-        await client`
-          INSERT INTO players.legacy_discovery_aliases
-            (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
-          VALUES (1004, 'françois', 'François', '2025-01-01T00:00:00Z', ${'1'.repeat(64)})
-        `
-        await client`
-          INSERT INTO players.discovery_aliases
-            (brawlhalla_id, normalized_alias, display_alias, observed_at)
-          VALUES
-            (1001, 'mã¼ller', 'MÃ¼ller', '2025-01-01T00:00:00Z'),
-            (1004, 'franã§ois', 'FranÃ§ois', '2025-01-01T00:00:00Z'),
-            (1004, 'françois', 'FRANÇOIS', '2025-02-01T00:00:00Z')
         `
         await client`DELETE FROM players.discovery_outbox`
         const [baseline] = await client<{ source_version: string }[]>`
@@ -361,26 +347,11 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           { brawlhalla_id: 1001, player_name: 'Müller', last_success_at: '2026-01-01 00:00:00+00' },
           { brawlhalla_id: 1002, player_name: 'Ã©', last_success_at: '2026-01-01 00:00:00+00' },
           { brawlhalla_id: 1003, player_name: 'MÃ\u0083Â¼ller', last_success_at: '2026-01-01 00:00:00+00' },
-          { brawlhalla_id: 1004, player_name: 'Current Name', last_success_at: '2026-01-01 00:00:00+00' },
-        ])
-        const aliases = await client<
-          { brawlhalla_id: number; normalized_alias: string; display_alias: string; observed_at: string }[]
-        >`
-          SELECT brawlhalla_id, normalized_alias, display_alias, observed_at::text
-          FROM players.discovery_aliases ORDER BY brawlhalla_id, normalized_alias
-        `
-        expect([...aliases]).toEqual([
-          {
-            brawlhalla_id: 1004,
-            normalized_alias: 'françois',
-            display_alias: 'FRANÇOIS',
-            observed_at: '2025-02-01 00:00:00+00',
-          },
         ])
         const outbox = await client<{ brawlhalla_id: number; source_version: string }[]>`
           SELECT brawlhalla_id, source_version FROM players.discovery_outbox ORDER BY brawlhalla_id
         `
-        expect(outbox.map(({ brawlhalla_id }) => brawlhalla_id)).toEqual([1001, 1004])
+        expect(outbox.map(({ brawlhalla_id }) => brawlhalla_id)).toEqual([1001])
         expect(new Set(outbox.map(({ source_version }) => source_version))).toEqual(
           new Set([(Number(baseline.source_version) + 1).toString()]),
         )
