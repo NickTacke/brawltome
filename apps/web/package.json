@@ -12,7 +12,6 @@
   "dependencies": {
     "@brawltome/contracts": "workspace:*",
     "@brawltome/game-data": "workspace:*",
-    "@brawltome/shared": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
     "@brawltome/ui": "workspace:*",
     "@heroicons/react": "^2.2.0",
