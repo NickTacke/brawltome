@@ -332,6 +332,11 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             (1003, 'MÃ¼ller', NULL, NULL, '2025-01-01T00:00:00Z', ${'2'.repeat(64)}),
             (2002, 'é', NULL, NULL, '2025-01-01T00:00:00Z', ${'3'.repeat(64)})
         `
+        await client`
+          INSERT INTO players.discovery_aliases
+            (brawlhalla_id, normalized_alias, display_alias, observed_at)
+          VALUES (1001, 'mã¼ller', 'MÃ¼ller', '2025-01-01T00:00:00Z')
+        `
         await client`DELETE FROM players.discovery_outbox`
         const [baseline] = await client<{ source_version: string }[]>`
           SELECT source_version FROM players.discovery_state WHERE singleton
@@ -348,6 +353,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           { brawlhalla_id: 1002, player_name: 'Ã©', last_success_at: '2026-01-01 00:00:00+00' },
           { brawlhalla_id: 1003, player_name: 'MÃ\u0083Â¼ller', last_success_at: '2026-01-01 00:00:00+00' },
         ])
+        const aliases = await client`SELECT * FROM players.discovery_aliases`
+        expect([...aliases]).toEqual([])
         const outbox = await client<{ brawlhalla_id: number; source_version: string }[]>`
           SELECT brawlhalla_id, source_version FROM players.discovery_outbox ORDER BY brawlhalla_id
         `
