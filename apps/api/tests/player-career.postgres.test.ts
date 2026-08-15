@@ -181,7 +181,7 @@ describe('Players-owned canonical career state', () => {
 
       await refreshCanonicalCareerPlayer(
         players,
-        source(emptySnapshot),
+        source({ ...emptySnapshot, clan: null }),
         91913839,
         { caller: 'on-demand' },
         effectFor(lease),
@@ -197,6 +197,7 @@ describe('Players-owned canonical career state', () => {
       })
       const profile = await players.byId(91913839)
       expect(profile?.snapshot).toMatchObject({
+        guild: null,
         account: { xp: 0, level: 0, xpPercentage: 0 },
         combat: { games: 0, wins: 0, matchTime: 0, damageBomb: '9007199254740993' },
         legends: [],
