@@ -92,7 +92,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
       <ClanHeader clan={clan} id={id} memberCount={clan.members.length} refreshing={isRefreshing} />
       <MemberList
         members={clan.members}
-        totalClanXp={clan.clanXp}
+        totalClanLifetimeXp={clan.clanLifetimeXp}
         roster={clan.roster}
         page={page}
         pageSize={PAGE_SIZE}

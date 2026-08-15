@@ -32,16 +32,16 @@ const formatJoinedDate = (value: string | Date | null) =>
 
 interface MemberRowProps {
   member: ClanMember
-  totalClanXp: string
+  totalClanLifetimeXp: string
 }
 
-export function MemberRow({ member, totalClanXp }: MemberRowProps) {
+export function MemberRow({ member, totalClanLifetimeXp }: MemberRowProps) {
   const name = member.name ? fixEncoding(member.name) : `Player ${member.brawlhallaId}`
   const rank = member.rank ?? 'Unknown'
-  const total = BigInt(totalClanXp)
+  const total = BigInt(totalClanLifetimeXp)
   const contribution = (() => {
     if (total === 0n) return null
-    const tenths = (BigInt(member.xp) * 1_000n) / total
+    const tenths = (BigInt(member.xp) * 1_000n + total / 2n) / total
     return `${tenths / 10n}.${tenths % 10n}%`
   })()
   const href = `/player/${member.brawlhallaId}`
