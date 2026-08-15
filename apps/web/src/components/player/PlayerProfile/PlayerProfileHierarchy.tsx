@@ -134,30 +134,44 @@ export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHier
         <CombatCard player={display} />
       </div>
 
-      {display.ratingHistory.length > 1 && (
-        <div id="rating-history">
+      <div id="rating-history">
+        {display.ratingHistory.length > 1 ? (
           <RatingChart data={display.ratingHistory} />
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-muted-foreground">Rating history will appear after two complete observations.</p>
+        )}
+      </div>
 
       <div id="weapons">
-        <WeaponSection weaponStats={weaponStats} />
+        {weaponStats.length > 0 ? (
+          <WeaponSection weaponStats={weaponStats} />
+        ) : (
+          <p className="text-sm text-muted-foreground">No weapon statistics are available yet.</p>
+        )}
       </div>
 
       <div id="legends">
-        <LegendSection
-          allLegends={allLegends}
-          rankedLegends={rankedLegends}
-          rankedAvailable={Boolean(player.currentSeason?.snapshot)}
-        />
+        {allLegends.length > 0 ? (
+          <LegendSection
+            allLegends={allLegends}
+            rankedLegends={rankedLegends}
+            rankedAvailable={Boolean(player.currentSeason?.snapshot)}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">No legend statistics are available yet.</p>
+        )}
       </div>
 
       <div id="teams">
-        <TeamSection
-          player={{ name: player.name, rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null }}
-          rankedTeams={teams}
-          brawlhallaId={player.brawlhallaId}
-        />
+        {teams.length > 0 ? (
+          <TeamSection
+            player={{ name: player.name, rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null }}
+            rankedTeams={teams}
+            brawlhallaId={player.brawlhallaId}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">No ranked 2v2 teams are available yet.</p>
+        )}
       </div>
     </>
   )
