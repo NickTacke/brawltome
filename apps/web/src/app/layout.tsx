@@ -3,7 +3,7 @@ import { MaintenancePage } from '@/components/MaintenancePage'
 import { Providers } from '@/components/Providers'
 import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
 import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 
 export const metadata: Metadata = {
   title: {
@@ -39,8 +39,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'BrawlTome',
   },
-  themeColor: '#1e2530',
 }
+
+export const viewport: Viewport = { themeColor: '#1e2530' }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true'
