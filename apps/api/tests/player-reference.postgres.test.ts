@@ -19,17 +19,10 @@ describe('stored Player Reference', () => {
       await db.transaction(async (transaction) => {
         const archiveChecksum = 'a'.repeat(64)
         await transaction.execute(sql`
-          INSERT INTO players.legacy_profile_archive (brawlhalla_id, raw_row, row_checksum)
-          VALUES
-            (${storedId}, ${JSON.stringify({ brawlhalla_id: storedId, name: 'Archived Player', rating: 1800, best_legend: 3 })}::jsonb, ${archiveChecksum}),
-            (${placeholderId}, ${JSON.stringify({ brawlhalla_id: placeholderId, name: `Player ${placeholderId}` })}::jsonb, ${archiveChecksum}),
-            (${storedMetadataId}, ${JSON.stringify({ brawlhalla_id: storedMetadataId, name: 'Stored Name' })}::jsonb, ${archiveChecksum})
-        `)
-        await transaction.execute(sql`
           INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
           VALUES
             (${storedId}, 'canonical alias', 'Canonical Alias', '2026-08-10T00:00:00Z'),
-            (${storedId}, 'archived player', 'ARCHIVED PLAYER', '2026-08-10T00:00:00Z')
+            (${storedId}, 'stored player', 'STORED PLAYER', '2026-08-10T00:00:00Z')
         `)
         await transaction.execute(sql`
           INSERT INTO players.legacy_discovery_aliases
@@ -42,6 +35,15 @@ describe('stored Player Reference', () => {
         const queries = createDatabasePlayerReferenceQueries(
           transaction as unknown as Database,
           async (brawlhallaId) => {
+            if (brawlhallaId === storedId) {
+              return {
+                brawlhallaId,
+                name: 'Stored Player',
+                bestLegendNameKey: 'bodvar',
+                legacyRating: 1_800,
+              }
+            }
+            if (brawlhallaId === placeholderId) return { brawlhallaId, name: `Player ${brawlhallaId}` }
             if (brawlhallaId === rankedId) {
               return {
                 brawlhallaId,
@@ -56,7 +58,7 @@ describe('stored Player Reference', () => {
             if (brawlhallaId === storedMetadataId) {
               return {
                 brawlhallaId,
-                name: `Player ${brawlhallaId}`,
+                name: 'Stored Name',
                 bestLegendNameKey: 'teros',
                 legacyRating: 1_800,
               }
@@ -82,7 +84,7 @@ describe('stored Player Reference', () => {
 
         expect(await queries.byId(storedId)).toEqual({
           brawlhallaId: storedId,
-          name: 'Archived Player',
+          name: 'Stored Player',
           aliases: ['Canonical Alias', 'Older Alias'],
           bestLegendNameKey: 'bodvar',
           legacyRating: 1_800,
