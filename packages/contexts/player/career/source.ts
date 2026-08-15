@@ -204,7 +204,7 @@ export function decodeV0CareerSnapshot(
   const wins = integer(source.wins, 'career.wins')
   if (wins > games) throw new Error('career.wins cannot exceed games')
 
-  const guildSource = source.clan === undefined ? null : record(source.clan, 'career.clan')
+  const guildSource = source.clan === undefined || source.clan === null ? null : record(source.clan, 'career.clan')
   const guild = guildSource
     ? {
         guildId: integer(guildSource.clan_id, 'career.clan.clan_id', 1),

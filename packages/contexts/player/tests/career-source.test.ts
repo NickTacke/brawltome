@@ -109,8 +109,8 @@ describe('V0 career snapshot source contract', () => {
     })
   })
 
-  test('maps authoritative guild absence', () => {
-    expect(decodeV0CareerSnapshot({ ...completeSnapshot, clan: undefined }, 91913839, resolveLegend).guild).toBeNull()
+  test.each([undefined, null])('maps authoritative guild absence from %p', (clan) => {
+    expect(decodeV0CareerSnapshot({ ...completeSnapshot, clan }, 91913839, resolveLegend).guild).toBeNull()
   })
 
   test('accepts an authoritative empty legend collection', () => {
@@ -132,6 +132,8 @@ describe('V0 career snapshot source contract', () => {
     { ...completeSnapshot, games: undefined },
     { ...completeSnapshot, legends: undefined },
     { ...completeSnapshot, damagebomb: '01' },
+    { ...completeSnapshot, clan: false },
+    { ...completeSnapshot, clan: [] },
     { ...completeSnapshot, clan: { clan_id: 0, clan_name: 'Invalid' } },
     { ...completeSnapshot, clan: { clan_id: 2_616_365, clan_name: '' } },
     { ...completeSnapshot, legends: [{ ...completeSnapshot.legends[0], legend_id: 0 }] },
