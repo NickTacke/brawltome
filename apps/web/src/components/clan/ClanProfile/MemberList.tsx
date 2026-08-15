@@ -27,7 +27,7 @@ import { type ClanMember, type SortKey, filterMembers, paginateMembers, sortMemb
 
 interface MemberListProps {
   members: ClanMember[]
-  totalClanXp: string
+  totalClanLifetimeXp: string
   roster: ClanProfileContract['roster']
   page: number
   pageSize: number
@@ -40,7 +40,7 @@ interface MemberListProps {
 
 export function MemberList({
   members,
-  totalClanXp,
+  totalClanLifetimeXp,
   roster,
   page,
   pageSize,
@@ -117,7 +117,7 @@ export function MemberList({
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="w-[60px] font-bold text-center">Rank</TableHead>
                 <TableHead className="font-bold">Player</TableHead>
-                <TableHead className="text-right font-bold">XP / Contribution</TableHead>
+                <TableHead className="text-right font-bold">XP / Lifetime Contribution</TableHead>
                 <TableHead className="text-right font-bold hidden sm:table-cell">Joined</TableHead>
               </TableRow>
             </TableHeader>
@@ -130,7 +130,7 @@ export function MemberList({
                 </TableRow>
               ) : (
                 visible.map((member) => (
-                  <MemberRow key={member.brawlhallaId} member={member} totalClanXp={totalClanXp} />
+                  <MemberRow key={member.brawlhallaId} member={member} totalClanLifetimeXp={totalClanLifetimeXp} />
                 ))
               )}
             </TableBody>
