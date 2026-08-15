@@ -8,6 +8,7 @@ on:
       - "packages/contracts/**"
       - "bun.lock"
       - "package.json"
+      - "tsconfig.json"
       - ".github/workflows/desktop-ci.yml"
       - ".gitmodules"
   pull_request:
@@ -16,6 +17,7 @@ on:
       - "packages/contracts/**"
       - "bun.lock"
       - "package.json"
+      - "tsconfig.json"
       - ".github/workflows/desktop-ci.yml"
       - ".gitmodules"
 
