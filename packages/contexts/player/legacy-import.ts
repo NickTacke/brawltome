@@ -531,7 +531,7 @@ function historyRejection(raw: RawRow): string | null {
   if (!positiveInteger(raw.brawlhalla_id)) return 'history-player-identity-invalid'
   if (!positiveInteger(raw.rating)) return 'history-rating-invalid'
   if (!nonNegativeInteger(raw.peak_rating)) return 'history-peak-rating-invalid'
-  if (!visibleText(raw.tier, 64)) return 'history-tier-unavailable'
+  if (raw.tier !== null && !visibleText(raw.tier, 64)) return 'history-tier-unavailable'
   if (!nonNegativeInteger(raw.games) || !nonNegativeInteger(raw.wins)) return 'history-record-invalid'
   if (!parseLegacyTimestamp(raw.recorded_at)) return 'history-timestamp-invalid'
   if (!Number.isSafeInteger(raw.id)) return 'history-order-invalid'
@@ -544,7 +544,7 @@ type HistoryInput = {
   brawlhallaId: number
   rating: number
   peakRating: number
-  tier: string
+  tier: string | null
   wins: number
   games: number
   recordedAt: string
@@ -745,7 +745,7 @@ async function importPlayerBatch(sql: Sql, players: SourceRow[]): Promise<void> 
             brawlhallaId: raw.brawlhalla_id as number,
             rating: raw.rating as number,
             peakRating: raw.peak_rating as number,
-            tier: raw.tier as string,
+            tier: raw.tier as string | null,
             wins: raw.wins as number,
             games: raw.games as number,
             recordedAt: (parseLegacyTimestamp(raw.recorded_at) as Date).toISOString(),
@@ -896,7 +896,7 @@ async function reconcile(client: Sql, manifest: SourceManifest): Promise<Reconci
             OR history.brawlhalla_id::text <> archive.raw_row->>'brawlhalla_id'
             OR history.rating::text <> archive.raw_row->>'rating'
             OR history.peak_rating::text <> archive.raw_row->>'peak_rating'
-            OR history.tier <> archive.raw_row->>'tier'
+            OR history.tier IS DISTINCT FROM archive.raw_row->>'tier'
             OR history.wins::text <> archive.raw_row->>'wins'
             OR history.games::text <> archive.raw_row->>'games'
             OR history.source_order::text <> archive.raw_row->>'id'

@@ -67,6 +67,7 @@ const soloQueueSchema = rankedValuesSchema
 
 const ratingHistorySchema = rankedValuesSchema
   .extend({
+    tier: visibleText.nullable(),
     source: z.enum(['v0-player-snapshot', 'legacy-v2']),
     recordedAt: utcDateTime,
   })

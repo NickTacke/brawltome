@@ -9255,7 +9255,10 @@ pub mod types {
     ///            ]
     ///          },
     ///          "tier": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "minLength": 1
     ///          },
     ///          "wins": {
@@ -9706,7 +9709,10 @@ pub mod types {
     ///            ]
     ///          },
     ///          "tier": {
-    ///            "type": "string",
+    ///            "type": [
+    ///              "string",
+    ///              "null"
+    ///            ],
     ///            "minLength": 1
     ///          },
     ///          "wins": {
@@ -10959,7 +10965,10 @@ pub mod types {
     ///      ]
     ///    },
     ///    "tier": {
-    ///      "type": "string",
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
     ///      "minLength": 1
     ///    },
     ///    "wins": {
@@ -10986,7 +10995,7 @@ pub mod types {
         #[serde(rename = "recordedAt", deserialize_with = "deserialize_utc_datetime")]
         pub recorded_at: ::chrono::DateTime<::chrono::offset::Utc>,
         pub source: PlayerRankedSnapshotInnerRatingHistoryItemSource,
-        pub tier: PlayerRankedSnapshotInnerRatingHistoryItemTier,
+        pub tier: ::std::option::Option<PlayerRankedSnapshotInnerRatingHistoryItemTier>,
         #[serde(deserialize_with = "deserialize_nonnegative_int32")]
         pub wins: i32,
     }

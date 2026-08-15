@@ -88,6 +88,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'players/0010',
       'players/0011',
       'players/0012',
+      'players/0013',
     ])
     expect(clanMigrationInventory.map(({ identity }) => identity)).toEqual([
       'clans/0001',
@@ -104,11 +105,11 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0006',
     ])
     expect(globalMigrationInventory.slice(-5).map(({ identity }): string => identity)).toEqual([
-      'players/0009',
       'players/0010',
       'clans/0004',
       'players/0011',
       'players/0012',
+      'players/0013',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -192,6 +193,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       clanMigrationInventory[3],
       playerMigrationInventory[10],
       playerMigrationInventory[11],
+      playerMigrationInventory[12],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -224,7 +226,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(55)
+    expect(globalMigrationInventory).toHaveLength(56)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -247,6 +249,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       clanMigrationInventory[3],
       playerMigrationInventory[10],
       playerMigrationInventory[11],
+      playerMigrationInventory[12],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -259,7 +262,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(21)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(22)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -277,7 +280,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(10)
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(11)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const [rankedProfiles] = await client<{ table_name: string | null }[]>`
@@ -311,7 +314,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      const prefix = playerMigrationInventory.slice(0, -2)
+      const prefix = playerMigrationInventory.slice(0, -3)
       expect(await migratePostgres(databaseUrl.toString(), prefix)).toBe(prefix.length)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
@@ -346,7 +349,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           SELECT source_version FROM players.discovery_state WHERE singleton
         `
 
-        expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, -1))).toBe(1)
+        expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, -2))).toBe(1)
 
         const careers = await client<{ brawlhalla_id: number; player_name: string; last_success_at: string }[]>`
           SELECT brawlhalla_id, player_name, last_success_at::text
@@ -522,8 +525,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
       const failingMigration: Migration = {
-        identity: 'players/0012',
-        predecessor: 'players/0011',
+        identity: 'players/0014',
+        predecessor: 'players/0013',
         checksum: checksumSql(failingSql),
         sql: failingSql,
       }
