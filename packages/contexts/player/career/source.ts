@@ -105,20 +105,17 @@ function decimal(value: unknown, path: string): string {
   return value
 }
 
-// ponytail: repair one whole-string Latin-1 layer; expand only from reviewed production samples.
-export function normalizeV0CareerName(value: string): string {
+// ponytail: derive one whole-string Latin-1 layer; persistence requires exact stored evidence before using it.
+export function decodeV0CareerNameCandidate(value: string): string | null {
   const characters = [...value]
   if (characters.some((character) => character.charCodeAt(0) > 0xff) || !UTF8_AS_LATIN1_SEQUENCE.test(value)) {
-    return value
+    return null
   }
   try {
     const decoded = UTF8_DECODER.decode(Uint8Array.from(characters, (character) => character.charCodeAt(0)))
-    const hasNonAsciiLetterOrMark = [...decoded].some(
-      (character) => character.charCodeAt(0) > 0x7f && /[\p{Letter}\p{Mark}]/u.test(character),
-    )
-    return decoded !== value && !UTF8_AS_LATIN1_SEQUENCE.test(decoded) && hasNonAsciiLetterOrMark ? decoded : value
+    return decoded !== value && !UTF8_AS_LATIN1_SEQUENCE.test(decoded) ? decoded : null
   } catch {
-    return value
+    return null
   }
 }
 
@@ -233,7 +230,7 @@ export function decodeV0CareerSnapshot(
 
   return {
     brawlhallaId,
-    name: normalizeV0CareerName(text(source.name, 'career.name')),
+    name: text(source.name, 'career.name'),
     guild,
     account: {
       xp: integer(source.xp, 'career.xp'),
