@@ -165,7 +165,6 @@
     "packages/contexts/player": {
       "name": "@brawltome/player",
       "dependencies": {
-        "@brawltome/bhapi": "workspace:*",
         "@brawltome/database": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "@brawltome/shared": "workspace:*",
