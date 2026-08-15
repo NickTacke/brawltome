@@ -1,5 +1,4 @@
 import type { Database } from '@brawltome/database'
-import { getLegendById, legendSlug } from '@brawltome/game-data'
 import { type CanonicalPlayerNameEvidence, selectCanonicalPlayerName } from '@brawltome/player'
 import { createPlayerReferenceQueries } from '@brawltome/player/composition'
 import { sql } from 'drizzle-orm'
@@ -11,25 +10,6 @@ type CanonicalReferenceEvidence = CanonicalPlayerNameEvidence & {
 }
 
 type FindCanonicalReference = (brawlhallaId: number) => Promise<CanonicalReferenceEvidence | null>
-
-function positiveInteger(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
-  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 2_147_483_647 ? parsed : null
-}
-
-function archivedReference(raw: unknown, brawlhallaId: number): CanonicalReferenceEvidence | null {
-  if (!raw || typeof raw !== 'object') return null
-  const row = raw as Record<string, unknown>
-  if (typeof row.name !== 'string') return null
-  const bestLegend = positiveInteger(row.best_legend)
-  const legend = bestLegend ? getLegendById(bestLegend) : undefined
-  return {
-    brawlhallaId,
-    name: row.name,
-    bestLegendNameKey: legend ? legendSlug(legend.heroId, legend.displayName) : null,
-    legacyRating: positiveInteger(row.rating),
-  }
-}
 
 export function createDatabasePlayerReferenceQueries(
   db: Database,
@@ -61,21 +41,13 @@ export function createDatabasePlayerReferenceQueries(
       ranked: rankedReference,
       career: careerReference,
     })
-    const archivedRows = nameEvidence
-      ? []
-      : await db.execute<{ raw_row: unknown }>(sql`
-          SELECT raw_row FROM players.legacy_profile_archive WHERE brawlhalla_id = ${brawlhallaId}
-        `)
-    const archived = archivedReference(archivedRows[0]?.raw_row, brawlhallaId)
-    const reference = nameEvidence ?? archived
-    if (!reference) return null
+    if (!nameEvidence) return null
     return {
       brawlhallaId,
-      name: reference.name,
+      name: nameEvidence.name,
       aliases: aliasRows.map(({ display_alias }) => display_alias),
-      bestLegendNameKey:
-        rankedReference?.bestLegendNameKey ?? archived?.bestLegendNameKey ?? careerReference?.bestLegendNameKey,
-      legacyRating: rankedReference?.legacyRating ?? archived?.legacyRating,
+      bestLegendNameKey: rankedReference?.bestLegendNameKey ?? careerReference?.bestLegendNameKey,
+      legacyRating: rankedReference?.legacyRating,
     }
   })
 }
