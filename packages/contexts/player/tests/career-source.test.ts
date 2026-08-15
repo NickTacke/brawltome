@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeV0CareerSnapshot } from '../career/source'
+import { decodeV0CareerNameCandidate, decodeV0CareerSnapshot } from '../career/source'
 
 const completeSnapshot = {
   brawlhalla_id: 91913839,
@@ -113,17 +113,22 @@ describe('V0 career snapshot source contract', () => {
     expect(decodeV0CareerSnapshot({ ...completeSnapshot, clan }, 91913839, resolveLegend).guild).toBeNull()
   })
 
+  test.each(['MÃ¼ller', 'Müller', 'Player 😀', '日本語', 'Привет', 'Â©', 'MÃ(ller', 'MÃ\u0083Â¼ller'])(
+    'preserves the observed V0 name %p until persistence can corroborate it',
+    (name) => {
+      expect(decodeV0CareerSnapshot({ ...completeSnapshot, name }, 91913839, resolveLegend).name).toBe(name)
+    },
+  )
+
   test.each([
     ['MÃ¼ller', 'Müller'],
-    ['Müller', 'Müller'],
-    ['Player 😀', 'Player 😀'],
-    ['日本語', '日本語'],
-    ['Привет', 'Привет'],
-    ['Â©', 'Â©'],
-    ['MÃ(ller', 'MÃ(ller'],
-    ['MÃ\u0083Â¼ller', 'MÃ\u0083Â¼ller'],
-  ])('normalizes a recognized V0 name %p to %p', (name, expected) => {
-    expect(decodeV0CareerSnapshot({ ...completeSnapshot, name }, 91913839, resolveLegend).name).toBe(expected)
+    ['Â©', '©'],
+    ['Müller', null],
+    ['Player 😀', null],
+    ['MÃ(ller', null],
+    ['MÃ\u0083Â¼ller', null],
+  ])('derives the one-level candidate for %p as %p', (name, expected) => {
+    expect(decodeV0CareerNameCandidate(name)).toBe(expected)
   })
 
   test('accepts an authoritative empty legend collection', () => {

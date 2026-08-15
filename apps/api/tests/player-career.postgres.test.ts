@@ -261,6 +261,11 @@ describe('Players-owned canonical career state', () => {
         UPDATE players.career_profiles SET player_name = 'MÃ¼ller'
         WHERE brawlhalla_id = ${brawlhallaId}
       `
+      await control`
+        INSERT INTO players.legacy_profile_discovery
+          (brawlhalla_id, player_name, rating, best_legend, observed_at, archive_checksum)
+        VALUES (${brawlhallaId}, 'Müller', NULL, NULL, clock_timestamp(), ${'0'.repeat(64)})
+      `
 
       const repairLease = await claimCareerOperation(operations, brawlhallaId)
       await refreshCanonicalCareerPlayer(
@@ -286,6 +291,10 @@ describe('Players-owned canonical career state', () => {
         UPDATE players.career_profiles SET player_name = 'FranÃ§ois'
         WHERE brawlhalla_id = ${brawlhallaId}
       `
+      await control`
+        INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias)
+        VALUES (${brawlhallaId}, 'françois', 'François')
+      `
       const renamedLease = await claimCareerOperation(operations, brawlhallaId)
       await refreshCanonicalCareerPlayer(
         players,
@@ -301,8 +310,24 @@ describe('Players-owned canonical career state', () => {
         ...(await control<{ normalized_alias: string; display_alias: string }[]>`
           SELECT normalized_alias, display_alias
           FROM players.discovery_aliases WHERE brawlhalla_id = ${brawlhallaId}
+          ORDER BY normalized_alias
         `),
       ]).toEqual([{ normalized_alias: 'françois', display_alias: 'François' }])
+
+      const ambiguousLease = await claimCareerOperation(operations, brawlhallaId)
+      await refreshCanonicalCareerPlayer(
+        players,
+        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, name: 'Ã©' }),
+        brawlhallaId,
+        { caller: 'on-demand' },
+        effectFor(ambiguousLease),
+        resolveLegend,
+      )
+      await operations.complete(ambiguousLease)
+      const [ambiguousProfile] = await control<{ player_name: string }[]>`
+        SELECT player_name FROM players.career_profiles WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      expect(ambiguousProfile.player_name).toBe('Ã©')
     } finally {
       await Promise.all([players.close(), operations.close(), control.end()])
     }
