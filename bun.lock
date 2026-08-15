@@ -179,9 +179,6 @@
     "packages/contexts/ranking": {
       "name": "@brawltome/ranking",
       "dependencies": {
-        "@brawltome/database": "workspace:*",
-        "@brawltome/game-data": "workspace:*",
-        "drizzle-orm": "^0.39.0",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
