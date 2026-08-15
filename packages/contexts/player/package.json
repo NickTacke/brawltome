@@ -14,7 +14,6 @@
     "@brawltome/database": "workspace:*",
     "@brawltome/game-data": "workspace:*",
     "@brawltome/shared": "workspace:*",
-    "@brawltome/bhapi": "workspace:*",
     "drizzle-orm": "^0.39.0",
     "postgres": "^3.4.7"
   },
