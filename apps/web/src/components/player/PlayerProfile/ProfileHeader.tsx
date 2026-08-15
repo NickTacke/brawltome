@@ -26,8 +26,7 @@ interface ProfileHeaderPlayer {
       combat: { matchTime: number }
     } | null
   } | null
-  clan?: { clanId: number; clanName: string } | null
-  matchTimeTotal?: number | null
+  clan: { clanId: number; clanName: string } | null
 }
 
 interface ProfileHeaderProps {
@@ -39,7 +38,7 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
   const career = player.career?.snapshot
-  const playtime = career ? career.combat.matchTime : player.matchTimeTotal
+  const playtime = career?.combat.matchTime
   const region = player.currentSeason?.snapshot?.oneVsOne.region
   const guild = career ? career.guild : player.clan
 
@@ -94,9 +93,8 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
                     align="start"
                     className="max-h-[198px] overflow-y-auto pb-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent"
                   >
-                    {aliases.map((alias: string, idx: number) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: aliases can contain duplicates
-                      <DropdownMenuItem key={`${alias}-${idx}`}>{fixEncoding(alias)}</DropdownMenuItem>
+                    {aliases.map((alias) => (
+                      <DropdownMenuItem key={alias}>{fixEncoding(alias)}</DropdownMenuItem>
                     ))}
                     {aliases.length > 5 && (
                       <div className="sticky bottom-0 h-5 bg-gradient-to-t from-popover to-transparent pointer-events-none -mt-5" />

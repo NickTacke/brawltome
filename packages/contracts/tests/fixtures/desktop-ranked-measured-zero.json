@@ -1,7 +1,8 @@
 {
   "player": {
     "brawlhallaId": 91913839,
-    "name": "Measured Zero"
+    "name": "Measured Zero",
+    "aliases": []
   },
   "ranked": {
     "brawlhallaId": 91913839,

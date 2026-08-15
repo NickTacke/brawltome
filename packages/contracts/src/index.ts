@@ -37,6 +37,7 @@ export {
   decimalXpSchema,
   discordClanRefreshInputSchema,
   nullableClanProfileSchema,
+  playerClanMembershipSchema,
   type ClanProfileContract,
   type ClanRefreshInputContract,
   type ClanRefreshResponseContract,

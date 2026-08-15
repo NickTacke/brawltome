@@ -1,5 +1,5 @@
 {
-  "player": { "brawlhallaId": 42, "name": "Stale Ada" },
+  "player": { "brawlhallaId": 42, "name": "Stale Ada", "aliases": [] },
   "ranked": {
     "brawlhallaId": 42,
     "checkedAt": "2026-08-09T23:30:00Z",

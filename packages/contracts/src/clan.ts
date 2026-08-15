@@ -51,6 +51,9 @@ const clanProfileShape = {
 export const clanProfileSchema = z.object(clanProfileShape).strict().meta({ id: 'ClanProfile' })
 
 export const nullableClanProfileSchema = clanProfileSchema.nullable()
+export const playerClanMembershipSchema = z
+  .object({ clanId: clanIdSchema, clanName: z.string().min(1).max(256) })
+  .strict()
 export const clanByIdInputSchema = z.object({ id: clanIdSchema }).strict()
 export const clanRefreshInputSchema = z
   .object({

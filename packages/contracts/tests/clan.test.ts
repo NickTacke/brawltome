@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { type ClanProfileContract, clanProfileSchema, clanRefreshResponseSchema } from '../src/clan'
+import {
+  type ClanProfileContract,
+  clanProfileSchema,
+  clanRefreshResponseSchema,
+  playerClanMembershipSchema,
+} from '../src/clan'
 
 const profile = {
   clanId: 77,
@@ -55,5 +60,12 @@ describe('canonical Clan contract', () => {
         refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: 15 } },
       }).clan,
     ).toEqual(profile)
+  })
+
+  test('publishes a narrow Clans-owned membership', () => {
+    expect(playerClanMembershipSchema.parse({ clanId: 77, clanName: 'Exact' })).toEqual({
+      clanId: 77,
+      clanName: 'Exact',
+    })
   })
 })
