@@ -1,5 +1,11 @@
 import postgres from 'postgres'
-import { CAREER_FRESHNESS_SECONDS, type CareerPlayerProfile, type CareerPlayerQueries, careerFreshness } from './model'
+import {
+  CAREER_FRESHNESS_SECONDS,
+  type CareerPlayerProfile,
+  type CareerPlayerQueries,
+  type CareerSnapshotSource,
+  careerFreshness,
+} from './model'
 import { type V0CareerSnapshot, decodeV0CareerNameCandidate } from './source'
 
 export type CanonicalCareerEffect = {
@@ -19,6 +25,7 @@ type ProfileRow = {
   guild_name: string | null
   checked_at: Date
   last_success_at: Date | null
+  snapshot_source: CareerSnapshotSource
   xp: number | null
   level: number | null
   xp_percentage: number | null
@@ -153,7 +160,8 @@ export function createPostgresCareerPlayers(
       return client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
         const [profile] = await sql<ProfileRow[]>`
-          SELECT brawlhalla_id, guild_id, guild_name, checked_at, last_success_at, xp, level, xp_percentage,
+          SELECT brawlhalla_id, guild_id, guild_name, checked_at, last_success_at, snapshot_source,
+                 xp, level, xp_percentage,
                  games, wins, match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick,
                  snowball_hits, bomb_kos, mine_kos, spikeball_kos, sidekick_kos, snowball_kos
           FROM players.career_profiles
@@ -161,12 +169,13 @@ export function createPostgresCareerPlayers(
         `
         if (!profile) return null
 
-        const freshness = careerFreshness(profile.last_success_at, now())
+        const freshness = careerFreshness(profile.last_success_at, profile.snapshot_source, now())
         if (!profile.last_success_at) {
           return {
             brawlhallaId,
             checkedAt: profile.checked_at,
             lastSuccessAt: null,
+            snapshotSource: null,
             freshness,
             freshForSeconds: CAREER_FRESHNESS_SECONDS,
             snapshot: null,
@@ -196,6 +205,7 @@ export function createPostgresCareerPlayers(
           brawlhallaId,
           checkedAt: profile.checked_at,
           lastSuccessAt: profile.last_success_at,
+          snapshotSource: profile.snapshot_source,
           freshness,
           freshForSeconds: CAREER_FRESHNESS_SECONDS,
           snapshot: {
@@ -319,13 +329,13 @@ export function createPostgresCareerPlayers(
         const { account, combat } = snapshot
         await sql`
           INSERT INTO players.career_profiles
-            (brawlhalla_id, player_name, guild_id, guild_name, checked_at, last_success_at,
+            (brawlhalla_id, player_name, guild_id, guild_name, checked_at, last_success_at, snapshot_source,
              xp, level, xp_percentage, games, wins, match_time, damage_bomb, damage_mine,
              damage_spikeball, damage_sidekick, snowball_hits, bomb_kos, mine_kos, spikeball_kos,
              sidekick_kos, snowball_kos)
           VALUES
             (${snapshot.brawlhallaId}, ${playerName}, ${snapshot.guild?.guildId ?? null},
-             ${snapshot.guild?.guildName ?? null}, ${observedAt}, ${observedAt}, ${account.xp},
+             ${snapshot.guild?.guildName ?? null}, ${observedAt}, ${observedAt}, 'v0-player-snapshot', ${account.xp},
              ${account.level}, ${account.xpPercentage}, ${combat.games}, ${combat.wins}, ${combat.matchTime},
              ${combat.damageBomb}, ${combat.damageMine}, ${combat.damageSpikeball}, ${combat.damageSidekick},
              ${combat.snowballHits}, ${combat.bombKos}, ${combat.mineKos}, ${combat.spikeballKos},
@@ -336,6 +346,7 @@ export function createPostgresCareerPlayers(
             guild_name = EXCLUDED.guild_name,
             checked_at = EXCLUDED.checked_at,
             last_success_at = EXCLUDED.last_success_at,
+            snapshot_source = EXCLUDED.snapshot_source,
             xp = EXCLUDED.xp,
             level = EXCLUDED.level,
             xp_percentage = EXCLUDED.xp_percentage,

@@ -49,6 +49,14 @@ CREATE TABLE public.player_alias (
   created_at timestamp NOT NULL,
   PRIMARY KEY (brawlhalla_id, key)
 );
+CREATE TABLE public.player_clan (
+  brawlhalla_id integer PRIMARY KEY REFERENCES public.player(brawlhalla_id) ON DELETE CASCADE,
+  clan_name text NOT NULL,
+  clan_id integer NOT NULL,
+  clan_xp bigint NOT NULL,
+  clan_lifetime_xp bigint NOT NULL,
+  personal_xp integer NOT NULL
+);
 CREATE TABLE public.player_stats_legend (
   brawlhalla_id integer NOT NULL REFERENCES public.player(brawlhalla_id) ON DELETE CASCADE,
   legend_id integer NOT NULL,
@@ -145,6 +153,8 @@ UPDATE public.player SET valhallan_confirmed_at = '2026-08-01 10:45:00' WHERE br
 UPDATE public.player SET synced_at_3v3 = '2026-08-02 11:00:00' WHERE brawlhalla_id = 43;
 INSERT INTO public.player_alias VALUES
   (42, 'former', 'Former Name', '2026-07-01 00:00:00');
+INSERT INTO public.player_clan VALUES
+  (42, 'Legacy Clan', 7, 1000, 5000, 250);
 INSERT INTO public.player_stats_legend VALUES
   (42, 3, 'bodvar', 3000, 8, 0.5, 120, 60, 1000, 80, 0, 0, 60,
    50000, 45000, 20000, 10000, 500, 250, 40, 20, 5, 7, 3, 9000, 4000, 7000);

@@ -31,6 +31,7 @@ const profile: PlayerCareerProfileContract = {
   brawlhallaId: 91913839,
   checkedAt: '2026-08-09T22:00:00Z',
   lastSuccessAt: '2026-08-09T22:00:00Z',
+  snapshotSource: 'v0-player-snapshot',
   freshness: 'fresh',
   freshForSeconds: 43_200,
   snapshot: {
@@ -66,6 +67,7 @@ describe('Player career profile contract', () => {
       parsePlayerCareerProfileOutput({
         ...profile,
         lastSuccessAt: null,
+        snapshotSource: null,
         freshness: 'unavailable',
         snapshot: null,
       }),
@@ -84,8 +86,15 @@ describe('Player career profile contract', () => {
         weapons: [{ weapon: 'Hammer', heldTime: 0, damage: '0', kos: 0, games: 2 }],
       },
     },
-    { ...profile, lastSuccessAt: null, freshness: 'fresh', snapshot: profile.snapshot },
-    { ...profile, lastSuccessAt: profile.lastSuccessAt, freshness: 'unavailable', snapshot: null },
+    { ...profile, snapshotSource: 'legacy-v2', freshness: 'fresh' },
+    { ...profile, lastSuccessAt: null, snapshotSource: null, freshness: 'fresh', snapshot: profile.snapshot },
+    {
+      ...profile,
+      lastSuccessAt: profile.lastSuccessAt,
+      snapshotSource: null,
+      freshness: 'unavailable',
+      snapshot: null,
+    },
     {
       ...profile,
       snapshot: {

@@ -24,6 +24,7 @@ function harness(
     trusted?: boolean
     rankedLastSuccess?: Date | null
     careerLastSuccess?: Date | null
+    careerSnapshotSource?: 'v0-player-snapshot' | 'legacy-v2'
     discordCredential?: boolean
     now?: () => number
   } = {},
@@ -91,7 +92,9 @@ function harness(
     careerPlayerQueries: {
       byId: async () => {
         if ('careerLastSuccess' in options) {
-          return options.careerLastSuccess ? { lastSuccessAt: options.careerLastSuccess } : null
+          return options.careerLastSuccess
+            ? { lastSuccessAt: options.careerLastSuccess, snapshotSource: options.careerSnapshotSource ?? null }
+            : null
         }
         const stored = options.player === undefined ? stalePlayer : options.player
         if (!stored || typeof stored !== 'object' || !('statsLastUpdated' in stored) || !stored.statsLastUpdated) {
@@ -203,6 +206,19 @@ describe('canonical player interactive refresh', () => {
     await expect(freshCareer.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       refresh: { outcome: 'notNeeded' },
     })
+  })
+
+  test('always refreshes imported historical career snapshots', async () => {
+    const historical = caller({
+      rankedLastSuccess: new Date(),
+      careerLastSuccess: new Date(),
+      careerSnapshotSource: 'legacy-v2',
+      trusted: true,
+    })
+    await expect(historical.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
+      refresh: { outcome: 'accepted' },
+    })
+    expect(historical.reserveInput()).toMatchObject({ staleSections: ['stats'] })
   })
 
   test('includes newly stale canonical domains in dedupe identity without changing stored timestamps', async () => {

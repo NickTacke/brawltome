@@ -7,9 +7,11 @@ const profile: PlayerCareerProfileContract = {
   brawlhallaId: 42,
   checkedAt: '2026-08-10T10:00:00Z',
   lastSuccessAt: '2026-08-10T10:00:00Z',
+  snapshotSource: 'v0-player-snapshot',
   freshness: 'fresh',
   freshForSeconds: 43_200,
   snapshot: {
+    guild: null,
     account: { xp: 100, level: 2, xpPercentage: 0.5 },
     combat: {
       games: 10,
@@ -80,6 +82,15 @@ describe('CareerStatistics', () => {
     expect(html).toContain('9,007,199,254,740,993 damage')
   })
 
+  test('discloses imported historical snapshots', () => {
+    const html = renderToStaticMarkup(
+      <CareerStatistics career={{ ...profile, snapshotSource: 'legacy-v2', freshness: 'stale' }} />,
+    )
+
+    expect(html).toContain('Historical data from the previous service, observed 2026-08-10.')
+    expect(html).toContain('Career Weapon Usage')
+  })
+
   test('shows one compact unavailable explanation and omits deep sections', () => {
     const html = renderToStaticMarkup(<CareerStatistics career={null} />)
 
@@ -95,6 +106,7 @@ describe('CareerStatistics', () => {
       brawlhallaId: 42,
       checkedAt: '2026-08-10T10:00:00Z',
       lastSuccessAt: null,
+      snapshotSource: null,
       freshness: 'unavailable',
       freshForSeconds: 43_200,
       snapshot: null,
@@ -119,6 +131,7 @@ describe('CareerStatistics', () => {
       brawlhallaId: 42,
       checkedAt: '2026-08-10T10:00:00Z',
       lastSuccessAt: null,
+      snapshotSource: null,
       freshness: 'unavailable',
       freshForSeconds: 43_200,
       snapshot: null,

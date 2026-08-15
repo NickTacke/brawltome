@@ -767,12 +767,22 @@
           },
           "snapshot": {
             "$ref": "#/components/schemas/PlayerCareerSnapshot"
+          },
+          "snapshotSource": {
+            "enum": [
+              "v0-player-snapshot",
+              "legacy-v2",
+              null
+            ],
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
           "brawlhallaId",
           "checkedAt",
           "lastSuccessAt",
+          "snapshotSource",
           "freshness",
           "freshForSeconds",
           "snapshot"

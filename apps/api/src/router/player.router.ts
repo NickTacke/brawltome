@@ -48,7 +48,10 @@ async function requestPlayerRefresh(
     ctx.careerPlayerQueries.byId(input.id),
   ])
   const rankedStale = !ranked?.lastSuccessAt || now - ranked.lastSuccessAt.getTime() > RANKED_FRESHNESS_SECONDS * 1_000
-  const statsStale = !career?.lastSuccessAt || now - career.lastSuccessAt.getTime() > CAREER_FRESHNESS_SECONDS * 1_000
+  const statsStale =
+    career?.snapshotSource === 'legacy-v2' ||
+    !career?.lastSuccessAt ||
+    now - career.lastSuccessAt.getTime() > CAREER_FRESHNESS_SECONDS * 1_000
   if (!rankedStale && !statsStale) {
     return { player, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
   }

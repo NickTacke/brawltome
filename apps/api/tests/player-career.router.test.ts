@@ -19,6 +19,7 @@ describe('player.careerById', () => {
         brawlhallaId,
         checkedAt: observedAt,
         lastSuccessAt: observedAt,
+        snapshotSource: 'v0-player-snapshot',
         freshness: 'fresh',
         freshForSeconds: 43_200,
         snapshot: {
@@ -63,6 +64,7 @@ describe('player.careerById', () => {
         brawlhallaId,
         checkedAt: observedAt,
         lastSuccessAt: null,
+        snapshotSource: null,
         freshness: 'unavailable',
         freshForSeconds: 3600,
         snapshot: null,

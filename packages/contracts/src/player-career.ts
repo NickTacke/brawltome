@@ -101,6 +101,7 @@ export const playerCareerProfileSchema = z
     brawlhallaId: brawlhallaIdSchema,
     checkedAt: utcDateTime,
     lastSuccessAt: utcDateTime.nullable(),
+    snapshotSource: z.enum(['v0-player-snapshot', 'legacy-v2']).nullable(),
     freshness: z.enum(['fresh', 'stale', 'unavailable']),
     freshForSeconds: z.int().min(43_200).max(43_200).meta({ format: 'int32' }),
     snapshot: playerCareerSnapshotSchema.nullable(),
@@ -108,10 +109,20 @@ export const playerCareerProfileSchema = z
   .strict()
   .superRefine((profile, context) => {
     const unavailable =
-      profile.lastSuccessAt === null && profile.freshness === 'unavailable' && profile.snapshot === null
-    const available = profile.lastSuccessAt !== null && profile.freshness !== 'unavailable' && profile.snapshot !== null
+      profile.lastSuccessAt === null &&
+      profile.snapshotSource === null &&
+      profile.freshness === 'unavailable' &&
+      profile.snapshot === null
+    const available =
+      profile.lastSuccessAt !== null &&
+      profile.snapshotSource !== null &&
+      profile.freshness !== 'unavailable' &&
+      profile.snapshot !== null
     if (!unavailable && !available) {
       context.addIssue({ code: 'custom', message: 'career availability fields are inconsistent' })
+    }
+    if (profile.snapshotSource === 'legacy-v2' && profile.freshness !== 'stale') {
+      context.addIssue({ code: 'custom', message: 'legacy career snapshots must remain stale' })
     }
   })
   .meta({ id: 'PlayerCareerProfile' })

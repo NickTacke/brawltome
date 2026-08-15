@@ -5471,7 +5471,8 @@ pub mod types {
     ///    "freshForSeconds",
     ///    "freshness",
     ///    "lastSuccessAt",
-    ///    "snapshot"
+    ///    "snapshot",
+    ///    "snapshotSource"
     ///  ],
     ///  "properties": {
     ///    "brawlhallaId": {
@@ -5508,6 +5509,17 @@ pub mod types {
     ///    },
     ///    "snapshot": {
     ///      "$ref": "#/components/schemas/PlayerCareerSnapshot"
+    ///    },
+    ///    "snapshotSource": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "enum": [
+    ///        "v0-player-snapshot",
+    ///        "legacy-v2",
+    ///        null
+    ///      ]
     ///    }
     ///  },
     ///  "additionalProperties": false
@@ -5530,12 +5542,27 @@ pub mod types {
             ::chrono::DateTime<::chrono::offset::Utc>,
         >,
         pub snapshot: PlayerCareerSnapshot,
+        #[serde(rename = "snapshotSource")]
+        pub snapshot_source: ::std::option::Option<PlayerCareerProfileSnapshotSource>,
     }
     impl<'de> ::serde::Deserialize<'de> for PlayerCareerProfile {
         fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
         where
             D: ::serde::Deserializer<'de>,
         {
+            fn deserialize_required_snapshot_source<'wire, D>(
+                deserializer: D,
+            ) -> ::std::result::Result<
+                ::std::option::Option<PlayerCareerProfileSnapshotSource>,
+                D::Error,
+            >
+            where
+                D: ::serde::Deserializer<'wire>,
+            {
+                <::std::option::Option<
+                    PlayerCareerProfileSnapshotSource,
+                > as ::serde::Deserialize>::deserialize(deserializer)
+            }
             #[derive(::serde::Deserialize)]
             #[serde(deny_unknown_fields)]
             struct Wire {
@@ -5563,18 +5590,38 @@ pub mod types {
                     ::chrono::DateTime<::chrono::offset::Utc>,
                 >,
                 snapshot: PlayerCareerSnapshot,
+                #[serde(
+                    rename = "snapshotSource",
+                    deserialize_with = "deserialize_required_snapshot_source"
+                )]
+                snapshot_source: ::std::option::Option<
+                    PlayerCareerProfileSnapshotSource,
+                >,
             }
             let wire = <Wire as ::serde::Deserialize>::deserialize(deserializer)?;
             let unavailable = wire.last_success_at.is_none()
+                && wire.snapshot_source.is_none()
                 && matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
                 && wire.snapshot.0.is_none();
             let available = wire.last_success_at.is_some()
+                && wire.snapshot_source.is_some()
                 && !matches!(wire.freshness, PlayerCareerProfileFreshness::Unavailable)
                 && wire.snapshot.0.is_some();
             if !unavailable && !available {
                 return Err(
                     <D::Error as ::serde::de::Error>::custom(
                         "career availability fields are inconsistent",
+                    ),
+                );
+            }
+            if matches!(
+                wire.snapshot_source.as_ref(),
+                Some(PlayerCareerProfileSnapshotSource::LegacyV2)
+            ) && !matches!(wire.freshness, PlayerCareerProfileFreshness::Stale)
+            {
+                return Err(
+                    <D::Error as ::serde::de::Error>::custom(
+                        "legacy career snapshots must remain stale",
                     ),
                 );
             }
@@ -5596,6 +5643,7 @@ pub mod types {
                 freshness: wire.freshness,
                 last_success_at: wire.last_success_at,
                 snapshot: wire.snapshot,
+                snapshot_source: wire.snapshot_source,
             })
         }
     }
@@ -5675,6 +5723,84 @@ pub mod types {
     }
     impl ::std::convert::TryFrom<::std::string::String>
     for PlayerCareerProfileFreshness {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`PlayerCareerProfileSnapshotSource`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "v0-player-snapshot",
+    ///    "legacy-v2"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum PlayerCareerProfileSnapshotSource {
+        #[serde(rename = "v0-player-snapshot")]
+        V0PlayerSnapshot,
+        #[serde(rename = "legacy-v2")]
+        LegacyV2,
+    }
+    impl ::std::fmt::Display for PlayerCareerProfileSnapshotSource {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::V0PlayerSnapshot => f.write_str("v0-player-snapshot"),
+                Self::LegacyV2 => f.write_str("legacy-v2"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for PlayerCareerProfileSnapshotSource {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "v0-player-snapshot" => Ok(Self::V0PlayerSnapshot),
+                "legacy-v2" => Ok(Self::LegacyV2),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PlayerCareerProfileSnapshotSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PlayerCareerProfileSnapshotSource {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PlayerCareerProfileSnapshotSource {
         type Error = self::error::ConversionError;
         fn try_from(
             value: ::std::string::String,

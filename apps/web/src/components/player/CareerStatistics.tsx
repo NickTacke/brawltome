@@ -31,6 +31,14 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
       </p>
     )
   }
+  if (career.snapshotSource === 'legacy-v2') {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Historical data from the previous service, observed {observedDate(career.lastSuccessAt)}. A live update will
+        replace this snapshot when available.
+      </p>
+    )
+  }
   if (career.freshness === 'stale') {
     return (
       <p className="text-sm text-muted-foreground">

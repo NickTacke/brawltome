@@ -2,6 +2,7 @@
   "brawlhallaId": 91913839,
   "checkedAt": "2026-08-09T22:00:00Z",
   "lastSuccessAt": "2026-08-09T22:00:00Z",
+  "snapshotSource": "v0-player-snapshot",
   "freshness": "fresh",
   "freshForSeconds": 43200,
   "snapshot": {
