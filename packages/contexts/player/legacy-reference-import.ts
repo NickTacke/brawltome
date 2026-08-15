@@ -286,28 +286,75 @@ async function progressReconciliation(client: Sql): Promise<Reconciliation> {
 }
 
 async function reconcile(client: Sql): Promise<Reconciliation> {
-  const [result] = await client<
+  const [counts] = await client<
     Array<{
       source_rows: number
       archived_rows: number
+      ledger_rows: number
+      transformed_aliases: number
+      transformed_history: number
+      rejected_ledger_rows: number
       imported_aliases: number
       imported_history: number
       rejected_rows: number
-      source_exact: boolean
-      destination_exact: boolean
     }>
   >`
-    WITH source AS (
-      SELECT 'player_alias'::text AS source_table,
-             jsonb_build_array(row.brawlhalla_id, row.key)::text AS source_key,
-             row.brawlhalla_id, to_jsonb(row) AS raw_row
-      FROM public.player_alias row
-      UNION ALL
-      SELECT 'rating_history', row.id::text, row.brawlhalla_id, to_jsonb(row)
-      FROM public.rating_history row
-    ), archive AS (
+    SELECT
+      (SELECT count(*)::integer FROM public.player_alias) +
+        (SELECT count(*)::integer FROM public.rating_history) AS source_rows,
+      (SELECT count(*)::integer FROM players.legacy_archive
+       WHERE source_table IN ('player_alias', 'rating_history')) AS archived_rows,
+      (SELECT count(*)::integer FROM players.legacy_import_ledger
+       WHERE source_table IN ('player_alias', 'rating_history')) AS ledger_rows,
+      (SELECT count(*)::integer FROM players.legacy_import_ledger
+       WHERE source_table = 'player_alias' AND outcome = 'transformed') AS transformed_aliases,
+      (SELECT count(*)::integer FROM players.legacy_import_ledger
+       WHERE source_table = 'rating_history' AND outcome = 'transformed') AS transformed_history,
+      (SELECT count(*)::integer FROM players.legacy_import_ledger
+       WHERE source_table IN ('player_alias', 'rating_history') AND outcome = 'rejected') AS rejected_ledger_rows,
+      (SELECT count(*)::integer FROM players.legacy_discovery_aliases) AS imported_aliases,
+      (SELECT count(*)::integer FROM players.ranked_rating_history
+       WHERE history_source = 'v2-legacy') AS imported_history,
+      (SELECT count(*)::integer FROM players.legacy_import_rejections
+       WHERE source_table IN ('player_alias', 'rating_history')) AS rejected_rows
+  `
+  const [source] = await client<{ exact: boolean }[]>`
+    SELECT NOT EXISTS (
+      SELECT 1 FROM (
+        SELECT 1
+        FROM public.player_alias source
+        LEFT JOIN players.legacy_archive archive
+          ON archive.source_table = 'player_alias'
+         AND archive.source_key = jsonb_build_array(source.brawlhalla_id, source.key)::text
+        WHERE archive.source_key IS NULL
+           OR archive.brawlhalla_id IS DISTINCT FROM source.brawlhalla_id
+           OR archive.raw_row IS DISTINCT FROM to_jsonb(source)
+           OR archive.row_checksum <> encode(sha256(convert_to(to_jsonb(source)::text, 'UTF8')), 'hex')
+           OR archive.content_checksum <> encode(sha256(convert_to(archive.raw_row::text, 'UTF8')), 'hex')
+        UNION ALL
+        SELECT 1
+        FROM public.rating_history source
+        LEFT JOIN players.legacy_archive archive
+          ON archive.source_table = 'rating_history' AND archive.source_key = source.id::text
+        WHERE archive.source_key IS NULL
+           OR archive.brawlhalla_id IS DISTINCT FROM source.brawlhalla_id
+           OR archive.raw_row IS DISTINCT FROM to_jsonb(source)
+           OR archive.row_checksum <> encode(sha256(convert_to(to_jsonb(source)::text, 'UTF8')), 'hex')
+           OR archive.content_checksum <> encode(sha256(convert_to(archive.raw_row::text, 'UTF8')), 'hex')
+      ) mismatch
+    ) AS exact
+  `
+  const [destination] = await client<{ exact: boolean }[]>`
+    WITH archive AS (
       SELECT * FROM players.legacy_archive
       WHERE source_table IN ('player_alias', 'rating_history')
+    ), rejections AS (
+      SELECT source_table, source_key, count(*)::integer AS rejection_count,
+             bool_and(rejection.archive_checksum = archive.row_checksum) AS rejection_checksum_exact,
+             min(rejection.code) AS rejection_code
+      FROM players.legacy_import_rejections rejection
+      JOIN archive USING (source_table, source_key)
+      GROUP BY source_table, source_key
     ), evidence AS (
       SELECT archive.*,
              ledger.outcome, ledger.archive_checksum AS ledger_checksum,
@@ -317,114 +364,79 @@ async function reconcile(client: Sql): Promise<Reconciliation> {
              history.rating AS history_rating, history.peak_rating AS history_peak_rating,
              history.tier AS history_tier, history.wins AS history_wins, history.games AS history_games,
              history.recorded_at AS history_recorded_at, history.source_order,
-             rejection.rejection_count, rejection.rejection_checksum_exact,
+             coalesce(rejection.rejection_count, 0) AS rejection_count,
+             coalesce(rejection.rejection_checksum_exact, false) AS rejection_checksum_exact,
              rejection.rejection_code
       FROM archive
       LEFT JOIN players.legacy_import_ledger ledger USING (source_table, source_key)
       LEFT JOIN players.legacy_discovery_aliases alias
-        ON archive.source_table = 'player_alias' AND alias.archive_checksum = archive.row_checksum
+        ON archive.source_table = 'player_alias'
+       AND alias.brawlhalla_id = (archive.raw_row->>'brawlhalla_id')::integer
+       AND alias.normalized_alias = lower(archive.raw_row->>'value')
+       AND alias.archive_checksum = archive.row_checksum
       LEFT JOIN players.ranked_rating_history history
         ON archive.source_table = 'rating_history' AND history.history_source = 'v2-legacy'
        AND history.legacy_source_key = archive.source_key
-      LEFT JOIN LATERAL (
-        SELECT count(*)::integer AS rejection_count,
-               bool_and(item.archive_checksum = archive.row_checksum) AS rejection_checksum_exact,
-               min(item.code) AS rejection_code
-        FROM players.legacy_import_rejections item
-        WHERE item.source_table = archive.source_table AND item.source_key = archive.source_key
-      ) rejection ON true
+      LEFT JOIN rejections rejection USING (source_table, source_key)
     )
-    SELECT
-      (SELECT count(*)::integer FROM source) AS source_rows,
-      (SELECT count(*)::integer FROM archive) AS archived_rows,
-      (SELECT count(*)::integer FROM players.legacy_discovery_aliases) AS imported_aliases,
-      (SELECT count(*)::integer FROM players.ranked_rating_history
-       WHERE history_source = 'v2-legacy') AS imported_history,
-      (SELECT count(*)::integer FROM players.legacy_import_rejections
-       WHERE source_table IN ('player_alias', 'rating_history')) AS rejected_rows,
-      NOT EXISTS (
-        SELECT 1 FROM source
-        FULL JOIN archive USING (source_table, source_key)
-        WHERE source.source_key IS NULL OR archive.source_key IS NULL
-           OR archive.brawlhalla_id IS DISTINCT FROM source.brawlhalla_id
-           OR archive.raw_row IS DISTINCT FROM source.raw_row
-           OR archive.row_checksum <> encode(sha256(convert_to(source.raw_row::text, 'UTF8')), 'hex')
-           OR archive.content_checksum <> encode(sha256(convert_to(archive.raw_row::text, 'UTF8')), 'hex')
-      ) AS source_exact,
-      NOT EXISTS (
-        SELECT 1 FROM evidence
-        WHERE outcome IS NULL OR ledger_checksum <> row_checksum
-           OR CASE source_table
-             WHEN 'player_alias' THEN CASE outcome
-               WHEN 'transformed' THEN alias_id IS NULL
-                 OR normalized_alias IS DISTINCT FROM lower(raw_row->>'value')
-                 OR display_alias IS DISTINCT FROM raw_row->>'value'
-                 OR alias_observed_at <> ((raw_row->>'created_at')::timestamp AT TIME ZONE 'UTC')
-                 OR alias_checksum <> row_checksum OR rejection_count <> 0
-               WHEN 'rejected' THEN alias_id IS NOT NULL OR rejection_count <> 1
-                 OR NOT rejection_checksum_exact
-                 OR rejection_code NOT IN ('alias-identity-invalid', 'alias-normalization-collision')
-               ELSE true
-             END
-             WHEN 'rating_history' THEN CASE outcome
-               WHEN 'transformed' THEN history_id IS NULL
-                 OR history_player_id <> (raw_row->>'brawlhalla_id')::integer
-                 OR history_rating <> (raw_row->>'rating')::integer
-                 OR history_peak_rating <> (raw_row->>'peak_rating')::integer
-                 OR history_tier IS DISTINCT FROM raw_row->>'tier'
-                 OR history_wins <> (raw_row->>'wins')::integer
-                 OR history_games <> (raw_row->>'games')::integer
-                 OR history_recorded_at <> ((raw_row->>'recorded_at')::timestamp AT TIME ZONE 'UTC')
-                 OR source_order <> (raw_row->>'id')::bigint OR rejection_count <> 0
-               WHEN 'rejected' THEN history_id IS NOT NULL OR rejection_count <> 1
-                 OR NOT rejection_checksum_exact OR rejection_code NOT IN (
-                   'history-player-identity-invalid',
-                   'history-rating-invalid',
-                   'history-peak-rating-invalid',
-                   'history-tier-unavailable',
-                   'history-record-invalid',
-                   'history-timestamp-invalid',
-                   'history-order-invalid',
-                   'history-values-invalid'
-                 )
-               ELSE true
-             END
+    SELECT NOT EXISTS (
+      SELECT 1 FROM evidence
+      WHERE outcome IS NULL OR ledger_checksum <> row_checksum
+         OR CASE source_table
+           WHEN 'player_alias' THEN CASE outcome
+             WHEN 'transformed' THEN alias_id IS NULL
+               OR normalized_alias IS DISTINCT FROM lower(raw_row->>'value')
+               OR display_alias IS DISTINCT FROM raw_row->>'value'
+               OR alias_observed_at <> ((raw_row->>'created_at')::timestamp AT TIME ZONE 'UTC')
+               OR alias_checksum <> row_checksum OR rejection_count <> 0
+             WHEN 'rejected' THEN alias_id IS NOT NULL OR rejection_count <> 1
+               OR NOT rejection_checksum_exact
+               OR rejection_code NOT IN ('alias-identity-invalid', 'alias-normalization-collision')
              ELSE true
            END
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM players.legacy_import_ledger destination
-        LEFT JOIN archive USING (source_table, source_key)
-        WHERE destination.source_table IN ('player_alias', 'rating_history') AND archive.source_key IS NULL
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM players.legacy_discovery_aliases destination
-        LEFT JOIN archive ON archive.source_table = 'player_alias'
-         AND archive.row_checksum = destination.archive_checksum
-        WHERE archive.source_key IS NULL
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM players.ranked_rating_history destination
-        LEFT JOIN archive ON archive.source_table = 'rating_history'
-         AND archive.source_key = destination.legacy_source_key
-        WHERE destination.history_source = 'v2-legacy' AND archive.source_key IS NULL
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM players.legacy_import_rejections destination
-        LEFT JOIN archive USING (source_table, source_key)
-        WHERE destination.source_table IN ('player_alias', 'rating_history') AND archive.source_key IS NULL
-      ) AS destination_exact
+           WHEN 'rating_history' THEN CASE outcome
+             WHEN 'transformed' THEN history_id IS NULL
+               OR history_player_id <> (raw_row->>'brawlhalla_id')::integer
+               OR history_rating <> (raw_row->>'rating')::integer
+               OR history_peak_rating <> (raw_row->>'peak_rating')::integer
+               OR history_tier IS DISTINCT FROM raw_row->>'tier'
+               OR history_wins <> (raw_row->>'wins')::integer
+               OR history_games <> (raw_row->>'games')::integer
+               OR history_recorded_at <> ((raw_row->>'recorded_at')::timestamp AT TIME ZONE 'UTC')
+               OR source_order <> (raw_row->>'id')::bigint OR rejection_count <> 0
+             WHEN 'rejected' THEN history_id IS NOT NULL OR rejection_count <> 1
+               OR NOT rejection_checksum_exact OR rejection_code NOT IN (
+                 'history-player-identity-invalid',
+                 'history-rating-invalid',
+                 'history-peak-rating-invalid',
+                 'history-tier-unavailable',
+                 'history-record-invalid',
+                 'history-timestamp-invalid',
+                 'history-order-invalid',
+                 'history-values-invalid'
+               )
+             ELSE true
+           END
+           ELSE true
+         END
+    ) AS exact
   `
-  const exact = result.source_exact && result.destination_exact && result.source_rows === result.archived_rows
+  const sourceExact = source.exact && counts.source_rows === counts.archived_rows
+  const destinationExact =
+    destination.exact &&
+    counts.ledger_rows === counts.archived_rows &&
+    counts.imported_aliases === counts.transformed_aliases &&
+    counts.imported_history === counts.transformed_history &&
+    counts.rejected_rows === counts.rejected_ledger_rows
   return {
-    sourceRows: result.source_rows,
-    archivedRows: result.archived_rows,
-    importedAliases: result.imported_aliases,
-    importedHistory: result.imported_history,
-    rejectedRows: result.rejected_rows,
-    sourceExact: result.source_exact,
-    destinationExact: result.destination_exact,
-    exact,
+    sourceRows: counts.source_rows,
+    archivedRows: counts.archived_rows,
+    importedAliases: counts.imported_aliases,
+    importedHistory: counts.imported_history,
+    rejectedRows: counts.rejected_rows,
+    sourceExact,
+    destinationExact,
+    exact: sourceExact && destinationExact,
   }
 }
 
