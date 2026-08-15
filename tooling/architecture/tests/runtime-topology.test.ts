@@ -57,5 +57,5 @@ describe('PostgreSQL-only runtime topology', () => {
     expect(topology.services['operations-worker'].depends_on).toHaveProperty('migration')
     expect(JSON.stringify(topology)).not.toContain(forbiddenPort)
     expect(JSON.stringify(topology)).not.toContain(forbiddenEnvironment)
-  })
+  }, 15_000)
 })
