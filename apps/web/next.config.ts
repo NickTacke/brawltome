@@ -7,7 +7,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: repositoryRoot,
-  transpilePackages: ['@brawltome/ui', '@brawltome/shared', '@brawltome/telemetry'],
+  transpilePackages: ['@brawltome/ui', '@brawltome/telemetry'],
   typescript: {
     ignoreBuildErrors: true,
   },
