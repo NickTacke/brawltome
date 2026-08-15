@@ -313,6 +313,10 @@ describe('V3 production topology', () => {
     expect(dockerfile).toContain('AS web')
     expect(dockerfile).toContain('/app/packages/contracts/node_modules packages/contracts/node_modules')
     expect(dockerfile).toContain('apps/web/.next/standalone')
+    expect(
+      dockerfile.match(/org\.opencontainers\.image\.source="https:\/\/github\.com\/NickTacke\/brawltome"/g),
+    ).toHaveLength(3)
+    expect(dockerfile.match(/org\.opencontainers\.image\.revision=""/g)).toHaveLength(3)
     expect(dockerignore).toContain('**/.env*')
     expect(postgresInit).toContain('NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS')
     expect(postgresInit).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE brawltome_owner')
