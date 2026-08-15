@@ -1,6 +1,7 @@
 import { getLegendById } from '@brawltome/game-data/legends'
 import { legendSlug } from '@brawltome/game-data/reference-data'
 import postgres from 'postgres'
+import { decodeV0CareerNameCandidate } from './career/source'
 import type { PlayerDiscoveryFact, PlayerDiscoverySnapshotStream, PlayerDiscoverySource } from './discovery-facts'
 import { isUsablePlayerName, selectCanonicalPlayerName } from './reference'
 
@@ -114,12 +115,15 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
       const name = nameEvidence?.name ?? fallback?.player_name
       if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
       const canonicalAvailable = canonical?.last_success_at !== null && canonical?.last_success_at !== undefined
-      const aliases = [...(aliasesById.get(brawlhallaId) ?? [])]
+      const aliases = (aliasesById.get(brawlhallaId) ?? []).filter(
+        (alias) => decodeV0CareerNameCandidate(alias) !== name,
+      )
       for (const candidate of [canonical?.player_name, career?.player_name, fallback?.player_name]) {
         if (
           candidate &&
           candidate !== name &&
           isUsablePlayerName(candidate, brawlhallaId) &&
+          decodeV0CareerNameCandidate(candidate) !== name &&
           !aliases.includes(candidate)
         ) {
           aliases.push(candidate)
