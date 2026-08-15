@@ -12,7 +12,6 @@
   "dependencies": {
     "@brawltome/database": "workspace:*",
     "@brawltome/replay-format": "workspace:*",
-    "@brawltome/shared": "workspace:*",
     "drizzle-orm": "^0.39.0"
   },
   "devDependencies": {
