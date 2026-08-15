@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { randomInt } from 'node:crypto'
-import { type Database, db, player } from '@brawltome/database'
+import { type Database, db } from '@brawltome/database'
+import { sql } from 'drizzle-orm'
 import { createDatabasePlayerReferenceQueries } from '../src/adapters/player-reference.database'
 
 describe('stored Player Reference', () => {
@@ -16,11 +17,27 @@ describe('stored Player Reference', () => {
 
     try {
       await db.transaction(async (transaction) => {
-        await transaction.insert(player).values([
-          { brawlhallaId: storedId, name: 'Canonical Player', rating: 0 },
-          { brawlhallaId: placeholderId, name: `Player ${placeholderId}`, rating: 0 },
-          { brawlhallaId: storedMetadataId, name: 'Stored Name', rating: 0 },
-        ])
+        const archiveChecksum = 'a'.repeat(64)
+        await transaction.execute(sql`
+          INSERT INTO players.legacy_profile_archive (brawlhalla_id, raw_row, row_checksum)
+          VALUES
+            (${storedId}, ${JSON.stringify({ brawlhalla_id: storedId, name: 'Archived Player', rating: 1800, best_legend: 3 })}::jsonb, ${archiveChecksum}),
+            (${placeholderId}, ${JSON.stringify({ brawlhalla_id: placeholderId, name: `Player ${placeholderId}` })}::jsonb, ${archiveChecksum}),
+            (${storedMetadataId}, ${JSON.stringify({ brawlhalla_id: storedMetadataId, name: 'Stored Name' })}::jsonb, ${archiveChecksum})
+        `)
+        await transaction.execute(sql`
+          INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
+          VALUES
+            (${storedId}, 'canonical alias', 'Canonical Alias', '2026-08-10T00:00:00Z'),
+            (${storedId}, 'archived player', 'ARCHIVED PLAYER', '2026-08-10T00:00:00Z')
+        `)
+        await transaction.execute(sql`
+          INSERT INTO players.legacy_discovery_aliases
+            (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
+          VALUES
+            (${storedId}, 'canonical alias', 'CANONICAL ALIAS', '2026-08-09T00:00:00Z', ${archiveChecksum}),
+            (${storedId}, 'older alias', 'Older Alias', '2026-08-08T00:00:00Z', ${archiveChecksum})
+        `)
 
         const queries = createDatabasePlayerReferenceQueries(
           transaction as unknown as Database,
@@ -63,22 +80,39 @@ describe('stored Player Reference', () => {
           },
         )
 
-        expect(await queries.byId(storedId)).toEqual({ brawlhallaId: storedId, name: 'Canonical Player' })
+        expect(await queries.byId(storedId)).toEqual({
+          brawlhallaId: storedId,
+          name: 'Archived Player',
+          aliases: ['Canonical Alias', 'Older Alias'],
+          bestLegendNameKey: 'bodvar',
+          legacyRating: 1_800,
+        })
         expect(await queries.byId(rankedId)).toEqual({
           brawlhallaId: rankedId,
           name: 'Career Name',
+          aliases: [],
           bestLegendNameKey: 'teros',
           legacyRating: 2_000,
         })
-        expect(await queries.byId(careerId)).toEqual({ brawlhallaId: careerId, name: 'Canonical Career Player' })
-        expect(await queries.byId(careerPriorityId)).toEqual({ brawlhallaId: careerPriorityId, name: 'Career Name' })
+        expect(await queries.byId(careerId)).toEqual({
+          brawlhallaId: careerId,
+          name: 'Canonical Career Player',
+          aliases: [],
+        })
+        expect(await queries.byId(careerPriorityId)).toEqual({
+          brawlhallaId: careerPriorityId,
+          name: 'Career Name',
+          aliases: [],
+        })
         expect(await queries.byId(invalidCareerId)).toEqual({
           brawlhallaId: invalidCareerId,
           name: 'Ranked Name',
+          aliases: [],
         })
         expect(await queries.byId(storedMetadataId)).toEqual({
           brawlhallaId: storedMetadataId,
           name: 'Stored Name',
+          aliases: [],
           bestLegendNameKey: 'teros',
           legacyRating: 1_800,
         })

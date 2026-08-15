@@ -33,7 +33,7 @@ describe('desktop ranked lookup route', () => {
     const observedAt = new Date()
     const calls = { active: 0, reserve: 0, admit: 0 }
     const app = createDesktopRankedRoutes({
-      playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Measured Zero' }) },
+      playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Measured Zero', aliases: [] }) },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
       refreshOperations: {
         findActiveInteractivePlayerRefresh: async () => {
@@ -59,7 +59,7 @@ describe('desktop ranked lookup route', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
-      player: { brawlhallaId: 42, name: 'Measured Zero' },
+      player: { brawlhallaId: 42, name: 'Measured Zero', aliases: [] },
       ranked: {
         ...freshProfile(observedAt),
         checkedAt: observedAt.toISOString(),
@@ -80,7 +80,7 @@ describe('desktop ranked lookup route', () => {
       playerReferences: {
         byId: async () => {
           await gate
-          return { brawlhallaId: 42, name: 'Cached Ada' }
+          return { brawlhallaId: 42, name: 'Cached Ada', aliases: [] }
         },
       },
       rankedPlayers: {
@@ -134,7 +134,7 @@ describe('desktop ranked lookup route', () => {
 
   test('maps an API dependency failure to temporary unavailability without inventing ranked data', async () => {
     const app = createDesktopRankedRoutes({
-      playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Cached Ada' }) },
+      playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Cached Ada', aliases: [] }) },
       rankedPlayers: {
         byId: async () => {
           throw new Error('database unavailable')
@@ -156,7 +156,7 @@ describe('desktop ranked lookup route', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
-      player: { brawlhallaId: 42, name: 'Cached Ada' },
+      player: { brawlhallaId: 42, name: 'Cached Ada', aliases: [] },
       ranked: null,
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
     })
@@ -167,7 +167,7 @@ describe('desktop ranked lookup route', () => {
     const ranked = { ...freshProfile(observedAt), freshness: 'stale' as const }
     const operationId = '2ef5a585-e8b9-46df-8f95-53d03af42d11'
     const shared = {
-      playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Stale Ada' }) },
+      playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Stale Ada', aliases: [] }) },
       rankedPlayers: { byId: async () => ranked },
     }
 
@@ -262,6 +262,7 @@ describe('desktop ranked lookup route', () => {
           calls.reservationKey = reservationKey
           return { outcome: 'admitted' as const }
         },
+        admitActorOnce: async () => ({ outcome: 'admitted' as const }),
         hasActorReservation: async () => false,
       },
     })

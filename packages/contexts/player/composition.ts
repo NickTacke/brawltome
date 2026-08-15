@@ -37,7 +37,6 @@ export {
   type PostgresPlayerDiscoverySource,
 } from './discovery-postgres'
 export { createSteamPlayerEvidenceResolver } from './verification'
-export { createPlayerRepo } from './player.repo'
 export {
   importLegacyCareerSnapshots,
   type LegacyCareerImportOptions,

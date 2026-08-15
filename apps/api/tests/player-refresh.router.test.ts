@@ -8,7 +8,7 @@ import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/
 
 const secret = 'player-refresh-test-secret'
 const discordSecret = 'discord-player-refresh-test-secret'
-const cached = { brawlhallaId: 42, name: 'Cached Ada' }
+const cached = { brawlhallaId: 42, name: 'Cached Ada', aliases: [] }
 const stalePlayer = { rankedLastUpdated: null, statsLastUpdated: null }
 
 function harness(
@@ -103,7 +103,6 @@ function harness(
         return { lastSuccessAt: stored.statsLastUpdated }
       },
     },
-    playerRepo: { findById: async () => (options.player === undefined ? stalePlayer : options.player) },
     refreshOperations: operations,
     requestAdmission: {
       admitActor: async (actor: { kind: string }) => {

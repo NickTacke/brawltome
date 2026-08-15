@@ -10,7 +10,7 @@ const savedPlayers: SavedPlayersContract = [
     order: 0,
     pinOrder: 0,
     savedAt: '2026-08-10T09:00:00Z',
-    player: { brawlhallaId: 42, name: 'Ada' },
+    player: { brawlhallaId: 42, name: 'Ada', aliases: [] },
     currentSeason: null,
   },
   {
@@ -18,7 +18,7 @@ const savedPlayers: SavedPlayersContract = [
     order: 1,
     pinOrder: null,
     savedAt: '2026-08-10T09:01:00Z',
-    player: { brawlhallaId: 43, name: 'Lin' },
+    player: { brawlhallaId: 43, name: 'Lin', aliases: [] },
     currentSeason: null,
   },
 ]
@@ -54,7 +54,7 @@ describe('Saved Players client state', () => {
     await Promise.resolve()
 
     await updateSavedPlayersCache(queryClient, 'account-one', async () => savedPlayers)
-    resolveStaleQuery?.([{ ...savedPlayers[0], player: { brawlhallaId: 42, name: 'Stale Ada' } }])
+    resolveStaleQuery?.([{ ...savedPlayers[0], player: { brawlhallaId: 42, name: 'Stale Ada', aliases: [] } }])
     await staleQuery.catch(() => undefined)
 
     const cachedResult: unknown = queryClient.getQueryData(['account', 'savedPlayers', 'account-one'])
@@ -88,7 +88,7 @@ describe('Saved Players client state', () => {
     await Promise.resolve()
     resolveMutation?.(savedPlayers)
     await update
-    resolveStaleQuery?.([{ ...savedPlayers[0], player: { brawlhallaId: 42, name: 'Stale Ada' } }])
+    resolveStaleQuery?.([{ ...savedPlayers[0], player: { brawlhallaId: 42, name: 'Stale Ada', aliases: [] } }])
     await staleQuery.catch(() => undefined)
 
     const cachedResult: unknown = queryClient.getQueryData(['account', 'savedPlayers', 'account-one'])
