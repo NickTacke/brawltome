@@ -6,6 +6,7 @@ import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createPostgresCareerPlayers, createPostgresRankedPlayers } from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
+import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
 import { createPostgresStatistics } from '@brawltome/statistics/composition'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
@@ -30,6 +31,7 @@ import { appRouter } from './router'
 import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
+import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
 import { readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { runtimeMigrationInventory } from './runtime-migration-inventory'
@@ -43,6 +45,10 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required')
 const refreshTrustSecret = process.env.REFRESH_TRUST_COOKIE_SECRET
 if (!refreshTrustSecret || Buffer.byteLength(refreshTrustSecret) < 32) {
   throw new Error('REFRESH_TRUST_COOKIE_SECRET must be set and at least 32 bytes')
+}
+const replayBridgeSecret = process.env.REPLAY_BRIDGE_SECRET
+if (!replayBridgeSecret || Buffer.byteLength(replayBridgeSecret) < 32) {
+  throw new Error('REPLAY_BRIDGE_SECRET must be set and at least 32 bytes')
 }
 const authenticatedRefreshIpLimit = Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120)
 if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimit < 1) {
@@ -70,6 +76,7 @@ const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
 })
 const ranking = createPostgresRanking(databaseUrl)
 const statistics = createPostgresStatistics(databaseUrl)
+const replayAnalysisJobs = createPostgresReplayAnalysisJobs(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
 const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationInventory)
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -96,6 +103,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
+    { name: 'replay-analysis-postgres', close: replayAnalysisJobs.close },
     { name: 'database-postgres', close: closeDatabase },
     { name: 'readiness-postgres', close: postgresReadiness.close },
     { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
@@ -152,6 +160,7 @@ app.use(
   cors({
     origin: (origin) => (corsOrigins.includes(origin) ? origin : null),
     credentials: true,
+    allowHeaders: ['Content-Type', 'Traceparent', 'X-Replay-File-Name', 'X-Request-Id'],
   }),
 )
 
@@ -180,6 +189,8 @@ app.route(
   '/internal/operations',
   createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
 )
+app.route('/api', createReplayAnalysisRoutes({ accounts, jobs: replayAnalysisJobs, webOrigin: authConfig.webOrigin }))
+app.route('/internal/replays', createReplayBridgeRoutes({ jobs: replayAnalysisJobs, secret: replayBridgeSecret }))
 
 app.use(
   '/trpc/*',

@@ -23,6 +23,7 @@
     "@brawltome/ranking": "workspace:*",
     "@brawltome/request-admission": "workspace:*",
     "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/replay-analysis": "workspace:*",
     "@brawltome/statistics": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
     "@hono/trpc-server": "^0.3.0",

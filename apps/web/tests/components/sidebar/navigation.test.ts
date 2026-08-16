@@ -4,7 +4,7 @@ import { parseNavigationContract } from '@/components/sidebar/navigation-contrac
 import navigation from '@/components/sidebar/navigation.json'
 import { wipFeatures } from '@/lib/wip-features'
 
-const requiredSoonDestinations = ['/stats', '/matches', '/learn', '/tournaments', '/feed']
+const requiredSoonDestinations = ['/stats', '/learn', '/tournaments', '/feed']
 
 describe('shell navigation contract', () => {
   test('drives rendered navigation from the serializable parity contract', () => {
@@ -20,7 +20,9 @@ describe('shell navigation contract', () => {
     )
   })
 
-  test('keeps required placeholders visible and non-live', () => {
+  test('keeps live and placeholder destinations honest', () => {
+    expect(navigation).toContainEqual(expect.objectContaining({ href: '/matches', status: 'live' }))
+    expect('matches' in wipFeatures).toBe(false)
     for (const href of requiredSoonDestinations) {
       expect(navigation).toContainEqual(expect.objectContaining({ href, status: 'soon' }))
       expect(href.slice(1) in wipFeatures).toBe(true)

@@ -24,6 +24,7 @@
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
+        "@brawltome/replay-analysis": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/statistics": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
@@ -70,6 +71,13 @@
         "discord.js": "^14.22.0",
         "superjson": "^2.2.2",
       },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
+    "apps/replay-bridge": {
+      "name": "@brawltome/replay-bridge",
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.7.0",
@@ -177,6 +185,16 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/contexts/replay-analysis": {
+      "name": "@brawltome/replay-analysis",
+      "dependencies": {
+        "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/contexts/request-admission": {
       "name": "@brawltome/request-admission",
       "dependencies": {
@@ -281,6 +299,7 @@
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
+        "@brawltome/replay-analysis": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/statistics": "workspace:*",
         "postgres": "^3.4.0",
@@ -391,6 +410,10 @@
     "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/contexts/ranking"],
 
     "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/contexts/refresh-operations"],
+
+    "@brawltome/replay-analysis": ["@brawltome/replay-analysis@workspace:packages/contexts/replay-analysis"],
+
+    "@brawltome/replay-bridge": ["@brawltome/replay-bridge@workspace:apps/replay-bridge"],
 
     "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/contexts/request-admission"],
 
