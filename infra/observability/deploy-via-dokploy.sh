@@ -12,7 +12,7 @@ cd "$repository_root"
 compose_id=$DOKPLOY_OBSERVABILITY_COMPOSE_ID
 source_ref=$DOKPLOY_OBSERVABILITY_REF
 api_url=${DOKPLOY_URL%/}/api
-expected_command='compose --parallel 1 -p brawltome-observability-bc1eng -f ./deploy/observability/compose.yml up -d --build --remove-orphans --force-recreate'
+expected_command='compose --parallel 1 -p brawltome-observability-bc1eng -f ./infra/observability/compose.yml up -d --build --remove-orphans --force-recreate'
 
 [[ $compose_id =~ ^[A-Za-z0-9_-]+$ ]] || {
   printf '%s\n' 'Dokploy compose ID contains unsupported characters.' >&2

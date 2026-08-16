@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { parse } from 'yaml'
 
 const root = resolve(import.meta.dir, '../../..')
-const deploy = (...parts: string[]) => resolve(root, 'deploy/observability', ...parts)
+const deploy = (...parts: string[]) => resolve(root, 'infra/observability', ...parts)
 const read = (...parts: string[]) => readFileSync(deploy(...parts), 'utf8')
 
 const requiredAlerts = [
@@ -40,10 +40,10 @@ describe('observability deployment contract', () => {
       scripts?: Record<string, string>
     }
 
-    expect(packageJson.scripts?.['observability:deploy']).toBe('bash deploy/observability/deploy-via-dokploy.sh')
-    expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh deploy/observability/networks/ensure.sh')
+    expect(packageJson.scripts?.['observability:deploy']).toBe('bash infra/observability/deploy-via-dokploy.sh')
+    expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh infra/observability/networks/ensure.sh')
     expect(packageJson.scripts?.['observability:verify-rendered-topology']).toBe(
-      'bun tooling/observability/src/verify-rendered-topology.ts',
+      'bun infra/observability/verify-rendered-topology.ts',
     )
     expect(packageJson.scripts?.['observability:grafana-tunnel']).toBeUndefined()
 
