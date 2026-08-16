@@ -7,10 +7,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 export function GET(request: NextRequest) {
   const url = request.nextUrl
-  const destination = url.clone()
-  destination.pathname = '/matches'
-  destination.search = ''
-  const response = NextResponse.redirect(destination)
+  const response = new NextResponse(null, { headers: { location: '/matches' }, status: 307 })
   response.headers.set('cache-control', 'no-store')
   if (!matchesPreviewInviteAuthorized(url.searchParams.get('token'))) return response
 

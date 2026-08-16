@@ -23,7 +23,7 @@ describe('matches preview invite', () => {
     const cookieValue = setCookie.split(';')[0]?.slice(`${matchesPreviewCookieName}=`.length)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('https://brawltome.app/matches')
+    expect(response.headers.get('location')).toBe('/matches')
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('Max-Age=2592000')
     expect(setCookie).toContain('Path=/matches')
