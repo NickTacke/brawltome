@@ -105,7 +105,6 @@ type AppRouterRecord = {
     >
   }
   status: {
-    health: Query<void, { status: 'healthy' }>
     discordReady: Query<void, { status: 'ready' }>
   }
 }
