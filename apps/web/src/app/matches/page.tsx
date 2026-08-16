@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { MatchesContent } from './MatchesContent'
 
 export const metadata: Metadata = {
-  title: 'Matches - Coming Soon',
+  title: 'Matches',
 }
 
 export default async function Page() {

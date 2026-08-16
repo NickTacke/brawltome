@@ -9,163 +9,102 @@ import {
   replayJobDetailSchema,
   replayJobSummarySchema,
 } from '@brawltome/contracts'
-import { getLegendById, getLevelById } from '@brawltome/game-data'
-import { Upload } from 'lucide-react'
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
+import { Activity, Clock3, FileUp, History, LockKeyhole, Upload, Zap } from 'lucide-react'
+import { type DragEvent, type FormEvent, useCallback, useEffect, useState } from 'react'
+import { ReplayResultView } from './ReplayResultView'
 
-const statusLabel = {
-  pending: 'Pending',
-  processing: 'Processing',
+type ReplayJobStatus = ReplayJobSummaryContract['status']
+
+const statusLabel: Record<ReplayJobStatus, string> = {
+  pending: 'Queued',
+  processing: 'Analyzing',
   completed: 'Complete',
   failed: 'Failed',
-} as const
-
-export function formatDuration(milliseconds: number): string {
-  const totalSeconds = Math.round(milliseconds / 1_000)
-  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`
 }
 
-export function timelineX(timestampMs: number, durationMs: number): number {
-  return 20 + Math.min(timestampMs / durationMs, 1) * 960
+const statusClass: Record<ReplayJobStatus, string> = {
+  pending: 'border-border bg-muted text-muted-foreground',
+  processing: 'border-primary/30 bg-primary/10 text-primary',
+  completed: 'border-success/30 bg-success/10 text-success',
+  failed: 'border-destructive/30 bg-destructive/10 text-destructive',
 }
 
-function ResultView({ job }: { job: ReplayJobDetailContract }) {
-  if (!job.result) return null
-  const { core } = job.result
-  const replay = core.replay
-  const metrics = new Map(core.native.players.map((player) => [player.slot, player]))
-  const maxDamage = Math.max(...core.native.players.map(({ damageDealt }) => damageDealt), 1)
-  const map = getLevelById(replay.mapId)
-  const winningTeam = replay.outcome.winningTeamId
+function replayTimestamp(value: string): string {
+  return `${value.slice(0, 10)} · ${value.slice(11, 16)} UTC`
+}
 
+function ReplayHistory({
+  jobs,
+  selectedId,
+  onSelect,
+}: {
+  jobs: ReplayJobSummaryContract[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+}) {
   return (
-    <div className="space-y-6">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Match summary">
-        {[
-          ['Duration', formatDuration(replay.durationMs)],
-          ['Map', map?.displayName ?? `Map ${replay.mapId}`],
-          ['Playlist', `#${replay.playlistId}`],
-          ['Winner', winningTeam === null ? 'Draw' : `Team ${winningTeam}`],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
-            <p className="text-muted-foreground text-xs uppercase tracking-wider">{label}</p>
-            <p className="mt-1 text-lg font-semibold">{value}</p>
+    <Card className="overflow-hidden border-border lg:sticky lg:top-6">
+      <CardHeader className="border-b border-border/70 pb-4">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <History className="h-5 w-5 text-primary" aria-hidden="true" />
+          Recent replays
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">Your private match history, newest first.</p>
+      </CardHeader>
+      <CardContent className="p-0">
+        {jobs.length === 0 ? (
+          <div className="p-6 text-center">
+            <Activity className="mx-auto h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
+            <p className="mt-3 font-semibold text-foreground">No matches yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Upload a replay to start your history.</p>
           </div>
-        ))}
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">
-        <div className="border-b border-white/[0.06] px-5 py-4">
-          <h2 className="font-semibold">Players</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-muted-foreground bg-white/[0.02] text-xs uppercase tracking-wider">
-              <tr>
-                <th className="px-5 py-3 font-medium">Player</th>
-                <th className="px-3 py-3 font-medium">Team</th>
-                <th className="px-3 py-3 font-medium">Legend</th>
-                <th className="px-3 py-3 text-right font-medium">KOs</th>
-                <th className="px-3 py-3 text-right font-medium">Deaths</th>
-                <th className="px-3 py-3 text-right font-medium">Damage</th>
-                <th className="px-5 py-3 text-right font-medium">Dodges</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.05]">
-              {replay.players.map((player) => {
-                const native = metrics.get(player.slot)
-                const legend = getLegendById(player.loadout.legendId)
-                return (
-                  <tr key={player.slot}>
-                    <td className="px-5 py-3 font-medium">
-                      {player.name}
-                      {player.teamId === winningTeam && <span className="ml-2 text-amber-300">Winner</span>}
+        ) : (
+          <div className="max-h-[42rem] overflow-y-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="sr-only">
+                <tr>
+                  <th>Replay</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {jobs.map((job) => (
+                  <tr key={job.id} className={selectedId === job.id ? 'bg-primary/10' : 'hover:bg-muted/30'}>
+                    <th className="p-0 align-top" scope="row">
+                      <button
+                        type="button"
+                        onClick={() => onSelect(job.id)}
+                        className="w-full cursor-pointer p-4 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      >
+                        <span className="block truncate font-bold text-foreground">
+                          {job.fileName ?? 'Brawlhalla replay'}
+                        </span>
+                        <span className="mt-1 flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                          <Clock3 className="h-3 w-3" aria-hidden="true" />
+                          {replayTimestamp(job.createdAt)}
+                        </span>
+                        {job.failure && (
+                          <span className="mt-1 block text-xs font-normal text-destructive">{job.failure.message}</span>
+                        )}
+                      </button>
+                    </th>
+                    <td className="w-24 p-4 pl-0 text-right align-top">
+                      <Badge variant="outline" className={`px-2 py-0.5 ${statusClass[job.status]}`}>
+                        {statusLabel[job.status]}
+                      </Badge>
+                      <span className="mt-2 block text-[10px] text-muted-foreground">
+                        Updated {job.updatedAt.slice(11, 16)} UTC
+                      </span>
                     </td>
-                    <td className="px-3 py-3">{player.teamId}</td>
-                    <td className="px-3 py-3">{legend?.displayName ?? `#${player.loadout.legendId}`}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{native?.kos ?? 0}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{native?.deaths ?? 0}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{native?.damageDealt.toFixed(1) ?? '0'}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{native?.dodges ?? 0}</td>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <figure className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <figcaption className="font-semibold">Damage dealt</figcaption>
-          <div className="mt-5 space-y-4">
-            {replay.players.map((player) => {
-              const damage = metrics.get(player.slot)?.damageDealt ?? 0
-              return (
-                <div key={player.slot}>
-                  <div className="mb-1.5 flex justify-between text-sm">
-                    <span>{player.name}</span>
-                    <span className="tabular-nums">{damage.toFixed(1)}</span>
-                  </div>
-                  <div className="bg-muted h-2 overflow-hidden rounded-full">
-                    <div
-                      className="bg-primary h-full rounded-full"
-                      style={{ width: `${(damage / maxDamage) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </figure>
-
-        <figure className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <figcaption className="font-semibold">KO timeline</figcaption>
-          {replay.koTimeline.length === 0 ? (
-            <p className="text-muted-foreground mt-5 text-sm">No KOs recorded.</p>
-          ) : (
-            <>
-              <svg viewBox="0 0 1000 100" className="mt-5 h-24 w-full" aria-hidden="true">
-                <line x1="20" x2="980" y1="50" y2="50" className="stroke-border" strokeWidth="4" />
-                {replay.koTimeline.map((event, index) => (
-                  <g key={`${event.timestampMs}-${event.victimSlot}-${index}`}>
-                    <circle
-                      cx={timelineX(event.timestampMs, replay.durationMs)}
-                      cy="50"
-                      r="10"
-                      className="fill-primary"
-                    />
-                    <text
-                      x={timelineX(event.timestampMs, replay.durationMs)}
-                      y={index % 2 === 0 ? 25 : 86}
-                      textAnchor="middle"
-                      className="fill-muted-foreground text-[24px]"
-                    >
-                      {formatDuration(event.timestampMs)}
-                    </text>
-                  </g>
                 ))}
-              </svg>
-              <ol className="sr-only">
-                {replay.koTimeline.map((event, index) => {
-                  const scorer = replay.players.find(({ slot }) => slot === event.scoringSlot)?.name ?? 'Environment'
-                  const victim = replay.players.find(({ slot }) => slot === event.victimSlot)?.name ?? 'Unknown player'
-                  return (
-                    <li key={`${event.timestampMs}-${event.victimSlot}-${index}`}>
-                      {formatDuration(event.timestampMs)}: {scorer} knocked out {victim}.
-                    </li>
-                  )
-                })}
-              </ol>
-            </>
-          )}
-        </figure>
-      </div>
-
-      <p className="text-muted-foreground text-xs">
-        Replay-deterministic analysis from processor {core.provenance.processorVersion}. {core.limitations[0]?.text}
-      </p>
-    </div>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -176,6 +115,8 @@ export function ReplayAnalysisPage() {
   const [selected, setSelected] = useState<ReplayJobDetailContract | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [loadingSelected, setLoadingSelected] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadJobs = useCallback(async (signal: AbortSignal) => {
@@ -191,6 +132,9 @@ export function ReplayAnalysisPage() {
   }, [])
 
   const hasActiveJobs = jobs.some(({ status }) => status === 'pending' || status === 'processing')
+  let uploadButtonLabel = 'Analyze replay'
+  if (hasActiveJobs) uploadButtonLabel = 'Analysis in progress'
+  else if (uploading) uploadButtonLabel = 'Uploading…'
   useEffect(() => {
     if (!account) return
     let cancelled = false
@@ -222,6 +166,7 @@ export function ReplayAnalysisPage() {
     let cancelled = false
     setSelected(null)
     if (selectedId && selectedStatus) {
+      setLoadingSelected(true)
       void loadSelected(selectedId)
         .then((detail) => {
           if (!cancelled) setSelected(detail)
@@ -229,19 +174,34 @@ export function ReplayAnalysisPage() {
         .catch(() => {
           if (!cancelled) setError('Could not load replay analysis.')
         })
+        .finally(() => {
+          if (!cancelled) setLoadingSelected(false)
+        })
     }
     return () => {
       cancelled = true
     }
   }, [loadSelected, selectedId, selectedStatus])
 
-  async function upload(event: FormEvent) {
-    event.preventDefault()
-    if (!file || uploading) return
-    if (file.size > REPLAY_UPLOAD_LIMIT_BYTES) {
+  function chooseFile(nextFile: File | null) {
+    if (nextFile && nextFile.size > REPLAY_UPLOAD_LIMIT_BYTES) {
+      setFile(null)
       setError('Replay files must be 16 MiB or smaller.')
       return
     }
+    setError(null)
+    setFile(nextFile)
+  }
+
+  function dropReplay(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault()
+    setDragging(false)
+    chooseFile(event.dataTransfer.files[0] ?? null)
+  }
+
+  async function upload(event: FormEvent) {
+    event.preventDefault()
+    if (!file || uploading) return
     setUploading(true)
     setError(null)
     try {
@@ -266,117 +226,165 @@ export function ReplayAnalysisPage() {
     }
   }
 
-  if (isLoading) return <main className="mx-auto max-w-6xl px-6 py-12">Loading…</main>
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-7xl animate-pulse px-6 py-12 text-sm text-muted-foreground">Loading matches…</div>
+    )
+  }
+
   if (!account) {
     return (
-      <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-3xl font-bold">Replay analysis</h1>
-        <p className="text-muted-foreground mt-3">Sign in to upload and privately view your Brawlhalla replays.</p>
-        <button
-          type="button"
-          onClick={signIn}
-          className="bg-primary mt-6 cursor-pointer rounded-lg px-5 py-3 font-semibold text-white"
-        >
-          Sign in with Discord
-        </button>
-      </main>
+      <section className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
+        <Badge variant="outline" className="gap-2 border-primary/30 bg-primary/5 text-primary">
+          <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+          Private replay analysis
+        </Badge>
+        <h1 className="mt-5 text-4xl font-black tracking-tight text-foreground sm:text-6xl">
+          Turn matches into answers.
+        </h1>
+        <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
+          Upload a Brawlhalla replay to review damage, movement, knockouts, and equipment in one match report.
+        </p>
+        <Card className="mt-8 w-full border-border bg-linear-to-br from-card to-primary/5">
+          <CardContent className="flex flex-col items-center p-8">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <FileUp className="h-7 w-7" aria-hidden="true" />
+            </div>
+            <h2 className="mt-4 text-xl font-bold">Sign in to upload replays</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your uploads and analysis history stay attached to your account.
+            </p>
+            <Button type="button" size="lg" onClick={signIn} className="mt-6">
+              Sign in with Discord
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
     )
   }
 
   return (
-    <main className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Replay analysis</h1>
-        <p className="text-muted-foreground mt-2">
-          Upload a format 268 replay. Processing normally finishes in a few minutes.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-8 px-6 py-10 pb-16">
+      <header>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Matches</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">Replay analysis</h1>
+            <p className="mt-2 max-w-2xl text-muted-foreground">
+              Private, replay-deterministic match reports processed by the Brawltome replay worker.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <Badge variant="outline" className="gap-1.5">
+              <LockKeyhole className="h-3 w-3" />
+              Private
+            </Badge>
+            <Badge variant="outline" className="gap-1.5">
+              <Zap className="h-3 w-3" />
+              Format 268
+            </Badge>
+          </div>
+        </div>
+      </header>
 
-      <form onSubmit={upload} className="rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] p-6">
-        <label htmlFor="replay-file" className="flex cursor-pointer flex-col items-center gap-3 text-center">
-          <Upload className="text-muted-foreground h-8 w-8" />
-          <span className="font-medium">{file?.name ?? 'Choose a .replay file'}</span>
-          <span className="text-muted-foreground text-xs">Maximum 16 MiB</span>
-        </label>
-        <input
-          id="replay-file"
-          type="file"
-          accept=".replay,application/octet-stream"
-          className="sr-only"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        />
-        <button
-          type="submit"
-          disabled={!file || uploading}
-          className="bg-primary mx-auto mt-5 block cursor-pointer rounded-lg px-5 py-2.5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {uploading ? 'Uploading…' : 'Analyze replay'}
-        </button>
-      </form>
+      <Card
+        className={`overflow-hidden border-border bg-linear-to-br from-card to-primary/5 ${dragging ? 'ring-2 ring-primary' : ''}`}
+      >
+        <CardContent className={jobs.length === 0 ? 'p-8 sm:p-10' : 'p-5'}>
+          <form onSubmit={upload} className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+            <label
+              htmlFor="replay-file"
+              onDragEnter={(event) => {
+                event.preventDefault()
+                setDragging(true)
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={() => setDragging(false)}
+              onDrop={dropReplay}
+              className={`flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg border border-dashed p-4 transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border bg-background/50 hover:border-primary/50'}`}
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Upload className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-bold text-foreground">
+                  {file?.name ?? 'Choose or drop a .replay file'}
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {hasActiveJobs ? 'One replay is already being analyzed' : 'Format 268 · Maximum 16 MiB'}
+                </span>
+              </span>
+            </label>
+            <input
+              id="replay-file"
+              type="file"
+              accept=".replay,application/octet-stream"
+              className="sr-only"
+              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+            />
+            <Button type="submit" size="lg" disabled={!file || uploading || hasActiveJobs} className="shrink-0">
+              {uploadButtonLabel}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {error && (
-        <p role="alert" className="text-sm text-red-300">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {error}
-        </p>
-      )}
-
-      {jobs.length > 0 && (
-        <section>
-          <h2 className="mb-3 font-semibold">Your replays</h2>
-          <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
-            <table className="w-full min-w-2xl text-left text-sm">
-              <thead className="bg-white/[0.04] text-xs uppercase text-zinc-400">
-                <tr>
-                  <th className="px-4 py-3 font-medium" scope="col">
-                    Replay
-                  </th>
-                  <th className="px-4 py-3 font-medium" scope="col">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 font-medium" scope="col">
-                    Submitted
-                  </th>
-                  <th className="px-4 py-3 font-medium" scope="col">
-                    Updated
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <tr key={job.id} className={selectedId === job.id ? 'bg-primary/10' : 'border-t border-white/[0.06]'}>
-                    <th className="px-4 py-3 font-medium" scope="row">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(job.id)}
-                        className="cursor-pointer hover:underline"
-                      >
-                        {job.fileName ?? 'Replay'}
-                      </button>
-                    </th>
-                    <td className="px-4 py-3">{statusLabel[job.status]}</td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      <time dateTime={job.createdAt}>{job.createdAt.slice(0, 16).replace('T', ' ')} UTC</time>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      <time dateTime={job.updatedAt}>{job.updatedAt.slice(0, 16).replace('T', ' ')} UTC</time>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {selected && selected.status !== 'completed' && (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6">
-          <p className="font-semibold">{statusLabel[selected.status]}</p>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {selected.failure?.message ?? 'The replay is waiting for VM 104 and the Replay Processor.'}
-          </p>
         </div>
       )}
-      {selected && <ResultView job={selected} />}
-    </main>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">
+        <ReplayHistory jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
+
+        <section className="min-w-0" aria-live="polite">
+          {loadingSelected && (
+            <Card className="animate-pulse">
+              <CardContent className="p-8">
+                <div className="h-5 w-40 rounded bg-muted" />
+                <div className="mt-4 h-28 rounded bg-muted/60" />
+              </CardContent>
+            </Card>
+          )}
+          {!loadingSelected && selected && selected.status !== 'completed' && (
+            <Card className="border-border bg-linear-to-br from-card to-primary/5">
+              <CardContent className="flex items-start gap-4 p-6">
+                <span className="relative mt-1 flex h-3 w-3 shrink-0">
+                  {selected.status !== 'failed' && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-50" />
+                  )}
+                  <span
+                    className={`relative inline-flex h-3 w-3 rounded-full ${selected.status === 'failed' ? 'bg-destructive' : 'bg-primary'}`}
+                  />
+                </span>
+                <div>
+                  <p className="font-bold text-foreground">{statusLabel[selected.status]}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selected.failure?.message ??
+                      'The replay worker is preparing your match report. This normally takes a few minutes.'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {!loadingSelected && selected && <ReplayResultView job={selected} />}
+          {!loadingSelected && !selected && jobs.length === 0 && (
+            <Card className="border-dashed border-border bg-card/60">
+              <CardContent className="flex min-h-80 flex-col items-center justify-center p-8 text-center">
+                <Activity className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
+                <h2 className="mt-4 text-xl font-bold text-foreground">Your next match report starts here</h2>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Upload a replay above. Recent matches will stay on the left while the full analysis opens here.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      </div>
+    </div>
   )
 }
