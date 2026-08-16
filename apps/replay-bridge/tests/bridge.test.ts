@@ -255,14 +255,14 @@ describe('replay bridge', () => {
       if (!response) throw new Error('Unexpected request')
       return response
     }) as unknown as typeof fetch
-    let clockReads = 0
+    const times = [0, 0, 300_000, 300_000, 300_000, 300_000]
 
     expect(
       await processNextReplay(
         config,
         fetcher,
         async () => undefined,
-        () => (clockReads++ === 0 ? 0 : 600_000),
+        () => times.shift() ?? 300_000,
       ),
     ).toBe(true)
     expect(requests.map(({ method, url }) => `${method} ${new URL(url).pathname}`)).toEqual([
@@ -271,6 +271,64 @@ describe('replay bridge', () => {
       'POST /internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/renew',
       'GET /v1/jobs/processor-job-0001',
       'GET /v1/jobs/processor-job-0001/result',
+      'POST /internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/result',
+      'DELETE /v1/jobs/processor-job-0001',
+    ])
+  })
+
+  test('renews before long result transfer and callback phases', async () => {
+    const requests: Request[] = []
+    const signals: AbortSignal[] = []
+    const succeeded = {
+      apiVersion: 1,
+      state: 'succeeded',
+      jobId: 'processor-job-0001',
+      statusUrl: '/v1/jobs/processor-job-0001',
+      resultUrl: '/v1/jobs/processor-job-0001/result',
+      submittedAt: '2026-08-16T10:00:00Z',
+      terminalAt: '2026-08-16T10:01:00Z',
+      expiresAt: '2026-08-16T11:01:00Z',
+    }
+    const responses = [
+      new Response(Uint8Array.of(1), {
+        status: 200,
+        headers: {
+          'x-replay-job-id': '1b2f7508-8e9c-4b1a-950f-d60fabe27176',
+          'x-replay-lease-seconds': '600',
+          'x-replay-lease-token': leaseToken,
+        },
+      }),
+      Response.json(succeeded, { status: 202 }),
+      new Response(null, { status: 204 }),
+      Response.json({ schemaVersion: 1 }),
+      new Response(null, { status: 204 }),
+      new Response(null, { status: 204 }),
+      new Response(null, { status: 204 }),
+    ]
+    const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push(new Request(input, init))
+      if (init?.signal) signals.push(init.signal)
+      const response = responses.shift()
+      if (!response) throw new Error('Unexpected request')
+      return response
+    }) as unknown as typeof fetch
+    const times = [0, 0, 300_000, 300_000, 600_000, 600_000]
+
+    expect(
+      await processNextReplay(
+        config,
+        fetcher,
+        async () => undefined,
+        () => times.shift() ?? 600_000,
+      ),
+    ).toBe(true)
+    expect(signals).toHaveLength(requests.length)
+    expect(requests.map(({ method, url }) => `${method} ${new URL(url).pathname}`)).toEqual([
+      'POST /internal/replays/claim',
+      'POST /v1/jobs',
+      'POST /internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/renew',
+      'GET /v1/jobs/processor-job-0001/result',
+      'POST /internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/renew',
       'POST /internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/result',
       'DELETE /v1/jobs/processor-job-0001',
     ])
