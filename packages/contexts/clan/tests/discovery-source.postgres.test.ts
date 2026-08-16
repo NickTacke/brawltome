@@ -7,7 +7,7 @@ import {
 } from '@brawltome/clan/composition'
 import postgres from 'postgres'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
 const databaseName = `brawltome_clan_discovery_${process.pid}_${randomUUID().replaceAll('-', '')}`
 let admin: ReturnType<typeof postgres>

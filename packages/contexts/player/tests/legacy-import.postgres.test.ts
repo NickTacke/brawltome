@@ -10,7 +10,7 @@ import {
 } from '../composition'
 import { legacyPlayerRowsSql, legacyPlayerSchemaSql } from './fixtures/legacy-player-migration'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
 const databaseName = `bt_player_import_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`
 let admin: ReturnType<typeof postgres>
