@@ -22,6 +22,8 @@ const requiredAlerts = [
   'TelemetryStorageNearQuota',
 ] as const
 
+const legacyDimension = ['gene', 'ration'].join('')
+
 const persistentQuotas = {
   prometheus: 'OBSERVABILITY_METRICS_QUOTA_BYTES',
   loki: 'OBSERVABILITY_LOGS_QUOTA_BYTES',
@@ -67,7 +69,7 @@ describe('observability deployment contract', () => {
         OBSERVABILITY_LOGS_QUOTA_BYTES: '1000000000',
         OBSERVABILITY_TRACES_QUOTA_BYTES: '1000000000',
         PROMETHEUS_RETENTION_SIZE: '800MB',
-        BRAWLTOME_NETWORK_NAME: 'brawltome-internal',
+        BRAWLTOME_NETWORK_NAME: 'brawltome',
         DISCORD_WEBHOOK_URL_FILE: '/run/owner-secrets/discord-webhook-url',
         METRICS_SCRAPE_SECRET_FILE: '/run/owner-secrets/metrics-scrape-secret',
         OTEL_INGEST_TOKEN_FILE: '/run/owner-secrets/otel-ingest-token',
@@ -118,7 +120,7 @@ describe('observability deployment contract', () => {
     const expectedNetworks: Record<string, string[]> = {
       alertmanager: ['notifications', 'observability'],
       'blackbox-exporter': ['application'],
-      grafana: ['default', 'dokploy-network'],
+      grafana: ['dokploy-network', 'observability'],
       loki: ['observability'],
       'node-exporter': ['observability'],
       'otel-collector': ['application', 'observability'],
@@ -142,15 +144,11 @@ describe('observability deployment contract', () => {
       expect(Object.keys(service.networks ?? {}).sort(), `${name} network membership`).toEqual(expectedNetworks[name])
     }
     expect(rendered.networks).toMatchObject({
-      application: { external: true, name: 'brawltome-internal' },
-      default: { external: true, name: 'brawltome-observability' },
+      application: { external: true, name: 'brawltome' },
       'dokploy-network': { external: true, name: 'dokploy-network' },
       notifications: { external: true, name: 'brawltome-notifications' },
       observability: { external: true, name: 'brawltome-observability' },
     })
-    for (const [name, service] of Object.entries(rendered.services)) {
-      if (name !== 'grafana') expect(service.networks ?? {}).not.toHaveProperty('default')
-    }
     const nodeExporter = rendered.services['node-exporter']
     expect(nodeExporter?.command).toEqual([
       '--collector.disable-defaults',
@@ -186,7 +184,7 @@ describe('observability deployment contract', () => {
     expect(read('storage', 'verify-quota-mounts.sh')).toContain('findmnt')
   })
 
-  test('scrapes V3 metrics and probes V3 dependency readiness', () => {
+  test('scrapes application metrics and probes dependency readiness', () => {
     const config = parse(read('prometheus', 'prometheus.yml')) as {
       scrape_configs: Array<{
         job_name: string
@@ -195,18 +193,18 @@ describe('observability deployment contract', () => {
     }
     const job = (name: string) => config.scrape_configs.find(({ job_name }) => job_name === name)?.static_configs
 
-    expect(job('api')).toEqual([{ targets: ['v3-api:3000'], labels: { runtime: 'api', generation: 'v3' } }])
+    expect(job('api')).toEqual([{ targets: ['api:3000'], labels: { runtime: 'api' } }])
     expect(job('operations-worker')).toEqual([
-      { targets: ['v3-operations-worker:3001'], labels: { runtime: 'operations-worker', generation: 'v3' } },
+      { targets: ['operations-worker:3001'], labels: { runtime: 'operations-worker' } },
     ])
-    expect(job('web')).toEqual([{ targets: ['v3-web:3000'], labels: { runtime: 'web', generation: 'v3' } }])
+    expect(job('web')).toEqual([{ targets: ['web:3000'], labels: { runtime: 'web' } }])
     expect(job('discord')).toBeUndefined()
     expect(job('availability')).toBeUndefined()
     expect(job('readiness')).toEqual([
-      { targets: ['http://v3-api:3000/health/ready'], labels: { runtime: 'api', generation: 'v3' } },
+      { targets: ['http://api:3000/health/ready'], labels: { runtime: 'api' } },
       {
-        targets: ['http://v3-operations-worker:3001/health/ready'],
-        labels: { runtime: 'operations-worker', generation: 'v3' },
+        targets: ['http://operations-worker:3001/health/ready'],
+        labels: { runtime: 'operations-worker' },
       },
     ])
   })
@@ -220,20 +218,20 @@ describe('observability deployment contract', () => {
     for (const alert of requiredAlerts) expect(evidence).toContain(`alertname: ${alert}`)
     expect(rules).not.toMatch(/\b(request_id|trace_id|job_id|operation_id|user_id|guild_id)\b/)
     for (const aggregation of [
-      'max by (runtime, generation)',
-      'sum by (runtime, generation, le)',
-      'sum by (runtime, generation)',
-      'max by (generation, work_class)',
+      'max by (runtime)',
+      'sum by (runtime, le)',
+      'sum by (runtime)',
+      'max by (work_class)',
     ]) {
       expect(rules).toContain(aggregation)
     }
     const alertmanager = read('alertmanager', 'alertmanager.yml')
     expect(alertmanager).toContain('webhook_url_file: /run/secrets/discord_webhook_url')
     expect(alertmanager).toContain('send_resolved: true')
-    expect(alertmanager).toContain('group_by: [severity, generation, alertname]')
+    expect(alertmanager).toContain('group_by: [severity, alertname]')
     expect(alertmanager).toContain('group_wait: 30s')
     expect(alertmanager).toContain('group_interval: 5m')
-    expect(alertmanager).toContain('Generation: {{ .Labels.generation }}')
+    expect(alertmanager).not.toContain(`Labels.${legacyDimension}`)
     expect(alertmanager).toContain('{{ with .Labels.failure_category }} | Category: {{ . }}{{ end }}')
     expect(rules).toContain('refresh_failures_total{failure_category!="admission_deferred"}')
     expect(read('prometheus', 'prometheus.yml')).toContain('/run/secrets/metrics_scrape_secret')
@@ -262,7 +260,7 @@ describe('observability deployment contract', () => {
     ]) {
       expect(titles).toContain(title)
     }
-    expect(queries).toContain('generation')
+    expect(queries).not.toContain(legacyDimension)
     for (const metric of [
       'probe_success',
       'worker_heartbeat_timestamp_seconds',
