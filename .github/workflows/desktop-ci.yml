@@ -67,19 +67,7 @@ jobs:
 
       - name: Check repository-owned Rust formatting
         working-directory: apps/desktop
-        shell: pwsh
-        run: |
-          rustfmt --check --edition 2021 `
-            app/src/detection_bridge.rs `
-            app/src/lib.rs `
-            app/src/overlay.rs `
-            app/src/tray.rs `
-            app/src/updater_artifact.rs `
-            app/src/windows_acceptance.rs `
-            app/src/bin/verify_updater_artifact.rs `
-            app/tests/updater_artifact.rs `
-            app/tests/windows_acceptance.rs `
-            app/tests/windows_lifecycle.rs
+        run: cargo fmt --package brawltome-desktop --package brawltome-events -- --check
 
       - name: Lint Windows Rust targets
         working-directory: apps/desktop
