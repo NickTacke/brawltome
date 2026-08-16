@@ -453,6 +453,7 @@ dependencies = [
  "criterion",
  "log",
  "memchr",
+ "serde",
  "tokio",
  "windows-sys 0.59.0",
 ]
