@@ -53,7 +53,7 @@ esac
   chmodSync(rclone, 0o755)
   for (const [command, body] of [
     ['flock', '#!/bin/sh\nexit 0\n'],
-    ['sha256sum', '#!/bin/sh\nexec shasum -a 256 "$@"\n'],
+    ['sha256sum', '#!/bin/sh\nsleep "${FAKE_SHA256_DELAY:-0}"\nexec shasum -a 256 "$@"\n'],
   ] as const) {
     const path = join(bin, command)
     writeFileSync(path, body)
@@ -66,6 +66,7 @@ esac
     BACKUP_PREFIX: 'fixture-prefix',
     BACKUP_INTEGRITY_METRICS_FILE: metrics,
     FAKE_REMOTE: remote,
+    FAKE_SHA256_DELAY: '0.2',
     LOCK_FILE: join(root, 'verifier.lock'),
     PATH: `${bin}:${process.env.PATH}`,
     RCLONE_BIN: rclone,

@@ -63,6 +63,7 @@ command -v "$RCLONE_BIN" >/dev/null
 command -v awk >/dev/null
 command -v flock >/dev/null
 command -v gzip >/dev/null
+command -v mkfifo >/dev/null
 command -v sha256sum >/dev/null
 
 exec 9>"$LOCK_FILE"
@@ -93,10 +94,20 @@ backup_age=$((now - backup_timestamp))
 (( backup_age >= MIN_BACKUP_AGE_SECONDS )) || { printf '%s\n' 'Latest backup is still being uploaded' >&2; exit 1; }
 (( backup_age <= MAX_BACKUP_AGE_SECONDS )) || { printf '%s\n' 'Latest backup is stale' >&2; exit 1; }
 
-hash_file=$(mktemp)
-trap 'status=$?; rm -f "$hash_file"; on_exit "$status"' EXIT
-if ! "$RCLONE_BIN" cat "$remote/$latest" | tee >(sha256sum | awk '{ print $1 }' >"$hash_file") | gzip -t; then
+work_dir=$(mktemp -d)
+hash_file=$work_dir/hash
+hash_pipe=$work_dir/stream
+mkfifo "$hash_pipe"
+trap 'status=$?; rm -rf "$work_dir"; on_exit "$status"' EXIT
+sha256sum <"$hash_pipe" | awk '{ print $1 }' >"$hash_file" &
+hash_pid=$!
+if ! "$RCLONE_BIN" cat "$remote/$latest" | tee "$hash_pipe" | gzip -t; then
+  wait "$hash_pid" || true
   printf '%s\n' 'Latest backup could not be read and validated' >&2
+  exit 1
+fi
+if ! wait "$hash_pid"; then
+  printf '%s\n' 'Latest backup hash could not be computed' >&2
   exit 1
 fi
 computed=$(<"$hash_file")

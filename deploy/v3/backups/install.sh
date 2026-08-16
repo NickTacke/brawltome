@@ -5,7 +5,7 @@ set -euo pipefail
 repository_root=$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)
 environment_file=/etc/brawltome/backup-integrity.env
 
-for command in awk flock gzip mktemp python3 rclone sha256sum systemctl tee useradd; do
+for command in awk flock gzip mkfifo mktemp python3 rclone sha256sum systemctl tee useradd; do
   command -v "$command" >/dev/null || { printf 'Required command is unavailable: %s\n' "$command" >&2; exit 1; }
 done
 [[ -r $environment_file ]] || { printf '%s\n' "$environment_file is unreadable" >&2; exit 1; }
