@@ -8,9 +8,30 @@ const observabilityServices = new Set(['api', 'operations-worker', 'web'])
 const expectedBuildTargets: Record<string, string> = {
   migration: 'migration',
   postgres: 'postgres',
-  'api': 'api',
+  api: 'api',
   'operations-worker': 'operations-worker',
-  'web': 'web',
+  web: 'web',
+}
+
+const expectedDependencies: Record<string, [service: string, condition: string]> = {
+  api: ['migration', 'service_completed_successfully'],
+  migration: ['postgres', 'service_healthy'],
+  'operations-worker': ['migration', 'service_completed_successfully'],
+  web: ['api', 'service_healthy'],
+}
+
+const expectedHealthPaths: Record<string, string> = {
+  api: '/health/ready',
+  postgres: 'pg_isready',
+  'operations-worker': '/health/ready',
+  web: '/api/health/ready',
+}
+
+const expectedStopGracePeriods: Record<string, string> = {
+  api: '1m10s',
+  postgres: '30s',
+  'operations-worker': '1m10s',
+  web: '20s',
 }
 
 const expectedSecretFiles: Record<string, string> = {
@@ -96,6 +117,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (target && readPath(service, 'build', 'target') !== target) {
       violations.push(`${name} must use build target ${target}`)
     }
+    checkRuntimeContract(violations, name, service)
     checkRuntimeHardening(violations, name, service)
     checkSecretEnvironment(violations, name, service.environment)
     checkSecretMountShadowing(
@@ -189,6 +211,35 @@ function checkExactKeys(
 ): void {
   if (!sameValues(Object.keys(value), expected))
     violations.push(`${subject} must be exactly: ${[...expected].sort().join(', ')}`)
+}
+
+function checkRuntimeContract(violations: string[], name: string, service: Record<string, unknown>): void {
+  const dependency = expectedDependencies[name]
+  if (
+    dependency &&
+    (!isRecord(service.depends_on) ||
+      !sameValues(Object.keys(service.depends_on), [dependency[0]]) ||
+      readPath(service, 'depends_on', dependency[0], 'condition') !== dependency[1])
+  ) {
+    violations.push(`${name} dependencies must match the approved topology`)
+  }
+
+  const healthPath = expectedHealthPaths[name]
+  const healthCommand = asStringArray(readPath(service, 'healthcheck', 'test')).join(' ')
+  if (healthPath && !healthCommand.includes(healthPath)) {
+    violations.push(`${name} health check must use ${healthPath}`)
+  }
+
+  const stopGracePeriod = expectedStopGracePeriods[name]
+  if (stopGracePeriod && service.stop_grace_period !== stopGracePeriod) {
+    violations.push(`${name} must retain stop grace period ${stopGracePeriod}`)
+  }
+
+  const memory = readPath(service, 'deploy', 'resources', 'limits', 'memory')
+  const pids = readPath(service, 'deploy', 'resources', 'limits', 'pids')
+  if (typeof memory !== 'string' || typeof pids !== 'number' || pids <= 0) {
+    violations.push(`${name} must retain bounded memory and PID resources`)
+  }
 }
 
 function checkRuntimeHardening(violations: string[], name: string, service: Record<string, unknown>): void {
