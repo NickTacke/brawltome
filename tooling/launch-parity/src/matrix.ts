@@ -361,8 +361,20 @@ export const launchParityMatrix: readonly ParityRow[] = [
     verificationGap:
       'Needs a rendered browser assertion covering fresh-to-stale, scope changes, first-publication unavailable, and transport failure.',
   },
+  implemented(
+    'matches.replay-analysis',
+    'shell-navigation',
+    'Signed-in users upload replays and inspect durable Replay Processor results.',
+    ['/matches'],
+    [
+      'packages/contexts/replay-analysis/index.ts',
+      'apps/api/src/routes/replay-analysis.routes.ts',
+      'apps/replay-bridge/src/index.ts',
+      'apps/web/src/app/matches/ReplayAnalysisPage.tsx',
+    ],
+    'Needs production VM 104 and browser acceptance evidence.',
+  ),
   ...[
-    ['matches', 'Matches'],
     ['learn', 'Learn'],
     ['tournaments', 'Tournaments'],
     ['feed', 'Feed'],

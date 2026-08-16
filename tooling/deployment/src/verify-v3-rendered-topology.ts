@@ -24,6 +24,7 @@ const expectedSecretFiles: Record<string, string> = {
   postgres_owner_password: 'postgres-owner-password',
   postgres_runtime_password: 'postgres-runtime-password',
   refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
+  replay_bridge_secret: 'replay-bridge-secret',
   runtime_database_url: 'runtime-database-url',
   turnstile_secret_key: 'turnstile-secret-key',
 }
@@ -36,6 +37,7 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'metrics_scrape_secret',
     'otel_authorization',
     'refresh_trust_cookie_secret',
+    'replay_bridge_secret',
     'runtime_database_url',
     'turnstile_secret_key',
   ],
@@ -236,6 +238,7 @@ function checkSecretEnvironment(violations: string[], name: string, value: unkno
     'POSTGRES_DEAD_LETTER_PASSWORD',
     'POSTGRES_PASSWORD',
     'REFRESH_TRUST_COOKIE_SECRET',
+    'REPLAY_BRIDGE_SECRET',
   ])
   if (Object.keys(value).some((key) => secretNames.has(key))) {
     violations.push(`${name} must not receive raw secret environment variables`)

@@ -4,6 +4,7 @@ import { discoveryMigrationInventory } from '@brawltome/discovery/composition'
 import { playerMigrationInventory } from '@brawltome/player/composition'
 import { rankingMigrationInventory } from '@brawltome/ranking/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
+import { replayAnalysisMigrationInventory } from '@brawltome/replay-analysis/composition'
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
 import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
 
@@ -55,4 +56,5 @@ export const runtimeMigrationInventory = [
   playerMigrationInventory[10],
   playerMigrationInventory[11],
   playerMigrationInventory[12],
+  replayAnalysisMigrationInventory[0],
 ] as const
