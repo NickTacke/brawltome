@@ -27,6 +27,7 @@ export type ReplayBridgeConfig = {
 
 const MAX_BUSY_ATTEMPTS = 12
 const MAX_SUBMISSIONS_PER_CLAIM = 2
+const REQUEST_TIMEOUT_MS = 30_000
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const processorJobIdPattern = /^[A-Za-z0-9_-]{16,128}$/
 const failureCodePattern = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9_-]*$/
@@ -126,6 +127,10 @@ function url(base: string, path: string): string {
   return new URL(path, `${base.replace(/\/$/, '')}/`).toString()
 }
 
+function request(fetcher: Fetch, input: string, init?: RequestInit): Promise<Response> {
+  return fetcher(input, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+}
+
 async function json(response: Response): Promise<unknown> {
   try {
     return await response.json()
@@ -149,7 +154,7 @@ async function reportFailure(
   leaseToken: string,
   failure: ProcessorFailure,
 ) {
-  const response = await fetcher(url(config.brawltomeUrl, `/internal/replays/${id}/failure`), {
+  const response = await request(fetcher, url(config.brawltomeUrl, `/internal/replays/${id}/failure`), {
     method: 'POST',
     headers: bridgeHeaders(config, leaseToken, true),
     body: JSON.stringify({ code: failure.code, message: failure.message }),
@@ -163,7 +168,7 @@ async function renewClaim(
   id: string,
   leaseToken: string,
 ): Promise<boolean> {
-  const response = await fetcher(url(config.brawltomeUrl, `/internal/replays/${id}/renew`), {
+  const response = await request(fetcher, url(config.brawltomeUrl, `/internal/replays/${id}/renew`), {
     method: 'POST',
     headers: bridgeHeaders(config, leaseToken),
   })
@@ -173,7 +178,7 @@ async function renewClaim(
 }
 
 async function releaseClaim(config: ReplayBridgeConfig, fetcher: Fetch, id: string, leaseToken: string) {
-  const response = await fetcher(url(config.brawltomeUrl, `/internal/replays/${id}/release`), {
+  const response = await request(fetcher, url(config.brawltomeUrl, `/internal/replays/${id}/release`), {
     method: 'POST',
     headers: bridgeHeaders(config, leaseToken),
   })
@@ -181,7 +186,7 @@ async function releaseClaim(config: ReplayBridgeConfig, fetcher: Fetch, id: stri
 }
 
 async function deleteProcessorJob(config: ReplayBridgeConfig, fetcher: Fetch, statusUrl: string) {
-  await fetcher(url(config.processorUrl, statusUrl), {
+  await request(fetcher, url(config.processorUrl, statusUrl), {
     method: 'DELETE',
     headers: { authorization: `Bearer ${config.processorToken}` },
   }).catch(() => undefined)
@@ -193,7 +198,7 @@ export async function processNextReplay(
   wait: (milliseconds: number) => Promise<unknown> = sleep,
   now: () => number = Date.now,
 ): Promise<boolean> {
-  const claim = await fetcher(url(config.brawltomeUrl, '/internal/replays/claim'), {
+  const claim = await request(fetcher, url(config.brawltomeUrl, '/internal/replays/claim'), {
     method: 'POST',
     headers: { authorization: `Bearer ${config.brawltomeToken}` },
   })
@@ -208,12 +213,20 @@ export async function processNextReplay(
   const renewalIntervalMs = (leaseSeconds * 1_000) / 2
   let renewAt = now() + renewalIntervalMs
   const replayBytes = await claim.arrayBuffer()
+  const maintainLease = async (): Promise<boolean> => {
+    if (now() + REQUEST_TIMEOUT_MS < renewAt) return true
+    if (!(await renewClaim(config, fetcher, id, leaseToken))) return false
+    renewAt = now() + renewalIntervalMs
+    return true
+  }
 
   try {
     for (let submissionNumber = 1; submissionNumber <= MAX_SUBMISSIONS_PER_CLAIM; submissionNumber += 1) {
       let current: WorkerJob | undefined
       for (let busyAttempt = 0; busyAttempt < MAX_BUSY_ATTEMPTS; busyAttempt += 1) {
-        const submitted = await fetcher(url(config.processorUrl, '/v1/jobs'), {
+        // pi-lens-ignore: await-in-loop
+        if (!(await maintainLease())) return true
+        const submitted = await request(fetcher, url(config.processorUrl, '/v1/jobs'), {
           method: 'POST',
           headers: {
             authorization: `Bearer ${config.processorToken}`,
@@ -230,6 +243,7 @@ export async function processNextReplay(
         const failure = processorFailure(submittedBody)
         if (failure.action === 'operator_recovery') {
           await wait(config.pollMs)
+          if (!(await maintainLease())) return true
           await releaseClaim(config, fetcher, id, leaseToken)
           return true
         }
@@ -241,25 +255,25 @@ export async function processNextReplay(
         }
         if (failure.class === 'transient' && failure.action === 'submit_new_job') break
         // pi-lens-ignore: await-in-loop
+        if (!(await maintainLease())) return true
+        // pi-lens-ignore: await-in-loop
         await reportFailure(config, fetcher, id, leaseToken, failure)
         return true
       }
 
       if (!current) {
         if (submissionNumber < MAX_SUBMISSIONS_PER_CLAIM) continue
+        if (!(await maintainLease())) return true
         await releaseClaim(config, fetcher, id, leaseToken)
         return true
       }
 
       while (current.state === 'running') {
-        if (now() + config.pollMs >= renewAt) {
-          // pi-lens-ignore: await-in-loop
-          if (!(await renewClaim(config, fetcher, id, leaseToken))) return true
-          renewAt = now() + renewalIntervalMs
-        }
         // pi-lens-ignore: await-in-loop
         await wait(config.pollMs)
-        const status = await fetcher(url(config.processorUrl, current.statusUrl), {
+        // pi-lens-ignore: await-in-loop
+        if (!(await maintainLease())) return true
+        const status = await request(fetcher, url(config.processorUrl, current.statusUrl), {
           headers: { authorization: `Bearer ${config.processorToken}` },
         })
         if (!status.ok) throw new Error(`Replay Processor status failed with HTTP ${status.status}`)
@@ -267,9 +281,11 @@ export async function processNextReplay(
       }
 
       if (current.state === 'failed') {
+        if (!(await maintainLease())) return true
         await deleteProcessorJob(config, fetcher, current.statusUrl)
         if (current.failure.action === 'operator_recovery') {
           await wait(config.pollMs)
+          if (!(await maintainLease())) return true
           await releaseClaim(config, fetcher, id, leaseToken)
           return true
         }
@@ -280,21 +296,26 @@ export async function processNextReplay(
               ? Math.min(current.failure.details.retryAfterSeconds * 1_000, 10_000)
               : config.pollMs,
           )
+          if (!(await maintainLease())) return true
           await releaseClaim(config, fetcher, id, leaseToken)
           return true
         }
+        if (!(await maintainLease())) return true
         await reportFailure(config, fetcher, id, leaseToken, current.failure)
         return true
       }
 
-      const result = await fetcher(url(config.processorUrl, current.resultUrl), {
+      if (!(await maintainLease())) return true
+      const result = await request(fetcher, url(config.processorUrl, current.resultUrl), {
         headers: { authorization: `Bearer ${config.processorToken}` },
       })
       if (!result.ok) throw new Error(`Replay Processor result failed with HTTP ${result.status}`)
-      const accepted = await fetcher(url(config.brawltomeUrl, `/internal/replays/${id}/result`), {
+      const resultBody = await result.arrayBuffer()
+      if (!(await maintainLease())) return true
+      const accepted = await request(fetcher, url(config.brawltomeUrl, `/internal/replays/${id}/result`), {
         method: 'POST',
         headers: bridgeHeaders(config, leaseToken, true),
-        body: await result.arrayBuffer(),
+        body: resultBody,
       })
       if (accepted.status !== 204) throw new Error(`Brawltome rejected analysis result with HTTP ${accepted.status}`)
 
