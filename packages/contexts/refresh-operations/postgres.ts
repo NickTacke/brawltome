@@ -259,18 +259,6 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-type AcceptedOrScheduledOperationKind =
-  | 'proof'
-  | 'interactive-player-refresh'
-  | 'ranked-player-pulse'
-  | LeaderboardOperationKind
-  | DiscoveryProjectionKind
-  | 'discovery-reconciliation'
-
-function operationKind(input: { kind?: AcceptedOrScheduledOperationKind }): AcceptedOrScheduledOperationKind {
-  return input.kind ?? 'proof'
-}
-
 function isLeaderboardKind(kind: string): kind is LeaderboardOperationKind {
   return (leaderboardOperationKinds as readonly string[]).includes(kind)
 }
@@ -303,7 +291,7 @@ function validateScheduleIdentity(input: {
 
 function validateSchedule(input: CreateSchedule): Date {
   const firstDueAt = validateScheduleIdentity(input)
-  const kind = operationKind(input)
+  const kind = input.kind ?? 'proof'
   if (isLeaderboardKind(kind)) {
     const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
     if (payload.intervalMs !== input.intervalMs) {
@@ -944,7 +932,7 @@ export function createPostgresRefreshOperations(
     },
 
     async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
-      const kind = operationKind(input)
+      const kind = input.kind ?? 'proof'
       if (isLeaderboardKind(kind)) {
         if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
         validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
@@ -1099,7 +1087,7 @@ export function createPostgresRefreshOperations(
 
     async createSchedule(input: CreateSchedule): Promise<CreateScheduleResult> {
       const firstDueAt = validateSchedule(input)
-      const kind = operationKind(input)
+      const kind = input.kind ?? 'proof'
       const scheduleId = randomUUID()
       const [created] = await client<{ id: string }[]>`
         INSERT INTO refresh_operations.schedules
@@ -2209,10 +2197,7 @@ export function createPostgresRefreshOperations(
     },
 
     async close() {
-      if (renewalClient === client) {
-        await client.end()
-        return
-      }
+      if (renewalClient === client) return client.end()
       await Promise.all([client.end(), renewalClient.end()])
     },
   }
@@ -2232,5 +2217,3 @@ export function createPostgresDeadLetterOperations(
     close: operations.close,
   }
 }
-
-export type PostgresDeadLetterOperations = ReturnType<typeof createPostgresDeadLetterOperations>

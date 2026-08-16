@@ -2,7 +2,6 @@
 
 import { Leaderboard } from '@/components/Leaderboard'
 import { SearchBar } from '@/components/SearchBar'
-import { ServerStatus } from '@/components/ServerStatus'
 import { Skeleton } from '@brawltome/ui'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -75,10 +74,6 @@ export default function Home() {
           </p>
         </div>
       </footer>
-
-      <div className="fixed bottom-4 right-4 z-50">
-        <ServerStatus />
-      </div>
     </main>
   )
 }

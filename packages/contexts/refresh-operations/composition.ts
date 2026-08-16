@@ -18,7 +18,6 @@ import { addLegendMetaPublication } from './migrations/0016-add-legend-meta-publ
 export {
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
-  type PostgresDeadLetterOperations,
   type PostgresRefreshOperations,
 } from './postgres'
 
