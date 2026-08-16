@@ -16,13 +16,13 @@ write_metrics() {
   cat >"$temporary" <<METRICS
 # HELP brawltome_postgres_backup_integrity_ok Whether the latest recurring PostgreSQL backup passed integrity verification.
 # TYPE brawltome_postgres_backup_integrity_ok gauge
-brawltome_postgres_backup_integrity_ok{generation="v3"} $ok
+brawltome_postgres_backup_integrity_ok $ok
 # HELP brawltome_postgres_backup_integrity_last_run_timestamp_seconds Unix timestamp of the latest verifier run.
 # TYPE brawltome_postgres_backup_integrity_last_run_timestamp_seconds gauge
-brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"} $now
+brawltome_postgres_backup_integrity_last_run_timestamp_seconds $now
 # HELP brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds Backup timestamp of the latest verified recurring PostgreSQL backup.
 # TYPE brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds gauge
-brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"} $verified
+brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds $verified
 METRICS
   mv "$temporary" "$BACKUP_INTEGRITY_METRICS_FILE"
 }

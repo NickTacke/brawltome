@@ -9,7 +9,7 @@ const runner = resolve(root, 'infra/app/run-with-secrets.sh')
 const temporaryDirectories: string[] = []
 
 function fixture(secretValues: Record<string, string>) {
-  const directory = mkdtempSync(join(tmpdir(), 'brawltome-v3-secrets-'))
+  const directory = mkdtempSync(join(tmpdir(), 'brawltome-secrets-'))
   temporaryDirectories.push(directory)
   const secrets = join(directory, 'secrets')
   const bin = join(directory, 'bin')
@@ -45,7 +45,7 @@ afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { force: true, recursive: true })
 })
 
-describe('V3 secret bootstrap', () => {
+describe('application secret bootstrap', () => {
   test('exports API secrets without placing values in command arguments', () => {
     const values = {
       runtime_database_url: 'postgres://runtime-secret',
