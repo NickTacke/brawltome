@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-compose='docker compose -f deploy/observability/tests/compose.yml'
-alerts=$(awk '/^[[:space:]]+- alert:/{print $3}' deploy/observability/prometheus/rules/alerts.yml)
+compose='docker compose -f infra/observability/tests/fixtures/compose.yml'
+alerts=$(awk '/^[[:space:]]+- alert:/{print $3}' infra/observability/prometheus/rules/alerts.yml)
 alert_count=$(printf '%s\n' "$alerts" | awk 'NF { count++ } END { print count + 0 }')
 
 cleanup() {

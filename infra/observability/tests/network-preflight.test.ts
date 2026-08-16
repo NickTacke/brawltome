@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const repositoryRoot = resolve(import.meta.dir, '../../..')
-const preflight = join(repositoryRoot, 'deploy/observability/networks/ensure.sh')
+const preflight = join(repositoryRoot, 'infra/observability/networks/ensure.sh')
 const temporaryDirectories: string[] = []
 
 type FixtureOptions = {
