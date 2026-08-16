@@ -23,8 +23,7 @@
       "@brawltome/ranking": ["./packages/contexts/ranking/index.ts"],
       "@brawltome/request-admission": ["./packages/contexts/request-admission/index.ts"],
       "@brawltome/refresh-operations": ["./packages/contexts/refresh-operations/index.ts"],
-      "@brawltome/replay-analysis": ["./packages/contexts/replay-analysis/index.ts"],
-      "@brawltome/identity": ["./packages/contexts/identity/index.ts"]
+      "@brawltome/replay-analysis": ["./packages/contexts/replay-analysis/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist"]
