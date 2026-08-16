@@ -18,11 +18,11 @@ fi
 install -d -m 0755 /usr/local/libexec
 install -d -o brawltome-backup-integrity -g brawltome-backup-integrity -m 0755 \
   /srv/brawltome-observability/backup-integrity
-install -m 0755 "$repository_root/deploy/v3/backups/verify-dokploy-backup-integrity.sh" \
+install -m 0755 "$repository_root/infra/app/backups/verify-dokploy-backup-integrity.sh" \
   /usr/local/libexec/brawltome-verify-backup-integrity
-install -m 0644 "$repository_root/deploy/v3/backups/systemd/brawltome-backup-integrity.service" \
+install -m 0644 "$repository_root/infra/app/backups/systemd/brawltome-backup-integrity.service" \
   /etc/systemd/system/brawltome-backup-integrity.service
-install -m 0644 "$repository_root/deploy/v3/backups/systemd/brawltome-backup-integrity.timer" \
+install -m 0644 "$repository_root/infra/app/backups/systemd/brawltome-backup-integrity.timer" \
   /etc/systemd/system/brawltome-backup-integrity.timer
 systemctl daemon-reload
 systemctl enable --now brawltome-backup-integrity.timer
