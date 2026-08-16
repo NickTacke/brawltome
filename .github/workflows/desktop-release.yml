@@ -72,17 +72,7 @@ jobs:
       - name: Run release Rust and TypeScript gates
         shell: pwsh
         run: |
-          rustfmt --check --edition 2021 `
-            apps/desktop/app/src/detection_bridge.rs `
-            apps/desktop/app/src/lib.rs `
-            apps/desktop/app/src/overlay.rs `
-            apps/desktop/app/src/tray.rs `
-            apps/desktop/app/src/updater_artifact.rs `
-            apps/desktop/app/src/windows_acceptance.rs `
-            apps/desktop/app/src/bin/verify_updater_artifact.rs `
-            apps/desktop/app/tests/updater_artifact.rs `
-            apps/desktop/app/tests/windows_acceptance.rs `
-            apps/desktop/app/tests/windows_lifecycle.rs
+          cargo fmt --manifest-path apps/desktop/Cargo.toml --package brawltome-desktop --package brawltome-events -- --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo clippy --locked --manifest-path apps/desktop/Cargo.toml -p brawltome-desktop -p brawltome-events --all-targets --no-deps -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

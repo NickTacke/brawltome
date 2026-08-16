@@ -98,7 +98,8 @@ pub struct DetectionHandle {
 impl DetectionHandle {
     pub async fn stop(self) -> Result<(), DetectionError> {
         let _ = self.stop_tx.send(());
-        self.join.await
+        self.join
+            .await
             .map_err(|e| DetectionError::StartFailed(format!("join failed: {e}")))?;
         Ok(())
     }
@@ -157,7 +158,10 @@ mod tests {
             opponent_bhids: vec![2],
         });
         let json = serde_json::to_string(&event).unwrap();
-        assert!(json.starts_with(r#"{"type":"match_started""#), "got: {json}");
+        assert!(
+            json.starts_with(r#"{"type":"match_started""#),
+            "got: {json}"
+        );
     }
 
     #[test]
@@ -179,7 +183,9 @@ mod tests {
 
     #[test]
     fn game_event_detached_serializes_with_type_tag_and_reason() {
-        let event = GameEvent::Detached(DetachedPayload { reason: DetachReason::ProcessGone });
+        let event = GameEvent::Detached(DetachedPayload {
+            reason: DetachReason::ProcessGone,
+        });
         let json = serde_json::to_string(&event).unwrap();
         assert_eq!(json, r#"{"type":"detached","reason":"process_gone"}"#);
     }
@@ -194,7 +200,9 @@ mod tests {
 
     #[test]
     fn game_event_detached_handle_invalid_round_trips() {
-        let original = GameEvent::Detached(DetachedPayload { reason: DetachReason::HandleInvalid });
+        let original = GameEvent::Detached(DetachedPayload {
+            reason: DetachReason::HandleInvalid,
+        });
         let json = serde_json::to_string(&original).unwrap();
         let parsed: GameEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, original);
@@ -219,7 +227,10 @@ mod tests {
     fn game_event_local_player_found_round_trips() {
         let original = GameEvent::LocalPlayerFound(LocalPlayerFoundPayload { bhid: 42 });
         let json = serde_json::to_string(&original).unwrap();
-        assert!(json.contains(r#""type":"local_player_found""#), "got: {json}");
+        assert!(
+            json.contains(r#""type":"local_player_found""#),
+            "got: {json}"
+        );
         assert!(json.contains(r#""bhid":42"#), "got: {json}");
         let parsed: GameEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, original);
@@ -243,7 +254,9 @@ mod tests {
                 let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel();
                 let join = tokio::spawn(async move {
                     for event in scripted {
-                        if stop_rx.try_recv().is_ok() { return; }
+                        if stop_rx.try_recv().is_ok() {
+                            return;
+                        }
                         let _ = events.send(event).await;
                     }
                 });
@@ -255,22 +268,31 @@ mod tests {
         let svc = FakeDetection {
             scripted: vec![
                 GameEvent::Scanning(ScanningPayload),
-                GameEvent::MatchEnded(MatchEndedPayload { local_player_bhid: 7 }),
+                GameEvent::MatchEnded(MatchEndedPayload {
+                    local_player_bhid: 7,
+                }),
             ],
         };
-        let handle = svc.start(
-            DetectionConfig {
-                target_process: "Test.exe".into(),
-                poll_interval_ms: 100,
-            },
-            tx,
-        ).expect("start should succeed");
+        let handle = svc
+            .start(
+                DetectionConfig {
+                    target_process: "Test.exe".into(),
+                    poll_interval_ms: 100,
+                },
+                tx,
+            )
+            .expect("start should succeed");
 
         let first = rx.recv().await.expect("first event");
         assert_eq!(first, GameEvent::Scanning(ScanningPayload));
 
         let second = rx.recv().await.expect("second event");
-        assert_eq!(second, GameEvent::MatchEnded(MatchEndedPayload { local_player_bhid: 7 }));
+        assert_eq!(
+            second,
+            GameEvent::MatchEnded(MatchEndedPayload {
+                local_player_bhid: 7
+            })
+        );
 
         handle.stop().await.expect("stop should succeed");
     }
