@@ -42,17 +42,16 @@ describe('observability deployment contract', () => {
       scripts?: Record<string, string>
     }
 
-    expect(packageJson.scripts?.['observability:deploy']).toBe('bash infra/observability/deploy-via-dokploy.sh')
-    expect(packageJson.scripts?.['observability:network-preflight']).toBe('sh infra/observability/networks/ensure.sh')
-    expect(packageJson.scripts?.['observability:verify-rendered-topology']).toBe(
-      'bun infra/observability/verify-rendered-topology.ts',
-    )
-    expect(packageJson.scripts?.['observability:grafana-tunnel']).toBeUndefined()
+    expect(packageJson.scripts?.['infra:app:check']).toContain('infra/app/verify-rendered-topology.ts')
+    expect(packageJson.scripts?.['infra:app:storage-preflight']).toBe('sh infra/app/storage/verify-postgres-mount.sh')
+    expect(packageJson.scripts?.['infra:observability:check']).toContain('sh infra/observability/validate.sh')
+    expect(packageJson.scripts?.['infra:observability:deploy']).toBe('bash infra/observability/deploy-via-dokploy.sh')
+    expect(Object.keys(packageJson.scripts ?? {}).some((name) => name.startsWith('observability:') || name.startsWith('v3:'))).toBe(false)
 
     const deploymentScript = read('deploy-via-dokploy.sh')
     expect(deploymentScript).toContain('curl --silent --show-error --fail-with-body --config -')
     expect(deploymentScript).toContain('compose.getConvertedCompose')
-    expect(deploymentScript.indexOf('observability:verify-rendered-topology')).toBeLessThan(
+    expect(deploymentScript.indexOf('bun infra/observability/verify-rendered-topology.ts')).toBeLessThan(
       deploymentScript.indexOf('api_post compose.deploy'),
     )
     expect(Bun.spawnSync(['bash', '-n', deploy('deploy-via-dokploy.sh')]).exitCode).toBe(0)

@@ -563,7 +563,7 @@ describe('dead-letter operations', () => {
     writeFileSync(join(secretRoot, 'postgres_dead_letter_password'), rolePassword, { mode: 0o400 })
 
     const configured = Bun.spawn(
-      ['sh', resolve(import.meta.dir, '../../../../deploy/v3/postgres/configure-dead-letter-role.sh')],
+      ['sh', resolve(import.meta.dir, '../../../../infra/app/postgres/configure-dead-letter-role.sh')],
       {
         env: {
           ...process.env,
