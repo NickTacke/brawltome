@@ -7,7 +7,6 @@ import { createPostgresCareerPlayers, createPostgresRankedPlayers } from '@brawl
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
-import { initGameData, verifyTurnstileResult } from '@brawltome/shared'
 import { createPostgresStatistics } from '@brawltome/statistics/composition'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
@@ -23,6 +22,7 @@ import {
   verifyRefreshTrust,
 } from './auth/refresh-trust-cookie'
 import { createAuthRoutes } from './auth/routes'
+import { verifyTurnstileResult } from './auth/turnstile'
 import { requestWithVerifiedClientIp } from './client-ip'
 import { createHealthRoutes } from './health-routes'
 import { createPostgresReadiness } from './postgres-readiness'
@@ -72,20 +72,11 @@ const ranking = createPostgresRanking(databaseUrl)
 const statistics = createPostgresStatistics(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
 const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationInventory)
-let gameDataReady = false
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
 
 const lifecycle = createRuntimeLifecycle({
   ...runtimeConfig,
-  readinessProbes: [
-    { name: 'postgres-schema', check: postgresReadiness.check },
-    {
-      name: 'game-data',
-      check: async () => {
-        if (!gameDataReady) throw new Error('game data is not initialized')
-      },
-    },
-  ],
+  readinessProbes: [{ name: 'postgres-schema', check: postgresReadiness.check }],
   stopAdmission: () => {
     void server.current?.stop(false)
   },
@@ -112,7 +103,6 @@ const lifecycle = createRuntimeLifecycle({
 })
 
 const sharedCtx = {
-  db,
   telemetry,
   playerReferenceQueries,
   discoveryQueries: discovery,
@@ -306,23 +296,6 @@ const instrumentedFetch = instrumentHttpHandler(
 )
 server.current = Bun.serve({ port, fetch: instrumentedFetch })
 lifecycle.markReady()
-
-async function initializeGameData(): Promise<void> {
-  while (!lifecycle.signal.aborted && !gameDataReady) {
-    const finishWork = lifecycle.startWork()
-    if (!finishWork) return
-    try {
-      await initGameData(db)
-      gameDataReady = true
-    } catch (error) {
-      telemetry.logger.error('api.game_data.initialization_failed', error)
-    } finally {
-      finishWork()
-    }
-    if (!gameDataReady) await Bun.sleep(1_000)
-  }
-}
-void initializeGameData()
 
 let shutdownRequested = false
 function requestShutdown(): void {

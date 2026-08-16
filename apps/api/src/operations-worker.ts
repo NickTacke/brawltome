@@ -4,9 +4,8 @@ import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { BhApiClient, type BhApiClientOptions, createBhApiRequestQueue } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan/composition'
-import { closeDatabase, db } from '@brawltome/database'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
-import { createLegendReferenceIndex, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
+import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
 import {
   createPostgresCareerPlayers,
   createPostgresPlayerDiscoverySource,
@@ -50,6 +49,17 @@ if (!connectionString) throw new Error('DATABASE_URL is required')
 const configuredApiKey = process.env.BRAWLHALLA_API_KEY
 if (!configuredApiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 const apiKey: string = configuredApiKey
+const legendReferences = createLegendReferenceIndex(
+  legends
+    .filter(({ displayName, weaponOne, weaponTwo }) => displayName && weaponOne && weaponTwo)
+    .map((legend) => ({
+      legendId: legend.heroId,
+      legendNameKey: legendSlug(legend.heroId, legend.displayName),
+      bioName: legend.displayName,
+      weaponOne: legend.weaponOne,
+      weaponTwo: legend.weaponTwo,
+    })),
+)
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
@@ -120,7 +130,6 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'accounts-postgres', close: accounts.close },
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'players-career-postgres', close: careerPlayers.close },
-    { name: 'database-postgres', close: closeDatabase },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
@@ -347,16 +356,6 @@ try {
               },
             )
           } else {
-            const legendRecords = await db.query.legend.findMany()
-            const references = createLegendReferenceIndex(
-              legendRecords.map((legend) => ({
-                legendId: legend.legendId,
-                legendNameKey: legendSlug(legend.legendId, legend.legendNameKey),
-                bioName: legend.bioName,
-                weaponOne: legend.weaponOne,
-                weaponTwo: legend.weaponTwo,
-              })),
-            )
             await refreshCanonicalCareerPlayer(
               careerPlayers,
               { getStats: (brawlhallaId, options) => admittedBhapi.getPlayerStats(brawlhallaId, options) },
@@ -370,8 +369,8 @@ try {
                 section: 'stats',
               },
               (legendId, legendNameKey) => {
-                const byId = references.getById(legendId)
-                const byKey = references.getByKey(legendNameKey)
+                const byId = legendReferences.getById(legendId)
+                const byKey = legendReferences.getByKey(legendNameKey)
                 if (!byId || !byKey || byId.legendId !== byKey.legendId || byId.legendNameKey !== byKey.legendNameKey) {
                   return null
                 }

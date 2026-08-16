@@ -25,7 +25,6 @@
         "@brawltome/ranking": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
-        "@brawltome/shared": "workspace:*",
         "@brawltome/statistics": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
@@ -225,18 +224,6 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/shared": {
-      "name": "@brawltome/shared",
-      "dependencies": {
-        "@brawltome/bhapi": "workspace:*",
-        "@brawltome/database": "workspace:*",
-        "@brawltome/game-data": "workspace:*",
-        "drizzle-orm": "^0.39.0",
-      },
-      "devDependencies": {
-        "typescript": "^5.7.0",
-      },
-    },
     "packages/telemetry": {
       "name": "@brawltome/telemetry",
       "dependencies": {
@@ -404,8 +391,6 @@
     "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/contexts/refresh-operations"],
 
     "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/contexts/request-admission"],
-
-    "@brawltome/shared": ["@brawltome/shared@workspace:packages/shared"],
 
     "@brawltome/statistics": ["@brawltome/statistics@workspace:packages/contexts/statistics"],
 

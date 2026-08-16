@@ -32,7 +32,6 @@ COPY apps/discord-bot/package.json apps/discord-bot/
 COPY apps/web/package.json apps/web/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
-COPY packages/shared/package.json packages/shared/
 COPY packages/telemetry/package.json packages/telemetry/
 COPY packages/ui/package.json packages/ui/
 COPY packages/contexts/accounts/package.json packages/contexts/accounts/

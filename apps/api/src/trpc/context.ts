@@ -1,6 +1,5 @@
 import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanRepo } from '@brawltome/clan'
-import type { Database } from '@brawltome/database'
 import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
 import type { PlayerValhallanQueries, RankingQueries } from '@brawltome/ranking'
@@ -10,7 +9,6 @@ import type { CareerWeaponUsageQueries, StatisticsHistoryQueries, StatisticsQuer
 import type { Telemetry } from '@brawltome/telemetry'
 
 export interface Context {
-  db: Database
   telemetry: Telemetry
   playerReferenceQueries: PlayerReferenceQueries
   discoveryQueries: DiscoveryQueries
