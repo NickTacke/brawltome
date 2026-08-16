@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const repositoryRoot = resolve(import.meta.dir, '../../..')
-const wrapper = resolve(repositoryRoot, 'deploy/observability/deploy-via-dokploy.sh')
+const wrapper = resolve(repositoryRoot, 'infra/observability/deploy-via-dokploy.sh')
 const temporaryDirectories: string[] = []
 const commit = 'a'.repeat(40)
 const sourceRef = `observability-v3-${commit}`
@@ -28,7 +28,7 @@ function fixture() {
 cat >/dev/null
 printf '%s\n' "$*" >> "$MOCK_CURL_LOG"
 case "$*" in
-  *compose.one*) printf '%s' '{"command":"compose --parallel 1 -p brawltome-observability-bc1eng -f ./deploy/observability/compose.yml up -d --build --remove-orphans --force-recreate","sourceType":"github","branch":"${sourceRef}","customGitBranch":"stale-inert-ref"}' ;;
+  *compose.one*) printf '%s' '{"command":"compose --parallel 1 -p brawltome-observability-bc1eng -f ./infra/observability/compose.yml up -d --build --remove-orphans --force-recreate","sourceType":"github","branch":"${sourceRef}","customGitBranch":"stale-inert-ref"}' ;;
   *domain.byComposeId*) printf '%s' '[{"host":"observability.brawltome.app","path":"/","port":3000,"https":true,"certificateType":"letsencrypt","serviceName":"grafana","domainType":"compose","internalPath":"/","stripPath":false,"forwardAuthEnabled":false}]' ;;
   *compose.getConvertedCompose*) printf '%s' '"services: {}"' ;;
   *compose.fetchSourceType*) printf '%s' '{}' ;;
