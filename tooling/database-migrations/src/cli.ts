@@ -7,4 +7,4 @@ if (!connectionString) {
 }
 
 const applied = await migratePostgres(connectionString, globalMigrationInventory)
-console.log(applied === 0 ? 'V3 migrations are up to date.' : `Applied ${applied} V3 migration(s).`)
+console.log(applied === 0 ? 'Migrations are up to date.' : `Applied ${applied} migration(s).`)

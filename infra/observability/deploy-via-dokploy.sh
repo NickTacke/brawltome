@@ -113,7 +113,7 @@ rendered=$(
       PROMETHEUS_RETENTION_SIZE=9GB \
       docker compose --file - config --format json
 )
-printf '%s' "$rendered" | BRAWLTOME_NETWORK_NAME=brawltome bun run observability:verify-rendered-topology
+printf '%s' "$rendered" | BRAWLTOME_NETWORK_NAME=brawltome bun infra/observability/verify-rendered-topology.ts
 
 verify_remote_ref
 verify_dokploy_metadata
