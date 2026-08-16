@@ -210,6 +210,7 @@ services:
       - --collector.disable-defaults
       - --collector.filesystem
       - --collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$
+      - --collector.textfile
       - --collector.textfile.directory=/textfile
     volumes:
       - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/prometheus:/storage/prometheus:ro
