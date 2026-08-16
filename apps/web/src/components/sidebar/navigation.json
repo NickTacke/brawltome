@@ -1,8 +1,0 @@
-[
-  { "label": "Home", "href": "/", "status": "live" },
-  { "label": "Statistics", "href": "/stats", "status": "soon" },
-  { "label": "Matches", "href": "/matches", "status": "soon" },
-  { "label": "Learn", "href": "/learn", "status": "soon" },
-  { "label": "Tournaments", "href": "/tournaments", "status": "soon" },
-  { "label": "Feed", "href": "/feed", "status": "soon" }
-]

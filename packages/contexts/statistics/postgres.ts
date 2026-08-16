@@ -1776,12 +1776,5 @@ export function createPostgresStatistics(
     },
   }
 
-  return {
-    ...tracer,
-    async close() {
-      await client.end()
-    },
-  }
+  return { ...tracer, close: () => client.end() }
 }
-
-export type PostgresStatistics = ReturnType<typeof createPostgresStatistics>

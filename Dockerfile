@@ -48,7 +48,6 @@ COPY packages/game-data/package.json packages/game-data/
 COPY packages/contracts/package.json packages/contracts/
 COPY tooling/architecture/package.json tooling/architecture/
 COPY tooling/database-migrations/package.json tooling/database-migrations/
-COPY tooling/launch-parity/package.json tooling/launch-parity/
 RUN bun install --frozen-lockfile
 
 FROM base AS build

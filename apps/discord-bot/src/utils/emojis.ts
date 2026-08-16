@@ -46,23 +46,9 @@ export function getEmoji(name: string, fallback = ''): string {
   return fallback
 }
 
-export function getLogo(): string {
-  return getEmoji('logo', '🎮')
-}
-
 export function getBannerEmoji(tier: string | null): string {
   const baseTier = tier?.split(' ')[0]?.toLowerCase() || 'unranked'
   return getEmoji(`banner_${baseTier}`, getTierFallback(baseTier))
-}
-
-export function getAvatarEmoji(legendNameKey: string): string {
-  const key = legendNameKey?.toLowerCase().replace(/\s+/g, '_') || ''
-  return getEmoji(`avatar_${key}`, '👤')
-}
-
-export function getWeaponEmoji(weapon: string): string {
-  const key = weapon?.toLowerCase().replace(/\s+/g, '_') || ''
-  return getEmoji(`weapon_${key}`, '⚔️')
 }
 
 function getTierFallback(tier: string): string {
@@ -79,16 +65,8 @@ function getTierFallback(tier: string): string {
   return fallbacks[tier] || '➖'
 }
 
-export function emojisLoaded(): boolean {
-  return emojiCache !== null && emojiCache.size > 0
-}
-
 export function getEmojiCount(): number {
   return emojiCache?.size || 0
-}
-
-export function clearEmojiCache(): void {
-  emojiCache = null
 }
 
 export function getEmojiCache(): Map<string, DiscordEmoji> | null {
