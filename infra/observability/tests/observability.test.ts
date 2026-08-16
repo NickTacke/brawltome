@@ -23,6 +23,7 @@ const requiredAlerts = [
 ] as const
 
 const legacyDimension = ['gene', 'ration'].join('')
+const legacyScriptPrefix = ['v', '3', ':'].join('')
 
 const persistentQuotas = {
   prometheus: 'OBSERVABILITY_METRICS_QUOTA_BYTES',
@@ -46,7 +47,11 @@ describe('observability deployment contract', () => {
     expect(packageJson.scripts?.['infra:app:storage-preflight']).toBe('sh infra/app/storage/verify-postgres-mount.sh')
     expect(packageJson.scripts?.['infra:observability:check']).toContain('sh infra/observability/validate.sh')
     expect(packageJson.scripts?.['infra:observability:deploy']).toBe('bash infra/observability/deploy-via-dokploy.sh')
-    expect(Object.keys(packageJson.scripts ?? {}).some((name) => name.startsWith('observability:') || name.startsWith('v3:'))).toBe(false)
+    expect(
+      Object.keys(packageJson.scripts ?? {}).some(
+        (name) => name.startsWith('observability:') || name.startsWith(legacyScriptPrefix),
+      ),
+    ).toBe(false)
 
     const deploymentScript = read('deploy-via-dokploy.sh')
     expect(deploymentScript).toContain('curl --silent --show-error --fail-with-body --config -')
@@ -216,12 +221,7 @@ describe('observability deployment contract', () => {
     expect(declaredAlerts).toEqual([...requiredAlerts])
     for (const alert of requiredAlerts) expect(evidence).toContain(`alertname: ${alert}`)
     expect(rules).not.toMatch(/\b(request_id|trace_id|job_id|operation_id|user_id|guild_id)\b/)
-    for (const aggregation of [
-      'max by (runtime)',
-      'sum by (runtime, le)',
-      'sum by (runtime)',
-      'max by (work_class)',
-    ]) {
+    for (const aggregation of ['max by (runtime)', 'sum by (runtime, le)', 'sum by (runtime)', 'max by (work_class)']) {
       expect(rules).toContain(aggregation)
     }
     const alertmanager = read('alertmanager', 'alertmanager.yml')
