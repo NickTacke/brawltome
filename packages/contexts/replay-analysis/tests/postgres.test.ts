@@ -5,7 +5,7 @@ import { ActiveReplayJobError, type ReplayAnalysisJobs } from '../index'
 import { createReplayJobs } from '../migrations/0001-create-replay-jobs'
 import { createPostgresReplayAnalysisJobs } from '../postgres'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
 const databaseName = `brawltome_replay_analysis_${process.pid}_${randomUUID().replaceAll('-', '')}`
 const accountId = randomUUID()

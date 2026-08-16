@@ -4,7 +4,7 @@ import { MAX_PINNED_PLAYERS, accountsMigrationInventory, createPostgresAccounts 
 import postgres from 'postgres'
 import { migratePostgres } from '../src/postgres'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
 const hasDedicatedServer = configuredServer?.startsWith(dedicatedServer) ?? false
 

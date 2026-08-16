@@ -25,24 +25,29 @@ function renderCompose(profile: 'discord' | 'operator') {
         build?: { target?: string }
         cap_drop?: string[]
         depends_on?: Record<string, { condition?: string }>
+        deploy?: { replicas?: number; resources?: { limits?: { memory?: string; pids?: number } } }
         environment?: Record<string, string>
+        healthcheck?: { test?: string[] }
         init?: boolean
         networks?: Record<string, unknown>
         ports?: unknown[]
         profiles?: string[]
         read_only?: boolean
         restart?: string
-        secrets?: Array<{ source: string }>
+        secrets?: Array<{ source: string; target?: string }>
         security_opt?: string[]
+        stop_grace_period?: string
         user?: string
       }
     >
+    secrets: Record<string, { file?: string; name?: string }>
   }
 }
 
 describe('application profile topology', () => {
   test('keeps Discord internal, hardened, and dependent on API readiness', () => {
-    const discord = renderCompose('discord').services['discord-bot']
+    const rendered = renderCompose('discord')
+    const discord = rendered.services['discord-bot']
 
     expect(discord).toMatchObject({
       build: { target: 'discord-bot' },
@@ -55,18 +60,32 @@ describe('application profile topology', () => {
       environment: { API_URL: 'http://api:3000', DISCORD_CLIENT_ID: '123456789012345678' },
     })
     expect(Object.keys(discord.networks ?? {}).sort()).toEqual(['application', 'observability'])
-    expect(discord.secrets?.map(({ source }) => source).sort()).toEqual([
-      'discord_internal_api_secret',
-      'discord_token',
-      'internal_api_secret',
-      'metrics_scrape_secret',
-      'otel_authorization',
+    expect(discord.healthcheck?.test?.join(' ')).toContain('http://localhost:3002/health/ready')
+    expect(discord.stop_grace_period).toBe('1m10s')
+    expect(discord.deploy).toMatchObject({
+      replicas: 1,
+      resources: { limits: { memory: '536870912', pids: 192 } },
+    })
+    expect(discord.secrets?.toSorted((left, right) => left.source.localeCompare(right.source))).toEqual([
+      {
+        source: 'discord_internal_api_secret',
+        target: '/run/secrets/discord_internal_api_secret',
+      },
+      { source: 'discord_token', target: '/run/secrets/discord_token' },
+      { source: 'internal_api_secret', target: '/run/secrets/internal_api_secret' },
+      { source: 'metrics_scrape_secret', target: '/run/secrets/metrics_scrape_secret' },
+      { source: 'otel_authorization', target: '/run/secrets/otel_authorization' },
     ])
+    expect(rendered.secrets.discord_token).toEqual({
+      file: '/var/lib/brawltome-secrets/discord-token',
+      name: 'brawltome_discord_token',
+    })
     expect(discord.ports ?? []).toHaveLength(0)
   })
 
   test('keeps dead-letter provisioning and CLI operator-only', () => {
-    const services = renderCompose('operator').services
+    const rendered = renderCompose('operator')
+    const services = rendered.services
     const role = services['dead-letter-role']
     const cli = services['dead-letter-cli']
 
@@ -82,9 +101,13 @@ describe('application profile topology', () => {
       depends_on: { migration: { condition: 'service_completed_successfully' } },
     })
     expect(Object.keys(role.networks ?? {})).toEqual(['application'])
-    expect(role.secrets?.map(({ source }) => source).sort()).toEqual([
-      'postgres_dead_letter_password',
-      'postgres_owner_password',
+    expect(role.deploy).toMatchObject({ resources: { limits: { memory: '134217728', pids: 64 } } })
+    expect(role.secrets?.toSorted((left, right) => left.source.localeCompare(right.source))).toEqual([
+      {
+        source: 'postgres_dead_letter_password',
+        target: '/run/secrets/postgres_dead_letter_password',
+      },
+      { source: 'postgres_owner_password', target: '/run/secrets/postgres_owner_password' },
     ])
 
     expect(cli).toMatchObject({
@@ -98,10 +121,29 @@ describe('application profile topology', () => {
       depends_on: { 'dead-letter-role': { condition: 'service_completed_successfully' } },
     })
     expect(Object.keys(cli.networks ?? {})).toEqual(['application'])
-    expect(cli.secrets?.map(({ source }) => source).sort()).toEqual([
-      'dead_letter_database_url',
-      'dead_letter_operator_tokens',
+    expect(cli.deploy).toMatchObject({ resources: { limits: { memory: '134217728', pids: 64 } } })
+    expect(cli.secrets?.toSorted((left, right) => left.source.localeCompare(right.source))).toEqual([
+      { source: 'dead_letter_database_url', target: '/run/secrets/dead_letter_database_url' },
+      {
+        source: 'dead_letter_operator_tokens',
+        target: '/run/secrets/dead_letter_operator_tokens',
+      },
     ])
+    expect(services).not.toHaveProperty('discord-bot')
+    expect(rendered.secrets).toMatchObject({
+      dead_letter_database_url: {
+        file: '/var/lib/brawltome-secrets/dead-letter-database-url',
+        name: 'brawltome_dead_letter_database_url',
+      },
+      dead_letter_operator_tokens: {
+        file: '/var/lib/brawltome-secrets/dead-letter-operator-tokens',
+        name: 'brawltome_dead_letter_operator_tokens',
+      },
+      postgres_dead_letter_password: {
+        file: '/var/lib/brawltome-secrets/postgres-dead-letter-password',
+        name: 'brawltome_postgres_dead_letter_password',
+      },
+    })
     expect(cli.environment ?? {}).not.toHaveProperty('DEAD_LETTER_OPERATOR_TOKEN')
     expect(cli.ports ?? []).toHaveLength(0)
   })
