@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dir, '../../..')
-const runner = resolve(root, 'deploy/v3/run-with-secrets.sh')
+const runner = resolve(root, 'infra/app/run-with-secrets.sh')
 const temporaryDirectories: string[] = []
 
 function fixture(secretValues: Record<string, string>) {

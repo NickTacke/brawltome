@@ -8,7 +8,7 @@ import {
 } from '../../../apps/api/src/operations-worker-config'
 
 const root = resolve(import.meta.dir, '../../..')
-const deployment = (...parts: string[]) => resolve(root, 'deploy/v3', ...parts)
+const deployment = (...parts: string[]) => resolve(root, 'infra/app', ...parts)
 
 function renderCompose(profiles = ['discord']) {
   const result = Bun.spawnSync({

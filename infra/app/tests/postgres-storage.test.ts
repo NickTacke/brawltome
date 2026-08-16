@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dir, '../../..')
-const preflight = resolve(root, 'deploy/v3/storage/verify-postgres-mount.sh')
+const preflight = resolve(root, 'infra/app/storage/verify-postgres-mount.sh')
 const temporaryDirectories: string[] = []
 
 function fixture(overrides: Record<string, string> = {}) {

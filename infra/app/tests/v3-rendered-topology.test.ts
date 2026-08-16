@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { verifyV3RenderedTopology } from '../src/verify-v3-rendered-topology'
+import { verifyV3RenderedTopology } from '../verify-rendered-topology'
 
 const root = resolve(import.meta.dir, '../../..')
 
 function renderedTopology(): Record<string, unknown> {
   const result = Bun.spawnSync({
-    cmd: ['docker', 'compose', '-f', 'deploy/v3/compose.yml', 'config', '--format', 'json'],
+    cmd: ['docker', 'compose', '-f', 'infra/app/compose.yml', 'config', '--format', 'json'],
     cwd: root,
     env: {
       ...process.env,
