@@ -163,7 +163,9 @@ describe('application profile topology', () => {
     expect(
       dockerfile.match(/org\.opencontainers\.image\.source="https:\/\/github\.com\/NickTacke\/brawltome"/g),
     ).toHaveLength(3)
-    expect(dockerfile.match(/org\.opencontainers\.image\.revision=""/g)).toHaveLength(3)
+    expect(dockerfile).not.toContain('org.opencontainers.image.created=""')
+    expect(dockerfile).not.toContain('org.opencontainers.image.revision=""')
+    expect(dockerfile).not.toContain('org.opencontainers.image.version=""')
     expect(dockerignore).toContain('**/.env*')
     expect(postgresInit).toContain('NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS')
     expect(postgresInit).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE brawltome_owner')
