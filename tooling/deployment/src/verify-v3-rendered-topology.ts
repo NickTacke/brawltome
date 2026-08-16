@@ -19,6 +19,7 @@ const expectedSecretFiles: Record<string, string> = {
   discord_internal_api_secret: 'discord-internal-api-secret',
   migration_database_url: 'migration-database-url',
   internal_api_secret: 'internal-api-secret',
+  matches_preview_token: 'matches-preview-token',
   metrics_scrape_secret: 'metrics-scrape-secret',
   otel_authorization: 'otel-authorization',
   postgres_owner_password: 'postgres-owner-password',
@@ -44,7 +45,7 @@ const expectedServiceSecrets: Record<string, string[]> = {
   migration: ['migration_database_url'],
   'v3-operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
   postgres: ['postgres_owner_password', 'postgres_runtime_password'],
-  'v3-web': ['internal_api_secret', 'metrics_scrape_secret', 'otel_authorization'],
+  'v3-web': ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
 }
 
 export function verifyV3RenderedTopology(document: unknown): string[] {
@@ -233,6 +234,7 @@ function checkSecretEnvironment(violations: string[], name: string, value: unkno
     'DISCORD_INTERNAL_API_SECRET',
     'DISCORD_TOKEN',
     'INTERNAL_API_SECRET',
+    'MATCHES_PREVIEW_TOKEN',
     'METRICS_SCRAPE_SECRET',
     'OTEL_EXPORTER_OTLP_AUTHORIZATION',
     'POSTGRES_DEAD_LETTER_PASSWORD',

@@ -18,10 +18,7 @@ function fixture(secretValues: Record<string, string>) {
   for (const [name, value] of Object.entries(secretValues))
     writeFileSync(join(secrets, name), `${value}\n`, { mode: 0o400 })
 
-  const executable = join(bin, 'bun')
-  writeFileSync(
-    executable,
-    `#!/bin/sh
+  const executable = `#!/bin/sh
 printf 'args=%s\\n' "$*"
 printf 'database=%s\\n' "\${DATABASE_URL:-}"
 printf 'dead-letter-database=%s\\n' "\${DEAD_LETTER_DATABASE_URL:-}"
@@ -29,14 +26,18 @@ printf 'dead-letter-tokens=%s\\n' "\${DEAD_LETTER_OPERATOR_TOKENS:-}"
 printf 'discord-client-secret=%s\\n' "\${DISCORD_CLIENT_SECRET:-}"
 printf 'discord-internal=%s\\n' "\${DISCORD_INTERNAL_API_SECRET:-}"
 printf 'internal=%s\\n' "\${INTERNAL_API_SECRET:-}"
+printf 'matches-preview=%s\\n' "\${MATCHES_PREVIEW_TOKEN:-}"
 printf 'metrics=%s\\n' "\${METRICS_SCRAPE_SECRET:-}"
 printf 'otel=%s\\n' "\${OTEL_EXPORTER_OTLP_AUTHORIZATION:-}"
 printf 'trust=%s\\n' "\${REFRESH_TRUST_COOKIE_SECRET:-}"
 printf 'replay-bridge=%s\\n' "\${REPLAY_BRIDGE_SECRET:-}"
 printf 'turnstile=%s\\n' "\${TURNSTILE_SECRET_KEY:-}"
-`,
-  )
-  chmodSync(executable, 0o755)
+`
+  for (const runtime of ['bun', 'node']) {
+    const path = join(bin, runtime)
+    writeFileSync(path, executable)
+    chmodSync(path, 0o755)
+  }
   return { bin, secrets }
 }
 
@@ -65,6 +66,25 @@ describe('V3 secret bootstrap', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('args=run apps/api/src/serve.ts')
+    for (const value of Object.values(values)) expect(result.stdout).toContain(value)
+    expect(result.stdout.split('\n')[0]).not.toContain('secret')
+  })
+
+  test('exports web secrets including the private matches preview token', () => {
+    const values = {
+      internal_api_secret: 'internal-secret-value',
+      matches_preview_token: 'matches-preview-token-value-at-least-32-bytes',
+      metrics_scrape_secret: 'metrics-secret-value',
+      otel_authorization: 'Bearer otel-secret-value',
+    }
+    const { bin, secrets } = fixture(values)
+    const result = spawnSync('sh', [runner, 'web'], {
+      encoding: 'utf8',
+      env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },
+    })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('args=apps/web/server.js')
     for (const value of Object.values(values)) expect(result.stdout).toContain(value)
     expect(result.stdout.split('\n')[0]).not.toContain('secret')
   })
