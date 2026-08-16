@@ -15,7 +15,7 @@ services:
       - postgres_runtime_password
     volumes:
       - type: bind
-        source: ${V3_POSTGRES_DATA_ROOT:?Set the dedicated V3 PostgreSQL data root}
+        source: ${POSTGRES_DATA_ROOT:?Set the dedicated PostgreSQL data root}
         target: /var/lib/postgresql/data
     tmpfs:
       - /run/postgresql:rw,noexec,nosuid,nodev,uid=70,gid=70,mode=0750,size=16m
@@ -103,7 +103,7 @@ services:
           memory: 128M
           pids: 64
 
-  v3-dead-letter-cli:
+  dead-letter-cli:
     profiles: [operator]
     build:
       context: ../..
@@ -131,7 +131,7 @@ services:
           memory: 128M
           pids: 64
 
-  v3-api:
+  api:
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -139,7 +139,7 @@ services:
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
       CORS_ORIGIN: https://brawltome.app
-      DISCORD_CLIENT_ID: ${V3_DISCORD_CLIENT_ID:?Set the Discord OAuth client ID}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Set the Discord OAuth client ID}
       DISCORD_REDIRECT_URI: https://api.brawltome.app/auth/discord/callback
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -192,17 +192,17 @@ services:
         reservations:
           memory: 256M
 
-  v3-web:
+  web:
     build:
       context: ../..
       dockerfile: Dockerfile
       target: web
       args:
         NEXT_PUBLIC_API_URL: https://api.brawltome.app
-        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${V3_TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
     environment:
       HOSTNAME: 0.0.0.0
-      INTERNAL_API_URL: http://v3-api:3000
+      INTERNAL_API_URL: http://api:3000
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PORT: "3000"
@@ -216,7 +216,7 @@ services:
       - application
       - observability
     depends_on:
-      v3-api:
+      api:
         condition: service_healthy
     healthcheck:
       test:
@@ -246,7 +246,7 @@ services:
         reservations:
           memory: 192M
 
-  v3-operations-worker:
+  operations-worker:
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -307,15 +307,15 @@ services:
         reservations:
           memory: 256M
 
-  v3-discord-bot:
+  discord-bot:
     profiles: [discord]
     build:
       context: ../..
       dockerfile: Dockerfile
       target: discord-bot
     environment:
-      API_URL: http://v3-api:3000
-      DISCORD_CLIENT_ID: ${V3_DISCORD_CLIENT_ID:-deferred}
+      API_URL: http://api:3000
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-deferred}
       DISCORD_METRICS_PORT: "3002"
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -331,7 +331,7 @@ services:
       - application
       - observability
     depends_on:
-      v3-api:
+      api:
         condition: service_healthy
     healthcheck:
       test:
@@ -364,63 +364,63 @@ services:
 networks:
   application:
     external: true
-    name: brawltome-v3
+    name: brawltome
   observability:
     external: true
     name: brawltome-observability
 
 secrets:
   brawlhalla_api_key:
-    name: brawltome-v3_brawlhalla_api_key
-    file: /var/lib/brawltome-v3-secrets/brawlhalla-api-key
+    name: brawltome_brawlhalla_api_key
+    file: /var/lib/brawltome-secrets/brawlhalla-api-key
   dead_letter_database_url:
-    name: brawltome-v3_dead_letter_database_url
-    file: /var/lib/brawltome-v3-secrets/dead-letter-database-url
+    name: brawltome_dead_letter_database_url
+    file: /var/lib/brawltome-secrets/dead-letter-database-url
   dead_letter_operator_tokens:
-    name: brawltome-v3_dead_letter_operator_tokens
-    file: /var/lib/brawltome-v3-secrets/dead-letter-operator-tokens
+    name: brawltome_dead_letter_operator_tokens
+    file: /var/lib/brawltome-secrets/dead-letter-operator-tokens
   discord_client_secret:
-    name: brawltome-v3_discord_client_secret
-    file: /var/lib/brawltome-v3-secrets/discord-client-secret
+    name: brawltome_discord_client_secret
+    file: /var/lib/brawltome-secrets/discord-client-secret
   discord_internal_api_secret:
-    name: brawltome-v3_discord_internal_api_secret
-    file: /var/lib/brawltome-v3-secrets/discord-internal-api-secret
+    name: brawltome_discord_internal_api_secret
+    file: /var/lib/brawltome-secrets/discord-internal-api-secret
   discord_token:
-    name: brawltome-v3_discord_token
-    file: /var/lib/brawltome-v3-secrets/discord-token
+    name: brawltome_discord_token
+    file: /var/lib/brawltome-secrets/discord-token
   internal_api_secret:
-    name: brawltome-v3_internal_api_secret
-    file: /var/lib/brawltome-v3-secrets/internal-api-secret
+    name: brawltome_internal_api_secret
+    file: /var/lib/brawltome-secrets/internal-api-secret
   matches_preview_token:
-    name: brawltome-v3_matches_preview_token
-    file: /var/lib/brawltome-v3-secrets/matches-preview-token
+    name: brawltome_matches_preview_token
+    file: /var/lib/brawltome-secrets/matches-preview-token
   metrics_scrape_secret:
-    name: brawltome-v3_metrics_scrape_secret
-    file: /var/lib/brawltome-v3-secrets/metrics-scrape-secret
+    name: brawltome_metrics_scrape_secret
+    file: /var/lib/brawltome-secrets/metrics-scrape-secret
   migration_database_url:
-    name: brawltome-v3_migration_database_url
-    file: /var/lib/brawltome-v3-secrets/migration-database-url
+    name: brawltome_migration_database_url
+    file: /var/lib/brawltome-secrets/migration-database-url
   otel_authorization:
-    name: brawltome-v3_otel_authorization
-    file: /var/lib/brawltome-v3-secrets/otel-authorization
+    name: brawltome_otel_authorization
+    file: /var/lib/brawltome-secrets/otel-authorization
   postgres_dead_letter_password:
-    name: brawltome-v3_postgres_dead_letter_password
-    file: /var/lib/brawltome-v3-secrets/postgres-dead-letter-password
+    name: brawltome_postgres_dead_letter_password
+    file: /var/lib/brawltome-secrets/postgres-dead-letter-password
   postgres_owner_password:
-    name: brawltome-v3_postgres_owner_password
-    file: /var/lib/brawltome-v3-secrets/postgres-owner-password
+    name: brawltome_postgres_owner_password
+    file: /var/lib/brawltome-secrets/postgres-owner-password
   postgres_runtime_password:
-    name: brawltome-v3_postgres_runtime_password
-    file: /var/lib/brawltome-v3-secrets/postgres-runtime-password
+    name: brawltome_postgres_runtime_password
+    file: /var/lib/brawltome-secrets/postgres-runtime-password
   refresh_trust_cookie_secret:
-    name: brawltome-v3_refresh_trust_cookie_secret
-    file: /var/lib/brawltome-v3-secrets/refresh-trust-cookie-secret
+    name: brawltome_refresh_trust_cookie_secret
+    file: /var/lib/brawltome-secrets/refresh-trust-cookie-secret
   replay_bridge_secret:
-    name: brawltome-v3_replay_bridge_secret
-    file: /var/lib/brawltome-v3-secrets/replay-bridge-secret
+    name: brawltome_replay_bridge_secret
+    file: /var/lib/brawltome-secrets/replay-bridge-secret
   runtime_database_url:
-    name: brawltome-v3_runtime_database_url
-    file: /var/lib/brawltome-v3-secrets/runtime-database-url
+    name: brawltome_runtime_database_url
+    file: /var/lib/brawltome-secrets/runtime-database-url
   turnstile_secret_key:
-    name: brawltome-v3_turnstile_secret_key
-    file: /var/lib/brawltome-v3-secrets/turnstile-secret-key
+    name: brawltome_turnstile_secret_key
+    file: /var/lib/brawltome-secrets/turnstile-secret-key
