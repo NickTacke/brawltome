@@ -187,12 +187,8 @@ describe('V3 dependency architecture', () => {
     expect(result.appliedExceptions.map(({ id }) => id).sort()).toEqual(
       [
         'v2-api-router-export',
-        'v2-api-shared-package',
         'v2-discord-api-router-app-import',
         'v2-discord-api-router-undeclared',
-        'v2-shared-bhapi-adapter',
-        'v2-shared-database-adapter',
-        'v2-shared-game-data-foundation',
         'v2-web-api-router-client-app-import',
         'v2-web-api-router-client-undeclared',
         'v2-web-api-router-server-app-import',

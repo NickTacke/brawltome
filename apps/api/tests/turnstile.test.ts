@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { verifyTurnstile, verifyTurnstileResult } from '@brawltome/shared'
+import { verifyTurnstile, verifyTurnstileResult } from '../src/auth/turnstile'
 
 describe('verifyTurnstile', () => {
   test('returns true for valid token', async () => {
