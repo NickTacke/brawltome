@@ -52,7 +52,7 @@ const expectedSecretFiles: Record<string, string> = {
 }
 
 const expectedServiceSecrets: Record<string, string[]> = {
-  'api': [
+  api: [
     'discord_client_secret',
     'discord_internal_api_secret',
     'internal_api_secret',
@@ -66,7 +66,7 @@ const expectedServiceSecrets: Record<string, string[]> = {
   migration: ['migration_database_url'],
   'operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
   postgres: ['postgres_owner_password', 'postgres_runtime_password'],
-  'web': ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
+  web: ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
 }
 
 export function verifyAppRenderedTopology(document: unknown): string[] {
@@ -159,7 +159,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     }
   }
 
-  const api = services['api']
+  const api = services.api
   if (isRecord(api)) {
     if (readPath(api, 'environment', 'CORS_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must allow only the final public web origin')
@@ -176,7 +176,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     }
   }
 
-  const web = services['web']
+  const web = services.web
   if (isRecord(web)) {
     if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
       violations.push('web must use the internal API origin for server calls')
