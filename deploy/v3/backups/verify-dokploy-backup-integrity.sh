@@ -115,7 +115,13 @@ computed=$(<"$hash_file")
 
 sidecar="$latest.sha256"
 expected="$computed  $latest"
-if existing=$("$RCLONE_BIN" cat "$remote/$sidecar" 2>/dev/null); then
+sidecar_listing=$("$RCLONE_BIN" lsf --files-only --include "$sidecar" "$remote")
+if [[ -n $sidecar_listing && $sidecar_listing != "$sidecar" ]]; then
+  printf '%s\n' 'Latest backup checksum sidecar lookup was ambiguous' >&2
+  exit 1
+fi
+if [[ $sidecar_listing == "$sidecar" ]]; then
+  existing=$("$RCLONE_BIN" cat "$remote/$sidecar")
   [[ $existing =~ ^[a-f0-9]{64}\ \ [^[:space:]]+$ && $existing == "$expected" ]] || {
     printf '%s\n' 'Latest backup checksum sidecar does not match' >&2
     exit 1

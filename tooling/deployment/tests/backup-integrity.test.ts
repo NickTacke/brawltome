@@ -34,11 +34,17 @@ command=$1
 shift
 case "$command" in
   lsf)
-    for path in "$FAKE_REMOTE"/*.sql.gz; do [[ -e $path ]] && basename "$path"; done
+    if [[ " $* " == *".sha256"* ]]; then
+      for argument in "$@"; do
+        if [[ $argument == *.sha256 && -e "$FAKE_REMOTE/$argument" ]]; then printf '%s\\n' "$argument"; fi
+      done
+    else
+      for path in "$FAKE_REMOTE"/*.sql.gz; do [[ -e $path ]] && basename "$path"; done
+    fi
     ;;
   cat)
     path=\${1##*/}
-    /bin/cat "$FAKE_REMOTE/$path"
+    [[ -e "$FAKE_REMOTE/$path" ]] && /bin/cat "$FAKE_REMOTE/$path"
     ;;
   rcat)
     [[ $1 == --immutable ]]
