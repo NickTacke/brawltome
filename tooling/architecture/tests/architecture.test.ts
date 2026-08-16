@@ -11,6 +11,12 @@ function rulesFor(repository: Parameters<typeof checkArchitecture>[0]) {
 }
 
 describe('dependency architecture', () => {
+  it('contains policy only for real workspaces', () => {
+    expect(currentArchitecturePolicy.roles).not.toHaveProperty('@brawltome/identity')
+    expect(currentArchitecturePolicy.allowedExports).not.toHaveProperty('@brawltome/identity')
+    expect(currentArchitecturePolicy.capabilityDependencies).not.toHaveProperty('@brawltome/identity')
+  })
+
   it('accepts dependencies allowed by workspace roles and capability allow-lists', () => {
     expect(checkArchitecture(validFixture, policy).violations).toEqual([])
   })
