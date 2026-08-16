@@ -2,15 +2,15 @@
 
 import { posix } from 'node:path'
 
-const expectedServices = ['migration', 'postgres', 'v3-api', 'v3-operations-worker', 'v3-web'] as const
-const observabilityServices = new Set(['v3-api', 'v3-operations-worker', 'v3-web'])
+const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web'] as const
+const observabilityServices = new Set(['api', 'operations-worker', 'web'])
 
 const expectedBuildTargets: Record<string, string> = {
   migration: 'migration',
   postgres: 'postgres',
-  'v3-api': 'api',
-  'v3-operations-worker': 'operations-worker',
-  'v3-web': 'web',
+  'api': 'api',
+  'operations-worker': 'operations-worker',
+  'web': 'web',
 }
 
 const expectedSecretFiles: Record<string, string> = {
@@ -31,7 +31,7 @@ const expectedSecretFiles: Record<string, string> = {
 }
 
 const expectedServiceSecrets: Record<string, string[]> = {
-  'v3-api': [
+  'api': [
     'discord_client_secret',
     'discord_internal_api_secret',
     'internal_api_secret',
@@ -43,12 +43,12 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'turnstile_secret_key',
   ],
   migration: ['migration_database_url'],
-  'v3-operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
+  'operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
   postgres: ['postgres_owner_password', 'postgres_runtime_password'],
-  'v3-web': ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
+  'web': ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
 }
 
-export function verifyV3RenderedTopology(document: unknown): string[] {
+export function verifyAppRenderedTopology(document: unknown): string[] {
   if (!isRecord(document)) return ['rendered Compose must be an object']
   const services = isRecord(document.services) ? document.services : {}
   const networks = isRecord(document.networks) ? document.networks : {}
@@ -60,8 +60,8 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
   checkExactKeys(violations, 'secrets', secrets, Object.keys(expectedSecretFiles))
 
   const application = networks.application
-  if (!isRecord(application) || application.external !== true || application.name !== 'brawltome-v3') {
-    violations.push('application must be external network brawltome-v3')
+  if (!isRecord(application) || application.external !== true || application.name !== 'brawltome') {
+    violations.push('application must be external network brawltome')
   }
   const observability = networks.observability
   if (!isRecord(observability) || observability.external !== true || observability.name !== 'brawltome-observability') {
@@ -106,7 +106,7 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     )
   }
 
-  const worker = services['v3-operations-worker']
+  const worker = services['operations-worker']
   if (isRecord(worker)) {
     if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1800') {
       violations.push('operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes')
@@ -137,7 +137,7 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     }
   }
 
-  const api = services['v3-api']
+  const api = services['api']
   if (isRecord(api)) {
     if (readPath(api, 'environment', 'CORS_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must allow only the final public web origin')
@@ -154,9 +154,9 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     }
   }
 
-  const web = services['v3-web']
+  const web = services['web']
   if (isRecord(web)) {
-    if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://v3-api:3000') {
+    if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
       violations.push('web must use the internal API origin for server calls')
     }
     if (readPath(web, 'build', 'args', 'NEXT_PUBLIC_API_URL') !== 'https://api.brawltome.app') {
@@ -171,8 +171,8 @@ export function verifyV3RenderedTopology(document: unknown): string[] {
     const secret = secrets[key]
     if (
       !isRecord(secret) ||
-      secret.name !== `brawltome-v3_${key}` ||
-      secret.file !== `/var/lib/brawltome-v3-secrets/${file}`
+      secret.name !== `brawltome_${key}` ||
+      secret.file !== `/var/lib/brawltome-secrets/${file}`
     ) {
       violations.push(`${key} must use the approved host secret file`)
     }
@@ -212,7 +212,7 @@ function checkRuntimeHardening(violations: string[], name: string, service: Reco
     violations.push(`${name} must not override the image command or entrypoint`)
   }
   if (name === 'postgres') {
-    if (!hasBind(service.volumes, '/srv/brawltome-v3/postgres', '/var/lib/postgresql/data')) {
+    if (!hasBind(service.volumes, '/srv/brawltome/postgres', '/var/lib/postgresql/data')) {
       violations.push('postgres must bind only the approved data filesystem')
     }
   } else if (service.volumes !== undefined && (!Array.isArray(service.volumes) || service.volumes.length > 0)) {
@@ -311,12 +311,12 @@ function sameValues(left: string[], right: string[]): boolean {
 
 if (import.meta.main) {
   try {
-    const violations = verifyV3RenderedTopology(JSON.parse(await Bun.stdin.text()))
-    for (const violation of violations) console.error(`v3-rendered-topology: ${violation}`)
+    const violations = verifyAppRenderedTopology(JSON.parse(await Bun.stdin.text()))
+    for (const violation of violations) console.error(`app-rendered-topology: ${violation}`)
     if (violations.length > 0) process.exit(1)
-    console.log('Rendered V3 topology verified.')
+    console.log('Rendered application topology verified.')
   } catch {
-    console.error('v3-rendered-topology: input must be valid Docker Compose JSON')
+    console.error('app-rendered-topology: input must be valid Docker Compose JSON')
     process.exit(1)
   }
 }
