@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const repositoryRoot = resolve(import.meta.dir, '../../..')
-const preflight = join(repositoryRoot, 'deploy/observability/storage/verify-quota-mounts.sh')
+const preflight = join(repositoryRoot, 'infra/observability/storage/verify-quota-mounts.sh')
 const temporaryDirectories: string[] = []
 
 function executable(path: string, content: string): void {

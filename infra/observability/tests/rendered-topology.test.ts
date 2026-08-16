@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
-import { verifyRenderedTopology } from '../src/verify-rendered-topology'
+import { verifyRenderedTopology } from '../verify-rendered-topology'
 
-const verifier = resolve(import.meta.dir, '../src/verify-rendered-topology.ts')
+const verifier = resolve(import.meta.dir, '../verify-rendered-topology.ts')
 
 type FixtureService = {
   command?: string[]
