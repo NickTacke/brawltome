@@ -2,165 +2,150 @@
   <img src="apps/web/public/images/logo.png" alt="BrawlTome" width="400" />
 </p>
 
-<p align="center">Brawlhalla player tracking: stats, rankings, clans, and rating history.</p>
+<p align="center">
+  Brawlhalla player tracking for stats, rankings, clans, rating history, and live opponent insights.
+</p>
 
 <p align="center">
-  <a href="https://brawltome.app">Web App</a> · <a href="#discord-bot">Discord Bot</a> · <a href="#desktop-overlay">Desktop Overlay</a>
+  <a href="https://github.com/NickTacke/brawltome/actions/workflows/ci.yml"><img src="https://github.com/NickTacke/brawltome/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/NickTacke/brawltome" alt="GPL-3.0 license" /></a>
+</p>
+
+<p align="center">
+  <a href="https://brawltome.app">Web App</a> ·
+  <a href="#discord-bot">Discord Bot</a> ·
+  <a href="#desktop-overlay">Desktop Overlay</a>
 </p>
 
 ## Features
 
-- **Player Profiles**: ranked stats, legend breakdowns, weapon usage, rating history charts
-- **Global Leaderboards**: 1v1 and 2v2 rankings across all regions with sorting and pagination
-- **Clan Pages**: member lists with ratings, XP tracking, rank info
-- **Name History**: tracks player name changes as searchable aliases
-- **Discord Bot**: `/player`, `/clan`, `/status` slash commands with rich embeds
-- **Desktop Overlay**: Tauri app that detects in-game opponents via memory scanning and displays stats in real-time
-- **Background Sync**: Janitor service keeps top rankings fresh, discovers new players, and confirms Valhallan tiers
+- **Player profiles:** ranked stats, legends, weapons, and rating history
+- **Leaderboards:** 1v1, 2v2, Solo 2v2, and 3v3 with region filters and pagination
+- **Clans and discovery:** clan pages and searchable player aliases and former names
+- **Discord bot:** slash commands for player, clan, and service information
+- **Desktop overlay:** live Windows opponent detection and player insights
+- **Durable refresh operations:** PostgreSQL-backed refresh, ranking, discovery, and projection work
+- **Replay analysis preview:** backend replay processing coordinated through the replay bridge
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│              CLIENT LAYER                       │
-│   Web (Next.js)  │  Desktop (Tauri)  │  Discord │
-└────────┬──────────────────┬──────────┬──────────┘
-         │  tRPC + SuperJSON│          │
-         ▼                  ▼          ▼
-┌─────────────────────────────────────────────────┐
-│          API SERVER (Hono + tRPC)               │
-└──┬──────────────────────┬───────────────────────┘
-   │                      │
-   ▼                      ▼
-PostgreSQL          Brawlhalla API
-   ▲
-   │
-   │    ┌───────────────────────┐
-   └────│  OPERATIONS WORKER    │
-        │  Leased durable work  │
-        └───────────────────────┘
+```mermaid
+flowchart LR
+  Web[Web / Next.js] -->|tRPC + HTTP| API[Hono + tRPC API]
+  Desktop[Windows desktop overlay] -->|HTTP| API
+  Discord[Discord bot] -->|tRPC| API
+  Bridge[Replay bridge] <-->|claims and results| API
+  API <--> PG[(PostgreSQL)]
+  Worker[Operations worker] <--> PG
+  PG -. LISTEN / NOTIFY .-> Worker
+  Worker --> BH[Brawlhalla API]
+  Bridge <--> Processor[Replay processor]
 ```
 
-- **API Server** durably accepts operations and admission decisions in PostgreSQL
-- **Operations Worker** fairly claims fenced leases and executes work at least once
-- **PostgreSQL** owns jobs, schedules, retries, dead letters, deduplication, and source quotas
-- **LISTEN plus polling** provides optional low-latency wakeups without weakening recovery correctness
+- PostgreSQL owns durable operations, schedules, retries, dead letters, deduplication, and source quotas.
+- The operations worker claims fenced leases and performs external Brawlhalla work at least once.
+- `LISTEN`/`NOTIFY` improves wake-up latency; polling preserves recovery correctness.
 
-## Tech Stack
+### Technology
 
-| Layer | Technology |
+| Area | Technology |
 | --- | --- |
-| Runtime | [Bun](https://bun.sh/) 1.2+ |
-| Backend | [Hono](https://hono.dev/) + [tRPC](https://trpc.io/) 11 |
-| Frontend | [Next.js](https://nextjs.org/) 16 (App Router, RSC) |
-| Desktop | [Tauri](https://tauri.app/) 2 (Rust + React) |
-| Discord | [discord.js](https://discord.js.org/) v14 |
-| Database and operational state | PostgreSQL 16 + [Drizzle ORM](https://orm.drizzle.team/) |
-| Styling | Tailwind CSS 4 + Shadcn UI (Radix) |
-| Linting | [Biome](https://biomejs.dev/) |
+| Runtime | Bun 1.3.14 |
+| API | Hono 4 + tRPC 11 |
+| Web | Next.js 16 + React 19 |
+| Desktop | Tauri 2 |
+| Discord | discord.js 14 |
+| Data | PostgreSQL 16 + Drizzle ORM |
+| UI | Tailwind CSS 4 + Radix-based shared components |
+| Telemetry | OpenTelemetry |
+| Tooling | Biome |
 
-## Structure
+### Repository layout
 
-```
-apps/
-  api/              # Hono + tRPC server and worker entrypoints
-  web/              # Next.js frontend
-  desktop/          # Tauri desktop overlay
-  discord-bot/      # Discord bot
-packages/
-  database/         # Drizzle schema, migrations, client
-  bhapi/            # Brawlhalla API client + rate limiter
-  shared/           # Shared constants (TTLs, thresholds)
-  ui/               # Shared UI components (Radix + Tailwind)
-```
+| Path | Purpose |
+| --- | --- |
+| `apps/` | API and worker, web app, Discord bot, Windows desktop overlay, and replay bridge |
+| `packages/contexts/` | Accounts, players, clans, rankings, discovery, refresh operations, replay analysis, and statistics capabilities |
+| `packages/` | Database and Brawlhalla adapters, contracts, game data, telemetry, and shared UI |
+| `infra/` | Application, observability, backup, storage, and host-service infrastructure with its checks |
+| `tooling/` | Cross-repository architecture policy and database migration commands |
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) v1.2+
-- [Docker](https://www.docker.com/) (for PostgreSQL)
-- Brawlhalla API key ([dev.brawlhalla.com](https://dev.brawlhalla.com/))
+- [Bun](https://bun.sh/) 1.3.14
+- [Docker](https://www.docker.com/) with Compose
+- A Brawlhalla API key from [dev.brawlhalla.com](https://dev.brawlhalla.com/)
+- Git submodule access only for optional desktop development
 
-### Setup
+### Local setup
 
 ```bash
-git clone https://github.com/NickTacke/brawltome
+git clone https://github.com/NickTacke/brawltome.git
 cd brawltome
 bun install
+cp .env.example .env
 docker compose up -d
 ```
 
-Copy `.env.example` and fill in your values:
+Set `BRAWLHALLA_API_KEY` in `.env`. Generate independent values for `INTERNAL_API_SECRET`, `REFRESH_TRUST_COOKIE_SECRET`, and `REPLAY_BRIDGE_SECRET`:
 
 ```bash
-# apps/api/.env
-DATABASE_URL=postgres://brawltome:brawltome@localhost:5432/brawltome
-BRAWLHALLA_API_KEY=your-key
-INTERNAL_API_SECRET=<openssl rand -hex 32>
-
-# apps/web/.env
-NEXT_PUBLIC_API_URL=http://localhost:3000
-INTERNAL_API_SECRET=<same as above>
-
-# apps/discord-bot/.env (optional)
-API_URL=http://localhost:3000
-DISCORD_TOKEN=your-token
-DISCORD_CLIENT_ID=your-client-id
-INTERNAL_API_SECRET=<same as above>
+openssl rand -hex 32
 ```
 
-Initialize the database:
+Run migrations, then start the API, operations worker, and web app in separate terminals. The explicit ports keep the web app, worker health endpoint, and optional Discord metrics endpoint from colliding:
 
 ```bash
-bun run db:generate
 bun run db:migrate
+PORT=3000 bun run dev:api
+HEALTH_PORT=3003 bun run dev:operations-worker
+PORT=3001 bun run dev:web
 ```
 
-### Development
+The API listens on <http://localhost:3000> and the web app on <http://localhost:3001>.
+
+### Database commands
+
+| Command | Purpose |
+| --- | --- |
+| `bun run db:generate` | Generate migration files while authoring schema changes |
+| `bun run db:migrate` | Apply committed database migrations |
+| `bun run db:push` | Push schema changes directly during local development |
+
+## Discord Bot
+
+Set `DISCORD_TOKEN` and an independently generated `DISCORD_INTERNAL_API_SECRET`. The bot and API must share both `DISCORD_INTERNAL_API_SECRET` and `INTERNAL_API_SECRET`. Set `DISCORD_CLIENT_ID` when registering slash commands or initializing application emojis.
 
 ```bash
-bun run dev:api                 # API server (localhost:3000)
-bun run dev:operations-worker   # PostgreSQL operations worker
-bun run dev:web                 # Frontend (localhost:3001)
-bun run dev:discord-bot  # Discord bot
-bun run dev:desktop      # Desktop overlay (Tauri)
+bun run dev:discord-bot
 ```
 
-### Commands
+## Desktop Overlay
+
+Desktop development requires Windows. The detection submodule is private, so configure repository access before initializing it:
 
 ```bash
-bun test                 # Run all tests
-bun run typecheck        # Type-check all packages
-bun run lint             # Lint (Biome)
-bun run format           # Format (Biome)
-bun run db:generate      # Generate migration from schema changes
-bun run db:migrate       # Run migrations
-bun run db:push          # Push schema directly (dev only)
+git submodule update --init --recursive
+bun run dev:desktop
+```
+
+## Contributor checks
+
+```bash
+bun run lint
+bun run typecheck
+bun test
+bun run architecture:check
+bun run infra:app:check
+bun run infra:observability:check
 ```
 
 ## Deployment
 
-The Dockerfile provides multi-stage builds with three targets:
+The root multi-stage `Dockerfile` builds the deployable images. Production application infrastructure and its checks live in `infra/app`; observability infrastructure lives in `infra/observability`.
 
-```bash
-docker build --target api -t brawltome-api .
-docker build --target operations-worker -t brawltome-operations-worker .
-docker build --target discord-bot -t brawltome-discord-bot .
-```
+## License
 
-Multiple worker instances can run simultaneously. PostgreSQL leases, fencing, and skip-locked claims coordinate work safely across replicas.
-
-## Discord Bot
-
-Slash commands:
-
-| Command | Description |
-| --- | --- |
-| `/player <name>` | Search and display player stats |
-| `/clan <name>` | Search and display clan info |
-| `/status` | API health check |
-
-## Desktop Overlay
-
-The Tauri app scans game memory to detect opponents and displays their stats as an always-on-top overlay during matches. Requires the desktop app to be built separately via `bun run dev:desktop`.
+BrawlTome is licensed under the [GNU General Public License v3.0](LICENSE).
