@@ -19,10 +19,9 @@ scrape_configs:
       X-Metrics-Secret:
         files: [/run/secrets/metrics_scrape_secret]
     static_configs:
-      - targets: ["v3-api:3000"]
+      - targets: ["api:3000"]
         labels:
           runtime: api
-          generation: v3
 
   - job_name: operations-worker
     metrics_path: /metrics
@@ -30,10 +29,9 @@ scrape_configs:
       X-Metrics-Secret:
         files: [/run/secrets/metrics_scrape_secret]
     static_configs:
-      - targets: ["v3-operations-worker:3001"]
+      - targets: ["operations-worker:3001"]
         labels:
           runtime: operations-worker
-          generation: v3
 
   - job_name: web
     metrics_path: /api/metrics
@@ -41,24 +39,21 @@ scrape_configs:
       X-Metrics-Secret:
         files: [/run/secrets/metrics_scrape_secret]
     static_configs:
-      - targets: ["v3-web:3000"]
+      - targets: ["web:3000"]
         labels:
           runtime: web
-          generation: v3
 
   - job_name: readiness
     metrics_path: /probe
     params:
       module: [http_2xx]
     static_configs:
-      - targets: ["http://v3-api:3000/health/ready"]
+      - targets: ["http://api:3000/health/ready"]
         labels:
           runtime: api
-          generation: v3
-      - targets: ["http://v3-operations-worker:3001/health/ready"]
+      - targets: ["http://operations-worker:3001/health/ready"]
         labels:
           runtime: operations-worker
-          generation: v3
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

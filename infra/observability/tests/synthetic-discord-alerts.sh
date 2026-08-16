@@ -23,7 +23,7 @@ payload() {
     $names | split("\n") | map(select(length > 0)) | map({
       labels: {
         alertname: ., severity: "warning", service: "brawltome", signal: (ascii_downcase),
-        generation: "v3", failure_category: "synthetic_failure",
+        failure_category: "synthetic_failure",
         request_id: "must-not-reach-discord", trace_id: "must-not-reach-discord"
       },
       annotations: { summary: (. + " synthetic evidence") },
@@ -48,7 +48,6 @@ payload '2099-01-01T00:00:00Z' | curl -fsS -H 'content-type: application/json' -
 wait_for_events "$alert_count" 60
 firing=$(curl -fsS http://127.0.0.1:18080/events)
 printf '%s' "$firing" | grep -q 'FIRING'
-printf '%s' "$firing" | grep -q 'Generation: v3'
 printf '%s' "$firing" | grep -q 'Category: synthetic_failure'
 for alert in $alerts; do
 	printf '%s' "$firing" | grep -q "$alert"
