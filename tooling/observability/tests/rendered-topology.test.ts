@@ -6,6 +6,7 @@ import { verifyRenderedTopology } from '../src/verify-rendered-topology'
 const verifier = resolve(import.meta.dir, '../src/verify-rendered-topology.ts')
 
 type FixtureService = {
+  command?: string[]
   configs?: Array<{ target: string }>
   environment?: Record<string, string>
   image: string
@@ -15,7 +16,7 @@ type FixtureService = {
   secrets?: Array<{ source: string; target: string }>
   tmpfs?: string[]
   user: string
-  volumes?: Array<{ target: string }>
+  volumes?: Array<{ type?: string; source?: string; target: string; read_only?: boolean }>
 }
 
 type TopologyFixture = {
@@ -134,7 +135,21 @@ function validTopology(): TopologyFixture {
         secrets: [{ source: 'grafana_admin_password', target: '/run/secrets/grafana_admin_password' }],
       },
       loki: service('loki', ['observability']),
-      'node-exporter': service('node-exporter', ['observability']),
+      'node-exporter': {
+        ...service('node-exporter', ['observability']),
+        command: [
+          '--collector.disable-defaults',
+          '--collector.filesystem',
+          '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+          '--collector.textfile.directory=/textfile',
+        ],
+        volumes: [
+          ['/srv/brawltome-observability/prometheus', '/storage/prometheus'],
+          ['/srv/brawltome-observability/loki', '/storage/loki'],
+          ['/srv/brawltome-observability/tempo', '/storage/tempo'],
+          ['/srv/brawltome-observability/backup-integrity', '/textfile'],
+        ].map(([source, target]) => ({ type: 'bind', source, target, read_only: true })),
+      },
       'otel-collector': service(
         'otel-collector',
         ['application', 'observability'],
@@ -160,6 +175,8 @@ describe('rendered Dokploy observability topology', () => {
     topology.services.prometheus.networks.default = null
     topology.services.prometheus.labels = { 'traefik.enable': 'true' }
     topology.services.grafana.ports = [{ published: '3000', target: 3000 }]
+    topology.services['node-exporter'].volumes = [{ target: '/textfile', read_only: false }]
+    topology.services['node-exporter'].command?.push('--collector.systemd')
     topology.networks.default.name = 'local-project-bridge'
 
     expect(verifyRenderedTopology(topology)).toEqual(
@@ -167,6 +184,8 @@ describe('rendered Dokploy observability topology', () => {
         'prometheus networks must be exactly: application, observability',
         'prometheus must not have Traefik labels',
         'grafana must not publish ports',
+        'node-exporter command must match the approved collector set exactly',
+        'node-exporter volumes must match the approved read-only host paths exactly',
         'default must be external network brawltome-observability',
       ]),
     )

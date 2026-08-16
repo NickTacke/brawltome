@@ -1,0 +1,11 @@
+[Unit]
+Description=Verify each recurring BrawlTome PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=brawltome-backup-integrity.service
+
+[Install]
+WantedBy=timers.target

@@ -117,8 +117,48 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
 
   const grafana = services.grafana
   if (isRecord(grafana)) checkGrafana(violations, grafana)
+  const nodeExporter = services['node-exporter']
+  if (isRecord(nodeExporter)) checkNodeExporter(violations, nodeExporter)
 
   return violations
+}
+
+function checkNodeExporter(violations: string[], nodeExporter: Record<string, unknown>): void {
+  const expectedCommand = [
+    '--collector.disable-defaults',
+    '--collector.filesystem',
+    '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+    '--collector.textfile.directory=/textfile',
+  ]
+  if (
+    !Array.isArray(nodeExporter.command) ||
+    nodeExporter.command.some((value) => typeof value !== 'string') ||
+    !sameValues(nodeExporter.command, expectedCommand)
+  ) {
+    violations.push('node-exporter command must match the approved collector set exactly')
+  }
+  const expectedVolumes = [
+    ['/srv/brawltome-observability/prometheus', '/storage/prometheus'],
+    ['/srv/brawltome-observability/loki', '/storage/loki'],
+    ['/srv/brawltome-observability/tempo', '/storage/tempo'],
+    ['/srv/brawltome-observability/backup-integrity', '/textfile'],
+  ]
+  const volumes = Array.isArray(nodeExporter.volumes) ? nodeExporter.volumes : []
+  const volumesMatch =
+    volumes.length === expectedVolumes.length &&
+    expectedVolumes.every(([source, target]) =>
+      volumes.some(
+        (volume) =>
+          isRecord(volume) &&
+          volume.type === 'bind' &&
+          volume.source === source &&
+          volume.target === target &&
+          volume.read_only === true,
+      ),
+    )
+  if (!volumesMatch) {
+    violations.push('node-exporter volumes must match the approved read-only host paths exactly')
+  }
 }
 
 function checkGrafana(violations: string[], grafana: Record<string, unknown>): void {

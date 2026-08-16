@@ -301,6 +301,113 @@ tests:
         alertname: HttpErrorRateHigh
         exp_alerts: []
 
+  - name: backup integrity failure and recovery
+    interval: 1m
+    input_series:
+      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+        values: "0 0 0 0 0 0 1 1"
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+        values: "0 60 120 180 240 300 360 420"
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+        values: "0 60 120 180 240 300 360 420"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PostgresBackupIntegrityFailed
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              severity: critical
+              service: brawltome
+              signal: backup-integrity
+            exp_annotations:
+              summary: "PostgreSQL backup integrity verification failed"
+              description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+      - eval_time: 6m
+        alertname: PostgresBackupIntegrityFailed
+        exp_alerts: []
+
+  - name: missing backup integrity status metric fires
+    interval: 1m
+    input_series:
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+        values: "0 60 120 180 240 300 360"
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+        values: "0 60 120 180 240 300 360"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PostgresBackupIntegrityFailed
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              severity: critical
+              service: brawltome
+              signal: backup-integrity
+            exp_annotations:
+              summary: "PostgreSQL backup integrity verification failed"
+              description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+
+  - name: missing backup last-run metric fires
+    interval: 1m
+    input_series:
+      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+        values: "1x7"
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+        values: "0 60 120 180 240 300 360"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PostgresBackupIntegrityFailed
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              severity: critical
+              service: brawltome
+              signal: backup-integrity
+            exp_annotations:
+              summary: "PostgreSQL backup integrity verification failed"
+              description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+
+  - name: missing latest verified backup metric fires
+    interval: 1m
+    input_series:
+      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+        values: "1x7"
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+        values: "0 60 120 180 240 300 360"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PostgresBackupIntegrityFailed
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              severity: critical
+              service: brawltome
+              signal: backup-integrity
+            exp_annotations:
+              summary: "PostgreSQL backup integrity verification failed"
+              description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+
+  - name: stale backup verification fires
+    interval: 1h
+    input_series:
+      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+        values: "1x12"
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+        values: "0x12"
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 10h
+        alertname: PostgresBackupIntegrityFailed
+        exp_alerts:
+          - exp_labels:
+              generation: v3
+              severity: critical
+              service: brawltome
+              signal: backup-integrity
+            exp_annotations:
+              summary: "PostgreSQL backup integrity verification failed"
+              description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+
   - name: telemetry storage firing and recovery
     interval: 1m
     input_series:

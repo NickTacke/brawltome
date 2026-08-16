@@ -1,0 +1,33 @@
+[Unit]
+Description=Verify the latest BrawlTome PostgreSQL backup checksum
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/brawltome/backup-integrity.env
+ExecStart=/usr/local/libexec/brawltome-verify-backup-integrity
+User=brawltome-backup-integrity
+Group=brawltome-backup-integrity
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
+RuntimeDirectory=brawltome-backup-integrity
+RuntimeDirectoryMode=0750
+AmbientCapabilities=
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/srv/brawltome-observability/backup-integrity
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+SystemCallArchitectures=native

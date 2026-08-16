@@ -18,6 +18,7 @@ const requiredAlerts = [
   'RefreshFailuresElevated',
   'HttpLatencyHigh',
   'HttpErrorRateHigh',
+  'PostgresBackupIntegrityFailed',
   'TelemetryStorageNearQuota',
 ] as const
 
@@ -83,6 +84,7 @@ describe('observability deployment contract', () => {
         {
           image?: string
           environment?: Record<string, string>
+          command?: string[]
           deploy?: { resources?: { limits?: { cpus?: number; memory?: string; pids?: number } } }
           security_opt?: string[]
           ports?: Array<{
@@ -93,6 +95,13 @@ describe('observability deployment contract', () => {
             target?: number
           }>
           networks?: Record<string, unknown>
+          volumes?: Array<{
+            type?: string
+            source?: string
+            target?: string
+            read_only?: boolean
+            bind?: { create_host_path?: boolean }
+          }>
         }
       >
     }
@@ -142,6 +151,20 @@ describe('observability deployment contract', () => {
     for (const [name, service] of Object.entries(rendered.services)) {
       if (name !== 'grafana') expect(service.networks ?? {}).not.toHaveProperty('default')
     }
+    const nodeExporter = rendered.services['node-exporter']
+    expect(nodeExporter?.command).toEqual([
+      '--collector.disable-defaults',
+      '--collector.filesystem',
+      '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+      '--collector.textfile.directory=/textfile',
+    ])
+    expect(nodeExporter?.volumes).toContainEqual({
+      type: 'bind',
+      source: '/srv/brawltome-observability/backup-integrity',
+      target: '/textfile',
+      read_only: true,
+      bind: { create_host_path: true },
+    })
   }, 20_000)
 
   test('fixes retention and requires explicit quota-backed mounts', () => {
