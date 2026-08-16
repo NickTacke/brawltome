@@ -41,7 +41,7 @@ describe('rendered application topology', () => {
 
   test('rejects preview web origins after final public cutover', () => {
     const topology = renderedTopology()
-    const environment = services(topology)['api'].environment as Record<string, string>
+    const environment = services(topology).api.environment as Record<string, string>
     environment.CORS_ORIGIN = 'https://preview.brawltome.app'
     environment.WEB_ORIGIN = 'https://preview.brawltome.app'
 
@@ -77,8 +77,8 @@ describe('rendered application topology', () => {
     const topology = renderedTopology()
     const current = services(topology)
     current['discord-bot'] = { networks: { application: null } }
-    current['api'].ports = [{ published: '3000', target: 3000 }]
-    current['web'].labels = { 'Traefik.enable': 'true' }
+    current.api.ports = [{ published: '3000', target: 3000 }]
+    current.web.labels = { 'Traefik.enable': 'true' }
     ;(topology.networks as Record<string, unknown>).public = { external: true, name: 'dokploy-network' }
 
     expect(verifyAppRenderedTopology(topology)).toEqual(
@@ -98,7 +98,7 @@ describe('rendered application topology', () => {
     ;(current['operations-worker'].environment as Record<string, string>).OPERATIONS_TOTAL_CONCURRENCY = '1'
     ;(current.postgres.build as Record<string, string>).target = 'api'
     current.postgres.volumes = [{ source: '/', target: '/var/lib/postgresql/data', type: 'bind' }]
-    current['api'].secrets = []
+    current.api.secrets = []
     ;(topology.secrets as Record<string, unknown>).extra = { file: '/tmp/extra' }
 
     expect(verifyAppRenderedTopology(topology)).toEqual(
@@ -116,15 +116,15 @@ describe('rendered application topology', () => {
   test('rejects hardening, raw-secret, and secret-shadowing drift', () => {
     const topology = renderedTopology()
     const current = services(topology)
-    current['api'].cap_add = ['SYS_ADMIN']
-    current['api'].cap_drop = []
-    current['api'].command = ['printenv']
-    current['api'].privileged = true
-    current['api'].user = '0:0'
-    ;(current['api'].environment as Record<string, string>).DATABASE_URL = 'raw-secret'
-    current['api'].tmpfs = ['/run:rw']
-    current['web'].labels = 'traefik.enable=true'
-    current['web'].volumes = [{ source: '/', target: '/run/secrets', type: 'bind' }]
+    current.api.cap_add = ['SYS_ADMIN']
+    current.api.cap_drop = []
+    current.api.command = ['printenv']
+    current.api.privileged = true
+    current.api.user = '0:0'
+    ;(current.api.environment as Record<string, string>).DATABASE_URL = 'raw-secret'
+    current.api.tmpfs = ['/run:rw']
+    current.web.labels = 'traefik.enable=true'
+    current.web.volumes = [{ source: '/', target: '/run/secrets', type: 'bind' }]
 
     expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
@@ -162,8 +162,8 @@ describe('rendered application topology', () => {
   test('rejects malformed service shapes and profile leakage', () => {
     const topology = renderedTopology()
     const current = topology.services as Record<string, unknown>
-    current['api'] = null
-    ;(current['web'] as Record<string, unknown>).ports = {}
+    current.api = null
+    ;(current.web as Record<string, unknown>).ports = {}
 
     expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining(['api must be a service object', 'web must not publish ports']),

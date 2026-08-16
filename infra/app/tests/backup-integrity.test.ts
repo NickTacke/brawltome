@@ -113,9 +113,7 @@ describe('recurring backup integrity verifier', () => {
     expect(`${result.stdout}${result.stderr}`).not.toContain('must-not-appear')
     const failedMetrics = readFileSync(metrics, 'utf8')
     expect(failedMetrics).toContain('brawltome_postgres_backup_integrity_ok 0')
-    expect(failedMetrics).toMatch(
-      /brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds [1-9][0-9]*/,
-    )
+    expect(failedMetrics).toMatch(/brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds [1-9][0-9]*/)
   })
 
   test('publishes failure when required configuration is missing', () => {
