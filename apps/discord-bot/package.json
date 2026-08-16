@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/contracts": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
     "@trpc/client": "^11.0.0",
     "discord.js": "^14.22.0",

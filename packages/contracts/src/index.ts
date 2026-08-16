@@ -150,6 +150,7 @@ export {
   type CareerWeaponUsageOutputContract,
   type CareerWeaponUsageRowContract,
 } from './career-weapon-usage'
+export type { AppRouter } from './trpc'
 export {
   discordPlayerRefreshInputSchema,
   discordUserIdSchema,
