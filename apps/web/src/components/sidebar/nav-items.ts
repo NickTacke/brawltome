@@ -2,8 +2,6 @@ import { BookBookmark, Cup, Gamepad, PieChart, UsersGroupRounded } from '@solar-
 import type { ComponentType, SVGProps } from 'react'
 
 import { HouseOutline } from './icons'
-import { type ShellHref, parseNavigationContract } from './navigation-contract'
-import navigation from './navigation.json'
 
 type NavIcon = ComponentType<SVGProps<SVGSVGElement> & { weight?: string }>
 
@@ -15,18 +13,11 @@ export interface NavItem {
   wip?: boolean
 }
 
-const iconsByHref: Record<ShellHref, NavIcon> = {
-  '/': HouseOutline,
-  '/stats': PieChart as NavIcon,
-  '/matches': Gamepad as NavIcon,
-  '/learn': BookBookmark as NavIcon,
-  '/tournaments': Cup as NavIcon,
-  '/feed': UsersGroupRounded as NavIcon,
-}
-
-export const navItems: NavItem[] = parseNavigationContract(navigation).map((destination) => ({
-  icon: iconsByHref[destination.href],
-  label: destination.label,
-  href: destination.href,
-  wip: destination.status === 'soon',
-}))
+export const navItems: NavItem[] = [
+  { icon: HouseOutline, label: 'Home', href: '/' },
+  { icon: PieChart as NavIcon, label: 'Statistics', href: '/stats', wip: true },
+  { icon: Gamepad as NavIcon, label: 'Matches', href: '/matches', wip: true },
+  { icon: BookBookmark as NavIcon, label: 'Learn', href: '/learn', wip: true },
+  { icon: Cup as NavIcon, label: 'Tournaments', href: '/tournaments', wip: true },
+  { icon: UsersGroupRounded as NavIcon, label: 'Feed', href: '/feed', wip: true },
+]
