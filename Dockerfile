@@ -7,10 +7,10 @@ LABEL org.opencontainers.image.created="" \
       org.opencontainers.image.title="BrawlTome" \
       org.opencontainers.image.url="https://brawltome.app" \
       org.opencontainers.image.version=""
-COPY --chmod=0555 deploy/v3/postgres/10-runtime-role.sh /docker-entrypoint-initdb.d/10-runtime-role.sh
+COPY --chmod=0555 infra/app/postgres/10-runtime-role.sh /docker-entrypoint-initdb.d/10-runtime-role.sh
 
 FROM postgres AS dead-letter-role
-COPY --chmod=0555 deploy/v3/postgres/configure-dead-letter-role.sh /usr/local/bin/configure-dead-letter-role
+COPY --chmod=0555 infra/app/postgres/configure-dead-letter-role.sh /usr/local/bin/configure-dead-letter-role
 ENTRYPOINT ["/usr/local/bin/configure-dead-letter-role"]
 
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS base
@@ -58,33 +58,33 @@ COPY . .
 FROM base AS migration
 COPY --from=build /app .
 USER bun
-ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["migration"]
 
 FROM base AS dead-letter-cli
 COPY --from=build /app .
 USER bun
-ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh", "dead-letter-cli"]
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh", "dead-letter-cli"]
 
 FROM base AS api
 COPY --from=build /app .
 USER bun
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["api"]
 
 FROM base AS operations-worker
 COPY --from=build /app .
 USER bun
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["operations-worker"]
 
 FROM base AS discord-bot
 COPY --from=build /app .
 USER bun
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["discord-bot"]
 
 FROM build AS web-build
@@ -110,8 +110,8 @@ ENV PORT=3000
 COPY --from=web-build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=web-build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=web-build --chown=node:node /app/apps/web/public ./apps/web/public
-COPY --from=web-build --chown=node:node /app/deploy/v3/run-with-secrets.sh ./deploy/v3/run-with-secrets.sh
+COPY --from=web-build --chown=node:node /app/infra/app/run-with-secrets.sh ./infra/app/run-with-secrets.sh
 USER node
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["/bin/sh", "deploy/v3/run-with-secrets.sh"]
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["web"]

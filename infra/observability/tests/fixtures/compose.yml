@@ -9,7 +9,7 @@ services:
     cap_drop: [ALL]
     command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
     volumes:
-      - ../alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ../../alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     secrets:
       - discord_webhook_url
     ports:
@@ -49,4 +49,4 @@ services:
 
 secrets:
   discord_webhook_url:
-    file: ./fixtures/discord-webhook-url
+    file: ./discord-webhook-url

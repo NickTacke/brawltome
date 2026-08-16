@@ -10,7 +10,7 @@ function rulesFor(repository: Parameters<typeof checkArchitecture>[0]) {
   return checkArchitecture(repository, policy).violations.map(({ rule }) => rule)
 }
 
-describe('V3 dependency architecture', () => {
+describe('dependency architecture', () => {
   it('accepts dependencies allowed by workspace roles and capability allow-lists', () => {
     expect(checkArchitecture(validFixture, policy).violations).toEqual([])
   })

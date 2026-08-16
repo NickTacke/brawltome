@@ -191,7 +191,7 @@ afterAll(async () => {
   await admin.end()
 })
 
-describe('real V3 runtime lifecycle', () => {
+describe('real production runtime lifecycle', () => {
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     test(`API ${signal} keeps liveness separate from known-prefix readiness and exits within bounds`, async () => {
       const control = postgres(connectionString, { max: 1 })

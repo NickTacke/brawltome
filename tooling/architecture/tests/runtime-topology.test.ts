@@ -24,7 +24,7 @@ describe('PostgreSQL-only runtime topology', () => {
         '--',
         '.',
         `:(exclude)${thisFile}`,
-        ':(exclude)tooling/deployment/tests/**',
+        ':(exclude)infra/app/tests/**',
         ':(exclude)LICENSE',
       ],
       cwd: root,
@@ -35,26 +35,16 @@ describe('PostgreSQL-only runtime topology', () => {
     expect(result.stdout.toString()).toBe('')
   })
 
-  test('renders one PostgreSQL-backed application topology', () => {
+  test('renders only local PostgreSQL', () => {
     const result = Bun.spawnSync({
-      cmd: ['docker', 'compose', '-f', 'docker-compose.yml', '--profile', 'v3', 'config', '--format', 'json'],
+      cmd: ['docker', 'compose', '--profile', '*', '-f', 'docker-compose.yml', 'config', '--format', 'json'],
       cwd: root,
       stdout: 'pipe',
       stderr: 'pipe',
     })
     expect(result.exitCode, result.stderr.toString()).toBe(0)
-    const topology = JSON.parse(result.stdout.toString()) as {
-      services: Record<string, { depends_on?: Record<string, unknown>; environment?: Record<string, string> }>
-    }
-    expect(Object.keys(topology.services).sort()).toEqual([
-      'api',
-      'discord-bot',
-      'migration',
-      'operations-worker',
-      'postgres',
-    ])
-    expect(topology.services.api.depends_on).toHaveProperty('migration')
-    expect(topology.services['operations-worker'].depends_on).toHaveProperty('migration')
+    const topology = JSON.parse(result.stdout.toString()) as { services: Record<string, unknown> }
+    expect(Object.keys(topology.services)).toEqual(['postgres'])
     expect(JSON.stringify(topology)).not.toContain(forbiddenPort)
     expect(JSON.stringify(topology)).not.toContain(forbiddenEnvironment)
   }, 15_000)
