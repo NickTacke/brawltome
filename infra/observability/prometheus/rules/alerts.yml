@@ -25,7 +25,7 @@ groups:
           description: "The dependency-aware readiness probe has failed for at least two minutes."
 
       - alert: WorkerHeartbeatStale
-        expr: time() - max by (runtime, generation) (worker_heartbeat_timestamp_seconds) > 60
+        expr: time() - max by (runtime) (worker_heartbeat_timestamp_seconds) > 60
         for: 2m
         labels:
           severity: critical
@@ -36,7 +36,7 @@ groups:
           description: "No successful worker loop heartbeat has been observed for more than one minute."
 
       - alert: OldestRunnableJobDelayed
-        expr: max by (generation, work_class) (operation_oldest_pending_age_ms) > 900000
+        expr: max by (work_class) (operation_oldest_pending_age_ms) > 900000
         for: 5m
         labels:
           severity: warning
@@ -47,7 +47,7 @@ groups:
           description: "The oldest runnable operation has exceeded the initial 15-minute operator threshold."
 
       - alert: ScheduleMaterializationLate
-        expr: max by (generation, kind) (schedule_lateness_ms) > 300000
+        expr: max by (kind) (schedule_lateness_ms) > 300000
         for: 5m
         labels:
           severity: warning
@@ -58,7 +58,7 @@ groups:
           description: "An enabled schedule has remained more than five minutes late."
 
       - alert: DeadLettersPresent
-        expr: max by (generation, work_class, kind) (operation_dead_letters) > 0
+        expr: max by (work_class, kind) (operation_dead_letters) > 0
         for: 1m
         labels:
           severity: critical
@@ -69,7 +69,7 @@ groups:
           description: "At least one durable operation is in dead-letter state."
 
       - alert: SourceQuotaNearLimit
-        expr: max by (generation, domain) (source_quota_used) / clamp_min(max by (generation, domain) (source_quota_limit), 1) >= 0.9
+        expr: max by (domain) (source_quota_used) / clamp_min(max by (domain) (source_quota_limit), 1) >= 0.9
         for: 2m
         labels:
           severity: warning
@@ -80,7 +80,7 @@ groups:
           description: "Distributed source admission is close to its fixed window limit."
 
       - alert: RefreshFailuresElevated
-        expr: sum by (generation, kind, failure_category) (increase(refresh_failures_total{failure_category!="admission_deferred"}[15m])) > 2
+        expr: sum by (kind, failure_category) (increase(refresh_failures_total{failure_category!="admission_deferred"}[15m])) > 2
         for: 1m
         labels:
           severity: warning
@@ -91,7 +91,7 @@ groups:
           description: "More than two refresh attempts failed in the last 15 minutes."
 
       - alert: HttpLatencyHigh
-        expr: histogram_quantile(0.95, sum by (runtime, generation, le) (rate(http_server_duration_ms_bucket[5m]))) > 250
+        expr: histogram_quantile(0.95, sum by (runtime, le) (rate(http_server_duration_ms_bucket[5m]))) > 250
         for: 5m
         labels:
           severity: warning
@@ -102,7 +102,7 @@ groups:
           description: "The five-minute HTTP p95 has exceeded the launch threshold."
 
       - alert: HttpErrorRateHigh
-        expr: sum by (runtime, generation) (rate(http_server_requests_total{status_class="5xx"}[5m])) / clamp_min(sum by (runtime, generation) (rate(http_server_requests_total[5m])), 0.001) > 0.01
+        expr: sum by (runtime) (rate(http_server_requests_total{status_class="5xx"}[5m])) / clamp_min(sum by (runtime) (rate(http_server_requests_total[5m])), 0.001) > 0.01
         for: 5m
         labels:
           severity: critical
@@ -114,12 +114,12 @@ groups:
 
       - alert: PostgresBackupIntegrityFailed
         expr: |
-          brawltome_postgres_backup_integrity_ok{generation="v3"} == 0
-          or absent(brawltome_postgres_backup_integrity_ok{generation="v3"})
-          or absent(brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"})
-          or absent(brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"})
-          or time() - brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"} > 28800
-          or time() - brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"} > 28800
+          brawltome_postgres_backup_integrity_ok == 0
+          or absent(brawltome_postgres_backup_integrity_ok)
+          or absent(brawltome_postgres_backup_integrity_last_run_timestamp_seconds)
+          or absent(brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds)
+          or time() - brawltome_postgres_backup_integrity_last_run_timestamp_seconds > 28800
+          or time() - brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds > 28800
         for: 5m
         labels:
           severity: critical

@@ -62,11 +62,11 @@ create_network() {
 	internal=$2
 	if [ "$internal" = true ]; then
 		docker network create --driver overlay --attachable --internal \
-			--label io.brawltome.capability=v3-observability -- "$name" ||
+			--label io.brawltome.capability=observability -- "$name" ||
 			fail "cannot create $name"
 	else
 		docker network create --driver overlay --attachable \
-			--label io.brawltome.capability=v3-observability -- "$name" ||
+			--label io.brawltome.capability=observability -- "$name" ||
 			fail "cannot create $name"
 	fi
 }

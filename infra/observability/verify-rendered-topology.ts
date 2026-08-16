@@ -7,7 +7,7 @@ const approvedHost = 'observability.brawltome.app'
 const expectedServiceNetworks: Record<string, string[]> = {
   alertmanager: ['notifications', 'observability'],
   'blackbox-exporter': ['application'],
-  grafana: ['default', 'dokploy-network'],
+  grafana: ['dokploy-network', 'observability'],
   loki: ['observability'],
   'node-exporter': ['observability'],
   'otel-collector': ['application', 'observability'],
@@ -57,7 +57,7 @@ const expectedSecretFiles: Record<string, string> = {
   otel_ingest_token: '/var/lib/brawltome-observability-secrets/otel-ingest-token',
 }
 
-export function verifyRenderedTopology(document: unknown, applicationNetworkName = 'brawltome-v3'): string[] {
+export function verifyRenderedTopology(document: unknown, applicationNetworkName = 'brawltome'): string[] {
   if (!isRecord(document)) return ['rendered Compose must be an object']
 
   const services = isRecord(document.services) ? document.services : {}
@@ -68,7 +68,6 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
   checkExactKeys(violations, 'services', services, Object.keys(expectedServiceNetworks))
   checkExactKeys(violations, 'networks', networks, [
     'application',
-    'default',
     'dokploy-network',
     'notifications',
     'observability',
@@ -109,7 +108,6 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
   }
 
   checkNetwork(violations, networks, 'application', applicationNetworkName)
-  checkNetwork(violations, networks, 'default', 'brawltome-observability')
   checkNetwork(violations, networks, 'dokploy-network', 'dokploy-network')
   checkNetwork(violations, networks, 'notifications', 'brawltome-notifications')
   checkNetwork(violations, networks, 'observability', 'brawltome-observability')
