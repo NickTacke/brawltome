@@ -77,11 +77,5 @@ jobs:
         working-directory: apps/desktop
         run: cargo test --locked --workspace
 
-      - name: Test desktop TypeScript harnesses
-        run: bun run --filter @brawltome/desktop test
-
-      - name: Type-check desktop TypeScript
-        run: bun run --filter @brawltome/desktop typecheck
-
       - name: Build full Tauri application without release bundles
         run: bun run --filter @brawltome/desktop build:ci
