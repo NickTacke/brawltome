@@ -141,6 +141,7 @@ function validTopology(): TopologyFixture {
           '--collector.disable-defaults',
           '--collector.filesystem',
           '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+          '--collector.textfile',
           '--collector.textfile.directory=/textfile',
         ],
         volumes: [

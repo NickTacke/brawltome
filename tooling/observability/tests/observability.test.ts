@@ -156,6 +156,7 @@ describe('observability deployment contract', () => {
       '--collector.disable-defaults',
       '--collector.filesystem',
       '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+      '--collector.textfile',
       '--collector.textfile.directory=/textfile',
     ])
     expect(nodeExporter?.volumes).toContainEqual({
