@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-compose='docker compose -f deploy/observability/tests/pipeline-compose.yml'
+compose='docker compose -f infra/observability/tests/fixtures/pipeline-compose.yml'
 marker="brawltome-synthetic-pipeline-$$"
 export GRAFANA_SYNTHETIC_PASSWORD="local-pipeline-$$"
 
