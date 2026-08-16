@@ -25,9 +25,9 @@ function renderCompose(profiles = ['discord']) {
     cwd: root,
     env: {
       ...process.env,
-      V3_DISCORD_CLIENT_ID: '123456789012345678',
-      V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
-      V3_TURNSTILE_SITE_KEY: 'test-site-key',
+      DISCORD_CLIENT_ID: '123456789012345678',
+      POSTGRES_DATA_ROOT: '/srv/brawltome/postgres',
+      TURNSTILE_SITE_KEY: 'test-site-key',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -61,18 +61,18 @@ function renderCompose(profiles = ['discord']) {
   }
 }
 
-const runtimeServices = ['postgres', 'v3-api', 'v3-discord-bot', 'v3-operations-worker', 'v3-web'] as const
+const runtimeServices = ['postgres', 'api', 'discord-bot', 'operations-worker', 'web'] as const
 
-describe('V3 production topology', () => {
+describe('production application topology', () => {
   test('renders independent one-replica units without public exposure', () => {
     const rendered = renderCompose()
     expect(Object.keys(rendered.services).sort()).toEqual([
+      'api',
+      'discord-bot',
       'migration',
+      'operations-worker',
       'postgres',
-      'v3-api',
-      'v3-discord-bot',
-      'v3-operations-worker',
-      'v3-web',
+      'web',
     ])
 
     for (const name of runtimeServices) {
@@ -83,26 +83,26 @@ describe('V3 production topology', () => {
       expect(service.ports ?? [], `${name} published ports`).toHaveLength(0)
     }
 
-    expect(rendered.services['v3-discord-bot'].profiles).toEqual(['discord'])
+    expect(rendered.services['discord-bot'].profiles).toEqual(['discord'])
     expect(JSON.stringify(rendered)).not.toContain('traefik')
     expect(JSON.stringify(rendered)).not.toContain('redis')
   })
 
-  test('isolates data units and uses collision-free V3 runtime identities', () => {
+  test('isolates data units and uses canonical runtime identities', () => {
     const rendered = renderCompose()
     const expected = {
       migration: ['application'],
       postgres: ['application'],
-      'v3-api': ['application', 'observability'],
-      'v3-discord-bot': ['application', 'observability'],
-      'v3-operations-worker': ['application', 'observability'],
-      'v3-web': ['application', 'observability'],
+      'api': ['application', 'observability'],
+      'discord-bot': ['application', 'observability'],
+      'operations-worker': ['application', 'observability'],
+      'web': ['application', 'observability'],
     }
     for (const [name, networks] of Object.entries(expected)) {
       expect(Object.keys(rendered.services[name].networks ?? {}).sort(), `${name} networks`).toEqual(networks)
     }
     expect(rendered.networks).toEqual({
-      application: expect.objectContaining({ external: true, name: 'brawltome-v3' }),
+      application: expect.objectContaining({ external: true, name: 'brawltome' }),
       observability: expect.objectContaining({ external: true, name: 'brawltome-observability' }),
     })
   })
@@ -110,17 +110,17 @@ describe('V3 production topology', () => {
   test('gates runtimes on migration and preserves health and drain semantics', () => {
     const rendered = renderCompose()
     expect(rendered.services.migration.restart).toBe('no')
-    expect(rendered.services['v3-api'].depends_on?.migration?.condition).toBe('service_completed_successfully')
-    expect(rendered.services['v3-operations-worker'].depends_on?.migration?.condition).toBe(
+    expect(rendered.services['api'].depends_on?.migration?.condition).toBe('service_completed_successfully')
+    expect(rendered.services['operations-worker'].depends_on?.migration?.condition).toBe(
       'service_completed_successfully',
     )
-    expect(rendered.services['v3-web'].depends_on?.['v3-api']?.condition).toBe('service_healthy')
+    expect(rendered.services['web'].depends_on?.['api']?.condition).toBe('service_healthy')
 
-    expect(rendered.services['v3-api'].healthcheck?.test?.join(' ')).toContain('/health/ready')
-    expect(rendered.services['v3-operations-worker'].healthcheck?.test?.join(' ')).toContain('/health/ready')
-    expect(rendered.services['v3-web'].healthcheck?.test?.join(' ')).toContain('/api/health/ready')
-    expect(rendered.services['v3-discord-bot'].healthcheck?.test?.join(' ')).toContain('/health/ready')
-    for (const name of ['v3-api', 'v3-discord-bot', 'v3-operations-worker'] as const) {
+    expect(rendered.services['api'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    expect(rendered.services['operations-worker'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    expect(rendered.services['web'].healthcheck?.test?.join(' ')).toContain('/api/health/ready')
+    expect(rendered.services['discord-bot'].healthcheck?.test?.join(' ')).toContain('/health/ready')
+    for (const name of ['api', 'discord-bot', 'operations-worker'] as const) {
       expect(rendered.services[name].stop_grace_period).toBe('1m10s')
     }
   })
@@ -147,27 +147,27 @@ describe('V3 production topology', () => {
     expect(Object.keys(rendered.secrets).sort()).toEqual(Object.keys(expectedSecretFiles).sort())
     for (const [name, file] of Object.entries(expectedSecretFiles)) {
       expect(rendered.secrets[name]).toMatchObject({
-        file: `/var/lib/brawltome-v3-secrets/${file}`,
-        name: `brawltome-v3_${name}`,
+        file: `/var/lib/brawltome-secrets/${file}`,
+        name: `brawltome_${name}`,
       })
     }
     expect(rendered.services.migration.secrets?.map(({ source }) => source)).toEqual(['migration_database_url'])
-    expect(rendered.services['v3-api'].environment).toMatchObject({
+    expect(rendered.services['api'].environment).toMatchObject({
       DISCORD_CLIENT_ID: '123456789012345678',
       DISCORD_REDIRECT_URI: 'https://api.brawltome.app/auth/discord/callback',
     })
-    expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).toEqual(
+    expect(rendered.services['api'].secrets?.map(({ source }) => source)).toEqual(
       expect.arrayContaining(['discord_client_secret', 'runtime_database_url', 'turnstile_secret_key']),
     )
-    expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
-    expect(rendered.services['v3-web'].secrets?.map(({ source }) => source)).toContain('matches_preview_token')
-    expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).toContain(
+    expect(rendered.services['api'].secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
+    expect(rendered.services['web'].secrets?.map(({ source }) => source)).toContain('matches_preview_token')
+    expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).toContain(
       'runtime_database_url',
     )
-    expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).not.toContain(
+    expect(rendered.services['operations-worker'].secrets?.map(({ source }) => source)).not.toContain(
       'migration_database_url',
     )
-    const workerEnvironment = rendered.services['v3-operations-worker'].environment
+    const workerEnvironment = rendered.services['operations-worker'].environment
     expect(workerEnvironment).toMatchObject({
       BRAWLHALLA_V1_REQUEST_LIMIT: '1800',
       LEADERBOARD_INTERVAL_MS: '900000',
@@ -198,7 +198,7 @@ describe('V3 production topology', () => {
     expect(rendered.services.postgres.volumes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source: '/srv/brawltome-v3/postgres',
+          source: '/srv/brawltome/postgres',
           target: '/var/lib/postgresql/data',
           type: 'bind',
         }),
@@ -209,13 +209,13 @@ describe('V3 production topology', () => {
   test('isolates profile-gated dead-letter role provisioning and CLI access', () => {
     const rendered = renderCompose(['operator'])
     expect(Object.keys(rendered.services).sort()).toEqual([
+      'api',
+      'dead-letter-cli',
       'dead-letter-role',
       'migration',
+      'operations-worker',
       'postgres',
-      'v3-api',
-      'v3-dead-letter-cli',
-      'v3-operations-worker',
-      'v3-web',
+      'web',
     ])
 
     const role = rendered.services['dead-letter-role']
@@ -236,7 +236,7 @@ describe('V3 production topology', () => {
       'postgres_owner_password',
     ])
 
-    const cli = rendered.services['v3-dead-letter-cli']
+    const cli = rendered.services['dead-letter-cli']
     expect(cli).toMatchObject({
       build: { target: 'dead-letter-cli' },
       profiles: ['operator'],
@@ -257,16 +257,16 @@ describe('V3 production topology', () => {
 
     expect(rendered.secrets).toMatchObject({
       dead_letter_database_url: {
-        file: '/var/lib/brawltome-v3-secrets/dead-letter-database-url',
-        name: 'brawltome-v3_dead_letter_database_url',
+        file: '/var/lib/brawltome-secrets/dead-letter-database-url',
+        name: 'brawltome_dead_letter_database_url',
       },
       dead_letter_operator_tokens: {
-        file: '/var/lib/brawltome-v3-secrets/dead-letter-operator-tokens',
-        name: 'brawltome-v3_dead_letter_operator_tokens',
+        file: '/var/lib/brawltome-secrets/dead-letter-operator-tokens',
+        name: 'brawltome_dead_letter_operator_tokens',
       },
       postgres_dead_letter_password: {
-        file: '/var/lib/brawltome-v3-secrets/postgres-dead-letter-password',
-        name: 'brawltome-v3_postgres_dead_letter_password',
+        file: '/var/lib/brawltome-secrets/postgres-dead-letter-password',
+        name: 'brawltome_postgres_dead_letter_password',
       },
     })
   })

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { verifyV3RenderedTopology } from '../verify-rendered-topology'
+import { verifyAppRenderedTopology } from '../verify-rendered-topology'
 
 const root = resolve(import.meta.dir, '../../..')
 
@@ -10,9 +10,9 @@ function renderedTopology(): Record<string, unknown> {
     cwd: root,
     env: {
       ...process.env,
-      V3_DISCORD_CLIENT_ID: '123456789012345678',
-      V3_POSTGRES_DATA_ROOT: '/srv/brawltome-v3/postgres',
-      V3_TURNSTILE_SITE_KEY: 'test-site-key',
+      DISCORD_CLIENT_ID: '123456789012345678',
+      POSTGRES_DATA_ROOT: '/srv/brawltome/postgres',
+      TURNSTILE_SITE_KEY: 'test-site-key',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -25,27 +25,27 @@ function services(topology: Record<string, unknown>): Record<string, Record<stri
   return topology.services as Record<string, Record<string, unknown>>
 }
 
-describe('rendered V3 deployment topology', () => {
+describe('rendered application topology', () => {
   test('accepts the exact internal-only four-unit rollout', () => {
-    expect(verifyV3RenderedTopology(renderedTopology())).toEqual([])
+    expect(verifyAppRenderedTopology(renderedTopology())).toEqual([])
   })
 
   test('rejects collision-prone legacy runtime service names', () => {
     const topology = renderedTopology()
     const current = services(topology)
-    current.api = current['v3-api']
-    expect(verifyV3RenderedTopology(topology)).toEqual(
+    current['legacy-api'] = current.api
+    expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([expect.stringContaining('services must be exactly')]),
     )
   })
 
   test('rejects preview web origins after final public cutover', () => {
     const topology = renderedTopology()
-    const environment = services(topology)['v3-api'].environment as Record<string, string>
-    environment.CORS_ORIGIN = 'https://v3.brawltome.app'
-    environment.WEB_ORIGIN = 'https://v3.brawltome.app'
+    const environment = services(topology)['api'].environment as Record<string, string>
+    environment.CORS_ORIGIN = 'https://preview.brawltome.app'
+    environment.WEB_ORIGIN = 'https://preview.brawltome.app'
 
-    expect(verifyV3RenderedTopology(topology)).toEqual(
+    expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
         'api must allow only the final public web origin',
         'api must use the final public web origin',
@@ -69,24 +69,24 @@ describe('rendered V3 deployment topology', () => {
     ['SOURCE_UNAVAILABLE_RETRY_MS', '1000', 'operations-worker must retain the 60-second source outage deferral'],
   ] as const)('rejects independent %s rollout drift', (variable, value, violation) => {
     const topology = renderedTopology()
-    ;(services(topology)['v3-operations-worker'].environment as Record<string, string>)[variable] = value
-    expect(verifyV3RenderedTopology(topology)).toContain(violation)
+    ;(services(topology)['operations-worker'].environment as Record<string, string>)[variable] = value
+    expect(verifyAppRenderedTopology(topology)).toContain(violation)
   })
 
   test('rejects Discord activation, public exposure, and extra networks', () => {
     const topology = renderedTopology()
     const current = services(topology)
-    current['v3-discord-bot'] = { networks: { application: null } }
-    current['v3-api'].ports = [{ published: '3000', target: 3000 }]
-    current['v3-web'].labels = { 'Traefik.enable': 'true' }
+    current['discord-bot'] = { networks: { application: null } }
+    current['api'].ports = [{ published: '3000', target: 3000 }]
+    current['web'].labels = { 'Traefik.enable': 'true' }
     ;(topology.networks as Record<string, unknown>).public = { external: true, name: 'dokploy-network' }
 
-    expect(verifyV3RenderedTopology(topology)).toEqual(
+    expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
         expect.stringContaining('services must be exactly'),
         expect.stringContaining('networks must be exactly'),
-        'v3-api must not publish ports',
-        'v3-web must not have Traefik labels',
+        'api must not publish ports',
+        'web must not have Traefik labels',
       ]),
     )
   })
@@ -94,17 +94,17 @@ describe('rendered V3 deployment topology', () => {
   test('rejects quota, secret, image, and storage drift', () => {
     const topology = renderedTopology()
     const current = services(topology)
-    ;(current['v3-operations-worker'].environment as Record<string, string>).BRAWLHALLA_V1_REQUEST_LIMIT = '150'
-    ;(current['v3-operations-worker'].environment as Record<string, string>).OPERATIONS_TOTAL_CONCURRENCY = '1'
+    ;(current['operations-worker'].environment as Record<string, string>).BRAWLHALLA_V1_REQUEST_LIMIT = '150'
+    ;(current['operations-worker'].environment as Record<string, string>).OPERATIONS_TOTAL_CONCURRENCY = '1'
     ;(current.postgres.build as Record<string, string>).target = 'api'
     current.postgres.volumes = [{ source: '/', target: '/var/lib/postgresql/data', type: 'bind' }]
-    current['v3-api'].secrets = []
+    current['api'].secrets = []
     ;(topology.secrets as Record<string, unknown>).extra = { file: '/tmp/extra' }
 
-    expect(verifyV3RenderedTopology(topology)).toEqual(
+    expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
         expect.stringContaining('secrets must be exactly'),
-        'v3-api secrets must match approved attachments exactly',
+        'api secrets must match approved attachments exactly',
         'operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes',
         'operations-worker must retain two total operation slots',
         'postgres must use build target postgres',
@@ -116,27 +116,27 @@ describe('rendered V3 deployment topology', () => {
   test('rejects hardening, raw-secret, and secret-shadowing drift', () => {
     const topology = renderedTopology()
     const current = services(topology)
-    current['v3-api'].cap_add = ['SYS_ADMIN']
-    current['v3-api'].cap_drop = []
-    current['v3-api'].command = ['printenv']
-    current['v3-api'].privileged = true
-    current['v3-api'].user = '0:0'
-    ;(current['v3-api'].environment as Record<string, string>).DATABASE_URL = 'raw-secret'
-    current['v3-api'].tmpfs = ['/run:rw']
-    current['v3-web'].labels = 'traefik.enable=true'
-    current['v3-web'].volumes = [{ source: '/', target: '/run/secrets', type: 'bind' }]
+    current['api'].cap_add = ['SYS_ADMIN']
+    current['api'].cap_drop = []
+    current['api'].command = ['printenv']
+    current['api'].privileged = true
+    current['api'].user = '0:0'
+    ;(current['api'].environment as Record<string, string>).DATABASE_URL = 'raw-secret'
+    current['api'].tmpfs = ['/run:rw']
+    current['web'].labels = 'traefik.enable=true'
+    current['web'].volumes = [{ source: '/', target: '/run/secrets', type: 'bind' }]
 
-    expect(verifyV3RenderedTopology(topology)).toEqual(
+    expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
-        'v3-api must not add capabilities',
-        'v3-api must drop all capabilities',
-        'v3-api must not override the image user',
-        'v3-api must not set privileged mode',
-        'v3-api must not override the image command or entrypoint',
-        'v3-api must not receive raw secret environment variables',
-        'v3-api tmpfs must not shadow secret targets',
-        'v3-web labels must be an object',
-        'v3-web must not add volumes',
+        'api must not add capabilities',
+        'api must drop all capabilities',
+        'api must not override the image user',
+        'api must not set privileged mode',
+        'api must not override the image command or entrypoint',
+        'api must not receive raw secret environment variables',
+        'api tmpfs must not shadow secret targets',
+        'web labels must be an object',
+        'web must not add volumes',
       ]),
     )
   })
@@ -144,11 +144,11 @@ describe('rendered V3 deployment topology', () => {
   test('rejects malformed service shapes and profile leakage', () => {
     const topology = renderedTopology()
     const current = topology.services as Record<string, unknown>
-    current['v3-api'] = null
-    ;(current['v3-web'] as Record<string, unknown>).ports = {}
+    current['api'] = null
+    ;(current['web'] as Record<string, unknown>).ports = {}
 
-    expect(verifyV3RenderedTopology(topology)).toEqual(
-      expect.arrayContaining(['v3-api must be a service object', 'v3-web must not publish ports']),
+    expect(verifyAppRenderedTopology(topology)).toEqual(
+      expect.arrayContaining(['api must be a service object', 'web must not publish ports']),
     )
   })
 })
