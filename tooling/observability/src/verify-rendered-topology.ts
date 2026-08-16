@@ -128,6 +128,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
     '--collector.disable-defaults',
     '--collector.filesystem',
     '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+    '--collector.textfile',
     '--collector.textfile.directory=/textfile',
   ]
   if (
