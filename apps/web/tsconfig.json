@@ -8,7 +8,6 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@brawltome/api/router": ["../../apps/api/src/router/index.ts"],
       "@brawltome/database": ["../../packages/database/src/index.ts"]
     }
   },

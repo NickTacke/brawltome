@@ -1,3 +1,5 @@
+import type { AppRouter as ContractAppRouter } from '@brawltome/contracts'
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 import { router } from '../trpc/trpc'
 import { accountRouter } from './account.router'
 import { clanRouter } from './clan.router'
@@ -17,6 +19,14 @@ export const appRouter = router({
   search: searchRouter,
   leaderboard: leaderboardRouter,
   statistics: statisticsRouter,
-})
+}) satisfies ContractAppRouter
 
-export type AppRouter = typeof appRouter
+type Equal<Left, Right> = (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
+  ? true
+  : false
+type Assert<Condition extends true> = Condition
+export type AppRouterContractProof = Assert<
+  Equal<inferRouterInputs<typeof appRouter>, inferRouterInputs<ContractAppRouter>> extends true
+    ? Equal<inferRouterOutputs<typeof appRouter>, inferRouterOutputs<ContractAppRouter>>
+    : false
+>

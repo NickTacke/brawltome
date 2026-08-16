@@ -1,4 +1,4 @@
-import type { AppRouter } from '@brawltome/api/router'
+import type { AppRouter } from '@brawltome/contracts'
 import { telemetryFetch } from '@brawltome/telemetry'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import superjson from 'superjson'

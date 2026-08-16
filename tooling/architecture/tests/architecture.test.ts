@@ -142,12 +142,12 @@ describe('V3 dependency architecture', () => {
     expect(rulesFor(fixture)).toContain('app-to-app')
   })
 
-  it('reads type-only imports and package exports from a repository', () => {
+  it('reads type-only contract imports without exposing application source', () => {
     const repository = readArchitectureRepository(resolve(import.meta.dir, '../../..'))
     const web = repository.workspaces.find(({ name }) => name === '@brawltome/web')
 
-    expect(web?.sourceFiles.flatMap(({ imports }) => imports)).toContain('@brawltome/api/router')
-    expect(repository.workspaces.find(({ name }) => name === '@brawltome/api')?.exports).toContain('./router')
+    expect(web?.sourceFiles.flatMap(({ imports }) => imports)).toContain('@brawltome/contracts')
+    expect(repository.workspaces.find(({ name }) => name === '@brawltome/api')?.exports).toEqual(['.'])
   })
 
   it('enforces Clans and Players persistence ownership isolation', async () => {
@@ -178,23 +178,13 @@ describe('V3 dependency architecture', () => {
     expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
   })
 
-  it('passes the current repository only through the exact temporary V2 exceptions', () => {
+  it('passes the current repository without temporary architecture exceptions', () => {
     const repository = readArchitectureRepository(resolve(import.meta.dir, '../../..'))
     const result = checkArchitecture(repository, currentArchitecturePolicy)
 
     expect(result.violations).toEqual([])
     expect(result.staleExceptions).toEqual([])
-    expect(result.appliedExceptions.map(({ id }) => id).sort()).toEqual(
-      [
-        'v2-api-router-export',
-        'v2-discord-api-router-app-import',
-        'v2-discord-api-router-undeclared',
-        'v2-web-api-router-client-app-import',
-        'v2-web-api-router-client-undeclared',
-        'v2-web-api-router-server-app-import',
-        'v2-web-api-router-server-undeclared',
-      ].sort(),
-    )
+    expect(result.appliedExceptions).toEqual([])
   })
 
   it('reports named temporary exceptions without allowing new import locations', () => {
