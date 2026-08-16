@@ -15,7 +15,7 @@ import {
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
 const databaseName = `bt_discovery_reconcile_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 16)}`
 let admin: ReturnType<typeof postgres>

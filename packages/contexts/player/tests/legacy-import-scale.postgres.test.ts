@@ -4,7 +4,7 @@ import postgres from 'postgres'
 import { importLegacyPlayers, playerMigrationInventory } from '../composition'
 import { legacyPlayerSchemaSql } from './fixtures/legacy-player-migration'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const databaseName = `bt_player_scale_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 16)}`
 const scaleTest = process.env.RUN_MIGRATION_SCALE_TESTS === '1' ? test : test.skip
 let admin: ReturnType<typeof postgres>
