@@ -10,7 +10,7 @@ import {
   replayJobSummarySchema,
 } from '@brawltome/contracts'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
-import { Activity, Clock3, FileUp, History, LockKeyhole, Upload, Zap } from 'lucide-react'
+import { Activity, Clock3, FileUp, History, LockKeyhole, Upload } from 'lucide-react'
 import { type DragEvent, type FormEvent, useCallback, useEffect, useState } from 'react'
 import { ReplayResultView } from './ReplayResultView'
 
@@ -44,7 +44,7 @@ function ReplayHistory({
   onSelect: (id: string) => void
 }) {
   return (
-    <Card className="overflow-hidden border-border lg:sticky lg:top-6">
+    <Card className="overflow-hidden border-border">
       <CardHeader className="border-b border-border/70 pb-4">
         <CardTitle className="flex items-center gap-2 text-lg">
           <History className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -60,7 +60,7 @@ function ReplayHistory({
             <p className="mt-1 text-sm text-muted-foreground">Upload a replay to start your history.</p>
           </div>
         ) : (
-          <div className="max-h-[42rem] overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto">
             <table className="w-full text-left text-sm">
               <thead className="sr-only">
                 <tr>
@@ -227,14 +227,12 @@ export function ReplayAnalysisPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="mx-auto max-w-7xl animate-pulse px-6 py-12 text-sm text-muted-foreground">Loading matches…</div>
-    )
+    return <div className="animate-pulse py-12 text-sm text-muted-foreground">Loading matches…</div>
   }
 
   if (!account) {
     return (
-      <section className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
+      <section className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center py-12 text-center">
         <Badge variant="outline" className="gap-2 border-primary/30 bg-primary/5 text-primary">
           <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
           Private replay analysis
@@ -245,7 +243,7 @@ export function ReplayAnalysisPage() {
         <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
           Upload a Brawlhalla replay to review damage, movement, knockouts, and equipment in one match report.
         </p>
-        <Card className="mt-8 w-full border-border bg-linear-to-br from-card to-primary/5">
+        <Card className="mt-8 w-full border-border">
           <CardContent className="flex flex-col items-center p-8">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <FileUp className="h-7 w-7" aria-hidden="true" />
@@ -264,32 +262,15 @@ export function ReplayAnalysisPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-6 py-10 pb-16">
+    <div className="space-y-8 pb-10">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Matches</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">Replay analysis</h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground">
-              Private, replay-deterministic match reports processed by the Brawltome replay worker.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline" className="gap-1.5">
-              <LockKeyhole className="h-3 w-3" />
-              Private
-            </Badge>
-            <Badge variant="outline" className="gap-1.5">
-              <Zap className="h-3 w-3" />
-              Format 268
-            </Badge>
-          </div>
-        </div>
+        <h1 className="text-3xl font-black tracking-tight text-foreground sm:h-14 sm:text-5xl">Replay analysis</h1>
+        <p className="mt-2 max-w-2xl text-muted-foreground">
+          Upload a Brawlhalla replay to review damage, movement, knockouts, and equipment.
+        </p>
       </header>
 
-      <Card
-        className={`overflow-hidden border-border bg-linear-to-br from-card to-primary/5 ${dragging ? 'ring-2 ring-primary' : ''}`}
-      >
+      <Card className={`overflow-hidden border-border ${dragging ? 'ring-2 ring-primary' : ''}`}>
         <CardContent className={jobs.length === 0 ? 'p-8 sm:p-10' : 'p-5'}>
           <form onSubmit={upload} className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
             <label
@@ -338,10 +319,10 @@ export function ReplayAnalysisPage() {
         </div>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">
+      <div className="space-y-6">
         <ReplayHistory jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
 
-        <section className="min-w-0" aria-live="polite">
+        <section aria-live="polite">
           {loadingSelected && (
             <Card className="animate-pulse">
               <CardContent className="p-8">
@@ -351,7 +332,7 @@ export function ReplayAnalysisPage() {
             </Card>
           )}
           {!loadingSelected && selected && selected.status !== 'completed' && (
-            <Card className="border-border bg-linear-to-br from-card to-primary/5">
+            <Card className="border-border">
               <CardContent className="flex items-start gap-4 p-6">
                 <span className="relative mt-1 flex h-3 w-3 shrink-0">
                   {selected.status !== 'failed' && (
@@ -373,12 +354,12 @@ export function ReplayAnalysisPage() {
           )}
           {!loadingSelected && selected && <ReplayResultView job={selected} />}
           {!loadingSelected && !selected && jobs.length === 0 && (
-            <Card className="border-dashed border-border bg-card/60">
+            <Card className="border-dashed border-border">
               <CardContent className="flex min-h-80 flex-col items-center justify-center p-8 text-center">
                 <Activity className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
                 <h2 className="mt-4 text-xl font-bold text-foreground">Your next match report starts here</h2>
                 <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  Upload a replay above. Recent matches will stay on the left while the full analysis opens here.
+                  Upload a replay above. Recent matches will stay above the full analysis.
                 </p>
               </CardContent>
             </Card>

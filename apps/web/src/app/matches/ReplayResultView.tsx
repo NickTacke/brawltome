@@ -62,47 +62,36 @@ export function ReplayResultView({ job }: { job: ReplayJobDetailContract }) {
 
   return (
     <article className="space-y-6" aria-label="Selected replay analysis">
-      <Card className="overflow-hidden border-border bg-linear-to-br from-card via-card to-primary/5 shadow-sm">
-        <CardContent className="p-0">
-          <div className="border-b border-border/70 p-5 sm:p-7">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="gap-1.5 bg-success text-success-foreground">
-                    <Trophy className="h-3 w-3" aria-hidden="true" />
-                    Match complete
-                  </Badge>
-                  <Badge variant="outline" className="font-mono text-muted-foreground">
-                    Playlist {replay.playlistId}
-                  </Badge>
-                </div>
-                <p className="mt-4 max-w-xl truncate text-sm font-semibold text-muted-foreground">
-                  {job.fileName ?? 'Brawlhalla replay'}
-                </p>
-                <h2 className="mt-1 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-                  {map?.displayName ?? `Map ${replay.mapId}`}
-                </h2>
-                <p className="mt-2 text-sm text-muted-foreground">Analyzed {replayTimestamp(job.updatedAt)}</p>
-              </div>
-              <div className="min-w-48 rounded-lg border border-primary/20 bg-primary/10 px-5 py-4 text-right">
-                <p className="text-xs font-bold uppercase tracking-wide text-primary">Winner</p>
-                <p className="mt-1 text-xl font-black text-foreground">{winnerLabel}</p>
-              </div>
-            </div>
+      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div className="min-w-0">
+          <Badge variant="outline" className="font-mono text-muted-foreground">
+            Playlist {replay.playlistId}
+          </Badge>
+          <h2 className="mt-3 truncate text-3xl font-black tracking-tight text-foreground sm:h-14 sm:text-5xl">
+            {map?.displayName ?? `Map ${replay.mapId}`}
+          </h2>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span className="max-w-xl truncate font-semibold">{job.fileName ?? 'Brawlhalla replay'}</span>
+            <span aria-hidden="true">•</span>
+            <span>Analyzed {replayTimestamp(job.updatedAt)}</span>
           </div>
+        </div>
+        <div className="shrink-0 md:text-right">
+          <p className="text-xs font-bold uppercase tracking-wide text-primary">Winner</p>
+          <p className="mt-1 text-2xl font-black text-foreground">{winnerLabel}</p>
+        </div>
+      </header>
 
-          <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-7 xl:grid-cols-4" aria-label="Match summary">
-            <StatTile icon={Clock3} label="Duration" value={formatDuration(replay.durationMs)} />
-            <StatTile icon={MapPinned} label="Map" value={map?.displayName ?? `Map ${replay.mapId}`} />
-            <StatTile
-              icon={Shield}
-              label="Rules"
-              value={`${replay.matchSettings.lives} stocks · ${replay.matchSettings.teamMode ? 'Teams' : 'Free-for-all'}`}
-            />
-            <StatTile icon={Gauge} label="Session" value={replay.online ? 'Online' : 'Local'} />
-          </div>
-        </CardContent>
-      </Card>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Match summary">
+        <StatTile icon={Clock3} label="Duration" value={formatDuration(replay.durationMs)} />
+        <StatTile icon={MapPinned} label="Map" value={map?.displayName ?? `Map ${replay.mapId}`} />
+        <StatTile
+          icon={Shield}
+          label="Rules"
+          value={`${replay.matchSettings.lives} stocks · ${replay.matchSettings.teamMode ? 'Teams' : 'Free-for-all'}`}
+        />
+        <StatTile icon={Gauge} label="Session" value={replay.online ? 'Online' : 'Local'} />
+      </section>
 
       <Card>
         <CardHeader className="border-b border-border/70 pb-4">
@@ -405,36 +394,6 @@ export function ReplayResultView({ job }: { job: ReplayJobDetailContract }) {
           </CardContent>
         </Card>
       )}
-
-      <details className="rounded-lg border border-border bg-card/60 p-4 text-sm">
-        <summary className="cursor-pointer font-semibold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-          Data quality & provenance
-        </summary>
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-muted-foreground">
-            <dt>Processor</dt>
-            <dd className="text-right font-mono text-foreground">{core.provenance.processorVersion}</dd>
-            <dt>Game build</dt>
-            <dd className="text-right font-mono text-foreground">{core.provenance.gameBuild}</dd>
-            <dt>Collector</dt>
-            <dd className="text-right font-mono text-foreground">{core.provenance.collector}</dd>
-            <dt>Profile</dt>
-            <dd className="text-right font-mono text-foreground">{core.provenance.qualificationProfile}</dd>
-          </dl>
-          <div>
-            <p className="font-semibold text-foreground">Known limitations</p>
-            <ul className="mt-2 space-y-2 text-muted-foreground">
-              {core.limitations.map((limitation, index) => (
-                <li key={`${limitation.code}-${index}`}>{limitation.text}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </details>
-
-      <p className="text-xs text-muted-foreground">
-        Replay-deterministic analysis from processor {core.provenance.processorVersion}.
-      </p>
     </article>
   )
 }
