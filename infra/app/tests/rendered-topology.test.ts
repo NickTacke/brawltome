@@ -141,6 +141,24 @@ describe('rendered application topology', () => {
     )
   })
 
+  test('rejects dependency, health, drain, and resource drift', () => {
+    const topology = renderedTopology()
+    const current = services(topology)
+    current.api.depends_on = {}
+    ;(current.web.healthcheck as Record<string, unknown>).test = ['CMD', 'false']
+    current.postgres.stop_grace_period = '1s'
+    ;(current['operations-worker'].deploy as Record<string, unknown>).resources = {}
+
+    expect(verifyAppRenderedTopology(topology)).toEqual(
+      expect.arrayContaining([
+        'api dependencies must match the approved topology',
+        'web health check must use /api/health/ready',
+        'postgres must retain stop grace period 30s',
+        'operations-worker must retain bounded memory and PID resources',
+      ]),
+    )
+  })
+
   test('rejects malformed service shapes and profile leakage', () => {
     const topology = renderedTopology()
     const current = topology.services as Record<string, unknown>
