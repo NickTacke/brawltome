@@ -20,6 +20,7 @@
     "@brawltome/ranking": "workspace:*",
     "@brawltome/request-admission": "workspace:*",
     "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/replay-analysis": "workspace:*",
     "@brawltome/statistics": "workspace:*",
     "postgres": "^3.4.0"
   },

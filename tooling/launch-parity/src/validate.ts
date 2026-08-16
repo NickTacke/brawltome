@@ -8,7 +8,7 @@ const requiredRowIds = [
   'shell.mobile-menu',
   'shell.home-public-search',
   'shell.home-leaderboard-discovery',
-  'placeholder.matches',
+  'matches.replay-analysis',
   'placeholder.learn',
   'placeholder.tournaments',
   'placeholder.feed',
@@ -39,7 +39,7 @@ const requiredRowIds = [
 const requiredShellDestinations = new Map([
   ['/', 'live'],
   ['/stats', 'soon'],
-  ['/matches', 'soon'],
+  ['/matches', 'live'],
   ['/learn', 'soon'],
   ['/tournaments', 'soon'],
   ['/feed', 'soon'],
@@ -224,7 +224,9 @@ export function validateRepositoryParity(rows: readonly ParityRow[], repositoryR
     if (!requiredShellDestinations.has(href)) errors.push(`unknown shell destination: ${href}`)
   }
 
-  for (const href of ['/matches', '/learn', '/tournaments', '/feed']) {
+  const matchesRow = byId.get('matches.replay-analysis')
+  if (!matchesRow?.destinations.includes('/matches')) errors.push('replay analysis parity row does not cover /matches')
+  for (const href of ['/learn', '/tournaments', '/feed']) {
     const row = byId.get(`placeholder.${href.slice(1)}`)
     if (!row?.destinations.includes(href)) errors.push(`placeholder parity row does not cover ${href}`)
   }

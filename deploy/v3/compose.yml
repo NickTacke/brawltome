@@ -156,6 +156,7 @@ services:
       - metrics_scrape_secret
       - otel_authorization
       - refresh_trust_cookie_secret
+      - replay_bridge_secret
       - turnstile_secret_key
     networks:
       - application
@@ -410,6 +411,9 @@ secrets:
   refresh_trust_cookie_secret:
     name: brawltome-v3_refresh_trust_cookie_secret
     file: /var/lib/brawltome-v3-secrets/refresh-trust-cookie-secret
+  replay_bridge_secret:
+    name: brawltome-v3_replay_bridge_secret
+    file: /var/lib/brawltome-v3-secrets/replay-bridge-secret
   runtime_database_url:
     name: brawltome-v3_runtime_database_url
     file: /var/lib/brawltome-v3-secrets/runtime-database-url

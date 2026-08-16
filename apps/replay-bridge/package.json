@@ -1,0 +1,14 @@
+{
+  "name": "@brawltome/replay-bridge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --compile --target=bun-linux-x64-baseline --outfile dist/replay-bridge",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  }
+}

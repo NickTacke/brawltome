@@ -139,6 +139,7 @@ describe('V3 production topology', () => {
       postgres_owner_password: 'postgres-owner-password',
       postgres_runtime_password: 'postgres-runtime-password',
       refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
+      replay_bridge_secret: 'replay-bridge-secret',
       runtime_database_url: 'runtime-database-url',
       turnstile_secret_key: 'turnstile-secret-key',
     }

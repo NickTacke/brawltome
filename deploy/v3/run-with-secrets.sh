@@ -32,6 +32,7 @@ case "$role" in
     read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
     read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
     read_secret REFRESH_TRUST_COOKIE_SECRET "$secrets_root/refresh_trust_cookie_secret"
+    read_secret REPLAY_BRIDGE_SECRET "$secrets_root/replay_bridge_secret"
     read_secret TURNSTILE_SECRET_KEY "$secrets_root/turnstile_secret_key"
     exec bun run apps/api/src/serve.ts
     ;;

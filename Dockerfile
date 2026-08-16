@@ -29,6 +29,7 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/discord-bot/package.json apps/discord-bot/
+COPY apps/replay-bridge/package.json apps/replay-bridge/
 COPY apps/web/package.json apps/web/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
@@ -40,6 +41,7 @@ COPY packages/contexts/clan/package.json packages/contexts/clan/
 COPY packages/contexts/ranking/package.json packages/contexts/ranking/
 COPY packages/contexts/request-admission/package.json packages/contexts/request-admission/
 COPY packages/contexts/refresh-operations/package.json packages/contexts/refresh-operations/
+COPY packages/contexts/replay-analysis/package.json packages/contexts/replay-analysis/
 COPY packages/contexts/statistics/package.json packages/contexts/statistics/
 COPY packages/contexts/discovery/package.json packages/contexts/discovery/
 COPY packages/game-data/package.json packages/game-data/
