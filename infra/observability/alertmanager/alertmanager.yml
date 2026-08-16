@@ -3,7 +3,7 @@ global:
 
 route:
   receiver: discord-operations
-  group_by: [severity, generation, alertname]
+  group_by: [severity, alertname]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
@@ -16,7 +16,7 @@ receivers:
         title: "{{ .Status | toUpper }}: BrawlTome {{ .CommonLabels.severity }} alerts"
         message: >-
           {{ range .Alerts }}{{ .Labels.alertname }}: {{ .Annotations.summary }}
-          Severity: {{ .Labels.severity }} | Signal: {{ .Labels.signal }} | Generation: {{ .Labels.generation }}{{ with .Labels.failure_category }} | Category: {{ . }}{{ end }}{{ "\n" }}{{ end }}
+          Severity: {{ .Labels.severity }} | Signal: {{ .Labels.signal }}{{ with .Labels.failure_category }} | Category: {{ . }}{{ end }}{{ "\n" }}{{ end }}
 
 inhibit_rules:
   - source_matchers: ['severity="critical"']

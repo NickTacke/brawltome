@@ -106,7 +106,7 @@ exit 1
   const env = {
     ...process.env,
     PATH: `${bin}:${process.env.PATH}`,
-    BRAWLTOME_NETWORK_NAME: options.networkName ?? 'brawltome-v3',
+    BRAWLTOME_NETWORK_NAME: options.networkName ?? 'brawltome',
     MOCK_AMBIGUOUS: options.ambiguous ?? '',
     MOCK_BAD_ATTRIBUTE: options.badAttribute ?? '',
     MOCK_CREATE_FAILURE: options.createFailure ?? '',
@@ -153,7 +153,7 @@ describe('observability network preflight', () => {
     expect(lines).toHaveLength(3)
     expect(lines.find((line) => line.endsWith('brawltome-observability'))).toContain('--internal')
     expect(lines.find((line) => line.endsWith('brawltome-notifications'))).not.toContain('--internal')
-    expect(lines.find((line) => line.endsWith('brawltome-v3'))).not.toContain('--internal')
+    expect(lines.find((line) => line.endsWith('brawltome'))).not.toContain('--internal')
     for (const line of lines) {
       expect(line).toContain('--driver overlay')
       expect(line).toContain('--attachable')
@@ -190,10 +190,10 @@ describe('observability network preflight', () => {
   })
 
   test('rejects ambiguous exact-name discovery', () => {
-    const { result, dockerLog } = fixture({ args: ['--provision'], ambiguous: 'brawltome-v3' })
+    const { result, dockerLog } = fixture({ args: ['--provision'], ambiguous: 'brawltome' })
 
     expect(result.exitCode).not.toBe(0)
-    expect(result.stderr.toString()).toContain('multiple networks named brawltome-v3')
+    expect(result.stderr.toString()).toContain('multiple networks named brawltome')
     expect(dockerLog()).toBe('')
   })
 
