@@ -62,8 +62,7 @@ function validTopology(): TopologyFixture {
     },
   }
   const networks = {
-    application: { external: true, name: 'brawltome-v3' },
-    default: { external: true, name: 'brawltome-observability' },
+    application: { external: true, name: 'brawltome' },
     'dokploy-network': { external: true, name: 'dokploy-network' },
     notifications: { external: true, name: 'brawltome-notifications' },
     observability: { external: true, name: 'brawltome-observability' },
@@ -106,7 +105,7 @@ function validTopology(): TopologyFixture {
       ),
       'blackbox-exporter': service('blackbox-exporter', ['application']),
       grafana: {
-        ...service('grafana', ['default', 'dokploy-network']),
+        ...service('grafana', ['dokploy-network', 'observability']),
         environment: {
           GF_ANALYTICS_CHECK_FOR_UPDATES: 'false',
           GF_ANALYTICS_REPORTING_ENABLED: 'false',
@@ -173,12 +172,12 @@ describe('rendered Dokploy observability topology', () => {
 
   test('rejects exposure and network drift introduced after source rendering', () => {
     const topology = validTopology()
-    topology.services.prometheus.networks.default = null
+    topology.services.prometheus.networks.public = null
     topology.services.prometheus.labels = { 'traefik.enable': 'true' }
     topology.services.grafana.ports = [{ published: '3000', target: 3000 }]
     topology.services['node-exporter'].volumes = [{ target: '/textfile', read_only: false }]
     topology.services['node-exporter'].command?.push('--collector.systemd')
-    topology.networks.default.name = 'local-project-bridge'
+    topology.networks.observability.name = 'local-project-bridge'
 
     expect(verifyRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
@@ -187,7 +186,7 @@ describe('rendered Dokploy observability topology', () => {
         'grafana must not publish ports',
         'node-exporter command must match the approved collector set exactly',
         'node-exporter volumes must match the approved read-only host paths exactly',
-        'default must be external network brawltome-observability',
+        'observability must be external network brawltome-observability',
       ]),
     )
   })

@@ -8,7 +8,7 @@ const repositoryRoot = resolve(import.meta.dir, '../../..')
 const wrapper = resolve(repositoryRoot, 'infra/observability/deploy-via-dokploy.sh')
 const temporaryDirectories: string[] = []
 const commit = 'a'.repeat(40)
-const sourceRef = `observability-v3-${commit}`
+const sourceRef = `observability-${commit}`
 
 function executable(path: string, content: string): void {
   writeFileSync(path, content)
@@ -105,7 +105,7 @@ describe('Dokploy observability deployment wrapper', () => {
   test('rejects an inert custom Git ref when the active GitHub branch is stale', () => {
     const { deployMarker, env, log } = fixture()
     const curlPath = `${env.PATH.split(':')[0]}/curl`
-    const curl = readFileSync(curlPath, 'utf8').replace(`"branch":"${sourceRef}"`, '"branch":"feature/v3-rewrite"')
+    const curl = readFileSync(curlPath, 'utf8').replace(`"branch":"${sourceRef}"`, '"branch":"feature/legacy-rewrite"')
     writeFileSync(curlPath, curl)
 
     const result = spawnSync('bash', [wrapper], { cwd: repositoryRoot, encoding: 'utf8', env })

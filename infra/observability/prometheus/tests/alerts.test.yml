@@ -7,15 +7,14 @@ tests:
   - name: metrics target firing and recovery
     interval: 1m
     input_series:
-      - series: 'up{job="api",runtime="api",generation="v3",instance="v3-api:3000"}'
+      - series: 'up{job="api",runtime="api",instance="api:3000"}'
         values: "0 0 0 1 1 1"
     alert_rule_test:
       - eval_time: 2m
         alertname: RuntimeMetricsTargetDown
         exp_alerts:
           - exp_labels:
-              generation: v3
-              instance: v3-api:3000
+              instance: api:3000
               job: api
               runtime: api
               severity: critical
@@ -31,15 +30,14 @@ tests:
   - name: readiness firing and recovery
     interval: 1m
     input_series:
-      - series: 'probe_success{job="readiness",runtime="api",generation="v3",instance="http://v3-api:3000/health/ready"}'
+      - series: 'probe_success{job="readiness",runtime="api",instance="http://api:3000/health/ready"}'
         values: "0 0 0 1 1 1"
     alert_rule_test:
       - eval_time: 2m
         alertname: RuntimeNotReady
         exp_alerts:
           - exp_labels:
-              generation: v3
-              instance: http://v3-api:3000/health/ready
+              instance: http://api:3000/health/ready
               job: readiness
               runtime: api
               severity: critical
@@ -304,18 +302,17 @@ tests:
   - name: backup integrity failure and recovery
     interval: 1m
     input_series:
-      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_ok'
         values: "0 0 0 0 0 0 1 1"
-      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds'
         values: "0 60 120 180 240 300 360 420"
-      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds'
         values: "0 60 120 180 240 300 360 420"
     alert_rule_test:
       - eval_time: 5m
         alertname: PostgresBackupIntegrityFailed
         exp_alerts:
           - exp_labels:
-              generation: v3
               severity: critical
               service: brawltome
               signal: backup-integrity
@@ -329,16 +326,15 @@ tests:
   - name: missing backup integrity status metric fires
     interval: 1m
     input_series:
-      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds'
         values: "0 60 120 180 240 300 360"
-      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds'
         values: "0 60 120 180 240 300 360"
     alert_rule_test:
       - eval_time: 5m
         alertname: PostgresBackupIntegrityFailed
         exp_alerts:
           - exp_labels:
-              generation: v3
               severity: critical
               service: brawltome
               signal: backup-integrity
@@ -349,16 +345,15 @@ tests:
   - name: missing backup last-run metric fires
     interval: 1m
     input_series:
-      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_ok'
         values: "1x7"
-      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds'
         values: "0 60 120 180 240 300 360"
     alert_rule_test:
       - eval_time: 5m
         alertname: PostgresBackupIntegrityFailed
         exp_alerts:
           - exp_labels:
-              generation: v3
               severity: critical
               service: brawltome
               signal: backup-integrity
@@ -369,16 +364,15 @@ tests:
   - name: missing latest verified backup metric fires
     interval: 1m
     input_series:
-      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_ok'
         values: "1x7"
-      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds'
         values: "0 60 120 180 240 300 360"
     alert_rule_test:
       - eval_time: 5m
         alertname: PostgresBackupIntegrityFailed
         exp_alerts:
           - exp_labels:
-              generation: v3
               severity: critical
               service: brawltome
               signal: backup-integrity
@@ -389,18 +383,17 @@ tests:
   - name: stale backup verification fires
     interval: 1h
     input_series:
-      - series: 'brawltome_postgres_backup_integrity_ok{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_ok'
         values: "1x12"
-      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds'
         values: "0x12"
-      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"}'
+      - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds'
         values: "0x12"
     alert_rule_test:
       - eval_time: 10h
         alertname: PostgresBackupIntegrityFailed
         exp_alerts:
           - exp_labels:
-              generation: v3
               severity: critical
               service: brawltome
               signal: backup-integrity

@@ -18,8 +18,8 @@ expected_command='compose --parallel 1 -p brawltome-observability-bc1eng -f ./in
   printf '%s\n' 'Dokploy compose ID contains unsupported characters.' >&2
   exit 1
 }
-[[ $source_ref =~ ^observability-v3-([0-9a-f]{40})$ ]] || {
-  printf '%s\n' 'Dokploy source ref must be an immutable observability-v3-<40-character-sha> tag.' >&2
+[[ $source_ref =~ ^observability-([0-9a-f]{40})$ ]] || {
+  printf '%s\n' 'Dokploy source ref must be an immutable observability-<40-character-sha> tag.' >&2
   exit 1
 }
 expected_commit=${BASH_REMATCH[1]}
@@ -101,7 +101,7 @@ print(value)
 rendered=$(
   printf '%s' "$converted_yaml" |
     env \
-      BRAWLTOME_NETWORK_NAME=brawltome-v3 \
+      BRAWLTOME_NETWORK_NAME=brawltome \
       DISCORD_WEBHOOK_URL_FILE=/var/lib/brawltome-observability-secrets/discord-webhook-url \
       GRAFANA_ADMIN_PASSWORD_FILE=/var/lib/brawltome-observability-secrets/grafana-admin-password \
       METRICS_SCRAPE_SECRET_FILE=/var/lib/brawltome-observability-secrets/metrics-scrape-secret \
@@ -113,7 +113,7 @@ rendered=$(
       PROMETHEUS_RETENTION_SIZE=9GB \
       docker compose --file - config --format json
 )
-printf '%s' "$rendered" | BRAWLTOME_NETWORK_NAME=brawltome-v3 bun run observability:verify-rendered-topology
+printf '%s' "$rendered" | BRAWLTOME_NETWORK_NAME=brawltome bun run observability:verify-rendered-topology
 
 verify_remote_ref
 verify_dokploy_metadata
