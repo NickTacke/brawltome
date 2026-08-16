@@ -20,7 +20,7 @@ jobs:
       - run: bun run architecture:check
       - run: docker compose config --quiet
 
-  v3-deployment:
+  infrastructure:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -46,11 +46,12 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - run: bun test tooling/deployment/tests apps/web/tests/lib/api-url.test.ts apps/web/tests/lib/web-readiness.test.ts apps/api/tests/runtime-lifecycle.test.ts
+      - run: bun run infra:app:check
+      - run: bun test infra/app/tests apps/web/tests/lib/api-url.test.ts apps/web/tests/lib/web-readiness.test.ts apps/api/tests/runtime-lifecycle.test.ts
       - run: bun test apps/api/tests/runtime-process.test.ts
       - run: bun test apps/api/tests/refresh-operations.postgres.test.ts
-      - run: V3_DISCORD_CLIENT_ID=123456789012345678 V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres V3_TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord --profile operator -f deploy/v3/compose.yml config --quiet
-      - run: V3_DISCORD_CLIENT_ID=123456789012345678 V3_POSTGRES_DATA_ROOT=/srv/brawltome-v3/postgres V3_TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord --profile operator -f deploy/v3/compose.yml build
+      - run: DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord --profile operator -f infra/app/compose.yml config --quiet
+      - run: DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord --profile operator -f infra/app/compose.yml build
 
   contracts:
     runs-on: ubuntu-latest
