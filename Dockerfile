@@ -1,12 +1,9 @@
 FROM postgres:16.8-alpine@sha256:3b057e1c2c6dfee60a30950096f3fab33be141dbb0fdd7af3d477083de94166c AS postgres
-LABEL org.opencontainers.image.created="" \
-      org.opencontainers.image.description="Brawlhalla player tracking" \
+LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
-      org.opencontainers.image.revision="" \
       org.opencontainers.image.source="https://github.com/NickTacke/brawltome" \
       org.opencontainers.image.title="BrawlTome" \
-      org.opencontainers.image.url="https://brawltome.app" \
-      org.opencontainers.image.version=""
+      org.opencontainers.image.url="https://brawltome.app"
 COPY --chmod=0555 infra/app/postgres/10-runtime-role.sh /docker-entrypoint-initdb.d/10-runtime-role.sh
 
 FROM postgres AS dead-letter-role
@@ -14,14 +11,11 @@ COPY --chmod=0555 infra/app/postgres/configure-dead-letter-role.sh /usr/local/bi
 ENTRYPOINT ["/usr/local/bin/configure-dead-letter-role"]
 
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS base
-LABEL org.opencontainers.image.created="" \
-      org.opencontainers.image.description="Brawlhalla player tracking" \
+LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
-      org.opencontainers.image.revision="" \
       org.opencontainers.image.source="https://github.com/NickTacke/brawltome" \
       org.opencontainers.image.title="BrawlTome" \
-      org.opencontainers.image.url="https://brawltome.app" \
-      org.opencontainers.image.version=""
+      org.opencontainers.image.url="https://brawltome.app"
 WORKDIR /app
 
 FROM base AS install
@@ -95,14 +89,11 @@ ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 RUN test -n "$NEXT_PUBLIC_API_URL" && bun run --filter @brawltome/web build
 
 FROM node:22.14.0-bookworm-slim@sha256:1c18d9ab3af4585870b92e4dbc5cac5a0dc77dd13df1a5905cea89fc720eb05b AS web
-LABEL org.opencontainers.image.created="" \
-      org.opencontainers.image.description="Brawlhalla player tracking" \
+LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
-      org.opencontainers.image.revision="" \
       org.opencontainers.image.source="https://github.com/NickTacke/brawltome" \
       org.opencontainers.image.title="BrawlTome" \
-      org.opencontainers.image.url="https://brawltome.app" \
-      org.opencontainers.image.version=""
+      org.opencontainers.image.url="https://brawltome.app"
 WORKDIR /app
 ENV HOSTNAME=0.0.0.0
 ENV NODE_ENV=production
