@@ -112,6 +112,23 @@ groups:
           summary: "{{ $labels.runtime }} HTTP 5xx rate exceeds one percent"
           description: "The fixed launch error boundary is breached over the five-minute window."
 
+      - alert: PostgresBackupIntegrityFailed
+        expr: |
+          brawltome_postgres_backup_integrity_ok{generation="v3"} == 0
+          or absent(brawltome_postgres_backup_integrity_ok{generation="v3"})
+          or absent(brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"})
+          or absent(brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"})
+          or time() - brawltome_postgres_backup_integrity_last_run_timestamp_seconds{generation="v3"} > 28800
+          or time() - brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds{generation="v3"} > 28800
+        for: 5m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: backup-integrity
+        annotations:
+          summary: "PostgreSQL backup integrity verification failed"
+          description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+
       - alert: TelemetryStorageNearQuota
         expr: 1 - (node_filesystem_avail_bytes{mountpoint=~"/storage/(prometheus|loki|tempo)"} / node_filesystem_size_bytes{mountpoint=~"/storage/(prometheus|loki|tempo)"}) >= 0.8
         for: 5m
