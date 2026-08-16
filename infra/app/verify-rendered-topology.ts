@@ -5,14 +5,6 @@ import { posix } from 'node:path'
 const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web'] as const
 const observabilityServices = new Set(['api', 'operations-worker', 'web'])
 
-const expectedBuildTargets: Record<string, string> = {
-  migration: 'migration',
-  postgres: 'postgres',
-  api: 'api',
-  'operations-worker': 'operations-worker',
-  web: 'web',
-}
-
 const expectedDependencies: Record<string, [service: string, condition: string]> = {
   api: ['migration', 'service_completed_successfully'],
   migration: ['postgres', 'service_healthy'],
@@ -113,9 +105,8 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (name !== 'migration' && readPath(service, 'deploy', 'replicas') !== 1) {
       violations.push(`${name} must have exactly one replica`)
     }
-    const target = expectedBuildTargets[name]
-    if (target && readPath(service, 'build', 'target') !== target) {
-      violations.push(`${name} must use build target ${target}`)
+    if (readPath(service, 'build', 'target') !== name) {
+      violations.push(`${name} must use build target ${name}`)
     }
     checkRuntimeContract(violations, name, service)
     checkRuntimeHardening(violations, name, service)
