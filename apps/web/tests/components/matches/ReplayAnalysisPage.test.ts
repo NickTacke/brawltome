@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatDuration, timelineX } from '@/app/matches/ReplayAnalysisPage'
+import { formatDuration, timelineX } from '@/app/matches/ReplayResultView'
 
 describe('replay result graphs', () => {
   test('formats duration and keeps KO markers inside the graph', () => {
