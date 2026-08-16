@@ -95,7 +95,7 @@ describe('recurring backup integrity verifier', () => {
     expect(hash).toMatch(/^[a-f0-9]{64}$/)
     expect(sidecarName).toBe(name)
     expect(sidecar.endsWith('\n')).toBe(true)
-    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok{generation="v3"} 1')
+    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 1')
 
     const verified = run(env)
     expect(verified.exitCode, verified.stderr.toString()).toBe(0)
@@ -112,9 +112,9 @@ describe('recurring backup integrity verifier', () => {
     expect(result.stderr.toString()).toContain('checksum sidecar does not match')
     expect(`${result.stdout}${result.stderr}`).not.toContain('must-not-appear')
     const failedMetrics = readFileSync(metrics, 'utf8')
-    expect(failedMetrics).toContain('brawltome_postgres_backup_integrity_ok{generation="v3"} 0')
+    expect(failedMetrics).toContain('brawltome_postgres_backup_integrity_ok 0')
     expect(failedMetrics).toMatch(
-      /brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds\{generation="v3"\} [1-9][0-9]*/,
+      /brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds [1-9][0-9]*/,
     )
   })
 
@@ -124,7 +124,7 @@ describe('recurring backup integrity verifier', () => {
 
     const result = run(missingRemoteEnv)
     expect(result.exitCode).not.toBe(0)
-    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok{generation="v3"} 0')
+    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
   })
 
   test('rejects a backup older than the eight-hour verification window', () => {
@@ -133,6 +133,6 @@ describe('recurring backup integrity verifier', () => {
     const result = run(env)
     expect(result.exitCode).not.toBe(0)
     expect(result.stderr.toString()).toContain('Latest backup is stale')
-    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok{generation="v3"} 0')
+    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
   })
 })

@@ -9,7 +9,7 @@ const preflight = resolve(root, 'infra/app/storage/verify-postgres-mount.sh')
 const temporaryDirectories: string[] = []
 
 function fixture(overrides: Record<string, string> = {}) {
-  const directory = mkdtempSync(join(tmpdir(), 'brawltome-v3-postgres-storage-'))
+  const directory = mkdtempSync(join(tmpdir(), 'brawltome-postgres-storage-'))
   temporaryDirectories.push(directory)
   const bin = join(directory, 'bin')
   const data = join(directory, 'postgres')
@@ -48,9 +48,9 @@ esac`,
     env: {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
-      V3_POSTGRES_DATA_ROOT: data,
-      V3_POSTGRES_MIN_FREE_BYTES: '2147483648',
-      V3_POSTGRES_QUOTA_BYTES: '25769803776',
+      POSTGRES_DATA_ROOT: data,
+      POSTGRES_MIN_FREE_BYTES: '2147483648',
+      POSTGRES_QUOTA_BYTES: '25769803776',
       MOCK_ALLOCATED_BLOCKS: '50331648',
       MOCK_AVAILABLE: '20000000000',
       MOCK_BACKING: join(directory, 'postgres.ext4'),
@@ -70,11 +70,11 @@ afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { force: true, recursive: true })
 })
 
-describe('V3 PostgreSQL storage preflight', () => {
+describe('PostgreSQL storage preflight', () => {
   test('accepts the dedicated quota-backed mount', () => {
     const result = spawnSync('sh', [preflight], { encoding: 'utf8', ...fixture() })
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain('V3 PostgreSQL storage preflight passed')
+    expect(result.stdout).toContain('PostgreSQL storage preflight passed')
   })
 
   test.each([
@@ -98,7 +98,7 @@ describe('V3 PostgreSQL storage preflight', () => {
     const withArgument = spawnSync('sh', [preflight, '--force'], { encoding: 'utf8', ...fixture() })
     const unsafeQuota = spawnSync('sh', [preflight], {
       encoding: 'utf8',
-      ...fixture({ V3_POSTGRES_QUOTA_BYTES: '01' }),
+      ...fixture({ POSTGRES_QUOTA_BYTES: '01' }),
     })
     expect(withArgument.status).toBe(64)
     expect(unsafeQuota.status).toBe(1)
