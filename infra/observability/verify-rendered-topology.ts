@@ -66,12 +66,7 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
   const violations: string[] = []
 
   checkExactKeys(violations, 'services', services, Object.keys(expectedServiceNetworks))
-  checkExactKeys(violations, 'networks', networks, [
-    'application',
-    'dokploy-network',
-    'notifications',
-    'observability',
-  ])
+  checkExactKeys(violations, 'networks', networks, ['application', 'dokploy-network', 'notifications', 'observability'])
   checkExactKeys(violations, 'secrets', secrets, Object.keys(expectedSecretFiles))
 
   for (const [name, expectedNetworks] of Object.entries(expectedServiceNetworks)) {
