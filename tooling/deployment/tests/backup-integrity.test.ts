@@ -47,8 +47,7 @@ case "$command" in
     [[ -e "$FAKE_REMOTE/$path" ]] && /bin/cat "$FAKE_REMOTE/$path"
     ;;
   rcat)
-    [[ $1 == --immutable ]]
-    path=\${2##*/}
+    path=\${1##*/}
     [[ ! -e "$FAKE_REMOTE/$path" ]]
     /bin/cat >"$FAKE_REMOTE/$path"
     ;;
