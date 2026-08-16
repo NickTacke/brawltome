@@ -45,6 +45,7 @@ case "$role" in
     ;;
   web)
     read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
+    read_secret MATCHES_PREVIEW_TOKEN "$secrets_root/matches_preview_token"
     read_secret METRICS_SCRAPE_SECRET "$secrets_root/metrics_scrape_secret"
     read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
     exec node apps/web/server.js

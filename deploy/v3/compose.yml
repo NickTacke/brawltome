@@ -209,6 +209,7 @@ services:
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
     secrets:
       - internal_api_secret
+      - matches_preview_token
       - metrics_scrape_secret
       - otel_authorization
     networks:
@@ -390,6 +391,9 @@ secrets:
   internal_api_secret:
     name: brawltome-v3_internal_api_secret
     file: /var/lib/brawltome-v3-secrets/internal-api-secret
+  matches_preview_token:
+    name: brawltome-v3_matches_preview_token
+    file: /var/lib/brawltome-v3-secrets/matches-preview-token
   metrics_scrape_secret:
     name: brawltome-v3_metrics_scrape_secret
     file: /var/lib/brawltome-v3-secrets/metrics-scrape-secret

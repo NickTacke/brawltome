@@ -134,6 +134,7 @@ describe('V3 production topology', () => {
       migration_database_url: 'migration-database-url',
       discord_token: 'discord-token',
       internal_api_secret: 'internal-api-secret',
+      matches_preview_token: 'matches-preview-token',
       metrics_scrape_secret: 'metrics-scrape-secret',
       otel_authorization: 'otel-authorization',
       postgres_owner_password: 'postgres-owner-password',
@@ -159,6 +160,7 @@ describe('V3 production topology', () => {
       expect.arrayContaining(['discord_client_secret', 'runtime_database_url', 'turnstile_secret_key']),
     )
     expect(rendered.services['v3-api'].secrets?.map(({ source }) => source)).not.toContain('migration_database_url')
+    expect(rendered.services['v3-web'].secrets?.map(({ source }) => source)).toContain('matches_preview_token')
     expect(rendered.services['v3-operations-worker'].secrets?.map(({ source }) => source)).toContain(
       'runtime_database_url',
     )

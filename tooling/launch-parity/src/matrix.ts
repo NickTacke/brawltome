@@ -364,7 +364,7 @@ export const launchParityMatrix: readonly ParityRow[] = [
   implemented(
     'matches.replay-analysis',
     'shell-navigation',
-    'Signed-in users upload replays and inspect durable Replay Processor results.',
+    'A temporary invite hides the replay-analysis UI while the public route remains a Soon destination; API authorization remains account-based.',
     ['/matches'],
     [
       'packages/contexts/replay-analysis/index.ts',

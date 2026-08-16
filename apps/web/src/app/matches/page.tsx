@@ -1,11 +1,12 @@
+import { matchesPreviewCookieName } from '@/lib/matches-preview'
 import type { Metadata } from 'next'
-import { ReplayAnalysisPage } from './ReplayAnalysisPage'
+import { cookies } from 'next/headers'
+import { MatchesContent } from './MatchesContent'
 
 export const metadata: Metadata = {
-  title: 'Replay Analysis',
-  description: 'Upload a Brawlhalla replay and inspect native match statistics.',
+  title: 'Matches - Coming Soon',
 }
 
-export default function Page() {
-  return <ReplayAnalysisPage />
+export default async function Page() {
+  return <MatchesContent previewCookie={(await cookies()).get(matchesPreviewCookieName)?.value} />
 }
