@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const verifier = resolve(import.meta.dir, '../../../deploy/v3/backups/verify-dokploy-backup-integrity.sh')
+const verifier = resolve(import.meta.dir, '../backups/verify-dokploy-backup-integrity.sh')
 const temporaryDirectories: string[] = []
 
 afterEach(() => {
