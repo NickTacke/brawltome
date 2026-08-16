@@ -13,7 +13,7 @@ services:
     user: "10001:10001"
     command: ["-config.file=/etc/loki/loki.yml"]
     volumes:
-      - ../loki/loki.yml:/etc/loki/loki.yml:ro
+      - ../../loki/loki.yml:/etc/loki/loki.yml:ro
     tmpfs:
       - /var/loki:rw,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0750,size=128m
     ports:
@@ -28,7 +28,7 @@ services:
     user: "10001:10001"
     command: ["-config.file=/etc/tempo/tempo.yml"]
     volumes:
-      - ../tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - ../../tempo/tempo.yml:/etc/tempo/tempo.yml:ro
     tmpfs:
       - /var/tempo:rw,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0750,size=128m
     ports:
@@ -48,8 +48,8 @@ services:
       GF_UNIFIED_ALERTING_ENABLED: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
     volumes:
-      - ../grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../grafana/dashboards:/var/lib/grafana/dashboards:ro
     tmpfs:
       - /var/lib/grafana:rw,noexec,nosuid,nodev,uid=472,gid=472,mode=0750,size=64m
       - /tmp:rw,noexec,nosuid,nodev,uid=472,gid=472,mode=0750,size=16m
@@ -66,7 +66,7 @@ services:
     user: "10001:10001"
     command: ["--config=/etc/otelcol/config.yml"]
     volumes:
-      - ../otel-collector/config.yml:/etc/otelcol/config.yml:ro
+      - ../../otel-collector/config.yml:/etc/otelcol/config.yml:ro
     secrets:
       - otel_ingest_token
     ports:
@@ -78,4 +78,4 @@ services:
 
 secrets:
   otel_ingest_token:
-    file: ./fixtures/otel-ingest-token
+    file: ./otel-ingest-token
