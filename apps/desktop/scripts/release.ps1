@@ -1,11 +1,11 @@
-# scripts/release.ps1
+# apps/desktop/scripts/release.ps1
 #
 # Bumps the desktop app version in apps/desktop/Cargo.toml + apps/desktop/app/tauri.conf.json,
 # commits the change, and creates a v$VERSION tag locally.
 # Manual `git push origin master --tags` is intentional - gives a chance to inspect
 # before triggering CI.
 #
-# Usage: ./scripts/release.ps1 0.1.0
+# Usage: ./apps/desktop/scripts/release.ps1 0.1.0
 
 param(
     [Parameter(Mandatory=$true)]
@@ -23,9 +23,9 @@ if ($Version -notmatch '^\d+\.\d+\.\d+(-[\w\.]+)?$') {
     exit 1
 }
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
-$CargoToml = Join-Path $RepoRoot "apps/desktop/Cargo.toml"
-$TauriConf = Join-Path $RepoRoot "apps/desktop/app/tauri.conf.json"
+$DesktopRoot = Split-Path -Parent $PSScriptRoot
+$CargoToml = Join-Path $DesktopRoot "Cargo.toml"
+$TauriConf = Join-Path $DesktopRoot "app/tauri.conf.json"
 
 if (-not (Test-Path $CargoToml)) {
     Write-Error "Could not find $CargoToml"
