@@ -15,6 +15,7 @@
   "dependencies": {
     "@brawltome/accounts": "workspace:*",
     "@brawltome/clan": "workspace:*",
+    "@brawltome/database": "workspace:*",
     "@brawltome/discovery": "workspace:*",
     "@brawltome/player": "workspace:*",
     "@brawltome/ranking": "workspace:*",

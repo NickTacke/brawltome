@@ -4,6 +4,7 @@ import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { BhApiClient, type BhApiClientOptions, createBhApiRequestQueue } from '@brawltome/bhapi'
 import { processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan/composition'
+import { globalMigrationInventory } from '@brawltome/database/migrations'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
 import {
@@ -39,7 +40,6 @@ import {
 } from './refresh-operations-worker'
 import { readHealthPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
-import { runtimeMigrationInventory } from './runtime-migration-inventory'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
@@ -104,7 +104,7 @@ const rankedPlayers = createPostgresRankedPlayers(connectionString, {
 const clans = createPostgresClans(connectionString)
 const playerDiscoverySource = createPostgresPlayerDiscoverySource(connectionString)
 const clanDiscoverySource = createPostgresClanDiscoverySource(connectionString)
-const postgresReadiness = createPostgresReadiness(connectionString, runtimeMigrationInventory)
+const postgresReadiness = createPostgresReadiness(connectionString, globalMigrationInventory)
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
 let listener: Awaited<ReturnType<typeof operations.listen>> | undefined

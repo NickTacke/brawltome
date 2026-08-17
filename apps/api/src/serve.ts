@@ -2,6 +2,7 @@ import { AccountsMaintenanceError } from '@brawltome/accounts'
 import { createPostgresAccounts } from '@brawltome/accounts/composition'
 import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
+import { globalMigrationInventory } from '@brawltome/database/migrations'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createPostgresCareerPlayers, createPostgresRankedPlayers } from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
@@ -34,7 +35,6 @@ import { createRefreshOperationRoutes } from './routes/refresh-operations.routes
 import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
 import { readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
-import { runtimeMigrationInventory } from './runtime-migration-inventory'
 import { createRuntimeTelemetry } from './telemetry'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
@@ -78,7 +78,7 @@ const ranking = createPostgresRanking(databaseUrl)
 const statistics = createPostgresStatistics(databaseUrl)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
-const postgresReadiness = createPostgresReadiness(databaseUrl, runtimeMigrationInventory)
+const postgresReadiness = createPostgresReadiness(databaseUrl, globalMigrationInventory)
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
 
 const lifecycle = createRuntimeLifecycle({
