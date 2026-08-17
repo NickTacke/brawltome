@@ -100,6 +100,47 @@ export type LeaderboardView =
       pageSize: number
     }
 
+export type RecentActivityEntry = {
+  standing: number
+  identity: PublishedLeaderboardIdentity
+  region: RegionalLeaderboardScope
+  rating: number
+  ratingDelta: number
+  winsDelta: number
+  lossesDelta: number
+  gamesDelta: number
+}
+
+export type RecentActivityView =
+  | {
+      status: 'fresh' | 'stale'
+      mode: LeaderboardMode
+      region: LeaderboardScope
+      currentSnapshotId: string
+      previousObservedAt: string
+      currentObservedAt: string
+      publishedAt: string
+      expectedNextPublicationAt: string
+      provenance: {
+        source: 'brawlhalla-v1-ranked-leaderboard'
+        contractVersion: 1 | 2
+        pageDepth: number
+      }
+      page: number
+      pageSize: number
+      hasMore: boolean
+      totalRows: number
+      entries: RecentActivityEntry[]
+    }
+  | {
+      status: 'unavailable'
+      reason: 'not_enough_history' | 'scan_gap'
+      mode: LeaderboardMode
+      region: LeaderboardScope
+      page: number
+      pageSize: number
+    }
+
 export type PlayerValhallanEvidence = {
   oneVsOne: boolean
   fixedTwoVsTwoTeams: Array<{ brawlhallaIdOne: number; brawlhallaIdTwo: number }>
@@ -119,6 +160,14 @@ export type RankingQueries = {
     snapshotId?: string
     now?: Date
   }): Promise<LeaderboardView>
+  getRecentActivity(input: {
+    mode: LeaderboardMode
+    region: LeaderboardScope
+    page: number
+    pageSize?: number
+    snapshotId?: string
+    now?: Date
+  }): Promise<RecentActivityView>
 }
 
 export type RankingPublicationStore = {

@@ -5,6 +5,8 @@ export {
   type LeaderboardScope,
   type LeaderboardView,
   type PlayerValhallanEvidence,
+  type RecentActivityEntry,
+  type RecentActivityView,
   type PlayerValhallanQueries,
   type PublishedLeaderboardRow,
   type RankingQueries,

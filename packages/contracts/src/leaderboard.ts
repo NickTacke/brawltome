@@ -14,6 +14,7 @@ const utcDateTimeSchema = z.iso
   .meta({ format: 'date-time' })
 const positiveInt32 = z.int().positive().max(2_147_483_647).meta({ format: 'int32' })
 const nonnegativeInt32 = z.int().min(0).max(2_147_483_647).meta({ format: 'int32' })
+const signedInt32 = z.int().min(-2_147_483_648).max(2_147_483_647).meta({ format: 'int32' })
 const playerNameSchema = z
   .string()
   .refine((name) => [...name].length <= 256, 'Player name must contain at most 256 Unicode characters')
@@ -66,6 +67,8 @@ export const leaderboardInputSchema = z
   })
   .strict()
 
+export const leaderboardRecentActivityInputSchema = leaderboardInputSchema
+
 const entryMetrics = {
   standing: positiveInt32,
   sourceRank: positiveInt32,
@@ -96,14 +99,16 @@ export const leaderboardEntrySchema = z.union([
   leaderboard3v3EntrySchema,
 ])
 
+const officialProvenanceSchema = z
+  .object({
+    source: z.literal('brawlhalla-v1-ranked-leaderboard'),
+    contractVersion: z.union([z.literal(1), z.literal(2)]),
+    pageDepth: z.int().min(1).max(20),
+  })
+  .strict()
+
 const provenanceSchema = z.union([
-  z
-    .object({
-      source: z.literal('brawlhalla-v1-ranked-leaderboard'),
-      contractVersion: z.union([z.literal(1), z.literal(2)]),
-      pageDepth: z.int().min(1).max(20),
-    })
-    .strict(),
+  officialProvenanceSchema,
   z
     .object({
       source: z.literal('v2-legacy'),
@@ -162,6 +167,85 @@ const unavailableSchema = z
 
 export const leaderboardOutputSchema = z.union([availableOutputSchema, unavailableSchema])
 
+const activityMetrics = {
+  standing: positiveInt32,
+  region: leaderboardRegionSchema,
+  rating: nonnegativeInt32,
+  ratingDelta: signedInt32,
+  winsDelta: nonnegativeInt32,
+  lossesDelta: nonnegativeInt32,
+  gamesDelta: positiveInt32,
+} as const
+
+function activityEntrySchema<T extends z.ZodType>(identity: T) {
+  return z
+    .object({ ...activityMetrics, identity })
+    .strict()
+    .refine(
+      ({ gamesDelta, winsDelta, lossesDelta }) => gamesDelta === winsDelta + lossesDelta,
+      'gamesDelta must equal winsDelta plus lossesDelta',
+    )
+}
+
+const activity1v1EntrySchema = activityEntrySchema(oneVsOneIdentitySchema)
+const activityFixed2v2EntrySchema = activityEntrySchema(fixedTwoVsTwoIdentitySchema)
+const activitySolo2v2EntrySchema = activityEntrySchema(soloTwoVsTwoIdentitySchema)
+const activity3v3EntrySchema = activityEntrySchema(threeVsThreeIdentitySchema)
+export const leaderboardRecentActivityEntrySchema = z.union([
+  activity1v1EntrySchema,
+  activityFixed2v2EntrySchema,
+  activitySolo2v2EntrySchema,
+  activity3v3EntrySchema,
+])
+
+const activityAvailableFields = {
+  region: leaderboardScopeSchema,
+  currentSnapshotId: z.uuid(),
+  previousObservedAt: utcDateTimeSchema,
+  currentObservedAt: utcDateTimeSchema,
+  publishedAt: utcDateTimeSchema,
+  expectedNextPublicationAt: utcDateTimeSchema,
+  provenance: officialProvenanceSchema,
+  page: z.int().min(1).max(500),
+  pageSize: z.int().min(1).max(100),
+  hasMore: z.boolean(),
+  totalRows: nonnegativeInt32,
+} as const
+
+function activityAvailableSchema<
+  const Status extends 'fresh' | 'stale',
+  const Mode extends (typeof leaderboardModes)[number],
+  Entry extends z.ZodType,
+>(status: Status, mode: Mode, entries: Entry) {
+  return z
+    .object({ status: z.literal(status), mode: z.literal(mode), ...activityAvailableFields, entries: z.array(entries) })
+    .strict()
+}
+
+const activityAvailableOutputSchema = z.union([
+  activityAvailableSchema('fresh', '1v1', activity1v1EntrySchema),
+  activityAvailableSchema('stale', '1v1', activity1v1EntrySchema),
+  activityAvailableSchema('fresh', '2v2', activityFixed2v2EntrySchema),
+  activityAvailableSchema('stale', '2v2', activityFixed2v2EntrySchema),
+  activityAvailableSchema('fresh', 'solo2v2', activitySolo2v2EntrySchema),
+  activityAvailableSchema('stale', 'solo2v2', activitySolo2v2EntrySchema),
+  activityAvailableSchema('fresh', '3v3', activity3v3EntrySchema),
+  activityAvailableSchema('stale', '3v3', activity3v3EntrySchema),
+])
+
+const activityUnavailableSchema = z
+  .object({
+    status: z.literal('unavailable'),
+    reason: z.enum(['not_enough_history', 'scan_gap']),
+    mode: leaderboardModeSchema,
+    region: leaderboardScopeSchema,
+    page: z.int().min(1).max(500),
+    pageSize: z.int().min(1).max(100),
+  })
+  .strict()
+
+export const leaderboardRecentActivityOutputSchema = z.union([activityAvailableOutputSchema, activityUnavailableSchema])
+
 export type LeaderboardRegion = z.infer<typeof leaderboardRegionSchema>
 export type LeaderboardScope = z.infer<typeof leaderboardScopeSchema>
 export type LeaderboardMode = z.infer<typeof leaderboardModeSchema>
@@ -169,7 +253,14 @@ export type LeaderboardInput = z.infer<typeof leaderboardInputSchema>
 export type LeaderboardIdentity = z.infer<typeof leaderboardIdentitySchema>
 export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>
 export type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
+export type LeaderboardRecentActivityInput = z.infer<typeof leaderboardRecentActivityInputSchema>
+export type LeaderboardRecentActivityEntry = z.infer<typeof leaderboardRecentActivityEntrySchema>
+export type LeaderboardRecentActivityOutput = z.infer<typeof leaderboardRecentActivityOutputSchema>
 
 export function parseLeaderboardOutput(value: unknown): LeaderboardOutput {
   return leaderboardOutputSchema.parse(value)
+}
+
+export function parseLeaderboardRecentActivityOutput(value: unknown): LeaderboardRecentActivityOutput {
+  return leaderboardRecentActivityOutputSchema.parse(value)
 }

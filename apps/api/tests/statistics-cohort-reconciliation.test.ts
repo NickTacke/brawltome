@@ -8,6 +8,8 @@ import {
   reconcileStatisticsCohort,
 } from '../src/statistics-cohort-reconciliation'
 
+type LeaderboardQueries = Pick<RankingQueries, 'getLeaderboard'>
+
 const snapshotId = '00000000-0000-4000-8000-000000000001'
 const generationId = '10000000-0000-4000-8000-000000000001'
 
@@ -44,7 +46,7 @@ function view(page: number, ids: number[], hasMore: boolean) {
 describe('Statistics immutable Ranking adapter', () => {
   test('pins every page to the first snapshot and preserves generation lineage', async () => {
     const calls: Array<{ page: number; snapshotId?: string }> = []
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         calls.push({ page: input.page, snapshotId: input.snapshotId })
         return input.page === 1 ? view(1, [1, 2], true) : view(2, [3], false)
@@ -70,7 +72,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
   test('loads exactly all nine pinned regional snapshots from one immutable generation', async () => {
     const calls: string[] = []
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         calls.push(`${input.region}:${input.page}`)
         const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
@@ -131,7 +133,7 @@ describe('Statistics immutable Ranking adapter', () => {
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
         const regional = view(1, [regionIndex + 1], false)
@@ -173,7 +175,7 @@ describe('Statistics immutable Ranking adapter', () => {
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         if (input.region !== 'EU') {
           return {
@@ -248,7 +250,7 @@ describe('Statistics immutable Ranking adapter', () => {
       },
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard() {
         throw new Error('settled generation must not reload Ranking snapshots')
       },
@@ -296,7 +298,7 @@ describe('Statistics immutable Ranking adapter', () => {
         return 'transitioned' as const
       },
     } as unknown as StatisticsOperations
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard() {
         throw new Error('an active generation must not reload Ranking snapshots')
       },
@@ -316,7 +318,7 @@ describe('Statistics immutable Ranking adapter', () => {
   })
 
   test('returns no cohort before Rankings publishes the EU snapshot', async () => {
-    const ranking: RankingQueries = {
+    const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         return {
           status: 'unavailable',

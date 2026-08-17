@@ -19,5 +19,5 @@ export const navItems: NavItem[] = [
   { icon: Gamepad as NavIcon, label: 'Matches', href: '/matches', wip: true },
   { icon: BookBookmark as NavIcon, label: 'Learn', href: '/learn', wip: true },
   { icon: Cup as NavIcon, label: 'Tournaments', href: '/tournaments', wip: true },
-  { icon: UsersGroupRounded as NavIcon, label: 'Feed', href: '/feed', wip: true },
+  { icon: UsersGroupRounded as NavIcon, label: 'Queue', href: '/queue' },
 ]
