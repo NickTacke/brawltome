@@ -122,12 +122,14 @@ describe('Queue activity presentation', () => {
     expect(html).toContain('2L')
   })
 
-  test('keeps stale, empty, history, gap, and transport failures distinct and accessible', () => {
+  test('renders stale results without a scan alert', () => {
     const stale = render({ ...playerView, status: 'stale' })
-    expect(stale).toContain('role="alert"')
-    expect(stale).toContain('Last activity scan: 2026-08-17 12:15 UTC.')
-    expect(stale).not.toContain('Activity may be outdated')
+    expect(stale).toContain('aria-label="Recent ranked activity"')
+    expect(stale).not.toContain('role="alert"')
+    expect(stale).not.toContain('Last activity scan')
+  })
 
+  test('keeps empty, history, gap, and transport failures distinct and accessible', () => {
     const empty = render({ ...base, totalRows: 0, entries: [] })
     expect(empty).toContain('No qualifying ranked activity was observed in this scan interval.')
     expect(empty).toContain('<output')
