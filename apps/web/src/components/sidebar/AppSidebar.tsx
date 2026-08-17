@@ -1,7 +1,7 @@
 'use client'
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import type { AccountContract } from '@brawltome/contracts'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@brawltome/ui'
 import { BookmarkSquare, User } from '@solar-icons/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'

@@ -1,6 +1,6 @@
+import { Card, Progress } from '@/components/ui'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
 import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
-import { Card, Progress } from '@brawltome/ui'
 import { CombatCard } from './CombatCard'
 import { LegendSection } from './LegendSection'
 import { formatHours, getWeaponIcon } from './shared'

@@ -1,8 +1,8 @@
 'use client'
 
+import { Badge, Card, CardContent } from '@/components/ui'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import type { PlayerRankedProfileContract } from '@brawltome/contracts'
-import { Badge, Card, CardContent } from '@brawltome/ui'
 import { Clock } from 'lucide-react'
 import Link from 'next/link'
 import { WinLossBar, getRankBanner } from './shared'

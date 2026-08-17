@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@brawltome/ui'
+import { Button } from '@/components/ui'
 import { ArrowLeft, Home } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'

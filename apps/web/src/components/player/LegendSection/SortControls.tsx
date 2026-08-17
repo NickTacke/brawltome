@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@brawltome/ui'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui'
 import { LEGEND_SORT_OPTIONS, type LegendSortKey } from './utils'
 
 interface SortControlsProps {

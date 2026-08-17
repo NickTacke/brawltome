@@ -1,7 +1,7 @@
 'use client'
 
+import { Skeleton } from '@/components/ui'
 import { signIn, useAccount } from '@/lib/auth'
-import { Skeleton } from '@brawltome/ui'
 import { Bookmark, Monitor, Trophy, UserRound } from 'lucide-react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'

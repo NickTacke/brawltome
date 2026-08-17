@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { useMemo, useState } from 'react'
 import {
   Area,

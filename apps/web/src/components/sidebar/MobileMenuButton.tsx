@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@brawltome/ui'
+import { Button } from '@/components/ui'
 import { Menu } from 'lucide-react'
 
 import { useSidebar } from './SidebarProvider'

@@ -1,7 +1,5 @@
 'use client'
 
-import { saveAccountPreferences, useAccount, useAccountPreferences } from '@/lib/auth'
-import { trpc } from '@/lib/trpc'
 import {
   Button,
   Card,
@@ -16,7 +14,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@brawltome/ui'
+} from '@/components/ui'
+import { saveAccountPreferences, useAccount, useAccountPreferences } from '@/lib/auth'
+import { trpc } from '@/lib/trpc'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

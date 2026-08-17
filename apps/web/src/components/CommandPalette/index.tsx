@@ -1,9 +1,9 @@
 'use client'
 
 import { navItems } from '@/components/sidebar/nav-items'
+import { Avatar, AvatarFallback, AvatarImage, Card } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
 import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
-import { Avatar, AvatarFallback, AvatarImage, Card } from '@brawltome/ui'
 import { Shield } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

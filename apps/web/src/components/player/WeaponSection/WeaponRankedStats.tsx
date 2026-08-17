@@ -1,8 +1,8 @@
 'use client'
 
+import { Avatar, AvatarImage } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
-import { Avatar, AvatarImage } from '@brawltome/ui'
 import { WinLossBar } from '../shared'
 import type { WeaponDerived } from './utils'
 

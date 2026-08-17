@@ -1,3 +1,4 @@
+import { Card } from '@/components/ui'
 import {
   type CareerWeaponExactRatioContract,
   type CareerWeaponUsageHistoryOutputContract,
@@ -6,7 +7,6 @@ import {
   careerWeaponUsageBracketScopes,
   careerWeaponUsageRegionScopes,
 } from '@brawltome/contracts'
-import { Card } from '@brawltome/ui'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { CareerWeaponUsageHistory } from './CareerWeaponUsageHistory'

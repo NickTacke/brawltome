@@ -1,7 +1,7 @@
 'use client'
 
+import { TableCell, TableRow } from '@/components/ui'
 import { fixEncoding, formatNum } from '@/lib/utils'
-import { TableCell, TableRow } from '@brawltome/ui'
 import { Crown, Shield, User, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import type { ClanMember } from './utils'
