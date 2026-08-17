@@ -89,8 +89,15 @@ function Appearance({ playerId }: { playerId: string }) {
   return (
     <div className="flex items-center gap-3">
       <Avatar className="h-12 w-12 rounded-md border border-border bg-muted">
-        {imageUrl && <img src={imageUrl} alt={appearance.name} className="rounded-md object-cover object-top" />}
-        <AvatarFallback className="rounded-md">{player.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={appearance.name}
+            className="aspect-square h-full w-full rounded-md object-cover object-top"
+          />
+        ) : (
+          <AvatarFallback className="rounded-md">{player.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+        )}
       </Avatar>
       <div>
         <Link href={`/matches?player=${player.id}`} className="font-bold hover:text-primary">
