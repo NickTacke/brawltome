@@ -3,7 +3,9 @@ import {
   buildQueueFilterQueryString,
   buildQueuePageQueryString,
   formatSignedDelta,
+  parseQueuePreference,
   parseQueueSearchParams,
+  queuePreferenceValue,
 } from '../../../src/components/Queue/utils'
 
 const snapshotId = '10000000-0000-4000-8000-000000000004'
@@ -39,6 +41,33 @@ describe('Queue URL filters', () => {
     const filters = { mode: '1v1' as const, region: 'EU' as const, page: 3, snapshotId }
     expect(buildQueueFilterQueryString(filters)).toBe('mode=1v1&region=EU&page=3')
     expect(buildQueuePageQueryString(filters, 4, snapshotId)).toBe(`mode=1v1&region=EU&page=4&snapshotId=${snapshotId}`)
+  })
+})
+
+describe('Queue browser preference', () => {
+  test('validates one versioned mode and region pair', () => {
+    expect(parseQueuePreference('v1.2v2.EU')).toEqual({ mode: '2v2', region: 'EU' })
+    for (const value of [undefined, '', 'v2.2v2.EU', 'v1.retired.EU', 'v1.2v2.mars', 'v1.2v2.EU.extra']) {
+      expect(parseQueuePreference(value)).toBeUndefined()
+    }
+  })
+
+  test('uses remembered filters as defaults while valid URL filters win', () => {
+    const remembered = { mode: '2v2' as const, region: 'EU' as const }
+    expect(parseQueueSearchParams({}, remembered)).toEqual({
+      mode: '2v2',
+      region: 'EU',
+      page: 1,
+      snapshotId: undefined,
+    })
+    expect(parseQueueSearchParams({ mode: '3v3', region: 'US-W' }, remembered)).toMatchObject({
+      mode: '3v3',
+      region: 'US-W',
+    })
+  })
+
+  test('serializes the versioned preference value', () => {
+    expect(queuePreferenceValue({ mode: 'solo2v2', region: 'US-E' })).toBe('v1.solo2v2.US-E')
   })
 })
 
