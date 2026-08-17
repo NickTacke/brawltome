@@ -47,9 +47,14 @@ case "$command" in
     [[ -e "$FAKE_REMOTE/$path" ]] && /bin/cat "$FAKE_REMOTE/$path"
     ;;
   rcat)
-    path=\${1##*/}
-    [[ ! -e "$FAKE_REMOTE/$path" ]]
-    /bin/cat >"$FAKE_REMOTE/$path"
+    printf '%s\n' 'Failed to copy: operation error S3: PutObject, https response error StatusCode: 501' >&2
+    exit 1
+    ;;
+  copyto)
+    source=$1
+    path=\${2##*/}
+    [[ -f $source && ! -e "$FAKE_REMOTE/$path" ]]
+    /bin/cp "$source" "$FAKE_REMOTE/$path"
     ;;
   *) exit 64 ;;
 esac
