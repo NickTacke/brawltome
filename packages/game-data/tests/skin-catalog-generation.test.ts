@@ -1,4 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { resolveExtractRoot, validateGeneratedData } from '../scripts/ingest'
 import {
   type OfficialCrossover,
   buildSkinCatalog,
@@ -6,6 +10,9 @@ import {
   parseOfficialCrossovers,
 } from '../scripts/skin-catalog'
 import type { Legend } from '../src/types'
+
+const preflightMessage =
+  'BRAWLTOME_SWZ_EXTRACT_ROOT must be an absolute directory containing Game/_manifest.json and Init/_manifest.json'
 
 const legends: Legend[] = [
   {
@@ -49,6 +56,87 @@ const costumes = [
   { costumeName: 'Viking', skinId: 3, ownerHero: 'Viking', isCrossover: false },
   { costumeName: 'Cena', skinId: 408, ownerHero: 'Ninja', isCrossover: true },
 ]
+
+test('requires an explicit complete extract root before refresh', () => {
+  expect(() => resolveExtractRoot(undefined)).toThrow(preflightMessage)
+  expect(() => resolveExtractRoot('research/swz-extract/out')).toThrow(preflightMessage)
+
+  const root = mkdtempSync(join(tmpdir(), 'brawltome-extract-'))
+  try {
+    mkdirSync(join(root, 'Game'))
+    writeFileSync(join(root, 'Game', '_manifest.json'), '[]')
+    expect(() => resolveExtractRoot(root)).toThrow(preflightMessage)
+    mkdirSync(join(root, 'Init'))
+    writeFileSync(join(root, 'Init', '_manifest.json'), '[]')
+    expect(resolveExtractRoot(root)).toBe(root)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('validates skins against legends before generated files are emitted', () => {
+  expect(() =>
+    validateGeneratedData({
+      legends,
+      levels: [
+        {
+          levelId: 1,
+          levelName: 'TestMap',
+          displayName: 'Test Map',
+          devOnly: false,
+          testLevel: false,
+          fileName: null,
+        },
+      ],
+      powers: [
+        {
+          powerId: 1,
+          powerName: 'TestPower',
+          baseDamage: 1,
+          fixedImpulse: 0,
+          variableImpulse: 0,
+          minimumImpulse: 0,
+          castTime: '1',
+          recoverTime: '1',
+          fixedRecoverTime: '1',
+          fixedStunTime: 0,
+          cooldownTime: 0,
+          onHitCooldownTime: 0,
+          aoeRadiusX: 0,
+          aoeRadiusY: 0,
+          isAirPower: false,
+          isSignature: false,
+          isMultihit: false,
+          isAntiair: false,
+          endOnHit: false,
+          cancelGravity: false,
+          wallCancel: false,
+          hurtboxName: null,
+        },
+      ],
+      hurtboxes: [
+        {
+          hurtboxName: 'TestBox',
+          hurtboxId: 1,
+          animClass: 'Test',
+          animName: 'Idle',
+          width: 1,
+          height: 1,
+        },
+      ],
+      skins: [
+        {
+          skinId: 408,
+          skinName: 'Cena',
+          legendId: 999,
+          isCrossover: true,
+          displayName: 'John Cena',
+          imageUrl: 'https://cms.brawlhalla.com/cena.png',
+        },
+      ],
+    }),
+  ).toThrow('skin 408 references unknown legend 999')
+})
 
 describe('official crossover parsing', () => {
   test('parses the complete strict response', () => {
