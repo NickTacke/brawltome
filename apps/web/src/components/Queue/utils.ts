@@ -22,20 +22,38 @@ export interface QueueFilters {
   snapshotId?: string
 }
 
+export type QueuePreference = Pick<QueueFilters, 'mode' | 'region'>
+
+export const QUEUE_PREFERENCE_COOKIE = 'brawltome-queue'
+const defaultQueuePreference: QueuePreference = { mode: '1v1', region: 'all' }
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
 function scalar(value: string | string[] | undefined): string | null {
   return typeof value === 'string' ? value : null
 }
 
-export function parseQueueSearchParams(params: QueueSearchParams): QueueFilters {
+export function parseQueueSearchParams(
+  params: QueueSearchParams,
+  defaults: QueuePreference = defaultQueuePreference,
+): QueueFilters {
   const snapshotId = scalar(params.snapshotId)
   return {
-    mode: parseEnum(scalar(params.mode), BRACKET_IDS, '1v1'),
-    region: parseEnum(scalar(params.region), REGION_IDS, 'all'),
+    mode: parseEnum(scalar(params.mode), BRACKET_IDS, defaults.mode),
+    region: parseEnum(scalar(params.region), REGION_IDS, defaults.region),
     page: parseInteger(scalar(params.page), { min: 1, max: MAX_PAGE, default: 1 }),
     snapshotId: snapshotId && uuidPattern.test(snapshotId) ? snapshotId : undefined,
   }
+}
+
+export function parseQueuePreference(value: string | undefined): QueuePreference | undefined {
+  const [version, rawMode, rawRegion, extra] = value?.split('.') ?? []
+  const mode = BRACKET_IDS.find((candidate) => candidate === rawMode)
+  const region = REGION_IDS.find((candidate) => candidate === rawRegion)
+  return version === 'v1' && mode && region && extra === undefined ? { mode, region } : undefined
+}
+
+export function queuePreferenceValue({ mode, region }: QueuePreference): string {
+  return `v1.${mode}.${region}`
 }
 
 export function buildQueueFilterQueryString(filters: QueueFilters): string {
