@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { ReplayReportView } from '@/app/matches/ReplayReportView'
 import { ReplayResultView, formatDuration, timelineX } from '@/app/matches/ReplayResultView'
+import { getPreviewMatch, replayReportFromPreview } from '@/app/matches/matches-preview-fixtures'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { completedReplayJob } from '../../fixtures/completed-replay-job'
@@ -9,6 +11,17 @@ describe('replay result graphs', () => {
     expect(formatDuration(113_296)).toBe('1:53')
     expect(timelineX(0, 113_296)).toBe(20)
     expect(timelineX(200_000, 113_296)).toBe(980)
+  })
+
+  test('labels fixture-backed reports as preview data', () => {
+    const previewMatch = getPreviewMatch('preview-final')
+    if (!previewMatch) throw new Error('Preview fixture is missing')
+
+    const html = renderToStaticMarkup(
+      createElement(ReplayReportView, { report: replayReportFromPreview(previewMatch) }),
+    )
+
+    expect(html).toContain('Preview data')
   })
 
   test('renders the visual report in the approved order with truthful source data', () => {
