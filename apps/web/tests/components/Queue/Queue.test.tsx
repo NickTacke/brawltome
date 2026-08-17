@@ -109,7 +109,7 @@ describe('Queue activity presentation', () => {
     expect(html).toContain('Ada with an exceptionally long tournament name')
     expect(html).toContain('Bodvar with another exceptionally long tournament name')
     expect(html).toContain('aria-label="Team roster"')
-    expect(html).toContain('flex shrink-0 -space-x-3')
+    expect(html).toContain('flex shrink-0 -space-x-1')
     expect(html.match(/h-10 w-10 rounded-lg ring-2 ring-card/g)).toHaveLength(2)
     expect(html).toContain('Bodvar with another exceptionally long tournament name best legend unavailable')
     expect(html).toContain('min-w-0 flex-1 space-y-0.5')
@@ -186,6 +186,8 @@ describe('Queue activity presentation', () => {
       expect(html).toContain(`value="${option}"`)
     }
     expect(html.match(/scheme-light dark:scheme-dark/g)).toHaveLength(2)
+    expect(html.match(/appearance-none/g)).toHaveLength(2)
+    expect(html.match(/pointer-events-none absolute right-3/g)).toHaveLength(2)
     expect(html.match(/font-bold text-foreground scheme-light/g)).toHaveLength(2)
     expect(html).not.toContain('name="snapshotId"')
     expect(html).not.toContain('name="page"')
