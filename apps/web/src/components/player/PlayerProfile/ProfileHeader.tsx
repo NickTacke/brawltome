@@ -1,6 +1,5 @@
 'use client'
 
-import { fixEncoding } from '@/lib/utils'
 import {
   Avatar,
   AvatarFallback,
@@ -11,7 +10,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@brawltome/ui'
+} from '@/components/ui'
+import { fixEncoding } from '@/lib/utils'
 import Link from 'next/link'
 import { formatHours } from '../shared'
 import { StaleBadge } from './StaleBadge'

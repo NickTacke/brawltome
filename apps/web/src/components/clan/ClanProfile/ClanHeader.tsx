@@ -1,9 +1,9 @@
 'use client'
 
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { formatDate } from '@/lib/format'
 import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
 import type { ClanProfileContract } from '@brawltome/contracts'
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Calendar, Clock, TrendingUp, Trophy, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 

@@ -1,9 +1,9 @@
 'use client'
 
+import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
-import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@brawltome/ui'
 import { Shield } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'

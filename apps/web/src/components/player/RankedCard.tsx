@@ -1,7 +1,7 @@
 'use client'
 
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { formatNum, timeAgo } from '@/lib/utils'
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Clock } from 'lucide-react'
 import { type PlayerData, WinLossBar, calculateEloReset, calculateGlory, getRankBanner } from './shared'
 

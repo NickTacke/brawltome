@@ -1,8 +1,8 @@
 'use client'
 
+import { Progress } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
-import { Progress } from '@brawltome/ui'
 import { formatCompact, formatHours, getWeaponIcon } from '../shared'
 import { WeaponCardExpanded } from './WeaponCardExpanded'
 import { computeWeaponDerived } from './utils'

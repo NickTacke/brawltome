@@ -1,7 +1,7 @@
 'use client'
 
+import { Avatar, AvatarFallback, AvatarImage, Badge, TableCell, TableRow } from '@/components/ui'
 import { fixEncoding } from '@/lib/utils'
-import { Avatar, AvatarFallback, AvatarImage, Badge, TableCell, TableRow } from '@brawltome/ui'
 import Link from 'next/link'
 import { type SoloLeaderboardEntry, type TeamLeaderboardEntry, getRankStyle, playerHref } from './utils'
 

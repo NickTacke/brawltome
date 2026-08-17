@@ -1,5 +1,6 @@
 'use client'
 
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { publicApiUrl } from '@/lib/api-url'
 import { signIn, useAccount } from '@/lib/auth'
 import {
@@ -9,7 +10,6 @@ import {
   replayJobDetailSchema,
   replayJobSummarySchema,
 } from '@brawltome/contracts'
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Activity, Clock3, FileUp, History, LockKeyhole, Upload } from 'lucide-react'
 import { type DragEvent, type FormEvent, useCallback, useEffect, useState } from 'react'
 import { ReplayResultView } from './ReplayResultView'

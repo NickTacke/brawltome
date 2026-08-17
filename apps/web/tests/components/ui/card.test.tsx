@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-describe('Card public contract', () => {
-  test('renders the existing primitive through the package root', () => {
+describe('Card local contract', () => {
+  test('renders the existing primitive through the web barrel', () => {
     const html = renderToStaticMarkup(
       <Card id="summary" aria-label="Player summary" className="p-2 shadow-none">
         <CardHeader>

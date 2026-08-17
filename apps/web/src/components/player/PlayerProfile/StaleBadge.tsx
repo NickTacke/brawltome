@@ -1,6 +1,6 @@
 'use client'
 
-import { Badge } from '@brawltome/ui'
+import { Badge } from '@/components/ui'
 
 export function StaleBadge() {
   return (

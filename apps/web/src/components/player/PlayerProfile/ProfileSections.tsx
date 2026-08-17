@@ -1,5 +1,5 @@
+import { Card } from '@/components/ui'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
-import { Card } from '@brawltome/ui'
 import { CareerStatistics } from '../CareerStatistics'
 import { RatingChart } from '../RatingChart'
 import { type RankedTeam, TeamSection } from '../TeamSection'
