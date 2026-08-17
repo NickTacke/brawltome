@@ -4,6 +4,7 @@ import { WinLossBar } from '@/components/player/shared'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Card } from '@/components/ui'
 import { fixEncoding } from '@/lib/utils'
 import type { LeaderboardRecentActivityEntry, LeaderboardRecentActivityOutput } from '@brawltome/contracts'
+import { ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import {
   BRACKETS,
@@ -42,37 +43,49 @@ function QueueFiltersForm({ filters }: { filters: QueueFilters }) {
       <label htmlFor="queue-mode" className="sr-only">
         Mode
       </label>
-      <select
-        id="queue-mode"
-        name="mode"
-        defaultValue={filters.mode}
-        aria-describedby="queue-filter-hint"
-        onChange={(event) => event.currentTarget.form?.requestSubmit()}
-        className="h-9 rounded-md border border-input bg-background px-3 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
-      >
-        {BRACKETS.map(({ id, label }) => (
-          <option key={id} value={id}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          id="queue-mode"
+          name="mode"
+          defaultValue={filters.mode}
+          aria-describedby="queue-filter-hint"
+          onChange={(event) => event.currentTarget.form?.requestSubmit()}
+          className="h-9 appearance-none rounded-md border border-input bg-background pl-3 pr-9 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
+        >
+          {BRACKETS.map(({ id, label }) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        />
+      </div>
       <label htmlFor="queue-region" className="sr-only">
         Region
       </label>
-      <select
-        id="queue-region"
-        name="region"
-        defaultValue={filters.region}
-        aria-describedby="queue-filter-hint"
-        onChange={(event) => event.currentTarget.form?.requestSubmit()}
-        className="h-9 min-w-32 rounded-md border border-input bg-background px-3 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
-      >
-        {REGIONS.map(({ id, label }) => (
-          <option key={id} value={id}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          id="queue-region"
+          name="region"
+          defaultValue={filters.region}
+          aria-describedby="queue-filter-hint"
+          onChange={(event) => event.currentTarget.form?.requestSubmit()}
+          className="h-9 min-w-32 appearance-none rounded-md border border-input bg-background pl-3 pr-9 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
+        >
+          {REGIONS.map(({ id, label }) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        />
+      </div>
       <noscript>
         <button type="submit" className="h-9 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
           Apply
@@ -114,7 +127,7 @@ function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   if (entry.identity.type !== 'fixed-two-vs-two-team') return <Player player={entry.identity.player} />
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
-      <div className="flex shrink-0 -space-x-3">
+      <div className="flex shrink-0 -space-x-1">
         {entry.identity.players.map((player) => {
           const name = fixEncoding(player.name)
           return (
