@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./migrations": "./src/migrations.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate",
@@ -13,6 +14,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/accounts": "workspace:*",
+    "@brawltome/clan": "workspace:*",
+    "@brawltome/discovery": "workspace:*",
+    "@brawltome/player": "workspace:*",
+    "@brawltome/ranking": "workspace:*",
+    "@brawltome/request-admission": "workspace:*",
+    "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/replay-analysis": "workspace:*",
+    "@brawltome/statistics": "workspace:*",
     "drizzle-orm": "^0.39.0",
     "postgres": "^3.4.0"
   },

@@ -231,6 +231,15 @@
     "packages/database": {
       "name": "@brawltome/database",
       "dependencies": {
+        "@brawltome/accounts": "workspace:*",
+        "@brawltome/clan": "workspace:*",
+        "@brawltome/discovery": "workspace:*",
+        "@brawltome/player": "workspace:*",
+        "@brawltome/ranking": "workspace:*",
+        "@brawltome/refresh-operations": "workspace:*",
+        "@brawltome/replay-analysis": "workspace:*",
+        "@brawltome/request-admission": "workspace:*",
+        "@brawltome/statistics": "workspace:*",
         "drizzle-orm": "^0.39.0",
         "postgres": "^3.4.0",
       },
@@ -274,6 +283,7 @@
       "dependencies": {
         "@brawltome/accounts": "workspace:*",
         "@brawltome/clan": "workspace:*",
+        "@brawltome/database": "workspace:*",
         "@brawltome/discovery": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { globalMigrationInventory } from '@brawltome/database/migrations'
 import type { OperationLease } from '@brawltome/refresh-operations'
 import {
   createPostgresRefreshOperations,
@@ -9,7 +10,6 @@ import postgres from 'postgres'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
-import { runtimeMigrationInventory } from '../src/runtime-migration-inventory'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `brawltome_operations_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -113,7 +113,7 @@ async function expire(operationId: string) {
 
 describe('durable Refresh Operations', () => {
   test('preserves the deployed runtime prefix and appends later migrations in dependency order', () => {
-    expect(runtimeMigrationInventory.map(({ identity }): string => identity)).toEqual([
+    expect(globalMigrationInventory.map(({ identity }): string => identity)).toEqual([
       'players/0001',
       'players/0002',
       'players/0003',

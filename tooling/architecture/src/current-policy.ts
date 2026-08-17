@@ -31,7 +31,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/replay-bridge': [],
     '@brawltome/web': [],
     '@brawltome/bhapi': ['.'],
-    '@brawltome/database': ['.'],
+    '@brawltome/database': ['.', './migrations'],
     '@brawltome/database-migrations': [],
     '@brawltome/game-data': ['.', './legends', './reference-data'],
     '@brawltome/telemetry': ['.', './node', './propagation'],
@@ -58,14 +58,14 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/replay-analysis': [],
     '@brawltome/statistics': [],
   },
-  compositionImporters: ['@brawltome/api', '@brawltome/database-migrations'],
+  compositionImporters: ['@brawltome/api', '@brawltome/database', '@brawltome/database-migrations'],
   contractsDependencies: ['@brawltome/game-data'],
   localImportAliases: {
     '@brawltome/desktop': ['@/'],
     '@brawltome/web': ['@/'],
   },
   workspaceRoleDependencies: {
-    '@brawltome/database-migrations': ['capability'],
+    '@brawltome/database-migrations': ['adapter', 'capability'],
   },
   exceptions: [],
 }

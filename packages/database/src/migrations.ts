@@ -8,7 +8,7 @@ import { replayAnalysisMigrationInventory } from '@brawltome/replay-analysis/com
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
 import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
 
-export const runtimeMigrationInventory = [
+export const globalMigrationInventory = [
   ...playerMigrationInventory.slice(0, 3),
   ...refreshOperationsMigrationInventory.slice(0, 6),
   ...requestAdmissionMigrationInventory.slice(0, 2),
