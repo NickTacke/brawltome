@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { refreshGeneratedData, resolveExtractRoot, validateGeneratedData } from '../scripts/ingest'
@@ -138,19 +138,18 @@ test('validates skins against legends before generated files are emitted', () =>
   ).toThrow('skin 408 references unknown legend 999')
 })
 
-test('leaves every generated output untouched when late refresh validation fails', async () => {
+test('leaves disposable generated outputs untouched when late refresh validation fails', async () => {
   const root = mkdtempSync(join(tmpdir(), 'brawltome-refresh-'))
-  const generatedDir = join(import.meta.dir, '..', 'src', 'generated')
-  const generatedPaths = ['legends.ts', 'levels.ts', 'powers.ts', 'hurtboxes.ts'].map((name) =>
-    join(generatedDir, name),
+  const outputDir = join(root, 'generated')
+  const generatedPaths = ['legends.ts', 'levels.ts', 'powers.ts', 'hurtboxes.ts', 'skins.ts'].map((name) =>
+    join(outputDir, name),
   )
-  const snapshots = generatedPaths.map((path) => readFileSync(path, 'utf8'))
-  const skinsPath = join(generatedDir, 'skins.ts')
-  const skinsSnapshot = existsSync(skinsPath) ? readFileSync(skinsPath, 'utf8') : undefined
 
   try {
     mkdirSync(join(root, 'Game'))
     mkdirSync(join(root, 'Init'))
+    mkdirSync(outputDir)
+    for (const path of generatedPaths) writeFileSync(path, 'sentinel')
     writeFileSync(
       join(root, 'Game', '_manifest.json'),
       JSON.stringify([
@@ -182,23 +181,18 @@ test('leaves every generated output untouched when late refresh validation fails
       'costumeTypes\nCostumeName,CostumeID,OwnerHero,IsCrossover\nViking,3,Viking,FALSE\n',
     )
 
+    let fetchCalls = 0
     const fetcher: typeof fetch = Object.assign(
-      async () => new Response(JSON.stringify(officialResponse()), { status: 200 }),
+      async () => {
+        fetchCalls++
+        return new Response(JSON.stringify(officialResponse()), { status: 200 })
+      },
       { preconnect: () => {} },
     )
-    await expect(refreshGeneratedData(root, fetcher)).rejects.toThrow('legend heroId contains duplicate 3')
-    expect(generatedPaths.map((path) => readFileSync(path, 'utf8'))).toEqual(snapshots)
-    expect(existsSync(skinsPath)).toBe(skinsSnapshot !== undefined)
-    if (skinsSnapshot !== undefined) expect(readFileSync(skinsPath, 'utf8')).toBe(skinsSnapshot)
+    await expect(refreshGeneratedData(root, fetcher, outputDir)).rejects.toThrow('legend heroId contains duplicate 3')
+    expect(fetchCalls).toBe(1)
+    for (const path of generatedPaths) expect(readFileSync(path, 'utf8')).toBe('sentinel')
   } finally {
-    generatedPaths.forEach((path, index) => {
-      const snapshot = snapshots[index] ?? ''
-      if (!existsSync(path) || readFileSync(path, 'utf8') !== snapshot) writeFileSync(path, snapshot)
-    })
-    if (skinsSnapshot === undefined) rmSync(skinsPath, { force: true })
-    else if (!existsSync(skinsPath) || readFileSync(skinsPath, 'utf8') !== skinsSnapshot) {
-      writeFileSync(skinsPath, skinsSnapshot)
-    }
     rmSync(root, { recursive: true, force: true })
   }
 })
