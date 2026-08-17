@@ -67,7 +67,6 @@ type ActivityIntervalRow = Extract<SnapshotRow, { source: 'brawlhalla-v1-ranked-
   schedule_window_at: Date
   previous_snapshot_id: string
   previous_observed_at: Date
-  previous_expected_next_publication_at: Date
 }
 
 type ActivityStandingRow = StoredIdentityRow & {
@@ -388,34 +387,17 @@ export function createPostgresRanking(connectionString: string) {
       )
       SELECT current_endpoint.*,
              previous_snapshot.id AS previous_snapshot_id,
-             previous_generation.observed_at AS previous_observed_at,
-             previous_generation.expected_next_publication_at AS previous_expected_next_publication_at,
-             (
-               SELECT max(failure.checked_at)
-               FROM rankings.collection_failures failure
-               WHERE failure.mode = current_endpoint.mode
-                 AND (
-                   failure.scope = 'all'
-                   OR current_endpoint.scope = 'all'
-                   OR failure.scope = current_endpoint.scope
-                 )
-                 AND failure.schedule_window_at >= current_endpoint.schedule_window_at
-             ) AS latest_failure_at
+             previous_generation.observed_at AS previous_observed_at
       FROM current_endpoint
       JOIN LATERAL (
-        SELECT generation.id AS generation_id, generation.observed_at,
-               generation.expected_next_publication_at
+        SELECT generation.id AS generation_id, generation.observed_at
         FROM rankings.generations generation
         WHERE generation.finalized
           AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
           AND generation.mode = current_endpoint.mode
-          AND (
-            generation.schedule_window_at < current_endpoint.schedule_window_at
-            OR (
-              generation.schedule_window_at = current_endpoint.schedule_window_at
-              AND generation.id < current_endpoint.generation_id
-            )
-          )
+          AND generation.schedule_window_at <= current_endpoint.schedule_window_at - interval '1 hour'
+          AND generation.schedule_window_at >= current_endpoint.schedule_window_at - interval '1 hour'
+            - (current_endpoint.expected_next_publication_at - current_endpoint.schedule_window_at)
         ORDER BY generation.schedule_window_at DESC, generation.id DESC
         LIMIT 1
       ) previous_generation ON true
@@ -434,17 +416,6 @@ export function createPostgresRanking(connectionString: string) {
         pageSize,
       }
     }
-    if (interval.previous_expected_next_publication_at.getTime() !== interval.schedule_window_at.getTime()) {
-      return {
-        status: 'unavailable',
-        reason: 'scan_gap',
-        mode: input.mode,
-        region: input.region,
-        page,
-        pageSize,
-      }
-    }
-
     const offset = (page - 1) * pageSize
     const entries = await client<ActivityStandingRow[]>`
       SELECT current.standing, current.identity_kind, current.player_one_id, current.player_one_name,
@@ -484,9 +455,9 @@ export function createPostgresRanking(connectionString: string) {
       totalRows = count?.total_count ?? 0
     }
     const now = input.now ?? new Date()
-    const stale =
-      now >= interval.expected_next_publication_at ||
-      (interval.latest_failure_at !== null && interval.latest_failure_at > interval.published_at)
+    const publicationIntervalMs =
+      interval.expected_next_publication_at.getTime() - interval.schedule_window_at.getTime()
+    const stale = now.getTime() >= interval.expected_next_publication_at.getTime() + publicationIntervalMs
     const provenance = publishedProvenance(interval)
     if (provenance.source !== 'brawlhalla-v1-ranked-leaderboard') {
       throw new Error('recent activity requires official leaderboard provenance')

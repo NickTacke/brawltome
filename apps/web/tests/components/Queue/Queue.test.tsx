@@ -54,6 +54,10 @@ describe('Queue activity presentation', () => {
     expect(html.match(/href="\/player\/42"/g)).toHaveLength(1)
     expect(html).toContain('Ada')
     expect(html).toContain('bodvar')
+    expect(html).toContain('1 player recently active in EU over the past hour.')
+    expect(html).toContain('inline-flex items-center rounded-full border')
+    expect(html).toContain('text-xl')
+    expect(html).toContain('aria-label="Win rate 33.3%"')
     expect(html).toContain('2300')
     expect(html).toContain('-12')
     expect(html).toContain('+3')
@@ -75,8 +79,8 @@ describe('Queue activity presentation', () => {
           identity: {
             type: 'fixed-two-vs-two-team' as const,
             players: [
-              { brawlhallaId: 42, name: 'Ada' },
-              { brawlhallaId: 43, name: 'Bodvar' },
+              { brawlhallaId: 42, name: 'Ada with an exceptionally long tournament name' },
+              { brawlhallaId: 43, name: 'Bodvar with another exceptionally long tournament name' },
             ],
           },
         },
@@ -85,15 +89,20 @@ describe('Queue activity presentation', () => {
     const html = render(view, { ...filters, mode: '2v2' })
     expect(html.match(/href="\/player\/42"/g)).toHaveLength(1)
     expect(html.match(/href="\/player\/43"/g)).toHaveLength(1)
-    expect(html).toContain('Ada')
-    expect(html).toContain('Bodvar')
+    expect(html).toContain('Ada with an exceptionally long tournament name')
+    expect(html).toContain('Bodvar with another exceptionally long tournament name')
+    expect(html).toContain('aria-label="Team roster"')
+    expect(html.match(/class="block min-w-0 hover:text-primary"/g)).toHaveLength(2)
+    expect(html).toContain('1 team recently active in EU over the past hour.')
+    expect(html).toContain('aria-label="Win rate 33.3%"')
+    expect(html).toContain('flex flex-col gap-2 sm:flex-row')
   })
 
   test('keeps stale, empty, history, gap, and transport failures distinct and accessible', () => {
     const stale = render({ ...playerView, status: 'stale' })
     expect(stale).toContain('role="alert"')
-    expect(stale).toContain('Activity may be outdated.')
-    expect(stale).not.toContain('late scan')
+    expect(stale).toContain('Last activity scan: 2026-08-17 12:15 UTC.')
+    expect(stale).not.toContain('Activity may be outdated')
 
     const empty = render({ ...base, totalRows: 0, entries: [] })
     expect(empty).toContain('No qualifying ranked activity was observed in this scan interval.')
@@ -113,7 +122,7 @@ describe('Queue activity presentation', () => {
       page: 1,
       pageSize: 20,
     })
-    expect(history).toContain('Two completed official scans are needed')
+    expect(history).toContain('At least one hour of official scans is needed')
     expect(history).not.toContain('scan interval was skipped')
 
     const gap = render({
