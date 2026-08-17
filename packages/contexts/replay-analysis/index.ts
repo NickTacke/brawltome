@@ -48,5 +48,3 @@ export interface ReplayAnalysisJobs {
   release(id: string, leaseToken: string): Promise<boolean>
   close(): Promise<void>
 }
-
-export { createPostgresReplayAnalysisJobs } from './postgres'

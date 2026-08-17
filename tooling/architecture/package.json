@@ -2,9 +2,6 @@
   "name": "@brawltome/architecture",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/check-architecture.ts"
-  },
   "scripts": {
     "check": "bun test tests && bun run src/cli.ts",
     "test": "bun test tests",

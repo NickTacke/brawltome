@@ -4,8 +4,7 @@
     "jsx": "preserve",
     "plugins": [{ "name": "next" }],
     "paths": {
-      "@/*": ["./src/*"],
-      "@brawltome/database": ["../../packages/database/src/index.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src", "next-env.d.ts"],

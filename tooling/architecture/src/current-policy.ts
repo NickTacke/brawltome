@@ -37,7 +37,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/game-data': ['.', './legends', './reference-data'],
     '@brawltome/telemetry': ['.', './node', './propagation'],
     '@brawltome/ui': ['.'],
-    '@brawltome/architecture': ['.'],
+    '@brawltome/architecture': [],
     '@brawltome/accounts': ['.', './composition'],
     '@brawltome/clan': ['.', './composition'],
     '@brawltome/contracts': ['.'],
