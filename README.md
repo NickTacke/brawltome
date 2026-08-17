@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/NickTacke/brawltome/actions/workflows/ci.yml"><img src="https://github.com/NickTacke/brawltome/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
+  <a href="https://deepwiki.com/NickTacke/brawltome"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/NickTacke/brawltome" alt="GPL-3.0 license" /></a>
 </p>
 
