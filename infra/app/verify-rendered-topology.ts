@@ -130,8 +130,8 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'LEADERBOARD_INTERVAL_MS') !== '900000') {
       violations.push('operations-worker must retain 15-minute leaderboard cadence')
     }
-    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '2') {
-      violations.push('operations-worker must retain two total operation slots')
+    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '3') {
+      violations.push('operations-worker must retain three total operation slots')
     }
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_RESERVATION') !== '1') {
       violations.push('operations-worker must retain one reserved interactive slot')
