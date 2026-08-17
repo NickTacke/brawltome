@@ -86,7 +86,7 @@ function Player({ player }: { player: Contestant }) {
   const href = playerHref(player.brawlhallaId)
   const name = fixEncoding(player.name)
   const content = (
-    <span className="flex min-w-0 items-center gap-3 font-bold">
+    <span className="flex min-h-12 min-w-0 items-center gap-4 font-bold">
       {player.bestLegendNameKey && (
         <Avatar
           aria-label={`${name} best legend: ${player.bestLegendNameKey}`}
@@ -128,19 +128,22 @@ function ActivityMetrics({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   const winRate = (entry.winsDelta / entry.gamesDelta) * 100
   return (
     <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Rating</p>
-          <p className="text-2xl font-black tracking-tight">
-            {entry.rating} <span className={`text-sm ${ratingDeltaColor}`}>{formatSignedDelta(entry.ratingDelta)}</span>
-          </p>
-        </div>
-        <p className="text-sm font-bold">
-          {formatSignedDelta(entry.gamesDelta)} games · {formatSignedDelta(entry.winsDelta)}W ·{' '}
-          {formatSignedDelta(entry.lossesDelta)}L
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Rating</p>
+        <p className="text-2xl font-black tracking-tight">
+          {entry.rating} <span className={`text-sm ${ratingDeltaColor}`}>{formatSignedDelta(entry.ratingDelta)}</span>
         </p>
       </div>
       <WinLossBar percent={winRate} className="h-2" />
+      <div className="flex justify-between text-[10px] font-bold">
+        <span>
+          {entry.winsDelta}W <span className="font-normal text-muted-foreground">({winRate.toFixed(1)}%)</span>
+        </span>
+        <span>
+          {entry.lossesDelta}L{' '}
+          <span className="font-normal text-muted-foreground">({(100 - winRate).toFixed(1)}%)</span>
+        </span>
+      </div>
     </div>
   )
 }
@@ -153,9 +156,11 @@ function ActivityRows({ entries }: { entries: LeaderboardRecentActivityEntry[] }
           <Card className="h-full bg-linear-to-br from-card to-background p-4">
             <div className="flex items-start justify-between gap-4">
               <Identity entry={entry} />
-              <div className="flex shrink-0 items-center gap-2 text-xs font-bold text-muted-foreground">
+              <div className="flex h-12 shrink-0 items-center gap-3 text-base font-black text-muted-foreground">
                 <span>#{entry.standing}</span>
-                <Badge variant="outline">{entry.region}</Badge>
+                <Badge variant="outline" className="text-sm">
+                  {entry.region}
+                </Badge>
               </div>
             </div>
             <ActivityMetrics entry={entry} />
@@ -226,11 +231,6 @@ export function QueueView({ view, filters }: { view: LeaderboardRecentActivityOu
               Last activity scan: {scanTime(view.currentObservedAt)}.
             </p>
           )}
-          <p className="text-sm font-bold text-muted-foreground">
-            {view.totalRows} {view.mode === '2v2' ? 'team' : 'player'}
-            {view.totalRows === 1 ? '' : 's'} recently active {view.region === 'all' ? 'globally' : `in ${view.region}`}{' '}
-            over the past hour.
-          </p>
           {view.entries.length === 0 ? (
             <Card className="p-6 text-center">
               <output>

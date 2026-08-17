@@ -1,7 +1,14 @@
 import { QueueLoadError, QueueView } from '@/components/Queue'
-import { PAGE_SIZE, type QueueSearchParams, parseQueueSearchParams } from '@/components/Queue/utils'
+import {
+  PAGE_SIZE,
+  QUEUE_PREFERENCE_COOKIE,
+  type QueueSearchParams,
+  parseQueuePreference,
+  parseQueueSearchParams,
+} from '@/components/Queue/utils'
 import { getServerTrpc } from '@/lib/trpc-server'
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +22,9 @@ interface PageProps {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-  const filters = parseQueueSearchParams(await searchParams)
+  const [params, cookieStore] = await Promise.all([searchParams, cookies()])
+  const remembered = parseQueuePreference(cookieStore.get(QUEUE_PREFERENCE_COOKIE)?.value)
+  const filters = parseQueueSearchParams(params, remembered)
   try {
     const trpc = await getServerTrpc()
     const view = await trpc.leaderboard.recentActivity.query({
