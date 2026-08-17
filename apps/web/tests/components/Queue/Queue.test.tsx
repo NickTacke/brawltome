@@ -75,6 +75,13 @@ describe('Queue activity presentation', () => {
     expect(html.toLowerCase()).not.toContain('last seen')
   })
 
+  test('places right-aligned W/L labels above the bar in a compact footer', () => {
+    const html = render(playerView)
+    expect(html.indexOf('1W')).toBeLessThan(html.indexOf('aria-label="Win rate 33.3%"'))
+    expect(html).toContain('text-right text-[10px] font-bold')
+    expect(html).toContain('mt-3 space-y-2 border-t border-border/50 pt-2')
+  })
+
   test('renders fixed 2v2 as one team activity row with both linked teammates', () => {
     const view = {
       ...base,
@@ -85,7 +92,11 @@ describe('Queue activity presentation', () => {
           identity: {
             type: 'fixed-two-vs-two-team' as const,
             players: [
-              { brawlhallaId: 42, name: 'Ada with an exceptionally long tournament name' },
+              {
+                brawlhallaId: 42,
+                name: 'Ada with an exceptionally long tournament name',
+                bestLegendNameKey: 'mordex',
+              },
               { brawlhallaId: 43, name: 'Bodvar with another exceptionally long tournament name' },
             ],
           },
@@ -98,7 +109,12 @@ describe('Queue activity presentation', () => {
     expect(html).toContain('Ada with an exceptionally long tournament name')
     expect(html).toContain('Bodvar with another exceptionally long tournament name')
     expect(html).toContain('aria-label="Team roster"')
-    expect(html.match(/class="block min-w-0 hover:text-primary"/g)).toHaveLength(2)
+    expect(html).toContain('flex shrink-0 -space-x-3')
+    expect(html.match(/h-10 w-10 rounded-lg ring-2 ring-card/g)).toHaveLength(2)
+    expect(html).toContain('Bodvar with another exceptionally long tournament name best legend unavailable')
+    expect(html).toContain('min-w-0 flex-1 space-y-0.5')
+    expect(html.match(/block truncate text-base font-black hover:text-primary/g)).toHaveLength(2)
+    expect(html.match(/href="\/player\/(42|43)"/g)).toHaveLength(2)
     expect(html).not.toContain('recently active')
     expect(html).toContain('aria-label="Win rate 33.3%"')
     expect(html).toContain('1W')
@@ -150,6 +166,14 @@ describe('Queue activity presentation', () => {
     expect(failure).not.toContain('SELECT')
   })
 
+  test('keeps activity cards shrinkable on narrow mobile viewports', () => {
+    const html = render(playerView)
+    expect(html).toContain('aria-label="Recent ranked activity" class="grid min-w-0')
+    expect(html).toContain('<article class="min-w-0">')
+    expect(html).toContain('h-full min-w-0')
+    expect(html).toContain('flex min-w-0 items-start justify-between')
+  })
+
   test('renders every approved filter and snapshot-pinned previous/next links', () => {
     const html = render(
       { ...playerView, page: 2, hasMore: true },
@@ -161,6 +185,8 @@ describe('Queue activity presentation', () => {
     for (const option of ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA']) {
       expect(html).toContain(`value="${option}"`)
     }
+    expect(html.match(/scheme-light dark:scheme-dark/g)).toHaveLength(2)
+    expect(html.match(/font-bold text-foreground scheme-light/g)).toHaveLength(2)
     expect(html).not.toContain('name="snapshotId"')
     expect(html).not.toContain('name="page"')
     expect(html).toContain(`href="/queue?mode=1v1&amp;region=EU&amp;page=1&amp;snapshotId=${base.currentSnapshotId}"`)
