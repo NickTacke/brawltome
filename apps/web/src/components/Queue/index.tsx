@@ -48,7 +48,7 @@ function QueueFiltersForm({ filters }: { filters: QueueFilters }) {
         defaultValue={filters.mode}
         aria-describedby="queue-filter-hint"
         onChange={(event) => event.currentTarget.form?.requestSubmit()}
-        className="h-9 rounded-md border border-input bg-background px-3 text-sm font-bold focus:outline-hidden focus:ring-2 focus:ring-ring"
+        className="h-9 rounded-md border border-input bg-background px-3 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
       >
         {BRACKETS.map(({ id, label }) => (
           <option key={id} value={id}>
@@ -65,7 +65,7 @@ function QueueFiltersForm({ filters }: { filters: QueueFilters }) {
         defaultValue={filters.region}
         aria-describedby="queue-filter-hint"
         onChange={(event) => event.currentTarget.form?.requestSubmit()}
-        className="h-9 min-w-32 rounded-md border border-input bg-background px-3 text-sm font-bold focus:outline-hidden focus:ring-2 focus:ring-ring"
+        className="h-9 min-w-32 rounded-md border border-input bg-background px-3 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
       >
         {REGIONS.map(({ id, label }) => (
           <option key={id} value={id}>
@@ -86,7 +86,7 @@ function Player({ player }: { player: Contestant }) {
   const href = playerHref(player.brawlhallaId)
   const name = fixEncoding(player.name)
   const content = (
-    <span className="flex min-h-12 min-w-0 items-center gap-4 font-bold">
+    <span className="flex min-h-12 min-w-0 flex-1 items-center gap-4 font-bold">
       {player.bestLegendNameKey && (
         <Avatar
           aria-label={`${name} best legend: ${player.bestLegendNameKey}`}
@@ -102,7 +102,7 @@ function Player({ player }: { player: Contestant }) {
     </span>
   )
   return href ? (
-    <Link href={href} prefetch={false} className="block min-w-0 hover:text-primary">
+    <Link href={href} prefetch={false} className="block min-w-0 flex-1 hover:text-primary">
       {content}
     </Link>
   ) : (
@@ -113,13 +113,49 @@ function Player({ player }: { player: Contestant }) {
 function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   if (entry.identity.type !== 'fixed-two-vs-two-team') return <Player player={entry.identity.player} />
   return (
-    <ul aria-label="Team roster" className="min-w-0 flex-1 space-y-2">
-      {entry.identity.players.map((player) => (
-        <li key={`${player.brawlhallaId}:${player.name}`} className="min-w-0">
-          <Player player={player} />
-        </li>
-      ))}
-    </ul>
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex shrink-0 -space-x-3">
+        {entry.identity.players.map((player) => {
+          const name = fixEncoding(player.name)
+          return (
+            <Avatar
+              key={`${player.brawlhallaId}:${player.name}`}
+              aria-label={
+                player.bestLegendNameKey
+                  ? `${name} best legend: ${player.bestLegendNameKey}`
+                  : `${name} best legend unavailable`
+              }
+              className="h-10 w-10 rounded-lg ring-2 ring-card"
+            >
+              {player.bestLegendNameKey && (
+                <AvatarImage
+                  src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+                  alt={player.bestLegendNameKey}
+                />
+              )}
+              <AvatarFallback className="rounded-lg text-xs">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          )
+        })}
+      </div>
+      <ul aria-label="Team roster" className="min-w-0 flex-1 space-y-0.5">
+        {entry.identity.players.map((player) => {
+          const name = fixEncoding(player.name)
+          const href = playerHref(player.brawlhallaId)
+          return (
+            <li key={`${player.brawlhallaId}:${player.name}`} className="min-w-0">
+              {href ? (
+                <Link href={href} prefetch={false} className="block truncate text-base font-black hover:text-primary">
+                  {name}
+                </Link>
+              ) : (
+                <span className="block truncate text-base font-black">{name}</span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
@@ -127,34 +163,36 @@ function ActivityMetrics({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   const ratingDeltaColor = entry.ratingDelta > 0 ? 'text-success' : entry.ratingDelta < 0 ? 'text-danger' : ''
   const winRate = (entry.winsDelta / entry.gamesDelta) * 100
   return (
-    <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Rating</p>
-        <p className="text-2xl font-black tracking-tight">
-          {entry.rating} <span className={`text-sm ${ratingDeltaColor}`}>{formatSignedDelta(entry.ratingDelta)}</span>
-        </p>
+    <div className="mt-3 space-y-2 border-t border-border/50 pt-2">
+      <div className="flex items-end justify-between gap-3">
+        <div className="shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Rating</p>
+          <p className="text-2xl font-black tracking-tight">
+            {entry.rating} <span className={`text-sm ${ratingDeltaColor}`}>{formatSignedDelta(entry.ratingDelta)}</span>
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-x-2 text-right text-[10px] font-bold">
+          <span className="whitespace-nowrap">
+            {entry.winsDelta}W <span className="font-normal text-muted-foreground">({winRate.toFixed(1)}%)</span>
+          </span>
+          <span className="whitespace-nowrap">
+            {entry.lossesDelta}L{' '}
+            <span className="font-normal text-muted-foreground">({(100 - winRate).toFixed(1)}%)</span>
+          </span>
+        </div>
       </div>
       <WinLossBar percent={winRate} className="h-2" />
-      <div className="flex justify-between text-[10px] font-bold">
-        <span>
-          {entry.winsDelta}W <span className="font-normal text-muted-foreground">({winRate.toFixed(1)}%)</span>
-        </span>
-        <span>
-          {entry.lossesDelta}L{' '}
-          <span className="font-normal text-muted-foreground">({(100 - winRate).toFixed(1)}%)</span>
-        </span>
-      </div>
     </div>
   )
 }
 
 function ActivityRows({ entries }: { entries: LeaderboardRecentActivityEntry[] }) {
   return (
-    <section aria-label="Recent ranked activity" className="grid gap-4 lg:grid-cols-2">
+    <section aria-label="Recent ranked activity" className="grid min-w-0 gap-4 lg:grid-cols-2">
       {entries.map((entry) => (
-        <article key={entryKey(entry)}>
-          <Card className="h-full bg-linear-to-br from-card to-background p-4">
-            <div className="flex items-start justify-between gap-4">
+        <article key={entryKey(entry)} className="min-w-0">
+          <Card className="h-full min-w-0 bg-linear-to-br from-card to-background p-4">
+            <div className="flex min-w-0 items-start justify-between gap-4">
               <Identity entry={entry} />
               <div className="flex h-12 shrink-0 items-center gap-3 text-base font-black text-muted-foreground">
                 <span>#{entry.standing}</span>
