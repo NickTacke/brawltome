@@ -127,7 +127,8 @@ if [[ $sidecar_listing == "$sidecar" ]]; then
     exit 1
   }
 else
-  printf '%s\n' "$expected" | "$RCLONE_BIN" rcat "$remote/$sidecar"
+  printf '%s\n' "$expected" >"$work_dir/$sidecar"
+  "$RCLONE_BIN" copyto "$work_dir/$sidecar" "$remote/$sidecar"
   existing=$("$RCLONE_BIN" cat "$remote/$sidecar")
   [[ $existing == "$expected" ]] || { printf '%s\n' 'Uploaded checksum sidecar could not be verified' >&2; exit 1; }
 fi
