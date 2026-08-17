@@ -1,16 +1,21 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  crossoverSkinIdsByLegend,
+  getCrossoverSkinById,
   getHurtboxByName,
   getLegendById,
   getLegendByName,
   getLevelById,
   getPowerById,
+  getSkinById,
   hurtboxes,
   knownHeroIds,
   knownLevelIds,
   legends,
   levels,
   powers,
+  resolvePlayerAppearance,
+  skins,
 } from '../index'
 
 describe('legends', () => {
@@ -88,5 +93,67 @@ describe('validation ID sets', () => {
   test('knownLevelIds covers all generated levels', () => {
     for (const l of levels) expect(knownLevelIds.has(l.levelId)).toBe(true)
     expect(knownLevelIds.size).toBe(levels.length)
+  })
+})
+
+describe('skin appearances', () => {
+  test('looks up generated skins and groups crossover IDs by owning legend', () => {
+    const crossover = skins.find((skin) => skin.isCrossover)
+    if (!crossover) throw new Error('generated catalog has no crossover skin')
+
+    expect(getSkinById(crossover.skinId)).toBe(crossover)
+    expect(getCrossoverSkinById(crossover.skinId)).toBe(crossover)
+    expect(crossoverSkinIdsByLegend.get(crossover.legendId)).toContain(crossover.skinId)
+  })
+
+  test('resolves an exact crossover with a base legend image fallback', () => {
+    const crossover = skins.find((skin) => skin.isCrossover)
+    if (!crossover) throw new Error('generated catalog has no crossover skin')
+    const appearance = resolvePlayerAppearance(crossover.legendId, crossover.skinId)
+
+    expect(appearance).toMatchObject({
+      kind: 'crossover',
+      legendId: crossover.legendId,
+      skinId: crossover.skinId,
+      name: crossover.displayName,
+      imageUrl: crossover.imageUrl,
+      diagnostic: null,
+    })
+    expect(appearance.fallbackImageUrl).toMatch(/^\/images\/legends\/avatars\/.+\.png$/)
+  })
+
+  test('uses the base legend for known non-crossovers and unknown skin IDs', () => {
+    expect(resolvePlayerAppearance(3, 3)).toMatchObject({
+      kind: 'legend',
+      legendId: 3,
+      name: 'BÖDVAR',
+      diagnostic: null,
+    })
+    expect(resolvePlayerAppearance(3, 2_147_483_647)).toMatchObject({
+      kind: 'legend',
+      legendId: 3,
+      name: 'BÖDVAR',
+      diagnostic: { code: 'unknown_skin', legendId: 3, skinId: 2_147_483_647 },
+    })
+  })
+
+  test('uses neutral output for an unknown legend and diagnoses owner mismatches', () => {
+    expect(resolvePlayerAppearance(2_147_483_647, 2_147_483_647)).toEqual({
+      kind: 'legend',
+      legendId: 2_147_483_647,
+      skinId: 2_147_483_647,
+      name: 'Legend 2147483647',
+      imageUrl: null,
+      fallbackImageUrl: null,
+      diagnostic: { code: 'unknown_legend', legendId: 2_147_483_647, skinId: 2_147_483_647 },
+    })
+
+    const crossover = skins.find((skin) => skin.isCrossover && skin.legendId !== 3)
+    if (!crossover) throw new Error('fixture needs a crossover not owned by Bödvar')
+    expect(resolvePlayerAppearance(3, crossover.skinId).diagnostic).toEqual({
+      code: 'skin_legend_mismatch',
+      legendId: 3,
+      skinId: crossover.skinId,
+    })
   })
 })
