@@ -294,7 +294,7 @@ export function ReplayReportView({ report }: { report: ReplayReport }) {
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{report.mode}</Badge>
-            <Badge variant="outline">{report.source === 'real' ? 'Analyzed replay' : 'Preview'}</Badge>
+            <Badge variant="outline">{report.source === 'real' ? 'Analyzed replay' : 'Preview data'}</Badge>
           </div>
           <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{report.title}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
