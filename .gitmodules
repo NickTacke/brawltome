@@ -1,3 +1,3 @@
 [submodule "apps/desktop/detection"]
 	path = apps/desktop/detection
-	url = https://github.com/NickTacke/brawltome-detection.git
+	url = ../brawltome-detection.git
