@@ -59,3 +59,12 @@ export type Hurtbox = {
   width: number
   height: number
 }
+
+export type Skin = {
+  skinId: number
+  skinName: string
+  legendId: number
+  isCrossover: boolean
+  displayName: string | null
+  imageUrl: string | null
+}
