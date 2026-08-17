@@ -32,6 +32,7 @@ let admin: ReturnType<typeof postgres>
 let connectionString = ''
 
 const intervalMs = 15 * 60 * 1000
+const activityWindowMs = 60 * 60 * 1000
 const admission = {
   totalConcurrency: 8,
   interactiveReservation: 2,
@@ -382,7 +383,7 @@ describe('recent ranked activity', () => {
       label: 'activity-history-one',
       window,
     })
-    const historyWindow = new Date(window.getTime() + intervalMs)
+    const historyWindow = new Date(window.getTime() + activityWindowMs)
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-history-two',
@@ -416,7 +417,7 @@ describe('recent ranked activity', () => {
       label: 'activity-wrong-mode-previous',
       window: twoVsTwoWindow,
     })
-    const twoVsTwoCurrentWindow = new Date(twoVsTwoWindow.getTime() + intervalMs)
+    const twoVsTwoCurrentWindow = new Date(twoVsTwoWindow.getTime() + activityWindowMs)
     await publishActivityGeneration(operations, ranking, {
       mode: '2v2',
       label: 'activity-wrong-mode-current',
@@ -516,7 +517,7 @@ describe('recent ranked activity', () => {
     })
     expect(
       await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1, now: currentWindow }),
-    ).toMatchObject({ status: 'unavailable', reason: 'not_enough_history' })
+    ).toMatchObject({ status: 'fresh', totalRows: 1 })
 
     await control.end()
     await ranking.close()
@@ -534,7 +535,7 @@ describe('recent ranked activity', () => {
       window: previousWindow,
       variant: 705,
     })
-    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-missing-current-complete',
@@ -588,7 +589,7 @@ describe('recent ranked activity', () => {
         window: previousWindow,
         variant: 710 + index,
       })
-      const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+      const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
       await publishActivityGeneration(operations, ranking, {
         mode,
         label: `activity-modes-current-${mode}`,
@@ -617,6 +618,92 @@ describe('recent ranked activity', () => {
     await operations.close()
   })
 
+  test('aggregates activity from the 75-minute fallback baseline across skipped scans', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const baselineWindow = new Date('2001-06-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '3v3',
+      label: 'activity-hour-baseline',
+      window: baselineWindow,
+      variant: 715,
+    })
+    await publishActivityGeneration(operations, ranking, {
+      mode: '3v3',
+      label: 'activity-hour-latest-intermediate',
+      window: new Date(baselineWindow.getTime() + 45 * 60 * 1000),
+      variant: 715,
+      transform: (row) => ({ ...row, wins: row.wins + 2 }),
+    })
+    const currentWindow = new Date(baselineWindow.getTime() + 75 * 60 * 1000)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '3v3',
+      label: 'activity-hour-current',
+      window: currentWindow,
+      variant: 715,
+      transform: (row) => ({ ...row, wins: row.wins + 3, losses: row.losses + 1 }),
+    })
+
+    const view = await ranking.queries.getRecentActivity({ mode: '3v3', region: 'all', page: 1, now: currentWindow })
+    if (view.status === 'unavailable') throw new Error('Expected rolling activity')
+    expect(view.previousObservedAt).toBe('2001-06-01T00:00:01.000Z')
+    expect(view.totalRows).toBe(9)
+    expect(view.entries[0]).toMatchObject({ winsDelta: 3, lossesDelta: 1, gamesDelta: 4 })
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('stays fresh through one delayed refresh and becomes stale after two missed windows', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const baselineWindow = new Date('2001-07-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-freshness-baseline',
+      window: baselineWindow,
+      variant: 716,
+    })
+    const currentWindow = new Date(baselineWindow.getTime() + 60 * 60 * 1000)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-freshness-current',
+      window: currentWindow,
+      variant: 716,
+      transform: (row) => ({ ...row, wins: row.wins + 1 }),
+    })
+    const failedWindow = new Date(currentWindow.getTime() + 15 * 60 * 1000)
+    const failed = await leaseOperation(operations, '1v1', 'activity-freshness-failure')
+    expect(
+      await ranking.recordCollectionFailure(authorization(failed, failedWindow.toISOString()), {
+        mode: '1v1',
+        scope: 'EU',
+        checkedAt: new Date(),
+        code: 'source_unavailable',
+        message: 'temporary source failure',
+      }),
+    ).toBe('recorded')
+    await operations.fail(failed, { code: 'source_unavailable', message: 'temporary', retryable: false }, 0)
+
+    await expect(
+      ranking.queries.getRecentActivity({
+        mode: '1v1',
+        region: 'EU',
+        page: 1,
+        now: new Date(currentWindow.getTime() + 15 * 60 * 1000),
+      }),
+    ).resolves.toMatchObject({ status: 'fresh' })
+    await expect(
+      ranking.queries.getRecentActivity({
+        mode: '1v1',
+        region: 'EU',
+        page: 1,
+        now: new Date(currentWindow.getTime() + 30 * 60 * 1000),
+      }),
+    ).resolves.toMatchObject({ status: 'stale' })
+    await ranking.close()
+    await operations.close()
+  })
+
   test('sorts by current rating then games delta and pins pagination to the requested current snapshot', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const ranking = createPostgresRanking(connectionString)
@@ -631,7 +718,7 @@ describe('recent ranked activity', () => {
       variant: 720,
       transform: (row) => ({ ...row, rating: 2000, wins: 20, losses: 10 }),
     })
-    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-sort-current',
@@ -712,7 +799,7 @@ describe('recent ranked activity', () => {
         scope === 'EU' && index === 5 ? null : { ...row, wins: 20, losses: 10, standing: index + 1 },
     })
 
-    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-exclusions-current',
@@ -737,7 +824,7 @@ describe('recent ranked activity', () => {
     await operations.close()
   })
 
-  test('returns scan_gap when the previous expected publication does not equal the current schedule window', async () => {
+  test('does not use unrelated old history when no hour baseline exists', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const ranking = createPostgresRanking(connectionString)
     const previousWindow = new Date('2003-06-01T00:00:00Z')
@@ -758,7 +845,7 @@ describe('recent ranked activity', () => {
     expect(await ranking.queries.getRecentActivity({ mode: '3v3', region: 'EU', page: 1, now: currentWindow })).toEqual(
       {
         status: 'unavailable',
-        reason: 'scan_gap',
+        reason: 'not_enough_history',
         mode: '3v3',
         region: 'EU',
         page: 1,
@@ -779,7 +866,7 @@ describe('recent ranked activity', () => {
       window: previousWindow,
       variant: 750,
     })
-    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
     await publishActivityGeneration(operations, ranking, {
       mode: 'solo2v2',
       label: 'activity-empty-current',
@@ -807,7 +894,7 @@ describe('recent ranked activity', () => {
     await operations.fail(failure, { code: 'source_unavailable', message: 'test', retryable: false }, 0)
     expect(
       await ranking.queries.getRecentActivity({ mode: 'solo2v2', region: 'EU', page: 1, now: currentWindow }),
-    ).toMatchObject({ status: 'stale', totalRows: 0, entries: [] })
+    ).toMatchObject({ status: 'fresh', totalRows: 0, entries: [] })
     expect(
       await ranking.queries.getRecentActivity({
         mode: 'solo2v2',
