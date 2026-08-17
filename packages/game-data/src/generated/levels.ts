@@ -835,22 +835,6 @@ const data = [
     "fileName": "Level_Ruins.swf"
   },
   {
-    "levelId": 178,
-    "levelName": "BloodMoonFFA",
-    "displayName": "Fortress of the Lions",
-    "devOnly": false,
-    "testLevel": false,
-    "fileName": "Level_Brawlball.swf"
-  },
-  {
-    "levelId": 182,
-    "levelName": "BloodMoon1v1",
-    "displayName": "Small Fortress of Lions",
-    "devOnly": false,
-    "testLevel": false,
-    "fileName": "Level_Wacky.swf"
-  },
-  {
     "levelId": 180,
     "levelName": "BloodMoonClimb",
     "displayName": "Siege of Lions",
@@ -1054,14 +1038,6 @@ const data = [
     "levelId": 238,
     "levelName": "BP9EndTimesTiny",
     "displayName": "Crumbled Chasm",
-    "devOnly": false,
-    "testLevel": false,
-    "fileName": "Level_Ruins.swf"
-  },
-  {
-    "levelId": 239,
-    "levelName": "BP9EndTimesStatic",
-    "displayName": "Chasm",
     "devOnly": false,
     "testLevel": false,
     "fileName": "Level_Ruins.swf"
@@ -1281,6 +1257,38 @@ const data = [
     "devOnly": false,
     "testLevel": false,
     "fileName": "Level_Wacky.swf"
+  },
+  {
+    "levelId": 178,
+    "levelName": "BloodMoonFFA",
+    "displayName": "Fortress of the Lions",
+    "devOnly": false,
+    "testLevel": false,
+    "fileName": "Level_Brawlball.swf"
+  },
+  {
+    "levelId": 42,
+    "levelName": "FortressOfWolves1v1",
+    "displayName": "Small Fortress of Wolves",
+    "devOnly": false,
+    "testLevel": false,
+    "fileName": "Level_Wacky.swf"
+  },
+  {
+    "levelId": 31,
+    "levelName": "MudBrawl2",
+    "displayName": "Shrek's Muddy Swamp",
+    "devOnly": false,
+    "testLevel": false,
+    "fileName": "Level_Ruins.swf"
+  },
+  {
+    "levelId": 35,
+    "levelName": "ShrekSwamp",
+    "displayName": "Shrek's Swamp",
+    "devOnly": false,
+    "testLevel": false,
+    "fileName": "Level_Ruins.swf"
   }
 ] as const
 
