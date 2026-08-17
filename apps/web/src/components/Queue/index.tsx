@@ -1,6 +1,7 @@
 'use client'
 
-import { Avatar, AvatarFallback, AvatarImage, Card } from '@/components/ui'
+import { WinLossBar } from '@/components/player/shared'
+import { Avatar, AvatarFallback, AvatarImage, Badge, Card } from '@/components/ui'
 import { fixEncoding } from '@/lib/utils'
 import type { LeaderboardRecentActivityEntry, LeaderboardRecentActivityOutput } from '@brawltome/contracts'
 import Link from 'next/link'
@@ -85,7 +86,7 @@ function Player({ player }: { player: Contestant }) {
   const href = playerHref(player.brawlhallaId)
   const name = fixEncoding(player.name)
   const content = (
-    <span className="inline-flex min-w-0 items-center gap-3 font-bold">
+    <span className="flex min-w-0 items-center gap-3 font-bold">
       {player.bestLegendNameKey && (
         <Avatar
           aria-label={`${name} best legend: ${player.bestLegendNameKey}`}
@@ -97,11 +98,11 @@ function Player({ player }: { player: Contestant }) {
           </AvatarFallback>
         </Avatar>
       )}
-      <span className="truncate">{name}</span>
+      <span className="truncate text-xl font-black">{name}</span>
     </span>
   )
   return href ? (
-    <Link href={href} prefetch={false} className="min-w-0 hover:text-primary">
+    <Link href={href} prefetch={false} className="block min-w-0 hover:text-primary">
       {content}
     </Link>
   ) : (
@@ -112,40 +113,34 @@ function Player({ player }: { player: Contestant }) {
 function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   if (entry.identity.type !== 'fixed-two-vs-two-team') return <Player player={entry.identity.player} />
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-3">
-      <Player player={entry.identity.players[0]} />
-      <span aria-hidden="true" className="text-muted-foreground">
-        +
-      </span>
-      <Player player={entry.identity.players[1]} />
-    </div>
+    <ul aria-label="Team roster" className="min-w-0 flex-1 space-y-2">
+      {entry.identity.players.map((player) => (
+        <li key={`${player.brawlhallaId}:${player.name}`} className="min-w-0">
+          <Player player={player} />
+        </li>
+      ))}
+    </ul>
   )
 }
 
 function ActivityMetrics({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   const ratingDeltaColor = entry.ratingDelta > 0 ? 'text-success' : entry.ratingDelta < 0 ? 'text-danger' : ''
+  const winRate = (entry.winsDelta / entry.gamesDelta) * 100
   return (
-    <div className="mt-5 flex flex-col gap-4 border-t border-border/50 pt-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Rating</p>
-        <p className="text-3xl font-black tracking-tight">
-          {entry.rating} <span className={`text-base ${ratingDeltaColor}`}>{formatSignedDelta(entry.ratingDelta)}</span>
+    <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Rating</p>
+          <p className="text-2xl font-black tracking-tight">
+            {entry.rating} <span className={`text-sm ${ratingDeltaColor}`}>{formatSignedDelta(entry.ratingDelta)}</span>
+          </p>
+        </div>
+        <p className="text-sm font-bold">
+          {formatSignedDelta(entry.gamesDelta)} games · {formatSignedDelta(entry.winsDelta)}W ·{' '}
+          {formatSignedDelta(entry.lossesDelta)}L
         </p>
       </div>
-      <div className="grid grid-cols-3 gap-5">
-        {(
-          [
-            ['Games', entry.gamesDelta],
-            ['Wins', entry.winsDelta],
-            ['Losses', entry.lossesDelta],
-          ] satisfies [string, number][]
-        ).map(([label, value]) => (
-          <div key={label} className="text-right">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="font-black">{formatSignedDelta(value)}</p>
-          </div>
-        ))}
-      </div>
+      <WinLossBar percent={winRate} className="h-2" />
     </div>
   )
 }
@@ -155,12 +150,12 @@ function ActivityRows({ entries }: { entries: LeaderboardRecentActivityEntry[] }
     <section aria-label="Recent ranked activity" className="grid gap-4 lg:grid-cols-2">
       {entries.map((entry) => (
         <article key={entryKey(entry)}>
-          <Card className="h-full bg-linear-to-br from-card to-background p-5">
+          <Card className="h-full bg-linear-to-br from-card to-background p-4">
             <div className="flex items-start justify-between gap-4">
               <Identity entry={entry} />
-              <div className="shrink-0 text-right text-xs font-bold text-muted-foreground">
-                <p>#{entry.standing}</p>
-                <p>{entry.region}</p>
+              <div className="flex shrink-0 items-center gap-2 text-xs font-bold text-muted-foreground">
+                <span>#{entry.standing}</span>
+                <Badge variant="outline">{entry.region}</Badge>
               </div>
             </div>
             <ActivityMetrics entry={entry} />
@@ -169,6 +164,10 @@ function ActivityRows({ entries }: { entries: LeaderboardRecentActivityEntry[] }
       ))}
     </section>
   )
+}
+
+function scanTime(value: string): string {
+  return `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`
 }
 
 function entryKey(entry: LeaderboardRecentActivityEntry): string {
@@ -216,7 +215,7 @@ export function QueueView({ view, filters }: { view: LeaderboardRecentActivityOu
         <Card className="p-6 text-center">
           <output>
             {view.reason === 'not_enough_history'
-              ? 'Two completed official scans are needed before recent activity can be inferred.'
+              ? 'At least one hour of official scans is needed before recent activity can be inferred.'
               : 'A scheduled scan interval was skipped, so this activity interval is unavailable.'}
           </output>
         </Card>
@@ -224,9 +223,14 @@ export function QueueView({ view, filters }: { view: LeaderboardRecentActivityOu
         <>
           {view.status === 'stale' && (
             <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
-              Activity may be outdated.
+              Last activity scan: {scanTime(view.currentObservedAt)}.
             </p>
           )}
+          <p className="text-sm font-bold text-muted-foreground">
+            {view.totalRows} {view.mode === '2v2' ? 'team' : 'player'}
+            {view.totalRows === 1 ? '' : 's'} recently active {view.region === 'all' ? 'globally' : `in ${view.region}`}{' '}
+            over the past hour.
+          </p>
           {view.entries.length === 0 ? (
             <Card className="p-6 text-center">
               <output>
