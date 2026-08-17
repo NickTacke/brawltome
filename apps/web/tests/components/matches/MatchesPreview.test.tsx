@@ -64,6 +64,7 @@ describe('matches preview feed', () => {
     expect(html).toContain('/matches?match=preview-final')
     expect(html).toContain('/matches?analyze=1')
     expect(html).toContain('Winner AxeMender and StarLancer')
+    expect(html).toContain('AxeMender &amp; StarLancer vs BlueMammoth &amp; QuickDraw')
   })
 })
 

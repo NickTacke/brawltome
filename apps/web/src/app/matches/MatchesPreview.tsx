@@ -60,6 +60,14 @@ function winnerNames(match: PreviewMatch): string {
   )
 }
 
+function participantNames(match: PreviewMatch): string {
+  const teams = new Map<string, string[]>()
+  for (const { playerId, teamId } of match.participants) {
+    teams.set(teamId, [...(teams.get(teamId) ?? []), getPreviewPlayer(playerId)?.name ?? playerId])
+  }
+  return [...teams.values()].map((names) => names.join(' & ')).join(' vs ')
+}
+
 function PreviewFeed({ notice }: { notice?: string }) {
   return (
     <PreviewShell>
@@ -76,9 +84,7 @@ function PreviewFeed({ notice }: { notice?: string }) {
                 </p>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {match.participants.map(({ playerId }) => getPreviewPlayer(playerId)?.name ?? playerId).join(' vs ')}
-                </span>
+                <span className="text-sm text-muted-foreground">{participantNames(match)}</span>
                 <Button asChild size="sm">
                   <Link href={`/matches?match=${match.id}`}>View match</Link>
                 </Button>
