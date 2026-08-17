@@ -9,6 +9,7 @@ describe('shell navigation', () => {
     expect(navItems.find(({ href }) => href === '/')?.wip).toBeFalsy()
     expect(navItems).toContainEqual(expect.objectContaining({ href: '/queue', label: 'Queue' }))
     expect(navItems.find(({ href }) => href === '/queue')?.wip).toBeFalsy()
+    expect(navItems.map(({ href }) => href)).toEqual(['/', '/stats', '/matches', '/queue', '/learn', '/tournaments'])
     expect(navItems.some(({ label }) => label === 'Feed')).toBe(false)
     expect('feed' in wipFeatures).toBe(false)
     for (const href of requiredSoonDestinations) {
