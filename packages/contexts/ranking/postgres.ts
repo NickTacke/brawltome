@@ -10,6 +10,7 @@ import type {
   PublishedLeaderboardIdentity,
   RankingPublicationAuthorization,
   RankingQueries,
+  RecentActivityView,
 } from './leaderboard'
 import { leaderboardModeFromOperationKind } from './leaderboard'
 import {
@@ -43,20 +44,41 @@ type SnapshotRow = {
     }
 )
 
-type StandingRow = {
-  standing: number
-  source_rank: number
+type StoredIdentityRow = {
   identity_kind: PublishedLeaderboardIdentity['type']
   player_one_id: number
   player_one_name: string
   player_two_id: number | null
   player_two_name: string | null
+}
+
+type StandingRow = StoredIdentityRow & {
+  standing: number
+  source_rank: number
   region: RegionalLeaderboardScope
   rating: number
   peak_rating: number | null
   wins: number
   losses: number
   tier: string | null
+}
+
+type ActivityIntervalRow = Extract<SnapshotRow, { source: 'brawlhalla-v1-ranked-leaderboard' }> & {
+  schedule_window_at: Date
+  previous_snapshot_id: string
+  previous_observed_at: Date
+  previous_expected_next_publication_at: Date
+}
+
+type ActivityStandingRow = StoredIdentityRow & {
+  standing: number
+  region: RegionalLeaderboardScope
+  rating: number
+  rating_delta: number
+  wins_delta: number
+  losses_delta: number
+  games_delta: number
+  total_count: number
 }
 
 function boundedPagination(page: number, pageSize = 20) {
@@ -95,7 +117,7 @@ function storedIdentity(identity: PublishedLeaderboardIdentity) {
   }
 }
 
-function publishedIdentity(row: StandingRow): PublishedLeaderboardIdentity {
+function publishedIdentity(row: StoredIdentityRow): PublishedLeaderboardIdentity {
   const first = { brawlhallaId: row.player_one_id, name: row.player_one_name }
   if (row.identity_kind === 'fixed-two-vs-two-team') {
     if (row.player_two_id === null || row.player_two_name === null) throw new Error('stored fixed team is incomplete')
@@ -321,7 +343,186 @@ export function createPostgresRanking(connectionString: string) {
     }
   }
 
-  const queries: RankingQueries & PlayerValhallanQueries = { getLeaderboard, playerValhallanEvidenceById }
+  async function getRecentActivity(input: {
+    mode: LeaderboardMode
+    region: LeaderboardScope
+    page: number
+    pageSize?: number
+    snapshotId?: string
+    now?: Date
+  }): Promise<RecentActivityView> {
+    validateMode(input.mode)
+    validateScope(input.region)
+    const { page, pageSize } = boundedPagination(input.page, input.pageSize)
+    const [interval] = await client<ActivityIntervalRow[]>`
+      WITH current_generation AS (
+        SELECT generation.*
+        FROM rankings.generations generation
+        WHERE generation.finalized
+          AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
+          AND generation.mode = ${input.mode}
+          AND (
+            ${input.snapshotId ?? null}::uuid IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM rankings.snapshots pinned_snapshot
+              WHERE pinned_snapshot.id = ${input.snapshotId ?? null}
+                AND pinned_snapshot.generation_id = generation.id
+                AND pinned_snapshot.mode = generation.mode
+                AND pinned_snapshot.scope = ${input.region}
+            )
+          )
+        ORDER BY generation.schedule_window_at DESC, generation.id DESC
+        LIMIT 1
+      ), current_endpoint AS (
+        SELECT snapshot.id AS snapshot_id, snapshot.generation_id, snapshot.mode, snapshot.scope,
+               generation.observed_at, generation.schedule_window_at, generation.published_at,
+               generation.expected_next_publication_at, generation.page_depth, generation.source,
+               generation.source_contract_version, generation.provenance, snapshot.row_count
+        FROM current_generation generation
+        JOIN rankings.snapshots snapshot
+          ON snapshot.generation_id = generation.id
+         AND snapshot.mode = generation.mode
+         AND snapshot.scope = ${input.region}
+         AND (${input.snapshotId ?? null}::uuid IS NULL OR snapshot.id = ${input.snapshotId ?? null})
+      )
+      SELECT current_endpoint.*,
+             previous_snapshot.id AS previous_snapshot_id,
+             previous_generation.observed_at AS previous_observed_at,
+             previous_generation.expected_next_publication_at AS previous_expected_next_publication_at,
+             (
+               SELECT max(failure.checked_at)
+               FROM rankings.collection_failures failure
+               WHERE failure.mode = current_endpoint.mode
+                 AND (
+                   failure.scope = 'all'
+                   OR current_endpoint.scope = 'all'
+                   OR failure.scope = current_endpoint.scope
+                 )
+                 AND failure.schedule_window_at >= current_endpoint.schedule_window_at
+             ) AS latest_failure_at
+      FROM current_endpoint
+      JOIN LATERAL (
+        SELECT generation.id AS generation_id, generation.observed_at,
+               generation.expected_next_publication_at
+        FROM rankings.generations generation
+        WHERE generation.finalized
+          AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
+          AND generation.mode = current_endpoint.mode
+          AND (
+            generation.schedule_window_at < current_endpoint.schedule_window_at
+            OR (
+              generation.schedule_window_at = current_endpoint.schedule_window_at
+              AND generation.id < current_endpoint.generation_id
+            )
+          )
+        ORDER BY generation.schedule_window_at DESC, generation.id DESC
+        LIMIT 1
+      ) previous_generation ON true
+      JOIN rankings.snapshots previous_snapshot
+        ON previous_snapshot.generation_id = previous_generation.generation_id
+       AND previous_snapshot.mode = current_endpoint.mode
+       AND previous_snapshot.scope = current_endpoint.scope
+    `
+    if (!interval) {
+      return {
+        status: 'unavailable',
+        reason: 'not_enough_history',
+        mode: input.mode,
+        region: input.region,
+        page,
+        pageSize,
+      }
+    }
+    if (interval.previous_expected_next_publication_at.getTime() !== interval.schedule_window_at.getTime()) {
+      return {
+        status: 'unavailable',
+        reason: 'scan_gap',
+        mode: input.mode,
+        region: input.region,
+        page,
+        pageSize,
+      }
+    }
+
+    const offset = (page - 1) * pageSize
+    const entries = await client<ActivityStandingRow[]>`
+      SELECT current.standing, current.identity_kind, current.player_one_id, current.player_one_name,
+             current.player_two_id, current.player_two_name, current.region, current.rating,
+             current.rating - previous.rating AS rating_delta,
+             current.wins - previous.wins AS wins_delta,
+             current.losses - previous.losses AS losses_delta,
+             (current.wins + current.losses) - (previous.wins + previous.losses) AS games_delta,
+             (count(*) OVER ())::integer AS total_count
+      FROM rankings.snapshot_rows current
+      JOIN rankings.snapshot_rows previous
+        ON previous.snapshot_id = ${interval.previous_snapshot_id}
+       AND previous.identity_key = current.identity_key
+      WHERE current.snapshot_id = ${interval.snapshot_id}
+        AND current.wins >= previous.wins
+        AND current.losses >= previous.losses
+        AND current.wins + current.losses > previous.wins + previous.losses
+      ORDER BY current.rating DESC,
+               ((current.wins + current.losses) - (previous.wins + previous.losses)) DESC,
+               current.identity_key ASC
+      OFFSET ${offset}
+      LIMIT ${pageSize}
+    `
+    let totalRows = entries[0]?.total_count ?? 0
+    if (entries.length === 0 && offset > 0) {
+      const [count] = await client<{ total_count: number }[]>`
+        SELECT count(*)::integer AS total_count
+        FROM rankings.snapshot_rows current
+        JOIN rankings.snapshot_rows previous
+          ON previous.snapshot_id = ${interval.previous_snapshot_id}
+         AND previous.identity_key = current.identity_key
+        WHERE current.snapshot_id = ${interval.snapshot_id}
+          AND current.wins >= previous.wins
+          AND current.losses >= previous.losses
+          AND current.wins + current.losses > previous.wins + previous.losses
+      `
+      totalRows = count?.total_count ?? 0
+    }
+    const now = input.now ?? new Date()
+    const stale =
+      now >= interval.expected_next_publication_at ||
+      (interval.latest_failure_at !== null && interval.latest_failure_at > interval.published_at)
+    const provenance = publishedProvenance(interval)
+    if (provenance.source !== 'brawlhalla-v1-ranked-leaderboard') {
+      throw new Error('recent activity requires official leaderboard provenance')
+    }
+    return {
+      status: stale ? 'stale' : 'fresh',
+      mode: interval.mode,
+      region: interval.scope,
+      currentSnapshotId: interval.snapshot_id,
+      previousObservedAt: interval.previous_observed_at.toISOString(),
+      currentObservedAt: interval.observed_at.toISOString(),
+      publishedAt: interval.published_at.toISOString(),
+      expectedNextPublicationAt: interval.expected_next_publication_at.toISOString(),
+      provenance,
+      page,
+      pageSize,
+      hasMore: offset + entries.length < totalRows,
+      totalRows,
+      entries: entries.map((entry) => ({
+        standing: entry.standing,
+        identity: publishedIdentity(entry),
+        region: entry.region,
+        rating: entry.rating,
+        ratingDelta: entry.rating_delta,
+        winsDelta: entry.wins_delta,
+        lossesDelta: entry.losses_delta,
+        gamesDelta: entry.games_delta,
+      })),
+    }
+  }
+
+  const queries: RankingQueries & PlayerValhallanQueries = {
+    getLeaderboard,
+    getRecentActivity,
+    playerValhallanEvidenceById,
+  }
 
   return {
     queries,

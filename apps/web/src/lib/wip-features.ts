@@ -1,4 +1,4 @@
-import { BookBookmark, Cup, Gamepad, type IconProps, PieChart, UsersGroupRounded } from '@solar-icons/react'
+import { BookBookmark, Cup, Gamepad, type IconProps, PieChart } from '@solar-icons/react'
 import type { ComponentType } from 'react'
 
 export interface WipFeature {
@@ -42,12 +42,5 @@ export const wipFeatures = {
     description:
       'Live brackets, results, and streams from Challengermode-hosted events. Players linked to their BrawlTome profiles. Approved organizers can host tournaments directly on BrawlTome',
     icon: Cup,
-  },
-  feed: {
-    title: 'Feed',
-    tagline: 'Activity and posts from players you follow',
-    description:
-      "Rank changes, tournament runs, notable matches from followed players and clans. Plus their posts. Nothing you didn't ask to see",
-    icon: UsersGroupRounded,
   },
 } as const satisfies Record<string, WipFeature>

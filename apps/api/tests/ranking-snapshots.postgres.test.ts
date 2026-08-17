@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import {
   type LeaderboardMode,
+  type LeaderboardScope,
   type PublishedLeaderboardRow,
   type RegionalLeaderboardScope,
   leaderboardModes,
@@ -183,6 +184,52 @@ function candidate(
   }
 }
 
+function activityCandidate(
+  mode: LeaderboardMode,
+  operationKey: string,
+  scheduleWindowAt: Date,
+  rowsPerRegion: number,
+  variant: number,
+  transform: (row: PublishedLeaderboardRow, scope: LeaderboardScope, index: number) => PublishedLeaderboardRow | null,
+): LeaderboardGenerationCandidate {
+  const publication = candidate(mode, operationKey, scheduleWindowAt, rowsPerRegion, variant)
+  publication.snapshots = new Map(
+    [...publication.snapshots].map(([scope, rows]) => [
+      scope,
+      rows.map((row, index) => transform(row, scope, index)).filter((row) => row !== null),
+    ]),
+  )
+  return publication
+}
+
+async function publishActivityGeneration(
+  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  ranking: ReturnType<typeof createPostgresRanking>,
+  input: {
+    mode: LeaderboardMode
+    label: string
+    window: Date
+    rows?: number
+    variant?: number
+    transform?: (row: PublishedLeaderboardRow, scope: LeaderboardScope, index: number) => PublishedLeaderboardRow | null
+  },
+) {
+  const lease = await leaseOperation(operations, input.mode, input.label)
+  const publication = activityCandidate(
+    input.mode,
+    lease.operationKey,
+    input.window,
+    input.rows ?? 1,
+    input.variant ?? 700,
+    input.transform ?? ((row) => row),
+  )
+  expect(await ranking.publishGeneration(authorization(lease, input.window.toISOString()), publication)).toBe(
+    'published',
+  )
+  await operations.complete(lease)
+  return publication
+}
+
 async function leaseOperation(
   operations: ReturnType<typeof createPostgresRefreshOperations>,
   mode: LeaderboardMode,
@@ -312,6 +359,465 @@ describe('Ranking mode migrations', () => {
       await client.end()
       await admin.unsafe(`DROP DATABASE IF EXISTS "${database.name}" WITH (FORCE)`)
     }
+  })
+})
+
+describe('recent ranked activity', () => {
+  test('supports valid pinned history and rejects legacy, unfinalized, wrong-mode, or wrong-scope snapshots', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1 })).toEqual({
+      status: 'unavailable',
+      reason: 'not_enough_history',
+      mode: '1v1',
+      region: 'EU',
+      page: 1,
+      pageSize: 20,
+    })
+
+    const window = new Date('2000-01-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-history-one',
+      window,
+    })
+    const historyWindow = new Date(window.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-history-two',
+      window: historyWindow,
+      transform: (row) => ({ ...row, wins: row.wins + 1 }),
+    })
+    const current = await ranking.queries.getLeaderboard({ mode: '1v1', region: 'EU', page: 1, now: historyWindow })
+    const otherScope = await ranking.queries.getLeaderboard({ mode: '1v1', region: 'all', page: 1, now: historyWindow })
+    if (current.status === 'unavailable' || otherScope.status === 'unavailable') throw new Error('Expected snapshots')
+    await expect(
+      ranking.queries.getRecentActivity({
+        mode: '1v1',
+        region: 'EU',
+        page: 1,
+        snapshotId: current.snapshotId,
+        now: historyWindow,
+      }),
+    ).resolves.toMatchObject({ status: 'fresh' })
+    expect(
+      await ranking.queries.getRecentActivity({
+        mode: '1v1',
+        region: 'EU',
+        page: 1,
+        snapshotId: otherScope.snapshotId,
+      }),
+    ).toMatchObject({ status: 'unavailable', reason: 'not_enough_history' })
+
+    const twoVsTwoWindow = new Date('2000-01-02T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '2v2',
+      label: 'activity-wrong-mode-previous',
+      window: twoVsTwoWindow,
+    })
+    const twoVsTwoCurrentWindow = new Date(twoVsTwoWindow.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '2v2',
+      label: 'activity-wrong-mode-current',
+      window: twoVsTwoCurrentWindow,
+      transform: (row) => ({ ...row, wins: row.wins + 1 }),
+    })
+    await expect(
+      ranking.queries.getRecentActivity({ mode: '2v2', region: 'EU', page: 1, now: twoVsTwoCurrentWindow }),
+    ).resolves.toMatchObject({ status: 'fresh' })
+    expect(
+      await ranking.queries.getRecentActivity({
+        mode: '2v2',
+        region: 'EU',
+        page: 1,
+        snapshotId: current.snapshotId,
+      }),
+    ).toMatchObject({ status: 'unavailable', reason: 'not_enough_history' })
+
+    const insertPinnedSnapshot = async (
+      source: 'v2-legacy' | 'brawlhalla-v1-ranked-leaderboard',
+      finalized: boolean,
+    ) => {
+      const generationId = randomUUID()
+      const snapshotId = randomUUID()
+      const scheduled = new Date(window.getTime() + (source === 'v2-legacy' ? 1 : 2) * intervalMs)
+      const provenance =
+        source === 'v2-legacy'
+          ? {
+              source,
+              contractVersion: 1,
+              sourceChecksum: 'a'.repeat(64),
+              importedAt: scheduled.toISOString(),
+              completeness: 'frozen-repository-rows',
+            }
+          : { source, contractVersion: 1, pageDepth: 1 }
+      await control`
+        INSERT INTO rankings.generations
+          (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
+           expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+        VALUES (${generationId}, ${randomUUID()}, ${`activity-pin:${randomUUID()}`}, '1v1', ${scheduled}, ${scheduled},
+          ${new Date(scheduled.getTime() + intervalMs)}, ${source === 'v2-legacy' ? null : 1}, ${source}, 1, false,
+          ${control.json(provenance)})
+      `
+      await control`
+        INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
+        VALUES (${snapshotId}, ${generationId}, '1v1', 'EU', 1)
+      `
+      await control`
+        INSERT INTO rankings.snapshot_rows
+          (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
+           player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier)
+        VALUES (${snapshotId}, '1v1', 1, 1, 1, 'one-vs-one-player', 990000001, 'Pinned Invalid',
+          NULL, NULL, 'EU', 2000, 2100, 20, 10, 'Diamond')
+      `
+      if (finalized) await control`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+      return snapshotId
+    }
+    for (const snapshotId of [
+      await insertPinnedSnapshot('v2-legacy', true),
+      await insertPinnedSnapshot('brawlhalla-v1-ranked-leaderboard', false),
+    ]) {
+      expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1, snapshotId })).toMatchObject(
+        { status: 'unavailable', reason: 'not_enough_history' },
+      )
+    }
+
+    const partialGenerationId = randomUUID()
+    const partialSnapshotId = randomUUID()
+    const partialWindow = new Date(window.getTime() + 3 * intervalMs)
+    await control`
+      INSERT INTO rankings.generations
+        (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
+         expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+      VALUES (${partialGenerationId}, ${randomUUID()}, ${`activity-partial:${randomUUID()}`}, '1v1',
+        ${partialWindow}, ${partialWindow}, ${new Date(partialWindow.getTime() + intervalMs)}, 1,
+        'brawlhalla-v1-ranked-leaderboard', 1, false,
+        ${control.json({ source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 })})
+    `
+    await control`
+      INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
+      VALUES (${partialSnapshotId}, ${partialGenerationId}, '1v1', 'all', 1)
+    `
+    await control`
+      INSERT INTO rankings.snapshot_rows
+        (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
+         player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier)
+      VALUES (${partialSnapshotId}, '1v1', 1, 1, 1, 'one-vs-one-player', 990000002, 'Missing EU',
+        NULL, NULL, 'EU', 2000, 2100, 20, 10, 'Diamond')
+    `
+    await control`UPDATE rankings.generations SET finalized = true WHERE id = ${partialGenerationId}`
+    const currentWindow = new Date(partialWindow.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-missing-scope-current',
+      window: currentWindow,
+      transform: (row) => ({ ...row, wins: row.wins + 1 }),
+    })
+    expect(
+      await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1, now: currentWindow }),
+    ).toMatchObject({ status: 'unavailable', reason: 'not_enough_history' })
+
+    await control.end()
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('returns not_enough_history when the newest official generation is missing the requested current scope', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    const previousWindow = new Date('2000-02-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-missing-current-previous',
+      window: previousWindow,
+      variant: 705,
+    })
+    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-missing-current-complete',
+      window: currentWindow,
+      variant: 705,
+      transform: (row) => ({ ...row, wins: row.wins + 1 }),
+    })
+
+    const generationId = randomUUID()
+    const snapshotId = randomUUID()
+    const scheduleWindowAt = new Date(currentWindow.getTime() + intervalMs)
+    await control`
+      INSERT INTO rankings.generations
+        (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
+         expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+      VALUES (${generationId}, ${randomUUID()}, ${`activity-missing-current:${randomUUID()}`}, '1v1',
+        ${scheduleWindowAt}, ${scheduleWindowAt}, ${new Date(scheduleWindowAt.getTime() + intervalMs)}, 1,
+        'brawlhalla-v1-ranked-leaderboard', 1, false,
+        ${control.json({ source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 })})
+    `
+    await control`
+      INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
+      VALUES (${snapshotId}, ${generationId}, '1v1', 'all', 1)
+    `
+    await control`
+      INSERT INTO rankings.snapshot_rows
+        (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
+         player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier)
+      VALUES (${snapshotId}, '1v1', 1, 1, 1, 'one-vs-one-player', 990000003, 'Missing Current EU',
+        NULL, NULL, 'EU', 2000, 2100, 20, 10, 'Diamond')
+    `
+    await control`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+
+    expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1 })).toMatchObject({
+      status: 'unavailable',
+      reason: 'not_enough_history',
+    })
+    await control.end()
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('returns positive game deltas for stable identities in all four modes and both Global and EU scopes', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    for (const [index, mode] of leaderboardModes.entries()) {
+      const previousWindow = new Date(Date.UTC(2001, 0, index + 1))
+      await publishActivityGeneration(operations, ranking, {
+        mode,
+        label: `activity-modes-previous-${mode}`,
+        window: previousWindow,
+        variant: 710 + index,
+      })
+      const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+      await publishActivityGeneration(operations, ranking, {
+        mode,
+        label: `activity-modes-current-${mode}`,
+        window: currentWindow,
+        variant: 710 + index,
+        transform: (row) => ({ ...row, rating: row.rating - 12, wins: row.wins + 1, losses: row.losses + 2 }),
+      })
+      for (const region of ['all', 'EU'] as const) {
+        const view = await ranking.queries.getRecentActivity({ mode, region, page: 1, now: currentWindow })
+        if (view.status === 'unavailable') throw new Error(`Expected ${mode} ${region} activity`)
+        expect(view.status).toBe('fresh')
+        expect(view.totalRows).toBe(region === 'all' ? 9 : 1)
+        expect(view.entries[0]).toMatchObject({ ratingDelta: -12, winsDelta: 1, lossesDelta: 2, gamesDelta: 3 })
+        expect(view.entries[0].identity.type).toBe(
+          mode === '1v1'
+            ? 'one-vs-one-player'
+            : mode === '2v2'
+              ? 'fixed-two-vs-two-team'
+              : mode === 'solo2v2'
+                ? 'solo-two-vs-two-player'
+                : 'three-vs-three-player',
+        )
+      }
+    }
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('sorts by current rating then games delta and pins pagination to the requested current snapshot', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const previousWindow = new Date('2002-01-01T00:00:00Z')
+    const ratings = [2300, 2400, 2300]
+    const games = [2, 1, 4]
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-sort-previous',
+      window: previousWindow,
+      rows: 3,
+      variant: 720,
+      transform: (row) => ({ ...row, rating: 2000, wins: 20, losses: 10 }),
+    })
+    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-sort-current',
+      window: currentWindow,
+      rows: 3,
+      variant: 720,
+      transform: (row, _scope, index) => ({
+        ...row,
+        rating: ratings[index % ratings.length],
+        peakRating: 3000,
+        wins: 20 + games[index % games.length],
+        losses: 10,
+      }),
+    })
+    const current = await ranking.queries.getLeaderboard({ mode: '1v1', region: 'EU', page: 1, now: currentWindow })
+    if (current.status === 'unavailable') throw new Error('Expected current snapshot')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-sort-latest',
+      window: new Date(currentWindow.getTime() + intervalMs),
+      rows: 3,
+      variant: 720,
+      transform: (row) => ({ ...row, rating: 2600, peakRating: 3000, wins: 30, losses: 10 }),
+    })
+
+    const pageOne = await ranking.queries.getRecentActivity({
+      mode: '1v1',
+      region: 'EU',
+      page: 1,
+      pageSize: 2,
+      snapshotId: current.snapshotId,
+      now: currentWindow,
+    })
+    const pageTwo = await ranking.queries.getRecentActivity({
+      mode: '1v1',
+      region: 'EU',
+      page: 2,
+      pageSize: 2,
+      snapshotId: current.snapshotId,
+      now: currentWindow,
+    })
+    if (pageOne.status === 'unavailable' || pageTwo.status === 'unavailable') throw new Error('Expected pinned pages')
+    expect(pageOne.currentSnapshotId).toBe(current.snapshotId)
+    expect(pageTwo.currentSnapshotId).toBe(current.snapshotId)
+    expect(pageOne.entries.map(({ rating, gamesDelta }) => [rating, gamesDelta])).toEqual([
+      [2400, 1],
+      [2300, 4],
+    ])
+    expect(pageTwo.entries.map(({ rating, gamesDelta }) => [rating, gamesDelta])).toEqual([[2300, 2]])
+    expect(pageOne.hasMore).toBe(true)
+    expect(pageOne.totalRows).toBe(3)
+    expect(pageTwo.hasMore).toBe(false)
+    expect(
+      await ranking.queries.getRecentActivity({
+        mode: '1v1',
+        region: 'EU',
+        page: 3,
+        pageSize: 2,
+        snapshotId: current.snapshotId,
+        now: currentWindow,
+      }),
+    ).toMatchObject({ currentSnapshotId: current.snapshotId, totalRows: 3, entries: [], hasMore: false })
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('excludes rating-only changes, regressed counters, reset rows, appearances, and disappearances', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const previousWindow = new Date('2003-01-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-exclusions-previous',
+      window: previousWindow,
+      rows: 6,
+      variant: 730,
+      transform: (row, scope, index) =>
+        scope === 'EU' && index === 5 ? null : { ...row, wins: 20, losses: 10, standing: index + 1 },
+    })
+
+    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '1v1',
+      label: 'activity-exclusions-current',
+      window: currentWindow,
+      rows: 6,
+      variant: 730,
+      transform: (row, scope, index) => {
+        if (scope === 'EU' && index === 4) return null
+        if (index === 0) return { ...row, wins: 21, losses: 10 }
+        if (index === 1) return { ...row, rating: row.rating + 100, peakRating: 3000, wins: 20, losses: 10 }
+        if (index === 2) return { ...row, wins: 19, losses: 12 }
+        if (index === 3) return { ...row, wins: 5, losses: 3 }
+        return { ...row, wins: 21, losses: 10 }
+      },
+    })
+
+    const view = await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1, now: currentWindow })
+    if (view.status === 'unavailable') throw new Error('Expected exclusion view')
+    expect(view.entries).toHaveLength(1)
+    expect(view.entries[0]).toMatchObject({ winsDelta: 1, lossesDelta: 0, gamesDelta: 1 })
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('returns scan_gap when the previous expected publication does not equal the current schedule window', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const previousWindow = new Date('2003-06-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: '3v3',
+      label: 'activity-gap-previous',
+      window: previousWindow,
+      variant: 740,
+    })
+    const currentWindow = new Date(previousWindow.getTime() + 2 * intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: '3v3',
+      label: 'activity-gap-current',
+      window: currentWindow,
+      variant: 740,
+      transform: (row) => ({ ...row, wins: row.wins + 1 }),
+    })
+    expect(await ranking.queries.getRecentActivity({ mode: '3v3', region: 'EU', page: 1, now: currentWindow })).toEqual(
+      {
+        status: 'unavailable',
+        reason: 'scan_gap',
+        mode: '3v3',
+        region: 'EU',
+        page: 1,
+        pageSize: 20,
+      },
+    )
+    await ranking.close()
+    await operations.close()
+  })
+
+  test('keeps valid empty and stale activity states explicit', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const previousWindow = new Date('2004-01-01T00:00:00Z')
+    await publishActivityGeneration(operations, ranking, {
+      mode: 'solo2v2',
+      label: 'activity-empty-previous',
+      window: previousWindow,
+      variant: 750,
+    })
+    const currentWindow = new Date(previousWindow.getTime() + intervalMs)
+    await publishActivityGeneration(operations, ranking, {
+      mode: 'solo2v2',
+      label: 'activity-empty-current',
+      window: currentWindow,
+      variant: 750,
+    })
+    const empty = await ranking.queries.getRecentActivity({
+      mode: 'solo2v2',
+      region: 'EU',
+      page: 1,
+      now: currentWindow,
+    })
+    expect(empty).toMatchObject({ status: 'fresh', totalRows: 0, entries: [] })
+
+    const failure = await leaseOperation(operations, 'solo2v2', 'activity-empty-failure')
+    expect(
+      await ranking.recordCollectionFailure(authorization(failure), {
+        mode: 'solo2v2',
+        scope: 'EU',
+        checkedAt: new Date(),
+        code: 'source_unavailable',
+        message: 'activity freshness test',
+      }),
+    ).toBe('recorded')
+    await operations.fail(failure, { code: 'source_unavailable', message: 'test', retryable: false }, 0)
+    expect(
+      await ranking.queries.getRecentActivity({ mode: 'solo2v2', region: 'EU', page: 1, now: currentWindow }),
+    ).toMatchObject({ status: 'stale', totalRows: 0, entries: [] })
+    expect(
+      await ranking.queries.getRecentActivity({
+        mode: 'solo2v2',
+        region: 'EU',
+        page: 1,
+        now: new Date(currentWindow.getTime() + 2 * intervalMs),
+      }),
+    ).toMatchObject({ status: 'stale' })
+    await ranking.close()
+    await operations.close()
   })
 })
 

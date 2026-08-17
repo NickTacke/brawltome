@@ -31,7 +31,12 @@ import type {
 } from './clan'
 import type { contractProofSchema } from './contract-proof'
 import type { discoverySearchInputSchema, discoverySearchOutputSchema } from './discovery'
-import type { leaderboardInputSchema, leaderboardOutputSchema } from './leaderboard'
+import type {
+  leaderboardInputSchema,
+  leaderboardOutputSchema,
+  leaderboardRecentActivityInputSchema,
+  leaderboardRecentActivityOutputSchema,
+} from './leaderboard'
 import type { nullablePlayerCareerProfileSchema } from './player-career'
 import type { nullablePlayerRankedProfileSchema } from './player-ranked'
 import type { nullablePlayerReferenceSchema, playerReferenceByIdInputSchema } from './player-reference'
@@ -94,6 +99,10 @@ type AppRouterRecord = {
   }
   leaderboard: {
     get: Query<Output<typeof leaderboardInputSchema>, Output<typeof leaderboardOutputSchema>>
+    recentActivity: Query<
+      Output<typeof leaderboardRecentActivityInputSchema>,
+      Output<typeof leaderboardRecentActivityOutputSchema>
+    >
   }
   statistics: {
     legendMeta: Query<Output<typeof legendMetaInputSchema>, Output<typeof legendMetaOutputSchema>>

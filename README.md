@@ -22,6 +22,7 @@
 
 - **Player profiles:** ranked stats, legends, weapons, and rating history
 - **Leaderboards:** 1v1, 2v2, Solo 2v2, and 3v3 with region filters and pagination
+- **Queue:** recent ranked activity inferred from leaderboard scan deltas
 - **Clans and discovery:** clan pages and searchable player aliases and former names
 - **Discord bot:** slash commands for player, clan, and service information
 - **Desktop overlay:** live Windows opponent detection and player insights
