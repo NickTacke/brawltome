@@ -1,9 +1,15 @@
 'use client'
 
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { Avatar, AvatarFallback, Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import Link from 'next/link'
 import { formatDuration } from './ReplayResultView'
-import { getPreviewPlayer, previewMatches } from './matches-preview-fixtures'
+import {
+  getPreviewAppearance,
+  getPreviewMatch,
+  getPreviewPlayer,
+  previewMatches,
+  previewMatchesForPlayer,
+} from './matches-preview-fixtures'
 
 export function MatchesPreview({
   matchId,
@@ -75,10 +81,137 @@ function PreviewFeed({ notice }: { notice?: string }) {
   )
 }
 
+function Appearance({ playerId }: { playerId: string }) {
+  const player = getPreviewPlayer(playerId)
+  if (!player) return null
+  const appearance = getPreviewAppearance(player)
+  const imageUrl = appearance.imageUrl ?? appearance.fallbackImageUrl ?? undefined
+  return (
+    <div className="flex items-center gap-3">
+      <Avatar className="h-12 w-12 rounded-md border border-border bg-muted">
+        {imageUrl && <img src={imageUrl} alt={appearance.name} className="rounded-md object-cover object-top" />}
+        <AvatarFallback className="rounded-md">{player.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+      </Avatar>
+      <div>
+        <Link href={`/matches?player=${player.id}`} className="font-bold hover:text-primary">
+          {player.name}
+        </Link>
+        <p className="text-xs text-muted-foreground">{appearance.name}</p>
+      </div>
+    </div>
+  )
+}
+
+function positioningText({ air, ground, wall }: { air: number; ground: number; wall: number }): string {
+  return `Air ${(air * 100).toFixed(1)}% · Ground ${(ground * 100).toFixed(1)}% · Wall ${(wall * 100).toFixed(1)}%`
+}
+
 function PreviewMatchDetail({ matchId }: { matchId: string }) {
-  return <PreviewFeed notice={`Preview match ${matchId} is unavailable.`} />
+  const match = getPreviewMatch(matchId)
+  if (!match) return <PreviewFeed notice="Preview match is unavailable." />
+  const winner = getPreviewPlayer(match.winnerPlayerId)
+  return (
+    <PreviewShell>
+      <Button asChild variant="ghost">
+        <Link href="/matches">Back to feed</Link>
+      </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>{match.map}</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {match.mode} · {formatDuration(match.durationMs)} · Winner {winner?.name ?? 'Unknown player'}
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          {match.participants.map((participant) => (
+            <section key={participant.playerId} className="rounded-lg border border-border p-4">
+              <Appearance playerId={participant.playerId} />
+              <p className="mt-3 text-sm">
+                Score {participant.score} · KOs {participant.kos} · Deaths {participant.deaths}
+              </p>
+              <p className="text-sm">
+                Dealt {participant.damageDealt.toFixed(1)} · Taken {participant.damageTaken.toFixed(1)}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">{positioningText(participant.positioning)}</p>
+            </section>
+          ))}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Knockout timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {match.knockouts.length === 0 ? (
+            <p>No knockouts were recorded.</p>
+          ) : (
+            <ol className="space-y-2">
+              {match.knockouts.map((knockout) => {
+                const scorer = knockout.scorerPlayerId && getPreviewPlayer(knockout.scorerPlayerId)?.name
+                const victim = getPreviewPlayer(knockout.victimPlayerId)?.name ?? 'Unknown player'
+                return (
+                  <li key={`${knockout.timestampMs}-${knockout.victimPlayerId}`}>
+                    {formatDuration(knockout.timestampMs)} · <strong>{scorer ?? 'Unknown scorer'}</strong> knocked out{' '}
+                    {victim}
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+        </CardContent>
+      </Card>
+      {match.events.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Additional events</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {match.events.map((event) => (
+              <p key={`${event.timestampMs}-${event.kind}`}>
+                {formatDuration(event.timestampMs)} · {event.label}
+              </p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </PreviewShell>
+  )
 }
 
 function PreviewPlayerHistory({ playerId }: { playerId: string }) {
-  return <PreviewFeed notice={`Preview player ${playerId} is unavailable.`} />
+  const player = getPreviewPlayer(playerId)
+  if (!player) return <PreviewFeed notice="Preview player is unavailable." />
+  const matches = previewMatchesForPlayer(playerId)
+  return (
+    <PreviewShell>
+      <Button asChild variant="ghost">
+        <Link href="/matches">Back to feed</Link>
+      </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>Player preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Appearance playerId={playerId} />
+        </CardContent>
+      </Card>
+      <section className="grid gap-4" aria-label={`${player.name} preview match history`}>
+        {matches.map((match) => (
+          <Card key={match.id}>
+            <CardHeader>
+              <CardTitle>{match.map}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {match.mode} · {formatDuration(match.durationMs)} · {match.winnerPlayerId === playerId ? 'Win' : 'Loss'}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Button asChild size="sm">
+                <Link href={`/matches?match=${match.id}`}>View match</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+    </PreviewShell>
+  )
 }

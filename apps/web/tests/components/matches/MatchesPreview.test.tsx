@@ -47,3 +47,38 @@ describe('matches preview feed', () => {
     expect(html).toContain('/matches?analyze=1')
   })
 })
+
+describe('matches preview detail and player history', () => {
+  test('renders truthful match detail with catalog appearances and unsupported data', () => {
+    const html = renderToStaticMarkup(createElement(MatchesPreview, { matchId: 'preview-final' }))
+
+    expect(html).toContain('King Knight')
+    expect(html).toContain('https://cms.brawlhalla.com/c/uploads/2021/07/a_Roster_Pose_KingKnightM.png')
+    expect(html).toContain('/images/legends/avatars/bodvar.png')
+    expect(html).toContain('Air 45.0% · Ground 54.0% · Wall 1.0%')
+    expect(html).toContain('Unknown scorer')
+    expect(html).not.toContain('Environment')
+    expect(html).not.toContain('dodges/min')
+    expect(html).toContain('Unsupported event')
+    expect(html).toContain('/matches?player=preview-knight')
+  })
+
+  test('derives player history from the same three-match graph', () => {
+    const html = renderToStaticMarkup(createElement(MatchesPreview, { playerId: 'preview-knight' }))
+
+    expect(html).toContain('AxeMender')
+    expect(html).toContain('King Knight')
+    expect(html.match(/View match/g) ?? []).toHaveLength(3)
+    expect(html).toContain('/matches?match=preview-final')
+  })
+
+  test('fails safely to the feed for unknown fixture identifiers', () => {
+    const matchHtml = renderToStaticMarkup(createElement(MatchesPreview, { matchId: 'missing' }))
+    const playerHtml = renderToStaticMarkup(createElement(MatchesPreview, { playerId: 'missing' }))
+
+    expect(matchHtml).toContain('Preview match is unavailable.')
+    expect(playerHtml).toContain('Preview player is unavailable.')
+    expect(matchHtml.match(/View match/g) ?? []).toHaveLength(3)
+    expect(playerHtml.match(/View match/g) ?? []).toHaveLength(3)
+  })
+})
