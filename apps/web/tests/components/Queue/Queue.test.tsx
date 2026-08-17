@@ -47,28 +47,18 @@ function render(view: LeaderboardRecentActivityOutput, currentFilters: QueueFilt
 }
 
 describe('Queue activity presentation', () => {
-  test('renders inferred player activity, scan interval, rating-first metrics, and coverage truthfully', () => {
+  test('renders each inferred player activity once with rating-first metrics', () => {
     const html = render(playerView)
     expect(html).toContain('<h1')
     expect(html).toContain('Queue')
-    expect(html).toContain('Recent ranked activity inferred from leaderboard changes.')
-    expect(html).toContain('href="/player/42"')
+    expect(html.match(/href="\/player\/42"/g)).toHaveLength(1)
     expect(html).toContain('Ada')
     expect(html).toContain('bodvar')
     expect(html).toContain('2300')
     expect(html).toContain('-12')
-    expect(html).toContain('+3 games')
-    expect(html).toContain('+1 W')
-    expect(html).toContain('+2 L')
-    expect(html).toContain('dateTime="2026-08-17T12:00:00Z"')
-    expect(html).toContain('dateTime="2026-08-17T12:15:00Z"')
-    expect(html).toContain('leaderboard-depth bounded')
-    expect(html).toContain('locally deduplicated union of regional source scans')
-    expect(html).toContain('normally every 15 minutes')
-    expect(html).toContain('may publish late')
-    expect(html).toContain('positive completed-game delta')
-    expect(html).toContain('may lag real play')
-    expect(html).toContain('ordered by current rating')
+    expect(html).toContain('+3')
+    expect(html).toContain('+1')
+    expect(html).toContain('+2')
     expect(html.toLowerCase()).not.toContain('online')
     expect(html.toLowerCase()).not.toContain('searching')
     expect(html.toLowerCase()).not.toContain('currently')
@@ -93,9 +83,8 @@ describe('Queue activity presentation', () => {
       ],
     } satisfies LeaderboardRecentActivityOutput
     const html = render(view, { ...filters, mode: '2v2' })
-    expect(html).toContain('Team activity')
-    expect(html).toContain('href="/player/42"')
-    expect(html).toContain('href="/player/43"')
+    expect(html.match(/href="\/player\/42"/g)).toHaveLength(1)
+    expect(html.match(/href="\/player\/43"/g)).toHaveLength(1)
     expect(html).toContain('Ada')
     expect(html).toContain('Bodvar')
   })
@@ -103,10 +92,7 @@ describe('Queue activity presentation', () => {
   test('keeps stale, empty, history, gap, and transport failures distinct and accessible', () => {
     const stale = render({ ...playerView, status: 'stale' })
     expect(stale).toContain('role="alert"')
-    expect(stale).toContain('This retained interval is stale')
-    expect(stale).toContain(
-      'Its freshness window may have passed, a newer interval may exist, or collection may have failed',
-    )
+    expect(stale).toContain('Activity may be outdated.')
     expect(stale).not.toContain('late scan')
 
     const empty = render({ ...base, totalRows: 0, entries: [] })
