@@ -1,10 +1,20 @@
 'use client'
 
 import { WinLossBar } from '@/components/player/shared'
-import { Avatar, AvatarFallback, AvatarImage, Badge, Card } from '@/components/ui'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Card,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui'
 import { fixEncoding } from '@/lib/utils'
 import type { LeaderboardRecentActivityEntry, LeaderboardRecentActivityOutput } from '@brawltome/contracts'
-import { ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import {
   BRACKETS,
@@ -29,69 +39,46 @@ function QueueHeader({ filters }: { filters: QueueFilters }) {
   return (
     <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <h1 className="text-3xl font-black tracking-tight sm:text-5xl">Queue</h1>
-      <QueueFiltersForm filters={filters} />
+      <QueueFilterControls filters={filters} />
     </header>
   )
 }
 
-function QueueFiltersForm({ filters }: { filters: QueueFilters }) {
+function QueueFilterControls({ filters }: { filters: QueueFilters }) {
+  const navigate = (next: Partial<QueueFilters>) => {
+    const query = buildQueueFilterQueryString({ ...filters, ...next, page: 1, snapshotId: undefined })
+    window.location.assign(`/queue?${query}`)
+  }
   return (
-    <form action="/queue" method="get" className="flex gap-2">
+    <div className="flex gap-2">
       <p id="queue-filter-hint" className="sr-only">
         Selecting a value updates results automatically.
       </p>
-      <label htmlFor="queue-mode" className="sr-only">
-        Mode
-      </label>
-      <div className="relative">
-        <select
-          id="queue-mode"
-          name="mode"
-          defaultValue={filters.mode}
-          aria-describedby="queue-filter-hint"
-          onChange={(event) => event.currentTarget.form?.requestSubmit()}
-          className="h-9 appearance-none rounded-md border border-input bg-background pl-3 pr-9 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
-        >
+      <Select value={filters.mode} onValueChange={(mode) => navigate({ mode: mode as QueueFilters['mode'] })}>
+        <SelectTrigger aria-label="Queue mode" aria-describedby="queue-filter-hint" className="h-9 w-28 font-bold">
+          <SelectValue>{BRACKETS.find(({ id }) => id === filters.mode)?.label}</SelectValue>
+        </SelectTrigger>
+        <SelectContent className="bg-popover">
           {BRACKETS.map(({ id, label }) => (
-            <option key={id} value={id}>
+            <SelectItem key={id} value={id} className="cursor-pointer">
               {label}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <ChevronDown
-          aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-        />
-      </div>
-      <label htmlFor="queue-region" className="sr-only">
-        Region
-      </label>
-      <div className="relative">
-        <select
-          id="queue-region"
-          name="region"
-          defaultValue={filters.region}
-          aria-describedby="queue-filter-hint"
-          onChange={(event) => event.currentTarget.form?.requestSubmit()}
-          className="h-9 min-w-32 appearance-none rounded-md border border-input bg-background pl-3 pr-9 text-sm font-bold text-foreground scheme-light dark:scheme-dark focus:outline-hidden focus:ring-2 focus:ring-ring"
-        >
+        </SelectContent>
+      </Select>
+      <Select value={filters.region} onValueChange={(region) => navigate({ region: region as QueueFilters['region'] })}>
+        <SelectTrigger aria-label="Queue region" aria-describedby="queue-filter-hint" className="h-9 w-36 font-bold">
+          <SelectValue>{REGIONS.find(({ id }) => id === filters.region)?.label}</SelectValue>
+        </SelectTrigger>
+        <SelectContent className="bg-popover">
           {REGIONS.map(({ id, label }) => (
-            <option key={id} value={id}>
+            <SelectItem key={id} value={id} className="cursor-pointer">
               {label}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <ChevronDown
-          aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-        />
-      </div>
-      <noscript>
-        <button type="submit" className="h-9 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
-          Apply
-        </button>
-      </noscript>
-    </form>
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
@@ -103,10 +90,15 @@ function Player({ player }: { player: Contestant }) {
       {player.bestLegendNameKey && (
         <Avatar
           aria-label={`${name} best legend: ${player.bestLegendNameKey}`}
-          className="h-12 w-12 shrink-0 rounded-xl"
+          className="h-12 w-12 shrink-0 border border-border bg-muted rounded-xl"
         >
-          <AvatarImage src={`/images/legends/avatars/${player.bestLegendNameKey}.png`} alt={player.bestLegendNameKey} />
-          <AvatarFallback className="rounded-xl text-xs">
+          <AvatarImage
+            src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+            alt={player.bestLegendNameKey}
+            className="object-cover object-top"
+            loading="lazy"
+          />
+          <AvatarFallback className="rounded-xl text-xs font-bold text-muted-foreground">
             {player.bestLegendNameKey.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -127,7 +119,7 @@ function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   if (entry.identity.type !== 'fixed-two-vs-two-team') return <Player player={entry.identity.player} />
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
-      <div className="flex shrink-0 -space-x-1">
+      <div className="flex shrink-0 gap-1">
         {entry.identity.players.map((player) => {
           const name = fixEncoding(player.name)
           return (
@@ -138,15 +130,19 @@ function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
                   ? `${name} best legend: ${player.bestLegendNameKey}`
                   : `${name} best legend unavailable`
               }
-              className="h-10 w-10 rounded-lg ring-2 ring-card"
+              className="h-10 w-10 border border-border bg-muted rounded-lg"
             >
               {player.bestLegendNameKey && (
                 <AvatarImage
                   src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
                   alt={player.bestLegendNameKey}
+                  className="object-cover object-top"
+                  loading="lazy"
                 />
               )}
-              <AvatarFallback className="rounded-lg text-xs">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              <AvatarFallback className="rounded-lg text-xs font-bold text-muted-foreground">
+                {name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
             </Avatar>
           )
         })}

@@ -58,6 +58,7 @@ describe('Queue activity presentation', () => {
     expect(html).toContain('inline-flex items-center rounded-full border')
     expect(html).toContain('text-xl')
     expect(html).toContain('items-center gap-4 font-bold')
+    expect(html).toContain('h-12 w-12 shrink-0 border border-border bg-muted rounded-xl')
     expect(html).toContain('flex h-12 shrink-0 items-center gap-3 text-base font-black')
     expect(html).toContain('aria-label="Win rate 33.3%"')
     expect(html).toContain('2300')
@@ -109,8 +110,8 @@ describe('Queue activity presentation', () => {
     expect(html).toContain('Ada with an exceptionally long tournament name')
     expect(html).toContain('Bodvar with another exceptionally long tournament name')
     expect(html).toContain('aria-label="Team roster"')
-    expect(html).toContain('flex shrink-0 -space-x-1')
-    expect(html.match(/h-10 w-10 rounded-lg ring-2 ring-card/g)).toHaveLength(2)
+    expect(html).toContain('flex shrink-0 gap-1')
+    expect(html.match(/h-10 w-10 border border-border bg-muted rounded-lg/g)).toHaveLength(2)
     expect(html).toContain('Bodvar with another exceptionally long tournament name best legend unavailable')
     expect(html).toContain('min-w-0 flex-1 space-y-0.5')
     expect(html.match(/block truncate text-base font-black hover:text-primary/g)).toHaveLength(2)
@@ -174,29 +175,23 @@ describe('Queue activity presentation', () => {
     expect(html).toContain('flex min-w-0 items-start justify-between')
   })
 
-  test('renders every approved filter and snapshot-pinned previous/next links', () => {
+  test('renders web controls for each filter and snapshot-pinned previous/next links', () => {
     const html = render(
       { ...playerView, page: 2, hasMore: true },
       { mode: '1v1', region: 'EU', page: 2, snapshotId: base.currentSnapshotId },
     )
-    expect(html).toContain('<label for="queue-mode"')
-    expect(html).toContain('<label for="queue-region"')
-    for (const option of ['1v1', '2v2', 'solo2v2', '3v3']) expect(html).toContain(`value="${option}"`)
-    for (const option of ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA']) {
-      expect(html).toContain(`value="${option}"`)
-    }
-    expect(html.match(/scheme-light dark:scheme-dark/g)).toHaveLength(2)
-    expect(html.match(/appearance-none/g)).toHaveLength(2)
-    expect(html.match(/pointer-events-none absolute right-3/g)).toHaveLength(2)
-    expect(html.match(/font-bold text-foreground scheme-light/g)).toHaveLength(2)
-    expect(html).not.toContain('name="snapshotId"')
-    expect(html).not.toContain('name="page"')
+    expect(html.match(/role="combobox"/g)).toHaveLength(2)
+    expect(html).toContain('aria-label="Queue mode"')
+    expect(html).toContain('aria-label="Queue region"')
+    expect(html).toContain('id="queue-filter-hint"')
+    expect(html).toContain('Selecting a value updates results automatically.')
+    expect(html.match(/aria-describedby="queue-filter-hint"/g)).toHaveLength(2)
+    expect(html).toContain('1v1')
+    expect(html).toContain('Europe')
+    expect(html.match(/<select aria-hidden="true"/g)).toHaveLength(2)
+    expect(html).not.toContain('<form')
+    expect(html).not.toContain('<noscript>')
     expect(html).toContain(`href="/queue?mode=1v1&amp;region=EU&amp;page=1&amp;snapshotId=${base.currentSnapshotId}"`)
     expect(html).toContain(`href="/queue?mode=1v1&amp;region=EU&amp;page=3&amp;snapshotId=${base.currentSnapshotId}"`)
-  })
-
-  test('keeps filter submission available without client hydration', () => {
-    const html = render(playerView)
-    expect(html).toContain('<noscript><button type="submit"')
   })
 })
