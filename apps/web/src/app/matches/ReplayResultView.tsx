@@ -23,6 +23,14 @@ function formatShare(value: number | null | undefined): string {
   return value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`
 }
 
+function formatPositioning(air: number, ground: number, wall: number): string {
+  return `Air ${(air * 100).toFixed(1)}% · Ground ${(ground * 100).toFixed(1)}% · Wall ${(wall * 100).toFixed(1)}%`
+}
+
+function formatKnockoutScorer(name: string | undefined): string {
+  return name ?? 'Unknown scorer'
+}
+
 function replayTimestamp(value: string): string {
   return `${value.slice(0, 10)} · ${value.slice(11, 16)} UTC`
 }
@@ -270,10 +278,7 @@ export function ReplayResultView({ job }: { job: ReplayJobDetailContract }) {
                 <div key={player.slot}>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-foreground">{player.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatMetric(playerSummary?.dodgesPerMinute)} dodges/min ·{' '}
-                      {formatShare(playerSummary?.airDodgeShare)} air
-                    </span>
+                    <span className="text-xs text-muted-foreground">{formatPositioning(air, ground, wall)}</span>
                   </div>
                   <div
                     className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-muted"
@@ -351,7 +356,8 @@ export function ReplayResultView({ job }: { job: ReplayJobDetailContract }) {
                         {formatDuration(event.timestampMs)}
                       </span>
                       <span>
-                        <strong>{scorer?.name ?? 'Environment'}</strong> knocked out {victim?.name ?? 'Unknown player'}
+                        <strong>{formatKnockoutScorer(scorer?.name)}</strong> knocked out{' '}
+                        {victim?.name ?? 'Unknown player'}
                       </span>
                     </li>
                   )
