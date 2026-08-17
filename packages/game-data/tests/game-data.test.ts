@@ -97,13 +97,25 @@ describe('validation ID sets', () => {
 })
 
 describe('skin appearances', () => {
-  test('looks up generated skins and groups crossover IDs by owning legend', () => {
+  test('looks up generated skins and completely groups sorted crossover IDs by owner', () => {
     const crossover = skins.find((skin) => skin.isCrossover)
-    if (!crossover) throw new Error('generated catalog has no crossover skin')
+    const nonCrossover = skins.find((skin) => !skin.isCrossover)
+    if (!crossover || !nonCrossover) throw new Error('generated catalog needs crossover and base skins')
 
     expect(getSkinById(crossover.skinId)).toBe(crossover)
+    expect(getSkinById(2_147_483_647)).toBeUndefined()
     expect(getCrossoverSkinById(crossover.skinId)).toBe(crossover)
-    expect(crossoverSkinIdsByLegend.get(crossover.legendId)).toContain(crossover.skinId)
+    expect(getCrossoverSkinById(nonCrossover.skinId)).toBeUndefined()
+    expect(getCrossoverSkinById(2_147_483_647)).toBeUndefined()
+
+    const expectedOwners = new Set(skins.filter((skin) => skin.isCrossover).map((skin) => skin.legendId))
+    expect(new Set(crossoverSkinIdsByLegend.keys())).toEqual(expectedOwners)
+    for (const [legendId, ids] of crossoverSkinIdsByLegend) {
+      expect(ids).toEqual([...ids].sort((left, right) => left - right))
+      expect(ids).toEqual(
+        skins.filter((skin) => skin.isCrossover && skin.legendId === legendId).map((skin) => skin.skinId),
+      )
+    }
   })
 
   test('resolves an exact crossover with a base legend image fallback', () => {
@@ -111,28 +123,34 @@ describe('skin appearances', () => {
     if (!crossover) throw new Error('generated catalog has no crossover skin')
     const appearance = resolvePlayerAppearance(crossover.legendId, crossover.skinId)
 
-    expect(appearance).toMatchObject({
+    expect(appearance).toEqual({
       kind: 'crossover',
-      legendId: crossover.legendId,
-      skinId: crossover.skinId,
-      name: crossover.displayName,
-      imageUrl: crossover.imageUrl,
+      legendId: 11,
+      skinId: 351,
+      name: 'King Knight',
+      imageUrl: 'https://cms.brawlhalla.com/c/uploads/2021/07/a_Roster_Pose_KingKnightM.png',
+      fallbackImageUrl: '/images/legends/avatars/sir roland.png',
       diagnostic: null,
     })
-    expect(appearance.fallbackImageUrl).toMatch(/^\/images\/legends\/avatars\/.+\.png$/)
   })
 
   test('uses the base legend for known non-crossovers and unknown skin IDs', () => {
-    expect(resolvePlayerAppearance(3, 3)).toMatchObject({
+    expect(resolvePlayerAppearance(3, 3)).toEqual({
       kind: 'legend',
       legendId: 3,
+      skinId: 3,
       name: 'BÖDVAR',
+      imageUrl: '/images/legends/avatars/bodvar.png',
+      fallbackImageUrl: '/images/legends/avatars/bodvar.png',
       diagnostic: null,
     })
-    expect(resolvePlayerAppearance(3, 2_147_483_647)).toMatchObject({
+    expect(resolvePlayerAppearance(3, 2_147_483_647)).toEqual({
       kind: 'legend',
       legendId: 3,
+      skinId: 2_147_483_647,
       name: 'BÖDVAR',
+      imageUrl: '/images/legends/avatars/bodvar.png',
+      fallbackImageUrl: '/images/legends/avatars/bodvar.png',
       diagnostic: { code: 'unknown_skin', legendId: 3, skinId: 2_147_483_647 },
     })
   })
@@ -150,10 +168,18 @@ describe('skin appearances', () => {
 
     const crossover = skins.find((skin) => skin.isCrossover && skin.legendId !== 3)
     if (!crossover) throw new Error('fixture needs a crossover not owned by Bödvar')
-    expect(resolvePlayerAppearance(3, crossover.skinId).diagnostic).toEqual({
-      code: 'skin_legend_mismatch',
+    expect(resolvePlayerAppearance(3, crossover.skinId)).toEqual({
+      kind: 'legend',
       legendId: 3,
       skinId: crossover.skinId,
+      name: 'BÖDVAR',
+      imageUrl: '/images/legends/avatars/bodvar.png',
+      fallbackImageUrl: '/images/legends/avatars/bodvar.png',
+      diagnostic: {
+        code: 'skin_legend_mismatch',
+        legendId: 3,
+        skinId: crossover.skinId,
+      },
     })
   })
 })
