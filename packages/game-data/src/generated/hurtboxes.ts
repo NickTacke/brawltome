@@ -7121,6 +7121,126 @@ const data = [
     "animName": "AttackSpecialDarkheartMonster6",
     "width": 0,
     "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorNSpear",
+    "hurtboxId": 894,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator3",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorNSpear2",
+    "hurtboxId": 895,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator3Hit",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorNSpear3",
+    "hurtboxId": 896,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator3HitAI",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorSSpear",
+    "hurtboxId": 897,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator4",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorSSpear2",
+    "hurtboxId": 898,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator4HitB",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorDSpear",
+    "hurtboxId": 899,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator5",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorDSpear2",
+    "hurtboxId": 900,
+    "animClass": "a__SpearAnimation",
+    "animName": "AttackSpecialGladiator5HitB",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorNChakram",
+    "hurtboxId": 901,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator7",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorNChakram2",
+    "hurtboxId": 902,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator7RecoverModeSwap",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorSChakram",
+    "hurtboxId": 903,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator2",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorSChakram2",
+    "hurtboxId": 904,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator2Ground",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorSChakram3",
+    "hurtboxId": 905,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator2RecoverModeSwap",
+    "width": 145,
+    "height": 160
+  },
+  {
+    "hurtboxName": "GladiatorSChakram4",
+    "hurtboxId": 906,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator2GroundRecoverModeSwap",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorDChakram",
+    "hurtboxId": 907,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator8",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "GladiatorDChakram2",
+    "hurtboxId": 908,
+    "animClass": "a__ChakramAnimation",
+    "animName": "AttackSpecialGladiator8RecoverModeSwap",
+    "width": 145,
+    "height": 160
   }
 ] as const
 

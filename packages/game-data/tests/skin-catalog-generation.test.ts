@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { refreshGeneratedData, resolveExtractRoot, validateGeneratedData } from '../scripts/ingest'
 import {
+  OFFICIAL_CROSSOVER_QUERY,
   type OfficialCrossover,
   buildSkinCatalog,
+  fetchOfficialCrossovers,
   parseCostumeSources,
   parseOfficialCrossovers,
 } from '../scripts/skin-catalog'
@@ -197,6 +199,52 @@ test('leaves disposable generated outputs untouched when late refresh validation
   }
 })
 
+describe('official crossover fetch', () => {
+  test('posts the exact GraphQL request to the official CMS', async () => {
+    let requestUrl = ''
+    let requestInit: RequestInit | undefined
+    const fetcher: typeof fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        requestUrl = String(input)
+        requestInit = init
+        return new Response(JSON.stringify(officialResponse(officialNode)), { status: 200 })
+      },
+      { preconnect: () => {} },
+    )
+
+    await fetchOfficialCrossovers(fetcher)
+
+    expect(requestUrl).toBe('https://cms.brawlhalla.com/graphql')
+    expect(requestInit).toEqual({
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: OFFICIAL_CROSSOVER_QUERY }),
+    })
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      query: `{
+  crossovers(first: 500, where: {orderby: {field: DATE, order: ASC}}) {
+    nodes {
+      title
+      slug
+      crossoverFields {
+        icon { sourceUrl }
+        legend { ... on Legend { title slug } }
+      }
+    }
+  }
+}`,
+    })
+  })
+
+  test('classifies a non-OK CMS response as a request failure', async () => {
+    const fetcher: typeof fetch = Object.assign(async () => new Response('unavailable', { status: 503 }), {
+      preconnect: () => {},
+    })
+
+    await expect(fetchOfficialCrossovers(fetcher)).rejects.toThrow('official crossover request failed with 503')
+  })
+})
+
 describe('official crossover parsing', () => {
   test('parses the complete strict response', () => {
     expect(parseOfficialCrossovers(officialResponse(officialNode))).toEqual([
@@ -288,8 +336,8 @@ describe('costume source parsing', () => {
 describe('skin catalog join', () => {
   const roster = (): OfficialCrossover[] => parseOfficialCrossovers(officialResponse(officialNode))
 
-  test('joins a reviewed alias and emits deterministic skin rows', () => {
-    expect(buildSkinCatalog(costumes, legends, roster(), { Cena: 'john-cena' })).toEqual([
+  test('sorts out-of-order costume input after joining a reviewed alias', () => {
+    expect(buildSkinCatalog([costumes[1], costumes[0]], legends, roster(), { Cena: 'john-cena' })).toEqual([
       {
         skinId: 3,
         skinName: 'Viking',
