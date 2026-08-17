@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { MatchesContent } from '@/app/matches/MatchesContent'
+import { MatchesPreview } from '@/app/matches/MatchesPreview'
 import { ReplayAnalysisPage } from '@/app/matches/ReplayAnalysisPage'
 import { GET } from '@/app/matches/preview/route'
 import { WorkInProgress } from '@/components/WorkInProgress'
@@ -32,7 +33,20 @@ describe('matches preview invite', () => {
     expect(setCookie).not.toContain(token)
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(matchesPreviewCookieAuthorized(cookieValue)).toBe(true)
-    expect(MatchesContent({ previewCookie: cookieValue }).type).toBe(ReplayAnalysisPage)
+    expect(MatchesContent({ previewCookie: cookieValue }).type).toBe(MatchesPreview)
+    expect(MatchesContent({ previewCookie: cookieValue, query: { analyze: '1' } }).type).toBe(ReplayAnalysisPage)
+
+    const conflicting = MatchesContent({
+      previewCookie: cookieValue,
+      query: { match: 'preview-final', player: 'preview-knight' },
+    })
+    expect(conflicting.type).toBe(MatchesPreview)
+    expect(conflicting.props.notice).toBe('Choose one preview view at a time.')
+
+    const repeated = MatchesContent({ previewCookie: cookieValue, query: { match: ['preview-final'] } })
+    expect(repeated.type).toBe(MatchesPreview)
+    expect(repeated.props.matchId).toBeUndefined()
+    expect(MatchesContent({ previewCookie: undefined, query: { analyze: '1' } }).type).toBe(WorkInProgress)
   })
 
   test('does not grant access for an invalid invite', () => {
