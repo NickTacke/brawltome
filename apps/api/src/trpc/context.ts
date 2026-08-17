@@ -1,5 +1,5 @@
 import type { Account, Accounts } from '@brawltome/accounts'
-import type { ClanRepo } from '@brawltome/clan'
+import type { ClanQueries } from '@brawltome/clan'
 import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
 import type { PlayerValhallanQueries, RankingQueries } from '@brawltome/ranking'
@@ -20,7 +20,7 @@ export interface Context {
   verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
   rankingQueries: RankingQueries & PlayerValhallanQueries
   statisticsQueries: StatisticsQueries & CareerWeaponUsageQueries & StatisticsHistoryQueries
-  clanRepo: ClanRepo
+  clanRepo: ClanQueries
   accounts: Accounts
   clientIp: string
   isBot: boolean

@@ -11,4 +11,4 @@ export type {
   ClanDiscoverySnapshot,
   ClanDiscoverySource,
 } from './discovery-facts'
-export type { ClanProvenance, ClanQueries, ClanQueries as ClanRepo, ClanRefreshEffect } from './postgres'
+export type { ClanProvenance, ClanQueries, ClanRefreshEffect } from './postgres'
