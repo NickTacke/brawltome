@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { MatchesPreview } from '@/app/matches/MatchesPreview'
+import { MatchesPreview, nextPreviewImageUrl } from '@/app/matches/MatchesPreview'
 import {
   getPreviewAppearance,
   getPreviewMatch,
@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 describe('matches preview fixtures', () => {
   test('form one consistent three-match graph with validated appearances', () => {
     expect(previewMatches).toHaveLength(3)
-    expect(getPreviewMatch('preview-final')?.winnerPlayerId).toBe('preview-knight')
+    expect(getPreviewMatch('preview-final')?.winningTeamId).toBe('1')
     expect(previewMatchesForPlayer('preview-knight')).toHaveLength(3)
 
     const knight = getPreviewPlayer('preview-knight')
@@ -31,6 +31,24 @@ describe('matches preview fixtures', () => {
       diagnostic: { code: 'unknown_skin' },
     })
   })
+
+  test('assigns participants to consistent winning teams', () => {
+    for (const match of previewMatches) {
+      const teamIds = match.participants.map(({ teamId }) => teamId)
+      expect(teamIds.every(Boolean)).toBe(true)
+      expect(new Set(teamIds).size).toBe(2)
+      expect(teamIds).toContain(match.winningTeamId)
+    }
+
+    expect(getPreviewMatch('preview-final')?.participants.map(({ teamId }) => teamId)).toEqual(['1', '2'])
+    expect(getPreviewMatch('preview-rematch')?.participants.map(({ teamId }) => teamId)).toEqual(['1', '2'])
+    expect(getPreviewMatch('preview-team')?.participants.map(({ playerId, teamId }) => [playerId, teamId])).toEqual([
+      ['preview-knight', '1'],
+      ['preview-orion', '1'],
+      ['preview-bodvar', '2'],
+      ['preview-cassidy', '2'],
+    ])
+  })
 })
 
 describe('matches preview feed', () => {
@@ -45,6 +63,7 @@ describe('matches preview feed', () => {
     expect(html.match(/View match/g) ?? []).toHaveLength(3)
     expect(html).toContain('/matches?match=preview-final')
     expect(html).toContain('/matches?analyze=1')
+    expect(html).toContain('Winner AxeMender and StarLancer')
   })
 })
 
@@ -66,6 +85,16 @@ describe('matches preview detail and player history', () => {
     expect(html).toContain('/matches?player=preview-knight')
   })
 
+  test('labels both members of the winning 2v2 team in detail and history', () => {
+    const detailHtml = renderToStaticMarkup(createElement(MatchesPreview, { matchId: 'preview-team' }))
+    const historyHtml = renderToStaticMarkup(createElement(MatchesPreview, { playerId: 'preview-orion' }))
+
+    expect(detailHtml).toContain('Winner AxeMender and StarLancer')
+    expect(detailHtml.match(/Team 1 · Winner/g) ?? []).toHaveLength(2)
+    expect(detailHtml.match(/Team 2 · Loss/g) ?? []).toHaveLength(2)
+    expect(historyHtml).toContain('Ranked 2v2 · 2:44 · Win')
+  })
+
   test('derives player history from the same three-match graph', () => {
     const html = renderToStaticMarkup(createElement(MatchesPreview, { playerId: 'preview-knight' }))
 
@@ -73,6 +102,13 @@ describe('matches preview detail and player history', () => {
     expect(html).toContain('King Knight')
     expect(html.match(/View match/g) ?? []).toHaveLength(3)
     expect(html).toContain('/matches?match=preview-final')
+  })
+
+  test('transitions a failed primary image to fallback then initials', () => {
+    const fallback = nextPreviewImageUrl('primary.png', 'fallback.png')
+
+    expect(fallback).toBe('fallback.png')
+    expect(nextPreviewImageUrl(fallback, 'fallback.png')).toBeUndefined()
   })
 
   test('fails safely to the feed for unknown fixture identifiers', () => {
