@@ -72,6 +72,11 @@ function QueueFiltersForm({ filters }: { filters: QueueFilters }) {
           </option>
         ))}
       </select>
+      <noscript>
+        <button type="submit" className="h-9 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
+          Apply
+        </button>
+      </noscript>
     </form>
   )
 }

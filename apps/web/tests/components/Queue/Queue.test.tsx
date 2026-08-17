@@ -150,4 +150,9 @@ describe('Queue activity presentation', () => {
     expect(html).toContain(`href="/queue?mode=1v1&amp;region=EU&amp;page=1&amp;snapshotId=${base.currentSnapshotId}"`)
     expect(html).toContain(`href="/queue?mode=1v1&amp;region=EU&amp;page=3&amp;snapshotId=${base.currentSnapshotId}"`)
   })
+
+  test('keeps filter submission available without client hydration', () => {
+    const html = render(playerView)
+    expect(html).toContain('<noscript><button type="submit"')
+  })
 })
