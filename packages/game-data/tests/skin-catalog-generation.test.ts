@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveExtractRoot, validateGeneratedData } from '../scripts/ingest'
+import { refreshGeneratedData, resolveExtractRoot, validateGeneratedData } from '../scripts/ingest'
 import {
   type OfficialCrossover,
   buildSkinCatalog,
@@ -136,6 +136,71 @@ test('validates skins against legends before generated files are emitted', () =>
       ],
     }),
   ).toThrow('skin 408 references unknown legend 999')
+})
+
+test('leaves every generated output untouched when late refresh validation fails', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'brawltome-refresh-'))
+  const generatedDir = join(import.meta.dir, '..', 'src', 'generated')
+  const generatedPaths = ['legends.ts', 'levels.ts', 'powers.ts', 'hurtboxes.ts'].map((name) =>
+    join(generatedDir, name),
+  )
+  const snapshots = generatedPaths.map((path) => readFileSync(path, 'utf8'))
+  const skinsPath = join(generatedDir, 'skins.ts')
+  const skinsSnapshot = existsSync(skinsPath) ? readFileSync(skinsPath, 'utf8') : undefined
+
+  try {
+    mkdirSync(join(root, 'Game'))
+    mkdirSync(join(root, 'Init'))
+    writeFileSync(
+      join(root, 'Game', '_manifest.json'),
+      JSON.stringify([
+        { i: 0, sniff: 'HeroTypes' },
+        { i: 1, sniff: 'binary' },
+        { i: 2, sniff: 'binary' },
+        { i: 3, sniff: 'binary' },
+      ]),
+    )
+    writeFileSync(join(root, 'Init', '_manifest.json'), JSON.stringify([{ i: 0, sniff: 'LevelTypes' }]))
+    writeFileSync(
+      join(root, 'Game', 'entry-000.xml'),
+      '<Root><HeroType id="1"><HeroID>3</HeroID><HeroName>Viking</HeroName><HeroDisplayName>Bodvar</HeroDisplayName></HeroType><HeroType id="2"><HeroID>3</HeroID><HeroName>Ninja</HeroName><HeroDisplayName>Hattori</HeroDisplayName></HeroType></Root>',
+    )
+    writeFileSync(
+      join(root, 'Init', 'entry-000.xml'),
+      '<Root><LevelType id="1"><LevelID>1</LevelID><LevelName>TestMap</LevelName><DisplayName>Test Map</DisplayName></LevelType></Root>',
+    )
+    writeFileSync(
+      join(root, 'Game', 'entry-001.bin'),
+      'powerTypes\nPowerName,PowerID,BaseDamage,VariableImpulse,FixedImpulse,MinimumImpulse,CastTime,FixedRecoverTime,RecoverTime,FixedStunTime,CooldownTime,OnHitCooldownTime,AoERadiusX,AoERadiusY,IsAirPower,IsSignature,IsAntiair,IsMultihit,EndOnHit,CancelGravity,WallCancel,Hurtbox\nTestPower,1,1,0,0,0,1,1,1,0,0,0,0,0,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TestBox\n',
+    )
+    writeFileSync(
+      join(root, 'Game', 'entry-002.bin'),
+      'hurtboxTypes\nHurtboxName,HurtboxID,AnimClass,AnimName,Width,Height\nTestBox,1,Test,Idle,1,1\n',
+    )
+    writeFileSync(
+      join(root, 'Game', 'entry-003.bin'),
+      'costumeTypes\nCostumeName,CostumeID,OwnerHero,IsCrossover\nViking,3,Viking,FALSE\n',
+    )
+
+    const fetcher: typeof fetch = Object.assign(
+      async () => new Response(JSON.stringify(officialResponse()), { status: 200 }),
+      { preconnect: () => {} },
+    )
+    await expect(refreshGeneratedData(root, fetcher)).rejects.toThrow('legend heroId contains duplicate 3')
+    expect(generatedPaths.map((path) => readFileSync(path, 'utf8'))).toEqual(snapshots)
+    expect(existsSync(skinsPath)).toBe(skinsSnapshot !== undefined)
+    if (skinsSnapshot !== undefined) expect(readFileSync(skinsPath, 'utf8')).toBe(skinsSnapshot)
+  } finally {
+    generatedPaths.forEach((path, index) => {
+      const snapshot = snapshots[index] ?? ''
+      if (!existsSync(path) || readFileSync(path, 'utf8') !== snapshot) writeFileSync(path, snapshot)
+    })
+    if (skinsSnapshot === undefined) rmSync(skinsPath, { force: true })
+    else if (!existsSync(skinsPath) || readFileSync(skinsPath, 'utf8') !== skinsSnapshot) {
+      writeFileSync(skinsPath, skinsSnapshot)
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 describe('official crossover parsing', () => {
