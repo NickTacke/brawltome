@@ -1,4 +1,5 @@
 import { type PlayerAppearance, resolvePlayerAppearance } from '@brawltome/game-data'
+import { type ReplayReport, safeRatio } from './replay-report'
 
 export type PreviewPlayer = {
   readonly id: string
@@ -184,4 +185,76 @@ export function previewMatchesForPlayer(id: string): readonly PreviewMatch[] {
 
 export function getPreviewAppearance(player: PreviewPlayer): PlayerAppearance {
   return resolvePlayerAppearance(player.legendId, player.skinId)
+}
+
+export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
+  const playersById = new Map<string, PreviewPlayer>(previewPlayers.map((player) => [player.id, player]))
+  const winnerNames = match.participants
+    .filter(({ teamId }) => teamId === match.winningTeamId)
+    .map(({ playerId }) => playersById.get(playerId)?.name)
+    .filter((name): name is string => name !== undefined)
+
+  return {
+    source: 'preview',
+    title: match.participants.map(({ playerId }) => playersById.get(playerId)?.name ?? playerId).join(' vs '),
+    mapName: match.map,
+    mode: match.mode,
+    durationMs: match.durationMs,
+    analyzedAt: null,
+    fileName: null,
+    gameBuild: null,
+    provenance: null,
+    winnerLabel: winnerNames.join(' & ') || `Team ${match.winningTeamId}`,
+    players: match.participants.flatMap((participant) => {
+      const player = playersById.get(participant.playerId)
+      if (!player) return []
+
+      return [
+        {
+          slot: match.participants.indexOf(participant),
+          name: player.name,
+          profileHref: `/matches?player=${player.id}`,
+          teamId: participant.teamId,
+          score: participant.score,
+          won: participant.teamId === match.winningTeamId,
+          appearance: getPreviewAppearance(player),
+          combat: {
+            kos: participant.kos,
+            deaths: participant.deaths,
+            suicides: 0,
+            clashes: 0,
+            damageDealt: participant.damageDealt,
+            damageTaken: participant.damageTaken,
+            teamDamageDealt: 0,
+            teamDamageTaken: 0,
+            damageDealtPerMinute: safeRatio(participant.damageDealt * 60_000, match.durationMs),
+            damageDealtPerKo: safeRatio(participant.damageDealt, participant.kos),
+            damageTakenPerDeath: safeRatio(participant.damageTaken, participant.deaths),
+            koDeathRatio: safeRatio(participant.kos, participant.deaths),
+          },
+          movement: {
+            dodges: null,
+            dashes: null,
+            jumps: null,
+            dashJumps: null,
+            airDodgeShare: null,
+            airJumpShare: null,
+            dashJumpShare: null,
+            groundTimeShare: participant.positioning.ground,
+            airTimeShare: participant.positioning.air,
+            wallTimeShare: participant.positioning.wall,
+          },
+          equipment: [],
+          powers: [],
+        },
+      ]
+    }),
+    knockouts: match.knockouts.map(({ timestampMs, scorerPlayerId, victimPlayerId }) => ({
+      timestampMs,
+      scorerName: scorerPlayerId === null ? null : (playersById.get(scorerPlayerId)?.name ?? null),
+      victimName: playersById.get(victimPlayerId)?.name ?? 'Unknown player',
+    })),
+    capabilities: { eventTimeline: false, dodgeDirections: false, engagements: false },
+    limitations: [],
+  }
 }
