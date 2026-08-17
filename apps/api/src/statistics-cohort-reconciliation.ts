@@ -8,7 +8,7 @@ import {
 } from '@brawltome/statistics'
 
 export async function loadLaunchCohortCandidates(
-  ranking: RankingQueries,
+  ranking: Pick<RankingQueries, 'getLeaderboard'>,
   region: LaunchCohortRegion = 'EU',
 ): Promise<CohortCandidateSnapshot | null> {
   const first = await ranking.getLeaderboard({ mode: '1v1', region, page: 1, pageSize: 100 })
@@ -55,7 +55,7 @@ export async function loadLaunchCohortCandidates(
 }
 
 export async function loadFullLaunchCohortCandidates(
-  ranking: RankingQueries,
+  ranking: Pick<RankingQueries, 'getLeaderboard'>,
 ): Promise<CohortCandidateSnapshot[] | null> {
   const snapshots = await Promise.all(launchCohortRegions.map((region) => loadLaunchCohortCandidates(ranking, region)))
   return snapshots.some((snapshot) => snapshot === null) ? null : (snapshots as CohortCandidateSnapshot[])
@@ -64,7 +64,7 @@ export async function loadFullLaunchCohortCandidates(
 export async function reconcileStatisticsCohort(
   statistics: StatisticsTracer,
   operations: StatisticsOperations,
-  ranking: RankingQueries,
+  ranking: Pick<RankingQueries, 'getLeaderboard'>,
 ): Promise<number> {
   let reconciled = 0
   const state = await statistics.reconciliationState()
