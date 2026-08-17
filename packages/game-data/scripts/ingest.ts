@@ -1,39 +1,51 @@
 #!/usr/bin/env bun
-// Regenerates packages/game-data/src/generated/* from the locally-extracted SWZ dumps.
-// Prereq: research/swz-extract/out/ populated (see research/swz-extract/extract.ts).
+// Regenerates packages/game-data/src/generated/* from locally-extracted SWZ dumps.
+// Prereq: BRAWLTOME_SWZ_EXTRACT_ROOT points to a complete extract directory.
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import type { Hurtbox, Legend, LevelMeta, Power } from '../src/types'
+import { constants, accessSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
+import { crossoverAliases } from '../src/crossover-aliases'
+import type { Hurtbox, Legend, LevelMeta, Power, Skin } from '../src/types'
+import { buildSkinCatalog, fetchOfficialCrossovers, parseCostumeSources } from './skin-catalog'
 
-const EXTRACT_ROOT = join(import.meta.dir, '..', '..', '..', 'research', 'swz-extract', 'out')
 const OUT_DIR = join(import.meta.dir, '..', 'src', 'generated')
+const EXTRACT_ERROR =
+  'BRAWLTOME_SWZ_EXTRACT_ROOT must be an absolute directory containing Game/_manifest.json and Init/_manifest.json'
 
-if (!existsSync(EXTRACT_ROOT)) {
-  console.error(`SWZ extracts not found at ${EXTRACT_ROOT}.`)
-  process.exit(1)
+export function resolveExtractRoot(input: string | undefined): string {
+  if (!input || input.trim() === '' || !isAbsolute(input)) throw new Error(EXTRACT_ERROR)
+  try {
+    if (!statSync(input).isDirectory()) throw new Error(EXTRACT_ERROR)
+    accessSync(join(input, 'Game', '_manifest.json'), constants.R_OK)
+    accessSync(join(input, 'Init', '_manifest.json'), constants.R_OK)
+  } catch {
+    throw new Error(EXTRACT_ERROR)
+  }
+  return input
 }
 
-function findXmlEntry(dir: string, sniff: string): string {
-  const manifest = JSON.parse(readFileSync(join(EXTRACT_ROOT, dir, '_manifest.json'), 'utf8')) as {
-    i: number
-    sniff: string
-  }[]
+function readManifest(extractRoot: string, dir: string): { i: number; sniff: string }[] {
+  try {
+    return JSON.parse(readFileSync(join(extractRoot, dir, '_manifest.json'), 'utf8'))
+  } catch (error) {
+    throw new Error(`failed to read ${dir}/_manifest.json`, { cause: error })
+  }
+}
+
+function findXmlEntry(extractRoot: string, dir: string, sniff: string): string {
+  const manifest = readManifest(extractRoot, dir)
   const row = manifest.find((m) => m.sniff === sniff)
   if (!row) throw new Error(`no entry with sniff=${sniff} in ${dir}`)
   const pad = String(row.i).padStart(3, '0')
-  return join(EXTRACT_ROOT, dir, `entry-${pad}.xml`)
+  return join(extractRoot, dir, `entry-${pad}.xml`)
 }
 
-function findCsvByLabel(dir: string, label: string): string {
-  const manifest = JSON.parse(readFileSync(join(EXTRACT_ROOT, dir, '_manifest.json'), 'utf8')) as {
-    i: number
-    sniff: string
-  }[]
+function findCsvByLabel(extractRoot: string, dir: string, label: string): string {
+  const manifest = readManifest(extractRoot, dir)
   for (const m of manifest) {
     if (m.sniff !== 'binary') continue
     const pad = String(m.i).padStart(3, '0')
-    const path = join(EXTRACT_ROOT, dir, `entry-${pad}.bin`)
+    const path = join(extractRoot, dir, `entry-${pad}.bin`)
     const first = readFileSync(path, 'utf8').split('\n', 1)[0].trim()
     if (first === label) return path
   }
@@ -162,8 +174,8 @@ const colBool = (r: string[], i: number): boolean => {
   return v === 'TRUE' || v === 'True' || v === 'true' || v === '1'
 }
 
-function loadLegends(): Legend[] {
-  const xml = readFileSync(findXmlEntry('Game', 'HeroTypes'), 'utf8')
+function loadLegends(extractRoot: string): Legend[] {
+  const xml = readFileSync(findXmlEntry(extractRoot, 'Game', 'HeroTypes'), 'utf8')
   // Inactive/beta heroes (e.g. DEFAULT_CHARACTER, Random) stay in knownHeroIds
   // so historical replays referencing them don't bounce at Layer 2 validation.
   return extractRecords(xml, 'HeroType')
@@ -183,8 +195,8 @@ function loadLegends(): Legend[] {
     }))
 }
 
-function loadLevels(): LevelMeta[] {
-  const xml = readFileSync(findXmlEntry('Init', 'LevelTypes'), 'utf8')
+function loadLevels(extractRoot: string): LevelMeta[] {
+  const xml = readFileSync(findXmlEntry(extractRoot, 'Init', 'LevelTypes'), 'utf8')
   return extractRecords(xml, 'LevelType')
     .filter((r) => r.get('LevelName') && r.get('LevelName') !== 'Template')
     .map((r) => ({
@@ -197,8 +209,8 @@ function loadLevels(): LevelMeta[] {
     }))
 }
 
-function loadPowers(): Power[] {
-  const { header, rows } = parseBmgCsv(findCsvByLabel('Game', 'powerTypes'))
+function loadPowers(extractRoot: string): Power[] {
+  const { header, rows } = parseBmgCsv(findCsvByLabel(extractRoot, 'Game', 'powerTypes'))
   const idx = (n: string) => {
     const i = header.indexOf(n)
     if (i === -1) throw new Error(`powerTypes: column ${n} not found in header`)
@@ -256,8 +268,8 @@ function loadPowers(): Power[] {
     }))
 }
 
-function loadHurtboxes(): Hurtbox[] {
-  const { header, rows } = parseBmgCsv(findCsvByLabel('Game', 'hurtboxTypes'))
+function loadHurtboxes(extractRoot: string): Hurtbox[] {
+  const { header, rows } = parseBmgCsv(findCsvByLabel(extractRoot, 'Game', 'hurtboxTypes'))
   const idx = (n: string) => {
     const i = header.indexOf(n)
     if (i === -1) throw new Error(`hurtboxTypes: column ${n} not found in header`)
@@ -283,7 +295,88 @@ function loadHurtboxes(): Hurtbox[] {
     }))
 }
 
-function emit<T>(name: string, values: T[], typeName: string) {
+export type GeneratedData = {
+  legends: Legend[]
+  levels: LevelMeta[]
+  powers: Power[]
+  hurtboxes: Hurtbox[]
+  skins: Skin[]
+}
+
+const assertRows = (name: string, rows: readonly unknown[]): void => {
+  if (rows.length === 0) throw new Error(`${name} generated no rows`)
+}
+
+const assertUnique = (name: string, values: readonly (string | number)[]): void => {
+  const seen = new Set<string | number>()
+  for (const value of values) {
+    if (seen.has(value)) throw new Error(`${name} contains duplicate ${value}`)
+    seen.add(value)
+  }
+}
+
+export function validateGeneratedData(data: GeneratedData): void {
+  assertRows('legends', data.legends)
+  assertRows('levels', data.levels)
+  assertRows('powers', data.powers)
+  assertRows('hurtboxes', data.hurtboxes)
+  assertRows('skins', data.skins)
+  assertUnique(
+    'legend heroId',
+    data.legends.map(({ heroId }) => heroId),
+  )
+  assertUnique(
+    'legend heroName',
+    data.legends.map(({ heroName }) => heroName),
+  )
+  assertUnique(
+    'level levelId',
+    data.levels.map(({ levelId }) => levelId),
+  )
+  assertUnique(
+    'power powerId',
+    data.powers.map(({ powerId }) => powerId),
+  )
+  assertUnique(
+    'hurtbox hurtboxId',
+    data.hurtboxes.map(({ hurtboxId }) => hurtboxId),
+  )
+  assertUnique(
+    'hurtbox hurtboxName',
+    data.hurtboxes.map(({ hurtboxName }) => hurtboxName),
+  )
+  assertUnique(
+    'skin skinId',
+    data.skins.map(({ skinId }) => skinId),
+  )
+
+  const requiredRow = (dataset: string, id: number, name: string): void => {
+    if (!Number.isSafeInteger(id) || id < 0 || name.trim() === '') {
+      throw new Error(`${dataset} contains invalid id/name ${id}/${JSON.stringify(name)}`)
+    }
+  }
+  for (const row of data.legends) requiredRow('legends', row.heroId, row.heroName)
+  for (const row of data.levels) requiredRow('levels', row.levelId, row.levelName)
+  for (const row of data.powers) requiredRow('powers', row.powerId, row.powerName)
+  for (const row of data.hurtboxes) requiredRow('hurtboxes', row.hurtboxId, row.hurtboxName)
+  for (const row of data.skins) requiredRow('skins', row.skinId, row.skinName)
+
+  const legendIds = new Set(data.legends.map(({ heroId }) => heroId))
+  for (const skin of data.skins) {
+    if (!legendIds.has(skin.legendId)) throw new Error(`skin ${skin.skinId} references unknown legend ${skin.legendId}`)
+    if (skin.isCrossover !== Boolean(skin.displayName && skin.imageUrl)) {
+      throw new Error(`skin ${skin.skinId} has inconsistent crossover metadata`)
+    }
+  }
+}
+
+async function loadSkins(extractRoot: string, legends: readonly Legend[], fetcher: typeof fetch): Promise<Skin[]> {
+  const { header, rows } = parseBmgCsv(findCsvByLabel(extractRoot, 'Game', 'costumeTypes'))
+  const roster = await fetchOfficialCrossovers(fetcher)
+  return buildSkinCatalog(parseCostumeSources([header, ...rows]), legends, roster, crossoverAliases)
+}
+
+function emit<T>(name: string, values: readonly T[], typeName: string) {
   // Cast through a second constant so TS doesn't infer an enormous tuple type
   // and hit "union too complex" on 3000+ rows.
   const body = `// @generated by packages/game-data/scripts/ingest.ts - do not edit.\nimport type { ${typeName} } from '../types'\n\nconst data = ${JSON.stringify(values, null, 2)} as const\n\nexport const ${name}: readonly ${typeName}[] = data as unknown as readonly ${typeName}[]\n`
@@ -291,8 +384,25 @@ function emit<T>(name: string, values: T[], typeName: string) {
   console.log(`wrote ${name}.ts  (${values.length} rows)`)
 }
 
-emit('legends', loadLegends(), 'Legend')
-emit('levels', loadLevels(), 'LevelMeta')
-emit('powers', loadPowers(), 'Power')
-emit('hurtboxes', loadHurtboxes(), 'Hurtbox')
-console.log('done.')
+export async function refreshGeneratedData(extractRoot: string, fetcher: typeof fetch = fetch): Promise<void> {
+  const legends = loadLegends(extractRoot)
+  const generated: GeneratedData = {
+    legends,
+    levels: loadLevels(extractRoot),
+    powers: loadPowers(extractRoot),
+    hurtboxes: loadHurtboxes(extractRoot),
+    skins: await loadSkins(extractRoot, legends, fetcher),
+  }
+
+  validateGeneratedData(generated)
+  emit('legends', generated.legends, 'Legend')
+  emit('levels', generated.levels, 'LevelMeta')
+  emit('powers', generated.powers, 'Power')
+  emit('hurtboxes', generated.hurtboxes, 'Hurtbox')
+  emit('skins', generated.skins, 'Skin')
+  console.log('done.')
+}
+
+if (import.meta.main) {
+  await refreshGeneratedData(resolveExtractRoot(process.env.BRAWLTOME_SWZ_EXTRACT_ROOT))
+}
