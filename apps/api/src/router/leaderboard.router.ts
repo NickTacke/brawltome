@@ -1,5 +1,4 @@
 import { type LeaderboardOutput, leaderboardInputSchema, parseLeaderboardOutput } from '@brawltome/contracts'
-import { mapLeaderboardOutput } from '../mappers/leaderboard.mapper'
 import type { Context } from '../trpc/context'
 import { publicProcedure, router } from '../trpc/trpc'
 
@@ -59,7 +58,7 @@ async function enrichBestLegends(
 
 export const leaderboardRouter = router({
   get: publicProcedure.input(leaderboardInputSchema).query(async ({ ctx, input }) => {
-    const output = mapLeaderboardOutput(
+    const output = parseLeaderboardOutput(
       await ctx.rankingQueries.getLeaderboard({
         mode: input.mode,
         region: input.region,
