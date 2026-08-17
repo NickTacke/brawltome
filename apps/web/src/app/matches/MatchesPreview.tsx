@@ -2,8 +2,10 @@
 
 import { Avatar, AvatarFallback, Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import Link from 'next/link'
+import { useState } from 'react'
 import { formatDuration } from './ReplayResultView'
 import {
+  type PreviewMatch,
   getPreviewAppearance,
   getPreviewMatch,
   getPreviewPlayer,
@@ -49,20 +51,28 @@ function previewTimestamp(value: string): string {
   return `${value.slice(0, 10)} · ${value.slice(11, 16)} UTC`
 }
 
+function winnerNames(match: PreviewMatch): string {
+  return (
+    match.participants
+      .filter(({ teamId }) => teamId === match.winningTeamId)
+      .map(({ playerId }) => getPreviewPlayer(playerId)?.name ?? 'Unknown player')
+      .join(' and ') || 'Unknown player'
+  )
+}
+
 function PreviewFeed({ notice }: { notice?: string }) {
   return (
     <PreviewShell>
       {notice && <output className="rounded-md border border-border p-3 text-sm">{notice}</output>}
       <section className="grid gap-4" aria-label="Preview recent matches">
         {previewMatches.map((match) => {
-          const winner = getPreviewPlayer(match.winnerPlayerId)
           return (
             <Card key={match.id}>
               <CardHeader>
                 <CardTitle>{match.map}</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {match.mode} · {formatDuration(match.durationMs)} · {previewTimestamp(match.playedAt)} · Winner{' '}
-                  {winner?.name ?? 'Unknown player'}
+                  {winnerNames(match)}
                 </p>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
@@ -81,23 +91,52 @@ function PreviewFeed({ notice }: { notice?: string }) {
   )
 }
 
+export function nextPreviewImageUrl(
+  currentImageUrl: string | undefined,
+  fallbackImageUrl: string | undefined,
+): string | undefined {
+  return currentImageUrl === fallbackImageUrl ? undefined : fallbackImageUrl
+}
+
+function AppearanceImage({
+  primaryImageUrl,
+  fallbackImageUrl,
+  alt,
+  initials,
+}: {
+  primaryImageUrl: string | undefined
+  fallbackImageUrl: string | undefined
+  alt: string
+  initials: string
+}) {
+  const [imageUrl, setImageUrl] = useState(primaryImageUrl)
+  if (!imageUrl) return <AvatarFallback className="rounded-md">{initials}</AvatarFallback>
+  return (
+    <img
+      src={imageUrl}
+      alt={alt}
+      className="aspect-square h-full w-full rounded-md object-cover object-top"
+      onError={() => setImageUrl(nextPreviewImageUrl(imageUrl, fallbackImageUrl))}
+    />
+  )
+}
+
 function Appearance({ playerId }: { playerId: string }) {
   const player = getPreviewPlayer(playerId)
   if (!player) return null
   const appearance = getPreviewAppearance(player)
-  const imageUrl = appearance.imageUrl ?? appearance.fallbackImageUrl ?? undefined
+  const primaryImageUrl = appearance.imageUrl ?? appearance.fallbackImageUrl ?? undefined
+  const fallbackImageUrl = appearance.imageUrl ? (appearance.fallbackImageUrl ?? undefined) : undefined
   return (
     <div className="flex items-center gap-3">
       <Avatar className="h-12 w-12 rounded-md border border-border bg-muted">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={appearance.name}
-            className="aspect-square h-full w-full rounded-md object-cover object-top"
-          />
-        ) : (
-          <AvatarFallback className="rounded-md">{player.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-        )}
+        <AppearanceImage
+          key={player.id}
+          primaryImageUrl={primaryImageUrl}
+          fallbackImageUrl={fallbackImageUrl}
+          alt={appearance.name}
+          initials={player.name.slice(0, 2).toUpperCase()}
+        />
       </Avatar>
       <div>
         <Link href={`/matches?player=${player.id}`} className="font-bold hover:text-primary">
@@ -116,7 +155,6 @@ function positioningText({ air, ground, wall }: { air: number; ground: number; w
 function PreviewMatchDetail({ matchId }: { matchId: string }) {
   const match = getPreviewMatch(matchId)
   if (!match) return <PreviewFeed notice="Preview match is unavailable." />
-  const winner = getPreviewPlayer(match.winnerPlayerId)
   return (
     <PreviewShell>
       <Button asChild variant="ghost">
@@ -126,7 +164,7 @@ function PreviewMatchDetail({ matchId }: { matchId: string }) {
         <CardHeader>
           <CardTitle>{match.map}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            {match.mode} · {formatDuration(match.durationMs)} · Winner {winner?.name ?? 'Unknown player'}
+            {match.mode} · {formatDuration(match.durationMs)} · Winner {winnerNames(match)}
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -134,6 +172,9 @@ function PreviewMatchDetail({ matchId }: { matchId: string }) {
             <section key={participant.playerId} className="rounded-lg border border-border p-4">
               <Appearance playerId={participant.playerId} />
               <p className="mt-3 text-sm">
+                Team {participant.teamId} · {participant.teamId === match.winningTeamId ? 'Winner' : 'Loss'}
+              </p>
+              <p className="text-sm">
                 Score {participant.score} · KOs {participant.kos} · Deaths {participant.deaths}
               </p>
               <p className="text-sm">
@@ -203,21 +244,25 @@ function PreviewPlayerHistory({ playerId }: { playerId: string }) {
         </CardContent>
       </Card>
       <section className="grid gap-4" aria-label={`${player.name} preview match history`}>
-        {matches.map((match) => (
-          <Card key={match.id}>
-            <CardHeader>
-              <CardTitle>{match.map}</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {match.mode} · {formatDuration(match.durationMs)} · {match.winnerPlayerId === playerId ? 'Win' : 'Loss'}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <Button asChild size="sm">
-                <Link href={`/matches?match=${match.id}`}>View match</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        {matches.map((match) => {
+          const participant = match.participants.find(({ playerId: id }) => id === playerId)
+          return (
+            <Card key={match.id}>
+              <CardHeader>
+                <CardTitle>{match.map}</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {match.mode} · {formatDuration(match.durationMs)} ·{' '}
+                  {participant?.teamId === match.winningTeamId ? 'Win' : 'Loss'}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <Button asChild size="sm">
+                  <Link href={`/matches?match=${match.id}`}>View match</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )
+        })}
       </section>
     </PreviewShell>
   )

@@ -15,6 +15,7 @@ export type PreviewPositioning = {
 
 export type PreviewParticipant = {
   readonly playerId: string
+  readonly teamId: string
   readonly score: number
   readonly kos: number
   readonly deaths: number
@@ -29,7 +30,7 @@ export type PreviewMatch = {
   readonly map: string
   readonly mode: 'Ranked 1v1' | 'Ranked 2v2'
   readonly durationMs: number
-  readonly winnerPlayerId: string
+  readonly winningTeamId: string
   readonly participants: readonly PreviewParticipant[]
   readonly knockouts: readonly {
     readonly timestampMs: number
@@ -57,10 +58,11 @@ export const previewMatches = [
     map: 'Small Brawlhaven',
     mode: 'Ranked 1v1',
     durationMs: 113_296,
-    winnerPlayerId: 'preview-knight',
+    winningTeamId: '1',
     participants: [
       {
         playerId: 'preview-knight',
+        teamId: '1',
         score: 3,
         kos: 3,
         deaths: 1,
@@ -70,6 +72,7 @@ export const previewMatches = [
       },
       {
         playerId: 'preview-bodvar',
+        teamId: '2',
         score: 1,
         kos: 1,
         deaths: 3,
@@ -87,10 +90,11 @@ export const previewMatches = [
     map: 'Mammoth Fortress',
     mode: 'Ranked 2v2',
     durationMs: 164_000,
-    winnerPlayerId: 'preview-knight',
+    winningTeamId: '1',
     participants: [
       {
         playerId: 'preview-knight',
+        teamId: '1',
         score: 2,
         kos: 2,
         deaths: 1,
@@ -100,6 +104,7 @@ export const previewMatches = [
       },
       {
         playerId: 'preview-orion',
+        teamId: '1',
         score: 2,
         kos: 2,
         deaths: 2,
@@ -109,6 +114,7 @@ export const previewMatches = [
       },
       {
         playerId: 'preview-bodvar',
+        teamId: '2',
         score: 1,
         kos: 1,
         deaths: 2,
@@ -118,6 +124,7 @@ export const previewMatches = [
       },
       {
         playerId: 'preview-cassidy',
+        teamId: '2',
         score: 1,
         kos: 1,
         deaths: 2,
@@ -135,10 +142,11 @@ export const previewMatches = [
     map: 'Miami Dome',
     mode: 'Ranked 1v1',
     durationMs: 98_000,
-    winnerPlayerId: 'preview-bodvar',
+    winningTeamId: '2',
     participants: [
       {
         playerId: 'preview-knight',
+        teamId: '1',
         score: 2,
         kos: 2,
         deaths: 3,
@@ -148,6 +156,7 @@ export const previewMatches = [
       },
       {
         playerId: 'preview-bodvar',
+        teamId: '2',
         score: 3,
         kos: 3,
         deaths: 2,
