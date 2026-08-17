@@ -61,12 +61,12 @@ export type Hurtbox = {
 }
 
 export type Skin = {
-  skinId: number
-  skinName: string
-  legendId: number
-  isCrossover: boolean
-  displayName: string | null
-  imageUrl: string | null
+  readonly skinId: number
+  readonly skinName: string
+  readonly legendId: number
+  readonly isCrossover: boolean
+  readonly displayName: string | null
+  readonly imageUrl: string | null
 }
 
 export type CatalogDiagnostic = {
