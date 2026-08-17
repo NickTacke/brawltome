@@ -1,7 +1,7 @@
 'use client'
 
+import { Button, Card } from '@/components/ui'
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
-import { Button, Card } from '@brawltome/ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { SortControls } from './SortControls'

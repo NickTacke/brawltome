@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Input } from '@brawltome/ui'
+import { Button, Input } from '@/components/ui'
 import { MAX_PAGE } from './utils'
 
 interface PaginationControlsProps {

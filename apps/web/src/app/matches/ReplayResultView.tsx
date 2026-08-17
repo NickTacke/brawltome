@@ -1,8 +1,8 @@
 'use client'
 
+import { Avatar, AvatarFallback, AvatarImage, Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { MATCH_SUMMARY_EXTENSION_URI, type ReplayJobDetailContract } from '@brawltome/contracts'
 import { getLegendById, getLevelById, legendSlug } from '@brawltome/game-data'
-import { Avatar, AvatarFallback, AvatarImage, Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Activity, Clock3, Crown, Gauge, MapPinned, Shield, Swords, Trophy } from 'lucide-react'
 import Link from 'next/link'
 

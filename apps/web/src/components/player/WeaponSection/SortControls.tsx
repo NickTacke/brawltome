@@ -1,6 +1,6 @@
 'use client'
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@brawltome/ui'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui'
 import type { WeaponSortKey } from './utils'
 
 const WEAPON_SORT_OPTIONS: { value: WeaponSortKey; label: string }[] = [

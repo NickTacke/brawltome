@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Card } from '@brawltome/ui'
+import { Button, Card } from '@/components/ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { type PlayerData, parseNum } from '../shared'

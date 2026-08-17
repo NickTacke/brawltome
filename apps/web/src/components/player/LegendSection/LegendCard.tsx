@@ -1,6 +1,6 @@
+import { Avatar, AvatarFallback, AvatarImage, Badge } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
 import { normalizeWeaponName } from '@brawltome/game-data'
-import { Avatar, AvatarFallback, AvatarImage, Badge } from '@brawltome/ui'
 import {
   type PlayerData,
   WinLossBar,

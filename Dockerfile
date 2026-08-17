@@ -28,7 +28,6 @@ COPY apps/web/package.json apps/web/
 COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/telemetry/package.json packages/telemetry/
-COPY packages/ui/package.json packages/ui/
 COPY packages/contexts/accounts/package.json packages/contexts/accounts/
 COPY packages/contexts/player/package.json packages/contexts/player/
 COPY packages/contexts/clan/package.json packages/contexts/clan/

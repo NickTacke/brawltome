@@ -2,7 +2,7 @@
 
 import { Leaderboard } from '@/components/Leaderboard'
 import { SearchBar } from '@/components/SearchBar'
-import { Skeleton } from '@brawltome/ui'
+import { Skeleton } from '@/components/ui'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Suspense, useState } from 'react'

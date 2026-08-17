@@ -1,6 +1,6 @@
 'use client'
 
-import { Skeleton, TableCell, TableRow } from '@brawltome/ui'
+import { Skeleton, TableCell, TableRow } from '@/components/ui'
 
 export function LeaderboardSkeletonRows() {
   return (
