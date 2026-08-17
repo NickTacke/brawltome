@@ -68,3 +68,19 @@ export type Skin = {
   displayName: string | null
   imageUrl: string | null
 }
+
+export type CatalogDiagnostic = {
+  code: 'unknown_legend' | 'unknown_skin' | 'skin_legend_mismatch'
+  legendId: number
+  skinId: number
+}
+
+export type PlayerAppearance = {
+  kind: 'legend' | 'crossover'
+  legendId: number
+  skinId: number
+  name: string
+  imageUrl: string | null
+  fallbackImageUrl: string | null
+  diagnostic: CatalogDiagnostic | null
+}
