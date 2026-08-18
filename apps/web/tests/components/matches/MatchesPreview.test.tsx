@@ -56,6 +56,8 @@ describe('matches preview feed', () => {
     const html = renderToStaticMarkup(createElement(MatchesPreview, {}))
 
     expect(html).toContain('Preview data')
+    expect(html).toContain('Analyze a real replay')
+    expect(html).toContain('aria-label="Preview recent matches"')
     expect(html).toContain('Small Brawlhaven')
     expect(html).toContain('Mammoth Fortress')
     expect(html).toContain('Miami Dome')
@@ -69,30 +71,32 @@ describe('matches preview feed', () => {
 })
 
 describe('matches preview detail and player history', () => {
-  test('renders truthful match detail with catalog appearances and unsupported data', () => {
+  test('renders fixture detail through the shared truthful report', () => {
     const html = renderToStaticMarkup(createElement(MatchesPreview, { matchId: 'preview-final' }))
 
+    expect(html).toContain('Preview data')
+    expect(html).toContain('Event overview')
+    expect(html).toContain('Extended combat')
+    expect(html).toContain('Movement &amp; positioning')
+    expect(html).toContain('Engagements')
+    expect(html).toContain('Requires qualified event timeline')
     expect(html).toContain('King Knight')
     expect(html).toContain('https://cms.brawlhalla.com/c/uploads/2021/07/a_Roster_Pose_KingKnightM.png')
     expect(html).toContain('/images/legends/avatars/bodvar.png')
-    expect(html).toContain('class="aspect-square h-full w-full rounded-md object-cover object-top"')
     expect(html).not.toContain('>AX</span>')
     expect(html).not.toContain('>BL</span>')
-    expect(html).toContain('Air 45.0% · Ground 54.0% · Wall 1.0%')
+    expect(html).toContain('/matches?player=preview-knight')
     expect(html).toContain('Unknown scorer')
     expect(html).not.toContain('Environment')
     expect(html).not.toContain('dodges/min')
-    expect(html).toContain('Unsupported event')
-    expect(html).toContain('/matches?player=preview-knight')
   })
 
   test('labels both members of the winning 2v2 team in detail and history', () => {
     const detailHtml = renderToStaticMarkup(createElement(MatchesPreview, { matchId: 'preview-team' }))
     const historyHtml = renderToStaticMarkup(createElement(MatchesPreview, { playerId: 'preview-orion' }))
 
-    expect(detailHtml).toContain('Winner AxeMender and StarLancer')
-    expect(detailHtml.match(/Team 1 · Winner/g) ?? []).toHaveLength(2)
-    expect(detailHtml.match(/Team 2 · Loss/g) ?? []).toHaveLength(2)
+    expect(detailHtml).toContain('AxeMender &amp; StarLancer')
+    expect(detailHtml.match(/aria-label="Winner"/g) ?? []).toHaveLength(2)
     expect(historyHtml).toContain('Ranked 2v2 · 2:44 · Win')
   })
 
