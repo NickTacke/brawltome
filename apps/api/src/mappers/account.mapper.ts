@@ -1,23 +1,23 @@
 import type {
   Account,
   AccountPreferences,
+  PinnedPlayer,
   PlayerShortcuts,
   PrimaryPlayerVerificationState,
-  SavedPlayer,
 } from '@brawltome/accounts'
 import {
   type AccountPreferencesContract,
   type AccountViewContract,
+  type PinnedPlayersContract,
   type PlayerRankedProfileContract,
   type PlayerReferenceContract,
   type PlayerShortcutsContract,
   type PrimaryPlayerVerificationStateContract,
-  type SavedPlayersContract,
   accountPreferencesSchema,
   parseAccountViewOutput,
+  parsePinnedPlayersOutput,
   parsePlayerShortcutsOutput,
   parsePrimaryPlayerVerificationStateOutput,
-  parseSavedPlayersOutput,
 } from '@brawltome/contracts'
 
 export function toAccountPreferences(preferences: AccountPreferences): AccountPreferencesContract {
@@ -45,16 +45,16 @@ export interface AccountPlayerFacts {
   currentSeason: PlayerRankedProfileContract | null
 }
 
-export function toSavedPlayers(
-  savedPlayers: readonly SavedPlayer[],
+export function toPinnedPlayers(
+  pinnedPlayers: readonly PinnedPlayer[],
   facts: ReadonlyMap<number, AccountPlayerFacts>,
-): SavedPlayersContract {
-  return parseSavedPlayersOutput(
-    savedPlayers.map((savedPlayer) => ({
-      ...savedPlayer,
-      savedAt: savedPlayer.savedAt.toISOString(),
-      player: facts.get(savedPlayer.brawlhallaId)?.player ?? null,
-      currentSeason: facts.get(savedPlayer.brawlhallaId)?.currentSeason ?? null,
+): PinnedPlayersContract {
+  return parsePinnedPlayersOutput(
+    pinnedPlayers.map((pinnedPlayer) => ({
+      ...pinnedPlayer,
+      pinnedAt: pinnedPlayer.pinnedAt.toISOString(),
+      player: facts.get(pinnedPlayer.brawlhallaId)?.player ?? null,
+      currentSeason: facts.get(pinnedPlayer.brawlhallaId)?.currentSeason ?? null,
     })),
   )
 }
@@ -76,7 +76,9 @@ export function toPlayerShortcuts(
     primary: shortcuts.primaryPlayer
       ? mapShortcut(shortcuts.primaryPlayer.brawlhallaId, shortcuts.primaryPlayer.name)
       : null,
-    pins: shortcuts.pinnedPlayers.map(({ brawlhallaId }) => mapShortcut(brawlhallaId)),
+    pins: shortcuts.pinnedPlayers
+      .filter(({ brawlhallaId }) => brawlhallaId !== shortcuts.primaryPlayer?.brawlhallaId)
+      .map(({ brawlhallaId }) => mapShortcut(brawlhallaId)),
   })
 }
 

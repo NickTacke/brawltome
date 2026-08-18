@@ -1,22 +1,21 @@
-import { InvalidSavedPlayerError } from '@brawltome/accounts'
+import { InvalidPinnedPlayerError } from '@brawltome/accounts'
 import {
   accountPreferencesSchema,
   accountViewSchema,
+  pinnedPlayerInputSchema,
   pinnedPlayerOrderInputSchema,
+  pinnedPlayersSchema,
   playerShortcutsSchema,
   primaryPlayerVerificationStateSchema,
-  savedPlayerInputSchema,
-  savedPlayerOrderInputSchema,
-  savedPlayersSchema,
 } from '@brawltome/contracts'
 import { TRPCError } from '@trpc/server'
 import {
   type AccountPlayerFacts,
   toAccountPreferences,
   toAccountView,
+  toPinnedPlayers,
   toPlayerShortcuts,
   toPrimaryPlayerVerificationState,
-  toSavedPlayers,
 } from '../mappers/account.mapper'
 import { mapPlayerRankedProfile } from '../mappers/player-ranked.mapper'
 import type { Context } from '../trpc/context'
@@ -39,13 +38,13 @@ async function readPlayerFacts(ctx: Context, brawlhallaIds: readonly number[]) {
   return facts
 }
 
-async function readSavedPlayers(ctx: Context, accountId: string) {
-  const savedPlayers = await ctx.accounts.getSavedPlayers(accountId)
+async function readPinnedPlayers(ctx: Context, accountId: string) {
+  const pinnedPlayers = await ctx.accounts.getPinnedPlayers(accountId)
   const facts = await readPlayerFacts(
     ctx,
-    savedPlayers.map(({ brawlhallaId }) => brawlhallaId),
+    pinnedPlayers.map(({ brawlhallaId }) => brawlhallaId),
   )
-  return toSavedPlayers(savedPlayers, facts)
+  return toPinnedPlayers(pinnedPlayers, facts)
 }
 
 async function readPlayerShortcuts(ctx: Context, accountId: string) {
@@ -57,8 +56,8 @@ async function readPlayerShortcuts(ctx: Context, accountId: string) {
   return toPlayerShortcuts(shortcuts, await readPlayerFacts(ctx, brawlhallaIds))
 }
 
-function savedPlayerInputError(error: unknown): never {
-  if (error instanceof InvalidSavedPlayerError) {
+function pinnedPlayerInputError(error: unknown): never {
+  if (error instanceof InvalidPinnedPlayerError) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: error.message })
   }
   throw error
@@ -85,66 +84,39 @@ export const accountRouter = router({
   playerShortcuts: protectedProcedure
     .output(playerShortcutsSchema)
     .query(({ ctx }) => readPlayerShortcuts(ctx, ctx.account.id)),
-  savedPlayers: protectedProcedure.output(savedPlayersSchema).query(({ ctx }) => readSavedPlayers(ctx, ctx.account.id)),
-  savePlayer: protectedProcedure
-    .input(savedPlayerInputSchema)
-    .output(savedPlayersSchema)
+  pinnedPlayers: protectedProcedure
+    .output(pinnedPlayersSchema)
+    .query(({ ctx }) => readPinnedPlayers(ctx, ctx.account.id)),
+  pinPlayer: protectedProcedure
+    .input(pinnedPlayerInputSchema)
+    .output(pinnedPlayersSchema)
     .mutation(async ({ ctx, input }) => {
       if (!(await ctx.playerReferenceQueries.byId(input.brawlhallaId))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Player not found' })
       }
       try {
-        await ctx.accounts.savePlayer(ctx.account.id, input.brawlhallaId)
+        await ctx.accounts.pinPlayer(ctx.account.id, input.brawlhallaId)
       } catch (error) {
-        savedPlayerInputError(error)
+        pinnedPlayerInputError(error)
       }
-      return readSavedPlayers(ctx, ctx.account.id)
+      return readPinnedPlayers(ctx, ctx.account.id)
     }),
-  removeSavedPlayer: protectedProcedure
-    .input(savedPlayerInputSchema)
-    .output(savedPlayersSchema)
+  unpinPlayer: protectedProcedure
+    .input(pinnedPlayerInputSchema)
+    .output(pinnedPlayersSchema)
     .mutation(async ({ ctx, input }) => {
-      await ctx.accounts.removeSavedPlayer(ctx.account.id, input.brawlhallaId)
-      return readSavedPlayers(ctx, ctx.account.id)
-    }),
-  reorderSavedPlayers: protectedProcedure
-    .input(savedPlayerOrderInputSchema)
-    .output(savedPlayersSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        await ctx.accounts.reorderSavedPlayers(ctx.account.id, input.brawlhallaIds)
-      } catch (error) {
-        savedPlayerInputError(error)
-      }
-      return readSavedPlayers(ctx, ctx.account.id)
-    }),
-  pinSavedPlayer: protectedProcedure
-    .input(savedPlayerInputSchema)
-    .output(savedPlayersSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        await ctx.accounts.pinSavedPlayer(ctx.account.id, input.brawlhallaId)
-      } catch (error) {
-        savedPlayerInputError(error)
-      }
-      return readSavedPlayers(ctx, ctx.account.id)
-    }),
-  unpinSavedPlayer: protectedProcedure
-    .input(savedPlayerInputSchema)
-    .output(savedPlayersSchema)
-    .mutation(async ({ ctx, input }) => {
-      await ctx.accounts.unpinSavedPlayer(ctx.account.id, input.brawlhallaId)
-      return readSavedPlayers(ctx, ctx.account.id)
+      await ctx.accounts.unpinPlayer(ctx.account.id, input.brawlhallaId)
+      return readPinnedPlayers(ctx, ctx.account.id)
     }),
   reorderPinnedPlayers: protectedProcedure
     .input(pinnedPlayerOrderInputSchema)
-    .output(savedPlayersSchema)
+    .output(pinnedPlayersSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         await ctx.accounts.reorderPinnedPlayers(ctx.account.id, input.brawlhallaIds)
       } catch (error) {
-        savedPlayerInputError(error)
+        pinnedPlayerInputError(error)
       }
-      return readSavedPlayers(ctx, ctx.account.id)
+      return readPinnedPlayers(ctx, ctx.account.id)
     }),
 })

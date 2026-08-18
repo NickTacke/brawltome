@@ -3,7 +3,8 @@ import {
   type AccountsStore,
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
-  automaticPinOrder,
+  InvalidPinnedPlayerError,
+  MAX_PINNED_PLAYERS,
   createAccounts,
 } from '../src/accounts'
 
@@ -73,25 +74,18 @@ function makeStore() {
     async readPrimaryMonitoringSnapshot() {
       return { observedAt: now, targets: [] }
     },
-    async getSavedPlayers() {
+    async getPinnedPlayers() {
       return []
     },
-    async savePlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, pinOrder: null, savedAt: now }
+    async pinPlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, pinnedAt: now }
     },
-    async removeSavedPlayer() {},
-    async reorderSavedPlayers() {
+    async unpinPlayer() {},
+    async reorderPinnedPlayers() {
       return []
     },
     async getPlayerShortcuts() {
       return { primaryPlayer: null, pinnedPlayers: [] }
-    },
-    async pinSavedPlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, pinnedAt: now }
-    },
-    async unpinSavedPlayer() {},
-    async reorderPinnedPlayers() {
-      return []
     },
   }
   return { store, accounts, sessions, preferences }
@@ -102,11 +96,16 @@ function makeAccounts(store: AccountsStore, token = 'raw-session-token') {
 }
 
 describe('Accounts', () => {
-  test('auto-pins new non-Primary saves only while shortcut space remains', () => {
-    expect(automaticPinOrder(false, 0)).toBe(0)
-    expect(automaticPinOrder(false, 3)).toBe(3)
-    expect(automaticPinOrder(false, 4)).toBeNull()
-    expect(automaticPinOrder(true, 0)).toBeNull()
+  test('delegates the pinned-player add cap to the store', async () => {
+    const state = makeStore()
+    const service = makeAccounts({
+      ...state.store,
+      async pinPlayer() {
+        throw new InvalidPinnedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
+      },
+    })
+
+    await expect(service.pinPlayer(ACCOUNT_ID, 21)).rejects.toThrow('Pinned Players cannot exceed 20')
   })
 
   test('generates unique URL-safe 32-byte session tokens', async () => {

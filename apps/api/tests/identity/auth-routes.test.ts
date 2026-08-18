@@ -71,25 +71,18 @@ function makeFakes() {
     async getPrimaryPlayerVerificationState() {
       return { primaryPlayer: null, attempts: [] }
     },
-    async getSavedPlayers() {
+    async getPinnedPlayers() {
       return []
     },
-    async savePlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, pinOrder: null, savedAt: new Date() }
+    async pinPlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, pinnedAt: new Date() }
     },
-    async removeSavedPlayer() {},
-    async reorderSavedPlayers() {
+    async unpinPlayer() {},
+    async reorderPinnedPlayers() {
       return []
     },
     async getPlayerShortcuts() {
       return { primaryPlayer: null, pinnedPlayers: [] }
-    },
-    async pinSavedPlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, pinnedAt: new Date() }
-    },
-    async unpinSavedPlayer() {},
-    async reorderPinnedPlayers() {
-      return []
     },
   }
   const requestAdmission = {

@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  MAX_PINNED_PLAYERS,
+  type PinnedPlayersContract,
   type PrimaryPlayerVerificationStateContract,
-  type SavedPlayersContract,
   accountPreferencesSchema,
   accountViewSchema,
   parseAccountViewOutput,
+  parsePinnedPlayersOutput,
   parsePlayerShortcutsOutput,
   parsePrimaryPlayerVerificationStateOutput,
-  parseSavedPlayersOutput,
   pinnedPlayerOrderInputSchema,
-  savedPlayerOrderInputSchema,
 } from '../src/account'
 
 const signedInView = {
@@ -85,48 +85,71 @@ describe('accountViewSchema', () => {
   })
 })
 
-describe('savedPlayersSchema', () => {
-  test('preserves canonical Player Profile observation facts without ownership or follow semantics', () => {
-    const savedPlayers: SavedPlayersContract = [
-      {
-        brawlhallaId: 42,
-        order: 0,
-        pinOrder: 0,
-        savedAt: '2026-08-10T09:00:00.000Z',
-        player: { brawlhallaId: 42, name: 'Ada', aliases: [] },
-        currentSeason: {
-          brawlhallaId: 42,
-          checkedAt: '2026-08-10T10:00:00.000Z',
-          lastSuccessAt: null,
-          freshness: 'unavailable',
-          freshForSeconds: 3_600,
-          sparsePulse: null,
-          snapshot: null,
-        },
-      },
-    ]
+describe('pinnedPlayersSchema', () => {
+  const pinnedPlayer = {
+    brawlhallaId: 42,
+    order: 0,
+    pinnedAt: '2026-08-10T09:00:00.000Z',
+    player: { brawlhallaId: 42, name: 'Ada', aliases: [] },
+    currentSeason: {
+      brawlhallaId: 42,
+      checkedAt: '2026-08-10T10:00:00.000Z',
+      lastSuccessAt: null,
+      freshness: 'unavailable' as const,
+      freshForSeconds: 3_600,
+      sparsePulse: null,
+      snapshot: null,
+    },
+  }
 
-    expect(parseSavedPlayersOutput(savedPlayers)).toEqual(savedPlayers)
-    expect(() => parseSavedPlayersOutput([{ ...savedPlayers[0], accountId: signedInView.account.id }])).toThrow()
-    expect(() => parseSavedPlayersOutput([{ ...savedPlayers[0], following: true }])).toThrow()
+  test('preserves canonical Player Profile observation facts without ownership or follow semantics', () => {
+    const pinnedPlayers: PinnedPlayersContract = [pinnedPlayer]
+
+    expect(parsePinnedPlayersOutput(pinnedPlayers)).toEqual(pinnedPlayers)
+    expect(() => parsePinnedPlayersOutput([{ ...pinnedPlayers[0], accountId: signedInView.account.id }])).toThrow()
+    expect(() => parsePinnedPlayersOutput([{ ...pinnedPlayers[0], following: true }])).toThrow()
     expect(() =>
-      parseSavedPlayersOutput([
+      parsePinnedPlayersOutput([
         {
-          ...savedPlayers[0],
-          player: { brawlhallaId: 43, name: 'Different player' },
+          ...pinnedPlayers[0],
+          player: { brawlhallaId: 43, name: 'Different player', aliases: [] },
         },
       ]),
     ).toThrow()
   })
 
-  test('requires a complete duplicate-free order payload shape', () => {
-    expect(savedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
-    expect(() => savedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
+  test('keeps the add cap separate from the legacy collection output cap', () => {
+    expect(MAX_PINNED_PLAYERS).toBe(20)
+    const legacyTwentyOnePlayers = Array.from({ length: 21 }, (_, index) => ({
+      ...pinnedPlayer,
+      brawlhallaId: index + 1,
+      order: index,
+      player: { brawlhallaId: index + 1, name: `Player ${index + 1}`, aliases: [] },
+      currentSeason: null,
+    }))
+
+    expect(parsePinnedPlayersOutput(legacyTwentyOnePlayers)).toHaveLength(21)
     expect(() =>
-      savedPlayerOrderInputSchema.parse({ brawlhallaIds: Array.from({ length: 101 }, (_, index) => index + 1) }),
+      parsePinnedPlayersOutput(
+        Array.from({ length: 101 }, (_, index) => ({
+          ...pinnedPlayer,
+          brawlhallaId: index + 1,
+          order: index,
+          player: null,
+          currentSeason: null,
+        })),
+      ),
+    ).toThrow()
+  })
+
+  test('requires a complete duplicate-free order payload shape', () => {
+    expect(pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
+    expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
+    expect(() =>
+      pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: Array.from({ length: 101 }, (_, index) => index + 1) }),
     ).toThrow()
     expect(() =>
-      savedPlayerOrderInputSchema.parse({ accountId: signedInView.account.id, brawlhallaIds: [42] }),
+      pinnedPlayerOrderInputSchema.parse({ accountId: signedInView.account.id, brawlhallaIds: [42] }),
     ).toThrow()
   })
 })
@@ -152,14 +175,22 @@ describe('playerShortcutsSchema', () => {
     expect(() => parsePlayerShortcutsOutput({ ...shortcuts, accountId: signedInView.account.id })).toThrow()
     expect(() => parsePlayerShortcutsOutput({ ...shortcuts, pins: [...shortcuts.pins, shortcuts.primary] })).toThrow()
     expect(() =>
-      parsePlayerShortcutsOutput({ ...shortcuts, pins: Array.from({ length: 5 }, () => shortcuts.pins[0]) }),
+      parsePlayerShortcutsOutput({
+        ...shortcuts,
+        pins: Array.from({ length: 101 }, (_, index) => ({
+          ...shortcuts.pins[0],
+          brawlhallaId: index + 1,
+        })),
+      }),
     ).toThrow()
   })
 
   test('bounds a duplicate-free complete pin order payload', () => {
     expect(pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
     expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
-    expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [1, 2, 3, 4, 5] })).toThrow()
+    expect(() =>
+      pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: Array.from({ length: 101 }, (_, index) => index + 1) }),
+    ).toThrow()
   })
 })
 

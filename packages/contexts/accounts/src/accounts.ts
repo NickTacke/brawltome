@@ -3,12 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SESSION_EXTEND_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
 
-export const MAX_SAVED_PLAYERS = 100
-export const MAX_PINNED_PLAYERS = 4
-
-export function automaticPinOrder(isPrimary: boolean, pinnedCount: number): number | null {
-  return !isPrimary && pinnedCount < MAX_PINNED_PLAYERS ? pinnedCount : null
-}
+export const MAX_PINNED_PLAYERS = 20
 
 export interface Account {
   id: string
@@ -46,10 +41,10 @@ export class InvalidAccountPreferencesError extends Error {
   }
 }
 
-export class InvalidSavedPlayerError extends Error {
-  constructor(message = 'Invalid Saved Player') {
+export class InvalidPinnedPlayerError extends Error {
+  constructor(message = 'Invalid Pinned Player') {
     super(message)
-    this.name = 'InvalidSavedPlayerError'
+    this.name = 'InvalidPinnedPlayerError'
   }
 }
 
@@ -115,13 +110,6 @@ export interface PrimaryPlayerEvidence extends PrimaryPlayerReference {
   source: 'brawlhalla-v0-steam-search'
 }
 
-export interface SavedPlayer {
-  brawlhallaId: number
-  order: number
-  pinOrder: number | null
-  savedAt: Date
-}
-
 export interface PinnedPlayer {
   brawlhallaId: number
   order: number
@@ -149,14 +137,11 @@ export interface Accounts {
     resolver: { resolve(steamId: string): Promise<PrimaryPlayerEvidence | null> },
   ): Promise<PrimaryPlayerVerificationAttempt>
   getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
-  getSavedPlayers(accountId: string): Promise<SavedPlayer[]>
-  savePlayer(accountId: string, brawlhallaId: number): Promise<SavedPlayer>
-  removeSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
-  reorderSavedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<SavedPlayer[]>
-  getPlayerShortcuts(accountId: string): Promise<PlayerShortcuts>
-  pinSavedPlayer(accountId: string, brawlhallaId: number): Promise<PinnedPlayer>
-  unpinSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
+  getPinnedPlayers(accountId: string): Promise<PinnedPlayer[]>
+  pinPlayer(accountId: string, brawlhallaId: number): Promise<PinnedPlayer>
+  unpinPlayer(accountId: string, brawlhallaId: number): Promise<void>
   reorderPinnedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<PinnedPlayer[]>
+  getPlayerShortcuts(accountId: string): Promise<PlayerShortcuts>
 }
 
 export interface AccountsStore {
@@ -184,14 +169,11 @@ export interface AccountsStore {
   }): Promise<PrimaryPlayerVerificationAttempt>
   getPrimaryPlayerVerificationState(accountId: string): Promise<PrimaryPlayerVerificationState>
   readPrimaryMonitoringSnapshot(): Promise<PrimaryMonitoringSnapshot>
-  getSavedPlayers(accountId: string): Promise<SavedPlayer[]>
-  savePlayer(accountId: string, brawlhallaId: number): Promise<SavedPlayer>
-  removeSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
-  reorderSavedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<SavedPlayer[]>
-  getPlayerShortcuts(accountId: string): Promise<PlayerShortcuts>
-  pinSavedPlayer(accountId: string, brawlhallaId: number): Promise<PinnedPlayer>
-  unpinSavedPlayer(accountId: string, brawlhallaId: number): Promise<void>
+  getPinnedPlayers(accountId: string): Promise<PinnedPlayer[]>
+  pinPlayer(accountId: string, brawlhallaId: number): Promise<PinnedPlayer>
+  unpinPlayer(accountId: string, brawlhallaId: number): Promise<void>
   reorderPinnedPlayers(accountId: string, orderedBrawlhallaIds: readonly number[]): Promise<PinnedPlayer[]>
+  getPlayerShortcuts(accountId: string): Promise<PlayerShortcuts>
 }
 
 interface CreateAccountsOptions {
@@ -267,58 +249,37 @@ export function createAccounts({
       return store.getPrimaryPlayerVerificationState(accountId)
     },
 
-    getSavedPlayers(accountId) {
-      return store.getSavedPlayers(accountId)
+    getPinnedPlayers(accountId) {
+      return store.getPinnedPlayers(accountId)
     },
 
-    savePlayer(accountId, brawlhallaId) {
+    pinPlayer(accountId, brawlhallaId) {
       requireBrawlhallaId(brawlhallaId)
-      return store.savePlayer(accountId, brawlhallaId)
+      return store.pinPlayer(accountId, brawlhallaId)
     },
 
-    removeSavedPlayer(accountId, brawlhallaId) {
+    unpinPlayer(accountId, brawlhallaId) {
       requireBrawlhallaId(brawlhallaId)
-      return store.removeSavedPlayer(accountId, brawlhallaId)
-    },
-
-    reorderSavedPlayers(accountId, orderedBrawlhallaIds) {
-      if (new Set(orderedBrawlhallaIds).size !== orderedBrawlhallaIds.length) {
-        throw new InvalidSavedPlayerError('Saved Player order contains duplicate players')
-      }
-      for (const brawlhallaId of orderedBrawlhallaIds) requireBrawlhallaId(brawlhallaId)
-      return store.reorderSavedPlayers(accountId, orderedBrawlhallaIds)
-    },
-
-    getPlayerShortcuts(accountId) {
-      return store.getPlayerShortcuts(accountId)
-    },
-
-    pinSavedPlayer(accountId, brawlhallaId) {
-      requireBrawlhallaId(brawlhallaId)
-      return store.pinSavedPlayer(accountId, brawlhallaId)
-    },
-
-    unpinSavedPlayer(accountId, brawlhallaId) {
-      requireBrawlhallaId(brawlhallaId)
-      return store.unpinSavedPlayer(accountId, brawlhallaId)
+      return store.unpinPlayer(accountId, brawlhallaId)
     },
 
     reorderPinnedPlayers(accountId, orderedBrawlhallaIds) {
       if (new Set(orderedBrawlhallaIds).size !== orderedBrawlhallaIds.length) {
-        throw new InvalidSavedPlayerError('Pinned Player order contains duplicate players')
-      }
-      if (orderedBrawlhallaIds.length > MAX_PINNED_PLAYERS) {
-        throw new InvalidSavedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
+        throw new InvalidPinnedPlayerError('Pinned Player order contains duplicate players')
       }
       for (const brawlhallaId of orderedBrawlhallaIds) requireBrawlhallaId(brawlhallaId)
       return store.reorderPinnedPlayers(accountId, orderedBrawlhallaIds)
+    },
+
+    getPlayerShortcuts(accountId) {
+      return store.getPlayerShortcuts(accountId)
     },
   }
 }
 
 function requireBrawlhallaId(value: number): void {
   if (!Number.isInteger(value) || value < 1 || value > 2_147_483_647) {
-    throw new InvalidSavedPlayerError('Invalid Brawlhalla player ID')
+    throw new InvalidPinnedPlayerError('Invalid Brawlhalla player ID')
   }
 }
 
