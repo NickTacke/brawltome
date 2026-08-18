@@ -34,6 +34,20 @@ function replayTimestamp(value: string): string {
   return `${value.slice(0, 10)} · ${value.slice(11, 16)} UTC`
 }
 
+export function selectUploadedReplay(
+  jobs: ReplayJobSummaryContract[],
+  job: ReplayJobSummaryContract,
+): { jobs: ReplayJobSummaryContract[]; selectedId: string } {
+  return { jobs: [job, ...jobs.filter(({ id }) => id !== job.id)], selectedId: job.id }
+}
+
+export function selectLoadedReplay(
+  selectedId: string | null,
+  detail: ReplayJobDetailContract,
+): ReplayJobDetailContract | null {
+  return detail.id === selectedId ? detail : null
+}
+
 function ReplayHistory({
   jobs,
   selectedId,
@@ -110,8 +124,10 @@ function ReplayHistory({
 
 export function ReplayAnalysisPage() {
   const { account, isLoading } = useAccount()
-  const [jobs, setJobs] = useState<ReplayJobSummaryContract[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [{ jobs, selectedId }, setReplaySelection] = useState<{
+    jobs: ReplayJobSummaryContract[]
+    selectedId: string | null
+  }>({ jobs: [], selectedId: null })
   const [selected, setSelected] = useState<ReplayJobDetailContract | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -144,8 +160,10 @@ export function ReplayAnalysisPage() {
       try {
         const nextJobs = await loadJobs(controller.signal)
         if (!cancelled) {
-          setJobs(nextJobs)
-          setSelectedId((current) => current ?? nextJobs[0]?.id ?? null)
+          setReplaySelection((current) => ({
+            jobs: nextJobs,
+            selectedId: current.selectedId ?? nextJobs[0]?.id ?? null,
+          }))
         }
       } catch {
         if (!cancelled) setError(hasActiveJobs ? 'Could not refresh replay jobs.' : 'Could not load replay jobs.')
@@ -169,7 +187,7 @@ export function ReplayAnalysisPage() {
       setLoadingSelected(true)
       void loadSelected(selectedId)
         .then((detail) => {
-          if (!cancelled) setSelected(detail)
+          if (!cancelled) setSelected(selectLoadedReplay(selectedId, detail))
         })
         .catch(() => {
           if (!cancelled) setError('Could not load replay analysis.')
@@ -216,8 +234,7 @@ export function ReplayAnalysisPage() {
       })
       if (!response.ok) throw new Error(`Upload failed with status ${response.status}`)
       const job = replayJobSummarySchema.parse(await response.json())
-      setJobs((current) => [job, ...current.filter(({ id }) => id !== job.id)])
-      setSelectedId(job.id)
+      setReplaySelection((current) => selectUploadedReplay(current.jobs, job))
       setFile(null)
     } catch {
       setError('Could not upload this replay. Try again.')
@@ -320,7 +337,11 @@ export function ReplayAnalysisPage() {
       )}
 
       <div className="space-y-6">
-        <ReplayHistory jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
+        <ReplayHistory
+          jobs={jobs}
+          selectedId={selectedId}
+          onSelect={(id) => setReplaySelection((current) => ({ ...current, selectedId: id }))}
+        />
 
         <section aria-live="polite">
           {loadingSelected && (

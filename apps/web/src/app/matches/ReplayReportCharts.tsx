@@ -11,7 +11,8 @@ function boundedWidth(value: number, denominator: number): string {
   return `${Math.min(Math.max((value / denominator) * 100, 0), 100)}%`
 }
 
-function formatNumber(value: number): string {
+function formatNumber(value: number | null): string {
+  if (value === null) return '—'
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
@@ -32,25 +33,28 @@ export function timelineX(timestampMs: number, durationMs: number): number {
 export function ComparisonBars({
   label,
   values,
+  percentage = false,
 }: {
   label: string
-  values: readonly { name: string; value: number }[]
+  values: readonly { id: string | number; name: string; value: number | null }[]
+  percentage?: boolean
 }): React.ReactNode {
-  const denominator = Math.max(...values.map(({ value }) => value), 1)
+  const denominator = Math.max(...values.map(({ value }) => value ?? 0), 1)
+  const display = percentage ? formatShare : formatNumber
 
   return (
     <section className="space-y-3" aria-label={label}>
       <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-      {values.map(({ name, value }, index) => (
-        <div key={`${name}-${value}`} role="img" aria-label={`${label}, ${name}: ${formatNumber(value)}`}>
+      {values.map(({ id, name, value }, index) => (
+        <div key={id} role="img" aria-label={`${label}, ${name}: ${display(value)}`}>
           <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-            <span className="truncate font-semibold">{name}</span>
-            <span className="shrink-0 font-mono text-xs tabular-nums">{formatNumber(value)}</span>
+            <span className="min-w-0 break-all font-semibold">{name}</span>
+            <span className="shrink-0 font-mono text-xs tabular-nums">{display(value)}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted">
             <div
               className={`h-full rounded-full ${playerBarClass(index)}`}
-              style={{ width: boundedWidth(value, denominator) }}
+              style={{ width: boundedWidth(value ?? 0, percentage ? 1 : denominator) }}
             />
           </div>
         </div>
@@ -61,49 +65,29 @@ export function ComparisonBars({
 
 export function MovementBars({ players }: { players: readonly ReplayReportPlayer[] }): React.ReactNode {
   const metrics = [
-    ['Dodges', (player: ReplayReportPlayer) => player.movement.dodges],
-    ['Dashes', (player: ReplayReportPlayer) => player.movement.dashes],
-    ['Jumps', (player: ReplayReportPlayer) => player.movement.jumps],
-    ['Dash jumps', (player: ReplayReportPlayer) => player.movement.dashJumps],
+    ['Dodges', (player: ReplayReportPlayer) => player.movement.dodges, false],
+    ['Dashes', (player: ReplayReportPlayer) => player.movement.dashes, false],
+    ['Jumps', (player: ReplayReportPlayer) => player.movement.jumps, false],
+    ['Dash jumps', (player: ReplayReportPlayer) => player.movement.dashJumps, false],
+    ['Dodges per minute', (player: ReplayReportPlayer) => player.movement.dodgesPerMinute, false],
+    ['Dashes per minute', (player: ReplayReportPlayer) => player.movement.dashesPerMinute, false],
+    ['Jumps per minute', (player: ReplayReportPlayer) => player.movement.jumpsPerMinute, false],
+    ['Dash jumps per minute', (player: ReplayReportPlayer) => player.movement.dashJumpsPerMinute, false],
+    ['Air dodge share', (player: ReplayReportPlayer) => player.movement.airDodgeShare, true],
+    ['Air jump share', (player: ReplayReportPlayer) => player.movement.airJumpShare, true],
+    ['Dash jump share', (player: ReplayReportPlayer) => player.movement.dashJumpShare, true],
   ] as const
 
   return (
-    <section className="space-y-5" aria-label="Movement comparison">
-      {metrics.map(([label, valueForPlayer]) => {
-        const values = players.map(valueForPlayer)
-        const denominator = Math.max(...values.map((value) => value ?? 0), 1)
-        return (
-          <section
-            key={label}
-            className="space-y-2"
-            aria-label={`${label} movement for ${players.map(({ name }) => name).join(', ')}`}
-          >
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-            {players.map((player, index) => {
-              const value = valueForPlayer(player)
-              return (
-                <div
-                  key={player.slot}
-                  className="grid grid-cols-[minmax(0,1fr)_3rem] items-center gap-3 text-sm"
-                  role="img"
-                  aria-label={`${label}, ${player.name}: ${value ?? 'unavailable'}`}
-                >
-                  <div className="min-w-0">
-                    <span className="mb-1 block truncate font-semibold">{player.name}</span>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={`h-full rounded-full ${playerBarClass(index)}`}
-                        style={{ width: boundedWidth(value ?? 0, denominator) }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-right font-mono text-xs tabular-nums">{value ?? '—'}</span>
-                </div>
-              )
-            })}
-          </section>
-        )
-      })}
+    <section className="grid gap-5 sm:grid-cols-2" aria-label="Movement comparison">
+      {metrics.map(([label, valueForPlayer, percentage]) => (
+        <ComparisonBars
+          key={label}
+          label={label}
+          percentage={percentage}
+          values={players.map((player) => ({ id: player.slot, name: player.name, value: valueForPlayer(player) }))}
+        />
+      ))}
     </section>
   )
 }
@@ -117,7 +101,7 @@ export function PositioningBars({ players }: { players: readonly ReplayReportPla
         return (
           <section key={player.slot} aria-label={`${player.name} positioning`}>
             <div className="flex flex-col justify-between gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
-              <span className="font-semibold">{player.name}</span>
+              <span className="break-all font-semibold">{player.name}</span>
               <span className="text-xs text-muted-foreground">{label}</span>
             </div>
             <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-muted">
@@ -191,7 +175,7 @@ export function KnockoutTimeline({
             <span className="shrink-0 font-mono text-xs font-bold text-primary">
               {formatDuration(knockout.timestampMs)}
             </span>
-            <span>
+            <span className="break-words">
               <strong>{knockout.scorerName ?? 'Unknown scorer'}</strong> knocked out {knockout.victimName}
             </span>
           </li>
