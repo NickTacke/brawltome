@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback, Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import Link from 'next/link'
 import { useState } from 'react'
+import { ReplayReportView } from './ReplayReportView'
 import { formatDuration } from './ReplayResultView'
 import {
   type PreviewMatch,
@@ -11,6 +12,7 @@ import {
   getPreviewPlayer,
   previewMatches,
   previewMatchesForPlayer,
+  replayReportFromPreview,
 } from './matches-preview-fixtures'
 
 export function MatchesPreview({
@@ -27,19 +29,19 @@ export function MatchesPreview({
   return <PreviewFeed notice={notice} />
 }
 
-function PreviewShell({ children }: { children: React.ReactNode }) {
+function PreviewShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Badge variant="outline">Preview data</Badge>
-          <h1 className="mt-3 text-4xl font-black tracking-tight">Recent matches</h1>
+          <h1 className="mt-3 text-4xl font-black tracking-tight">{title}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Fixture-backed interface preview. No public records are being published.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/matches?analyze=1">Analyze replay</Link>
+        <Button asChild>
+          <Link href="/matches?analyze=1">Analyze a real replay</Link>
         </Button>
       </header>
       {children}
@@ -60,38 +62,70 @@ function winnerNames(match: PreviewMatch): string {
   )
 }
 
-function participantNames(match: PreviewMatch): string {
-  const teams = new Map<string, string[]>()
-  for (const { playerId, teamId } of match.participants) {
-    teams.set(teamId, [...(teams.get(teamId) ?? []), getPreviewPlayer(playerId)?.name ?? playerId])
+function matchTeams(match: PreviewMatch) {
+  const teams = new Map<string, PreviewMatch['participants'][number][]>()
+  for (const participant of match.participants) {
+    teams.set(participant.teamId, [...(teams.get(participant.teamId) ?? []), participant])
   }
-  return [...teams.values()].map((names) => names.join(' & ')).join(' vs ')
+  return [...teams].map(([id, participants]) => ({
+    id,
+    participants,
+    score: participants.reduce((total, participant) => total + participant.score, 0),
+    won: id === match.winningTeamId,
+  }))
+}
+
+function participantNames(match: PreviewMatch): string {
+  return matchTeams(match)
+    .map(({ participants }) =>
+      participants.map(({ playerId }) => getPreviewPlayer(playerId)?.name ?? playerId).join(' & '),
+    )
+    .join(' vs ')
 }
 
 function PreviewFeed({ notice }: { notice?: string }) {
   return (
-    <PreviewShell>
+    <PreviewShell title="Recent matches">
       {notice && <output className="rounded-md border border-border p-3 text-sm">{notice}</output>}
-      <section className="grid gap-4" aria-label="Preview recent matches">
-        {previewMatches.map((match) => {
-          return (
-            <Card key={match.id}>
-              <CardHeader>
-                <CardTitle>{match.map}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {match.mode} · {formatDuration(match.durationMs)} · {previewTimestamp(match.playedAt)} · Winner{' '}
-                  {winnerNames(match)}
-                </p>
-              </CardHeader>
-              <CardContent className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">{participantNames(match)}</span>
-                <Button asChild size="sm">
+      <section className="grid gap-3" aria-label="Preview recent matches">
+        {previewMatches.map((match) => (
+          <Card key={match.id} className="border-border bg-card">
+            <CardContent className="space-y-4 p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Match</p>
+                  <h2 className="mt-1 text-xl font-black">{match.map}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {match.mode} · {formatDuration(match.durationMs)} · {previewTimestamp(match.playedAt)}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
                   <Link href={`/matches?match=${match.id}`}>View match</Link>
                 </Button>
-              </CardContent>
-            </Card>
-          )
-        })}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2" aria-label={participantNames(match)}>
+                {matchTeams(match).map((team) => (
+                  <section key={team.id} className="rounded-md border border-border p-3">
+                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-border/60 pb-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                          Team {team.id} score
+                        </p>
+                        <p className="font-mono text-2xl font-black tabular-nums">{team.score}</p>
+                      </div>
+                      {team.won && <Badge variant="outline">Winner {winnerNames(match)}</Badge>}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {team.participants.map(({ playerId }) => (
+                        <Appearance key={playerId} playerId={playerId} />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </section>
     </PreviewShell>
   )
@@ -154,80 +188,15 @@ function Appearance({ playerId }: { playerId: string }) {
   )
 }
 
-function positioningText({ air, ground, wall }: { air: number; ground: number; wall: number }): string {
-  return `Air ${(air * 100).toFixed(1)}% · Ground ${(ground * 100).toFixed(1)}% · Wall ${(wall * 100).toFixed(1)}%`
-}
-
 function PreviewMatchDetail({ matchId }: { matchId: string }) {
   const match = getPreviewMatch(matchId)
   if (!match) return <PreviewFeed notice="Preview match is unavailable." />
   return (
-    <PreviewShell>
+    <PreviewShell title="Match report">
       <Button asChild variant="ghost">
         <Link href="/matches">Back to feed</Link>
       </Button>
-      <Card>
-        <CardHeader>
-          <CardTitle>{match.map}</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {match.mode} · {formatDuration(match.durationMs)} · Winner {winnerNames(match)}
-          </p>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          {match.participants.map((participant) => (
-            <section key={participant.playerId} className="rounded-lg border border-border p-4">
-              <Appearance playerId={participant.playerId} />
-              <p className="mt-3 text-sm">
-                Team {participant.teamId} · {participant.teamId === match.winningTeamId ? 'Winner' : 'Loss'}
-              </p>
-              <p className="text-sm">
-                Score {participant.score} · KOs {participant.kos} · Deaths {participant.deaths}
-              </p>
-              <p className="text-sm">
-                Dealt {participant.damageDealt.toFixed(1)} · Taken {participant.damageTaken.toFixed(1)}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">{positioningText(participant.positioning)}</p>
-            </section>
-          ))}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Knockout timeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {match.knockouts.length === 0 ? (
-            <p>No knockouts were recorded.</p>
-          ) : (
-            <ol className="space-y-2">
-              {match.knockouts.map((knockout) => {
-                const scorer = knockout.scorerPlayerId && getPreviewPlayer(knockout.scorerPlayerId)?.name
-                const victim = getPreviewPlayer(knockout.victimPlayerId)?.name ?? 'Unknown player'
-                return (
-                  <li key={`${knockout.timestampMs}-${knockout.victimPlayerId}`}>
-                    {formatDuration(knockout.timestampMs)} · <strong>{scorer ?? 'Unknown scorer'}</strong> knocked out{' '}
-                    {victim}
-                  </li>
-                )
-              })}
-            </ol>
-          )}
-        </CardContent>
-      </Card>
-      {match.events.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Additional events</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {match.events.map((event) => (
-              <p key={`${event.timestampMs}-${event.kind}`}>
-                {formatDuration(event.timestampMs)} · {event.label}
-              </p>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <ReplayReportView report={replayReportFromPreview(match)} />
     </PreviewShell>
   )
 }
@@ -237,7 +206,7 @@ function PreviewPlayerHistory({ playerId }: { playerId: string }) {
   if (!player) return <PreviewFeed notice="Preview player is unavailable." />
   const matches = previewMatchesForPlayer(playerId)
   return (
-    <PreviewShell>
+    <PreviewShell title="Player history">
       <Button asChild variant="ghost">
         <Link href="/matches">Back to feed</Link>
       </Button>
