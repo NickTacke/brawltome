@@ -7,18 +7,20 @@ import { useState } from 'react'
 import { ComparisonBars, KnockoutTimeline, MovementBars, PositioningBars, formatDuration } from './ReplayReportCharts'
 import type { ReplayReport, ReplayReportPlayer } from './replay-report'
 
-const playerBarClasses = ['bg-primary', 'bg-chart-3', 'bg-chart-5'] as const
-
-function formatMetric(value: number | null, suffix = ''): string {
-  return value === null ? '—' : `${value.toFixed(1)}${suffix}`
+function formatMetric(value: number | null): string {
+  return value === null ? '—' : value.toFixed(1)
 }
 
 function formatShare(value: number | null): string {
   return value === null ? '—' : `${(value * 100).toFixed(1)}%`
 }
 
-function analyzedTimestamp(value: string | null): string {
+function reportTimestamp(value: string | null): string {
   return value ? `${value.slice(0, 10)} · ${value.slice(11, 16)} UTC` : 'Not available'
+}
+
+function playerValues(players: readonly ReplayReportPlayer[], value: (player: ReplayReportPlayer) => number | null) {
+  return players.map((player) => ({ id: player.slot, name: player.name, value: value(player) }))
 }
 
 function AppearanceImage({ player }: { player: ReplayReportPlayer }) {
@@ -45,7 +47,7 @@ function AppearanceImage({ player }: { player: ReplayReportPlayer }) {
 }
 
 function PlayerIdentity({ player }: { player: ReplayReportPlayer }) {
-  const name = <span className="block truncate text-lg font-black">{player.name}</span>
+  const name = <span className="block break-all text-lg font-black">{player.name}</span>
   return (
     <Card className={player.won ? 'border-primary/50' : undefined}>
       <CardContent className="p-4">
@@ -54,7 +56,7 @@ function PlayerIdentity({ player }: { player: ReplayReportPlayer }) {
             <AppearanceImage key={`${player.slot}-${player.appearance.skinId}`} player={player} />
           </Avatar>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               {player.profileHref ? (
                 <Link href={player.profileHref} className="min-w-0 hover:text-primary">
                   {name}
@@ -64,7 +66,7 @@ function PlayerIdentity({ player }: { player: ReplayReportPlayer }) {
               )}
               {player.won && <Crown className="h-4 w-4 shrink-0 text-amber-500" aria-label="Winner" />}
             </div>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="break-words text-xs text-muted-foreground">
               {player.appearance.name} · Team {player.teamId}
             </p>
           </div>
@@ -77,7 +79,7 @@ function PlayerIdentity({ player }: { player: ReplayReportPlayer }) {
           ].map(([label, value]) => (
             <div key={label}>
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-              <p className="font-mono text-lg font-black tabular-nums">{value}</p>
+              <p className="font-mono text-lg font-black tabular-nums">{value ?? '—'}</p>
             </div>
           ))}
         </div>
@@ -86,51 +88,18 @@ function PlayerIdentity({ player }: { player: ReplayReportPlayer }) {
   )
 }
 
-function UnavailableCard({ title }: { title: string }) {
+function CapabilityCard({ title, available }: { title: string; available: boolean }) {
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-xl">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm font-semibold text-muted-foreground">Requires qualified event timeline</p>
+        <p className="text-sm font-semibold text-muted-foreground">
+          {available ? 'Qualified event timeline available' : 'Requires qualified event timeline'}
+        </p>
       </CardContent>
     </Card>
-  )
-}
-
-function NullableComparison({
-  label,
-  players,
-  value,
-}: {
-  label: string
-  players: readonly ReplayReportPlayer[]
-  value: (player: ReplayReportPlayer) => number | null
-}) {
-  const values = players.map(value)
-  const denominator = Math.max(...values.map((item) => item ?? 0), 1)
-  return (
-    <section className="space-y-3" aria-label={label}>
-      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-      {players.map((player, index) => {
-        const item = value(player)
-        return (
-          <div key={player.slot} role="img" aria-label={`${label}, ${player.name}: ${formatMetric(item)}`}>
-            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-              <span className="truncate font-semibold">{player.name}</span>
-              <span className="shrink-0 font-mono text-xs tabular-nums">{formatMetric(item)}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full rounded-full ${playerBarClasses[index % playerBarClasses.length] ?? 'bg-primary'}`}
-                style={{ width: `${Math.min(Math.max(((item ?? 0) / denominator) * 100, 0), 100)}%` }}
-              />
-            </div>
-          </div>
-        )
-      })}
-    </section>
   )
 }
 
@@ -138,51 +107,74 @@ function EquipmentAndPowers({ players }: { players: readonly ReplayReportPlayer[
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {players.map((player) => {
-        const maxPowerUses = Math.max(...player.powers.map(({ uses }) => uses), 1)
+        if (player.equipment === null || player.powers === null) {
+          return (
+            <section key={player.slot} className="rounded-lg border border-border/70 bg-background/40 p-4">
+              <h4 className="break-all font-black">{player.name}</h4>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Equipment and power counters unavailable in preview data.
+              </p>
+            </section>
+          )
+        }
+
         return (
           <section key={player.slot} className="rounded-lg border border-border/70 bg-background/40 p-4">
-            <h4 className="font-black">{player.name}</h4>
-            <div className="mt-4 space-y-4">
-              {player.equipment.map((equipment) => (
-                <div key={equipment.key}>
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-semibold">{equipment.key}</span>
-                    <span className="font-mono text-xs tabular-nums">
-                      {formatShare(equipment.heldTimeShare)} held · {formatMetric(equipment.enemyDamage)} damage
-                    </span>
-                  </div>
-                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.min(Math.max((equipment.heldTimeShare ?? 0) * 100, 0), 100)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-              {player.powers.map((power) => (
-                <div key={`${power.equipmentKey}-${power.key}`} className="border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-mono font-bold">{power.key}</span>
-                    <span className="font-mono text-xs font-bold tabular-nums">{power.uses} uses</span>
-                  </div>
-                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-chart-3"
-                      style={{ width: `${(power.uses / maxPowerUses) * 100}%` }}
-                    />
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {power.enemyHits} hits · {formatMetric(power.enemyDamage)} damage · {power.enemyKos} KOs
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Damage/hit {formatMetric(power.enemyDamagePerHit)} · Damage/use{' '}
-                    {formatMetric(power.enemyDamagePerUse)} · Hits/use {formatMetric(power.enemyHitsPerUse)} · KOs/use{' '}
-                    {formatMetric(power.enemyKosPerUse)}
-                  </p>
-                </div>
-              ))}
+            <h4 className="break-all font-black">{player.name}</h4>
+            <div className="mt-4 space-y-5">
+              {player.equipment.length > 0 && (
+                <ComparisonBars
+                  label="Equipment held share"
+                  percentage
+                  values={player.equipment.map((equipment) => ({
+                    id: `${player.slot}-equipment-${equipment.key}`,
+                    name: equipment.key,
+                    value: equipment.heldTimeShare,
+                  }))}
+                />
+              )}
+              {player.powers.length > 0 && (
+                <ComparisonBars
+                  label="Power uses"
+                  values={player.powers.map((power) => ({
+                    id: `${player.slot}-${power.equipmentKey}-${power.key}`,
+                    name: power.key,
+                    value: power.uses,
+                  }))}
+                />
+              )}
               {player.equipment.length === 0 && player.powers.length === 0 && (
-                <p className="text-sm text-muted-foreground">No equipment counters were recorded.</p>
+                <p className="text-sm text-muted-foreground">No equipment or power counters were recorded.</p>
+              )}
+              {(player.equipment.length > 0 || player.powers.length > 0) && (
+                <details className="rounded-md border border-border/70">
+                  <summary className="cursor-pointer p-3 text-sm font-bold">
+                    Equipment and power details for {player.name}
+                  </summary>
+                  <div className="space-y-3 border-t border-border/70 p-3 text-xs text-muted-foreground">
+                    {player.equipment.map((equipment) => (
+                      <p key={equipment.key}>
+                        <strong className="text-foreground">{equipment.key}</strong>:{' '}
+                        {formatShare(equipment.heldTimeShare)} held
+                        {' · '}
+                        {formatMetric(equipment.enemyDamage)} damage
+                      </p>
+                    ))}
+                    {player.powers.map((power) => (
+                      <div key={`${power.equipmentKey}-${power.key}`}>
+                        <p>
+                          <strong className="font-mono text-foreground">{power.key}</strong>: {power.uses} uses ·{' '}
+                          {power.enemyHits} hits · {formatMetric(power.enemyDamage)} damage · {power.enemyKos} KOs
+                        </p>
+                        <p className="mt-1">
+                          Damage/hit {formatMetric(power.enemyDamagePerHit)} · Damage/use{' '}
+                          {formatMetric(power.enemyDamagePerUse)} · Hits/use {formatMetric(power.enemyHitsPerUse)} ·
+                          KOs/use {formatMetric(power.enemyKosPerUse)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           </section>
@@ -209,15 +201,15 @@ function ReplayDetails({ report }: { report: ReplayReport }) {
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="text-xs text-muted-foreground">File</dt>
-            <dd className="font-mono text-sm">{report.fileName ?? '—'}</dd>
+            <dd className="break-all font-mono text-sm">{report.fileName ?? '—'}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Analyzed</dt>
-            <dd className="font-mono text-sm">{analyzedTimestamp(report.analyzedAt)}</dd>
+            <dd className="font-mono text-sm">{reportTimestamp(report.analyzedAt)}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Game build</dt>
-            <dd className="font-mono text-sm">{report.gameBuild ?? '—'}</dd>
+            <dd className="break-all font-mono text-sm">{report.gameBuild ?? '—'}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Duration</dt>
@@ -227,7 +219,7 @@ function ReplayDetails({ report }: { report: ReplayReport }) {
 
         {report.players.map((player) => (
           <section key={player.slot}>
-            <h4 className="font-black">{player.name} exact counters</h4>
+            <h4 className="break-all font-black">{player.name} exact counters</h4>
             <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
               <Counter label="Score" value={player.score} />
               <Counter label="KOs" value={player.combat.kos} />
@@ -265,19 +257,19 @@ function ReplayDetails({ report }: { report: ReplayReport }) {
             <dl className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-muted-foreground">Collector</dt>
-                <dd className="font-mono text-sm break-all">{report.provenance.collector}</dd>
+                <dd className="break-all font-mono text-sm">{report.provenance.collector}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Processor version</dt>
-                <dd className="font-mono text-sm break-all">{report.provenance.processorVersion}</dd>
+                <dd className="break-all font-mono text-sm">{report.provenance.processorVersion}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Qualification profile</dt>
-                <dd className="font-mono text-sm break-all">{report.provenance.qualificationProfile}</dd>
+                <dd className="break-all font-mono text-sm">{report.provenance.qualificationProfile}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Replay digest</dt>
-                <dd className="font-mono text-sm break-all">{report.provenance.replayDigest}</dd>
+                <dd className="break-all font-mono text-sm">{report.provenance.replayDigest}</dd>
               </div>
             </dl>
           </section>
@@ -288,32 +280,58 @@ function ReplayDetails({ report }: { report: ReplayReport }) {
 }
 
 export function ReplayReportView({ report }: { report: ReplayReport }) {
+  const timestamp = report.playedAt ?? report.analyzedAt
   return (
     <article className="space-y-6" aria-label="Selected replay analysis">
-      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+      <header className="flex min-w-0 flex-col justify-between gap-4 md:flex-row md:items-end">
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{report.mode}</Badge>
             <Badge variant="outline">{report.source === 'real' ? 'Analyzed replay' : 'Preview data'}</Badge>
+            {report.fileName && <Badge variant="outline">{report.fileName}</Badge>}
+            {report.gameBuild && <Badge variant="outline">Build {report.gameBuild}</Badge>}
           </div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">{report.title}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {report.mapName} · {formatDuration(report.durationMs)} · {analyzedTimestamp(report.analyzedAt)}
+          <h2 className="mt-3 break-all text-3xl font-black tracking-tight sm:text-5xl">{report.title}</h2>
+          <p className="mt-2 break-words text-sm text-muted-foreground">
+            {report.mapName} · {formatDuration(report.durationMs)} · {reportTimestamp(timestamp)}
           </p>
         </div>
-        <div className="shrink-0 md:text-right">
+        <div className="min-w-0 max-w-full md:text-right">
           <p className="text-xs font-bold uppercase tracking-wide text-primary">Winner</p>
-          <p className="mt-1 text-2xl font-black">{report.winnerLabel}</p>
+          <p className="mt-1 break-all text-2xl font-black">{report.winnerLabel}</p>
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Players">
-        {report.players.map((player) => (
-          <PlayerIdentity key={player.slot} player={player} />
+      <section className="grid gap-3 lg:grid-cols-2" aria-label="Teams and final scores">
+        {report.teams.map((team) => (
+          <section
+            key={team.id}
+            className="rounded-lg border border-border bg-card p-3"
+            aria-label={`Team ${team.id} final score ${team.score ?? 'unavailable'}${team.won ? ', winner' : ''}`}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/60 pb-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Team {team.id}</p>
+              <p className="font-mono text-2xl font-black tabular-nums">{team.score ?? '—'}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {team.playerSlots.map((slot) => {
+                const player = report.players.find((candidate) => candidate.slot === slot)
+                return player ? <PlayerIdentity key={player.slot} player={player} /> : null
+              })}
+            </div>
+          </section>
         ))}
       </section>
 
-      <UnavailableCard title="Event overview" />
+      <section className="space-y-3" aria-labelledby="event-overview-heading">
+        <h3 id="event-overview-heading" className="text-2xl font-black">
+          Event overview
+        </h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <CapabilityCard title="Damage progression" available={report.capabilities.eventTimeline} />
+          <CapabilityCard title="Best engagement" available={report.capabilities.eventTimeline} />
+        </div>
+      </section>
 
       <Card>
         <CardHeader>
@@ -321,31 +339,40 @@ export function ReplayReportView({ report }: { report: ReplayReport }) {
           <p className="text-sm text-muted-foreground">Direct replay counters and denominator-aware rates.</p>
         </CardHeader>
         <CardContent className="space-y-8">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             <ComparisonBars
               label="Damage comparison"
-              values={report.players.map((player) => ({ name: player.name, value: player.combat.damageDealt }))}
+              values={playerValues(report.players, (player) => player.combat.damageDealt)}
             />
             <ComparisonBars
               label="Damage taken comparison"
-              values={report.players.map((player) => ({ name: player.name, value: player.combat.damageTaken }))}
+              values={playerValues(report.players, (player) => player.combat.damageTaken)}
+            />
+            <ComparisonBars
+              label="Team damage dealt"
+              values={playerValues(report.players, (player) => player.combat.teamDamageDealt)}
+            />
+            <ComparisonBars
+              label="Team damage taken"
+              values={playerValues(report.players, (player) => player.combat.teamDamageTaken)}
             />
           </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            <NullableComparison
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+            <ComparisonBars
               label="Damage per minute"
-              players={report.players}
-              value={(player) => player.combat.damageDealtPerMinute}
+              values={playerValues(report.players, (player) => player.combat.damageDealtPerMinute)}
             />
-            <NullableComparison
+            <ComparisonBars
               label="Damage per KO"
-              players={report.players}
-              value={(player) => player.combat.damageDealtPerKo}
+              values={playerValues(report.players, (player) => player.combat.damageDealtPerKo)}
             />
-            <NullableComparison
+            <ComparisonBars
               label="Damage taken per death"
-              players={report.players}
-              value={(player) => player.combat.damageTakenPerDeath}
+              values={playerValues(report.players, (player) => player.combat.damageTakenPerDeath)}
+            />
+            <ComparisonBars
+              label="KO/death ratio"
+              values={playerValues(report.players, (player) => player.combat.koDeathRatio)}
             />
           </div>
           <EquipmentAndPowers players={report.players} />
@@ -357,14 +384,14 @@ export function ReplayReportView({ report }: { report: ReplayReport }) {
           <CardTitle className="text-xl">Movement &amp; positioning</CardTitle>
           <p className="text-sm text-muted-foreground">Direct action counters and measured positioning time.</p>
         </CardHeader>
-        <CardContent className="grid gap-8 xl:grid-cols-2">
+        <CardContent className="space-y-8">
           <MovementBars players={report.players} />
           <PositioningBars players={report.players} />
         </CardContent>
       </Card>
 
-      <UnavailableCard title="Dodge directions" />
-      <UnavailableCard title="Engagements" />
+      <CapabilityCard title="Dodge directions" available={report.capabilities.dodgeDirections} />
+      <CapabilityCard title="Engagements" available={report.capabilities.engagements} />
 
       <Card>
         <CardHeader>

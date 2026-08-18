@@ -29,14 +29,14 @@ export type ReplayReportPlayer = {
   won: boolean
   appearance: PlayerAppearance
   combat: {
-    kos: number
-    deaths: number
-    suicides: number
-    clashes: number
-    damageDealt: number
-    damageTaken: number
-    teamDamageDealt: number
-    teamDamageTaken: number
+    kos: number | null
+    deaths: number | null
+    suicides: number | null
+    clashes: number | null
+    damageDealt: number | null
+    damageTaken: number | null
+    teamDamageDealt: number | null
+    teamDamageTaken: number | null
     damageDealtPerMinute: number | null
     damageDealtPerKo: number | null
     damageTakenPerDeath: number | null
@@ -47,6 +47,10 @@ export type ReplayReportPlayer = {
     dashes: number | null
     jumps: number | null
     dashJumps: number | null
+    dodgesPerMinute: number | null
+    dashesPerMinute: number | null
+    jumpsPerMinute: number | null
+    dashJumpsPerMinute: number | null
     airDodgeShare: number | null
     airJumpShare: number | null
     dashJumpShare: number | null
@@ -54,8 +58,8 @@ export type ReplayReportPlayer = {
     airTimeShare: number | null
     wallTimeShare: number | null
   }
-  equipment: ReplayReportEquipment[]
-  powers: ReplayReportPower[]
+  equipment: ReplayReportEquipment[] | null
+  powers: ReplayReportPower[] | null
 }
 
 export type ReplayReportKnockout = {
@@ -64,12 +68,20 @@ export type ReplayReportKnockout = {
   victimName: string
 }
 
+export type ReplayReportTeam = {
+  id: string
+  playerSlots: number[]
+  score: number | null
+  won: boolean
+}
+
 export type ReplayReport = {
   source: 'real' | 'preview'
   title: string
   mapName: string
   mode: string
   durationMs: number
+  playedAt: string | null
   analyzedAt: string | null
   fileName: string | null
   gameBuild: string | null
@@ -80,6 +92,7 @@ export type ReplayReport = {
     replayDigest: string
   } | null
   winnerLabel: string
+  teams: ReplayReportTeam[]
   players: ReplayReportPlayer[]
   knockouts: ReplayReportKnockout[]
   capabilities: {
@@ -112,10 +125,8 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
   const winners = winningTeamId === null ? [] : replay.players.filter((player) => player.teamId === winningTeamId)
   const mapName = getLevelById(replay.mapId)?.displayName ?? `Map ${replay.mapId}`
 
-  const players = replay.players.flatMap<ReplayReportPlayer>((player) => {
+  const players: ReplayReportPlayer[] = replay.players.map((player) => {
     const native = nativeBySlot.get(player.slot)
-    if (!native) return []
-
     const playerSummary = summaryBySlot.get(player.slot)
     const equipmentEntries = Object.entries(payloadBySlot.get(player.slot)?.Equipment ?? {})
     const equipment = equipmentEntries.map(([key, counters]) => {
@@ -140,60 +151,83 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
         enemyKosPerUse: safeRatio(power.EnemyKOs, power.Uses),
       })),
     )
+    const positioningTotal = native ? native.groundTimeMs + native.airTimeMs + native.wallTimeMs : 0
 
-    return [
-      {
-        slot: player.slot,
-        name: player.name,
-        profileHref: player.playerId !== null && player.playerId > 0 ? `/player/${player.playerId}` : null,
-        teamId: String(player.teamId),
-        score: player.score,
-        won: winningTeamId !== null && player.teamId === winningTeamId,
-        appearance: resolvePlayerAppearance(player.loadout.legendId, player.loadout.costumeId),
-        combat: {
-          kos: native.kos,
-          deaths: native.deaths,
-          suicides: native.suicides,
-          clashes: native.clashes,
-          damageDealt: native.damageDealt,
-          damageTaken: native.damageTaken,
-          teamDamageDealt: native.teamDamageDealt,
-          teamDamageTaken: native.teamDamageTaken,
-          damageDealtPerMinute: playerSummary
-            ? playerSummary.damageDealtPerMinute
-            : safeRatio(native.damageDealt * 60_000, replay.durationMs),
-          damageDealtPerKo: playerSummary ? playerSummary.damageDealtPerKo : safeRatio(native.damageDealt, native.kos),
-          damageTakenPerDeath: playerSummary
-            ? playerSummary.damageTakenPerDeath
-            : safeRatio(native.damageTaken, native.deaths),
-          koDeathRatio: playerSummary ? playerSummary.koDeathRatio : safeRatio(native.kos, native.deaths),
-        },
-        movement: {
-          dodges: native.dodges,
-          dashes: native.dashes,
-          jumps: native.jumps,
-          dashJumps: native.dashJumps,
-          airDodgeShare: playerSummary ? playerSummary.airDodgeShare : safeRatio(native.airDodges, native.dodges),
-          airJumpShare: playerSummary ? playerSummary.airJumpShare : safeRatio(native.airJumps, native.jumps),
-          dashJumpShare: playerSummary ? playerSummary.dashJumpShare : safeRatio(native.dashJumps, native.dashes),
-          groundTimeShare: playerSummary
-            ? playerSummary.groundTimeShare
-            : safeRatio(native.groundTimeMs, replay.durationMs),
-          airTimeShare: playerSummary ? playerSummary.airTimeShare : safeRatio(native.airTimeMs, replay.durationMs),
-          wallTimeShare: playerSummary ? playerSummary.wallTimeShare : safeRatio(native.wallTimeMs, replay.durationMs),
-        },
-        equipment,
-        powers,
+    return {
+      slot: player.slot,
+      name: player.name,
+      profileHref: player.playerId !== null && player.playerId > 0 ? `/player/${player.playerId}` : null,
+      teamId: String(player.teamId),
+      score: player.score,
+      won: winningTeamId !== null && player.teamId === winningTeamId,
+      appearance: resolvePlayerAppearance(player.loadout.legendId, player.loadout.costumeId),
+      combat: {
+        kos: native?.kos ?? null,
+        deaths: native?.deaths ?? null,
+        suicides: native?.suicides ?? null,
+        clashes: native?.clashes ?? null,
+        damageDealt: native?.damageDealt ?? null,
+        damageTaken: native?.damageTaken ?? null,
+        teamDamageDealt: native?.teamDamageDealt ?? null,
+        teamDamageTaken: native?.teamDamageTaken ?? null,
+        damageDealtPerMinute:
+          playerSummary?.damageDealtPerMinute ??
+          (native ? safeRatio(native.damageDealt * 60_000, replay.durationMs) : null),
+        damageDealtPerKo:
+          playerSummary?.damageDealtPerKo ?? (native ? safeRatio(native.damageDealt, native.kos) : null),
+        damageTakenPerDeath:
+          playerSummary?.damageTakenPerDeath ?? (native ? safeRatio(native.damageTaken, native.deaths) : null),
+        koDeathRatio: playerSummary?.koDeathRatio ?? (native ? safeRatio(native.kos, native.deaths) : null),
       },
-    ]
+      movement: {
+        dodges: native?.dodges ?? null,
+        dashes: native?.dashes ?? null,
+        jumps: native?.jumps ?? null,
+        dashJumps: native?.dashJumps ?? null,
+        dodgesPerMinute:
+          playerSummary?.dodgesPerMinute ?? (native ? safeRatio(native.dodges * 60_000, replay.durationMs) : null),
+        dashesPerMinute:
+          playerSummary?.dashesPerMinute ?? (native ? safeRatio(native.dashes * 60_000, replay.durationMs) : null),
+        jumpsPerMinute:
+          playerSummary?.jumpsPerMinute ?? (native ? safeRatio(native.jumps * 60_000, replay.durationMs) : null),
+        dashJumpsPerMinute: native ? safeRatio(native.dashJumps * 60_000, replay.durationMs) : null,
+        airDodgeShare: playerSummary?.airDodgeShare ?? (native ? safeRatio(native.airDodges, native.dodges) : null),
+        airJumpShare: playerSummary?.airJumpShare ?? (native ? safeRatio(native.airJumps, native.jumps) : null),
+        dashJumpShare: playerSummary?.dashJumpShare ?? (native ? safeRatio(native.dashJumps, native.dashes) : null),
+        groundTimeShare:
+          playerSummary?.groundTimeShare ?? (native ? safeRatio(native.groundTimeMs, positioningTotal) : null),
+        airTimeShare: playerSummary?.airTimeShare ?? (native ? safeRatio(native.airTimeMs, positioningTotal) : null),
+        wallTimeShare: playerSummary?.wallTimeShare ?? (native ? safeRatio(native.wallTimeMs, positioningTotal) : null),
+      },
+      equipment,
+      powers,
+    }
   })
+
+  const teamScores = new Map(replay.teamScores.map(({ teamId, score }) => [String(teamId), score]))
+  const teams = new Map<string, ReplayReportTeam>()
+  for (const player of players) {
+    const team = teams.get(player.teamId)
+    if (team) team.playerSlots.push(player.slot)
+    else {
+      teams.set(player.teamId, {
+        id: player.teamId,
+        playerSlots: [player.slot],
+        score: teamScores.get(player.teamId) ?? null,
+        won: player.won,
+      })
+    }
+  }
+  const teamList = [...teams.values()]
+  const namesBySlot = new Map(players.map(({ slot, name }) => [slot, name]))
 
   return {
     source: 'real',
-    title: replay.players.map(({ name }) => name).join(' vs '),
+    title: teamList.map(({ playerSlots }) => playerSlots.map((slot) => namesBySlot.get(slot)).join(' & ')).join(' vs '),
     mapName,
     mode: `Playlist ${replay.playlistId}`,
     durationMs: replay.durationMs,
+    playedAt: null,
     analyzedAt: job.updatedAt,
     fileName: job.fileName,
     gameBuild: core.provenance.gameBuild,
@@ -205,12 +239,15 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
     },
     winnerLabel:
       winningTeamId === null ? 'Draw' : winners.map(({ name }) => name).join(' & ') || `Team ${winningTeamId}`,
+    teams: teamList,
     players,
-    knockouts: replay.koTimeline.map((knockout) => ({
-      timestampMs: knockout.timestampMs,
-      scorerName: knockout.scoringSlot === null ? null : (playerBySlot.get(knockout.scoringSlot)?.name ?? null),
-      victimName: playerBySlot.get(knockout.victimSlot)?.name ?? 'Unknown player',
-    })),
+    knockouts: [...replay.koTimeline]
+      .sort((left, right) => left.timestampMs - right.timestampMs)
+      .map((knockout) => ({
+        timestampMs: knockout.timestampMs,
+        scorerName: knockout.scoringSlot === null ? null : (playerBySlot.get(knockout.scoringSlot)?.name ?? null),
+        victimName: playerBySlot.get(knockout.victimSlot)?.name ?? 'Unknown player',
+      })),
     capabilities: { eventTimeline: false, dodgeDirections: false, engagements: false },
     limitations: [core.limitations, nativeExtension.limitations, summary?.limitations ?? []]
       .flat()

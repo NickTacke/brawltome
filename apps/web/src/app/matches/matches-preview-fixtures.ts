@@ -189,29 +189,51 @@ export function getPreviewAppearance(player: PreviewPlayer): PlayerAppearance {
 
 export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
   const playersById = new Map<string, PreviewPlayer>(previewPlayers.map((player) => [player.id, player]))
-  const winnerNames = match.participants
-    .filter(({ teamId }) => teamId === match.winningTeamId)
-    .map(({ playerId }) => playersById.get(playerId)?.name)
-    .filter((name): name is string => name !== undefined)
+  const winnerNames = match.participants.flatMap(({ playerId, teamId }) => {
+    const name = playersById.get(playerId)?.name
+    return teamId === match.winningTeamId && name ? [name] : []
+  })
+  const teams = new Map<string, { id: string; playerSlots: number[]; score: number; won: boolean }>()
+  for (const [slot, participant] of match.participants.entries()) {
+    const team = teams.get(participant.teamId)
+    if (team) {
+      team.playerSlots.push(slot)
+      team.score += participant.score
+    } else {
+      teams.set(participant.teamId, {
+        id: participant.teamId,
+        playerSlots: [slot],
+        score: participant.score,
+        won: participant.teamId === match.winningTeamId,
+      })
+    }
+  }
+  const teamList = [...teams.values()]
+  const nameAtSlot = (slot: number) => {
+    const participant = match.participants[slot]
+    return participant ? (playersById.get(participant.playerId)?.name ?? participant.playerId) : 'Unknown player'
+  }
 
   return {
     source: 'preview',
-    title: match.participants.map(({ playerId }) => playersById.get(playerId)?.name ?? playerId).join(' vs '),
+    title: teamList.map(({ playerSlots }) => playerSlots.map(nameAtSlot).join(' & ')).join(' vs '),
     mapName: match.map,
     mode: match.mode,
     durationMs: match.durationMs,
+    playedAt: match.playedAt,
     analyzedAt: null,
     fileName: null,
     gameBuild: null,
     provenance: null,
     winnerLabel: winnerNames.join(' & ') || `Team ${match.winningTeamId}`,
-    players: match.participants.flatMap((participant) => {
+    teams: teamList,
+    players: match.participants.flatMap((participant, slot) => {
       const player = playersById.get(participant.playerId)
       if (!player) return []
 
       return [
         {
-          slot: match.participants.indexOf(participant),
+          slot,
           name: player.name,
           profileHref: `/matches?player=${player.id}`,
           teamId: participant.teamId,
@@ -221,12 +243,12 @@ export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
           combat: {
             kos: participant.kos,
             deaths: participant.deaths,
-            suicides: 0,
-            clashes: 0,
+            suicides: null,
+            clashes: null,
             damageDealt: participant.damageDealt,
             damageTaken: participant.damageTaken,
-            teamDamageDealt: 0,
-            teamDamageTaken: 0,
+            teamDamageDealt: null,
+            teamDamageTaken: null,
             damageDealtPerMinute: safeRatio(participant.damageDealt * 60_000, match.durationMs),
             damageDealtPerKo: safeRatio(participant.damageDealt, participant.kos),
             damageTakenPerDeath: safeRatio(participant.damageTaken, participant.deaths),
@@ -237,6 +259,10 @@ export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
             dashes: null,
             jumps: null,
             dashJumps: null,
+            dodgesPerMinute: null,
+            dashesPerMinute: null,
+            jumpsPerMinute: null,
+            dashJumpsPerMinute: null,
             airDodgeShare: null,
             airJumpShare: null,
             dashJumpShare: null,
@@ -244,16 +270,18 @@ export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
             airTimeShare: participant.positioning.air,
             wallTimeShare: participant.positioning.wall,
           },
-          equipment: [],
-          powers: [],
+          equipment: null,
+          powers: null,
         },
       ]
     }),
-    knockouts: match.knockouts.map(({ timestampMs, scorerPlayerId, victimPlayerId }) => ({
-      timestampMs,
-      scorerName: scorerPlayerId === null ? null : (playersById.get(scorerPlayerId)?.name ?? null),
-      victimName: playersById.get(victimPlayerId)?.name ?? 'Unknown player',
-    })),
+    knockouts: [...match.knockouts]
+      .sort((left, right) => left.timestampMs - right.timestampMs)
+      .map(({ timestampMs, scorerPlayerId, victimPlayerId }) => ({
+        timestampMs,
+        scorerName: scorerPlayerId === null ? null : (playersById.get(scorerPlayerId)?.name ?? null),
+        victimName: playersById.get(victimPlayerId)?.name ?? 'Unknown player',
+      })),
     capabilities: { eventTimeline: false, dodgeDirections: false, engagements: false },
     limitations: [],
   }
