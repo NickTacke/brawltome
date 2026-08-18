@@ -9,12 +9,11 @@ import type { z } from 'zod'
 import type {
   accountPreferencesSchema,
   accountViewSchema,
+  pinnedPlayerInputSchema,
   pinnedPlayerOrderInputSchema,
+  pinnedPlayersSchema,
   playerShortcutsSchema,
   primaryPlayerVerificationStateSchema,
-  savedPlayerInputSchema,
-  savedPlayerOrderInputSchema,
-  savedPlayersSchema,
 } from './account'
 import type {
   careerWeaponUsageHistoryOutputSchema,
@@ -66,13 +65,10 @@ type AppRouterRecord = {
     updatePreferences: Mutation<Output<typeof accountPreferencesSchema>, Output<typeof accountPreferencesSchema>>
     primaryPlayer: Query<void, Output<typeof primaryPlayerVerificationStateSchema>>
     playerShortcuts: Query<void, Output<typeof playerShortcutsSchema>>
-    savedPlayers: Query<void, Output<typeof savedPlayersSchema>>
-    savePlayer: Mutation<Output<typeof savedPlayerInputSchema>, Output<typeof savedPlayersSchema>>
-    removeSavedPlayer: Mutation<Output<typeof savedPlayerInputSchema>, Output<typeof savedPlayersSchema>>
-    reorderSavedPlayers: Mutation<Output<typeof savedPlayerOrderInputSchema>, Output<typeof savedPlayersSchema>>
-    pinSavedPlayer: Mutation<Output<typeof savedPlayerInputSchema>, Output<typeof savedPlayersSchema>>
-    unpinSavedPlayer: Mutation<Output<typeof savedPlayerInputSchema>, Output<typeof savedPlayersSchema>>
-    reorderPinnedPlayers: Mutation<Output<typeof pinnedPlayerOrderInputSchema>, Output<typeof savedPlayersSchema>>
+    pinnedPlayers: Query<void, Output<typeof pinnedPlayersSchema>>
+    pinPlayer: Mutation<Output<typeof pinnedPlayerInputSchema>, Output<typeof pinnedPlayersSchema>>
+    unpinPlayer: Mutation<Output<typeof pinnedPlayerInputSchema>, Output<typeof pinnedPlayersSchema>>
+    reorderPinnedPlayers: Mutation<Output<typeof pinnedPlayerOrderInputSchema>, Output<typeof pinnedPlayersSchema>>
   }
   contractProof: {
     get: Query<void, Output<typeof contractProofSchema>>

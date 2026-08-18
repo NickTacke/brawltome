@@ -136,11 +136,11 @@ async function runFullRehearsal() {
       const primary = await inspect<Array<{ account_id: string; brawlhalla_id: number }>>`
         SELECT account_id::text, brawlhalla_id::integer FROM accounts.primary_players ORDER BY account_id
       `
-      const [personalization] = await inspect<Array<{ preferences: number; saved_players: number; pins: number }>>`
+      const [personalization] = await inspect<Array<{ preferences: number; pinned_players: number; pins: number }>>`
         SELECT
           (SELECT count(*)::integer FROM accounts.preferences) AS preferences,
-          (SELECT count(*)::integer FROM accounts.saved_players) AS saved_players,
-          (SELECT count(*)::integer FROM accounts.saved_player_pins) AS pins
+          (SELECT count(*)::integer FROM accounts.pinned_players) AS pinned_players,
+          0::integer AS pins
       `
       const history = await inspect<Array<{ identity: string }>>`
         SELECT identity FROM brawltome_migrations.history ORDER BY ordinal
@@ -202,7 +202,7 @@ describePostgres('Accounts V2 import', () => {
         { status: 'verified', count: 1 },
       ],
       primary: [{ account_id: legacyAccountIds.linked, brawlhalla_id: 42 }],
-      personalization: { preferences: 0, saved_players: 0, pins: 0 },
+      personalization: { preferences: 0, pinned_players: 0, pins: 0 },
       history: globalMigrationInventory.map(({ identity }) => identity),
       cutover: { finalized: true },
     })
@@ -292,11 +292,7 @@ describePostgres('Accounts V2 import', () => {
           VALUES (${legacyAccountIds.linked}, 1, '2v2', 'EU')
         `
         await seed`
-          INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
-          VALUES (${legacyAccountIds.linked}, 77, 0)
-        `
-        await seed`
-          INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position)
+          INSERT INTO accounts.pinned_players (account_id, brawlhalla_id, position)
           VALUES (${legacyAccountIds.linked}, 77, 0)
         `
       } finally {
@@ -378,8 +374,8 @@ describePostgres('Accounts V2 import', () => {
         const [personalization] = await inspect<Array<{ preferences: number; saved: number; pins: number }>>`
           SELECT
             (SELECT count(*)::integer FROM accounts.preferences WHERE account_id = ${legacyAccountIds.linked}) AS preferences,
-            (SELECT count(*)::integer FROM accounts.saved_players WHERE account_id = ${legacyAccountIds.linked}) AS saved,
-            (SELECT count(*)::integer FROM accounts.saved_player_pins WHERE account_id = ${legacyAccountIds.linked}) AS pins
+            (SELECT count(*)::integer FROM accounts.pinned_players WHERE account_id = ${legacyAccountIds.linked}) AS saved,
+            (SELECT count(*)::integer FROM accounts.pinned_players WHERE account_id = ${legacyAccountIds.linked}) AS pins
         `
         expect(personalization).toEqual({ preferences: 1, saved: 1, pins: 1 })
 
@@ -440,7 +436,7 @@ describePostgres('Accounts V2 import', () => {
             steamId: 'fenced-steam-writer',
             idempotencyKey: 'fenced-writer-attempt',
           }),
-          runtime.accounts.savePlayer(legacyAccountIds.linked, 424242),
+          runtime.accounts.pinPlayer(legacyAccountIds.linked, 424242),
           runtime.accounts.authenticate(legacyAccountSecrets.validRawSessionToken),
         ].map((writer) =>
           writer.finally(() => {
@@ -454,7 +450,7 @@ describePostgres('Accounts V2 import', () => {
         >`
           SELECT
             (SELECT count(*)::integer FROM accounts.preferences) AS preferences,
-            (SELECT count(*)::integer FROM accounts.saved_players) AS saved,
+            (SELECT count(*)::integer FROM accounts.pinned_players) AS saved,
             (SELECT count(*)::integer FROM accounts.primary_player_verification_attempts) AS attempts,
             (SELECT count(*)::integer FROM accounts.oauth_identities
              WHERE provider_account_id = 'fenced-discord-writer') AS identities
@@ -469,7 +465,7 @@ describePostgres('Accounts V2 import', () => {
         >`
           SELECT
             (SELECT count(*)::integer FROM accounts.preferences) AS preferences,
-            (SELECT count(*)::integer FROM accounts.saved_players) AS saved,
+            (SELECT count(*)::integer FROM accounts.pinned_players) AS saved,
             (SELECT count(*)::integer FROM accounts.primary_player_verification_attempts) AS attempts,
             (SELECT count(*)::integer FROM accounts.oauth_identities
              WHERE provider_account_id = 'fenced-discord-writer') AS identities
@@ -505,25 +501,25 @@ describePostgres('Accounts V2 import', () => {
           steamId: 'fenced-completion-steam',
           idempotencyKey: 'fenced-completion-attempt',
         })
-        await runtime.accounts.savePlayer(legacyAccountIds.pending, 501)
-        await runtime.accounts.savePlayer(legacyAccountIds.failed, 601)
-        await runtime.accounts.savePlayer(legacyAccountIds.failed, 602)
-        await runtime.accounts.pinSavedPlayer(legacyAccountIds.failed, 601)
-        await runtime.accounts.savePlayer(legacyAccountIds.conflict, 701)
-        await runtime.accounts.savePlayer(legacyAccountIds.conflict, 702)
-        await runtime.accounts.pinSavedPlayer(legacyAccountIds.conflict, 701)
-        await runtime.accounts.pinSavedPlayer(legacyAccountIds.conflict, 702)
-        await runtime.accounts.savePlayer(legacyAccountIds.duplicateA, 801)
+        await runtime.accounts.pinPlayer(legacyAccountIds.pending, 501)
+        await runtime.accounts.pinPlayer(legacyAccountIds.failed, 601)
+        await runtime.accounts.pinPlayer(legacyAccountIds.failed, 602)
+        await runtime.accounts.pinPlayer(legacyAccountIds.failed, 601)
+        await runtime.accounts.pinPlayer(legacyAccountIds.conflict, 701)
+        await runtime.accounts.pinPlayer(legacyAccountIds.conflict, 702)
+        await runtime.accounts.pinPlayer(legacyAccountIds.conflict, 701)
+        await runtime.accounts.pinPlayer(legacyAccountIds.conflict, 702)
+        await runtime.accounts.pinPlayer(legacyAccountIds.duplicateA, 801)
 
         await fence.unsafe("SELECT pg_advisory_lock(hashtextextended('accounts:writer-maintenance-fence', 0))")
         fenceHeld = true
         writers = [
           runtime.accounts.signOut(signIn.sessionToken),
           runtime.accounts.resolvePrimaryPlayerVerification(attempt.id, { resolve: async () => null }),
-          runtime.accounts.removeSavedPlayer(legacyAccountIds.pending, 501),
-          runtime.accounts.reorderSavedPlayers(legacyAccountIds.failed, [602, 601]),
-          runtime.accounts.pinSavedPlayer(legacyAccountIds.duplicateA, 801),
-          runtime.accounts.unpinSavedPlayer(legacyAccountIds.failed, 601),
+          runtime.accounts.unpinPlayer(legacyAccountIds.pending, 501),
+          runtime.accounts.reorderPinnedPlayers(legacyAccountIds.failed, [602, 601]),
+          runtime.accounts.pinPlayer(legacyAccountIds.duplicateA, 801),
+          runtime.accounts.unpinPlayer(legacyAccountIds.failed, 601),
           runtime.accounts.reorderPinnedPlayers(legacyAccountIds.conflict, [702, 701]),
         ]
         await waitForAdvisoryWaiters(inspect, 'ShareLock', writers.length)
@@ -532,7 +528,7 @@ describePostgres('Accounts V2 import', () => {
         fenceHeld = false
         await Promise.all(writers)
         expect(await runtime.accounts.authenticate(signIn.sessionToken)).toEqual({ status: 'anonymous' })
-        expect(await runtime.accounts.getSavedPlayers(legacyAccountIds.pending)).toEqual([])
+        expect(await runtime.accounts.getPinnedPlayers(legacyAccountIds.pending)).toEqual([])
         expect(await runtime.accounts.getPlayerShortcuts(legacyAccountIds.failed)).toMatchObject({
           pinnedPlayers: [{ brawlhallaId: 602 }],
         })

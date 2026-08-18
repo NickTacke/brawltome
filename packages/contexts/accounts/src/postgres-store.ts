@@ -4,16 +4,13 @@ import {
   type AccountPreferences,
   AccountsMaintenanceError,
   type AccountsStore,
-  InvalidSavedPlayerError,
+  InvalidPinnedPlayerError,
   LEADERBOARD_BRACKETS,
   LEADERBOARD_REGIONS,
   MAX_PINNED_PLAYERS,
-  MAX_SAVED_PLAYERS,
   type PinnedPlayer,
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
-  type SavedPlayer,
-  automaticPinOrder,
 } from './accounts'
 import { v2AuthCutoverIsFinalized } from './finalize-v2-auth-cutover'
 import {
@@ -69,13 +66,6 @@ interface PrimaryPlayerRow {
   player_name: string | null
   verified_at: Date
   verification_attempt_id: string
-}
-
-interface SavedPlayerRow {
-  brawlhalla_id: number
-  position: number
-  pin_position: number | null
-  saved_at: Date
 }
 
 interface PinnedPlayerRow {
@@ -446,63 +436,43 @@ function postgresAccountsStore(client: Sql): AccountsStore {
       })
     },
 
-    getSavedPlayers(accountId) {
-      return readSavedPlayers(client, accountId)
+    getPinnedPlayers(accountId) {
+      return readPinnedPlayers(client, accountId)
     },
 
-    async savePlayer(accountId, brawlhallaId) {
+    async pinPlayer(accountId, brawlhallaId) {
       return withAccountsWriterFence(client, async (transaction) => {
-        await lockSavedPlayers(transaction, accountId)
-        const savedPlayers = await readSavedPlayers(transaction, accountId)
-        const existing = savedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
+        await lockPinnedPlayers(transaction, accountId)
+        const pinnedPlayers = await readPinnedPlayers(transaction, accountId)
+        const existing = pinnedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
         if (existing) return existing
-        if (savedPlayers.length >= MAX_SAVED_PLAYERS) {
-          throw new InvalidSavedPlayerError(`Saved Players cannot exceed ${MAX_SAVED_PLAYERS}`)
+        if (pinnedPlayers.length >= MAX_PINNED_PLAYERS) {
+          throw new InvalidPinnedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
         }
-        const [savedPlayer] = await transaction.unsafe<SavedPlayerRow[]>(
-          `INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
-           VALUES ($1, $2, $3)
-           RETURNING brawlhalla_id::int, position, NULL::integer AS pin_position, saved_at`,
-          [accountId, brawlhallaId, savedPlayers.length],
-        )
-        if (!savedPlayer) throw new Error('Failed to save player')
 
-        const [membership] = await transaction.unsafe<{ primary_player: boolean }[]>(
-          `SELECT EXISTS (
-             SELECT 1 FROM accounts.primary_players
-             WHERE account_id = $1 AND brawlhalla_id = $2
-           ) AS primary_player`,
-          [accountId, brawlhallaId],
+        const [pinnedPlayer] = await transaction.unsafe<PinnedPlayerRow[]>(
+          `INSERT INTO accounts.pinned_players (account_id, brawlhalla_id, position)
+           VALUES ($1, $2, $3)
+           RETURNING brawlhalla_id::int, position, pinned_at`,
+          [accountId, brawlhallaId, pinnedPlayers.length],
         )
-        const pinOrder = automaticPinOrder(
-          membership?.primary_player === true,
-          (await readPinnedPlayers(transaction, accountId)).length,
-        )
-        if (pinOrder !== null) {
-          await transaction.unsafe(
-            `INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position)
-             VALUES ($1, $2, $3)`,
-            [accountId, brawlhallaId, pinOrder],
-          )
-        }
-        return mapSavedPlayer({ ...savedPlayer, pin_position: pinOrder })
+        if (!pinnedPlayer) throw new Error('Failed to pin player')
+        return mapPinnedPlayer(pinnedPlayer)
       })
     },
 
-    async removeSavedPlayer(accountId, brawlhallaId) {
+    async unpinPlayer(accountId, brawlhallaId) {
       await withAccountsWriterFence(client, async (transaction) => {
-        const locked = await lockSavedPlayerForUpdate(transaction, accountId, brawlhallaId)
-        if (!locked) return
-        await lockSavedPlayers(transaction, accountId)
+        await lockPinnedPlayers(transaction, accountId)
         const [removed] = await transaction.unsafe<{ position: number }[]>(
-          `DELETE FROM accounts.saved_players
+          `DELETE FROM accounts.pinned_players
            WHERE account_id = $1 AND brawlhalla_id = $2
            RETURNING position`,
           [accountId, brawlhallaId],
         )
         if (!removed) return
         await transaction.unsafe(
-          `UPDATE accounts.saved_players
+          `UPDATE accounts.pinned_players
            SET position = position - 1
            WHERE account_id = $1 AND position > $2`,
           [accountId, removed.position],
@@ -510,30 +480,29 @@ function postgresAccountsStore(client: Sql): AccountsStore {
       })
     },
 
-    async reorderSavedPlayers(accountId, orderedBrawlhallaIds) {
+    async reorderPinnedPlayers(accountId, orderedBrawlhallaIds) {
       return withAccountsWriterFence(client, async (transaction) => {
-        await lockSavedPlayerCollectionForUpdate(transaction, accountId)
-        await lockSavedPlayers(transaction, accountId)
-        const current = await readSavedPlayers(transaction, accountId)
+        await lockPinnedPlayers(transaction, accountId)
+        const current = await readPinnedPlayers(transaction, accountId)
         const currentIds = current.map(({ brawlhallaId }) => brawlhallaId).sort((left, right) => left - right)
         const requestedIds = [...orderedBrawlhallaIds].sort((left, right) => left - right)
         if (
           currentIds.length !== requestedIds.length ||
           currentIds.some((brawlhallaId, index) => brawlhallaId !== requestedIds[index])
         ) {
-          throw new InvalidSavedPlayerError('Saved Player order must contain the complete collection')
+          throw new InvalidPinnedPlayerError('Pinned Player order must contain the complete pinned collection')
         }
         await transaction.unsafe(
-          `UPDATE accounts.saved_players saved
+          `UPDATE accounts.pinned_players pinned
            SET position = requested.position
            FROM (
              SELECT brawlhalla_id, ordinality::int - 1 AS position
              FROM unnest($2::bigint[]) WITH ORDINALITY AS ordered(brawlhalla_id, ordinality)
            ) requested
-           WHERE saved.account_id = $1 AND saved.brawlhalla_id = requested.brawlhalla_id`,
+           WHERE pinned.account_id = $1 AND pinned.brawlhalla_id = requested.brawlhalla_id`,
           [accountId, orderedBrawlhallaIds],
         )
-        return readSavedPlayers(transaction, accountId)
+        return readPinnedPlayers(transaction, accountId)
       })
     },
 
@@ -557,160 +526,22 @@ function postgresAccountsStore(client: Sql): AccountsStore {
         }
       })
     },
-
-    async pinSavedPlayer(accountId, brawlhallaId) {
-      return withAccountsWriterFence(client, async (transaction) => {
-        await lockSavedPlayerForPin(transaction, accountId, brawlhallaId)
-        await lockSavedPlayers(transaction, accountId)
-        const pinnedPlayers = await readPinnedPlayers(transaction, accountId)
-        const existing = pinnedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
-        if (existing) return existing
-
-        const [membership] = await transaction.unsafe<{ saved: boolean; primary_player: boolean }[]>(
-          `SELECT
-             EXISTS (
-               SELECT 1 FROM accounts.saved_players
-               WHERE account_id = $1 AND brawlhalla_id = $2
-             ) AS saved,
-             EXISTS (
-               SELECT 1 FROM accounts.primary_players
-               WHERE account_id = $1 AND brawlhalla_id = $2
-             ) AS primary_player`,
-          [accountId, brawlhallaId],
-        )
-        if (membership?.primary_player) {
-          throw new InvalidSavedPlayerError('Primary Player cannot occupy a pin')
-        }
-        if (!membership?.saved) throw new InvalidSavedPlayerError('Pinned Player must be saved first')
-        if (pinnedPlayers.length >= MAX_PINNED_PLAYERS) {
-          throw new InvalidSavedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
-        }
-
-        const [pinnedPlayer] = await transaction.unsafe<PinnedPlayerRow[]>(
-          `INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position)
-           VALUES ($1, $2, $3)
-           RETURNING brawlhalla_id::int, position, pinned_at`,
-          [accountId, brawlhallaId, pinnedPlayers.length],
-        )
-        if (!pinnedPlayer) throw new Error('Failed to pin Saved Player')
-        return mapPinnedPlayer(pinnedPlayer)
-      })
-    },
-
-    async unpinSavedPlayer(accountId, brawlhallaId) {
-      await withAccountsWriterFence(client, async (transaction) => {
-        await lockSavedPlayers(transaction, accountId)
-        await transaction.unsafe(
-          `DELETE FROM accounts.saved_player_pins
-           WHERE account_id = $1 AND brawlhalla_id = $2`,
-          [accountId, brawlhallaId],
-        )
-      })
-    },
-
-    async reorderPinnedPlayers(accountId, orderedBrawlhallaIds) {
-      return withAccountsWriterFence(client, async (transaction) => {
-        await lockSavedPlayers(transaction, accountId)
-        const current = await readPinnedPlayers(transaction, accountId)
-        const currentIds = current.map(({ brawlhallaId }) => brawlhallaId).sort((left, right) => left - right)
-        const requestedIds = [...orderedBrawlhallaIds].sort((left, right) => left - right)
-        if (
-          currentIds.length !== requestedIds.length ||
-          currentIds.some((brawlhallaId, index) => brawlhallaId !== requestedIds[index])
-        ) {
-          throw new InvalidSavedPlayerError('Pinned Player order must contain the complete pinned collection')
-        }
-        await transaction.unsafe(
-          `UPDATE accounts.saved_player_pins pinned
-           SET position = requested.position
-           FROM (
-             SELECT brawlhalla_id, ordinality::int - 1 AS position
-             FROM unnest($2::bigint[]) WITH ORDINALITY AS ordered(brawlhalla_id, ordinality)
-           ) requested
-           WHERE pinned.account_id = $1 AND pinned.brawlhalla_id = requested.brawlhalla_id`,
-          [accountId, orderedBrawlhallaIds],
-        )
-        return readPinnedPlayers(transaction, accountId)
-      })
-    },
   }
 }
 
-async function lockSavedPlayerForUpdate(
-  transaction: TransactionSql,
-  accountId: string,
-  brawlhallaId: number,
-): Promise<boolean> {
-  const [savedPlayer] = await transaction.unsafe<{ brawlhalla_id: number }[]>(
-    `SELECT brawlhalla_id::int
-     FROM accounts.saved_players
-     WHERE account_id = $1 AND brawlhalla_id = $2
-     FOR UPDATE`,
-    [accountId, brawlhallaId],
-  )
-  return Boolean(savedPlayer)
-}
-
-async function lockSavedPlayerCollectionForUpdate(transaction: TransactionSql, accountId: string): Promise<void> {
-  await transaction.unsafe(
-    `SELECT brawlhalla_id
-     FROM accounts.saved_players
-     WHERE account_id = $1
-     ORDER BY brawlhalla_id
-     FOR UPDATE`,
-    [accountId],
-  )
-}
-
-async function lockSavedPlayerForPin(
-  transaction: TransactionSql,
-  accountId: string,
-  brawlhallaId: number,
-): Promise<void> {
-  await transaction.unsafe(
-    `SELECT brawlhalla_id
-     FROM accounts.saved_players
-     WHERE account_id = $1 AND brawlhalla_id = $2
-     FOR KEY SHARE`,
-    [accountId, brawlhallaId],
-  )
-}
-
-async function lockSavedPlayers(transaction: TransactionSql, accountId: string): Promise<void> {
+async function lockPinnedPlayers(transaction: TransactionSql, accountId: string): Promise<void> {
   await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`account:${accountId}`])
-}
-
-async function readSavedPlayers(client: Sql | TransactionSql, accountId: string): Promise<SavedPlayer[]> {
-  const rows = await client.unsafe<SavedPlayerRow[]>(
-    `SELECT saved.brawlhalla_id::int, saved.position, pins.position AS pin_position, saved.saved_at
-     FROM accounts.saved_players saved
-     LEFT JOIN accounts.saved_player_pins pins
-       ON pins.account_id = saved.account_id AND pins.brawlhalla_id = saved.brawlhalla_id
-     WHERE saved.account_id = $1
-     ORDER BY saved.position, saved.brawlhalla_id`,
-    [accountId],
-  )
-  return rows.map(mapSavedPlayer)
 }
 
 async function readPinnedPlayers(client: Sql | TransactionSql, accountId: string): Promise<PinnedPlayer[]> {
   const rows = await client.unsafe<PinnedPlayerRow[]>(
     `SELECT brawlhalla_id::int, position, pinned_at
-     FROM accounts.saved_player_pins
+     FROM accounts.pinned_players
      WHERE account_id = $1
      ORDER BY position, brawlhalla_id`,
     [accountId],
   )
   return rows.map(mapPinnedPlayer)
-}
-
-function mapSavedPlayer({ brawlhalla_id, position, pin_position, saved_at }: SavedPlayerRow): SavedPlayer {
-  return {
-    brawlhallaId: brawlhalla_id,
-    order: position,
-    pinOrder: pin_position,
-    savedAt: saved_at,
-  }
 }
 
 function mapPinnedPlayer({ brawlhalla_id, position, pinned_at }: PinnedPlayerRow): PinnedPlayer {

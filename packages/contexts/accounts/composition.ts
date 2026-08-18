@@ -5,6 +5,7 @@ import { addPrimaryPlayerVerification } from './migrations/0004-add-primary-play
 import { addSavedPlayers } from './migrations/0005-add-saved-players'
 import { addPinnedPlayerShortcuts } from './migrations/0006-add-pinned-player-shortcuts'
 import { addV2AccountsImportEvidence } from './migrations/0007-add-v2-accounts-import-evidence'
+import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-players'
 import { createAccounts } from './src/accounts'
 
 export {
@@ -14,7 +15,7 @@ export {
   type LegacyAccountsReconciliation,
 } from './src/legacy-import'
 
-export { AccountsMaintenanceError, MAX_PINNED_PLAYERS, MAX_SAVED_PLAYERS } from './src/accounts'
+export { AccountsMaintenanceError, InvalidPinnedPlayerError, MAX_PINNED_PLAYERS } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
 export function createPostgresAccounts(connectionString: string) {
@@ -34,4 +35,5 @@ export const accountsMigrationInventory = [
   addSavedPlayers,
   addPinnedPlayerShortcuts,
   addV2AccountsImportEvidence,
+  consolidatePinnedPlayers,
 ] as const
