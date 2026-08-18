@@ -67,6 +67,8 @@ describe('matches preview feed', () => {
     expect(html).toContain('/matches?analyze=1')
     expect(html).toContain('Winner AxeMender and StarLancer')
     expect(html).toContain('AxeMender &amp; StarLancer vs BlueMammoth &amp; QuickDraw')
+    expect(html).toContain('aria-label="Team 1 final score 4, winner"')
+    expect(html).toContain('aria-label="Team 2 final score 2"')
   })
 })
 
@@ -97,6 +99,10 @@ describe('matches preview detail and player history', () => {
 
     expect(detailHtml).toContain('AxeMender &amp; StarLancer')
     expect(detailHtml.match(/aria-label="Winner"/g) ?? []).toHaveLength(2)
+    expect(detailHtml).toMatch(/AxeMender<\/span><\/a><svg[^>]*aria-label="Winner"/)
+    expect(detailHtml).toMatch(/StarLancer<\/span><\/a><svg[^>]*aria-label="Winner"/)
+    expect(detailHtml).not.toMatch(/BlueMammoth<\/span><\/a><svg[^>]*aria-label="Winner"/)
+    expect(detailHtml).not.toMatch(/QuickDraw<\/span><\/a><svg[^>]*aria-label="Winner"/)
     expect(historyHtml).toContain('Ranked 2v2 · 2:44 · Win')
   })
 

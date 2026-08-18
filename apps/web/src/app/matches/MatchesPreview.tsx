@@ -105,7 +105,11 @@ function PreviewFeed({ notice }: { notice?: string }) {
               </div>
               <div className="grid gap-3 md:grid-cols-2" aria-label={participantNames(match)}>
                 {matchTeams(match).map((team) => (
-                  <section key={team.id} className="rounded-md border border-border p-3">
+                  <section
+                    key={team.id}
+                    className="rounded-md border border-border p-3"
+                    aria-label={`Team ${team.id} final score ${team.score}${team.won ? ', winner' : ''}`}
+                  >
                     <div className="mb-3 flex items-start justify-between gap-3 border-b border-border/60 pb-3">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
