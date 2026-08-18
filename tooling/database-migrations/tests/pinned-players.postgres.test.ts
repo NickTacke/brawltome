@@ -1,0 +1,144 @@
+import { describe, expect, test } from 'bun:test'
+import { randomUUID } from 'node:crypto'
+import { MAX_PINNED_PLAYERS, accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts/composition'
+import postgres from 'postgres'
+import { migratePostgres } from '../src/postgres'
+
+const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
+const configuredServer = process.env.DATABASE_URL
+const hasDedicatedServer = configuredServer?.startsWith(dedicatedServer) ?? false
+
+async function withDatabase(run: (databaseUrl: string) => Promise<void>) {
+  if (!hasDedicatedServer) throw new Error('Pinned Players PostgreSQL tests require dedicated 127.0.0.1:55436')
+
+  const databaseName = `brawltome_pinned_players_${process.pid}_${randomUUID().replaceAll('-', '')}`
+  const adminUrl = new URL(configuredServer as string)
+  adminUrl.pathname = '/postgres'
+  const databaseUrl = new URL(configuredServer as string)
+  databaseUrl.pathname = `/${databaseName}`
+  const admin = postgres(adminUrl.toString(), { max: 1 })
+  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+  try {
+    await run(databaseUrl.toString())
+  } finally {
+    await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+    await admin.end()
+  }
+}
+
+async function signIn(runtime: ReturnType<typeof createPostgresAccounts>, providerAccountId: string) {
+  return runtime.accounts.signInWithDiscord({ providerAccountId, displayName: providerAccountId, avatarHash: null })
+}
+
+function pinnedIds(
+  players: Awaited<ReturnType<ReturnType<typeof createPostgresAccounts>['accounts']['getPinnedPlayers']>>,
+) {
+  return players.map(({ brawlhallaId }) => brawlhallaId)
+}
+
+describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
+  test('consolidates old saved rows with old pin order first and removes legacy tables', async () => {
+    await withDatabase(async (databaseUrl) => {
+      const accountId = '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295'
+      const legacyAccountId = '3f1b5ca7-0c73-4ac8-93ea-a22a663cb296'
+      const seed = postgres(databaseUrl, { max: 1 })
+      try {
+        await migratePostgres(databaseUrl, accountsMigrationInventory.slice(0, 7))
+        await seed`
+          INSERT INTO accounts.users (id) VALUES (${accountId}), (${legacyAccountId})
+        `
+        await seed`
+          INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
+          VALUES
+            (${accountId}, 101, 0),
+            (${accountId}, 102, 1),
+            (${accountId}, 103, 2),
+            (${accountId}, 104, 3)
+        `
+        await seed`
+          INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position)
+          VALUES
+            (${accountId}, 103, 0),
+            (${accountId}, 101, 1)
+        `
+        await seed`
+          INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
+          SELECT ${legacyAccountId}, id, id - 1
+          FROM generate_series(201, 221) AS players(id)
+        `
+      } finally {
+        await seed.end()
+      }
+
+      expect(await migratePostgres(databaseUrl, accountsMigrationInventory)).toBe(1)
+      const runtime = createPostgresAccounts(databaseUrl)
+      const inspect = postgres(databaseUrl, { max: 1 })
+      try {
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(accountId))).toEqual([103, 101, 102, 104])
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(legacyAccountId))).toEqual(
+          Array.from({ length: 21 }, (_, index) => index + 201),
+        )
+        const [tables] = await inspect<{ pinned: string | null; saved: string | null; pins: string | null }[]>`
+          SELECT
+            to_regclass('accounts.pinned_players')::text AS pinned,
+            to_regclass('accounts.saved_players')::text AS saved,
+            to_regclass('accounts.saved_player_pins')::text AS pins
+        `
+        expect(tables).toEqual({ pinned: 'accounts.pinned_players', saved: null, pins: null })
+      } finally {
+        await runtime.close()
+        await inspect.end()
+      }
+    })
+  }, 15_000)
+
+  test('allows idempotent existing pins and legacy-over-cap reorder while capping new additions', async () => {
+    await withDatabase(async (databaseUrl) => {
+      await migratePostgres(databaseUrl, accountsMigrationInventory)
+      const runtime = createPostgresAccounts(databaseUrl)
+      try {
+        const { account } = await signIn(runtime, 'pinned-player-cap')
+        for (let id = 1; id <= MAX_PINNED_PLAYERS; id += 1) await runtime.accounts.pinPlayer(account.id, id)
+
+        expect(MAX_PINNED_PLAYERS).toBe(20)
+        expect(await runtime.accounts.pinPlayer(account.id, 1)).toMatchObject({ brawlhallaId: 1 })
+        await expect(runtime.accounts.pinPlayer(account.id, 21)).rejects.toThrow('Pinned Players cannot exceed 20')
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(account.id))).toEqual(
+          Array.from({ length: 20 }, (_, index) => index + 1),
+        )
+
+        const reordered = await runtime.accounts.reorderPinnedPlayers(
+          account.id,
+          Array.from({ length: 20 }, (_, index) => 20 - index),
+        )
+        expect(pinnedIds(reordered)).toEqual(Array.from({ length: 20 }, (_, index) => 20 - index))
+      } finally {
+        await runtime.close()
+      }
+    })
+  }, 15_000)
+
+  test('compacts positions after idempotent unpinning and isolates accounts', async () => {
+    await withDatabase(async (databaseUrl) => {
+      await migratePostgres(databaseUrl, accountsMigrationInventory)
+      const runtime = createPostgresAccounts(databaseUrl)
+      try {
+        const [{ account: first }, { account: second }] = await Promise.all([
+          signIn(runtime, 'pinned-player-first'),
+          signIn(runtime, 'pinned-player-second'),
+        ])
+        await Promise.all([41, 42, 43].map((id) => runtime.accounts.pinPlayer(first.id, id)))
+        await runtime.accounts.pinPlayer(second.id, 41)
+
+        await Promise.all(Array.from({ length: 8 }, () => runtime.accounts.unpinPlayer(first.id, 42)))
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(first.id))).toEqual([41, 43])
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(second.id))).toEqual([41])
+        expect((await runtime.accounts.reorderPinnedPlayers(first.id, [43, 41])).map(({ order }) => order)).toEqual([
+          0, 1,
+        ])
+      } finally {
+        await runtime.close()
+      }
+    })
+  }, 15_000)
+})

@@ -88,25 +88,18 @@ function createStore(): AccountsStore {
           : [],
       }
     },
-    async getSavedPlayers() {
+    async getPinnedPlayers() {
       return []
     },
-    async savePlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, pinOrder: null, savedAt: startedAt }
+    async pinPlayer(_accountId, brawlhallaId) {
+      return { brawlhallaId, order: 0, pinnedAt: startedAt }
     },
-    async removeSavedPlayer() {},
-    async reorderSavedPlayers() {
+    async unpinPlayer() {},
+    async reorderPinnedPlayers() {
       return []
     },
     async getPlayerShortcuts() {
       return { primaryPlayer: state.primaryPlayer, pinnedPlayers: [] }
-    },
-    async pinSavedPlayer(_accountId, brawlhallaId) {
-      return { brawlhallaId, order: 0, pinnedAt: startedAt }
-    },
-    async unpinSavedPlayer() {},
-    async reorderPinnedPlayers() {
-      return []
     },
   }
 }

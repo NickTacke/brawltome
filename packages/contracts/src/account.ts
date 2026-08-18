@@ -106,51 +106,38 @@ const utcDateTime = z.iso
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
 
-export const savedPlayerInputSchema = z.object({ brawlhallaId: brawlhallaIdSchema }).strict()
+export const pinnedPlayerInputSchema = z.object({ brawlhallaId: brawlhallaIdSchema }).strict()
 
-export const MAX_SAVED_PLAYERS = 100
-export const MAX_PINNED_PLAYERS = 4
-
-export const savedPlayerOrderInputSchema = z
-  .object({ brawlhallaIds: z.array(brawlhallaIdSchema).max(MAX_SAVED_PLAYERS) })
-  .strict()
-  .refine(
-    ({ brawlhallaIds }) => new Set(brawlhallaIds).size === brawlhallaIds.length,
-    'Saved Player order cannot contain duplicates',
-  )
+export const MAX_PINNED_PLAYERS = 20
+export const MAX_PINNED_PLAYERS_OUTPUT = 100
 
 export const pinnedPlayerOrderInputSchema = z
-  .object({ brawlhallaIds: z.array(brawlhallaIdSchema).max(MAX_PINNED_PLAYERS) })
+  .object({ brawlhallaIds: z.array(brawlhallaIdSchema).max(MAX_PINNED_PLAYERS_OUTPUT) })
   .strict()
   .refine(
     ({ brawlhallaIds }) => new Set(brawlhallaIds).size === brawlhallaIds.length,
     'Pinned Player order cannot contain duplicates',
   )
 
-export const savedPlayerSchema = z
+export const pinnedPlayerSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     order: z.int().min(0).max(2_147_483_647),
-    pinOrder: z
-      .int()
-      .min(0)
-      .max(MAX_PINNED_PLAYERS - 1)
-      .nullable(),
-    savedAt: utcDateTime,
+    pinnedAt: utcDateTime,
     player: nullablePlayerReferenceSchema,
     currentSeason: nullablePlayerRankedProfileSchema,
   })
   .strict()
-  .superRefine((savedPlayer, context) => {
-    if (savedPlayer.player && savedPlayer.player.brawlhallaId !== savedPlayer.brawlhallaId) {
-      context.addIssue({ code: 'custom', message: 'Saved Player reference must match its bookmark' })
+  .superRefine((pinnedPlayer, context) => {
+    if (pinnedPlayer.player && pinnedPlayer.player.brawlhallaId !== pinnedPlayer.brawlhallaId) {
+      context.addIssue({ code: 'custom', message: 'Pinned Player reference must match its bookmark' })
     }
-    if (savedPlayer.currentSeason && savedPlayer.currentSeason.brawlhallaId !== savedPlayer.brawlhallaId) {
-      context.addIssue({ code: 'custom', message: 'Saved Player ranked facts must match its bookmark' })
+    if (pinnedPlayer.currentSeason && pinnedPlayer.currentSeason.brawlhallaId !== pinnedPlayer.brawlhallaId) {
+      context.addIssue({ code: 'custom', message: 'Pinned Player ranked facts must match its bookmark' })
     }
   })
 
-export const savedPlayersSchema = z.array(savedPlayerSchema).max(MAX_SAVED_PLAYERS)
+export const pinnedPlayersSchema = z.array(pinnedPlayerSchema).max(MAX_PINNED_PLAYERS_OUTPUT)
 
 const shortcutMainLegendSchema = z
   .object({
@@ -170,7 +157,7 @@ export const playerShortcutSchema = z
 export const playerShortcutsSchema = z
   .object({
     primary: playerShortcutSchema.nullable(),
-    pins: z.array(playerShortcutSchema).max(MAX_PINNED_PLAYERS),
+    pins: z.array(playerShortcutSchema).max(MAX_PINNED_PLAYERS_OUTPUT),
   })
   .strict()
   .superRefine((shortcuts, context) => {
@@ -189,8 +176,8 @@ export type AccountViewContract = z.infer<typeof accountViewSchema>
 export type PrimaryPlayerVerificationStateContract = z.infer<typeof primaryPlayerVerificationStateSchema>
 export type PlayerShortcutContract = z.infer<typeof playerShortcutSchema>
 export type PlayerShortcutsContract = z.infer<typeof playerShortcutsSchema>
-export type SavedPlayerContract = z.infer<typeof savedPlayerSchema>
-export type SavedPlayersContract = z.infer<typeof savedPlayersSchema>
+export type PinnedPlayerContract = z.infer<typeof pinnedPlayerSchema>
+export type PinnedPlayersContract = z.infer<typeof pinnedPlayersSchema>
 
 export function parseAccountViewOutput(value: unknown): AccountViewContract {
   return accountViewSchema.parse(value)
@@ -200,8 +187,8 @@ export function parsePrimaryPlayerVerificationStateOutput(value: unknown): Prima
   return primaryPlayerVerificationStateSchema.parse(value)
 }
 
-export function parseSavedPlayersOutput(value: unknown): SavedPlayersContract {
-  return savedPlayersSchema.parse(value)
+export function parsePinnedPlayersOutput(value: unknown): PinnedPlayersContract {
+  return pinnedPlayersSchema.parse(value)
 }
 
 export function parsePlayerShortcutsOutput(value: unknown): PlayerShortcutsContract {
