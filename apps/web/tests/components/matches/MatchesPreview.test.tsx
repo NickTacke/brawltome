@@ -78,6 +78,8 @@ describe('matches preview detail and player history', () => {
 
     expect(html).toContain('Preview data')
     expect(html).toContain('Event overview')
+    expect(html).toContain('Damage progression')
+    expect(html).toContain('Best engagement')
     expect(html).toContain('Extended combat')
     expect(html).toContain('Movement &amp; positioning')
     expect(html).toContain('Engagements')
@@ -89,8 +91,12 @@ describe('matches preview detail and player history', () => {
     expect(html).not.toContain('>BL</span>')
     expect(html).toContain('/matches?player=preview-knight')
     expect(html).toContain('Unknown scorer')
+    expect(html).toContain('Equipment and power counters unavailable in preview data.')
+    expect(html).toContain('Dodges per minute')
+    expect(html).toContain('aria-label="Team 1 final score 3, winner"')
+    expect(html).toContain('aria-label="Team 2 final score 1"')
+    expect(html).toContain('2026-08-17 · 19:40 UTC')
     expect(html).not.toContain('Environment')
-    expect(html).not.toContain('dodges/min')
   })
 
   test('labels both members of the winning 2v2 team in detail and history', () => {
