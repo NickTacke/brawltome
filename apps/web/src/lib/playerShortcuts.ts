@@ -2,7 +2,7 @@
 
 import { type PlayerShortcutsContract, parsePlayerShortcutsOutput } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
-import { savedPlayersKey } from './savedPlayersCache'
+import { pinnedPlayersKey } from './pinnedPlayersCache'
 import { trpc } from './trpc'
 
 const PLAYER_SHORTCUTS_KEY = ['account', 'playerShortcuts'] as const
@@ -40,14 +40,14 @@ export async function invalidatePlayerNavigation(
   accountId: string,
 ): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: savedPlayersKey(accountId) }),
+    queryClient.invalidateQueries({ queryKey: pinnedPlayersKey(accountId) }),
     invalidatePlayerShortcuts(queryClient, accountId),
   ])
 }
 
 export type PlayerShortcutNavigationItem = {
-  kind: 'primary' | 'pin' | 'all-saved'
-  href: `/player/${number}` | '/account#saved-players-heading'
+  kind: 'primary' | 'pin'
+  href: `/player/${number}`
   label: string
   accessibleLabel: string
   avatarUrl: string | null
@@ -78,16 +78,9 @@ export function createPlayerShortcutNavigation(
       kind: 'pin',
       href: `/player/${pin.brawlhallaId}`,
       label,
-      accessibleLabel: `Saved Player, ${label}`,
+      accessibleLabel: `Pinned Player, ${label}`,
       avatarUrl: avatarUrl(pin.mainLegend?.legendNameKey),
     })
   }
-  items.push({
-    kind: 'all-saved',
-    href: '/account#saved-players-heading',
-    label: 'All Saved Players',
-    accessibleLabel: 'All Saved Players',
-    avatarUrl: null,
-  })
   return items
 }

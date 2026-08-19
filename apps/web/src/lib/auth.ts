@@ -94,7 +94,7 @@ export async function signOut(queryClient: ReturnType<typeof useQueryClient>): P
   if (!response.ok) throw new Error(`Sign-out failed with status ${response.status}`)
 
   queryClient.removeQueries({ queryKey: ACCOUNT_PREFERENCES_KEY })
-  queryClient.removeQueries({ queryKey: ['account', 'savedPlayers'] })
+  queryClient.removeQueries({ queryKey: ['account', 'pinnedPlayers'] })
   queryClient.removeQueries({ queryKey: ['account', 'playerShortcuts'] })
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ACCOUNT_KEY }),

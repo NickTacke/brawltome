@@ -23,7 +23,7 @@ const shortcuts: PlayerShortcutsContract = {
 }
 
 describe('private Player shortcut navigation', () => {
-  test('derives Primary first as You, ordered pins, and the Saved Players overflow action', () => {
+  test('derives Primary first as You followed by every ordered Pinned Player', () => {
     expect(createPlayerShortcutNavigation(shortcuts)).toEqual([
       {
         kind: 'primary',
@@ -36,24 +36,18 @@ describe('private Player shortcut navigation', () => {
         kind: 'pin',
         href: '/player/44',
         label: 'Lin',
-        accessibleLabel: 'Saved Player, Lin',
+        accessibleLabel: 'Pinned Player, Lin',
         avatarUrl: '/images/legends/avatars/orion.png',
       },
       {
         kind: 'pin',
         href: '/player/43',
         label: 'Player ID 43',
-        accessibleLabel: 'Saved Player, Player ID 43',
-        avatarUrl: null,
-      },
-      {
-        kind: 'all-saved',
-        href: '/account#saved-players-heading',
-        label: 'All Saved Players',
-        accessibleLabel: 'All Saved Players',
+        accessibleLabel: 'Pinned Player, Player ID 43',
         avatarUrl: null,
       },
     ])
+    expect(createPlayerShortcutNavigation(shortcuts).some(({ kind }) => String(kind) === 'all-saved')).toBe(false)
   })
 
   test('returns no private destinations without an authenticated shortcut contract', () => {
@@ -72,7 +66,7 @@ describe('private Player shortcut navigation', () => {
     await invalidatePlayerNavigation(queryClient, 'account-one')
 
     expect(invalidations).toEqual([
-      { queryKey: ['account', 'savedPlayers', 'account-one'] },
+      { queryKey: ['account', 'pinnedPlayers', 'account-one'] },
       { queryKey: ['account', 'playerShortcuts', 'account-one'] },
     ])
   })
