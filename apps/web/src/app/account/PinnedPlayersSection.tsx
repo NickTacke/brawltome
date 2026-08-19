@@ -124,6 +124,8 @@ export function PinnedPlayersSection({
   onUnpin,
   onMove,
 }: PinnedPlayersSectionProps) {
+  const managedPinnedCount = pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId).length
+
   return (
     <section
       aria-labelledby="pinned-players-heading"
@@ -135,7 +137,7 @@ export function PinnedPlayersSection({
       <p className="text-muted-foreground mt-2 text-xs">
         Private pins visible only to you. Pinning a player does not claim ownership or create a public follow.
       </p>
-      {pinnedPlayers.length > MAX_PINNED_PLAYERS && (
+      {managedPinnedCount > MAX_PINNED_PLAYERS && (
         <p className="mt-3 text-xs text-amber-200" role="alert">
           This account has legacy pins above the current limit. Existing records are preserved; new pins are limited to
           20; remove a player before pinning another.
@@ -177,31 +179,31 @@ export function PinnedPlayersSection({
                         </span>
                       )}
                     </div>
-                    <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
-                      <fieldset className="flex items-center gap-1 border-0 p-0">
-                        <legend className="text-muted-foreground mr-1 text-[10px] font-medium uppercase">
-                          Pinned order for {label}
-                        </legend>
-                        <button
-                          type="button"
-                          aria-label={`Move ${label} up in Pinned Players`}
-                          disabled={index === 0 || pending}
-                          onClick={() => onMove(index, index - 1)}
-                          className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
-                        >
-                          <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Move ${label} down in Pinned Players`}
-                          disabled={index === pinnedPlayers.length - 1 || pending}
-                          onClick={() => onMove(index, index + 1)}
-                          className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
-                        >
-                          <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </fieldset>
-                      {!isPrimary && (
+                    {!isPrimary && (
+                      <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                        <fieldset className="flex items-center gap-1 border-0 p-0">
+                          <legend className="text-muted-foreground mr-1 text-[10px] font-medium uppercase">
+                            Pinned order for {label}
+                          </legend>
+                          <button
+                            type="button"
+                            aria-label={`Move ${label} up in Pinned Players`}
+                            disabled={index === 0 || pending}
+                            onClick={() => onMove(index, index - 1)}
+                            className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                          >
+                            <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Move ${label} down in Pinned Players`}
+                            disabled={index === pinnedPlayers.length - 1 || pending}
+                            onClick={() => onMove(index, index + 1)}
+                            className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+                          >
+                            <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </fieldset>
                         <button
                           type="button"
                           aria-label={`Unpin ${label}`}
@@ -211,8 +213,8 @@ export function PinnedPlayersSection({
                         >
                           <PinOff className="h-4 w-4" aria-hidden="true" />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-3">
                     <RankedObservation pinnedPlayer={pinnedPlayer} />
