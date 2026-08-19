@@ -76,6 +76,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'accounts/0006',
       'accounts/0007',
       'accounts/0008',
+      'accounts/0009',
     ])
     expect(playerMigrationInventory.map(({ identity }): string => identity)).toEqual([
       'players/0001',
@@ -106,13 +107,14 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0005',
       'rankings/0006',
     ])
-    expect(globalMigrationInventory.slice(-6).map(({ identity }): string => identity)).toEqual([
+    expect(globalMigrationInventory.slice(-7).map(({ identity }): string => identity)).toEqual([
       'clans/0004',
       'players/0011',
       'players/0012',
       'players/0013',
       'replay-analysis/0001',
       'accounts/0008',
+      'accounts/0009',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -199,6 +201,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       playerMigrationInventory[12],
       replayAnalysisMigrationInventory[0],
       accountsMigrationInventory[7],
+      accountsMigrationInventory[8],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -231,7 +234,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(58)
+    expect(globalMigrationInventory).toHaveLength(59)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -257,6 +260,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       playerMigrationInventory[12],
       replayAnalysisMigrationInventory[0],
       accountsMigrationInventory[7],
+      accountsMigrationInventory[8],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`

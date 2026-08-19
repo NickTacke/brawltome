@@ -6,6 +6,7 @@ import * as legacyPlayerCollectionMigration from './migrations/0005-add-saved-pl
 import { addPinnedPlayerShortcuts } from './migrations/0006-add-pinned-player-shortcuts'
 import { addV2AccountsImportEvidence } from './migrations/0007-add-v2-accounts-import-evidence'
 import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-players'
+import { addAccountTheme } from './migrations/0009-add-account-theme'
 import { createAccounts } from './src/accounts'
 
 export {
@@ -36,4 +37,5 @@ export const accountsMigrationInventory = [
   addPinnedPlayerShortcuts,
   addV2AccountsImportEvidence,
   consolidatePinnedPlayers,
+  addAccountTheme,
 ] as const

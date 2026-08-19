@@ -216,6 +216,34 @@
     --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
   }
+
+  html[data-theme="purple"] {
+    --background: 270 24% 14%;
+    --foreground: 270 20% 92%;
+    --card: 270 22% 17%;
+    --card-foreground: 270 20% 92%;
+    --popover: 270 24% 19%;
+    --popover-foreground: 270 20% 92%;
+    --primary: 280 75% 65%;
+    --primary-foreground: 270 30% 10%;
+    --secondary: 270 22% 23%;
+    --secondary-foreground: 270 20% 92%;
+    --muted: 270 20% 22%;
+    --muted-foreground: 270 12% 70%;
+    --accent: 270 24% 25%;
+    --accent-foreground: 270 20% 92%;
+    --border: 270 18% 31%;
+    --input: 270 18% 28%;
+    --ring: 280 75% 65%;
+    --sidebar: 272 28% 11%;
+    --sidebar-foreground: 270 20% 88%;
+    --sidebar-primary: 280 75% 65%;
+    --sidebar-primary-foreground: 270 30% 10%;
+    --sidebar-accent: 270 24% 19%;
+    --sidebar-accent-foreground: 270 20% 92%;
+    --sidebar-border: 270 20% 25%;
+    --sidebar-ring: 280 75% 65%;
+  }
 }
 
 @layer base {

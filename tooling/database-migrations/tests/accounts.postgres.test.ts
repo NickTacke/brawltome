@@ -525,7 +525,12 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
   test('round-trips launch preferences across sessions and runtimes without anonymous persistence', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
-    const defaultPreferences = { version: 1, leaderboardBracket: '1v1', leaderboardRegion: 'all' } as const
+    const defaultPreferences = {
+      version: 2,
+      leaderboardBracket: '1v1',
+      leaderboardRegion: 'all',
+      theme: 'neutral',
+    } as const
     const { globalMigrationInventory } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
     const databaseName = `brawltome_preferences_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -567,9 +572,10 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         secondDeviceToken = secondDevice.sessionToken
 
         await firstRuntime.accounts.updatePreferences(accountId, {
-          version: 1,
+          version: 2,
           leaderboardBracket: 'solo2v2',
           leaderboardRegion: 'EU',
+          theme: 'purple',
         })
       } finally {
         await firstRuntime.close()
@@ -580,9 +586,10 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         const authentication = await secondRuntime.accounts.authenticate(secondDeviceToken)
         expect(authentication).toMatchObject({ status: 'signedIn', account: { id: accountId } })
         expect(await secondRuntime.accounts.getPreferences(accountId)).toEqual({
-          version: 1,
+          version: 2,
           leaderboardBracket: 'solo2v2',
           leaderboardRegion: 'EU',
+          theme: 'purple',
         })
 
         const otherAccount = await secondRuntime.accounts.signInWithDiscord({
@@ -596,23 +603,25 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         const client = postgres(databaseUrl.toString(), { max: 1 })
         try {
           const [stored] = await client<
-            { schema_version: number; leaderboard_bracket: string; leaderboard_region: string }[]
+            { schema_version: number; leaderboard_bracket: string; leaderboard_region: string; theme: string }[]
           >`
-            SELECT schema_version, leaderboard_bracket, leaderboard_region
+            SELECT schema_version, leaderboard_bracket, leaderboard_region, theme
             FROM accounts.preferences
             WHERE account_id = ${accountId}
           `
           expect(stored).toEqual({
-            schema_version: 1,
+            schema_version: 2,
             leaderboard_bracket: 'solo2v2',
             leaderboard_region: 'EU',
+            theme: 'purple',
           })
 
           await client`
             UPDATE accounts.preferences
-            SET schema_version = 2,
+            SET schema_version = 1,
                 leaderboard_bracket = '3v3',
-                leaderboard_region = 'JPN'
+                leaderboard_region = 'JPN',
+                theme = 'purple'
             WHERE account_id = ${accountId}
           `
         } finally {

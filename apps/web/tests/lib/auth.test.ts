@@ -39,8 +39,13 @@ describe('parseAccountResponse', () => {
 })
 
 describe('parseAccountPreferencesResponse', () => {
-  test('accepts canonical launch preferences and rejects unknown fields', () => {
-    const preferences = { version: 1, leaderboardBracket: 'solo2v2', leaderboardRegion: 'SEA' } as const
+  test('accepts canonical account preferences and rejects unsupported themes', () => {
+    const preferences = {
+      version: 2,
+      leaderboardBracket: 'solo2v2',
+      leaderboardRegion: 'SEA',
+      theme: 'purple',
+    } as const
     expect(parseAccountPreferencesResponse(preferences)).toEqual(preferences)
     expect(() => parseAccountPreferencesResponse({ ...preferences, theme: 'dark' })).toThrow()
   })

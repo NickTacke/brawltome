@@ -15,12 +15,14 @@ export const leaderboardRegionPreferenceSchema = z.enum([
   'ME',
   'SA',
 ])
+export const accountThemeSchema = z.enum(['neutral', 'purple'])
 
 export const accountPreferencesSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     leaderboardBracket: leaderboardBracketPreferenceSchema,
     leaderboardRegion: leaderboardRegionPreferenceSchema,
+    theme: accountThemeSchema,
   })
   .strict()
 

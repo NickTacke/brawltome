@@ -50,7 +50,7 @@ function makeFakes() {
       sessions.delete(sessionToken)
     },
     async getPreferences() {
-      return { version: 1, leaderboardBracket: '1v1', leaderboardRegion: 'all' }
+      return { version: 2, leaderboardBracket: '1v1', leaderboardRegion: 'all', theme: 'neutral' }
     },
     async updatePreferences(_accountId, preferences) {
       return preferences
