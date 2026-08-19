@@ -221,6 +221,34 @@ describe('PinnedPlayersSection', () => {
     expect(html).not.toContain('aria-label="Move Player ID 44 up in Pinned Players" disabled=""')
   })
 
+  test('disables managed reorder controls at retained Primary boundaries', () => {
+    const primaryFirst = renderToStaticMarkup(
+      <PinnedPlayersSection
+        pinnedPlayers={[pinnedPlayers[0], pinnedPlayers[1]]}
+        loading={false}
+        primaryPlayerKnown
+        primaryPlayerId={42}
+        pendingPlayerId={null}
+        onUnpin={() => {}}
+        onMove={() => {}}
+      />,
+    )
+    const primaryLast = renderToStaticMarkup(
+      <PinnedPlayersSection
+        pinnedPlayers={[pinnedPlayers[1], pinnedPlayers[0]]}
+        loading={false}
+        primaryPlayerKnown
+        primaryPlayerId={42}
+        pendingPlayerId={null}
+        onUnpin={() => {}}
+        onMove={() => {}}
+      />,
+    )
+
+    expect(primaryFirst).toContain('aria-label="Move Player ID 43 up in Pinned Players" disabled=""')
+    expect(primaryLast).toContain('aria-label="Move Player ID 43 down in Pinned Players" disabled=""')
+  })
+
   test('marks a retained primary player as You without an unpin action', () => {
     const html = renderToStaticMarkup(
       <PinnedPlayersSection
