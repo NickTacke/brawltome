@@ -3,7 +3,9 @@ import { MaintenancePage } from '@/components/MaintenancePage'
 import { Providers } from '@/components/Providers'
 import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
 import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
+import { ACCOUNT_THEME_COOKIE } from '@/lib/theme'
 import type { Metadata, Viewport } from 'next'
+import { cookies } from 'next/headers'
 
 export const metadata: Metadata = {
   title: {
@@ -43,12 +45,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#1e2530' }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true'
   const maintenanceEnd = process.env.MAINTENANCE_END
+  const initialTheme = (await cookies()).get(ACCOUNT_THEME_COOKIE)?.value === 'purple' ? 'purple' : undefined
 
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark" data-theme={initialTheme} suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
         <Providers>
           <SidebarProvider>

@@ -43,7 +43,7 @@ const accounts = {
     return DEFAULT_ACCOUNT_PREFERENCES
   },
   async updatePreferences(_accountId, preferences) {
-    return preferences
+    return { ...DEFAULT_ACCOUNT_PREFERENCES, ...preferences }
   },
   async beginPrimaryPlayerVerification() {
     throw new Error('not used')
@@ -102,7 +102,7 @@ function makeAccounts() {
       return preferences
     },
     async updatePreferences(_accountId, nextPreferences) {
-      preferences = nextPreferences
+      preferences = { ...preferences, ...nextPreferences }
       return preferences
     },
     async beginPrimaryPlayerVerification() {
@@ -401,17 +401,17 @@ describe('account.preferences', () => {
   test('round-trips a validated update for the authenticated account', async () => {
     const api = caller(context(account)) as {
       preferences: () => Promise<unknown>
-      updatePreferences: (input: AccountPreferences) => Promise<unknown>
+      updatePreferences: (input: unknown) => Promise<unknown>
     }
     const updated = {
-      version: 2 as const,
       leaderboardBracket: '2v2' as const,
       leaderboardRegion: 'US-W' as const,
       theme: 'purple' as const,
     }
 
-    expect(await api.updatePreferences(updated)).toEqual(updated)
-    expect(await api.preferences()).toEqual(updated)
+    const expected = { ...DEFAULT_ACCOUNT_PREFERENCES, ...updated }
+    expect(await api.updatePreferences(updated)).toEqual(expected)
+    expect(await api.preferences()).toEqual(expected)
   })
 
   test('rejects anonymous updates and unknown fields', async () => {

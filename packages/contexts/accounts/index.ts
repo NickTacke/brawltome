@@ -8,6 +8,7 @@ export {
   type Account,
   type AccountAuthentication,
   type AccountPreferences,
+  type AccountPreferencesUpdate,
   type Accounts,
   type AccountSignIn,
   type DiscordSignInProfile,
