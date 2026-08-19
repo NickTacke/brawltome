@@ -1,16 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import type { SavedPlayersContract } from '@brawltome/contracts'
+import type { PinnedPlayersContract } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { SavedPlayersSection } from '../../../src/app/account/SavedPlayersSection'
+import { PinnedPlayersSection } from '../../../src/app/account/PinnedPlayersSection'
 import { SavedPlayerButton } from '../../../src/components/player/PlayerProfile/SavedPlayerButton'
 
-const savedPlayers: SavedPlayersContract = [
+const pinnedPlayers: PinnedPlayersContract = [
   {
     brawlhallaId: 42,
     order: 0,
-    pinOrder: 0,
-    savedAt: '2026-08-10T08:00:00Z',
-    player: { brawlhallaId: 42, name: 'Ada' },
+    pinnedAt: '2026-08-10T08:00:00Z',
+    player: { brawlhallaId: 42, name: 'Ada', aliases: [] },
     currentSeason: {
       brawlhallaId: 42,
       checkedAt: '2026-08-10T10:30:00Z',
@@ -69,8 +68,7 @@ const savedPlayers: SavedPlayersContract = [
   {
     brawlhallaId: 43,
     order: 1,
-    pinOrder: null,
-    savedAt: '2026-08-10T09:00:00Z',
+    pinnedAt: '2026-08-10T09:00:00Z',
     player: null,
     currentSeason: {
       brawlhallaId: 43,
@@ -84,26 +82,39 @@ const savedPlayers: SavedPlayersContract = [
   },
 ]
 
-describe('SavedPlayersSection', () => {
-  test('labels private bookmarks and discloses canonical observation coverage and freshness', () => {
+const legacyPinnedPlayers: PinnedPlayersContract = Array.from({ length: 21 }, (_, index) => ({
+  brawlhallaId: 100 + index,
+  order: index,
+  pinnedAt: `2026-08-${String(10 + (index % 10)).padStart(2, '0')}T08:00:00Z`,
+  player: null,
+  currentSeason: null,
+}))
+
+describe('PinnedPlayersSection', () => {
+  test('labels private pins and discloses canonical observation coverage and freshness', () => {
     const html = renderToStaticMarkup(
-      <SavedPlayersSection
-        savedPlayers={savedPlayers}
+      <PinnedPlayersSection
+        pinnedPlayers={pinnedPlayers}
         loading={false}
         pendingPlayerId={null}
-        onRemove={() => {}}
+        primaryPlayerId={null}
+        onUnpin={() => {}}
         onMove={() => {}}
-        onTogglePin={() => {}}
-        onMovePin={() => {}}
       />,
     )
 
-    expect(html).toContain('Saved Players')
-    expect(html).toContain('Private bookmarks visible only to you')
+    expect(html).toContain('Pinned Players')
+    expect(html).toContain('pinned-players-heading')
+    expect(html).toContain('Player ID 43')
+    expect(html).toContain('Unpin Ada')
+    expect(html).toContain('Unpin Player ID 43')
+    expect(html).toContain('Private pins visible only to you')
     expect(html).toContain('does not claim ownership or create a public follow')
     expect(html).toContain('Current Season')
     expect(html).toContain('Update delayed')
     expect(html).toContain('Latest supported 1v1 rating: 1650')
+    expect(html).toContain('Ranked observation details')
+    expect(html).toContain('<details')
     expect(html).toContain('Sparse pulse last checked')
     expect(html).toContain('latest supported rating may be newer than the complete ranked observation')
     expect(html).toContain('do not update rank, tier, region, legends, Solo Queue, team composition, or rating history')
@@ -115,63 +126,88 @@ describe('SavedPlayersSection', () => {
     expect(html).toContain('Sparse pulse overlays are excluded')
     expect(html).toContain('This is BrawlTome coverage, not complete Elo history')
     expect(html).toContain('Current Season ranked facts unavailable')
+    expect(html).not.toContain('Saved Players')
+    expect(html).not.toContain('shortcuts pinned')
     expect(html).not.toContain('Player 43</')
-    expect(html).not.toContain('live')
     expect(html).not.toContain('Follower')
   })
 
   test('distinguishes a failed private query from an empty collection', () => {
     const html = renderToStaticMarkup(
-      <SavedPlayersSection
-        savedPlayers={[]}
+      <PinnedPlayersSection
+        pinnedPlayers={[]}
         loading={false}
         error
         pendingPlayerId={null}
-        onRemove={() => {}}
+        onUnpin={() => {}}
         onMove={() => {}}
-        onTogglePin={() => {}}
-        onMovePin={() => {}}
       />,
     )
 
-    expect(html).toContain('Saved Players are unavailable. Try again.')
-    expect(html).not.toContain('No Saved Players yet.')
+    expect(html).toContain('Pinned Players are unavailable. Try again.')
+    expect(html).not.toContain('No Pinned Players yet.')
   })
 
-  test('uses semantic list controls with explicit accessible names', () => {
+  test('uses one ordered list with explicit accessible names', () => {
     const html = renderToStaticMarkup(
-      <SavedPlayersSection
-        savedPlayers={savedPlayers}
+      <PinnedPlayersSection
+        pinnedPlayers={pinnedPlayers}
         loading={false}
         pendingPlayerId={null}
-        onRemove={() => {}}
+        onUnpin={() => {}}
         onMove={() => {}}
-        onTogglePin={() => {}}
-        onMovePin={() => {}}
       />,
     )
 
     expect(html).toContain('<ol')
-    expect(html).toContain('aria-label="Unpin Ada from shortcuts"')
-    expect(html).toContain('aria-label="Move Ada down in pinned shortcuts"')
-    expect(html).toContain('aria-label="Move Ada down in Saved Players"')
-    expect(html).toContain('aria-label="Remove Ada from Saved Players"')
-    expect(html).toContain('aria-label="Pin Player ID 43 to shortcuts"')
-    expect(html).toContain('aria-label="Move Player ID 43 up in Saved Players"')
+    expect(html).toContain('aria-label="Unpin Ada"')
+    expect(html).toContain('aria-label="Move Ada down in Pinned Players"')
+    expect(html).toContain('aria-label="Move Player ID 43 up in Pinned Players"')
     expect(html).toContain('disabled=""')
 
     const pendingHtml = renderToStaticMarkup(
-      <SavedPlayersSection
-        savedPlayers={savedPlayers}
+      <PinnedPlayersSection
+        pinnedPlayers={pinnedPlayers}
         loading={false}
         pendingPlayerId={42}
-        onRemove={() => {}}
+        onUnpin={() => {}}
         onMove={() => {}}
-        onTogglePin={() => {}}
-        onMovePin={() => {}}
       />,
     )
-    expect(pendingHtml.match(/disabled=""/g)).toHaveLength(10)
+    expect(pendingHtml.match(/disabled=""/g)).toHaveLength(6)
+  })
+
+  test('marks a retained primary player as You without an unpin action', () => {
+    const html = renderToStaticMarkup(
+      <PinnedPlayersSection
+        pinnedPlayers={pinnedPlayers}
+        loading={false}
+        pendingPlayerId={null}
+        primaryPlayerId={42}
+        onUnpin={() => {}}
+        onMove={() => {}}
+      />,
+    )
+
+    expect(html).toContain('You')
+    expect(html).not.toContain('aria-label="Unpin Ada"')
+    expect(html).toContain('aria-label="Unpin Player ID 43"')
+  })
+
+  test('explains legacy pins above the current limit without hiding them', () => {
+    const html = renderToStaticMarkup(
+      <PinnedPlayersSection
+        pinnedPlayers={legacyPinnedPlayers}
+        loading={false}
+        pendingPlayerId={null}
+        onUnpin={() => {}}
+        onMove={() => {}}
+      />,
+    )
+
+    expect(html).toContain('new pins are limited to 20')
+    expect(html).toContain('remove a player before pinning another')
+    expect(html).toContain('Player ID 120')
   })
 })
 
