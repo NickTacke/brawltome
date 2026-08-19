@@ -2,7 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import type { AccountContract } from '@brawltome/contracts'
-import { BookmarkSquare, User } from '@solar-icons/react'
+import { User } from '@solar-icons/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -32,6 +32,8 @@ interface AppSidebarProps {
 
 export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcutsError }: AppSidebarProps) {
   const pathname = usePathname()
+  const primaryShortcut = playerShortcuts.find(({ kind }) => kind === 'primary')
+  const pinnedShortcuts = playerShortcuts.filter(({ kind }) => kind === 'pin')
 
   return (
     <TooltipProvider>
@@ -39,11 +41,11 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
         className="bg-sidebar border-sidebar-border text-sidebar-foreground flex h-full flex-col overflow-hidden border-r"
         style={{ width: SIDEBAR_WIDTH }}
       >
-        <nav className="flex-1 overflow-y-auto px-2 py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="shrink-0 px-2 py-1">
           {shortcutsLoading && <span className="sr-only">Loading your player shortcuts.</span>}
           {shortcutsError && (
             <span role="alert" className="sr-only">
-              Player shortcuts are unavailable. All Saved Players remains available.
+              Player shortcuts are unavailable.
             </span>
           )}
           {navItems.map((item) => {
@@ -68,9 +70,30 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
               </RailTooltip>
             )
           })}
-          {playerShortcuts.length > 0 && (
-            <ul aria-label="Your players" className="border-sidebar-border mt-2 border-t pt-2">
-              {playerShortcuts.map((shortcut) => {
+          {primaryShortcut && (
+            <div className="border-sidebar-border mt-2 border-t pt-2">
+              <RailTooltip label={primaryShortcut.label}>
+                <Link
+                  href={primaryShortcut.href}
+                  aria-label={primaryShortcut.accessibleLabel}
+                  aria-current={primaryShortcut.href === pathname ? 'page' : undefined}
+                  className={`my-2 flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+                    primaryShortcut.href === pathname
+                      ? 'text-foreground bg-white/[0.08]'
+                      : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
+                  }`}
+                >
+                  <PlayerShortcutAvatar avatarUrl={primaryShortcut.avatarUrl} className="h-8 w-8 rounded-md" />
+                </Link>
+              </RailTooltip>
+            </div>
+          )}
+        </nav>
+
+        {pinnedShortcuts.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <ul aria-label="Pinned Players" className="border-sidebar-border mt-2 border-t pt-2">
+              {pinnedShortcuts.map((shortcut) => {
                 const active = shortcut.href === pathname
                 return (
                   <li key={`${shortcut.kind}:${shortcut.href}`}>
@@ -85,19 +108,15 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
                             : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
                         }`}
                       >
-                        {shortcut.kind === 'all-saved' ? (
-                          <BookmarkSquare className="h-6 w-6" weight="Linear" aria-hidden="true" />
-                        ) : (
-                          <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
-                        )}
+                        <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
                       </Link>
                     </RailTooltip>
                   </li>
                 )
               })}
             </ul>
-          )}
-        </nav>
+          </div>
+        )}
 
         <div className="border-sidebar-border shrink-0 border-t px-2 py-2">
           <div className="mb-2">
