@@ -2,7 +2,6 @@
 
 import { Skeleton } from '@/components/ui'
 import { signIn, useAccount } from '@/lib/auth'
-import { Bookmark, Monitor, Trophy, UserRound } from 'lucide-react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
@@ -18,36 +17,25 @@ const ERROR_MESSAGES: Record<string, string> = {
   already_linked: 'You already have a linked player. Unlink first.',
 }
 
-const FEATURE_TEASERS = [
-  {
-    icon: Bookmark,
-    title: 'Saved Players',
-    description: 'Keep private player bookmarks with honestly scoped latest observations.',
-  },
-  {
-    icon: Monitor,
-    title: 'Desktop App',
-    description: 'Real-time overlay and match tracking. Requires an account.',
-  },
-  {
-    icon: UserRound,
-    title: 'Player Profiles',
-    description: 'Return to canonical Current Season and Career facts without ownership claims.',
-  },
-  {
-    icon: Trophy,
-    title: 'Tournaments',
-    description: 'Compete in brackets and track results across seasons.',
-  },
-]
-
 function LoadingState() {
   return (
-    <main className="mx-auto flex min-h-[60vh] max-w-lg items-center justify-center px-6">
-      <div className="flex w-full flex-col items-center gap-6">
-        <Skeleton className="h-20 w-20 rounded-full" />
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="h-4 w-56" />
+    <main className="mx-auto min-h-[60vh] max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 sm:p-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-3 w-36" />
+          </div>
+        </div>
+      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+        <Skeleton className="h-[30rem] rounded-xl" />
+        <div className="space-y-6">
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-36 rounded-xl" />
+        </div>
       </div>
     </main>
   )
@@ -55,37 +43,30 @@ function LoadingState() {
 
 function SignedOutState({ error }: { error: string | null }) {
   return (
-    <main className="mx-auto flex max-w-md flex-col items-center pb-12">
-      {error && ERROR_MESSAGES[error] && (
-        <div className="mb-8 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">
-          {ERROR_MESSAGES[error]}
-        </div>
-      )}
-
-      <Image src="/images/logo.png" alt="BrawlTome" width={400} height={400} className="w-64" />
-
-      <h1 className="mt-6 text-2xl font-bold tracking-tight">Sign in</h1>
-
-      <div className="mt-10 w-full space-y-2">
-        {FEATURE_TEASERS.map((feature) => (
-          <div key={feature.title} className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-            <feature.icon className="text-muted-foreground h-4 w-4 shrink-0" />
-            <div className="min-w-0">
-              <span className="text-sm font-medium">{feature.title}</span>
-              <span className="text-muted-foreground ml-2 text-xs">{feature.description}</span>
-            </div>
+    <main className="mx-auto flex min-h-[60vh] max-w-md items-center justify-center px-6 py-12">
+      <div className="w-full rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 text-center sm:p-8">
+        {error && ERROR_MESSAGES[error] && (
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+            role="alert"
+          >
+            {ERROR_MESSAGES[error]}
           </div>
-        ))}
-      </div>
+        )}
 
-      <button
-        type="button"
-        onClick={signIn}
-        className="mt-8 inline-flex cursor-pointer items-center gap-2.5 rounded-xl bg-[#5865F2] px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#4752C4] active:scale-[0.98]"
-      >
-        <DiscordIcon className="h-5 w-5" />
-        Continue with Discord
-      </button>
+        <Image src="/images/logo.png" alt="BrawlTome" width={240} height={240} className="mx-auto w-36" />
+        <h1 className="mt-6 text-2xl font-bold tracking-tight">Sign in to BrawlTome</h1>
+        <p className="text-muted-foreground mt-2 text-sm">Use Discord to continue to your account dashboard.</p>
+
+        <button
+          type="button"
+          onClick={signIn}
+          className="mt-8 inline-flex cursor-pointer items-center gap-2.5 rounded-xl bg-[#5865F2] px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#4752C4] active:scale-[0.98]"
+        >
+          <DiscordIcon className="h-5 w-5" />
+          Continue with Discord
+        </button>
+      </div>
     </main>
   )
 }
