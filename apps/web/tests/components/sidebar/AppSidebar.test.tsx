@@ -38,8 +38,13 @@ describe('AppSidebar pinned-player navigation', () => {
     expect(emptyHtml).toContain('min-h-0 flex-1 overflow-y-auto')
     expect(emptyHtml).toContain('shrink-0 border-t')
     expect(html).not.toContain('<hr class="mt-2 border-white/[0.14]"')
-    expect(html).toContain('aria-label="You, Ada"')
-    expect(html).toContain('aria-label="Pinned Players"')
+    const listStart = html.indexOf('<ul aria-label="Player shortcuts"')
+    const shortcutList = html.slice(listStart, html.indexOf('</ul>', listStart))
+    expect(shortcutList).toContain('aria-label="You, Ada"')
+    expect(shortcutList).toContain('aria-label="Pinned Player, Lin"')
+    expect(shortcutList.indexOf('aria-label="You, Ada"')).toBeLessThan(
+      shortcutList.indexOf('aria-label="Pinned Player, Lin"'),
+    )
   })
 
   test('renders all pin shortcuts in the independent scroll region', () => {
@@ -47,7 +52,7 @@ describe('AppSidebar pinned-player navigation', () => {
       <AppSidebar account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
     )
 
-    expect(html).toContain('aria-label="Pinned Players"')
+    expect(html).toContain('aria-label="Player shortcuts"')
     expect(html).toContain('min-h-0 flex-1 overflow-y-auto')
     expect(html).toContain('aria-label="Pinned Player, Lin"')
     expect(html).toContain('aria-label="Pinned Player, Mira"')
@@ -62,7 +67,13 @@ describe('MobileMenu pinned-player navigation', () => {
       <MobileMenu account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
     )
 
+    const listStart = html.indexOf('<ul aria-label="Player shortcuts"')
+    const shortcutList = html.slice(listStart, html.indexOf('</ul>', listStart))
+    expect(shortcutList).toContain('aria-label="You, Ada"')
+    expect(shortcutList).toContain('aria-label="Pinned Player, Lin"')
+    expect(shortcutList.indexOf('aria-label="You, Ada"')).toBeLessThan(
+      shortcutList.indexOf('aria-label="Pinned Player, Lin"'),
+    )
     expect(html).not.toContain('border-t border-white/[0.14]')
-    expect(html.indexOf('>You</')).toBeLessThan(html.indexOf('>Pinned Players<'))
   })
 })

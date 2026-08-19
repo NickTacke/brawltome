@@ -34,6 +34,7 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
   const pathname = usePathname()
   const primaryShortcut = playerShortcuts.find(({ kind }) => kind === 'primary')
   const pinnedShortcuts = playerShortcuts.filter(({ kind }) => kind === 'pin')
+  const shortcutList = primaryShortcut ? [primaryShortcut, ...pinnedShortcuts] : pinnedShortcuts
 
   return (
     <TooltipProvider>
@@ -70,30 +71,12 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
               </RailTooltip>
             )
           })}
-          {primaryShortcut && (
-            <div className="border-sidebar-border mt-2 border-t pt-2">
-              <RailTooltip label={primaryShortcut.label}>
-                <Link
-                  href={primaryShortcut.href}
-                  aria-label={primaryShortcut.accessibleLabel}
-                  aria-current={primaryShortcut.href === pathname ? 'page' : undefined}
-                  className={`my-2 flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                    primaryShortcut.href === pathname
-                      ? 'text-foreground bg-white/[0.08]'
-                      : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
-                  }`}
-                >
-                  <PlayerShortcutAvatar avatarUrl={primaryShortcut.avatarUrl} className="h-8 w-8 rounded-md" />
-                </Link>
-              </RailTooltip>
-            </div>
-          )}
         </nav>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {pinnedShortcuts.length > 0 && (
-            <ul aria-label="Pinned Players" className="pt-2">
-              {pinnedShortcuts.map((shortcut) => {
+          {shortcutList.length > 0 && (
+            <ul aria-label="Player shortcuts" className="pt-2">
+              {shortcutList.map((shortcut) => {
                 const active = shortcut.href === pathname
                 return (
                   <li key={`${shortcut.kind}:${shortcut.href}`}>
