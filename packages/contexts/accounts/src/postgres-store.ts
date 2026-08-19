@@ -443,10 +443,19 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async pinPlayer(accountId, brawlhallaId) {
       return withAccountsWriterFence(client, async (transaction) => {
         await lockPinnedPlayers(transaction, accountId)
+        const [primaryPlayer] = await transaction.unsafe<{ brawlhalla_id: number }[]>(
+          `SELECT brawlhalla_id::int
+           FROM accounts.primary_players
+           WHERE account_id = $1`,
+          [accountId],
+        )
         const pinnedPlayers = await readPinnedPlayers(transaction, accountId)
         const existing = pinnedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
         if (existing) return existing
-        if (pinnedPlayers.length >= MAX_PINNED_PLAYERS) {
+        const managedPinnedPlayers = pinnedPlayers.filter(
+          ({ brawlhallaId: pinnedBrawlhallaId }) => pinnedBrawlhallaId !== primaryPlayer?.brawlhalla_id,
+        )
+        if (managedPinnedPlayers.length >= MAX_PINNED_PLAYERS) {
           throw new InvalidPinnedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
         }
 

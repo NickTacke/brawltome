@@ -75,8 +75,14 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
       const inspect = postgres(databaseUrl, { max: 1 })
       try {
         expect(pinnedIds(await runtime.accounts.getPinnedPlayers(accountId))).toEqual([103, 101, 102, 104])
-        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(legacyAccountId))).toEqual(
-          Array.from({ length: 21 }, (_, index) => index + 201),
+        const legacyIds = Array.from({ length: 21 }, (_, index) => index + 201)
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(legacyAccountId))).toEqual(legacyIds)
+        await expect(runtime.accounts.pinPlayer(legacyAccountId, 222)).rejects.toThrow(
+          'Pinned Players cannot exceed 20',
+        )
+        const reorderedLegacyIds = [...legacyIds].reverse()
+        expect(pinnedIds(await runtime.accounts.reorderPinnedPlayers(legacyAccountId, reorderedLegacyIds))).toEqual(
+          reorderedLegacyIds,
         )
         const [tables] = await inspect<{ pinned: string | null; saved: string | null; pins: string | null }[]>`
           SELECT
@@ -90,6 +96,56 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
         await inspect.end()
       }
     })
+  }, 30_000)
+
+  test('does not count a retained Primary Player toward the managed pin cap', async () => {
+    await withDatabase(async (databaseUrl) => {
+      await migratePostgres(databaseUrl, accountsMigrationInventory)
+      const runtime = createPostgresAccounts(databaseUrl)
+      const inspect = postgres(databaseUrl, { max: 1 })
+      try {
+        const { account } = await signIn(runtime, 'pinned-player-cap')
+        const primaryBrawlhallaId = 999
+        const attemptId = randomUUID()
+        await inspect`
+          INSERT INTO accounts.primary_player_verification_attempts (
+            id, account_id, proof_provider, proof_subject, idempotency_key, started_at
+          ) VALUES (${attemptId}, ${account.id}, 'steam', 'primary-test', ${attemptId}, now())
+        `
+        await inspect`
+          INSERT INTO accounts.primary_player_verification_outcomes (
+            attempt_id, status, brawlhalla_id, player_name, evidence_source, evidence_checked_at, completed_at
+          ) VALUES (${attemptId}, 'verified', ${primaryBrawlhallaId}, 'Primary', 'test', now(), now())
+        `
+        await inspect`
+          INSERT INTO accounts.primary_players (
+            account_id, brawlhalla_id, player_name, verified_at, verification_attempt_id
+          ) VALUES (${account.id}, ${primaryBrawlhallaId}, 'Primary', now(), ${attemptId})
+        `
+        await inspect`
+          INSERT INTO accounts.pinned_players (account_id, brawlhalla_id, position)
+          VALUES (${account.id}, ${primaryBrawlhallaId}, 0)
+        `
+
+        expect(await runtime.accounts.pinPlayer(account.id, primaryBrawlhallaId)).toMatchObject({
+          brawlhallaId: primaryBrawlhallaId,
+        })
+        for (let id = 1; id < MAX_PINNED_PLAYERS; id += 1) await runtime.accounts.pinPlayer(account.id, id)
+        expect(await runtime.accounts.pinPlayer(account.id, MAX_PINNED_PLAYERS)).toMatchObject({
+          brawlhallaId: MAX_PINNED_PLAYERS,
+        })
+        await expect(runtime.accounts.pinPlayer(account.id, MAX_PINNED_PLAYERS + 1)).rejects.toThrow(
+          'Pinned Players cannot exceed 20',
+        )
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(account.id))).toEqual([
+          primaryBrawlhallaId,
+          ...Array.from({ length: MAX_PINNED_PLAYERS }, (_, index) => index + 1),
+        ])
+      } finally {
+        await runtime.close()
+        await inspect.end()
+      }
+    })
   }, 15_000)
 
   test('allows idempotent existing pins and legacy-over-cap reorder while capping new additions', async () => {
@@ -97,7 +153,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
       await migratePostgres(databaseUrl, accountsMigrationInventory)
       const runtime = createPostgresAccounts(databaseUrl)
       try {
-        const { account } = await signIn(runtime, 'pinned-player-cap')
+        const { account } = await signIn(runtime, 'pinned-player-cap-without-primary')
         for (let id = 1; id <= MAX_PINNED_PLAYERS; id += 1) await runtime.accounts.pinPlayer(account.id, id)
 
         expect(MAX_PINNED_PLAYERS).toBe(20)
