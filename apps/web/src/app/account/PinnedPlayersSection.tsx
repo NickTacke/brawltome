@@ -76,9 +76,10 @@ export function PinnedPlayersSection({
   onUnpin,
   onMove,
 }: PinnedPlayersSectionProps) {
-  const managedPinnedCount = primaryPlayerKnown
-    ? pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId).length
-    : 0
+  const managedPinnedPlayers = primaryPlayerKnown
+    ? pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId)
+    : []
+  const managedPinnedCount = managedPinnedPlayers.length
 
   return (
     <section
@@ -110,6 +111,9 @@ export function PinnedPlayersSection({
               const label = playerLabel(pinnedPlayer)
               const pending = pendingPlayerId !== null
               const isPrimary = primaryPlayerKnown && pinnedPlayer.brawlhallaId === primaryPlayerId
+              const managedIndex = managedPinnedPlayers.findIndex(
+                ({ brawlhallaId }) => brawlhallaId === pinnedPlayer.brawlhallaId,
+              )
               return (
                 <li key={pinnedPlayer.brawlhallaId} className="min-w-0">
                   <Card className="h-full min-w-0 bg-linear-to-br from-card to-background p-5">
@@ -137,7 +141,7 @@ export function PinnedPlayersSection({
                             <button
                               type="button"
                               aria-label={`Move ${label} up in Pinned Players`}
-                              disabled={index === 0 || pending}
+                              disabled={managedIndex <= 0 || pending}
                               onClick={() => onMove(index, index - 1)}
                               className="focus-visible:ring-primary flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
                             >
@@ -146,7 +150,7 @@ export function PinnedPlayersSection({
                             <button
                               type="button"
                               aria-label={`Move ${label} down in Pinned Players`}
-                              disabled={index === pinnedPlayers.length - 1 || pending}
+                              disabled={managedIndex === managedPinnedPlayers.length - 1 || pending}
                               onClick={() => onMove(index, index + 1)}
                               className="focus-visible:ring-primary flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
                             >
