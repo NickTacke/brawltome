@@ -78,30 +78,16 @@ describe('validated snapshot presentation', () => {
 describe('preferencesForLeaderboardUpdate', () => {
   const filters = { bracket: '1v1' as const, region: 'all' as const, page: 3 }
 
-  it('persists signed-in bracket and region changes without resetting the theme', () => {
-    const preferences = {
-      version: 2 as const,
-      leaderboardBracket: '1v1' as const,
-      leaderboardRegion: 'all' as const,
-      theme: 'purple' as const,
-    }
-    expect(preferencesForLeaderboardUpdate(filters, { region: 'EU' }, preferences)).toEqual({
-      version: 2,
+  it('persists signed-in bracket and region changes as a field patch', () => {
+    expect(preferencesForLeaderboardUpdate(filters, { region: 'EU' }, true)).toEqual({
       leaderboardBracket: '1v1',
       leaderboardRegion: 'EU',
-      theme: 'purple',
     })
   })
 
   it('does not persist pagination or anonymous interaction', () => {
-    const preferences = {
-      version: 2 as const,
-      leaderboardBracket: '1v1' as const,
-      leaderboardRegion: 'all' as const,
-      theme: 'neutral' as const,
-    }
-    expect(preferencesForLeaderboardUpdate(filters, { page: 4 }, preferences)).toBeNull()
-    expect(preferencesForLeaderboardUpdate(filters, { bracket: '2v2' }, null)).toBeNull()
+    expect(preferencesForLeaderboardUpdate(filters, { page: 4 }, true)).toBeNull()
+    expect(preferencesForLeaderboardUpdate(filters, { bracket: '2v2' }, false)).toBeNull()
   })
 })
 

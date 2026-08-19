@@ -15,13 +15,15 @@ describe('account theme application', () => {
   test('sets purple and removes the override for neutral', () => {
     const removeAttribute = mock(() => {})
     const dataset: Record<string, string> = {}
+    const fakeDocument = { cookie: '', documentElement: { dataset, removeAttribute } }
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
-      value: { documentElement: { dataset, removeAttribute } },
+      value: fakeDocument,
     })
 
     applyAccountTheme('purple')
     expect(dataset.theme).toBe('purple')
+    expect(fakeDocument.cookie).toContain('brawltome-theme=purple')
 
     applyAccountTheme('neutral')
     expect(removeAttribute).toHaveBeenCalledWith('data-theme')

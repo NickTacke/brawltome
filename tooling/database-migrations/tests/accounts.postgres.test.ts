@@ -572,7 +572,6 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         secondDeviceToken = secondDevice.sessionToken
 
         await firstRuntime.accounts.updatePreferences(accountId, {
-          version: 2,
           leaderboardBracket: 'solo2v2',
           leaderboardRegion: 'EU',
           theme: 'purple',

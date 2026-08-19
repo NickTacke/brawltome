@@ -8,6 +8,7 @@ import type {
 import type { z } from 'zod'
 import type {
   accountPreferencesSchema,
+  accountPreferencesUpdateSchema,
   accountViewSchema,
   pinnedPlayerInputSchema,
   pinnedPlayerOrderInputSchema,
@@ -62,7 +63,7 @@ type AppRouterRecord = {
   account: {
     current: Query<void, Output<typeof accountViewSchema>>
     preferences: Query<void, Output<typeof accountPreferencesSchema>>
-    updatePreferences: Mutation<Output<typeof accountPreferencesSchema>, Output<typeof accountPreferencesSchema>>
+    updatePreferences: Mutation<Output<typeof accountPreferencesUpdateSchema>, Output<typeof accountPreferencesSchema>>
     primaryPlayer: Query<void, Output<typeof primaryPlayerVerificationStateSchema>>
     playerShortcuts: Query<void, Output<typeof playerShortcutsSchema>>
     pinnedPlayers: Query<void, Output<typeof pinnedPlayersSchema>>

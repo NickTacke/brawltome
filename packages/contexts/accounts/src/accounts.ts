@@ -23,6 +23,12 @@ export interface AccountPreferences {
   theme: (typeof ACCOUNT_THEMES)[number]
 }
 
+export interface AccountPreferencesUpdate {
+  leaderboardBracket?: AccountPreferences['leaderboardBracket']
+  leaderboardRegion?: AccountPreferences['leaderboardRegion']
+  theme?: AccountPreferences['theme']
+}
+
 export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
   version: 2,
   leaderboardBracket: '1v1',
@@ -129,7 +135,7 @@ export interface Accounts {
   authenticate(sessionToken: string | null): Promise<AccountAuthentication>
   signOut(sessionToken: string): Promise<void>
   getPreferences(accountId: string | null): Promise<AccountPreferences>
-  updatePreferences(accountId: string, preferences: AccountPreferences): Promise<AccountPreferences>
+  updatePreferences(accountId: string, preferences: AccountPreferencesUpdate): Promise<AccountPreferences>
   beginPrimaryPlayerVerification(input: {
     accountId: string
     steamId: string
@@ -154,7 +160,7 @@ export interface AccountsStore {
   extendSession(id: string, expiresAt: Date): Promise<void>
   deleteSession(id: string): Promise<void>
   findPreferences(accountId: string): Promise<AccountPreferences | null>
-  upsertPreferences(accountId: string, preferences: AccountPreferences): Promise<AccountPreferences>
+  upsertPreferences(accountId: string, preferences: AccountPreferencesUpdate): Promise<AccountPreferences>
   beginPrimaryPlayerVerification(input: {
     attemptId: string
     accountId: string
@@ -228,7 +234,7 @@ export function createAccounts({
     },
 
     async updatePreferences(accountId, preferences) {
-      if (!validPreferences(preferences)) throw new InvalidAccountPreferencesError()
+      if (!validPreferencesUpdate(preferences)) throw new InvalidAccountPreferencesError()
       return store.upsertPreferences(accountId, preferences)
     },
 
@@ -286,17 +292,18 @@ function requireBrawlhallaId(value: number): void {
   }
 }
 
-function validPreferences(preferences: unknown): preferences is AccountPreferences {
+function validPreferencesUpdate(preferences: unknown): preferences is AccountPreferencesUpdate {
   if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) return false
   const value = preferences as Record<string, unknown>
   const keys = Object.keys(value)
   return (
-    keys.length === 4 &&
-    keys.every((key) => ['version', 'leaderboardBracket', 'leaderboardRegion', 'theme'].includes(key)) &&
-    value.version === 2 &&
-    LEADERBOARD_BRACKETS.includes(value.leaderboardBracket as AccountPreferences['leaderboardBracket']) &&
-    LEADERBOARD_REGIONS.includes(value.leaderboardRegion as AccountPreferences['leaderboardRegion']) &&
-    ACCOUNT_THEMES.includes(value.theme as AccountPreferences['theme'])
+    keys.length > 0 &&
+    keys.every((key) => ['leaderboardBracket', 'leaderboardRegion', 'theme'].includes(key)) &&
+    (value.leaderboardBracket === undefined ||
+      LEADERBOARD_BRACKETS.includes(value.leaderboardBracket as AccountPreferences['leaderboardBracket'])) &&
+    (value.leaderboardRegion === undefined ||
+      LEADERBOARD_REGIONS.includes(value.leaderboardRegion as AccountPreferences['leaderboardRegion'])) &&
+    (value.theme === undefined || ACCOUNT_THEMES.includes(value.theme as AccountPreferences['theme']))
   )
 }
 

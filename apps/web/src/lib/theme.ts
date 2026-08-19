@@ -1,5 +1,8 @@
 import type { AccountPreferencesContract } from '@brawltome/contracts'
 
+export const ACCOUNT_THEME_COOKIE = 'brawltome-theme'
+const ACCOUNT_THEME_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
 export type AccountTheme = AccountPreferencesContract['theme']
 
 export const ACCOUNT_THEME_OPTIONS = [
@@ -9,6 +12,7 @@ export const ACCOUNT_THEME_OPTIONS = [
 
 export function applyAccountTheme(theme: AccountTheme): void {
   const root = document.documentElement
+  document.cookie = `${ACCOUNT_THEME_COOKIE}=${theme}; Path=/; Max-Age=${theme === 'neutral' ? 0 : ACCOUNT_THEME_COOKIE_MAX_AGE}; SameSite=Lax`
   if (theme === 'neutral') {
     root.removeAttribute('data-theme')
     return

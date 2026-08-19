@@ -4,6 +4,7 @@ import {
   type PinnedPlayersContract,
   type PrimaryPlayerVerificationStateContract,
   accountPreferencesSchema,
+  accountPreferencesUpdateSchema,
   accountViewSchema,
   parseAccountViewOutput,
   parsePinnedPlayersOutput,
@@ -51,6 +52,19 @@ describe('accountPreferencesSchema', () => {
         leaderboardRegion: 'all',
       }),
     ).toThrow()
+  })
+})
+
+describe('accountPreferencesUpdateSchema', () => {
+  test('accepts non-empty field patches without requiring a full snapshot', () => {
+    expect(accountPreferencesUpdateSchema.parse({ theme: 'purple' })).toEqual({ theme: 'purple' })
+    expect(accountPreferencesUpdateSchema.parse({ leaderboardRegion: 'EU' })).toEqual({ leaderboardRegion: 'EU' })
+  })
+
+  test('rejects empty, unknown, and unsupported patches', () => {
+    expect(() => accountPreferencesUpdateSchema.parse({})).toThrow()
+    expect(() => accountPreferencesUpdateSchema.parse({ version: 2, theme: 'purple' })).toThrow()
+    expect(() => accountPreferencesUpdateSchema.parse({ theme: 'dark' })).toThrow()
   })
 })
 

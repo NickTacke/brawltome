@@ -26,6 +26,15 @@ export const accountPreferencesSchema = z
   })
   .strict()
 
+export const accountPreferencesUpdateSchema = z
+  .object({
+    leaderboardBracket: leaderboardBracketPreferenceSchema.optional(),
+    leaderboardRegion: leaderboardRegionPreferenceSchema.optional(),
+    theme: accountThemeSchema.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'At least one account preference is required')
+
 export const accountSchema = z
   .object({
     id: z.string().uuid(),
@@ -173,6 +182,7 @@ export const playerShortcutsSchema = z
   })
 
 export type AccountPreferencesContract = z.infer<typeof accountPreferencesSchema>
+export type AccountPreferencesUpdateContract = z.infer<typeof accountPreferencesUpdateSchema>
 export type AccountContract = z.infer<typeof accountSchema>
 export type AccountViewContract = z.infer<typeof accountViewSchema>
 export type PrimaryPlayerVerificationStateContract = z.infer<typeof primaryPlayerVerificationStateSchema>

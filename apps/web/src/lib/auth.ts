@@ -2,6 +2,7 @@
 
 import {
   type AccountPreferencesContract,
+  type AccountPreferencesUpdateContract,
   type AccountViewContract,
   type PrimaryPlayerVerificationStateContract,
   accountPreferencesSchema,
@@ -36,6 +37,7 @@ export function useAccount() {
   return {
     account: view?.status === 'signedIn' ? view.account : null,
     isLoading: query.isLoading,
+    isError: query.isError,
   }
 }
 
@@ -43,10 +45,10 @@ export function useAccountPreferences(accountId: string | null | undefined) {
   const query = useQuery({
     queryKey: accountPreferencesKey(accountId ?? null),
     queryFn: async () => parseAccountPreferencesResponse(await trpc.account.preferences.query()),
-    enabled: accountId !== undefined,
+    enabled: accountId !== undefined && accountId !== null,
     staleTime: 5 * 60 * 1000,
   })
-  return { preferences: query.data ?? null, isLoading: query.isLoading }
+  return { preferences: query.data ?? null, isLoading: query.isLoading, isError: query.isError }
 }
 
 export function parsePrimaryPlayerResponse(value: unknown): PrimaryPlayerVerificationStateContract {
@@ -82,9 +84,9 @@ export function linkSteam(): void {
 export async function saveAccountPreferences(
   queryClient: ReturnType<typeof useQueryClient>,
   accountId: string,
-  preferences: AccountPreferencesContract,
+  update: AccountPreferencesUpdateContract,
 ): Promise<AccountPreferencesContract> {
-  const updated = parseAccountPreferencesResponse(await trpc.account.updatePreferences.mutate(preferences))
+  const updated = parseAccountPreferencesResponse(await trpc.account.updatePreferences.mutate(update))
   queryClient.setQueryData(accountPreferencesKey(accountId), updated)
   return updated
 }

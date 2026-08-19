@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
-import { type Account, type Accounts, AccountsMaintenanceError, type DiscordSignInProfile } from '@brawltome/accounts'
+import {
+  type Account,
+  type Accounts,
+  AccountsMaintenanceError,
+  DEFAULT_ACCOUNT_PREFERENCES,
+  type DiscordSignInProfile,
+} from '@brawltome/accounts'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { type CreateAuthRoutesDeps, createAuthRoutes } from '../../src/auth/routes'
@@ -53,7 +59,7 @@ function makeFakes() {
       return { version: 2, leaderboardBracket: '1v1', leaderboardRegion: 'all', theme: 'neutral' }
     },
     async updatePreferences(_accountId, preferences) {
-      return preferences
+      return { ...DEFAULT_ACCOUNT_PREFERENCES, ...preferences }
     },
     async beginPrimaryPlayerVerification(input) {
       verificationAttempts.push(input)

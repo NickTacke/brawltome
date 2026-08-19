@@ -56,8 +56,9 @@ function makeStore() {
       return preferences.get(accountId) ?? null
     },
     async upsertPreferences(accountId, nextPreferences) {
-      preferences.set(accountId, nextPreferences)
-      return nextPreferences
+      const updated = { ...(preferences.get(accountId) ?? DEFAULT_ACCOUNT_PREFERENCES), ...nextPreferences }
+      preferences.set(accountId, updated)
+      return updated
     },
     async beginPrimaryPlayerVerification() {
       throw new Error('not used')
@@ -253,19 +254,16 @@ describe('Accounts', () => {
     expect(state.preferences.size).toBe(0)
   })
 
-  test('round-trips one explicit preference version for an account', async () => {
+  test('applies partial preference updates without resetting other fields', async () => {
     const state = makeStore()
     const accounts = makeAccounts(state.store)
-    const updated = {
-      version: 2 as const,
-      leaderboardBracket: '3v3' as const,
-      leaderboardRegion: 'JPN' as const,
-      theme: 'purple' as const,
-    }
+    const withTheme = { ...DEFAULT_ACCOUNT_PREFERENCES, theme: 'purple' as const }
+    const withRegion = { ...withTheme, leaderboardRegion: 'EU' as const }
 
     expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(DEFAULT_ACCOUNT_PREFERENCES)
-    expect(await accounts.updatePreferences(ACCOUNT_ID, updated)).toEqual(updated)
-    expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(updated)
+    expect(await accounts.updatePreferences(ACCOUNT_ID, { theme: 'purple' })).toEqual(withTheme)
+    expect(await accounts.updatePreferences(ACCOUNT_ID, { leaderboardRegion: 'EU' })).toEqual(withRegion)
+    expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(withRegion)
   })
 
   test('rejects unsupported values at the Accounts boundary without changing stored preferences', async () => {
@@ -274,10 +272,8 @@ describe('Accounts', () => {
 
     await expect(
       accounts.updatePreferences(ACCOUNT_ID, {
-        version: 2,
         leaderboardBracket: 'ranked' as '1v1',
         leaderboardRegion: 'EU',
-        theme: 'neutral',
       }),
     ).rejects.toBeInstanceOf(InvalidAccountPreferencesError)
     await expect(
