@@ -14,17 +14,20 @@ export interface Account {
 
 export const LEADERBOARD_BRACKETS = ['1v1', '2v2', 'solo2v2', '3v3'] as const
 export const LEADERBOARD_REGIONS = ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+export const ACCOUNT_THEMES = ['neutral', 'purple'] as const
 
 export interface AccountPreferences {
-  version: 1
+  version: 2
   leaderboardBracket: (typeof LEADERBOARD_BRACKETS)[number]
   leaderboardRegion: (typeof LEADERBOARD_REGIONS)[number]
+  theme: (typeof ACCOUNT_THEMES)[number]
 }
 
 export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
-  version: 1,
+  version: 2,
   leaderboardBracket: '1v1',
   leaderboardRegion: 'all',
+  theme: 'neutral',
 }
 
 export class AccountsMaintenanceError extends Error {
@@ -288,11 +291,12 @@ function validPreferences(preferences: unknown): preferences is AccountPreferenc
   const value = preferences as Record<string, unknown>
   const keys = Object.keys(value)
   return (
-    keys.length === 3 &&
-    keys.every((key) => ['version', 'leaderboardBracket', 'leaderboardRegion'].includes(key)) &&
-    value.version === 1 &&
+    keys.length === 4 &&
+    keys.every((key) => ['version', 'leaderboardBracket', 'leaderboardRegion', 'theme'].includes(key)) &&
+    value.version === 2 &&
     LEADERBOARD_BRACKETS.includes(value.leaderboardBracket as AccountPreferences['leaderboardBracket']) &&
-    LEADERBOARD_REGIONS.includes(value.leaderboardRegion as AccountPreferences['leaderboardRegion'])
+    LEADERBOARD_REGIONS.includes(value.leaderboardRegion as AccountPreferences['leaderboardRegion']) &&
+    ACCOUNT_THEMES.includes(value.theme as AccountPreferences['theme'])
   )
 }
 
