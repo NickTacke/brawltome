@@ -10,6 +10,20 @@ export const ACCOUNT_THEME_OPTIONS = [
   { value: 'purple', label: 'Purple' },
 ] as const satisfies ReadonlyArray<{ value: AccountTheme; label: string }>
 
+export async function resolveInitialAccountTheme(
+  cookieTheme: string | undefined,
+  hasSession: boolean,
+  loadPreferences: () => Promise<Pick<AccountPreferencesContract, 'theme'>>,
+): Promise<AccountTheme | undefined> {
+  if (cookieTheme === 'purple') return 'purple'
+  if (!hasSession) return undefined
+  try {
+    return (await loadPreferences()).theme === 'purple' ? 'purple' : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function applyAccountTheme(theme: AccountTheme): void {
   const root = document.documentElement
   const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
