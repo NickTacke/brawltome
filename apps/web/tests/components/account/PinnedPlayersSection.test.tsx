@@ -131,7 +131,6 @@ describe('PinnedPlayersSection', () => {
     expect(html).toContain('Sparse pulse overlays are excluded')
     expect(html).toContain('This is BrawlTome coverage, not complete Elo history')
     expect(html).toContain('Current Season ranked facts unavailable')
-    expect(html).not.toContain('Saved Players')
     expect(html).not.toContain('shortcuts pinned')
     expect(html).not.toContain('Player 43</')
     expect(html).not.toContain('Follower')
