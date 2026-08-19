@@ -90,6 +90,11 @@ const legacyPinnedPlayers: PinnedPlayersContract = Array.from({ length: 21 }, (_
   currentSeason: null,
 }))
 
+const twentyManagedPinsWithPrimary: PinnedPlayersContract = [
+  ...legacyPinnedPlayers.slice(0, 20),
+  { ...pinnedPlayers[0], order: 20, pinnedAt: '2026-08-30T08:00:00Z' },
+]
+
 describe('PinnedPlayersSection', () => {
   test('labels private pins and discloses canonical observation coverage and freshness', () => {
     const html = renderToStaticMarkup(
@@ -191,7 +196,27 @@ describe('PinnedPlayersSection', () => {
 
     expect(html).toContain('You')
     expect(html).not.toContain('aria-label="Unpin Ada"')
+    expect(html).not.toContain('aria-label="Move Ada up in Pinned Players"')
+    expect(html).not.toContain('aria-label="Move Ada down in Pinned Players"')
+    expect(html).not.toContain('Pinned order for Ada')
     expect(html).toContain('aria-label="Unpin Player ID 43"')
+  })
+
+  test('does not count a retained primary row toward the managed pin cap', () => {
+    const html = renderToStaticMarkup(
+      <PinnedPlayersSection
+        pinnedPlayers={twentyManagedPinsWithPrimary}
+        loading={false}
+        pendingPlayerId={null}
+        primaryPlayerId={42}
+        onUnpin={() => {}}
+        onMove={() => {}}
+      />,
+    )
+
+    expect(html).not.toContain('new pins are limited to 20')
+    expect(html).not.toContain('remove a player before pinning another')
+    expect(html).toContain('You')
   })
 
   test('explains legacy pins above the current limit without hiding them', () => {

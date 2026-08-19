@@ -63,8 +63,10 @@ export function SignedInState({ account }: SignedInStateProps) {
   async function handleMove(fromIndex: number, toIndex: number) {
     if (pendingPlayerId !== null) return
     const moved = pinnedPlayers[fromIndex]
+    const primaryPlayerId = primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null
+    if (!moved || moved.brawlhallaId === primaryPlayerId) return
     const brawlhallaIds = movePinnedPlayer(pinnedPlayers, fromIndex, toIndex)
-    if (!moved || brawlhallaIds.every((id, index) => id === pinnedPlayers[index]?.brawlhallaId)) return
+    if (brawlhallaIds.every((id, index) => id === pinnedPlayers[index]?.brawlhallaId)) return
     setPendingPlayerId(moved.brawlhallaId)
     setMutationError(null)
     setMutationStatus('')
