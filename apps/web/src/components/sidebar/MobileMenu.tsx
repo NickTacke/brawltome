@@ -141,7 +141,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
             </div>
           )}
           {pinnedShortcuts.length > 0 && (
-            <div className={primaryShortcut ? 'mt-3 border-t border-white/[0.14] pt-4' : 'mt-6'}>
+            <div className={primaryShortcut ? 'mt-3 pt-1' : 'mt-6'}>
               <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-widest">
                 Pinned Players
               </p>

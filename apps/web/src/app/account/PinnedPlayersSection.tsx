@@ -1,5 +1,6 @@
 'use client'
 
+import { WinLossBar } from '@/components/player/shared'
 import { Card } from '@/components/ui'
 import { MAX_PINNED_PLAYERS, type PinnedPlayerContract, type PinnedPlayersContract } from '@brawltome/contracts'
 import { ArrowDown, ArrowUp, PinOff } from 'lucide-react'
@@ -22,11 +23,7 @@ function playerLabel(pinnedPlayer: PinnedPlayerContract): string {
   return pinnedPlayer.player?.name ?? `Player ID ${pinnedPlayer.brawlhallaId}`
 }
 
-function observationDate(value: string): string {
-  return value.slice(0, 10)
-}
-
-function RankedObservation({ pinnedPlayer }: { pinnedPlayer: PinnedPlayerContract }) {
+function RankedSummary({ pinnedPlayer }: { pinnedPlayer: PinnedPlayerContract }) {
   const currentSeason = pinnedPlayer.currentSeason
   const snapshot = currentSeason?.snapshot
   if (!currentSeason || !snapshot)
@@ -34,17 +31,15 @@ function RankedObservation({ pinnedPlayer }: { pinnedPlayer: PinnedPlayerContrac
 
   const { games, rating, tier, wins, region } = snapshot.oneVsOne
   const losses = Math.max(0, games - wins)
-  const direction = snapshot.observedRatingDirection
-  const directionLabel = direction
-    ? `${direction.direction === 'up' ? 'Up' : direction.direction === 'down' ? 'Down' : 'Unchanged'} ${Math.abs(direction.ratingChange)} rating across ${direction.observationCount} observations`
-    : null
+  const winRate = games > 0 ? (wins / games) * 100 : 0
 
   return (
-    <div className="mt-5 border-t border-border/50 pt-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-3xl font-black tracking-tight">{rating}</p>
-          <p className="text-muted-foreground mt-1 text-xs font-semibold">
+    <div className="mt-3 space-y-2 border-t border-border/50 pt-2">
+      <div className="flex items-end justify-between gap-3">
+        <div className="shrink-0">
+          <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wide">Rating</p>
+          <p className="text-2xl font-black tracking-tight">{rating}</p>
+          <p className="text-muted-foreground text-xs font-semibold">
             {tier} <span aria-hidden="true">·</span> {region}
           </p>
         </div>
@@ -57,10 +52,7 @@ function RankedObservation({ pinnedPlayer }: { pinnedPlayer: PinnedPlayerContrac
           </p>
         </div>
       </div>
-      <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        <span>Checked {observationDate(currentSeason.checkedAt)}</span>
-        {directionLabel && <span>{directionLabel}</span>}
-      </div>
+      <WinLossBar percent={winRate} className="h-2" />
     </div>
   )
 }
@@ -106,7 +98,7 @@ export function PinnedPlayersSection({
         ) : pinnedPlayers.length === 0 ? (
           <p className="text-muted-foreground text-sm">No Pinned Players yet.</p>
         ) : (
-          <ol className="grid gap-4 sm:grid-cols-2">
+          <ol className="flex flex-col gap-3">
             {pinnedPlayers.map((pinnedPlayer, index) => {
               const label = playerLabel(pinnedPlayer)
               const pending = pendingPlayerId !== null
@@ -116,7 +108,7 @@ export function PinnedPlayersSection({
               )
               return (
                 <li key={pinnedPlayer.brawlhallaId} className="min-w-0">
-                  <Card className="h-full min-w-0 bg-linear-to-br from-card to-background p-5">
+                  <Card className="min-w-0 bg-linear-to-br from-card to-background p-4">
                     <div className="flex min-w-0 items-start justify-between gap-4">
                       <div className="min-w-0">
                         <Link
@@ -169,7 +161,7 @@ export function PinnedPlayersSection({
                         )
                       )}
                     </div>
-                    <RankedObservation pinnedPlayer={pinnedPlayer} />
+                    <RankedSummary pinnedPlayer={pinnedPlayer} />
                   </Card>
                 </li>
               )
