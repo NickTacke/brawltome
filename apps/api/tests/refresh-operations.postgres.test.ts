@@ -171,6 +171,7 @@ describe('durable Refresh Operations', () => {
       'players/0012',
       'players/0013',
       'replay-analysis/0001',
+      'accounts/0008',
     ])
   })
 

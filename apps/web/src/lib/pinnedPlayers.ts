@@ -29,19 +29,30 @@ export function movePinnedPlayer(
   primaryPlayerId: number | null = null,
 ): number[] {
   const ids = pinnedPlayers.map(({ brawlhallaId }) => brawlhallaId)
-  if (
-    fromIndex < 0 ||
-    fromIndex >= ids.length ||
-    toIndex < 0 ||
-    toIndex >= ids.length ||
-    fromIndex === toIndex ||
-    (primaryPlayerId !== null && ids[toIndex] === primaryPlayerId)
-  ) {
+  if (fromIndex < 0 || fromIndex >= ids.length || toIndex < 0 || toIndex >= ids.length || fromIndex === toIndex) {
     return ids
   }
-  const [moved] = ids.splice(fromIndex, 1)
-  ids.splice(toIndex, 0, moved)
-  return ids
+
+  const primaryIndex = primaryPlayerId === null ? -1 : ids.indexOf(primaryPlayerId)
+  if (primaryIndex === -1) {
+    const [moved] = ids.splice(fromIndex, 1)
+    ids.splice(toIndex, 0, moved)
+    return ids
+  }
+
+  const primaryId = ids[primaryIndex]
+  if (primaryId === undefined || ids[fromIndex] === primaryId) return ids
+  const managedIds = ids.filter((id) => id !== primaryId)
+  const managedFromIndex = managedIds.indexOf(ids[fromIndex])
+  const targetId = ids[toIndex]
+  const managedToIndex =
+    targetId === primaryId ? managedFromIndex + Math.sign(toIndex - fromIndex) : managedIds.indexOf(targetId)
+  if (managedFromIndex === -1 || managedToIndex < 0 || managedToIndex >= managedIds.length) return ids
+
+  const [moved] = managedIds.splice(managedFromIndex, 1)
+  managedIds.splice(managedToIndex, 0, moved)
+  managedIds.splice(primaryIndex, 0, primaryId)
+  return managedIds
 }
 
 export function pinPlayer(
