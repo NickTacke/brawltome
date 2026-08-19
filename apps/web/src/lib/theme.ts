@@ -12,7 +12,8 @@ export const ACCOUNT_THEME_OPTIONS = [
 
 export function applyAccountTheme(theme: AccountTheme): void {
   const root = document.documentElement
-  document.cookie = `${ACCOUNT_THEME_COOKIE}=${theme}; Path=/; Max-Age=${theme === 'neutral' ? 0 : ACCOUNT_THEME_COOKIE_MAX_AGE}; SameSite=Lax`
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${ACCOUNT_THEME_COOKIE}=${theme}; Path=/; Max-Age=${theme === 'neutral' ? 0 : ACCOUNT_THEME_COOKIE_MAX_AGE}; SameSite=Lax${secure}`
   if (theme === 'neutral') {
     root.removeAttribute('data-theme')
     return

@@ -599,6 +599,20 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         expect(otherAccount.account.id).not.toBe(accountId)
         expect(await secondRuntime.accounts.getPreferences(otherAccount.account.id)).toEqual(defaultPreferences)
 
+        await Promise.all([
+          secondRuntime.accounts.updatePreferences(otherAccount.account.id, { theme: 'purple' }),
+          secondRuntime.accounts.updatePreferences(otherAccount.account.id, {
+            leaderboardBracket: '2v2',
+            leaderboardRegion: 'EU',
+          }),
+        ])
+        expect(await secondRuntime.accounts.getPreferences(otherAccount.account.id)).toEqual({
+          version: 2,
+          leaderboardBracket: '2v2',
+          leaderboardRegion: 'EU',
+          theme: 'purple',
+        })
+
         const client = postgres(databaseUrl.toString(), { max: 1 })
         try {
           const [stored] = await client<
