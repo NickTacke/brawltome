@@ -3,7 +3,8 @@ import { MaintenancePage } from '@/components/MaintenancePage'
 import { Providers } from '@/components/Providers'
 import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
 import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
-import { ACCOUNT_THEME_COOKIE } from '@/lib/theme'
+import { ACCOUNT_THEME_COOKIE, resolveInitialAccountTheme } from '@/lib/theme'
+import { getServerTrpc } from '@/lib/trpc-server'
 import type { Metadata, Viewport } from 'next'
 import { cookies } from 'next/headers'
 
@@ -45,10 +46,17 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#1e2530' }
 
+const SESSION_COOKIE = 'brawltome_session'
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true'
   const maintenanceEnd = process.env.MAINTENANCE_END
-  const initialTheme = (await cookies()).get(ACCOUNT_THEME_COOKIE)?.value === 'purple' ? 'purple' : undefined
+  const cookieStore = await cookies()
+  const initialTheme = await resolveInitialAccountTheme(
+    cookieStore.get(ACCOUNT_THEME_COOKIE)?.value,
+    Boolean(cookieStore.get(SESSION_COOKIE)?.value),
+    async () => (await getServerTrpc()).account.preferences.query(),
+  )
 
   return (
     <html lang="en" className="dark" data-theme={initialTheme} suppressHydrationWarning>

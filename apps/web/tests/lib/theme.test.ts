@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { applyAccountTheme } from '../../src/lib/theme'
+import { applyAccountTheme, resolveInitialAccountTheme } from '../../src/lib/theme'
 
 const originalDocument = globalThis.document
 
@@ -12,6 +12,12 @@ afterEach(() => {
 })
 
 describe('account theme application', () => {
+  test('loads the saved theme when an authenticated request has no theme cookie', async () => {
+    const theme = await resolveInitialAccountTheme(undefined, true, async () => ({ theme: 'purple' }))
+
+    expect(theme).toBe('purple')
+  })
+
   test('sets purple and removes the override for neutral', () => {
     const removeAttribute = mock(() => {})
     const dataset: Record<string, string> = {}
