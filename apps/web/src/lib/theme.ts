@@ -11,7 +11,6 @@ export const ACCOUNT_THEME_OPTIONS = [
 ] as const satisfies ReadonlyArray<{ value: AccountTheme; label: string }>
 
 export async function resolveInitialAccountTheme(
-  cookieTheme: string | undefined,
   hasSession: boolean,
   loadPreferences: () => Promise<Pick<AccountPreferencesContract, 'theme'>>,
 ): Promise<AccountTheme | undefined> {
@@ -19,7 +18,7 @@ export async function resolveInitialAccountTheme(
   try {
     return (await loadPreferences()).theme === 'purple' ? 'purple' : undefined
   } catch {
-    return cookieTheme === 'purple' ? 'purple' : undefined
+    return undefined
   }
 }
 

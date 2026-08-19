@@ -3,7 +3,7 @@ import { MaintenancePage } from '@/components/MaintenancePage'
 import { Providers } from '@/components/Providers'
 import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
 import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
-import { ACCOUNT_THEME_COOKIE, resolveInitialAccountTheme } from '@/lib/theme'
+import { resolveInitialAccountTheme } from '@/lib/theme'
 import { getServerTrpc } from '@/lib/trpc-server'
 import type { Metadata, Viewport } from 'next'
 import { cookies } from 'next/headers'
@@ -52,10 +52,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true'
   const maintenanceEnd = process.env.MAINTENANCE_END
   const cookieStore = await cookies()
-  const initialTheme = await resolveInitialAccountTheme(
-    cookieStore.get(ACCOUNT_THEME_COOKIE)?.value,
-    Boolean(cookieStore.get(SESSION_COOKIE)?.value),
-    async () => (await getServerTrpc()).account.preferences.query(),
+  const initialTheme = await resolveInitialAccountTheme(Boolean(cookieStore.get(SESSION_COOKIE)?.value), async () =>
+    (await getServerTrpc()).account.preferences.query(),
   )
 
   return (

@@ -13,14 +13,14 @@ afterEach(() => {
 
 describe('account theme application', () => {
   test('loads the saved theme when an authenticated request has no theme cookie', async () => {
-    const theme = await resolveInitialAccountTheme(undefined, true, async () => ({ theme: 'purple' }))
+    const theme = await resolveInitialAccountTheme(true, async () => ({ theme: 'purple' }))
 
     expect(theme).toBe('purple')
   })
 
   test('does not query preferences without a session cookie', async () => {
     let queried = false
-    const theme = await resolveInitialAccountTheme(undefined, false, async () => {
+    const theme = await resolveInitialAccountTheme(false, async () => {
       queried = true
       return { theme: 'purple' }
     })
@@ -29,35 +29,25 @@ describe('account theme application', () => {
     expect(queried).toBe(false)
   })
 
-  test('keeps neutral when server preference loading fails or is neutral', async () => {
+  test('keeps the existing blue default when server preference loading fails', async () => {
     await expect(
-      resolveInitialAccountTheme(undefined, true, async () => Promise.reject(new Error('offline'))),
+      resolveInitialAccountTheme(true, async () => Promise.reject(new Error('offline'))),
     ).resolves.toBeUndefined()
     await expect(
-      resolveInitialAccountTheme(undefined, true, async () => ({ theme: 'neutral' })),
+      resolveInitialAccountTheme(true, async () => Promise.reject(new Error('offline'))),
     ).resolves.toBeUndefined()
+    await expect(resolveInitialAccountTheme(true, async () => ({ theme: 'neutral' }))).resolves.toBeUndefined()
   })
 
-  test('prefers the current account preference over a stale purple cookie', async () => {
+  test('uses the current account preference for an authenticated session', async () => {
     let queried = false
-    const theme = await resolveInitialAccountTheme('purple', true, async () => {
+    const theme = await resolveInitialAccountTheme(true, async () => {
       queried = true
       return { theme: 'neutral' }
     })
 
     expect(theme).toBeUndefined()
     expect(queried).toBe(true)
-  })
-
-  test('ignores a stale purple cookie without a session', async () => {
-    let queried = false
-    const theme = await resolveInitialAccountTheme('purple', false, async () => {
-      queried = true
-      return { theme: 'purple' }
-    })
-
-    expect(theme).toBeUndefined()
-    expect(queried).toBe(false)
   })
 
   test('sets purple and removes the override for neutral', () => {
