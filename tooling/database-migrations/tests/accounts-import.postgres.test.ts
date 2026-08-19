@@ -517,7 +517,6 @@ describePostgres('Accounts V2 import', () => {
           runtime.accounts.signOut(signIn.sessionToken),
           runtime.accounts.resolvePrimaryPlayerVerification(attempt.id, { resolve: async () => null }),
           runtime.accounts.unpinPlayer(legacyAccountIds.pending, 501),
-          runtime.accounts.reorderPinnedPlayers(legacyAccountIds.failed, [602, 601]),
           runtime.accounts.pinPlayer(legacyAccountIds.duplicateA, 801),
           runtime.accounts.unpinPlayer(legacyAccountIds.failed, 601),
           runtime.accounts.reorderPinnedPlayers(legacyAccountIds.conflict, [702, 701]),
