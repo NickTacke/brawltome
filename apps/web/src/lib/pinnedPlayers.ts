@@ -22,9 +22,21 @@ export function usePinnedPlayers(accountId: string | null | undefined) {
   }
 }
 
-export function movePinnedPlayer(pinnedPlayers: PinnedPlayersContract, fromIndex: number, toIndex: number): number[] {
+export function movePinnedPlayer(
+  pinnedPlayers: PinnedPlayersContract,
+  fromIndex: number,
+  toIndex: number,
+  primaryPlayerId: number | null = null,
+): number[] {
   const ids = pinnedPlayers.map(({ brawlhallaId }) => brawlhallaId)
-  if (fromIndex < 0 || fromIndex >= ids.length || toIndex < 0 || toIndex >= ids.length || fromIndex === toIndex) {
+  if (
+    fromIndex < 0 ||
+    fromIndex >= ids.length ||
+    toIndex < 0 ||
+    toIndex >= ids.length ||
+    fromIndex === toIndex ||
+    (primaryPlayerId !== null && ids[toIndex] === primaryPlayerId)
+  ) {
     return ids
   }
   const [moved] = ids.splice(fromIndex, 1)
