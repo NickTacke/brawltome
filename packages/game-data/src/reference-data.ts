@@ -28,7 +28,9 @@ export type WeaponAggregate = {
   kos: number
 }
 
-const LEGEND_SLUG_OVERRIDES: Record<number, string> = { 17: 'redraptor', 72: 'qinghua' }
+// Overrides must match the v0 API's legend_name_key exactly.
+// Qinghua ships 'qinghua & baobao' there, which the default slug already produces.
+const LEGEND_SLUG_OVERRIDES: Record<number, string> = { 17: 'redraptor' }
 
 const WEAPON_NAME_MAP: Record<string, string> = {
   Fists: 'Gauntlets',
