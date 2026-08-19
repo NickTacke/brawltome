@@ -64,8 +64,7 @@ export function SignedInState({ account }: SignedInStateProps) {
   async function handleMove(fromIndex: number, toIndex: number) {
     if (!primaryPlayerKnown || pendingPlayerId !== null) return
     const moved = pinnedPlayers[fromIndex]
-    if (!moved || moved.brawlhallaId === primaryPlayerId || pinnedPlayers[toIndex]?.brawlhallaId === primaryPlayerId)
-      return
+    if (!moved || moved.brawlhallaId === primaryPlayerId) return
     const brawlhallaIds = movePinnedPlayer(pinnedPlayers, fromIndex, toIndex, primaryPlayerId)
     if (brawlhallaIds.every((id, index) => id === pinnedPlayers[index]?.brawlhallaId)) return
     setPendingPlayerId(moved.brawlhallaId)

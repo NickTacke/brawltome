@@ -210,7 +210,7 @@ describe('PinnedPlayersSection', () => {
     expect(pendingHtml.match(/disabled=""/g)).toHaveLength(6)
   })
 
-  test('blocks managed pins from crossing the retained Primary Player', () => {
+  test('allows managed pins to cross the retained Primary Player', () => {
     const html = renderToStaticMarkup(
       <PinnedPlayersSection
         pinnedPlayers={primaryBetweenManagedPins}
@@ -223,8 +223,8 @@ describe('PinnedPlayersSection', () => {
       />,
     )
 
-    expect(html).toContain('aria-label="Move Player ID 43 down in Pinned Players" disabled=""')
-    expect(html).toContain('aria-label="Move Player ID 44 up in Pinned Players" disabled=""')
+    expect(html).not.toContain('aria-label="Move Player ID 43 down in Pinned Players" disabled=""')
+    expect(html).not.toContain('aria-label="Move Player ID 44 up in Pinned Players" disabled=""')
   })
 
   test('marks a retained primary player as You without an unpin action', () => {

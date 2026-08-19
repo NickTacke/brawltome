@@ -149,10 +149,14 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
           ...Array.from({ length: MAX_PINNED_PLAYERS }, (_, index) => index + 1),
         ]
         expect(pinnedIds(await runtime.accounts.getPinnedPlayers(account.id))).toEqual(expectedIds)
+        const managedReorderedIds = [primaryBrawlhallaId, 2, 1, ...expectedIds.slice(3)]
+        expect(pinnedIds(await runtime.accounts.reorderPinnedPlayers(account.id, managedReorderedIds))).toEqual(
+          managedReorderedIds,
+        )
         await expect(
           runtime.accounts.reorderPinnedPlayers(account.id, [1, primaryBrawlhallaId, ...expectedIds.slice(2)]),
         ).rejects.toThrow('Primary Player position cannot be changed')
-        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(account.id))).toEqual(expectedIds)
+        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(account.id))).toEqual(managedReorderedIds)
       } finally {
         await runtime.close()
         await inspect.end()
