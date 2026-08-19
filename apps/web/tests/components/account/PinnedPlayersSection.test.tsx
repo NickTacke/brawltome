@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { PinnedPlayersContract } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { PinnedPlayersSection } from '../../../src/app/account/PinnedPlayersSection'
-import { SavedPlayerButton } from '../../../src/components/player/PlayerProfile/SavedPlayerButton'
+import { PinnedPlayerButton } from '../../../src/components/player/PlayerProfile/PinnedPlayerButton'
 
 const pinnedPlayers: PinnedPlayersContract = [
   {
@@ -236,20 +236,18 @@ describe('PinnedPlayersSection', () => {
   })
 })
 
-describe('SavedPlayerButton', () => {
-  test('exposes save state as an accessible toggle', () => {
-    const save = renderToStaticMarkup(<SavedPlayerButton saved={false} pending={false} onToggle={() => {}} />)
-    const remove = renderToStaticMarkup(<SavedPlayerButton saved pending={false} onToggle={() => {}} />)
+describe('PinnedPlayerButton', () => {
+  test('renders a borderless Pin or Unpin pressed toggle', () => {
+    const pin = renderToStaticMarkup(<PinnedPlayerButton pinned={false} pending={false} onToggle={() => {}} />)
+    const unpin = renderToStaticMarkup(<PinnedPlayerButton pinned pending={false} onToggle={() => {}} />)
     const limited = renderToStaticMarkup(
-      <SavedPlayerButton saved={false} pending={false} disabled onToggle={() => {}} />,
+      <PinnedPlayerButton pinned={false} pending={false} disabled onToggle={() => {}} />,
     )
 
-    expect(save).toContain('aria-pressed="false"')
-    expect(save).toContain('aria-busy="false"')
-    expect(save).toContain('Save player')
-    expect(remove).toContain('aria-pressed="true"')
-    expect(remove).toContain('Remove from Saved Players')
-    expect(limited).toContain('disabled=""')
-    expect(limited).toContain('Saved Players limit reached')
+    expect(pin).toContain('>Pin<')
+    expect(pin).toContain('aria-pressed="false"')
+    expect(pin).not.toContain('border')
+    expect(unpin).toContain('>Unpin<')
+    expect(limited).toContain('Pinned Players limit reached')
   })
 })

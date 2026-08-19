@@ -1,7 +1,7 @@
 'use client'
 
 import type { AccountContract } from '@brawltome/contracts'
-import { BookmarkSquare, User } from '@solar-icons/react'
+import { User } from '@solar-icons/react'
 import { X } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -89,7 +89,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
           )}
           {shortcutsError && (
             <p role="alert" className="mb-2 text-sm text-red-300">
-              Player shortcuts are unavailable. All Saved Players remains available.
+              Player shortcuts are unavailable.
             </p>
           )}
           <ul className="flex flex-col">
@@ -124,7 +124,9 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
           </ul>
           {playerShortcuts.length > 0 && (
             <div className="mt-6">
-              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-widest">Your players</p>
+              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-widest">
+                Pinned Players
+              </p>
               <ul>
                 {playerShortcuts.map((shortcut) => {
                   const active = shortcut.href === pathname
@@ -139,13 +141,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
                           active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        {shortcut.kind === 'all-saved' ? (
-                          <span className="flex h-8 w-8 items-center justify-center">
-                            <BookmarkSquare className="h-6 w-6" weight="Linear" aria-hidden="true" />
-                          </span>
-                        ) : (
-                          <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
-                        )}
+                        <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
                         {shortcut.label}
                       </Link>
                     </li>
