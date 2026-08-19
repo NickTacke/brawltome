@@ -23,6 +23,21 @@ const playerShortcuts: PlayerShortcutNavigationItem[] = [
 ]
 
 describe('AppSidebar pinned-player navigation', () => {
+  test('anchors the footer while shortcuts are empty and separates You from pins', () => {
+    const emptyHtml = renderToStaticMarkup(
+      <AppSidebar account={null} playerShortcuts={[]} shortcutsLoading shortcutsError={false} />,
+    )
+    const html = renderToStaticMarkup(
+      <AppSidebar account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
+    )
+
+    expect(emptyHtml).toContain('min-h-0 flex-1 overflow-y-auto')
+    expect(emptyHtml).toContain('shrink-0 border-t')
+    expect(html).toContain('<hr class="mt-2 border-white/[0.14]"')
+    expect(html).toContain('aria-label="You, Ada"')
+    expect(html).toContain('aria-label="Pinned Players"')
+  })
+
   test('renders all pin shortcuts in the independent scroll region', () => {
     const html = renderToStaticMarkup(
       <AppSidebar account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
