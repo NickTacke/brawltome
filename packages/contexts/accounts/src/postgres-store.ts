@@ -283,35 +283,33 @@ function postgresAccountsStore(client: Sql): AccountsStore {
           preferences.leaderboardRegion ?? null,
           preferences.theme ?? null,
         ]
-        const [updated] = await transaction.unsafe<PreferencesRow[]>(
-          `UPDATE accounts.preferences
-           SET schema_version = 2,
-               leaderboard_bracket = COALESCE($2, leaderboard_bracket),
-               leaderboard_region = COALESCE($3, leaderboard_region),
-               theme = COALESCE($4, theme),
-               updated_at = now()
-           WHERE account_id = $1
-           RETURNING schema_version, leaderboard_bracket, leaderboard_region, theme`,
-          values,
-        )
-        if (updated) {
-          const stored = mapPreferences(updated)
-          if (!stored) throw new Error('Accounts stored an unsupported preference version')
-          return stored
-        }
-
-        const [inserted] = await transaction.unsafe<PreferencesRow[]>(
-          `INSERT INTO accounts.preferences (
+        const [row] = await transaction.unsafe<PreferencesRow[]>(
+          `INSERT INTO accounts.preferences AS existing_preferences (
              account_id,
              schema_version,
              leaderboard_bracket,
              leaderboard_region,
              theme
            ) VALUES ($1, 2, COALESCE($2, '1v1'), COALESCE($3, 'all'), COALESCE($4, 'neutral'))
+           ON CONFLICT (account_id) DO UPDATE
+           SET schema_version = 2,
+               leaderboard_bracket = CASE
+                 WHEN $2 IS NULL THEN existing_preferences.leaderboard_bracket
+                 ELSE EXCLUDED.leaderboard_bracket
+               END,
+               leaderboard_region = CASE
+                 WHEN $3 IS NULL THEN existing_preferences.leaderboard_region
+                 ELSE EXCLUDED.leaderboard_region
+               END,
+               theme = CASE
+                 WHEN $4 IS NULL THEN existing_preferences.theme
+                 ELSE EXCLUDED.theme
+               END,
+               updated_at = now()
            RETURNING schema_version, leaderboard_bracket, leaderboard_region, theme`,
           values,
         )
-        const stored = mapPreferences(inserted)
+        const stored = mapPreferences(row)
         if (!stored) throw new Error('Accounts stored an unsupported preference version')
         return stored
       })
