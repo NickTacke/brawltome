@@ -3,7 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { PlayerShortcutNavigationItem } from '../../../src/lib/playerShortcuts'
 
 mock.module('next/navigation', () => ({ usePathname: () => '/' }))
+mock.module('../../../src/components/sidebar/SidebarProvider', () => ({
+  useSidebar: () => ({ isMobileOpen: true, close: () => {} }),
+}))
 const { AppSidebar } = await import('../../../src/components/sidebar/AppSidebar')
+const { MobileMenu } = await import('../../../src/components/sidebar/MobileMenu')
 
 const playerShortcuts: PlayerShortcutNavigationItem[] = [
   {
@@ -23,7 +27,7 @@ const playerShortcuts: PlayerShortcutNavigationItem[] = [
 ]
 
 describe('AppSidebar pinned-player navigation', () => {
-  test('anchors the footer while shortcuts are empty and separates You from pins', () => {
+  test('anchors the footer while shortcuts are empty and keeps You above pins without a divider', () => {
     const emptyHtml = renderToStaticMarkup(
       <AppSidebar account={null} playerShortcuts={[]} shortcutsLoading shortcutsError={false} />,
     )
@@ -33,7 +37,7 @@ describe('AppSidebar pinned-player navigation', () => {
 
     expect(emptyHtml).toContain('min-h-0 flex-1 overflow-y-auto')
     expect(emptyHtml).toContain('shrink-0 border-t')
-    expect(html).toContain('<hr class="mt-2 border-white/[0.14]"')
+    expect(html).not.toContain('<hr class="mt-2 border-white/[0.14]"')
     expect(html).toContain('aria-label="You, Ada"')
     expect(html).toContain('aria-label="Pinned Players"')
   })
@@ -49,5 +53,16 @@ describe('AppSidebar pinned-player navigation', () => {
     expect(html).toContain('aria-label="Pinned Player, Mira"')
     expect(html).toContain('aria-label="Pinned Player, Nia"')
     expect(html).toContain('aria-label="You, Ada"')
+  })
+})
+
+describe('MobileMenu pinned-player navigation', () => {
+  test('keeps You above pins without a divider', () => {
+    const html = renderToStaticMarkup(
+      <MobileMenu account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
+    )
+
+    expect(html).not.toContain('border-t border-white/[0.14]')
+    expect(html.indexOf('>You</')).toBeLessThan(html.indexOf('>Pinned Players<'))
   })
 })
