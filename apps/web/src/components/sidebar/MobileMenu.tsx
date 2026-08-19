@@ -23,6 +23,8 @@ interface MobileMenuProps {
 export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcutsError }: MobileMenuProps) {
   const { isMobileOpen, close } = useSidebar()
   const pathname = usePathname()
+  const primaryShortcut = playerShortcuts.find(({ kind }) => kind === 'primary')
+  const pinnedShortcuts = playerShortcuts.filter(({ kind }) => kind === 'pin')
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   // Body scroll lock while open. iOS Safari still scrolls the document behind
@@ -122,13 +124,29 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
               )
             })}
           </ul>
-          {playerShortcuts.length > 0 && (
+          {primaryShortcut && (
             <div className="mt-6">
+              <Link
+                href={primaryShortcut.href}
+                onClick={close}
+                aria-label={primaryShortcut.accessibleLabel}
+                aria-current={primaryShortcut.href === pathname ? 'page' : undefined}
+                className={`flex min-h-12 items-center gap-4 py-3 text-lg font-semibold transition-colors ${
+                  primaryShortcut.href === pathname ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <PlayerShortcutAvatar avatarUrl={primaryShortcut.avatarUrl} className="h-8 w-8 rounded-md" />
+                {primaryShortcut.label}
+              </Link>
+            </div>
+          )}
+          {pinnedShortcuts.length > 0 && (
+            <div className={primaryShortcut ? 'mt-3 border-t border-white/[0.14] pt-4' : 'mt-6'}>
               <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-widest">
                 Pinned Players
               </p>
               <ul>
-                {playerShortcuts.map((shortcut) => {
+                {pinnedShortcuts.map((shortcut) => {
                   const active = shortcut.href === pathname
                   return (
                     <li key={`${shortcut.kind}:${shortcut.href}`}>
