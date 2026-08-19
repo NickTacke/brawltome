@@ -48,18 +48,18 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
           INSERT INTO accounts.users (id) VALUES (${accountId}), (${legacyAccountId})
         `
         await seed`
-          INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
+          INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position, saved_at)
           VALUES
-            (${accountId}, 101, 0),
-            (${accountId}, 102, 1),
-            (${accountId}, 103, 2),
-            (${accountId}, 104, 3)
+            (${accountId}, 101, 0, '2026-08-01T01:00:00Z'),
+            (${accountId}, 102, 1, '2026-08-02T01:00:00Z'),
+            (${accountId}, 103, 2, '2026-08-03T01:00:00Z'),
+            (${accountId}, 104, 3, '2026-08-04T01:00:00Z')
         `
         await seed`
-          INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position)
+          INSERT INTO accounts.saved_player_pins (account_id, brawlhalla_id, position, pinned_at)
           VALUES
-            (${accountId}, 103, 0),
-            (${accountId}, 101, 1)
+            (${accountId}, 103, 0, '2026-09-03T03:00:00Z'),
+            (${accountId}, 101, 1, '2026-09-01T03:00:00Z')
         `
         await seed`
           INSERT INTO accounts.saved_players (account_id, brawlhalla_id, position)
@@ -74,7 +74,14 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
       const runtime = createPostgresAccounts(databaseUrl)
       const inspect = postgres(databaseUrl, { max: 1 })
       try {
-        expect(pinnedIds(await runtime.accounts.getPinnedPlayers(accountId))).toEqual([103, 101, 102, 104])
+        const migratedPlayers = await runtime.accounts.getPinnedPlayers(accountId)
+        expect(pinnedIds(migratedPlayers)).toEqual([103, 101, 102, 104])
+        expect(migratedPlayers.map(({ brawlhallaId, pinnedAt }) => [brawlhallaId, pinnedAt.toISOString()])).toEqual([
+          [103, '2026-09-03T03:00:00.000Z'],
+          [101, '2026-09-01T03:00:00.000Z'],
+          [102, '2026-08-02T01:00:00.000Z'],
+          [104, '2026-08-04T01:00:00.000Z'],
+        ])
         const legacyIds = Array.from({ length: 21 }, (_, index) => index + 201)
         expect(pinnedIds(await runtime.accounts.getPinnedPlayers(legacyAccountId))).toEqual(legacyIds)
         await expect(runtime.accounts.pinPlayer(legacyAccountId, 222)).rejects.toThrow(

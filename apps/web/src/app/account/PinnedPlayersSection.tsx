@@ -11,6 +11,7 @@ interface PinnedPlayersSectionProps {
   error?: boolean
   headingRef?: RefObject<HTMLHeadingElement | null>
   pendingPlayerId: number | null
+  primaryPlayerKnown: boolean
   primaryPlayerId?: number | null
   onUnpin: (brawlhallaId: number) => void
   onMove: (fromIndex: number, toIndex: number) => void
@@ -120,11 +121,14 @@ export function PinnedPlayersSection({
   error = false,
   headingRef,
   pendingPlayerId,
+  primaryPlayerKnown,
   primaryPlayerId = null,
   onUnpin,
   onMove,
 }: PinnedPlayersSectionProps) {
-  const managedPinnedCount = pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId).length
+  const managedPinnedCount = primaryPlayerKnown
+    ? pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId).length
+    : 0
 
   return (
     <section
@@ -158,7 +162,7 @@ export function PinnedPlayersSection({
             {pinnedPlayers.map((pinnedPlayer, index) => {
               const label = playerLabel(pinnedPlayer)
               const pending = pendingPlayerId !== null
-              const isPrimary = pinnedPlayer.brawlhallaId === primaryPlayerId
+              const isPrimary = primaryPlayerKnown && pinnedPlayer.brawlhallaId === primaryPlayerId
               return (
                 <li key={pinnedPlayer.brawlhallaId} className="rounded-lg border border-white/[0.06] bg-black/10 p-4">
                   <div className="flex flex-col gap-3">
@@ -179,7 +183,7 @@ export function PinnedPlayersSection({
                         </span>
                       )}
                     </div>
-                    {!isPrimary && (
+                    {primaryPlayerKnown && !isPrimary && (
                       <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
                         <fieldset className="flex items-center gap-1 border-0 p-0">
                           <legend className="text-muted-foreground mr-1 text-[10px] font-medium uppercase">
