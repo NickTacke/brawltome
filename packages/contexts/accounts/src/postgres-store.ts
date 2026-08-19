@@ -501,6 +501,16 @@ function postgresAccountsStore(client: Sql): AccountsStore {
         ) {
           throw new InvalidPinnedPlayerError('Pinned Player order must contain the complete pinned collection')
         }
+        const [primaryPlayer] = await transaction.unsafe<{ brawlhalla_id: number }[]>(
+          `SELECT brawlhalla_id::int
+           FROM accounts.primary_players
+           WHERE account_id = $1`,
+          [accountId],
+        )
+        const retainedPrimary = current.find(({ brawlhallaId }) => brawlhallaId === primaryPlayer?.brawlhalla_id)
+        if (retainedPrimary && orderedBrawlhallaIds.indexOf(retainedPrimary.brawlhallaId) !== retainedPrimary.order) {
+          throw new InvalidPinnedPlayerError('Primary Player position cannot be changed')
+        }
         await transaction.unsafe(
           `UPDATE accounts.pinned_players pinned
            SET position = requested.position

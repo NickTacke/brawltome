@@ -163,6 +163,8 @@ export function PinnedPlayersSection({
               const label = playerLabel(pinnedPlayer)
               const pending = pendingPlayerId !== null
               const isPrimary = primaryPlayerKnown && pinnedPlayer.brawlhallaId === primaryPlayerId
+              const primaryAbove = primaryPlayerKnown && pinnedPlayers[index - 1]?.brawlhallaId === primaryPlayerId
+              const primaryBelow = primaryPlayerKnown && pinnedPlayers[index + 1]?.brawlhallaId === primaryPlayerId
               return (
                 <li key={pinnedPlayer.brawlhallaId} className="rounded-lg border border-white/[0.06] bg-black/10 p-4">
                   <div className="flex flex-col gap-3">
@@ -192,7 +194,7 @@ export function PinnedPlayersSection({
                           <button
                             type="button"
                             aria-label={`Move ${label} up in Pinned Players`}
-                            disabled={index === 0 || pending}
+                            disabled={index === 0 || primaryAbove || pending}
                             onClick={() => onMove(index, index - 1)}
                             className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
                           >
@@ -201,7 +203,7 @@ export function PinnedPlayersSection({
                           <button
                             type="button"
                             aria-label={`Move ${label} down in Pinned Players`}
-                            disabled={index === pinnedPlayers.length - 1 || pending}
+                            disabled={index === pinnedPlayers.length - 1 || primaryBelow || pending}
                             onClick={() => onMove(index, index + 1)}
                             className="focus-visible:ring-primary rounded-md p-3.5 hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
                           >

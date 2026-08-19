@@ -108,4 +108,10 @@ describe('Pinned Players client state', () => {
     expect(movePinnedPlayer(pinnedPlayers, 0, -1)).toEqual([42, 43])
     expect(pinnedPlayers.map(({ brawlhallaId }) => brawlhallaId)).toEqual([42, 43])
   })
+
+  test('does not move a managed pin across a retained Primary Player', () => {
+    const interleaved = [pinnedPlayers[1], pinnedPlayers[0], { ...pinnedPlayers[1], brawlhallaId: 44 }]
+    expect(movePinnedPlayer(interleaved, 0, 1, 42)).toEqual([43, 42, 44])
+    expect(movePinnedPlayer(interleaved, 2, 1, 42)).toEqual([43, 42, 44])
+  })
 })

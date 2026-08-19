@@ -95,6 +95,12 @@ const twentyManagedPinsWithPrimary: PinnedPlayersContract = [
   { ...pinnedPlayers[0], order: 20, pinnedAt: '2026-08-30T08:00:00Z' },
 ]
 
+const primaryBetweenManagedPins: PinnedPlayersContract = [
+  { ...pinnedPlayers[1], order: 0 },
+  { ...pinnedPlayers[0], order: 1 },
+  { ...pinnedPlayers[1], brawlhallaId: 44, order: 2 },
+]
+
 describe('PinnedPlayersSection', () => {
   test('labels private pins and discloses canonical observation coverage and freshness', () => {
     const html = renderToStaticMarkup(
@@ -202,6 +208,23 @@ describe('PinnedPlayersSection', () => {
       />,
     )
     expect(pendingHtml.match(/disabled=""/g)).toHaveLength(6)
+  })
+
+  test('blocks managed pins from crossing the retained Primary Player', () => {
+    const html = renderToStaticMarkup(
+      <PinnedPlayersSection
+        pinnedPlayers={primaryBetweenManagedPins}
+        loading={false}
+        primaryPlayerKnown
+        primaryPlayerId={42}
+        pendingPlayerId={null}
+        onUnpin={() => {}}
+        onMove={() => {}}
+      />,
+    )
+
+    expect(html).toContain('aria-label="Move Player ID 43 down in Pinned Players" disabled=""')
+    expect(html).toContain('aria-label="Move Player ID 44 up in Pinned Players" disabled=""')
   })
 
   test('marks a retained primary player as You without an unpin action', () => {
