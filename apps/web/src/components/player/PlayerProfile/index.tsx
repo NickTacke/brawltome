@@ -32,6 +32,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     isReady: pinnedPlayersReady,
   } = usePinnedPlayers(account?.id)
   const [pinnedPlayerPending, setPinnedPlayerPending] = useState(false)
+  const [optimisticPinned, setOptimisticPinned] = useState<boolean | null>(null)
   const [pinnedPlayerError, setPinnedPlayerError] = useState<string | null>(null)
   const [pinnedPlayerStatus, setPinnedPlayerStatus] = useState('')
   const [turnstileError, setTurnstileError] = useState(false)
@@ -94,7 +95,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const brawlhallaId = Number(id)
   const primaryPlayerKnown = !primaryPlayerLoading && !primaryPlayerError
   const primaryPlayerId = primaryPlayerKnown ? (primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null) : null
-  const isPinned = pinnedPlayers.some((pinnedPlayer) => pinnedPlayer.brawlhallaId === brawlhallaId)
+  const queriedIsPinned = pinnedPlayers.some((pinnedPlayer) => pinnedPlayer.brawlhallaId === brawlhallaId)
+  const isPinned = optimisticPinned ?? queriedIsPinned
   const isPrimaryPlayer = primaryPlayerId === brawlhallaId
   const pinnedPlayerLimitReached = hasPinnedPlayerLimitReached(pinnedPlayers, primaryPlayerId, brawlhallaId)
   const showPinnedPlayerButton = shouldShowPinnedPlayerButton({
@@ -106,9 +108,16 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     primaryPlayerError,
   })
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: profile identity changes reset the local optimistic state.
+  useEffect(() => {
+    setOptimisticPinned(null)
+  }, [account?.id, brawlhallaId])
+
   async function togglePinnedPlayer() {
     if (!account || !Number.isInteger(brawlhallaId) || brawlhallaId < 1) return
     if (!primaryPlayerKnown || isPrimaryPlayer || pinnedPlayerLimitReached) return
+    const nextPinned = !isPinned
+    setOptimisticPinned(nextPinned)
     setPinnedPlayerPending(true)
     setPinnedPlayerError(null)
     setPinnedPlayerStatus('')
@@ -120,7 +129,9 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         await pinPlayer(queryClient, account.id, brawlhallaId)
         setPinnedPlayerStatus('Pinned player to Pinned Players.')
       }
+      setOptimisticPinned(null)
     } catch {
+      setOptimisticPinned(null)
       setPinnedPlayerError('Could not update Pinned Players. Try again.')
     } finally {
       setPinnedPlayerPending(false)
@@ -149,7 +160,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         {account && (
           <>
             <output aria-live="polite" className="sr-only">
-              {pinnedPlayerPending ? 'Updating Pinned Players.' : pinnedPlayerStatus}
+              {pinnedPlayerStatus}
             </output>
             {pinnedPlayersLoading && (
               <output className="text-muted-foreground text-sm">Loading Pinned Players...</output>

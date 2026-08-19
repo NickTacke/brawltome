@@ -102,7 +102,7 @@ const primaryBetweenManagedPins: PinnedPlayersContract = [
 ]
 
 describe('PinnedPlayersSection', () => {
-  test('labels private pins and discloses canonical observation coverage and freshness', () => {
+  test('renders concise ranked card facts without explanatory copy', () => {
     const html = renderToStaticMarkup(
       <PinnedPlayersSection
         pinnedPlayers={pinnedPlayers}
@@ -120,24 +120,18 @@ describe('PinnedPlayersSection', () => {
     expect(html).toContain('Player ID 43')
     expect(html).toContain('Unpin Ada')
     expect(html).toContain('Unpin Player ID 43')
-    expect(html).toContain('Private pins visible only to you')
-    expect(html).toContain('does not claim ownership or create a public follow')
-    expect(html).toContain('Current Season')
+    expect(html).not.toContain('Private pins visible only to you')
+    expect(html).not.toContain('does not claim ownership or create a public follow')
+    expect(html).not.toContain('Pinned order for')
+    expect(html).not.toContain('Ranked observation details')
+    expect(html).not.toContain('Sparse pulse last checked')
+    expect(html).toContain('1650')
+    expect(html).toContain('Gold 5')
+    expect(html).toContain('6W / 6L')
     expect(html).toContain('Update delayed')
-    expect(html).toContain('Latest supported 1v1 rating: 1650')
-    expect(html).toContain('Ranked observation details')
-    expect(html).toContain('<details')
-    expect(html).toContain('Sparse pulse last checked')
-    expect(html).toContain('latest supported rating may be newer than the complete ranked observation')
-    expect(html).toContain('do not update rank, tier, region, legends, Solo Queue, team composition, or rating history')
-    expect(html).toContain('BrawlTome-observed direction')
-    expect(html).toContain('Up 50 rating across 2 observations')
-    expect(html).toContain('2026-08-10 to 2026-08-10')
-    expect(html).toContain('up to 365 retained BrawlTome complete-ranked observations')
-    expect(html).toContain('latest monotonic-games segment')
-    expect(html).toContain('Sparse pulse overlays are excluded')
-    expect(html).toContain('This is BrawlTome coverage, not complete Elo history')
-    expect(html).toContain('Current Season ranked facts unavailable')
+    expect(html).toContain('Up 50 rating')
+    expect(html).toContain('2026-08-10')
+    expect(html).toContain('Ranked observation unavailable')
     expect(html).not.toContain('shortcuts pinned')
     expect(html).not.toContain('Player 43</')
     expect(html).not.toContain('Follower')
@@ -288,6 +282,7 @@ describe('PinnedPlayerButton', () => {
   test('renders a borderless Pin or Unpin pressed toggle', () => {
     const pin = renderToStaticMarkup(<PinnedPlayerButton pinned={false} pending={false} onToggle={() => {}} />)
     const unpin = renderToStaticMarkup(<PinnedPlayerButton pinned pending={false} onToggle={() => {}} />)
+    const pending = renderToStaticMarkup(<PinnedPlayerButton pinned={false} pending onToggle={() => {}} />)
     const limited = renderToStaticMarkup(
       <PinnedPlayerButton pinned={false} pending={false} disabled onToggle={() => {}} />,
     )
@@ -296,6 +291,9 @@ describe('PinnedPlayerButton', () => {
     expect(pin).toContain('aria-pressed="false"')
     expect(pin).not.toContain('border')
     expect(unpin).toContain('>Unpin<')
+    expect(pending).toContain('>Pin<')
+    expect(pending).toContain('aria-busy="true"')
+    expect(pending).not.toContain('Updating Pinned Players')
     expect(limited).toContain('Pinned Players limit reached')
   })
 })
