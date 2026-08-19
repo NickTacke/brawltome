@@ -7241,6 +7241,86 @@ const data = [
     "animName": "AttackSpecialGladiator8RecoverModeSwap",
     "width": 145,
     "height": 160
+  },
+  {
+    "hurtboxName": "AstroGirlNCannon",
+    "hurtboxId": 912,
+    "animClass": "a__CannonAnimation",
+    "animName": "AttackSpecialAstroGirl5",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlSCannon",
+    "hurtboxId": 909,
+    "animClass": "a__CannonAnimation",
+    "animName": "AttackSpecialAstroGirl2Short",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlSCannon2",
+    "hurtboxId": 910,
+    "animClass": "a__CannonAnimation",
+    "animName": "AttackSpecialAstroGirl2Long",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlSCannon3",
+    "hurtboxId": 911,
+    "animClass": "a__CannonAnimation",
+    "animName": "AttackSpecialAstroGirl2Longest",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlDCannon",
+    "hurtboxId": 913,
+    "animClass": "a__CannonAnimation",
+    "animName": "AttackSpecialAstroGirl4",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlNOrb",
+    "hurtboxId": 914,
+    "animClass": "a__OrbAnimation",
+    "animName": "AttackSpecialAstroGirl6",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlNOrb2",
+    "hurtboxId": 915,
+    "animClass": "a__OrbAnimation",
+    "animName": "AttackSpecialAstroGirl6Ground",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlSOrb",
+    "hurtboxId": 916,
+    "animClass": "a__OrbAnimation",
+    "animName": "AttackSpecialAstroGirl1",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlSOrb2",
+    "hurtboxId": 917,
+    "animClass": "a__OrbAnimation",
+    "animName": "AttackSpecialAstroGirl1Ground",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "AstroGirlDOrb",
+    "hurtboxId": 918,
+    "animClass": "a__OrbAnimation",
+    "animName": "AttackSpecialAstroGirl3",
+    "width": 0,
+    "height": 0
   }
 ] as const
 

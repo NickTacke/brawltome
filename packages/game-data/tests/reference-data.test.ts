@@ -39,6 +39,7 @@ describe('legend references', () => {
     expect(legendSlug(3, 'BÖDVAR')).toBe('bodvar')
     expect(legendSlug(42, 'Lord Vraxx')).toBe('lord vraxx')
     expect(legendSlug(17, 'RED RAPTOR')).toBe('redraptor')
+    expect(legendSlug(72, 'QINGHUA & BAOBAO')).toBe('qinghua')
     expect(normalizeWeaponName('Fists')).toBe('Gauntlets')
     expect(normalizeWeaponName('Pistol')).toBe('Blasters')
     expect(normalizeWeaponName('Hammer')).toBe('Hammer')
