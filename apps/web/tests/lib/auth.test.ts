@@ -89,7 +89,7 @@ describe('signOut', () => {
     expect(invalidations).toEqual([{ queryKey: ['account', 'current'] }, { queryKey: ['account', 'primaryPlayer'] }])
     expect(removals).toEqual([
       { queryKey: ['account', 'preferences'] },
-      { queryKey: ['account', 'savedPlayers'] },
+      { queryKey: ['account', 'pinnedPlayers'] },
       { queryKey: ['account', 'playerShortcuts'] },
     ])
   })
