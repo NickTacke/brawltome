@@ -25,6 +25,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
   const pathname = usePathname()
   const primaryShortcut = playerShortcuts.find(({ kind }) => kind === 'primary')
   const pinnedShortcuts = playerShortcuts.filter(({ kind }) => kind === 'pin')
+  const shortcutList = primaryShortcut ? [primaryShortcut, ...pinnedShortcuts] : pinnedShortcuts
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   // Body scroll lock while open. iOS Safari still scrolls the document behind
@@ -124,49 +125,28 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
               )
             })}
           </ul>
-          {primaryShortcut && (
-            <div className="mt-6">
-              <Link
-                href={primaryShortcut.href}
-                onClick={close}
-                aria-label={primaryShortcut.accessibleLabel}
-                aria-current={primaryShortcut.href === pathname ? 'page' : undefined}
-                className={`flex min-h-12 items-center gap-4 py-3 text-lg font-semibold transition-colors ${
-                  primaryShortcut.href === pathname ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <PlayerShortcutAvatar avatarUrl={primaryShortcut.avatarUrl} className="h-8 w-8 rounded-md" />
-                {primaryShortcut.label}
-              </Link>
-            </div>
-          )}
-          {pinnedShortcuts.length > 0 && (
-            <div className={primaryShortcut ? 'mt-3 pt-1' : 'mt-6'}>
-              <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-widest">
-                Pinned Players
-              </p>
-              <ul>
-                {pinnedShortcuts.map((shortcut) => {
-                  const active = shortcut.href === pathname
-                  return (
-                    <li key={`${shortcut.kind}:${shortcut.href}`}>
-                      <Link
-                        href={shortcut.href}
-                        onClick={close}
-                        aria-label={shortcut.accessibleLabel}
-                        aria-current={active ? 'page' : undefined}
-                        className={`flex min-h-12 items-center gap-4 border-b border-white/[0.06] py-3 text-lg font-semibold transition-colors ${
-                          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
-                        {shortcut.label}
-                      </Link>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+          {shortcutList.length > 0 && (
+            <ul aria-label="Player shortcuts" className="mt-6">
+              {shortcutList.map((shortcut) => {
+                const active = shortcut.href === pathname
+                return (
+                  <li key={`${shortcut.kind}:${shortcut.href}`}>
+                    <Link
+                      href={shortcut.href}
+                      onClick={close}
+                      aria-label={shortcut.accessibleLabel}
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex min-h-12 items-center gap-4 border-b border-white/[0.06] py-3 text-lg font-semibold transition-colors ${
+                        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
+                      {shortcut.label}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </nav>
 
