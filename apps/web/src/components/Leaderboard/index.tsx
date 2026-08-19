@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  Button,
   Card,
   Select,
   SelectContent,
@@ -20,6 +19,7 @@ import { trpc } from '@/lib/trpc'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { LeaderboardErrorState } from './LeaderboardErrorState'
 import { SoloLeaderboardRow, TeamLeaderboardRow } from './LeaderboardRow'
 import { LeaderboardSkeletonRows } from './LeaderboardSkeleton'
 import { PaginationControls } from './PaginationControls'
@@ -40,19 +40,7 @@ import {
   snapshotNotice,
 } from './utils'
 
-export function LeaderboardErrorState({ onRetryAction }: { onRetryAction: () => void }) {
-  return (
-    <Card
-      role="alert"
-      className="w-full max-w-4xl mx-auto mt-12 bg-destructive/10 border-destructive text-destructive-foreground p-6 text-center"
-    >
-      <p>Unable to load leaderboard data.</p>
-      <Button type="button" variant="outline" className="mt-4" onClick={onRetryAction}>
-        Try again
-      </Button>
-    </Card>
-  )
-}
+export { LeaderboardErrorState }
 
 export function Leaderboard() {
   const router = useRouter()

@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { Children, isValidElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { LeaderboardErrorState } from '../../../src/components/Leaderboard'
+import { LeaderboardErrorState } from '../../../src/components/Leaderboard/LeaderboardErrorState'
 
 describe('LeaderboardErrorState', () => {
   test('offers recovery without exposing transport details', () => {
