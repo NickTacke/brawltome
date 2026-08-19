@@ -1,4 +1,8 @@
-import type { AccountPreferencesContract, LeaderboardEntry as ContractLeaderboardEntry } from '@brawltome/contracts'
+import type {
+  AccountPreferencesContract,
+  AccountPreferencesUpdateContract,
+  LeaderboardEntry as ContractLeaderboardEntry,
+} from '@brawltome/contracts'
 import { buildQueryString, parseEnum, parseInteger } from '../../lib/searchParams'
 
 export const BRACKETS = [
@@ -64,12 +68,11 @@ export function parseLeaderboardSearchParams(
 export function preferencesForLeaderboardUpdate(
   current: LeaderboardFilters,
   next: Partial<LeaderboardFilters>,
-  preferences: AccountPreferencesContract | null,
-): AccountPreferencesContract | null {
-  if (!preferences || (next.bracket === undefined && next.region === undefined)) return null
+  signedIn: boolean,
+): AccountPreferencesUpdateContract | null {
+  if (!signedIn || (next.bracket === undefined && next.region === undefined)) return null
   const merged = { ...current, ...next }
   return {
-    ...preferences,
     leaderboardBracket: merged.bracket,
     leaderboardRegion: merged.region,
   }

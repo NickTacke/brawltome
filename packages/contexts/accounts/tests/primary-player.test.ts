@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import type { AccountsStore, PrimaryPlayerVerificationAttempt, PrimaryPlayerVerificationState } from '../src/accounts'
+import {
+  type AccountsStore,
+  DEFAULT_ACCOUNT_PREFERENCES,
+  type PrimaryPlayerVerificationAttempt,
+  type PrimaryPlayerVerificationState,
+} from '../src/accounts'
 import { createAccounts } from '../src/accounts'
 
 const accountId = '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295'
@@ -25,7 +30,7 @@ function createStore(): AccountsStore {
       return null
     },
     async upsertPreferences(_accountId, preferences) {
-      return preferences
+      return { ...DEFAULT_ACCOUNT_PREFERENCES, ...preferences }
     },
     async beginPrimaryPlayerVerification(input) {
       const existing = idempotency.get(input.idempotencyKey)

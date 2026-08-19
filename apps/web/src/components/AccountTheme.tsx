@@ -5,13 +5,17 @@ import { applyAccountTheme } from '@/lib/theme'
 import { useEffect } from 'react'
 
 export function AccountTheme() {
-  const { account } = useAccount()
-  const { preferences } = useAccountPreferences(account?.id)
-  const theme = account ? (preferences?.theme ?? 'neutral') : 'neutral'
+  const { account, isLoading: accountLoading, isError: accountError } = useAccount()
+  const {
+    preferences,
+    isLoading: preferencesLoading,
+    isError: preferencesError,
+  } = useAccountPreferences(accountLoading ? undefined : (account?.id ?? null))
 
   useEffect(() => {
-    applyAccountTheme(theme)
-  }, [theme])
+    if (accountLoading || accountError || preferencesLoading || preferencesError) return
+    applyAccountTheme(account ? (preferences?.theme ?? 'neutral') : 'neutral')
+  }, [account, accountError, accountLoading, preferences?.theme, preferencesError, preferencesLoading])
 
   return null
 }

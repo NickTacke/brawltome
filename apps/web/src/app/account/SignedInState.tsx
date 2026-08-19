@@ -53,7 +53,7 @@ export function SignedInState({ account }: SignedInStateProps) {
     setThemeSaving(true)
     setThemeError(null)
     try {
-      await saveAccountPreferences(queryClient, account.id, { ...preferences, theme })
+      await saveAccountPreferences(queryClient, account.id, { theme })
     } catch {
       setThemeError('Could not save your theme. Try again.')
     } finally {

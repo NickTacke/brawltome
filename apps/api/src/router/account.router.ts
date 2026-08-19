@@ -1,6 +1,7 @@
 import { InvalidPinnedPlayerError } from '@brawltome/accounts'
 import {
   accountPreferencesSchema,
+  accountPreferencesUpdateSchema,
   accountViewSchema,
   pinnedPlayerInputSchema,
   pinnedPlayerOrderInputSchema,
@@ -70,7 +71,7 @@ export const accountRouter = router({
     return toAccountPreferences(preferences)
   }),
   updatePreferences: protectedProcedure
-    .input(accountPreferencesSchema)
+    .input(accountPreferencesUpdateSchema)
     .output(accountPreferencesSchema)
     .mutation(async ({ ctx, input }) => {
       const preferences = await ctx.accounts.updatePreferences(ctx.account.id, input)
