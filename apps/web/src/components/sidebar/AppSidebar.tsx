@@ -92,32 +92,29 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {pinnedShortcuts.length > 0 && (
-            <>
-              {primaryShortcut && <hr className="mt-2 border-white/[0.14]" />}
-              <ul aria-label="Pinned Players" className="pt-2">
-                {pinnedShortcuts.map((shortcut) => {
-                  const active = shortcut.href === pathname
-                  return (
-                    <li key={`${shortcut.kind}:${shortcut.href}`}>
-                      <RailTooltip label={shortcut.label}>
-                        <Link
-                          href={shortcut.href}
-                          aria-label={shortcut.accessibleLabel}
-                          aria-current={active ? 'page' : undefined}
-                          className={`my-2 flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                            active
-                              ? 'text-foreground bg-white/[0.08]'
-                              : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
-                          }`}
-                        >
-                          <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
-                        </Link>
-                      </RailTooltip>
-                    </li>
-                  )
-                })}
-              </ul>
-            </>
+            <ul aria-label="Pinned Players" className="pt-2">
+              {pinnedShortcuts.map((shortcut) => {
+                const active = shortcut.href === pathname
+                return (
+                  <li key={`${shortcut.kind}:${shortcut.href}`}>
+                    <RailTooltip label={shortcut.label}>
+                      <Link
+                        href={shortcut.href}
+                        aria-label={shortcut.accessibleLabel}
+                        aria-current={active ? 'page' : undefined}
+                        className={`my-2 flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+                          active
+                            ? 'text-foreground bg-white/[0.08]'
+                            : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
+                        }`}
+                      >
+                        <PlayerShortcutAvatar avatarUrl={shortcut.avatarUrl} className="h-8 w-8 rounded-md" />
+                      </Link>
+                    </RailTooltip>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </div>
 
