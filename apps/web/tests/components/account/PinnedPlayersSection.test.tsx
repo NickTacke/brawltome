@@ -102,6 +102,7 @@ describe('PinnedPlayersSection', () => {
         pinnedPlayers={pinnedPlayers}
         loading={false}
         pendingPlayerId={null}
+        primaryPlayerKnown
         primaryPlayerId={null}
         onUnpin={() => {}}
         onMove={() => {}}
@@ -143,6 +144,7 @@ describe('PinnedPlayersSection', () => {
         loading={false}
         error
         pendingPlayerId={null}
+        primaryPlayerKnown
         onUnpin={() => {}}
         onMove={() => {}}
       />,
@@ -152,11 +154,31 @@ describe('PinnedPlayersSection', () => {
     expect(html).not.toContain('No Pinned Players yet.')
   })
 
+  for (const reason of ['loading', 'error'] as const) {
+    test(`hides management controls while Primary Player query is ${reason}`, () => {
+      const html = renderToStaticMarkup(
+        <PinnedPlayersSection
+          pinnedPlayers={legacyPinnedPlayers}
+          loading={false}
+          primaryPlayerKnown={false}
+          pendingPlayerId={null}
+          onUnpin={() => {}}
+          onMove={() => {}}
+        />,
+      )
+
+      expect(html).not.toContain('aria-label="Unpin Player ID 100"')
+      expect(html).not.toContain('aria-label="Move Player ID 100 up in Pinned Players"')
+      expect(html).not.toContain('new pins are limited to 20')
+    })
+  }
+
   test('uses one ordered list with explicit accessible names', () => {
     const html = renderToStaticMarkup(
       <PinnedPlayersSection
         pinnedPlayers={pinnedPlayers}
         loading={false}
+        primaryPlayerKnown
         pendingPlayerId={null}
         onUnpin={() => {}}
         onMove={() => {}}
@@ -173,6 +195,7 @@ describe('PinnedPlayersSection', () => {
       <PinnedPlayersSection
         pinnedPlayers={pinnedPlayers}
         loading={false}
+        primaryPlayerKnown
         pendingPlayerId={42}
         onUnpin={() => {}}
         onMove={() => {}}
@@ -186,6 +209,7 @@ describe('PinnedPlayersSection', () => {
       <PinnedPlayersSection
         pinnedPlayers={pinnedPlayers}
         loading={false}
+        primaryPlayerKnown
         pendingPlayerId={null}
         primaryPlayerId={42}
         onUnpin={() => {}}
@@ -206,6 +230,7 @@ describe('PinnedPlayersSection', () => {
       <PinnedPlayersSection
         pinnedPlayers={twentyManagedPinsWithPrimary}
         loading={false}
+        primaryPlayerKnown
         pendingPlayerId={null}
         primaryPlayerId={42}
         onUnpin={() => {}}
@@ -223,6 +248,7 @@ describe('PinnedPlayersSection', () => {
       <PinnedPlayersSection
         pinnedPlayers={legacyPinnedPlayers}
         loading={false}
+        primaryPlayerKnown
         pendingPlayerId={null}
         onUnpin={() => {}}
         onMove={() => {}}

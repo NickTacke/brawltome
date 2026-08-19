@@ -24,6 +24,12 @@ FROM ordered
 WHERE players.account_id = ordered.account_id
   AND players.brawlhalla_id = ordered.brawlhalla_id;
 
+UPDATE accounts.pinned_players players
+SET pinned_at = pins.pinned_at
+FROM accounts.saved_player_pins pins
+WHERE players.account_id = pins.account_id
+  AND players.brawlhalla_id = pins.brawlhalla_id;
+
 DROP TRIGGER accounts_primary_players_remove_pin ON accounts.primary_players;
 DROP FUNCTION accounts.remove_primary_player_pin();
 DROP TRIGGER accounts_saved_player_pins_identity_immutable ON accounts.saved_player_pins;
@@ -38,6 +44,6 @@ DROP TABLE accounts.saved_player_pins;
 export const consolidatePinnedPlayers = {
   identity: 'accounts/0008',
   predecessor: 'accounts/0007',
-  checksum: '2493655cff4a59b208c34e2ac3634b55cbceadea35e60f01cf8add75a4b04d3d',
+  checksum: 'ea29c1977040e22527f23b4a3b63f896007dd4a646378144b5b5f756c7266711',
   sql,
 } as const

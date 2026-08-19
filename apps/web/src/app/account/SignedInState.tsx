@@ -23,6 +23,8 @@ export function SignedInState({ account }: SignedInStateProps) {
     isLoading: pinnedPlayersLoading,
     isError: pinnedPlayersQueryError,
   } = usePinnedPlayers(account.id)
+  const primaryPlayerKnown = !primaryPlayerLoading && !primaryPlayerError
+  const primaryPlayerId = primaryPlayerKnown ? (primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null) : null
   const pinnedPlayersHeadingRef = useRef<HTMLHeadingElement>(null)
   const previousPrimaryPlayerIdRef = useRef<number | null | undefined>(undefined)
   const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null)
@@ -34,16 +36,15 @@ export function SignedInState({ account }: SignedInStateProps) {
   })
 
   useEffect(() => {
-    if (primaryPlayerLoading || primaryPlayerError) return
-    const primaryPlayerId = primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null
+    if (!primaryPlayerKnown) return
     const previousPrimaryPlayerId = previousPrimaryPlayerIdRef.current
     previousPrimaryPlayerIdRef.current = primaryPlayerId
     if (previousPrimaryPlayerId === undefined || previousPrimaryPlayerId === primaryPlayerId) return
     void invalidatePlayerNavigation(queryClient, account.id)
-  }, [account.id, primaryPlayerError, primaryPlayerLoading, primaryPlayerState, queryClient])
+  }, [account.id, primaryPlayerKnown, primaryPlayerId, queryClient])
 
   async function handleUnpin(brawlhallaId: number) {
-    if (pendingPlayerId !== null) return
+    if (!primaryPlayerKnown || pendingPlayerId !== null || brawlhallaId === primaryPlayerId) return
     const unpinned = pinnedPlayers.find((pinnedPlayer) => pinnedPlayer.brawlhallaId === brawlhallaId)
     const label = unpinned?.player?.name ?? `Player ID ${brawlhallaId}`
     setPendingPlayerId(brawlhallaId)
@@ -61,9 +62,8 @@ export function SignedInState({ account }: SignedInStateProps) {
   }
 
   async function handleMove(fromIndex: number, toIndex: number) {
-    if (pendingPlayerId !== null) return
+    if (!primaryPlayerKnown || pendingPlayerId !== null) return
     const moved = pinnedPlayers[fromIndex]
-    const primaryPlayerId = primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null
     if (!moved || moved.brawlhallaId === primaryPlayerId) return
     const brawlhallaIds = movePinnedPlayer(pinnedPlayers, fromIndex, toIndex)
     if (brawlhallaIds.every((id, index) => id === pinnedPlayers[index]?.brawlhallaId)) return
@@ -121,7 +121,8 @@ export function SignedInState({ account }: SignedInStateProps) {
           error={pinnedPlayersQueryError}
           headingRef={pinnedPlayersHeadingRef}
           pendingPlayerId={pendingPlayerId}
-          primaryPlayerId={primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null}
+          primaryPlayerKnown={primaryPlayerKnown}
+          primaryPlayerId={primaryPlayerId}
           onUnpin={(brawlhallaId) => void handleUnpin(brawlhallaId)}
           onMove={(fromIndex, toIndex) => void handleMove(fromIndex, toIndex)}
         />
