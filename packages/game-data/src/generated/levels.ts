@@ -1289,6 +1289,14 @@ const data = [
     "devOnly": false,
     "testLevel": false,
     "fileName": "Level_Ruins.swf"
+  },
+  {
+    "levelId": 26,
+    "levelName": "Elysium",
+    "displayName": "Tree Fort",
+    "devOnly": true,
+    "testLevel": false,
+    "fileName": "Level_Wacky.swf"
   }
 ] as const
 

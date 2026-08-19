@@ -34,6 +34,12 @@ describe('legends', () => {
       weaponOne: 'Chakram',
       weaponTwo: 'Spear',
     })
+    expect(getLegendById(72)).toMatchObject({
+      heroName: 'AstroGirl',
+      displayName: 'QINGHUA & BAOBAO',
+      weaponOne: 'Orb',
+      weaponTwo: 'Cannon',
+    })
   })
 
   test('getLegendById returns the same object as getLegendByName', () => {

@@ -54,8 +54,17 @@ function findCsvByLabel(extractRoot: string, dir: string, label: string): string
 
 // Flat BMG XML: <Type attr="x">...<Field>value</Field>...</Type>.
 // Extract each top-level Type record as a Map of {fieldName -> text}.
-// No XML entity decoding (&amp;, &lt;, ...); BMG doesn't ship them today.
-// Revisit if a regeneration ever surfaces literal `&...;` in a generated value.
+// Decodes the five standard XML entities (Qinghua's display name ships `&amp;`).
+// `&amp;` must decode last so `&amp;lt;` becomes `&lt;`, not `<`.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
 function extractRecords(xml: string, tag: string): Map<string, string>[] {
   const open = new RegExp(`<${tag}\\s+[^>]*>`, 'g')
   const records: Map<string, string>[] = []
@@ -68,7 +77,7 @@ function extractRecords(xml: string, tag: string): Map<string, string>[] {
 
     const attrsOpen = match[0].slice(tag.length + 1, -1)
     const record = new Map<string, string>()
-    for (const a of attrsOpen.matchAll(/(\w+)="([^"]*)"/g)) record.set(a[1], a[2])
+    for (const a of attrsOpen.matchAll(/(\w+)="([^"]*)"/g)) record.set(a[1], decodeEntities(a[2]))
 
     let depth = 0
     let tagName = ''
@@ -79,7 +88,7 @@ function extractRecords(xml: string, tag: string): Map<string, string>[] {
       if (body[i + 1] === '/') {
         if (depth === 1 && tagName) {
           const valEnd = body.indexOf('<', tagStart)
-          const value = body.slice(tagStart, valEnd).trim()
+          const value = decodeEntities(body.slice(tagStart, valEnd).trim())
           if (!record.has(tagName)) record.set(tagName, value)
         }
         depth--

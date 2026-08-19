@@ -2019,6 +2019,14 @@ const data = [
     "imageUrl": null
   },
   {
+    "skinId": 253,
+    "skinName": "AstroGirl",
+    "legendId": 72,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
     "skinId": 254,
     "skinName": "Gladiator",
     "legendId": 11,
@@ -6022,6 +6030,38 @@ const data = [
     "skinId": 795,
     "skinName": "GladiatorSkull",
     "legendId": 71,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 796,
+    "skinName": "LokiSchool",
+    "legendId": 27,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 800,
+    "skinName": "AstroSkater",
+    "legendId": 72,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 802,
+    "skinName": "AstroLunarBun",
+    "legendId": 72,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 803,
+    "skinName": "AstroRoboBun",
+    "legendId": 72,
     "isCrossover": false,
     "displayName": null,
     "imageUrl": null

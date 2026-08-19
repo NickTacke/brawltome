@@ -924,6 +924,19 @@ const data = [
     "weaponTwo": "Spear",
     "isActive": true,
     "isBeta": false
+  },
+  {
+    "heroId": 72,
+    "heroName": "AstroGirl",
+    "displayName": "QINGHUA & BAOBAO",
+    "strength": 5,
+    "dexterity": 4,
+    "weight": 5,
+    "speed": 8,
+    "weaponOne": "Orb",
+    "weaponTwo": "Cannon",
+    "isActive": true,
+    "isBeta": false
   }
 ] as const
 
