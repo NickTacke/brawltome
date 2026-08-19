@@ -3,6 +3,7 @@ import {
   type LegendReference,
   aggregateWeapons,
   createLegendReferenceIndex,
+  legendAvatarUrl,
   legendSlug,
   normalizeWeaponName,
 } from '../index'
@@ -43,6 +44,12 @@ describe('legend references', () => {
     expect(normalizeWeaponName('Fists')).toBe('Gauntlets')
     expect(normalizeWeaponName('Pistol')).toBe('Blasters')
     expect(normalizeWeaponName('Hammer')).toBe('Hammer')
+  })
+
+  test('encodes avatar URLs so multi-word and ampersand keys resolve', () => {
+    expect(legendAvatarUrl('bodvar')).toBe('/images/legends/avatars/bodvar.png')
+    expect(legendAvatarUrl('king zuva')).toBe('/images/legends/avatars/king%20zuva.png')
+    expect(legendAvatarUrl('qinghua & baobao')).toBe('/images/legends/avatars/qinghua%20%26%20baobao.png')
   })
 
   test('aggregates resolved legend weapons by descending held time', () => {

@@ -135,7 +135,7 @@ describe('skin appearances', () => {
       skinId: 351,
       name: 'King Knight',
       imageUrl: 'https://cms.brawlhalla.com/c/uploads/2021/07/a_Roster_Pose_KingKnightM.png',
-      fallbackImageUrl: '/images/legends/avatars/sir roland.png',
+      fallbackImageUrl: '/images/legends/avatars/sir%20roland.png',
       diagnostic: null,
     })
   })

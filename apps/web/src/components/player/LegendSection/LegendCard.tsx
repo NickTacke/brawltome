@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage, Badge } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
-import { normalizeWeaponName } from '@brawltome/game-data'
+import { legendAvatarUrl, normalizeWeaponName } from '@brawltome/game-data'
 import {
   type PlayerData,
   WinLossBar,
@@ -52,7 +52,7 @@ export function LegendCard({
         <div className="flex items-center gap-4 relative z-10">
           <Avatar className="w-12 h-12 rounded-lg shadow-sm shrink-0">
             <AvatarImage
-              src={`/images/legends/avatars/${legend.legendNameKey}.png`}
+              src={legendAvatarUrl(legend.legendNameKey)}
               alt={displayName}
               className="object-cover object-top"
               loading="lazy"

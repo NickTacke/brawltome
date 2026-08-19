@@ -20,6 +20,7 @@ export function currentOneVsOneBracket(rating: number): CurrentOneVsOneBracket |
 export {
   aggregateWeapons,
   createLegendReferenceIndex,
+  legendAvatarUrl,
   legendSlug,
   normalizeWeaponName,
   type LegendReference,
@@ -33,7 +34,7 @@ import { legends } from './src/generated/legends'
 import { levels } from './src/generated/levels'
 import { powers } from './src/generated/powers'
 import { skins } from './src/generated/skins'
-import { legendSlug } from './src/reference-data'
+import { legendAvatarUrl, legendSlug } from './src/reference-data'
 import type { Hurtbox, Legend, LevelMeta, PlayerAppearance, Power, Skin } from './src/types'
 
 export { legends, levels, powers, hurtboxes, skins }
@@ -81,7 +82,7 @@ export function resolvePlayerAppearance(legendId: number, skinId: number): Playe
     }
   }
 
-  const baseImageUrl = `/images/legends/avatars/${legendSlug(legend.heroId, legend.displayName)}.png`
+  const baseImageUrl = legendAvatarUrl(legendSlug(legend.heroId, legend.displayName))
   const skin = getSkinById(skinId)
   if (!skin) {
     return {

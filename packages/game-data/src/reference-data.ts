@@ -99,3 +99,7 @@ function addWeaponStats(
   current.kos += stats.kos
   aggregates.set(weapon, current)
 }
+
+export function legendAvatarUrl(legendNameKey: string): string {
+  return `/images/legends/avatars/${encodeURIComponent(legendNameKey)}.png`
+}
