@@ -4,17 +4,17 @@ import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
-import { useAccount } from '@/lib/auth'
+import { useAccount, usePrimaryPlayer } from '@/lib/auth'
+import { pinPlayer, unpinPlayer, usePinnedPlayers } from '@/lib/pinnedPlayers'
 import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '@/lib/player-refresh'
 import { getRefreshClientAction } from '@/lib/refresh-outcome'
-import { removeSavedPlayer, savePlayer, useSavedPlayers } from '@/lib/savedPlayers'
-import { MAX_SAVED_PLAYERS } from '@brawltome/contracts'
+import { MAX_PINNED_PLAYERS } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
+import { PinnedPlayerButton } from './PinnedPlayerButton'
 import { PlayerProfileHierarchy } from './PlayerProfileHierarchy'
-import { SavedPlayerButton } from './SavedPlayerButton'
 
 interface PlayerProfileProps {
   initialData: PlayerData | null
@@ -24,15 +24,16 @@ interface PlayerProfileProps {
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const queryClient = useQueryClient()
   const { account } = useAccount()
+  const { state: primaryPlayerState } = usePrimaryPlayer()
   const {
-    savedPlayers,
-    isLoading: savedPlayersLoading,
-    isError: savedPlayersQueryError,
-    isReady: savedPlayersReady,
-  } = useSavedPlayers(account?.id)
-  const [savedPlayerPending, setSavedPlayerPending] = useState(false)
-  const [savedPlayerError, setSavedPlayerError] = useState<string | null>(null)
-  const [savedPlayerStatus, setSavedPlayerStatus] = useState('')
+    pinnedPlayers,
+    isLoading: pinnedPlayersLoading,
+    isError: pinnedPlayersQueryError,
+    isReady: pinnedPlayersReady,
+  } = usePinnedPlayers(account?.id)
+  const [pinnedPlayerPending, setPinnedPlayerPending] = useState(false)
+  const [pinnedPlayerError, setPinnedPlayerError] = useState<string | null>(null)
+  const [pinnedPlayerStatus, setPinnedPlayerStatus] = useState('')
   const [turnstileError, setTurnstileError] = useState(false)
   const [refreshAccepted, setRefreshAccepted] = useState(false)
   const [verificationRequired, setVerificationRequired] = useState(false)
@@ -91,27 +92,28 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const displayPlayer = player
   const brawlhallaId = Number(id)
-  const isSaved = savedPlayers.some((savedPlayer) => savedPlayer.brawlhallaId === brawlhallaId)
-  const savedPlayerLimitReached = !isSaved && savedPlayers.length >= MAX_SAVED_PLAYERS
+  const isPinned = pinnedPlayers.some((pinnedPlayer) => pinnedPlayer.brawlhallaId === brawlhallaId)
+  const isPrimaryPlayer = primaryPlayerState?.primaryPlayer?.brawlhallaId === brawlhallaId
+  const pinnedPlayerLimitReached = !isPinned && pinnedPlayers.length >= MAX_PINNED_PLAYERS
 
-  async function toggleSavedPlayer() {
+  async function togglePinnedPlayer() {
     if (!account || !Number.isInteger(brawlhallaId) || brawlhallaId < 1) return
-    if (savedPlayerLimitReached) return
-    setSavedPlayerPending(true)
-    setSavedPlayerError(null)
-    setSavedPlayerStatus('')
+    if (isPrimaryPlayer || pinnedPlayerLimitReached) return
+    setPinnedPlayerPending(true)
+    setPinnedPlayerError(null)
+    setPinnedPlayerStatus('')
     try {
-      if (isSaved) {
-        await removeSavedPlayer(queryClient, account.id, brawlhallaId)
-        setSavedPlayerStatus('Removed player from Saved Players.')
+      if (isPinned) {
+        await unpinPlayer(queryClient, account.id, brawlhallaId)
+        setPinnedPlayerStatus('Unpinned player from Pinned Players.')
       } else {
-        await savePlayer(queryClient, account.id, brawlhallaId)
-        setSavedPlayerStatus('Saved player to Saved Players.')
+        await pinPlayer(queryClient, account.id, brawlhallaId)
+        setPinnedPlayerStatus('Pinned player to Pinned Players.')
       }
     } catch {
-      setSavedPlayerError('Could not update Saved Players. Try again.')
+      setPinnedPlayerError('Could not update Pinned Players. Try again.')
     } finally {
-      setSavedPlayerPending(false)
+      setPinnedPlayerPending(false)
     }
   }
 
@@ -137,28 +139,30 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         {account && (
           <>
             <output aria-live="polite" className="sr-only">
-              {savedPlayerPending ? 'Updating Saved Players.' : savedPlayerStatus}
+              {pinnedPlayerPending ? 'Updating Pinned Players.' : pinnedPlayerStatus}
             </output>
-            {savedPlayersLoading && <output className="text-muted-foreground text-sm">Loading Saved Players...</output>}
-            {savedPlayersReady && (
-              <SavedPlayerButton
-                saved={isSaved}
-                pending={savedPlayerPending}
-                disabled={savedPlayerLimitReached}
-                onToggle={() => void toggleSavedPlayer()}
+            {pinnedPlayersLoading && (
+              <output className="text-muted-foreground text-sm">Loading Pinned Players...</output>
+            )}
+            {pinnedPlayersReady && !isPrimaryPlayer && (
+              <PinnedPlayerButton
+                pinned={isPinned}
+                pending={pinnedPlayerPending}
+                disabled={pinnedPlayerLimitReached}
+                onToggle={() => void togglePinnedPlayer()}
               />
             )}
           </>
         )}
       </div>
-      {savedPlayersQueryError && (
+      {pinnedPlayersQueryError && (
         <p role="alert" className="text-sm text-red-300">
-          Saved Players are unavailable. Try again.
+          Pinned Players are unavailable. Try again.
         </p>
       )}
-      {savedPlayerError && (
+      {pinnedPlayerError && (
         <p role="alert" className="text-sm text-red-300">
-          {savedPlayerError}
+          {pinnedPlayerError}
         </p>
       )}
       <PlayerProfileHierarchy
