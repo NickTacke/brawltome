@@ -81,14 +81,28 @@ export function linkSteam(): void {
   window.location.assign(authUrl('/auth/steam/link'))
 }
 
+const preferenceWriteQueues = new Map<string, Promise<unknown>>()
+
 export async function saveAccountPreferences(
   queryClient: ReturnType<typeof useQueryClient>,
   accountId: string,
   update: AccountPreferencesUpdateContract,
 ): Promise<AccountPreferencesContract> {
-  const updated = parseAccountPreferencesResponse(await trpc.account.updatePreferences.mutate(update))
-  queryClient.setQueryData(accountPreferencesKey(accountId), updated)
-  return updated
+  const previousWrite = preferenceWriteQueues.get(accountId) ?? Promise.resolve()
+  const currentWrite = previousWrite
+    .catch(() => {})
+    .then(async () => {
+      const updated = parseAccountPreferencesResponse(await trpc.account.updatePreferences.mutate(update))
+      queryClient.setQueryData(accountPreferencesKey(accountId), updated)
+      return updated
+    })
+  preferenceWriteQueues.set(accountId, currentWrite)
+
+  try {
+    return await currentWrite
+  } finally {
+    if (preferenceWriteQueues.get(accountId) === currentWrite) preferenceWriteQueues.delete(accountId)
+  }
 }
 
 export async function signOut(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
