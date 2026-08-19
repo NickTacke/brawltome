@@ -15,12 +15,11 @@ export async function resolveInitialAccountTheme(
   hasSession: boolean,
   loadPreferences: () => Promise<Pick<AccountPreferencesContract, 'theme'>>,
 ): Promise<AccountTheme | undefined> {
-  if (cookieTheme === 'purple') return 'purple'
   if (!hasSession) return undefined
   try {
     return (await loadPreferences()).theme === 'purple' ? 'purple' : undefined
   } catch {
-    return undefined
+    return cookieTheme === 'purple' ? 'purple' : undefined
   }
 }
 
