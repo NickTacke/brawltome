@@ -18,6 +18,37 @@ describe('account theme application', () => {
     expect(theme).toBe('purple')
   })
 
+  test('does not query preferences without a session cookie', async () => {
+    let queried = false
+    const theme = await resolveInitialAccountTheme(undefined, false, async () => {
+      queried = true
+      return { theme: 'purple' }
+    })
+
+    expect(theme).toBeUndefined()
+    expect(queried).toBe(false)
+  })
+
+  test('keeps neutral when server preference loading fails or is neutral', async () => {
+    await expect(
+      resolveInitialAccountTheme(undefined, true, async () => Promise.reject(new Error('offline'))),
+    ).resolves.toBeUndefined()
+    await expect(
+      resolveInitialAccountTheme(undefined, true, async () => ({ theme: 'neutral' })),
+    ).resolves.toBeUndefined()
+  })
+
+  test('uses a purple cookie without querying preferences', async () => {
+    let queried = false
+    const theme = await resolveInitialAccountTheme('purple', true, async () => {
+      queried = true
+      return { theme: 'neutral' }
+    })
+
+    expect(theme).toBe('purple')
+    expect(queried).toBe(false)
+  })
+
   test('sets purple and removes the override for neutral', () => {
     const removeAttribute = mock(() => {})
     const dataset: Record<string, string> = {}
