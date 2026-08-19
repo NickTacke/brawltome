@@ -28,7 +28,7 @@ export type WeaponAggregate = {
   kos: number
 }
 
-const LEGEND_SLUG_OVERRIDES: Record<number, string> = { 17: 'redraptor' }
+const LEGEND_SLUG_OVERRIDES: Record<number, string> = { 17: 'redraptor', 72: 'qinghua' }
 
 const WEAPON_NAME_MAP: Record<string, string> = {
   Fists: 'Gauntlets',
