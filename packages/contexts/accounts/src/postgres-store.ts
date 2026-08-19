@@ -1,5 +1,6 @@
 import postgres, { type Sql, type TransactionSql } from 'postgres'
 import {
+  ACCOUNT_THEMES,
   type Account,
   type AccountPreferences,
   AccountsMaintenanceError,
@@ -44,6 +45,7 @@ interface PreferencesRow {
   schema_version: number
   leaderboard_bracket: string
   leaderboard_region: string
+  theme: string
 }
 
 interface VerificationAttemptRow {
@@ -264,7 +266,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
 
     async findPreferences(accountId) {
       const [row] = await client.unsafe<PreferencesRow[]>(
-        `SELECT schema_version, leaderboard_bracket, leaderboard_region
+        `SELECT schema_version, leaderboard_bracket, leaderboard_region, theme
          FROM accounts.preferences
          WHERE account_id = $1`,
         [accountId],
@@ -279,15 +281,23 @@ function postgresAccountsStore(client: Sql): AccountsStore {
              account_id,
              schema_version,
              leaderboard_bracket,
-             leaderboard_region
-           ) VALUES ($1, $2, $3, $4)
+             leaderboard_region,
+             theme
+           ) VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (account_id) DO UPDATE
            SET schema_version = EXCLUDED.schema_version,
                leaderboard_bracket = EXCLUDED.leaderboard_bracket,
                leaderboard_region = EXCLUDED.leaderboard_region,
+               theme = EXCLUDED.theme,
                updated_at = now()
-           RETURNING schema_version, leaderboard_bracket, leaderboard_region`,
-          [accountId, preferences.version, preferences.leaderboardBracket, preferences.leaderboardRegion],
+           RETURNING schema_version, leaderboard_bracket, leaderboard_region, theme`,
+          [
+            accountId,
+            preferences.version,
+            preferences.leaderboardBracket,
+            preferences.leaderboardRegion,
+            preferences.theme,
+          ],
         )
         const stored = mapPreferences(row)
         if (!stored) throw new Error('Accounts stored an unsupported preference version')
@@ -573,16 +583,18 @@ function mapPinnedPlayer({ brawlhalla_id, position, pinned_at }: PinnedPlayerRow
 
 function mapPreferences(row: PreferencesRow): AccountPreferences | null {
   if (
-    row.schema_version !== 1 ||
+    row.schema_version !== 2 ||
     !LEADERBOARD_BRACKETS.includes(row.leaderboard_bracket as AccountPreferences['leaderboardBracket']) ||
-    !LEADERBOARD_REGIONS.includes(row.leaderboard_region as AccountPreferences['leaderboardRegion'])
+    !LEADERBOARD_REGIONS.includes(row.leaderboard_region as AccountPreferences['leaderboardRegion']) ||
+    !ACCOUNT_THEMES.includes(row.theme as AccountPreferences['theme'])
   ) {
     return null
   }
   return {
-    version: 1,
+    version: 2,
     leaderboardBracket: row.leaderboard_bracket as AccountPreferences['leaderboardBracket'],
     leaderboardRegion: row.leaderboard_region as AccountPreferences['leaderboardRegion'],
+    theme: row.theme as AccountPreferences['theme'],
   }
 }
 

@@ -38,6 +38,7 @@ describe('AppSidebar pinned-player navigation', () => {
     expect(emptyHtml).toContain('min-h-0 flex-1 overflow-y-auto')
     expect(emptyHtml).toContain('shrink-0 border-t')
     expect(html).not.toContain('<hr class="mt-2 border-white/[0.14]"')
+    expect(html).toContain('border-sidebar-border mt-2 border-t pt-2')
     const listStart = html.indexOf('<ul aria-label="Player shortcuts"')
     const shortcutList = html.slice(listStart, html.indexOf('</ul>', listStart))
     expect(shortcutList).toContain('aria-label="You, Ada"')

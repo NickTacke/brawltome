@@ -30,9 +30,10 @@ export const REGION_IDS = REGIONS.map((r) => r.id) as readonly RegionId[]
 export const PAGE_SIZE = 20
 export const MAX_PAGE = 500
 export const DEFAULT_LEADERBOARD_PREFERENCES: AccountPreferencesContract = {
-  version: 1,
+  version: 2,
   leaderboardBracket: '1v1',
   leaderboardRegion: 'all',
+  theme: 'neutral',
 }
 
 export interface LeaderboardFilters {
@@ -63,12 +64,12 @@ export function parseLeaderboardSearchParams(
 export function preferencesForLeaderboardUpdate(
   current: LeaderboardFilters,
   next: Partial<LeaderboardFilters>,
-  signedIn: boolean,
+  preferences: AccountPreferencesContract | null,
 ): AccountPreferencesContract | null {
-  if (!signedIn || (next.bracket === undefined && next.region === undefined)) return null
+  if (!preferences || (next.bracket === undefined && next.region === undefined)) return null
   const merged = { ...current, ...next }
   return {
-    version: 1,
+    ...preferences,
     leaderboardBracket: merged.bracket,
     leaderboardRegion: merged.region,
   }

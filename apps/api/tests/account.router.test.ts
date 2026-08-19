@@ -403,7 +403,12 @@ describe('account.preferences', () => {
       preferences: () => Promise<unknown>
       updatePreferences: (input: AccountPreferences) => Promise<unknown>
     }
-    const updated = { version: 1 as const, leaderboardBracket: '2v2' as const, leaderboardRegion: 'US-W' as const }
+    const updated = {
+      version: 2 as const,
+      leaderboardBracket: '2v2' as const,
+      leaderboardRegion: 'US-W' as const,
+      theme: 'purple' as const,
+    }
 
     expect(await api.updatePreferences(updated)).toEqual(updated)
     expect(await api.preferences()).toEqual(updated)
@@ -428,7 +433,7 @@ describe('account.preferences', () => {
   test('rejects unsupported producer output', () => {
     expect(() =>
       toAccountPreferences({
-        version: 2,
+        version: 1,
         leaderboardBracket: '1v1',
         leaderboardRegion: 'all',
       } as never),

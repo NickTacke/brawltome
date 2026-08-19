@@ -23,11 +23,12 @@ const signedInView = {
 }
 
 describe('accountPreferencesSchema', () => {
-  test('defines only the launch-consumed leaderboard preferences in version 1', () => {
+  test('defines leaderboard and account theme preferences in version 2', () => {
     const preferences = {
-      version: 1 as const,
+      version: 2 as const,
       leaderboardBracket: 'solo2v2' as const,
       leaderboardRegion: 'EU' as const,
+      theme: 'purple' as const,
     }
 
     expect(accountPreferencesSchema.parse(preferences)).toEqual(preferences)
@@ -36,16 +37,16 @@ describe('accountPreferencesSchema', () => {
   test('rejects unknown, retired, partial, and unsupported preferences', () => {
     expect(() =>
       accountPreferencesSchema.parse({
-        version: 1,
+        version: 2,
         leaderboardBracket: '1v1',
         leaderboardRegion: 'all',
         theme: 'dark',
       }),
     ).toThrow()
-    expect(() => accountPreferencesSchema.parse({ version: 1, leaderboardBracket: '1v1' })).toThrow()
+    expect(() => accountPreferencesSchema.parse({ version: 2, leaderboardBracket: '1v1' })).toThrow()
     expect(() =>
       accountPreferencesSchema.parse({
-        version: 2,
+        version: 1,
         leaderboardBracket: '1v1',
         leaderboardRegion: 'all',
       }),

@@ -422,9 +422,10 @@ describePostgres('Accounts V2 import', () => {
         fenceHeld = true
         writers = [
           runtime.accounts.updatePreferences(legacyAccountIds.linked, {
-            version: 1,
+            version: 2,
             leaderboardBracket: '2v2',
             leaderboardRegion: 'EU',
+            theme: 'neutral',
           }),
           runtime.accounts.signInWithDiscord({
             providerAccountId: 'fenced-discord-writer',
@@ -556,9 +557,10 @@ describePostgres('Accounts V2 import', () => {
         fenceHeld = true
         const startedAt = Date.now()
         const write = runtime.accounts.updatePreferences(legacyAccountIds.linked, {
-          version: 1,
+          version: 2,
           leaderboardBracket: '2v2',
           leaderboardRegion: 'EU',
+          theme: 'neutral',
         })
         await expect(write).rejects.toMatchObject({
           name: AccountsMaintenanceError.name,
@@ -643,9 +645,10 @@ describePostgres('Accounts V2 import', () => {
         let writerSettled = false
         writing = runtime.accounts
           .updatePreferences(legacyAccountIds.linked, {
-            version: 1,
+            version: 2,
             leaderboardBracket: '2v2',
             leaderboardRegion: 'EU',
+            theme: 'neutral',
           })
           .finally(() => {
             writerSettled = true
@@ -665,9 +668,10 @@ describePostgres('Accounts V2 import', () => {
         await heldSource
         expect(await importing).toMatchObject({ status: 'complete', reconciliation: { exact: true } })
         await runtime.accounts.updatePreferences(legacyAccountIds.linked, {
-          version: 1,
+          version: 2,
           leaderboardBracket: '2v2',
           leaderboardRegion: 'EU',
+          theme: 'neutral',
         })
         const [afterImport] = await inspect<Array<{ preferences: number }>>`
           SELECT count(*)::integer AS preferences FROM accounts.preferences

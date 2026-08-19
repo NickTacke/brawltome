@@ -73,9 +73,9 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
           })}
         </nav>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="border-sidebar-border mt-2 border-t pt-2 min-h-0 flex-1 overflow-y-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {shortcutList.length > 0 && (
-            <ul aria-label="Player shortcuts" className="pt-2">
+            <ul aria-label="Player shortcuts">
               {shortcutList.map((shortcut) => {
                 const active = shortcut.href === pathname
                 return (

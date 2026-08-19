@@ -1,12 +1,13 @@
 'use client'
 
-import { signOut, usePrimaryPlayer } from '@/lib/auth'
+import { saveAccountPreferences, signOut, useAccountPreferences, usePrimaryPlayer } from '@/lib/auth'
 import { movePinnedPlayer, reorderPinnedPlayers, unpinPlayer, usePinnedPlayers } from '@/lib/pinnedPlayers'
 import { invalidatePlayerNavigation } from '@/lib/playerShortcuts'
+import { ACCOUNT_THEME_OPTIONS } from '@/lib/theme'
 import type { AccountContract } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { Users } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { BrawlhallaLinkRow } from './BrawlhallaLinkRow'
 import { DiscordIcon } from './DiscordIcon'
 import { PinnedPlayersSection } from './PinnedPlayersSection'
@@ -17,6 +18,7 @@ interface SignedInStateProps {
 
 export function SignedInState({ account }: SignedInStateProps) {
   const queryClient = useQueryClient()
+  const { preferences, isLoading: preferencesLoading } = useAccountPreferences(account.id)
   const { state: primaryPlayerState, isLoading: primaryPlayerLoading, isError: primaryPlayerError } = usePrimaryPlayer()
   const {
     pinnedPlayers,
@@ -30,6 +32,8 @@ export function SignedInState({ account }: SignedInStateProps) {
   const [pendingPlayerId, setPendingPlayerId] = useState<number | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [mutationStatus, setMutationStatus] = useState('')
+  const [themeSaving, setThemeSaving] = useState(false)
+  const [themeError, setThemeError] = useState<string | null>(null)
   const memberSince = new Date(account.createdAt).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
@@ -42,6 +46,20 @@ export function SignedInState({ account }: SignedInStateProps) {
     if (previousPrimaryPlayerId === undefined || previousPrimaryPlayerId === primaryPlayerId) return
     void invalidatePlayerNavigation(queryClient, account.id)
   }, [account.id, primaryPlayerKnown, primaryPlayerId, queryClient])
+
+  async function handleThemeChange(event: ChangeEvent<HTMLSelectElement>) {
+    const theme = ACCOUNT_THEME_OPTIONS.find(({ value }) => value === event.currentTarget.value)?.value
+    if (!preferences || !theme || theme === preferences.theme) return
+    setThemeSaving(true)
+    setThemeError(null)
+    try {
+      await saveAccountPreferences(queryClient, account.id, { ...preferences, theme })
+    } catch {
+      setThemeError('Could not save your theme. Try again.')
+    } finally {
+      setThemeSaving(false)
+    }
+  }
 
   async function handleUnpin(brawlhallaId: number) {
     if (!primaryPlayerKnown || pendingPlayerId !== null || brawlhallaId === primaryPlayerId) return
@@ -128,6 +146,31 @@ export function SignedInState({ account }: SignedInStateProps) {
         />
 
         <aside className="space-y-6">
+          <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 sm:p-6">
+            <h2 className="text-sm font-semibold">Appearance</h2>
+            <p className="text-muted-foreground mt-1 text-xs">Choose the color theme for BrawlTome.</p>
+            <label className="mt-4 flex items-center justify-between gap-4 text-sm">
+              <span>Theme</span>
+              <select
+                aria-label="Theme"
+                value={preferences?.theme ?? 'neutral'}
+                onChange={(event) => void handleThemeChange(event)}
+                disabled={preferencesLoading || !preferences || themeSaving}
+                className="bg-background border-border text-foreground min-h-10 rounded-md border px-3 text-sm"
+              >
+                {ACCOUNT_THEME_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {themeError && (
+              <p role="alert" className="text-destructive mt-3 text-xs">
+                {themeError}
+              </p>
+            )}
+          </section>
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 sm:p-6">
             <h2 className="text-sm font-semibold">Primary Player</h2>
             <div className="mt-4">

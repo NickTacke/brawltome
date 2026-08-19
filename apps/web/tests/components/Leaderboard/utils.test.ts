@@ -27,9 +27,10 @@ describe('parseLeaderboardSearchParams', () => {
 
   it('uses canonical preferences when URL filters are absent or invalid', () => {
     const preferences = {
-      version: 1 as const,
+      version: 2 as const,
       leaderboardBracket: '3v3' as const,
       leaderboardRegion: 'JPN' as const,
+      theme: 'purple' as const,
     }
 
     expect(parseLeaderboardSearchParams(new URLSearchParams(), preferences)).toEqual({
@@ -46,9 +47,10 @@ describe('parseLeaderboardSearchParams', () => {
 
   it('keeps valid shared URL filters ahead of canonical preferences', () => {
     const preferences = {
-      version: 1 as const,
+      version: 2 as const,
       leaderboardBracket: '3v3' as const,
       leaderboardRegion: 'JPN' as const,
+      theme: 'purple' as const,
     }
 
     expect(parseLeaderboardSearchParams(new URLSearchParams('bracket=2v2&region=EU&page=4'), preferences)).toEqual({
@@ -76,17 +78,30 @@ describe('validated snapshot presentation', () => {
 describe('preferencesForLeaderboardUpdate', () => {
   const filters = { bracket: '1v1' as const, region: 'all' as const, page: 3 }
 
-  it('persists signed-in bracket and region changes as the complete V1 contract', () => {
-    expect(preferencesForLeaderboardUpdate(filters, { region: 'EU' }, true)).toEqual({
-      version: 1,
+  it('persists signed-in bracket and region changes without resetting the theme', () => {
+    const preferences = {
+      version: 2 as const,
+      leaderboardBracket: '1v1' as const,
+      leaderboardRegion: 'all' as const,
+      theme: 'purple' as const,
+    }
+    expect(preferencesForLeaderboardUpdate(filters, { region: 'EU' }, preferences)).toEqual({
+      version: 2,
       leaderboardBracket: '1v1',
       leaderboardRegion: 'EU',
+      theme: 'purple',
     })
   })
 
   it('does not persist pagination or anonymous interaction', () => {
-    expect(preferencesForLeaderboardUpdate(filters, { page: 4 }, true)).toBeNull()
-    expect(preferencesForLeaderboardUpdate(filters, { bracket: '2v2' }, false)).toBeNull()
+    const preferences = {
+      version: 2 as const,
+      leaderboardBracket: '1v1' as const,
+      leaderboardRegion: 'all' as const,
+      theme: 'neutral' as const,
+    }
+    expect(preferencesForLeaderboardUpdate(filters, { page: 4 }, preferences)).toBeNull()
+    expect(preferencesForLeaderboardUpdate(filters, { bracket: '2v2' }, null)).toBeNull()
   })
 })
 

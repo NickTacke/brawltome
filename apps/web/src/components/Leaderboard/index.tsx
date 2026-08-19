@@ -75,7 +75,7 @@ export function Leaderboard() {
       const qs = buildLeaderboardQueryString(merged)
       router.push(`${pathname}?${qs}`, { scroll: false })
 
-      const preferenceUpdate = preferencesForLeaderboardUpdate(filters, next, account !== null)
+      const preferenceUpdate = preferencesForLeaderboardUpdate(filters, next, account ? preferences : null)
       if (preferenceUpdate && account) {
         setPreferenceError(null)
         setPreferencesSaving(true)
@@ -87,7 +87,7 @@ export function Leaderboard() {
           .finally(() => setPreferencesSaving(false))
       }
     },
-    [account, filters, pathname, queryClient, router],
+    [account, filters, pathname, preferences, queryClient, router],
   )
 
   useEffect(() => {

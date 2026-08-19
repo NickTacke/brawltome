@@ -257,9 +257,10 @@ describe('Accounts', () => {
     const state = makeStore()
     const accounts = makeAccounts(state.store)
     const updated = {
-      version: 1 as const,
+      version: 2 as const,
       leaderboardBracket: '3v3' as const,
       leaderboardRegion: 'JPN' as const,
+      theme: 'purple' as const,
     }
 
     expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(DEFAULT_ACCOUNT_PREFERENCES)
@@ -273,9 +274,10 @@ describe('Accounts', () => {
 
     await expect(
       accounts.updatePreferences(ACCOUNT_ID, {
-        version: 1,
+        version: 2,
         leaderboardBracket: 'ranked' as '1v1',
         leaderboardRegion: 'EU',
+        theme: 'neutral',
       }),
     ).rejects.toBeInstanceOf(InvalidAccountPreferencesError)
     await expect(
