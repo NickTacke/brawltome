@@ -8,13 +8,13 @@ import { useAccount, usePrimaryPlayer } from '@/lib/auth'
 import { pinPlayer, unpinPlayer, usePinnedPlayers } from '@/lib/pinnedPlayers'
 import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '@/lib/player-refresh'
 import { getRefreshClientAction } from '@/lib/refresh-outcome'
-import { MAX_PINNED_PLAYERS } from '@brawltome/contracts'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
 import { PinnedPlayerButton } from './PinnedPlayerButton'
 import { PlayerProfileHierarchy } from './PlayerProfileHierarchy'
+import { hasPinnedPlayerLimitReached, shouldShowPinnedPlayerButton } from './player-profile-state'
 
 interface PlayerProfileProps {
   initialData: PlayerData | null
@@ -24,7 +24,7 @@ interface PlayerProfileProps {
 export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const queryClient = useQueryClient()
   const { account } = useAccount()
-  const { state: primaryPlayerState } = usePrimaryPlayer()
+  const { state: primaryPlayerState, isLoading: primaryPlayerLoading, isError: primaryPlayerError } = usePrimaryPlayer()
   const {
     pinnedPlayers,
     isLoading: pinnedPlayersLoading,
@@ -92,13 +92,23 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   const displayPlayer = player
   const brawlhallaId = Number(id)
+  const primaryPlayerKnown = !primaryPlayerLoading && !primaryPlayerError
+  const primaryPlayerId = primaryPlayerKnown ? (primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null) : null
   const isPinned = pinnedPlayers.some((pinnedPlayer) => pinnedPlayer.brawlhallaId === brawlhallaId)
-  const isPrimaryPlayer = primaryPlayerState?.primaryPlayer?.brawlhallaId === brawlhallaId
-  const pinnedPlayerLimitReached = !isPinned && pinnedPlayers.length >= MAX_PINNED_PLAYERS
+  const isPrimaryPlayer = primaryPlayerId === brawlhallaId
+  const pinnedPlayerLimitReached = hasPinnedPlayerLimitReached(pinnedPlayers, primaryPlayerId, brawlhallaId)
+  const showPinnedPlayerButton = shouldShowPinnedPlayerButton({
+    accountSignedIn: Boolean(account),
+    pinnedPlayersReady,
+    playerId: brawlhallaId,
+    primaryPlayerId,
+    primaryPlayerLoading,
+    primaryPlayerError,
+  })
 
   async function togglePinnedPlayer() {
     if (!account || !Number.isInteger(brawlhallaId) || brawlhallaId < 1) return
-    if (isPrimaryPlayer || pinnedPlayerLimitReached) return
+    if (!primaryPlayerKnown || isPrimaryPlayer || pinnedPlayerLimitReached) return
     setPinnedPlayerPending(true)
     setPinnedPlayerError(null)
     setPinnedPlayerStatus('')
@@ -144,7 +154,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
             {pinnedPlayersLoading && (
               <output className="text-muted-foreground text-sm">Loading Pinned Players...</output>
             )}
-            {pinnedPlayersReady && !isPrimaryPlayer && (
+            {showPinnedPlayerButton && (
               <PinnedPlayerButton
                 pinned={isPinned}
                 pending={pinnedPlayerPending}
