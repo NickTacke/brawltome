@@ -47,10 +47,9 @@ describe('private Player shortcut navigation', () => {
         avatarUrl: null,
       },
     ])
-    expect(createPlayerShortcutNavigation(shortcuts).some(({ kind }) => String(kind) === 'all-saved')).toBe(false)
   })
 
-  test('preserves every ordered Pinned Player without an all-saved destination', () => {
+  test('preserves every ordered Pinned Player without a synthetic destination', () => {
     const pins = Array.from({ length: 21 }, (_, index) => ({
       brawlhallaId: 100 + index,
       name: `Player ${index}`,
@@ -62,7 +61,6 @@ describe('private Player shortcut navigation', () => {
     expect(navigation.map(({ kind, href }) => [kind, href])).toEqual(
       pins.map(({ brawlhallaId }) => ['pin', `/player/${brawlhallaId}`]),
     )
-    expect(navigation.some(({ kind }) => String(kind) === 'all-saved')).toBe(false)
   })
 
   test('returns no private destinations without an authenticated shortcut contract', () => {

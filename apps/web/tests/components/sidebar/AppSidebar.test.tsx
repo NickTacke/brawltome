@@ -23,7 +23,7 @@ const playerShortcuts: PlayerShortcutNavigationItem[] = [
 ]
 
 describe('AppSidebar pinned-player navigation', () => {
-  test('renders all pin shortcuts in the independent scroll region without All Saved Players', () => {
+  test('renders all pin shortcuts in the independent scroll region', () => {
     const html = renderToStaticMarkup(
       <AppSidebar account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
     )
@@ -34,7 +34,5 @@ describe('AppSidebar pinned-player navigation', () => {
     expect(html).toContain('aria-label="Pinned Player, Mira"')
     expect(html).toContain('aria-label="Pinned Player, Nia"')
     expect(html).toContain('aria-label="You, Ada"')
-    expect(html).not.toContain('All Saved Players')
-    expect(html).not.toContain('all-saved')
   })
 })

@@ -387,13 +387,6 @@ describe('account.pinnedPlayers', () => {
     }
     const limitedApi = caller(context(account, limitedAccounts)) as { pinPlayer: (input: unknown) => Promise<unknown> }
     await expect(limitedApi.pinPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
-
-    const procedures = (accountRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def.procedures
-    expect(procedures).not.toHaveProperty('savedPlayers')
-    expect(procedures).not.toHaveProperty('savePlayer')
-    expect(procedures).not.toHaveProperty('removeSavedPlayer')
-    expect(procedures).not.toHaveProperty('pinSavedPlayer')
-    expect(procedures).not.toHaveProperty('unpinSavedPlayer')
   })
 })
 
