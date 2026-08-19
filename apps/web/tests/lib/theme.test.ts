@@ -38,14 +38,25 @@ describe('account theme application', () => {
     ).resolves.toBeUndefined()
   })
 
-  test('uses a purple cookie without querying preferences', async () => {
+  test('prefers the current account preference over a stale purple cookie', async () => {
     let queried = false
     const theme = await resolveInitialAccountTheme('purple', true, async () => {
       queried = true
       return { theme: 'neutral' }
     })
 
-    expect(theme).toBe('purple')
+    expect(theme).toBeUndefined()
+    expect(queried).toBe(true)
+  })
+
+  test('ignores a stale purple cookie without a session', async () => {
+    let queried = false
+    const theme = await resolveInitialAccountTheme('purple', false, async () => {
+      queried = true
+      return { theme: 'purple' }
+    })
+
+    expect(theme).toBeUndefined()
     expect(queried).toBe(false)
   })
 

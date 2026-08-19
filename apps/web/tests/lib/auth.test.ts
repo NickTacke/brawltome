@@ -1,14 +1,76 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import {
+import type { AccountPreferencesContract, AccountPreferencesUpdateContract } from '@brawltome/contracts'
+
+let preferenceMutation: (update: AccountPreferencesUpdateContract) => Promise<unknown> = async () => {
+  throw new Error('preference mutation not configured')
+}
+mock.module('../../src/lib/trpc', () => ({
+  trpc: {
+    account: {
+      updatePreferences: { mutate: (update: AccountPreferencesUpdateContract) => preferenceMutation(update) },
+    },
+  },
+}))
+
+const {
   parseAccountPreferencesResponse,
   parseAccountResponse,
   parsePrimaryPlayerResponse,
+  saveAccountPreferences,
   signOut,
-} from '../../src/lib/auth'
+} = await import('../../src/lib/auth')
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = originalFetch
+})
+
+describe('saveAccountPreferences', () => {
+  test('serializes concurrent preference writes for one account', async () => {
+    const updates: AccountPreferencesUpdateContract[] = []
+    let firstStarted!: () => void
+    let releaseFirst!: () => void
+    const firstStartedPromise = new Promise<void>((resolve) => {
+      firstStarted = resolve
+    })
+    const firstReleasePromise = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let preferences: AccountPreferencesContract = {
+      version: 2 as const,
+      leaderboardBracket: '1v1' as const,
+      leaderboardRegion: 'all' as const,
+      theme: 'neutral' as const,
+    }
+    preferenceMutation = async (update) => {
+      updates.push(update)
+      if (updates.length === 1) {
+        firstStarted()
+        await firstReleasePromise
+      }
+      preferences = { ...preferences, ...update }
+      return preferences
+    }
+
+    const cachedPreferences: unknown[] = []
+    const queryClient = {
+      setQueryData: mock((_key: unknown, value: unknown) => cachedPreferences.push(value)),
+    } as unknown as Parameters<typeof saveAccountPreferences>[0]
+    const first = saveAccountPreferences(queryClient, 'account-id', { theme: 'purple' })
+    await firstStartedPromise
+    const second = saveAccountPreferences(queryClient, 'account-id', { leaderboardRegion: 'EU' })
+
+    expect(updates).toEqual([{ theme: 'purple' }])
+    releaseFirst()
+    await Promise.all([first, second])
+    expect(updates).toEqual([{ theme: 'purple' }, { leaderboardRegion: 'EU' }])
+    expect(cachedPreferences.at(-1)).toEqual({
+      version: 2,
+      leaderboardBracket: '1v1',
+      leaderboardRegion: 'EU',
+      theme: 'purple',
+    })
+  })
 })
 
 describe('parseAccountResponse', () => {
