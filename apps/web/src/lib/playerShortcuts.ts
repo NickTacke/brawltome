@@ -1,4 +1,5 @@
 'use client'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { type PlayerShortcutsContract, parsePlayerShortcutsOutput } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
@@ -54,7 +55,7 @@ export type PlayerShortcutNavigationItem = {
 }
 
 function avatarUrl(legendNameKey: string | undefined): string | null {
-  return legendNameKey ? `/images/legends/avatars/${encodeURIComponent(legendNameKey)}.png` : null
+  return legendNameKey ? legendAvatarUrl(legendNameKey) : null
 }
 
 export function createPlayerShortcutNavigation(

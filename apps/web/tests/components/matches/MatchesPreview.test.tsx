@@ -21,7 +21,7 @@ describe('matches preview fixtures', () => {
     expect(knight && getPreviewAppearance(knight)).toMatchObject({
       kind: 'crossover',
       name: 'King Knight',
-      fallbackImageUrl: '/images/legends/avatars/sir roland.png',
+      fallbackImageUrl: '/images/legends/avatars/sir%20roland.png',
       diagnostic: null,
     })
     expect(bodvar && getPreviewAppearance(bodvar)).toMatchObject({

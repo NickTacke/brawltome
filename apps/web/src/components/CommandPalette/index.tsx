@@ -1,4 +1,5 @@
 'use client'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { navItems } from '@/components/sidebar/nav-items'
 import { Avatar, AvatarFallback, AvatarImage, Card } from '@/components/ui'
@@ -228,7 +229,7 @@ export function CommandPalette() {
                     <Avatar className="h-10 w-10 border border-border bg-muted rounded-md shrink-0">
                       {cmd.bestLegendNameKey && (
                         <AvatarImage
-                          src={`/images/legends/avatars/${cmd.bestLegendNameKey}.png`}
+                          src={legendAvatarUrl(cmd.bestLegendNameKey)}
                           alt={cmd.bestLegendNameKey}
                           className="object-cover object-top"
                         />

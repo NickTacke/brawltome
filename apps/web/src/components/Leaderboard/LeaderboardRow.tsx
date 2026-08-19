@@ -1,4 +1,5 @@
 'use client'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { Avatar, AvatarFallback, AvatarImage, Badge, TableCell, TableRow } from '@/components/ui'
 import { fixEncoding } from '@/lib/utils'
@@ -43,7 +44,7 @@ export function SoloLeaderboardRow({ entry }: { entry: SoloLeaderboardEntry }) {
                 className="h-10 w-10 border border-border bg-muted rounded-md"
               >
                 <AvatarImage
-                  src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+                  src={legendAvatarUrl(player.bestLegendNameKey)}
                   alt={player.bestLegendNameKey}
                   className="object-cover object-top"
                   loading="lazy"

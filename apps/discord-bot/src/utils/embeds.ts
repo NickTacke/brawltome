@@ -36,8 +36,7 @@ function formatNumber(num: number | bigint): string {
 
 function getLegendAvatarUrl(legendNameKey: string | undefined): string | null {
   if (!legendNameKey) return null
-  const key = legendNameKey.toLowerCase().replace(/\s+/g, '_')
-  return `https://brawltome.app/images/legends/avatars/${key}.png`
+  return `https://brawltome.app/images/legends/avatars/${encodeURIComponent(legendNameKey)}.png`
 }
 
 function refreshActive(refresh: PlayerRefreshResponse['refresh'] | ClanRefreshResponse['refresh']): boolean {

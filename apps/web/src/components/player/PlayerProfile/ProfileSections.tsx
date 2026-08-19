@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
+import { legendAvatarUrl } from '@brawltome/game-data'
 import { CareerStatistics } from '../CareerStatistics'
 import { RatingChart } from '../RatingChart'
 import { type RankedTeam, TeamSection } from '../TeamSection'
@@ -38,7 +39,7 @@ export function ProfileSections({
               {snapshot.rankedLegends.map((legend) => (
                 <div key={legend.legendId} className="flex items-center gap-3 bg-card p-4">
                   <img
-                    src={`/images/legends/avatars/${legend.legendNameKey}.png`}
+                    src={legendAvatarUrl(legend.legendNameKey)}
                     alt=""
                     className="h-12 w-12 rounded-lg bg-muted object-cover object-top"
                   />

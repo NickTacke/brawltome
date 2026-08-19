@@ -1,4 +1,5 @@
 'use client'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
@@ -142,7 +143,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                             <Avatar className="h-10 w-10 border border-border bg-muted rounded-md">
                               {p.bestLegendNameKey && (
                                 <AvatarImage
-                                  src={`/images/legends/avatars/${p.bestLegendNameKey}.png`}
+                                  src={legendAvatarUrl(p.bestLegendNameKey)}
                                   alt={p.bestLegendNameKey}
                                   className="object-cover object-top"
                                 />

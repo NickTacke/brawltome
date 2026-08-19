@@ -4,6 +4,7 @@ import {
   legendMetaBrackets,
   legendMetaRegions,
 } from '@brawltome/contracts'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 const regionLabels: Record<(typeof legendMetaRegions)[number], string> = {
   all: 'All regions',
@@ -232,7 +233,7 @@ export function LegendMetaView({
                     <th scope="row" className="px-4 py-4 text-left">
                       <span className="flex items-center gap-3">
                         <img
-                          src={`/images/legends/avatars/${row.legend.slug}.png`}
+                          src={legendAvatarUrl(row.legend.slug)}
                           alt=""
                           className="h-12 w-12 rounded-lg bg-muted object-cover object-top"
                           loading="lazy"

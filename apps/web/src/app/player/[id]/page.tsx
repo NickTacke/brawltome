@@ -2,6 +2,7 @@ import { PlayerProfile } from '@/components/player/PlayerProfile'
 import { loadPlayerWithReference } from '@/lib/player-reference'
 import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
+import { legendAvatarUrl } from '@brawltome/game-data'
 import type { Metadata } from 'next'
 import { cache } from 'react'
 
@@ -54,7 +55,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       images: legendKey
         ? [
             {
-              url: `/images/legends/avatars/${encodeURIComponent(legendKey)}.png`,
+              url: legendAvatarUrl(legendKey),
               width: 200,
               height: 200,
               alt: legendKey,
@@ -66,7 +67,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       card: 'summary',
       title: `${playerName} | BrawlTome`,
       description,
-      images: legendKey ? [`/images/legends/avatars/${encodeURIComponent(legendKey)}.png`] : ['/og-image.png'],
+      images: legendKey ? [legendAvatarUrl(legendKey)] : ['/og-image.png'],
     },
   }
 }

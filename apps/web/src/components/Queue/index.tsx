@@ -1,4 +1,5 @@
 'use client'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { WinLossBar } from '@/components/player/shared'
 import {
@@ -93,7 +94,7 @@ function Player({ player }: { player: Contestant }) {
           className="h-12 w-12 shrink-0 border border-border bg-muted rounded-xl"
         >
           <AvatarImage
-            src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+            src={legendAvatarUrl(player.bestLegendNameKey)}
             alt={player.bestLegendNameKey}
             className="object-cover object-top"
             loading="lazy"
@@ -134,7 +135,7 @@ function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
             >
               {player.bestLegendNameKey && (
                 <AvatarImage
-                  src={`/images/legends/avatars/${player.bestLegendNameKey}.png`}
+                  src={legendAvatarUrl(player.bestLegendNameKey)}
                   alt={player.bestLegendNameKey}
                   className="object-cover object-top"
                   loading="lazy"

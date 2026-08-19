@@ -1,4 +1,5 @@
 'use client'
+import { legendAvatarUrl } from '@brawltome/game-data'
 
 import {
   Avatar,
@@ -48,7 +49,7 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
         {topLegend && (
           <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-card rounded-2xl shrink-0">
             <AvatarImage
-              src={`/images/legends/avatars/${topLegend.legendNameKey}.png`}
+              src={legendAvatarUrl(topLegend.legendNameKey)}
               alt={topLegend.legendNameKey}
               className="object-cover object-top"
             />
