@@ -1,5 +1,4 @@
-import { describe, expect, test } from 'bun:test'
-import { selectLoadedReplay, selectUploadedReplay } from '@/app/matches/ReplayAnalysisPage'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { ReplayReportView } from '@/app/matches/ReplayReportView'
 import { ReplayResultView, formatDuration, timelineX } from '@/app/matches/ReplayResultView'
 import { getPreviewMatch, replayReportFromPreview } from '@/app/matches/matches-preview-fixtures'
@@ -7,6 +6,19 @@ import { MATCH_SUMMARY_EXTENSION_URI } from '@brawltome/contracts'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { completedReplayJob } from '../../fixtures/completed-replay-job'
+
+mock.module('@/lib/auth', () => ({
+  signIn: () => {},
+  useAccount: () => ({
+    account: { id: 'account-id', displayName: 'Player', avatarUrl: null, createdAt: new Date() },
+    isLoading: false,
+    isError: false,
+  }),
+}))
+
+const { ReplayAnalysisPage, selectLoadedReplay, selectUploadedReplay } = await import(
+  '@/app/matches/ReplayAnalysisPage'
+)
 
 describe('replay result graphs', () => {
   test('formats duration and keeps KO markers inside the graph', () => {
@@ -131,6 +143,39 @@ describe('replay result graphs', () => {
 
     expect(html.match(/Qualified event timeline available/g) ?? []).toHaveLength(2)
     expect(html).toContain('break-all')
+  })
+
+  test('renders a classified failed job without substituting a completed report', async () => {
+    const failed = structuredClone(completedReplayJob)
+    failed.status = 'failed'
+    failed.failure = {
+      code: 'input.unsupported_format',
+      message: 'Replay format 268 is unsupported. <Choose a format 269 replay.>',
+    }
+    failed.result = null
+    const react = await import('react')
+    const useState = spyOn(react, 'useState')
+    useState
+      .mockReturnValueOnce([{ jobs: [failed], selectedId: failed.id }, () => {}])
+      .mockReturnValueOnce([failed, () => {}])
+      .mockReturnValueOnce([null, () => {}])
+      .mockReturnValueOnce([false, () => {}])
+      .mockReturnValueOnce([false, () => {}])
+      .mockReturnValueOnce([false, () => {}])
+      .mockReturnValueOnce([null, () => {}])
+
+    try {
+      const html = renderToStaticMarkup(createElement(ReplayAnalysisPage))
+
+      expect(html.match(/Replay format 268 is unsupported\. &lt;Choose a format 269 replay\.&gt;/g) ?? []).toHaveLength(
+        2,
+      )
+      expect(html).not.toContain('<Choose a format 269 replay.>')
+      expect(html).not.toContain('Selected replay analysis')
+      expect(html).not.toContain('AxeMender')
+    } finally {
+      useState.mockRestore()
+    }
   })
 
   test('keeps the uploaded response selected through completed rich-report input', () => {

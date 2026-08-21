@@ -309,7 +309,7 @@ export function ReplayAnalysisPage() {
                   {file?.name ?? 'Choose or drop a .replay file'}
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {hasActiveJobs ? 'One replay is already being analyzed' : 'Format 268 · Maximum 16 MiB'}
+                  {hasActiveJobs ? 'One replay is already being analyzed' : 'Format 269 · Maximum 16 MiB'}
                 </span>
               </span>
             </label>
