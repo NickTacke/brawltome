@@ -82,7 +82,7 @@ describe('replay bridge', () => {
     if (!submission) throw new Error('Replay was not submitted')
     if (!callback) throw new Error('Processor result was not returned')
     expect(new Uint8Array(await submission.arrayBuffer())).toEqual(Uint8Array.of(1, 2, 3))
-    expect(await callback.text()).toBe(processorResult)
+    expect(new Uint8Array(await callback.arrayBuffer())).toEqual(new TextEncoder().encode(processorResult))
   })
 
   test('rejects processor-controlled absolute URLs and releases the fenced claim', async () => {
