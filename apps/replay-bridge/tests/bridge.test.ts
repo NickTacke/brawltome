@@ -15,6 +15,13 @@ const config: ReplayBridgeConfig = {
 describe('replay bridge', () => {
   test('claims, submits, polls, returns, and deletes one replay', async () => {
     const requests: Request[] = []
+    const processorResult = JSON.stringify({
+      schemaVersion: 1,
+      core: { replay: { format: 269 } },
+      extensions: {
+        'https://github.com/NickTacke/brawlhalla-replay-processor/extensions/event-timeline': { schemaVersion: 1 },
+      },
+    })
     const responses = [
       new Response(Uint8Array.of(1, 2, 3), {
         status: 200,
@@ -45,7 +52,7 @@ describe('replay bridge', () => {
         terminalAt: '2026-08-16T10:01:00Z',
         expiresAt: '2026-08-16T11:01:00Z',
       }),
-      Response.json({ schemaVersion: 1 }),
+      new Response(processorResult, { headers: { 'content-type': 'application/json' } }),
       new Response(null, { status: 204 }),
       new Response(null, { status: 204 }),
     ]
@@ -67,9 +74,15 @@ describe('replay bridge', () => {
     ])
     const submission = requests[1]
     expect(submission?.headers.get('idempotency-key')).toBe(`1b2f7508-8e9c-4b1a-950f-d60fabe27176:${leaseToken}:1`)
-    expect(requests[4]?.headers.get('x-replay-lease-token')).toBe(leaseToken)
+    const callback = requests.find(
+      ({ method, url }) =>
+        method === 'POST' && new URL(url).pathname === '/internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/result',
+    )
+    expect(callback?.headers.get('x-replay-lease-token')).toBe(leaseToken)
     if (!submission) throw new Error('Replay was not submitted')
+    if (!callback) throw new Error('Processor result was not returned')
     expect(new Uint8Array(await submission.arrayBuffer())).toEqual(Uint8Array.of(1, 2, 3))
+    expect(await callback.text()).toBe(processorResult)
   })
 
   test('rejects processor-controlled absolute URLs and releases the fenced claim', async () => {
