@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getPreviewMatch, replayReportFromPreview } from '@/app/matches/matches-preview-fixtures'
 import { replayReportFromJob } from '@/app/matches/replay-report'
-import { MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI } from '@brawltome/contracts'
+import { EVENT_TIMELINE_EXTENSION_URI, MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI } from '@brawltome/contracts'
 import { completedReplayJob } from '../../fixtures/completed-replay-job'
 
 describe('real replay report adapter', () => {
@@ -21,7 +21,19 @@ describe('real replay report adapter', () => {
     expect(report?.title).toBe('AxeMender vs BlueMammoth')
     expect(report?.provenance).toMatchObject({ processorVersion: '1.0.0', qualificationProfile: 'native-v1' })
     expect(report?.knockouts[0]?.scorerName).toBeNull()
-    expect(report?.capabilities).toEqual({ eventTimeline: false, dodgeDirections: false, engagements: false })
+    expect(report?.capabilities).toEqual({ eventTimeline: true, dodgeDirections: true, engagements: true })
+  })
+
+  test('keeps event capabilities unavailable without the event extension', () => {
+    const withoutEvents = structuredClone(completedReplayJob)
+    if (!withoutEvents.result) throw new Error('fixture result missing')
+    delete withoutEvents.result.extensions[EVENT_TIMELINE_EXTENSION_URI]
+
+    expect(replayReportFromJob(withoutEvents)?.capabilities).toEqual({
+      eventTimeline: false,
+      dodgeDirections: false,
+      engagements: false,
+    })
   })
 
   test('rejects jobs without a completed result', () => {

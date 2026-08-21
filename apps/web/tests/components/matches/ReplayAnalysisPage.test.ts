@@ -46,7 +46,7 @@ describe('replay result graphs', () => {
         expect(renderedText.indexOf(heading)).toBeGreaterThan(renderedText.indexOf(previousHeading))
       }
     }
-    expect(html.match(/Requires qualified event timeline/g) ?? []).toHaveLength(4)
+    expect(html.match(/Qualified event timeline available/g) ?? []).toHaveLength(4)
     expect(html).toContain('Damage progression')
     expect(html).toContain('Best engagement')
     expect(html).toContain('aria-label="Damage comparison"')

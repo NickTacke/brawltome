@@ -1,4 +1,9 @@
-import { MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI, type ReplayJobDetailContract } from '@brawltome/contracts'
+import {
+  EVENT_TIMELINE_EXTENSION_URI,
+  MATCH_SUMMARY_EXTENSION_URI,
+  NATIVE_EXTENSION_URI,
+  type ReplayJobDetailContract,
+} from '@brawltome/contracts'
 import { type PlayerAppearance, getLevelById, resolvePlayerAppearance } from '@brawltome/game-data'
 
 export type ReplayReportPower = {
@@ -114,6 +119,7 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
   const { replay } = core
   const nativeExtension = extensions[NATIVE_EXTENSION_URI]
   const summary = extensions[MATCH_SUMMARY_EXTENSION_URI]
+  const hasEventTimeline = extensions[EVENT_TIMELINE_EXTENSION_URI] !== undefined
   const nativeBySlot = new Map(core.native.players.map((player) => [player.slot, player]))
   const payloadBySlot = new Map(nativeExtension.data.players.map((player) => [player.slot, player.payload]))
   const summaryBySlot = new Map(summary?.data.players.map((player) => [player.slot, player]) ?? [])
@@ -248,7 +254,11 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
         scorerName: knockout.scoringSlot === null ? null : (playerBySlot.get(knockout.scoringSlot)?.name ?? null),
         victimName: playerBySlot.get(knockout.victimSlot)?.name ?? 'Unknown player',
       })),
-    capabilities: { eventTimeline: false, dodgeDirections: false, engagements: false },
+    capabilities: {
+      eventTimeline: hasEventTimeline,
+      dodgeDirections: hasEventTimeline,
+      engagements: hasEventTimeline,
+    },
     limitations: [core.limitations, nativeExtension.limitations, summary?.limitations ?? []]
       .flat()
       .map(({ code, text }) => ({ code, text })),
