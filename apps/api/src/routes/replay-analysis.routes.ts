@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import {
+  EVENT_TIMELINE_EXTENSION_URI,
   REPLAY_UPLOAD_LIMIT_BYTES,
   analysisResultV1Schema,
   replayJobDetailSchema,
@@ -175,7 +176,12 @@ export function createReplayBridgeRoutes(deps: { jobs: ReplayAnalysisJobs; secre
     const native = parsed.data.extensions['https://github.com/NickTacke/brawlhalla-replay-processor/extensions/native']
     const summary =
       parsed.data.extensions['https://github.com/NickTacke/brawlhalla-replay-processor/extensions/match-summary']
-    if (native.inputCoreDigest !== parsed.data.coreDigest || summary?.inputCoreDigest !== parsed.data.coreDigest) {
+    const eventTimeline = parsed.data.extensions[EVENT_TIMELINE_EXTENSION_URI]
+    if (
+      native.inputCoreDigest !== parsed.data.coreDigest ||
+      summary?.inputCoreDigest !== parsed.data.coreDigest ||
+      (eventTimeline !== undefined && eventTimeline.inputCoreDigest !== parsed.data.coreDigest)
+    ) {
       return c.json({ error: 'invalid_extension_digest' }, 400)
     }
     const outcome = await deps.jobs.complete(

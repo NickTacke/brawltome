@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
+import { EVENT_TIMELINE_EXTENSION_URI, MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI } from '@brawltome/contracts'
 import type { ReplayAnalysisJobs } from '@brawltome/replay-analysis'
 import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from '../src/routes/replay-analysis.routes'
 
@@ -80,6 +81,178 @@ describe('replay upload routes', () => {
 })
 
 describe('replay bridge routes', () => {
+  test('binds an event extension to the submitted core', async () => {
+    const nativePlayer = {
+      airDodges: 0,
+      airJumps: 0,
+      airTimeMs: 0,
+      clashes: 0,
+      damageDealt: 0,
+      damageTaken: 0,
+      dashJumps: 0,
+      dashes: 0,
+      deaths: 0,
+      dodges: 0,
+      groundTimeMs: 1,
+      jumps: 0,
+      kos: 0,
+      slot: 0,
+      suicides: 0,
+      teamDamageDealt: 0,
+      teamDamageTaken: 0,
+      teamKos: 0,
+      wallTimeMs: 0,
+    }
+    const loadout = {
+      colorId: 0,
+      costumeId: 0,
+      koEffectId: 0,
+      legendId: 1,
+      morphWeapon2: false,
+      sidekickId: 0,
+      stanceId: 0,
+      weaponSkin1Id: 0,
+      weaponSkin2Id: 0,
+    }
+    const digest = `sha256:${'a'.repeat(64)}`
+    const core = {
+      limitations: [{ code: 'test', scopes: ['/'], text: 'Test limitation.' }],
+      native: { players: [nativePlayer, { ...nativePlayer, slot: 1 }] },
+      provenance: {
+        collector: 'test',
+        gameBuild: '24744406',
+        parityClaim: 'replay-deterministic',
+        patchDigest: digest,
+        patchId: 'test',
+        patchedArtifactDigest: digest,
+        pristineArtifactDigest: digest,
+        processorArtifactDigest: digest,
+        processorVersion: 'test',
+        qualificationManifestDigest: digest,
+        qualificationProfile: 'test',
+        replaySourceDigest: digest,
+      },
+      replay: {
+        durationMs: 1,
+        format: 269,
+        koTimeline: [],
+        mapId: 1,
+        matchSettings: { lives: 3, scoreToWin: 0, teamMode: false },
+        online: true,
+        outcome: { winningTeamId: null },
+        players: [
+          { entityId: 0, loadout, name: 'One', playerId: null, score: 0, slot: 0, teamId: 0 },
+          { entityId: 1, loadout, name: 'Two', playerId: null, score: 0, slot: 1, teamId: 1 },
+        ],
+        playlistId: 1,
+        randomSeed: 1,
+        replayDigest: digest,
+        teamScores: [],
+      },
+    }
+    const coreDigest = `sha256:${createHash('sha256')
+      .update(JSON.stringify({ core, schemaVersion: 1 }))
+      .digest('hex')}`
+    const extensionIdentity = {
+      inputCoreDigest: coreDigest,
+      inputCoreSchemaVersion: 1,
+      limitations: [],
+      producerArtifactDigest: digest,
+      producerVersion: 'test',
+      qualificationManifestDigest: digest,
+      schemaVersion: 1,
+    }
+    const summaryPlayer = {
+      airDodgeShare: null,
+      airJumpShare: null,
+      airTimeShare: null,
+      damageDealtPerKo: null,
+      damageDealtPerMinute: null,
+      damageTakenPerDeath: null,
+      damageTakenPerMinute: null,
+      dashesPerMinute: null,
+      dashJumpShare: null,
+      deathsPerMinute: null,
+      dodgesPerMinute: null,
+      friendlyDamageDealtShare: null,
+      friendlyDamageTakenShare: null,
+      groundTimeShare: null,
+      jumpsPerMinute: null,
+      koDeathRatio: null,
+      kosPerMinute: null,
+      slot: 0,
+      wallTimeShare: null,
+    }
+    const result = {
+      core,
+      coreDigest,
+      extensions: {
+        [NATIVE_EXTENSION_URI]: {
+          ...extensionIdentity,
+          producerUri: NATIVE_EXTENSION_URI,
+          data: {
+            players: [
+              { payload: { Equipment: { Sword: { TimeHeld: 1 } }, Sequence: [] }, slot: 0 },
+              { payload: { Equipment: { Sword: { TimeHeld: 1 } }, Sequence: [] }, slot: 1 },
+            ],
+          },
+        },
+        [MATCH_SUMMARY_EXTENSION_URI]: {
+          ...extensionIdentity,
+          producerUri: MATCH_SUMMARY_EXTENSION_URI,
+          data: {
+            equipment: [],
+            players: [summaryPlayer, { ...summaryPlayer, slot: 1 }],
+            powers: [],
+            rateDenominatorMs: 0,
+          },
+        },
+        [EVENT_TIMELINE_EXTENSION_URI]: {
+          ...extensionIdentity,
+          producerUri: EVENT_TIMELINE_EXTENSION_URI,
+          data: {
+            clock: { basis: 'native-replay', quantumMs: 16, replayOffsetMs: 0 },
+            players: [
+              { dodges: [], hits: [], moves: [], slot: 0 },
+              { dodges: [], hits: [], moves: [], slot: 1 },
+            ],
+          },
+        },
+      },
+      schemaVersion: 1,
+    }
+    const complete = mock(async () => 'completed' as const)
+    const jobs = { complete } as unknown as ReplayAnalysisJobs
+    const secret = 'bridge-secret-that-is-at-least-32-bytes'
+    const app = createReplayBridgeRoutes({ jobs, secret })
+
+    const accepted = await app.request(`/${jobId}/result`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${secret}`,
+        'content-type': 'application/json',
+        'x-replay-lease-token': leaseToken,
+      },
+      body: JSON.stringify(result),
+    })
+    expect(accepted.status).toBe(204)
+    expect(complete).toHaveBeenCalledTimes(1)
+
+    result.extensions[EVENT_TIMELINE_EXTENSION_URI].inputCoreDigest = `sha256:${'f'.repeat(64)}`
+    const rejected = await app.request(`/${jobId}/result`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${secret}`,
+        'content-type': 'application/json',
+        'x-replay-lease-token': leaseToken,
+      },
+      body: JSON.stringify(result),
+    })
+    expect(rejected.status).toBe(400)
+    expect(await rejected.json()).toEqual({ error: 'invalid_extension_digest' })
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
   test('returns and requires the lease fence for state transitions', async () => {
     const claim = mock(async () => ({
       id: jobId,
