@@ -1,4 +1,9 @@
-import { MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI, type ReplayJobDetailContract } from '@brawltome/contracts'
+import {
+  EVENT_TIMELINE_EXTENSION_URI,
+  MATCH_SUMMARY_EXTENSION_URI,
+  NATIVE_EXTENSION_URI,
+  type ReplayJobDetailContract,
+} from '@brawltome/contracts'
 
 const digest = `sha256:${'0'.repeat(64)}`
 
@@ -30,7 +35,7 @@ export const completedReplayJob = {
       },
       replay: {
         durationMs: 60_000,
-        format: 268,
+        format: 269,
         koTimeline: [{ timestampMs: 30_000, victimSlot: 1, scoringSlot: null }],
         mapId: 4,
         matchSettings: { lives: 3, scoreToWin: 0, teamMode: false },
@@ -165,6 +170,48 @@ export const completedReplayJob = {
               },
             },
             { slot: 1, payload: { Equipment: { Hammer: { TimeHeld: 32_400 } }, Sequence: [] } },
+          ],
+        },
+      },
+      [EVENT_TIMELINE_EXTENSION_URI]: {
+        schemaVersion: 1,
+        inputCoreDigest: digest,
+        inputCoreSchemaVersion: 1,
+        limitations: [],
+        producerArtifactDigest: digest,
+        producerUri: EVENT_TIMELINE_EXTENSION_URI,
+        producerVersion: '1.0.0',
+        qualificationManifestDigest: digest,
+        data: {
+          clock: { basis: 'native-replay', quantumMs: 16, replayOffsetMs: 6016 },
+          players: [
+            {
+              slot: 0,
+              dodges: [{ airborne: false, sequence: 0, timestampMs: 6032, x: 1, y: 0 }],
+              moves: [
+                {
+                  equipmentKey: 'Sword',
+                  gravityCancelled: false,
+                  powerKey: 'nLight',
+                  sequence: 1,
+                  timestampMs: 6048,
+                },
+              ],
+              hits: [
+                {
+                  damageApplied: 13.5,
+                  equipmentKey: 'Sword',
+                  knockout: false,
+                  moveSequence: 1,
+                  powerKey: 'nLight',
+                  sequence: 2,
+                  target: 'enemy',
+                  timestampMs: 6080,
+                  victimSlot: 1,
+                },
+              ],
+            },
+            { slot: 1, dodges: [], moves: [], hits: [] },
           ],
         },
       },

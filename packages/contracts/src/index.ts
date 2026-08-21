@@ -159,15 +159,18 @@ export {
   type CareerWeaponUsageRowContract,
 } from './career-weapon-usage'
 export {
+  EVENT_TIMELINE_EXTENSION_URI,
   MATCH_SUMMARY_EXTENSION_URI,
   NATIVE_EXTENSION_URI,
   REPLAY_UPLOAD_LIMIT_BYTES,
   analysisResultV1Schema,
+  eventTimelineExtensionSchema,
   replayJobDetailSchema,
   replayJobFailureSchema,
   replayJobStatusSchema,
   replayJobSummarySchema,
   type AnalysisResultV1,
+  type EventTimelineExtensionV1,
   type ReplayJobDetailContract,
   type ReplayJobSummaryContract,
 } from './replay-analysis'

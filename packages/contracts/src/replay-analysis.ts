@@ -5,6 +5,8 @@ export const NATIVE_EXTENSION_URI =
   'https://github.com/NickTacke/brawlhalla-replay-processor/extensions/native' as const
 export const MATCH_SUMMARY_EXTENSION_URI =
   'https://github.com/NickTacke/brawlhalla-replay-processor/extensions/match-summary' as const
+export const EVENT_TIMELINE_EXTENSION_URI =
+  'https://github.com/NickTacke/brawlhalla-replay-processor/extensions/event-timeline' as const
 
 const digestSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/)
 const nonnegativeSchema = z.number().nonnegative()
@@ -107,7 +109,7 @@ const analysisCoreSchema = z
           .number()
           .min(1)
           .max(3 * 60 * 60 * 1000),
-        format: z.literal(268),
+        format: z.literal(269),
         koTimeline: z.array(koEventSchema).max(4096),
         mapId: identifierSchema,
         matchSettings: z
@@ -135,6 +137,82 @@ const extensionIdentityFields = {
   qualificationManifestDigest: digestSchema,
   schemaVersion: z.literal(1),
 }
+
+const eventSequenceSchema = z.number().int().min(0).max(0xffff_ffff)
+const eventTimestampSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(3 * 60 * 60 * 1000 + 60_016)
+const eventKeySchema = z.string().min(1).max(128)
+const eventDirectionSchema = z.union([z.literal(-1), z.literal(0), z.literal(1)])
+const eventClockSchema = z
+  .object({
+    basis: z.literal('native-replay'),
+    quantumMs: z.literal(16),
+    replayOffsetMs: z
+      .number()
+      .int()
+      .min(0)
+      .max(60_000)
+      .refine((value) => value % 16 === 0),
+  })
+  .strict()
+const dodgeEventSchema = z
+  .object({
+    airborne: z.boolean(),
+    sequence: eventSequenceSchema,
+    timestampMs: eventTimestampSchema,
+    x: eventDirectionSchema,
+    y: eventDirectionSchema,
+  })
+  .strict()
+const moveEventSchema = z
+  .object({
+    equipmentKey: eventKeySchema,
+    gravityCancelled: z.boolean(),
+    powerKey: eventKeySchema,
+    sequence: eventSequenceSchema,
+    timestampMs: eventTimestampSchema,
+  })
+  .strict()
+const hitEventSchema = z
+  .object({
+    damageApplied: z.number().gt(0).max(1_000),
+    equipmentKey: eventKeySchema.nullable(),
+    knockout: z.boolean(),
+    moveSequence: eventSequenceSchema.nullable(),
+    powerKey: eventKeySchema.nullable(),
+    sequence: eventSequenceSchema,
+    target: z.enum(['enemy', 'team', 'self']),
+    timestampMs: eventTimestampSchema,
+    victimSlot: identifierSchema,
+  })
+  .strict()
+
+export const eventTimelineExtensionSchema = z
+  .object({
+    ...extensionIdentityFields,
+    data: z
+      .object({
+        clock: eventClockSchema,
+        players: z
+          .array(
+            z
+              .object({
+                dodges: z.array(dodgeEventSchema).max(65_535),
+                hits: z.array(hitEventSchema).max(65_535),
+                moves: z.array(moveEventSchema).max(65_535),
+                slot: identifierSchema,
+              })
+              .strict(),
+          )
+          .min(2)
+          .max(4),
+      })
+      .strict(),
+  })
+  .strict()
 
 const powerCountersSchema = z
   .object({
@@ -241,6 +319,7 @@ export const analysisResultV1Schema = z
       .object({
         [NATIVE_EXTENSION_URI]: nativeExtensionSchema,
         [MATCH_SUMMARY_EXTENSION_URI]: matchSummaryExtensionSchema.optional(),
+        [EVENT_TIMELINE_EXTENSION_URI]: eventTimelineExtensionSchema.optional(),
       })
       .catchall(z.unknown()),
     schemaVersion: z.literal(1),
@@ -270,6 +349,7 @@ export const replayJobDetailSchema = replayJobSummarySchema
   .extend({ result: analysisResultV1Schema.nullable() })
   .strict()
 
+export type EventTimelineExtensionV1 = z.infer<typeof eventTimelineExtensionSchema>
 export type AnalysisResultV1 = z.infer<typeof analysisResultV1Schema>
 export type ReplayJobSummaryContract = z.infer<typeof replayJobSummarySchema>
 export type ReplayJobDetailContract = z.infer<typeof replayJobDetailSchema>
