@@ -166,10 +166,6 @@ function ActivityRows({ entries }: { entries: LeaderboardRecentActivityEntry[] }
   )
 }
 
-function scanTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`
-}
-
 function entryKey(entry: LeaderboardRecentActivityEntry): string {
   return entry.identity.type === 'fixed-two-vs-two-team'
     ? `${entry.identity.players[0].brawlhallaId}:${entry.identity.players[0].name}:${entry.identity.players[1].brawlhallaId}:${entry.identity.players[1].name}`
@@ -221,11 +217,6 @@ export function QueueView({ view, filters }: { view: LeaderboardRecentActivityOu
         </Card>
       ) : (
         <>
-          {view.status === 'stale' && (
-            <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
-              Last activity scan: {scanTime(view.currentObservedAt)}.
-            </p>
-          )}
           <p className="text-sm font-bold text-muted-foreground">
             {view.totalRows} {view.mode === '2v2' ? 'team' : 'player'}
             {view.totalRows === 1 ? '' : 's'} recently active {view.region === 'all' ? 'globally' : `in ${view.region}`}{' '}
