@@ -1,10 +1,13 @@
 'use client'
 
-import { MATCH_SUMMARY_EXTENSION_URI, type ReplayJobDetailContract } from '@brawltome/contracts'
-import { getLegendById, getLevelById, legendSlug } from '@brawltome/game-data'
-import { Avatar, AvatarFallback, AvatarImage, Badge, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
-import { Activity, Clock3, Crown, Gauge, MapPinned, Shield, Swords, Trophy } from 'lucide-react'
+import type { ReplayJobDetailContract } from '@brawltome/contracts'
+import { getLegendById, getLevelById, legendSlug, normalizeWeaponName } from '@brawltome/game-data'
+import { Avatar, AvatarFallback, AvatarImage } from '@brawltome/ui'
+import { Download, Trophy } from 'lucide-react'
 import Link from 'next/link'
+import { useState } from 'react'
+import { getWeaponIcon } from '../../components/player/shared'
+import { buildReplayReport, formatCount, formatRate } from './replay-report'
 
 export function formatDuration(milliseconds: number): string {
   const totalSeconds = Math.round(milliseconds / 1_000)
@@ -12,388 +15,641 @@ export function formatDuration(milliseconds: number): string {
 }
 
 export function timelineX(timestampMs: number, durationMs: number): number {
-  return 20 + Math.min(timestampMs / durationMs, 1) * 960
+  const progress = durationMs > 0 ? timestampMs / durationMs : 0
+  return 20 + Math.min(Math.max(progress, 0), 1) * 960
 }
 
 function formatMetric(value: number | null | undefined, suffix = ''): string {
-  return value === null || value === undefined ? '—' : `${value.toFixed(1)}${suffix}`
+  if (value === null || value === undefined) return '—'
+  return `${value.toFixed(2).replace(/\.?(0)+$/, '')}${suffix}`
+}
+
+function weaponDisplayName(key: string): string {
+  return key === 'RocketLance' ? 'Rocket Lance' : normalizeWeaponName(key)
+}
+
+type ReplayMatch = NonNullable<ReplayJobDetailContract['result']>['core']['replay']
+
+const PLAYLIST_MODE_LABELS: Record<number, string> = {
+  7: 'Ranked 2v2',
+}
+
+export function formatGameMode(replay: ReplayMatch): string {
+  const knownMode = PLAYLIST_MODE_LABELS[replay.playlistId]
+  if (knownMode) return knownMode
+  if (!replay.matchSettings.teamMode) return replay.players.length === 2 ? '1v1' : `${replay.players.length}-player`
+
+  const teamSizes = new Map<number, number>()
+  for (const player of replay.players) teamSizes.set(player.teamId, (teamSizes.get(player.teamId) ?? 0) + 1)
+  const playersPerTeam = Math.max(...teamSizes.values(), 1)
+  return `${playersPerTeam}v${playersPerTeam}`
 }
 
 function formatShare(value: number | null | undefined): string {
   return value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`
 }
 
-function replayTimestamp(value: string): string {
-  return `${value.slice(0, 10)} · ${value.slice(11, 16)} UTC`
+function formatPositioningShare(value: number | null): string {
+  return value === null ? '—' : `${(value * 100).toFixed(1)}%`
 }
 
-function StatTile({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string }) {
+export function formatPositioning(air: number | null, ground: number | null, wall: number | null): string {
+  return `Air ${formatPositioningShare(air)} · Ground ${formatPositioningShare(ground)} · Wall ${formatPositioningShare(wall)}`
+}
+
+type ReplayReport = ReturnType<typeof buildReplayReport>
+type ReportPlayer = ReplayReport['players'][number]
+
+type MatchSide = {
+  teamId: number
+  players: ReportPlayer[]
+  damageDealt: number | null
+  damageTaken: number | null
+  teamDamage: number | null
+  damageTakenPerDeath: number | null
+  damageDealtPerOpening: number | null
+  won: boolean
+}
+
+type SideName = 'left' | 'right'
+type PlayerTone = 'primary' | 'danger'
+
+function sumMetric(players: ReportPlayer[], select: (player: ReportPlayer) => number | null): number | null {
+  const values = players.map(select)
+  return values.every((value) => value === null)
+    ? null
+    : values.reduce<number>((total, value) => total + (value ?? 0), 0)
+}
+
+function ratio(numerator: number | null, denominator: number | null): number | null {
+  return numerator !== null && denominator !== null && denominator > 0 ? numerator / denominator : null
+}
+
+function createMatchSides(report: ReplayReport, winningTeamId: number | null): MatchSide[] {
+  const teamIds = [...new Set(report.players.map(({ teamId }) => teamId))].toSorted((left, right) => left - right)
+  return teamIds.map((teamId) => {
+    const players = report.players.filter((player) => player.teamId === teamId)
+    const damageTaken = sumMetric(players, (player) => player.damageTaken)
+    const deaths = sumMetric(players, (player) => player.deaths)
+    return {
+      teamId,
+      players,
+      damageDealt: sumMetric(players, (player) => player.damageDealt),
+      damageTaken,
+      teamDamage: sumMetric(players, (player) => player.teamDamageDealt),
+      damageTakenPerDeath: ratio(damageTaken, deaths),
+      damageDealtPerOpening: null,
+      won: winningTeamId !== null && teamId === winningTeamId,
+    }
+  })
+}
+
+function SectionHeading({ title }: { title: string }) {
   return (
-    <div className="rounded-lg border border-border/70 bg-background/60 p-4">
-      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+    <div className="mb-3">
+      <h3 className="text-base font-bold text-foreground">{title}</h3>
+    </div>
+  )
+}
+
+function ComingSoon() {
+  return (
+    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 px-4 py-5 text-center">
+      <p className="font-bold text-foreground">Coming soon</p>
+    </div>
+  )
+}
+
+function PlayerName({ player }: { player: ReportPlayer }) {
+  const content = <span className="break-words">{player.name}</span>
+  if (player.playerId === null || player.playerId <= 0) return content
+  return (
+    <Link href={`/player/${player.playerId}`} className="transition-colors hover:text-primary">
+      {content}
+    </Link>
+  )
+}
+
+function PlayerLane({ side, matchSide }: { side: SideName; matchSide: MatchSide }) {
+  const isLeft = side === 'left'
+  const avatarPlayer = matchSide.players[0]
+  const avatarLegend = avatarPlayer ? getLegendById(avatarPlayer.legendId) : null
+  const avatarSlug = avatarLegend ? legendSlug(avatarLegend.heroId, avatarLegend.displayName) : null
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-3 bg-card p-3 ${isLeft ? '' : 'md:flex-row-reverse md:text-right'}`}
+      aria-label={`${isLeft ? 'Left' : 'Right'} player lane${matchSide.won ? ', winner' : ''}`}
+    >
+      {avatarPlayer && (
+        <Avatar className="h-9 w-9 shrink-0 rounded-md border border-border bg-muted">
+          {avatarSlug && <AvatarImage src={`/images/legends/avatars/${avatarSlug}.png`} alt="" />}
+          <AvatarFallback className="rounded-md text-[10px]">{avatarPlayer.slot + 1}</AvatarFallback>
+        </Avatar>
+      )}
+      <div className="min-w-0 flex-1">
+        {matchSide.players.map((player) => {
+          const legend = getLegendById(player.legendId)
+          return (
+            <div key={player.slot}>
+              <div className="flex items-center gap-1.5 text-base font-black text-foreground">
+                <PlayerName player={player} />
+                {player.won && <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Winner" />}
+              </div>
+              <p className={`font-mono text-[10px] uppercase ${isLeft ? 'text-primary' : 'text-danger'}`}>
+                {legend?.displayName ?? `Legend ${player.legendId}`}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+      <div className="grid shrink-0 grid-cols-3 gap-1 font-mono text-[9px] uppercase text-muted-foreground">
+        {matchSide.players.length === 1 && (
+          <>
+            <div className="min-w-7 text-center">
+              <b className="block text-base text-foreground">{formatCount(matchSide.players[0]?.kos)}</b>
+              KOs
+            </div>
+            <div className="min-w-7 text-center">
+              <b className="block text-base text-foreground">{formatCount(matchSide.players[0]?.deaths)}</b>
+              Deaths
+            </div>
+            <div className="min-w-7 text-center">
+              <b className="block text-base text-foreground">{formatCount(matchSide.players[0]?.suicides)}</b>
+              SDs
+            </div>
+          </>
+        )}
+        {matchSide.players.length > 1 && (
+          <div className="col-span-3 text-right text-xs normal-case">
+            {matchSide.players.length} players · {formatCount(sumMetric(matchSide.players, (player) => player.kos))} KOs
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Meter({ value, max, tone }: { value: number | null; max: number; tone: PlayerTone }) {
+  if (value === null || max <= 0) return <span className="block h-1.5" />
+  return (
+    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted/60" aria-hidden="true">
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${Math.min((value / max) * 100, 100)}%`, backgroundColor: `hsl(var(--${tone}))` }}
+      />
+    </div>
+  )
+}
+
+function ComparisonTrack({ left, right }: { left: number | null; right: number | null }) {
+  const total = (left ?? 0) + (right ?? 0)
+  const leftWidth = total > 0 && left !== null ? (left / total) * 50 : 0
+  const rightWidth = total > 0 && right !== null ? (right / total) * 50 : 0
+  return (
+    <div className="relative h-2.5 overflow-hidden rounded-full bg-muted/60" aria-hidden="true">
+      {leftWidth > 0 && <div className="absolute inset-y-0 right-1/2 bg-primary" style={{ width: `${leftWidth}%` }} />}
+      {rightWidth > 0 && <div className="absolute inset-y-0 left-1/2 bg-danger" style={{ width: `${rightWidth}%` }} />}
+      <div className="absolute inset-y-0 left-1/2 w-px bg-border" />
+    </div>
+  )
+}
+
+function ComparisonRow({
+  left,
+  right,
+  label,
+  better,
+}: {
+  left: number | null
+  right: number | null
+  label: string
+  better?: 'higher' | 'lower'
+}) {
+  const leftBetter = left !== null && right !== null && (better === 'lower' ? left < right : left > right)
+  const rightBetter = left !== null && right !== null && (better === 'lower' ? right < left : right > left)
+  return (
+    <div className="border-b border-border/60 py-3 last:border-0">
+      <div className="mb-1.5 text-center font-mono text-[10px] uppercase leading-tight text-muted-foreground">
         {label}
       </div>
-      <p className="mt-2 truncate text-lg font-black text-foreground">{value}</p>
+      <div className="grid grid-cols-[4rem_minmax(0,1fr)_4rem] items-center gap-3">
+        <strong className={`font-mono text-sm tabular-nums ${leftBetter ? 'text-primary' : 'text-foreground'}`}>
+          {formatMetric(left)}
+        </strong>
+        <ComparisonTrack left={left} right={right} />
+        <strong
+          className={`text-right font-mono text-sm tabular-nums ${rightBetter ? 'text-danger' : 'text-foreground'}`}
+        >
+          {formatMetric(right)}
+        </strong>
+      </div>
     </div>
+  )
+}
+
+function DamageGraph() {
+  return (
+    <section aria-label="Damage over time" className="border-t border-border/70 pt-5">
+      <SectionHeading title="Damage over time" />
+      <ComingSoon />
+    </section>
+  )
+}
+
+function CombatComparison({ sides, teamMode }: { sides: MatchSide[]; teamMode: boolean }) {
+  const left = sides[0]
+  const right = sides[1]
+  return (
+    <section aria-labelledby="combat-heading" className="border-t border-border/70 pt-5">
+      <SectionHeading title="Combat" />
+      <div id="combat-heading" className="space-y-2">
+        <ComparisonRow label="Damage Dealt" left={left?.damageDealt ?? null} right={right?.damageDealt ?? null} />
+        <ComparisonRow
+          label="Damage Taken"
+          left={left?.damageTaken ?? null}
+          right={right?.damageTaken ?? null}
+          better="lower"
+        />
+        {teamMode && (
+          <ComparisonRow
+            label="Team Damage"
+            left={left?.teamDamage ?? null}
+            right={right?.teamDamage ?? null}
+            better="lower"
+          />
+        )}
+        <ComparisonRow
+          label="D.Taken / Death"
+          left={left?.damageTakenPerDeath ?? null}
+          right={right?.damageTakenPerDeath ?? null}
+          better="higher"
+        />
+        <ComparisonRow
+          label="D.Dealt / Opening"
+          left={left?.damageDealtPerOpening ?? null}
+          right={right?.damageDealtPerOpening ?? null}
+        />
+      </div>
+    </section>
+  )
+}
+
+function sumPowers(powers: ReplayReport['powers'], select: (power: ReplayReport['powers'][number]) => number | null) {
+  return powers.length === 0 || powers.every((power) => select(power) === null)
+    ? null
+    : powers.reduce((sum, power) => sum + (select(power) ?? 0), 0)
+}
+
+function MoveTable({ powers, teamMode }: { powers: ReplayReport['powers']; teamMode: boolean }) {
+  if (powers.length === 0) return <ComingSoon />
+  return (
+    <div className="overflow-x-auto border-t border-border/60 px-3 py-2">
+      <table className="min-w-[34rem] w-full text-left text-xs">
+        <thead className="font-mono text-[10px] uppercase text-muted-foreground">
+          <tr>
+            <th className="py-1.5">Move</th>
+            <th className="px-2 py-1.5 text-right">Uses</th>
+            <th className="px-2 py-1.5 text-right">Hits</th>
+            <th className="px-2 py-1.5 text-right">KOs</th>
+            <th className="px-2 py-1.5 text-right">Damage</th>
+            <th className="px-2 py-1.5 text-right">Dmg/hit</th>
+            <th className="px-2 py-1.5 text-right">Dmg/use</th>
+            {teamMode && <th className="px-2 py-1.5 text-right">Team dmg</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/50">
+          {powers.map((power) => (
+            <tr key={`${power.slot}-${power.equipmentKey}-${power.powerKey}`}>
+              <th className="py-1.5 font-mono font-medium text-foreground" scope="row">
+                {power.powerKey}
+              </th>
+              <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatCount(power.uses)}</td>
+              <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatCount(power.enemyHits)}</td>
+              <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatCount(power.enemyKOs)}</td>
+              <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatMetric(power.enemyDamage)}</td>
+              <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatMetric(power.damagePerHit)}</td>
+              <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatMetric(power.damagePerUse)}</td>
+              {teamMode && (
+                <td className="px-2 py-1.5 text-right font-mono tabular-nums">{formatMetric(power.teamDamage)}</td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function WeaponGroups({
+  player,
+  report,
+  teamMode,
+  tone,
+}: { player: ReportPlayer; report: ReplayReport; teamMode: boolean; tone: PlayerTone }) {
+  const equipment = report.equipment.filter((item) => item.slot === player.slot)
+  if (equipment.length === 0) return <ComingSoon />
+  const damageByWeapon = equipment.map((item) =>
+    sumPowers(
+      report.powers.filter((power) => power.slot === player.slot && power.equipmentKey === item.key),
+      (power) => power.enemyDamage,
+    ),
+  )
+  const totalDamage = damageByWeapon.reduce<number>((total, value) => total + (value ?? 0), 0)
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/70" aria-label={`${player.name} weapon usage`}>
+      <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_3.25rem] gap-2 border-b sm:grid-cols-[minmax(0,1fr)_6rem_7rem_5rem] border-border/60 px-3 py-1.5 font-mono text-[10px] uppercase text-muted-foreground">
+        <span>Weapon</span>
+        <span className="text-right">Held</span>
+        <span className="text-right">D.Dealt</span>
+        <span className="text-right">D.Taken</span>
+      </div>
+      {equipment.map((item, index) => {
+        const powers = report.powers.filter((power) => power.slot === player.slot && power.equipmentKey === item.key)
+        const damage = damageByWeapon[index] ?? null
+        return (
+          <details key={item.key} className="group border-b border-border/60 last:border-b-0">
+            <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_3.75rem_4.25rem_3.25rem] items-center gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_6rem_7rem_5rem] text-sm hover:bg-muted/20">
+              <span className="flex min-w-0 items-center gap-2 font-semibold text-foreground">
+                <span
+                  className="font-mono text-muted-foreground transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+                <img
+                  src={getWeaponIcon(normalizeWeaponName(item.key))}
+                  alt=""
+                  className="h-6 w-6 shrink-0 object-contain"
+                />
+                <span className="truncate">{weaponDisplayName(item.key)}</span>
+              </span>
+              <span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                {formatRate(item.heldTimeShare)}
+                <Meter value={item.heldTimeShare} max={1} tone={tone} />
+              </span>
+              <span className="text-right font-mono text-xs tabular-nums text-foreground">
+                {formatMetric(damage)}
+                <Meter value={damage} max={totalDamage} tone={tone} />
+              </span>
+              <span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                {formatMetric(item.damageTaken)}
+              </span>
+            </summary>
+            <MoveTable powers={powers} teamMode={teamMode} />
+          </details>
+        )
+      })}
+    </div>
+  )
+}
+
+function WeaponUsage({ report, teamMode }: { report: ReplayReport; teamMode: boolean }) {
+  return (
+    <section aria-labelledby="weapon-usage-heading" className="border-t border-border/70 pt-5">
+      <SectionHeading title="Weapon usage" />
+      <div id="weapon-usage-heading" className="grid gap-6 md:grid-cols-2">
+        {report.players.map((player, index) => (
+          <WeaponGroups
+            key={player.slot}
+            player={player}
+            report={report}
+            teamMode={teamMode}
+            tone={index === 0 ? 'primary' : 'danger'}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function DodgeBias() {
+  return <ComingSoon />
+}
+
+function Positioning({ player }: { player: ReportPlayer }) {
+  const values = [
+    ['Air', player.airTimeShare, 'hsl(var(--chart-3))'],
+    ['Ground', player.groundTimeShare, 'hsl(var(--primary))'],
+    ['Wall', player.wallTimeShare, 'hsl(var(--chart-4))'],
+  ] as const
+  return (
+    <div className="rounded-lg border border-border/70 bg-background/40 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="font-bold text-foreground">Positioning</h4>
+        <span className="font-mono text-[10px] uppercase text-muted-foreground">{player.name}</span>
+      </div>
+      <div className="space-y-3">
+        {values.map(([label, value, color]) => (
+          <div key={label} className="space-y-1.5">
+            <div className="flex items-center justify-between font-mono text-[10px] uppercase">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+                <span>{label}</span>
+              </div>
+              <span className="tabular-nums text-foreground">{formatShare(value)}</span>
+            </div>
+            <div
+              className="h-2.5 rounded-full bg-muted/60"
+              role="img"
+              aria-label={`${player.name} ${label} positioning share: ${formatShare(value)}`}
+            >
+              {value !== null && value > 0 ? (
+                <div className="h-full rounded-full" style={{ width: `${value * 100}%`, backgroundColor: color }} />
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MovementTotals({ player }: { player: ReportPlayer }) {
+  const values = [
+    ['Dodges', formatCount(player.dodges)],
+    ['Dashes', formatCount(player.dashes)],
+    ['Jumps', formatCount(player.jumps)],
+    ['Dash jumps', formatCount(player.dashJumps)],
+  ]
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {values.map(([label, value]) => (
+        <div key={label} className="rounded-md bg-muted/40 px-3 py-2">
+          <span className="block font-mono text-[10px] uppercase text-muted-foreground">{label}</span>
+          <b className="mt-1 block font-mono text-xl tabular-nums text-foreground">{value}</b>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PlaystylePanel({ player }: { player: ReportPlayer }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border/70 pb-2">
+        <h4 className="font-bold text-foreground">{player.name}</h4>
+        <span className="font-mono text-[10px] uppercase text-muted-foreground">Movement</span>
+      </div>
+      <MovementTotals player={player} />
+      <div className="grid gap-3 lg:grid-cols-2">
+        <DodgeBias />
+        <Positioning player={player} />
+      </div>
+    </div>
+  )
+}
+
+function Playstyle({ players }: { players: ReportPlayer[] }) {
+  const [activeSlot, setActiveSlot] = useState(players[0]?.slot ?? 0)
+  const activePlayer = players.find((player) => player.slot === activeSlot) ?? players[0]
+  return (
+    <section aria-labelledby="playstyle-heading" className="border-t border-border/70 pt-5">
+      <SectionHeading title="Playstyle" />
+      <div id="playstyle-heading" className="mb-4 grid grid-cols-2 gap-px bg-border/70 md:hidden">
+        {players.map((player) => (
+          <button
+            key={player.slot}
+            type="button"
+            onClick={() => setActiveSlot(player.slot)}
+            className={`px-3 py-2 text-center text-sm font-bold ${activeSlot === player.slot ? 'bg-primary text-primary-foreground' : 'bg-muted/50 text-muted-foreground'}`}
+          >
+            {player.name}
+          </button>
+        ))}
+      </div>
+      <div className="hidden gap-6 md:grid md:grid-cols-2">
+        {players.map((player) => (
+          <PlaystylePanel key={player.slot} player={player} />
+        ))}
+      </div>
+      {activePlayer && (
+        <div className="md:hidden">
+          <PlaystylePanel player={activePlayer} />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Engagements() {
+  return (
+    <section aria-label="Engagements" className="border-t border-border/70 pt-5">
+      <SectionHeading title="Engagements" />
+      <ComingSoon />
+    </section>
+  )
+}
+
+function KnockoutSequence({
+  replay,
+  report,
+}: { replay: NonNullable<ReplayJobDetailContract['result']>['core']['replay']; report: ReplayReport }) {
+  const playerBySlot = new Map(replay.players.map((player) => [player.slot, player]))
+  return (
+    <section aria-labelledby="knockout-heading" className="border-t border-border/70 pt-5">
+      <SectionHeading title="Knockout sequence" />
+      <div id="knockout-heading" className="rounded-lg border border-border/70 bg-background/40 p-4">
+        {report.knockouts.length === 0 ? (
+          <ComingSoon />
+        ) : (
+          <>
+            <div className="flex justify-between font-mono text-[10px] uppercase text-muted-foreground">
+              <span>0:00</span>
+              <span>{formatDuration(replay.durationMs)}</span>
+            </div>
+            <svg viewBox="0 0 1000 72" className="mt-1 h-16 w-full" role="img" aria-label="Knockout sequence">
+              <line x1="20" x2="980" y1="34" y2="34" className="stroke-border" strokeWidth="4" />
+              {report.knockouts.map((event) => (
+                <circle
+                  key={`${event.timestampMs}-${event.victimSlot}-${event.index}`}
+                  cx={timelineX(event.timestampMs, replay.durationMs)}
+                  cy="34"
+                  r="8"
+                  className="fill-success stroke-background"
+                  strokeWidth="4"
+                >
+                  <title>{`Knockout at ${formatDuration(event.timestampMs)}`}</title>
+                </circle>
+              ))}
+            </svg>
+            <ol className="mt-3 grid gap-1 sm:grid-cols-2">
+              {report.knockouts.map((event) => (
+                <li
+                  key={`${event.timestampMs}-${event.victimSlot}-${event.index}`}
+                  className="flex gap-3 border-t border-border/60 px-1 py-2 text-sm"
+                >
+                  <span className="font-mono text-xs text-primary">{formatDuration(event.timestampMs)}</span>
+                  <span>
+                    <strong>
+                      {event.scoringSlot === null
+                        ? 'Environment'
+                        : (playerBySlot.get(event.scoringSlot)?.name ?? 'Unknown player')}
+                    </strong>{' '}
+                    → {playerBySlot.get(event.victimSlot)?.name ?? 'Unknown player'}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 
 export function ReplayResultView({ job }: { job: ReplayJobDetailContract }) {
   if (!job.result) return null
-  const { core, extensions } = job.result
+  const { core } = job.result
   const replay = core.replay
-  const metricsBySlot = new Map(core.native.players.map((player) => [player.slot, player]))
-  const summary = extensions[MATCH_SUMMARY_EXTENSION_URI]
-  const summaryBySlot = new Map(summary?.data.players.map((player) => [player.slot, player]) ?? [])
-  const playerBySlot = new Map(replay.players.map((player) => [player.slot, player]))
+  const report = buildReplayReport(job)
+  const sides = createMatchSides(report, replay.outcome.winningTeamId)
   const map = getLevelById(replay.mapId)
-  const winningTeam = replay.outcome.winningTeamId
-  const winners = winningTeam === null ? [] : replay.players.filter(({ teamId }) => teamId === winningTeam)
-  const winnerLabel =
-    winningTeam === null ? 'Draw' : winners.map(({ name }) => name).join(' & ') || `Team ${winningTeam}`
-  const maxDamage = Math.max(
-    ...core.native.players.flatMap(({ damageDealt, damageTaken }) => [damageDealt, damageTaken]),
-    1,
-  )
-  const equipment = summary?.data.equipment
-    .filter(({ heldTimeShare }) => heldTimeShare !== null)
-    .toSorted((left, right) => (right.heldTimeShare ?? 0) - (left.heldTimeShare ?? 0))
 
   return (
-    <article className="space-y-6" aria-label="Selected replay analysis">
-      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <article className="mx-auto -mt-2 w-full max-w-5xl space-y-8 text-foreground" aria-label="Replay analysis">
+      <header className="flex flex-col justify-between gap-4 border-b border-border/70 pb-4 sm:flex-row sm:items-start">
         <div className="min-w-0">
-          <Badge variant="outline" className="font-mono text-muted-foreground">
-            Playlist {replay.playlistId}
-          </Badge>
-          <h2 className="mt-3 truncate text-3xl font-black tracking-tight text-foreground sm:h-14 sm:text-5xl">
+          <h2 className="break-words text-3xl font-black tracking-tight text-foreground sm:text-4xl">
             {map?.displayName ?? `Map ${replay.mapId}`}
           </h2>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <span className="max-w-xl truncate font-semibold">{job.fileName ?? 'Brawlhalla replay'}</span>
-            <span aria-hidden="true">•</span>
-            <span>Analyzed {replayTimestamp(job.updatedAt)}</span>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {[formatDuration(replay.durationMs), formatGameMode(replay), `${replay.matchSettings.lives} stocks`].map(
+              (item) => (
+                <span
+                  key={item}
+                  className="rounded-md bg-muted/60 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+                >
+                  {item}
+                </span>
+              ),
+            )}
           </div>
         </div>
-        <div className="shrink-0 md:text-right">
-          <p className="text-xs font-bold uppercase tracking-wide text-primary">Winner</p>
-          <p className="mt-1 text-2xl font-black text-foreground">{winnerLabel}</p>
-        </div>
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm font-bold text-foreground transition-colors hover:bg-muted/60"
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          Save replay
+        </button>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Match summary">
-        <StatTile icon={Clock3} label="Duration" value={formatDuration(replay.durationMs)} />
-        <StatTile icon={MapPinned} label="Map" value={map?.displayName ?? `Map ${replay.mapId}`} />
-        <StatTile
-          icon={Shield}
-          label="Rules"
-          value={`${replay.matchSettings.lives} stocks · ${replay.matchSettings.teamMode ? 'Teams' : 'Free-for-all'}`}
-        />
-        <StatTile icon={Gauge} label="Session" value={replay.online ? 'Online' : 'Local'} />
-      </section>
-
-      <Card>
-        <CardHeader className="border-b border-border/70 pb-4">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Swords className="h-5 w-5 text-primary" aria-hidden="true" />
-                Scoreboard
-              </CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Core combat output for every replay slot.</p>
-            </div>
-            <span className="text-xs font-mono text-muted-foreground">Format {replay.format}</span>
+      {sides.length >= 2 && (
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border/70 bg-border/70 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <PlayerLane side="left" matchSide={sides[0]} />
+          <div className="hidden place-items-center bg-card px-3 font-mono text-[10px] text-muted-foreground md:grid">
+            VS
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-3xl text-left text-sm">
-              <thead className="bg-muted/40 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-5 py-3" scope="col">
-                    Player
-                  </th>
-                  <th className="px-3 py-3 text-right" scope="col">
-                    Score
-                  </th>
-                  <th className="px-3 py-3 text-right" scope="col">
-                    KOs
-                  </th>
-                  <th className="px-3 py-3 text-right" scope="col">
-                    Deaths
-                  </th>
-                  <th className="px-3 py-3 text-right" scope="col">
-                    Dealt
-                  </th>
-                  <th className="px-3 py-3 text-right" scope="col">
-                    Taken
-                  </th>
-                  <th className="px-5 py-3 text-right" scope="col">
-                    Damage / min
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {replay.players.map((player) => {
-                  const native = metricsBySlot.get(player.slot)
-                  const playerSummary = summaryBySlot.get(player.slot)
-                  const legend = getLegendById(player.loadout.legendId)
-                  const avatarSlug = legend ? legendSlug(legend.heroId, legend.displayName) : null
-                  const won = player.teamId === winningTeam
-                  const playerName = <span>{player.name}</span>
-                  return (
-                    <tr key={player.slot} className={won ? 'bg-success/5' : undefined}>
-                      <th className="px-5 py-4" scope="row">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 rounded-md border border-border bg-muted">
-                            {avatarSlug && (
-                              <AvatarImage
-                                src={`/images/legends/avatars/${avatarSlug}.png`}
-                                alt={legend?.displayName ?? ''}
-                                className="rounded-md object-cover object-top"
-                              />
-                            )}
-                            <AvatarFallback className="rounded-md text-xs font-black text-muted-foreground">
-                              {player.slot + 1}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="flex items-center gap-2 font-bold text-foreground">
-                              {player.playerId !== null && player.playerId > 0 ? (
-                                <Link
-                                  href={`/player/${player.playerId}`}
-                                  className="transition-colors hover:text-primary"
-                                >
-                                  {playerName}
-                                </Link>
-                              ) : (
-                                playerName
-                              )}
-                              {won && <Crown className="h-3.5 w-3.5 text-amber-500" aria-label="Winner" />}
-                            </div>
-                            <p className="text-xs font-normal text-muted-foreground">
-                              {legend?.displayName ?? `Legend ${player.loadout.legendId}`} · Team {player.teamId}
-                            </p>
-                          </div>
-                        </div>
-                      </th>
-                      <td className="px-3 py-4 text-right font-bold tabular-nums">{player.score}</td>
-                      <td className="px-3 py-4 text-right font-black text-success tabular-nums">{native?.kos ?? 0}</td>
-                      <td className="px-3 py-4 text-right font-bold tabular-nums">{native?.deaths ?? 0}</td>
-                      <td className="px-3 py-4 text-right tabular-nums">{formatMetric(native?.damageDealt)}</td>
-                      <td className="px-3 py-4 text-right tabular-nums">{formatMetric(native?.damageTaken)}</td>
-                      <td className="px-5 py-4 text-right tabular-nums">
-                        {formatMetric(playerSummary?.damageDealtPerMinute)}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Activity className="h-5 w-5 text-chart-3" aria-hidden="true" />
-              Damage comparison
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Damage dealt versus damage absorbed.</p>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="flex gap-5 text-xs font-medium text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                Dealt
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-destructive/70" />
-                Taken
-              </span>
-            </div>
-            {replay.players.map((player) => {
-              const native = metricsBySlot.get(player.slot)
-              const dealt = native?.damageDealt ?? 0
-              const taken = native?.damageTaken ?? 0
-              return (
-                <div key={player.slot}>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="font-semibold text-foreground">{player.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {dealt.toFixed(1)} / {taken.toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${(dealt / maxDamage) * 100}%` }}
-                      />
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-destructive/70"
-                        style={{ width: `${(taken / maxDamage) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Shield className="h-5 w-5 text-chart-4" aria-hidden="true" />
-              Movement & dodges
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">How each player spent movement time and defensive actions.</p>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {replay.players.map((player) => {
-              const native = metricsBySlot.get(player.slot)
-              const playerSummary = summaryBySlot.get(player.slot)
-              const movementTotal = (native?.groundTimeMs ?? 0) + (native?.airTimeMs ?? 0) + (native?.wallTimeMs ?? 0)
-              const ground =
-                playerSummary?.groundTimeShare ?? (movementTotal > 0 ? (native?.groundTimeMs ?? 0) / movementTotal : 0)
-              const air =
-                playerSummary?.airTimeShare ?? (movementTotal > 0 ? (native?.airTimeMs ?? 0) / movementTotal : 0)
-              const wall =
-                playerSummary?.wallTimeShare ?? (movementTotal > 0 ? (native?.wallTimeMs ?? 0) / movementTotal : 0)
-              return (
-                <div key={player.slot}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-foreground">{player.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatMetric(playerSummary?.dodgesPerMinute)} dodges/min ·{' '}
-                      {formatShare(playerSummary?.airDodgeShare)} air
-                    </span>
-                  </div>
-                  <div
-                    className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-muted"
-                    aria-label={`${player.name} movement split`}
-                  >
-                    <div
-                      className="bg-primary"
-                      style={{ width: `${ground * 100}%` }}
-                      title={`Ground ${formatShare(ground)}`}
-                    />
-                    <div className="bg-chart-3" style={{ width: `${air * 100}%` }} title={`Air ${formatShare(air)}`} />
-                    <div
-                      className="bg-chart-4"
-                      style={{ width: `${wall * 100}%` }}
-                      title={`Wall ${formatShare(wall)}`}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-            <div className="flex flex-wrap gap-4 border-t border-border/60 pt-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                Ground
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-chart-3" />
-                Air
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-chart-4" />
-                Wall
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Trophy className="h-5 w-5 text-amber-500" aria-hidden="true" />
-            Knockout timeline
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">The sequence that decided the match.</p>
-        </CardHeader>
-        <CardContent>
-          {replay.koTimeline.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No knockouts were recorded.</p>
-          ) : (
-            <>
-              <svg viewBox="0 0 1000 92" className="h-24 w-full" role="img" aria-label="Knockout event timeline">
-                <line x1="20" x2="980" y1="44" y2="44" className="stroke-border" strokeWidth="4" />
-                {replay.koTimeline.map((event, index) => (
-                  <circle
-                    key={`${event.timestampMs}-${event.victimSlot}-${index}`}
-                    cx={timelineX(event.timestampMs, replay.durationMs)}
-                    cy="44"
-                    r="10"
-                    className="fill-primary stroke-background"
-                    strokeWidth="4"
-                  />
-                ))}
-              </svg>
-              <ol className="mt-4 grid gap-2 sm:grid-cols-2">
-                {replay.koTimeline.map((event, index) => {
-                  const scorer = event.scoringSlot === null ? null : playerBySlot.get(event.scoringSlot)
-                  const victim = playerBySlot.get(event.victimSlot)
-                  return (
-                    <li
-                      key={`${event.timestampMs}-${event.victimSlot}-${index}`}
-                      className="flex items-center gap-3 rounded-md border border-border/70 bg-muted/20 p-3 text-sm"
-                    >
-                      <span className="font-mono text-xs font-bold text-primary">
-                        {formatDuration(event.timestampMs)}
-                      </span>
-                      <span>
-                        <strong>{scorer?.name ?? 'Environment'}</strong> knocked out {victim?.name ?? 'Unknown player'}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ol>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {equipment && equipment.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Equipment usage</CardTitle>
-            <p className="text-sm text-muted-foreground">Share of tracked held time by player and item.</p>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-muted/40 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-5 py-3">Player</th>
-                    <th className="px-3 py-3">Equipment</th>
-                    <th className="px-5 py-3 text-right">Held time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {equipment.map((item) => (
-                    <tr key={`${item.slot}-${item.key}`}>
-                      <th className="px-5 py-3 font-semibold" scope="row">
-                        {playerBySlot.get(item.slot)?.name ?? `Slot ${item.slot + 1}`}
-                      </th>
-                      <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{item.key}</td>
-                      <td className="px-5 py-3 text-right font-bold tabular-nums">{formatShare(item.heldTimeShare)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+          <PlayerLane side="right" matchSide={sides[1]} />
+        </div>
       )}
+
+      <DamageGraph />
+      <CombatComparison sides={sides} teamMode={replay.matchSettings.teamMode} />
+      <WeaponUsage report={report} teamMode={replay.matchSettings.teamMode} />
+      <Playstyle players={report.players} />
+      <Engagements />
+      <KnockoutSequence replay={replay} report={report} />
     </article>
   )
 }

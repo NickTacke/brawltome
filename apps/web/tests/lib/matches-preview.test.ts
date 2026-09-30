@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { EventlineDemo } from '@/app/matches/EventlineDemo'
 import { MatchesContent } from '@/app/matches/MatchesContent'
 import { ReplayAnalysisPage } from '@/app/matches/ReplayAnalysisPage'
 import { GET } from '@/app/matches/preview/route'
@@ -33,6 +34,16 @@ describe('matches preview invite', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(matchesPreviewCookieAuthorized(cookieValue)).toBe(true)
     expect(MatchesContent({ previewCookie: cookieValue }).type).toBe(ReplayAnalysisPage)
+    expect(MatchesContent({ previewCookie: cookieValue, demo: true }).type).toBe(EventlineDemo)
+  })
+
+  test('preserves the demo destination when requested', () => {
+    process.env.MATCHES_PREVIEW_TOKEN = token
+
+    const response = GET(new NextRequest(`https://brawltome.app/matches/preview?token=${token}&demo=1`))
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/matches?demo=1')
   })
 
   test('does not grant access for an invalid invite', () => {
@@ -43,6 +54,7 @@ describe('matches preview invite', () => {
     expect(response.headers.has('set-cookie')).toBe(false)
     expect(matchesPreviewCookieAuthorized(undefined)).toBe(false)
     expect(MatchesContent({ previewCookie: undefined }).type).toBe(WorkInProgress)
+    expect(MatchesContent({ previewCookie: undefined, demo: true }).type).toBe(WorkInProgress)
   })
 
   test('fails closed when the preview token is absent or too short', () => {

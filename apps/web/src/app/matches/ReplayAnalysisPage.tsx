@@ -11,6 +11,7 @@ import {
 } from '@brawltome/contracts'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@brawltome/ui'
 import { Activity, Clock3, FileUp, History, LockKeyhole, Upload } from 'lucide-react'
+import Link from 'next/link'
 import { type DragEvent, type FormEvent, useCallback, useEffect, useState } from 'react'
 import { ReplayResultView } from './ReplayResultView'
 
@@ -60,7 +61,7 @@ function ReplayHistory({
             <p className="mt-1 text-sm text-muted-foreground">Upload a replay to start your history.</p>
           </div>
         ) : (
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto lg:max-h-[calc(100dvh-11rem)]">
             <table className="w-full text-left text-sm">
               <thead className="sr-only">
                 <tr>
@@ -263,11 +264,20 @@ export function ReplayAnalysisPage() {
 
   return (
     <div className="space-y-8 pb-10">
-      <header>
-        <h1 className="text-3xl font-black tracking-tight text-foreground sm:h-14 sm:text-5xl">Replay analysis</h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Upload a Brawlhalla replay to review damage, movement, knockouts, and equipment.
-        </p>
+      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Matches</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-5xl">Replay analysis</h1>
+          <p className="mt-2 max-w-2xl text-muted-foreground">
+            Upload a Brawlhalla replay to review damage, movement, knockouts, and equipment.
+          </p>
+        </div>
+        <Button asChild variant="outline" size="sm" className="shrink-0">
+          <Link href="/matches?demo=1">
+            <Activity className="mr-2 h-4 w-4" aria-hidden="true" />
+            View eventline demo
+          </Link>
+        </Button>
       </header>
 
       <Card className={`overflow-hidden border-border ${dragging ? 'ring-2 ring-primary' : ''}`}>
@@ -319,10 +329,12 @@ export function ReplayAnalysisPage() {
         </div>
       )}
 
-      <div className="space-y-6">
-        <ReplayHistory jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
+      <div className="grid items-start gap-6 lg:grid-cols-[21rem_minmax(0,1fr)]">
+        <div className="lg:sticky lg:top-6">
+          <ReplayHistory jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
+        </div>
 
-        <section aria-live="polite">
+        <section className="min-w-0" aria-live="polite">
           {loadingSelected && (
             <Card className="animate-pulse">
               <CardContent className="p-8">

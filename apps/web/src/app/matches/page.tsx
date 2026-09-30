@@ -7,6 +7,12 @@ export const metadata: Metadata = {
   title: 'Matches',
 }
 
-export default async function Page() {
-  return <MatchesContent previewCookie={(await cookies()).get(matchesPreviewCookieName)?.value} />
+interface PageProps {
+  searchParams: Promise<{ demo?: string | string[] }>
+}
+
+export default async function Page({ searchParams }: PageProps) {
+  const query = await searchParams
+  const cookieStore = await cookies()
+  return <MatchesContent previewCookie={cookieStore.get(matchesPreviewCookieName)?.value} demo={query.demo === '1'} />
 }
