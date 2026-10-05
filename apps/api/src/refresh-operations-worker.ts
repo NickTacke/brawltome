@@ -41,6 +41,7 @@ type RunOneRefreshOperationOptions = {
   renewEveryMs?: number
   sourceAdmission?: SourceAdmission
   waitForSourceAdmission?: (retryAfterMs: number, signal: AbortSignal) => Promise<void>
+  waitForSourceRetry?: (delayMs: number, signal: AbortSignal) => Promise<void>
   executeEffect?: (lease: ProofLease) => Promise<FencedResult>
   executeSection?(
     lease: PlayerLease,
@@ -594,6 +595,17 @@ async function executeStatisticsLegendMetaPublication(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
+// Transient V1 page failures retry in place; 429s stay with durable rate-limit backoff.
+const leaderboardPageRetryDelaysMs = [500, 2_000] as const
+
+function isTransientLeaderboardPageFailure(error: unknown): boolean {
+  return (
+    error instanceof LeaderboardSourceError &&
+    error.retryable &&
+    (error.code === 'source_transport_failed' || error.code === 'source_unavailable')
+  )
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -626,23 +638,34 @@ async function executeLeaderboard(
     },
     source: {
       async fetchPage(input) {
-        await renewLeaderboardLease()
-        for (;;) {
-          const admission = await sourceAdmission.admitSource({
-            domain: 'brawlhalla-v1',
-            reservationKey: `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`,
-            units: 1,
-            caller: 'background',
-          })
-          if (admission.outcome === 'admitted') break
-          await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
-          if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+        const pageKey = `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`
+        for (let retry = 0; ; retry += 1) {
           await renewLeaderboardLease()
+          for (;;) {
+            const admission = await sourceAdmission.admitSource({
+              domain: 'brawlhalla-v1',
+              // Each retry is a real source call, so it needs its own reservation.
+              reservationKey: retry === 0 ? pageKey : `${pageKey}:retry-${retry}`,
+              units: 1,
+              caller: 'background',
+            })
+            if (admission.outcome === 'admitted') break
+            await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
+            if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+            await renewLeaderboardLease()
+          }
+          await renewLeaderboardLease()
+          try {
+            return await (options.telemetry
+              ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
+              : leaderboardSource.fetchPage(input))
+          } catch (error) {
+            const delayMs = leaderboardPageRetryDelaysMs[retry]
+            if (delayMs === undefined || !isTransientLeaderboardPageFailure(error)) throw error
+            await (options.waitForSourceRetry ?? waitForRenewal)(delayMs, authorityLost)
+            if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+          }
         }
-        await renewLeaderboardLease()
-        return options.telemetry
-          ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
-          : leaderboardSource.fetchPage(input)
       },
     },
     publication: ranking,

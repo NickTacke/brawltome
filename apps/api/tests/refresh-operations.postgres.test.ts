@@ -173,6 +173,7 @@ describe('durable Refresh Operations', () => {
       'replay-analysis/0001',
       'accounts/0008',
       'accounts/0009',
+      'rankings/0007',
     ])
   })
 

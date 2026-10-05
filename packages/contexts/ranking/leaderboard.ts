@@ -280,6 +280,8 @@ function validateRegionRows(
     throw new LeaderboardCandidateError(`${mode}/${region} candidate is incomplete`)
   }
   const totalPages = pages[0]?.totalPages
+  // Zero source pages is an empty region; it publishes an empty regional snapshot.
+  if (totalPages === 0 && pages.length === 1 && pages[0]?.rankings.length === 0) return []
   if (!totalPages) throw new LeaderboardCandidateError(`${mode}/${region} does not contain source pages`)
   const rowsByIdentity = new Map<string, PublishedLeaderboardRow>()
   const ranks = new Set<number>()
@@ -371,6 +373,7 @@ function buildGlobal(
       if (!existing || compareDuplicateRows(row, existing) < 0) strongest.set(key, row)
     }
   }
+  if (strongest.size === 0) throw new LeaderboardCandidateError(`${mode} candidate has no ranked rows in any region`)
   return [...strongest.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
