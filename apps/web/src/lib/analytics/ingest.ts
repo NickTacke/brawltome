@@ -10,6 +10,7 @@ type IngestDeps = {
   telemetry: Pick<Telemetry, 'metrics' | 'logger'>
   salt: ReturnType<typeof createDailySalt>
   limiter: ReturnType<typeof createTabRateLimiter>
+  ipLimiter: ReturnType<typeof createTabRateLimiter>
 }
 
 const envelopeSchema = z.object({ events: z.array(z.unknown()).min(1).max(60) })
@@ -111,6 +112,14 @@ export function ingestBatch(input: { body: unknown; ip: string; userAgent: strin
     }
     if (invalid > 0) metrics.add('analytics_events_dropped_total', invalid, { reason: 'invalid' })
     if (events.length === 0) return
+    if (events.some((event) => event.tabId !== events[0].tabId)) {
+      metrics.add('analytics_events_dropped_total', events.length, { reason: 'invalid' })
+      return
+    }
+    if (input.ip && !deps.ipLimiter.allow(input.ip)) {
+      metrics.add('analytics_events_dropped_total', events.length, { reason: 'rate_limited' })
+      return
+    }
     if (!deps.limiter.allow(events[0].tabId)) {
       metrics.add('analytics_events_dropped_total', events.length, { reason: 'rate_limited' })
       return
