@@ -178,6 +178,12 @@ async function storedGenerationIds(sql: Sql): Promise<string[]> {
   )
 }
 
+async function storedGenerationIdsVisibleTo(transaction: postgres.TransactionSql): Promise<string[]> {
+  return (await transaction<{ id: string }[]>`SELECT id FROM rankings.generations ORDER BY schedule_window_at, id`).map(
+    ({ id }) => id,
+  )
+}
+
 async function orphanCounts(sql: Sql, generationIds: string[]) {
   const [counts] = await sql<{ snapshots: number; rows: number }[]>`
     SELECT
@@ -270,6 +276,161 @@ describe('Ranking snapshot retention', () => {
       expect(remaining.sort()).toEqual([...kept].sort())
       expect(await orphanCounts(sql, expired)).toEqual({ snapshots: 0, rows: 0 })
       expect(await orphanCounts(sql, kept)).toEqual({ snapshots: kept.length * 2, rows: kept.length * 4 })
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('keeps a generation exactly at the cutoff and one protected only through its snapshot', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const now = await databaseNow(sql)
+      const cutoff = new Date(now.getTime() - 26 * hour)
+      const beforeCutoff = await insertGeneration(sql, { mode: '1v1', windowAt: new Date(cutoff.getTime() - 1) })
+      const atCutoff = await insertGeneration(sql, { mode: '1v1', windowAt: cutoff })
+      // Legacy evidence may name a different generation than the snapshot it pins; the snapshot alone protects.
+      const pinnedBySnapshot = await insertGeneration(sql, {
+        mode: '1v1',
+        windowAt: new Date(now.getTime() - 40 * hour),
+      })
+      const legacy = await insertGeneration(sql, {
+        mode: '1v1',
+        windowAt: new Date(now.getTime() - 90 * hour),
+        source: 'v2-legacy',
+      })
+      await sql`
+        INSERT INTO rankings.legacy_import_sets
+          (mode, scope, status, source_row_count, candidate_row_count, gates, reasons, source_checksum,
+           generation_id, snapshot_id)
+        VALUES
+          ('1v1', 'EU', 'accepted', 2, 2, ${sql.json({})}, ${sql.array([] as string[])}, ${'b'.repeat(64)},
+           ${legacy.generationId}, ${pinnedBySnapshot.snapshots.EU})
+      `
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * minute) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
+
+      expect(await expire(sql, cutoff, 100)).toBe(1)
+      const remaining = await storedGenerationIds(sql)
+      expect(remaining).not.toContain(beforeCutoff.generationId)
+      expect(remaining).toContain(atCutoff.generationId)
+      expect(remaining).toContain(pinnedBySnapshot.generationId)
+      expect(await orphanCounts(sql, [atCutoff.generationId, pinnedBySnapshot.generationId])).toEqual({
+        snapshots: 4,
+        rows: 8,
+      })
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('lets concurrent expiry calls delete disjoint batches without blocking or failing', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const now = await databaseNow(sql)
+      const old = []
+      for (let index = 0; index < 6; index++) {
+        old.push(await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - (40 - index) * hour) }))
+      }
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * minute) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
+      const cutoff = new Date(now.getTime() - 24 * hour)
+      const expiredBy = async (transaction: postgres.TransactionSql) =>
+        (await storedGenerationIdsVisibleTo(transaction)).length
+
+      // The first call holds its locked batch open while the second runs: SKIP LOCKED hands it the rest.
+      let release: () => void = () => undefined
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let firstStarted: () => void = () => undefined
+      const started = new Promise<void>((resolve) => {
+        firstStarted = resolve
+      })
+      const before = await storedGenerationIds(sql)
+      const first = sql.begin(async (transaction) => {
+        const [row] = await transaction<{ deleted: number }[]>`
+          SELECT rankings.expire_v1_generations(${cutoff}, 3) AS deleted
+        `
+        const visible = await expiredBy(transaction)
+        firstStarted()
+        await held
+        return { deleted: row?.deleted, visible }
+      })
+      await started
+      const second = await sql.begin(async (transaction) => {
+        const [row] = await transaction<{ deleted: number }[]>`
+          SELECT rankings.expire_v1_generations(${cutoff}, 3) AS deleted
+        `
+        return { deleted: row?.deleted, remaining: await storedGenerationIdsVisibleTo(transaction) }
+      })
+      release()
+      const firstResult = await first
+      expect(firstResult.deleted).toBe(3)
+      expect(second.deleted).toBe(3)
+      const firstDeleted = before.length - firstResult.visible
+      expect(firstDeleted).toBe(3)
+
+      const remaining = await storedGenerationIds(sql)
+      for (const { generationId } of old) expect(remaining).not.toContain(generationId)
+      expect(remaining).toHaveLength(2)
+      // The second call's batch was the three the first did not lock.
+      const secondDeleted = before.filter((id) => !second.remaining.includes(id))
+      expect(secondDeleted).toHaveLength(3)
+      expect(
+        await orphanCounts(
+          sql,
+          old.map(({ generationId }) => generationId),
+        ),
+      ).toEqual({ snapshots: 0, rows: 0 })
+
+      // Unsynchronised concurrent calls with nothing left also succeed.
+      expect(await Promise.all([expire(sql, cutoff, 5), expire(sql, cutoff, 5)])).toEqual([0, 0])
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('leaves a publication that is still being written untouched while expiring', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const now = await databaseNow(sql)
+      const expired = await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 40 * hour) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * minute) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
+
+      let release: () => void = () => undefined
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let written: () => void = () => undefined
+      const inProgress = new Promise<void>((resolve) => {
+        written = resolve
+      })
+      // An unfinalized generation (even an old window) is mid-publication in another open transaction.
+      const publication = sql.begin(async (transaction) => {
+        const fixture = await insertGeneration(transaction as unknown as Sql, {
+          mode: '1v1',
+          windowAt: new Date(now.getTime() - 50 * hour),
+          finalized: false,
+        })
+        written()
+        await held
+        await transaction`UPDATE rankings.generations SET finalized = true WHERE id = ${fixture.generationId}`
+        return fixture
+      })
+      await inProgress
+      expect(await expire(sql, new Date(now.getTime() - 24 * hour), 100)).toBe(1)
+      release()
+      const published = await publication
+
+      const remaining = await storedGenerationIds(sql)
+      expect(remaining).not.toContain(expired.generationId)
+      expect(remaining).toContain(published.generationId)
+      expect(await orphanCounts(sql, [published.generationId])).toEqual({ snapshots: 2, rows: 4 })
+      const [finalized] = await sql<{ finalized: boolean }[]>`
+        SELECT finalized FROM rankings.generations WHERE id = ${published.generationId}
+      `
+      expect(finalized?.finalized).toBe(true)
     } finally {
       await sql.end()
     }
