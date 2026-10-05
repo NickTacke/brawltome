@@ -39,6 +39,7 @@ COPY packages/contexts/statistics/package.json packages/contexts/statistics/
 COPY packages/contexts/discovery/package.json packages/contexts/discovery/
 COPY packages/game-data/package.json packages/game-data/
 COPY packages/contracts/package.json packages/contracts/
+COPY tooling/analytics-review/package.json tooling/analytics-review/
 COPY tooling/architecture/package.json tooling/architecture/
 COPY tooling/database-migrations/package.json tooling/database-migrations/
 RUN bun install --frozen-lockfile
