@@ -133,17 +133,31 @@ export function createPlayerNameVerificationPlanner(deps: {
       }
     })
     let enqueued = 0
+    const releaseClaim = async (brawlhallaId: number, playerName: string) => {
+      try {
+        await deps.verifications.release(brawlhallaId, playerName)
+      } catch (error) {
+        record((active) => active.logger.error('player_name_verification.release_failed', error))
+      }
+    }
     for (const { brawlhallaId, playerName } of claimed) {
-      // An operation already in flight for this player keeps the claim; its preparation re-checks the pair.
-      const accepted = await deps.operations.accept({
-        kind: 'player-name-verification',
-        dedupeKey: `player-name-verification:${brawlhallaId}`,
-        operationKey: `player-name-verification:${brawlhallaId}:${randomUUID()}`,
-        workClass: 'maintenance',
-        payload: { brawlhallaId, playerName },
-        provenance: { source: 'player-name-verification' },
-      })
-      if (accepted.outcome === 'accepted') enqueued++
+      try {
+        // An operation already in flight for this player keeps the claim; its preparation re-checks the pair.
+        const accepted = await deps.operations.accept({
+          kind: 'player-name-verification',
+          dedupeKey: `player-name-verification:${brawlhallaId}`,
+          operationKey: `player-name-verification:${brawlhallaId}:${randomUUID()}`,
+          workClass: 'maintenance',
+          payload: { brawlhallaId, playerName },
+          provenance: { source: 'player-name-verification' },
+        })
+        if (accepted.outcome === 'accepted') enqueued++
+        else if (accepted.outcome !== 'already-active') await releaseClaim(brawlhallaId, playerName)
+      } catch (error) {
+        record((active) => active.logger.error('player_name_verification.enqueue_failed', error))
+        // No operation will run this claim, so it must not hold the pair (and the window budget) for a day.
+        await releaseClaim(brawlhallaId, playerName)
+      }
     }
     if (claimed.length > 0) {
       record((active) =>
