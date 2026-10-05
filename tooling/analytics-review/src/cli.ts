@@ -1,6 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { writeFileSync } from 'node:fs'
+import { resolveGrafanaConfig } from './config'
 import { createGrafanaApi } from './grafana'
 import { resolveOutputPath } from './output-path'
 import { collectReview } from './queries'
@@ -17,26 +16,16 @@ function parseArgs(argv: string[]): { days: number; out?: string } {
   return { days, out }
 }
 
-function readPassword(): string {
-  const file = join(homedir(), '.config/brawltome/observability.env')
-  let text: string
-  try {
-    text = readFileSync(file, 'utf8')
-  } catch {
-    throw new Error(`Could not read ${file}`)
-  }
-  for (const line of text.split('\n')) {
-    const match = line.match(/^\s*(?:export\s+)?GRAFANA_ADMIN_PASSWORD\s*=\s*(.*?)\s*$/)
-    if (!match) continue
-    return match[1].replace(/^(["'])(.*)\1$/, '$2')
-  }
-  throw new Error(`GRAFANA_ADMIN_PASSWORD not found in ${file}`)
-}
-
 const { days, out } = parseArgs(process.argv.slice(2))
-const baseUrl = process.env.GRAFANA_URL ?? 'https://observability.brawltome.app'
 const end = new Date()
-const api = createGrafanaApi(baseUrl, readPassword())
+let config: ReturnType<typeof resolveGrafanaConfig>
+try {
+  config = resolveGrafanaConfig(process.env)
+} catch (error) {
+  console.error((error as Error).message)
+  process.exit(1)
+}
+const api = createGrafanaApi(config.baseUrl, config.password)
 const report = buildReport(await collectReview(api, days, end), { days, end })
 const path = resolveOutputPath(out, end, process.env.INIT_CWD ?? process.cwd())
 writeFileSync(path, report)
