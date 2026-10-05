@@ -2158,6 +2158,13 @@ export function createPostgresRefreshOperations(
       }
     },
 
+    async operationStatus(operationId: string): Promise<string | null> {
+      const [operation] = await client<{ status: string }[]>`
+        SELECT status FROM refresh_operations.operations WHERE id = ${operationId}
+      `
+      return operation?.status ?? null
+    },
+
     async inspect(operationId: string) {
       const [operation] = await client`
         SELECT * FROM refresh_operations.operations WHERE id = ${operationId}

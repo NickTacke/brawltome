@@ -433,6 +433,28 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
+  test('reports an operation status cheaply for scheduler backoff decisions', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const accepted = await operations.accept({
+      kind: 'discovery-reconciliation',
+      dedupeKey: `discovery:player:reconciliation:${randomUUID()}`,
+      operationKey: `discovery:player:reconciliation:${randomUUID()}`,
+      workClass: 'projection',
+      payload: { owner: 'player' },
+      provenance: { source: 'integration-test' },
+      maxAttempts: 1,
+    })
+    expect(await operations.operationStatus(accepted.operationId)).toBe('pending')
+    const lease = requireLease(
+      await operations.claim('status-worker', 1_000, testAdmission, 'discovery-reconciliation'),
+    )
+    expect(await operations.operationStatus(accepted.operationId)).toBe('leased')
+    await operations.fail(lease, { code: 'database_unavailable', message: 'disk full', retryable: true }, 0)
+    expect(await operations.operationStatus(accepted.operationId)).toBe('dead_letter')
+    expect(await operations.operationStatus(randomUUID())).toBeNull()
+    await operations.close()
+  })
+
   test('checkpoints completed interactive sections across lease expiry', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const reserved = await operations.reserveInteractivePlayerRefresh({

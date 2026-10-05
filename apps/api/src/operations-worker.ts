@@ -24,6 +24,7 @@ import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
 import { internalSecretValid } from './auth/internal-secret'
+import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation-backoff'
 import { createHealthRoutes } from './health-routes'
 import {
   leaderboardScheduleDefinitions,
@@ -178,6 +179,11 @@ function requestShutdown(): void {
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 
+const discoveryReconciliationBackoff = createDiscoveryReconciliationBackoff({
+  baseMs: workerConfig.discovery.reconciliationFailureBackoffMs,
+  maxMs: workerConfig.discovery.reconciliationMaxFailureBackoffMs,
+  operationStatus: operations.operationStatus,
+})
 const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
 let leaderboardSchedulesReconciled = false
 try {
@@ -216,7 +222,10 @@ try {
           })
           if (projection.outcome === 'accepted') reconciledDiscovery++
         }
-        if (await discovery.reconciliationDue(definition.owner, workerConfig.discovery.reconciliationIntervalMs)) {
+        if (
+          (await discovery.reconciliationDue(definition.owner, workerConfig.discovery.reconciliationIntervalMs)) &&
+          (await discoveryReconciliationBackoff.shouldEnqueue(definition.owner))
+        ) {
           const reconciliation = await operations.accept({
             kind: 'discovery-reconciliation',
             dedupeKey: `discovery:${definition.owner}:reconciliation`,
@@ -225,6 +234,7 @@ try {
             payload: { owner: definition.owner },
             provenance: { source: 'owner-fact-reconciliation', requestedBy: 'issue-200' },
           })
+          discoveryReconciliationBackoff.recordEnqueued(definition.owner, reconciliation.operationId)
           if (reconciliation.outcome === 'accepted') reconciledDiscovery++
         }
       }

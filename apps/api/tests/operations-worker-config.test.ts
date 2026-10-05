@@ -19,6 +19,8 @@ describe('operations worker configuration', () => {
       discovery: {
         projectionBatchSize: 500,
         reconciliationIntervalMs: 60 * 60 * 1000,
+        reconciliationFailureBackoffMs: 5 * 60 * 1000,
+        reconciliationMaxFailureBackoffMs: 60 * 60 * 1000,
       },
       leaderboard: {
         pageDepth: 20,
@@ -71,6 +73,15 @@ describe('operations worker configuration', () => {
     expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_MAX_DELAY_MS: '1999' })).toThrow(
       'OPERATIONS_RETRY_MAX_DELAY_MS',
     )
+    expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS: '59999' })).toThrow(
+      'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
+    )
+    expect(() =>
+      readOperationsWorkerConfig({
+        DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS: '600000',
+        DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS: '599999',
+      }),
+    ).toThrow('DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS')
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }
