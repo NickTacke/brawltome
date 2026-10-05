@@ -2,6 +2,7 @@
 import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@/components/ui'
+import { track } from '@/lib/analytics/browser'
 import { trpc } from '@/lib/trpc'
 import { fixEncoding, formatNum } from '@/lib/utils'
 import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
@@ -28,11 +29,15 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const handleResultNavigate = useCallback(() => {
-    if (onBlur) onBlur()
-    setQuery('')
-    setError(null)
-  }, [onBlur])
+  const handleResultNavigate = useCallback(
+    (position: number, viaAlias: boolean) => {
+      track({ name: 'search.selected', source: 'bar', position: Math.min(position, 100), viaAlias })
+      if (onBlur) onBlur()
+      setQuery('')
+      setError(null)
+    },
+    [onBlur],
+  )
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -59,10 +64,19 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     }
 
     setIsSearching(true)
+    const started = performance.now()
     trpc.search.local
       .query({ query: debouncedQuery })
       .then((data) => {
         if (cancelled) return
+        track({
+          name: 'search.performed',
+          source: 'bar',
+          query: debouncedQuery,
+          results: Math.min(data.players.length + data.clans.length, 100),
+          aliasResults: Math.min(data.players.filter((p) => p.matchedAlias).length, 100),
+          latencyMs: Math.min(Math.round(performance.now() - started), 600000),
+        })
         setPlayerResults(data.players)
         setClanResults(data.clans)
         setShowClans(false)
@@ -73,6 +87,11 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
       })
       .catch(() => {
         if (cancelled) return
+        track({
+          name: 'search.failed',
+          source: 'bar',
+          latencyMs: Math.min(Math.round(performance.now() - started), 600000),
+        })
         setIsSearching(false)
         setError('Search failed.')
       })
@@ -131,12 +150,12 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                 {playerResults.length > 0 && (
                   <>
                     <div className="max-h-96 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent">
-                      {playerResults.slice(0, visiblePlayerCount).map((p) => (
+                      {playerResults.slice(0, visiblePlayerCount).map((p, index) => (
                         <Link
                           key={`p-${p.brawlhallaId}`}
                           href={`/player/${p.brawlhallaId}`}
                           prefetch={false}
-                          onClick={handleResultNavigate}
+                          onClick={() => handleResultNavigate(index, Boolean(p.matchedAlias))}
                           className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors"
                         >
                           <div className="flex items-center gap-3">
@@ -187,12 +206,12 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
                         : `Show ${clanResults.length} Clan${clanResults.length === 1 ? '' : 's'}`}
                     </button>
                     {showClans &&
-                      clanResults.map((c) => (
+                      clanResults.map((c, clanIndex) => (
                         <Link
                           key={`c-${c.clanId}`}
                           href={`/clan/${c.clanId}`}
                           prefetch={false}
-                          onClick={handleResultNavigate}
+                          onClick={() => handleResultNavigate(playerResults.length + clanIndex, false)}
                           className="w-full text-left p-3 hover:bg-accent hover:text-accent-foreground border-b border-border last:border-0 flex justify-between items-center group transition-colors bg-muted/10"
                         >
                           <div className="flex items-center gap-3">
