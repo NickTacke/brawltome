@@ -17,11 +17,13 @@ function setup(now = Date.parse('2026-10-05T23:59:59Z')) {
     (bytes) => new Uint8Array(bytes).fill(++seed),
   )
   const limiter = createTabRateLimiter(30, () => clock)
+  const ipLimiter = createTabRateLimiter(120, () => clock)
   return {
     sink,
     telemetry,
     salt,
     limiter,
+    ipLimiter,
     advance: (ms: number) => {
       clock += ms
     },
@@ -30,7 +32,7 @@ function setup(now = Date.parse('2026-10-05T23:59:59Z')) {
 
 describe('ingestBatch', () => {
   test('records metrics and scrubbed logs without ip or user agent', async () => {
-    const { sink, telemetry, salt, limiter } = setup()
+    const { sink, telemetry, salt, limiter, ipLimiter } = setup()
     ingestBatch(
       {
         body: {
@@ -56,7 +58,7 @@ describe('ingestBatch', () => {
         ip: '203.0.113.7',
         userAgent: 'Mozilla/5.0 Test',
       },
-      { telemetry, salt, limiter },
+      { telemetry, salt, limiter, ipLimiter },
     )
     await telemetry.flush(100)
     const output = JSON.stringify(sink.records)
@@ -76,7 +78,7 @@ describe('ingestBatch', () => {
   })
 
   test('maps vitals to a metric without a log, and normalizes unknown trpc labels', async () => {
-    const { sink, telemetry, salt, limiter } = setup()
+    const { sink, telemetry, salt, limiter, ipLimiter } = setup()
     ingestBatch(
       {
         body: {
@@ -88,7 +90,7 @@ describe('ingestBatch', () => {
         ip: '1.1.1.1',
         userAgent: 'a',
       },
-      { telemetry, salt, limiter },
+      { telemetry, salt, limiter, ipLimiter },
     )
     await telemetry.flush(100)
     const output = JSON.stringify(sink.records)
@@ -101,9 +103,9 @@ describe('ingestBatch', () => {
   })
 
   test('drops hostile bodies with a reason and never throws', () => {
-    const { telemetry, salt, limiter } = setup()
+    const { telemetry, salt, limiter, ipLimiter } = setup()
     for (const body of [null, 'x', { events: 'no' }, { events: [{ ...base, name: 'evil' }] }]) {
-      expect(() => ingestBatch({ body, ip: '1.1.1.1', userAgent: 'a' }, { telemetry, salt, limiter })).not.toThrow()
+      expect(() => ingestBatch({ body, ip: '1.1.1.1', userAgent: 'a' }, { telemetry, salt, limiter, ipLimiter })).not.toThrow()
     }
     ingestBatch(
       {
@@ -111,7 +113,7 @@ describe('ingestBatch', () => {
         ip: '1.1.1.1',
         userAgent: 'a',
       },
-      { telemetry, salt, limiter },
+      { telemetry, salt, limiter, ipLimiter },
     )
     const dropped = telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_events_dropped_total')
     expect(JSON.stringify(dropped)).toContain('too_many')
@@ -119,16 +121,66 @@ describe('ingestBatch', () => {
   })
 
   test('rate limits per tab', () => {
-    const { telemetry, salt } = setup()
+    const { telemetry, salt, ipLimiter } = setup()
     const limiter = createTabRateLimiter(2, () => 0)
     for (let index = 0; index < 3; index++) {
       ingestBatch(
         { body: { events: [{ ...base, name: 'pageview' }] }, ip: '1.1.1.1', userAgent: 'a' },
-        { telemetry, salt, limiter },
+        { telemetry, salt, limiter, ipLimiter },
       )
     }
     const dropped = telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_events_dropped_total')
     expect(JSON.stringify(dropped)).toContain('rate_limited')
+  })
+})
+
+describe('ingestBatch abuse limits', () => {
+  const dropReasons = (telemetry: ReturnType<typeof setup>['telemetry']) =>
+    JSON.stringify(telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_events_dropped_total'))
+
+  test('rate limits per client ip across rotating tab ids', () => {
+    const { telemetry, salt, limiter } = setup()
+    const ipLimiter = createTabRateLimiter(2, () => 0)
+    for (let index = 0; index < 3; index++) {
+      const rotating = String(index).repeat(32)
+      ingestBatch(
+        { body: { events: [{ ...base, tabId: rotating, name: 'pageview' }] }, ip: '198.51.100.4', userAgent: 'a' },
+        { telemetry, salt, limiter, ipLimiter },
+      )
+    }
+    const pageviews = telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_pageviews_total')
+    expect(JSON.stringify(pageviews?.series)).toContain('"value":2')
+    expect(dropReasons(telemetry)).toContain('rate_limited')
+  })
+
+  test('never exposes the ip in metrics', () => {
+    const { telemetry, salt, limiter, ipLimiter } = setup()
+    ingestBatch(
+      { body: { events: [{ ...base, name: 'pageview' }] }, ip: '198.51.100.4', userAgent: 'a' },
+      { telemetry, salt, limiter, ipLimiter },
+    )
+    expect(JSON.stringify(telemetry.metrics.snapshot())).not.toContain('198.51.100.4')
+  })
+
+  test('rejects a batch whose events do not share one tabId', () => {
+    const { telemetry, salt, limiter, ipLimiter } = setup()
+    ingestBatch(
+      {
+        body: {
+          events: [
+            { ...base, name: 'pageview' },
+            { ...base, tabId: 'e'.repeat(32), name: 'pageview' },
+          ],
+        },
+        ip: '1.1.1.1',
+        userAgent: 'a',
+      },
+      { telemetry, salt, limiter, ipLimiter },
+    )
+    const snapshot = telemetry.metrics.snapshot()
+    expect(snapshot.find((metric) => metric.name === 'analytics_pageviews_total')).toBeUndefined()
+    expect(dropReasons(telemetry)).toContain('invalid')
+    expect(dropReasons(telemetry)).toContain('"value":2')
   })
 })
 
@@ -145,7 +197,7 @@ describe('createDailySalt', () => {
 
 describe('ingestBatch per-event validation', () => {
   test('records valid events and drops only the invalid one', () => {
-    const { telemetry, salt, limiter } = setup()
+    const { telemetry, salt, limiter, ipLimiter } = setup()
     ingestBatch(
       {
         body: {
@@ -158,7 +210,7 @@ describe('ingestBatch per-event validation', () => {
         ip: '1.1.1.1',
         userAgent: 'ua',
       },
-      { telemetry, salt, limiter },
+      { telemetry, salt, limiter, ipLimiter },
     )
     const snapshot = telemetry.metrics.snapshot()
     const uses = snapshot.find((metric) => metric.name === 'analytics_feature_use_total')

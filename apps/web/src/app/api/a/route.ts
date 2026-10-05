@@ -7,6 +7,7 @@ import { webTelemetry } from '@/lib/web-telemetry-registry'
 
 const salt = createDailySalt(Date.now, (bytes) => new Uint8Array(randomBytes(bytes)))
 const limiter = createTabRateLimiter(30, Date.now)
+const ipLimiter = createTabRateLimiter(120, Date.now)
 
 // The address is only ever hashed into a daily visitor key, never stored. Route handlers have no peer address, so a
 // spoofed header can only skew approximate unique counts.
@@ -33,7 +34,7 @@ export async function POST(request: Request): Promise<Response> {
   }
   ingestBatch(
     { body, ip: clientIp(request), userAgent: request.headers.get('user-agent') ?? '' },
-    { telemetry: webTelemetry, salt, limiter },
+    { telemetry: webTelemetry, salt, limiter, ipLimiter },
   )
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } })
 }
