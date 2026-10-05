@@ -13,6 +13,7 @@ describe('stored Player Reference', () => {
     const careerPriorityId = storedId + 4
     const invalidCareerId = storedId + 5
     const storedMetadataId = storedId + 6
+    const renamedId = storedId + 7
     const rollback = new Error('rollback Player Reference integration test')
 
     try {
@@ -55,6 +56,9 @@ describe('stored Player Reference', () => {
             if (brawlhallaId === careerPriorityId || brawlhallaId === invalidCareerId) {
               return { brawlhallaId, name: 'Ranked Name' }
             }
+            if (brawlhallaId === renamedId) {
+              return { brawlhallaId, name: 'Renamed Player', observedAt: new Date('2026-10-05T12:00:00Z') }
+            }
             if (brawlhallaId === storedMetadataId) {
               return {
                 brawlhallaId,
@@ -77,6 +81,9 @@ describe('stored Player Reference', () => {
             }
             if (brawlhallaId === invalidCareerId) {
               return { brawlhallaId, name: `Player ${brawlhallaId}` }
+            }
+            if (brawlhallaId === renamedId) {
+              return { brawlhallaId, name: 'Legacy Career Name', observedAt: new Date('2024-01-01T00:00:00Z') }
             }
             return null
           },
@@ -118,6 +125,7 @@ describe('stored Player Reference', () => {
           bestLegendNameKey: 'teros',
           legacyRating: 1_800,
         })
+        expect(await queries.byId(renamedId)).toEqual({ brawlhallaId: renamedId, name: 'Renamed Player', aliases: [] })
         expect(await queries.byId(placeholderId)).toBeNull()
         expect(await queries.byId(storedId - 1)).toBeNull()
         throw rollback
