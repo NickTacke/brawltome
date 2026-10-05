@@ -63,6 +63,9 @@ export function createStateDeduper() {
 }
 
 /** Tracks refresh.abandoned once per cycle while a refresh is still active. */
+// A page hide into the back/forward cache is not an exit: the page can be restored and finish its refresh.
+export const isPageExit = (event: { persisted: boolean }): boolean => !event.persisted
+
 export function abandonRefresh(
   statusKind: string,
   trackedRef: { current: boolean },
