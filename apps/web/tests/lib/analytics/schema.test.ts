@@ -51,6 +51,18 @@ describe('scrubbers', () => {
     expect(scrubbed).not.toContain('abc')
     expect(scrubError('e'.repeat(500))).toHaveLength(200)
   })
+  test('scrubbers redact ids, emails and ip addresses but keep gamertag text', () => {
+    for (const scrub of [scrubQuery, scrubError]) {
+      expect(scrub('player 1234567 failed')).toBe('player [id] failed')
+      expect(scrub('id 1234 ok')).toBe('id 1234 ok')
+      expect(scrub('mail me@example.com now')).toBe('mail [email] now')
+      expect(scrub('from 203.0.113.42 here')).toBe('from [ip] here')
+      expect(scrub('from 2001:db8::1 here')).toBe('from [ip] here')
+      expect(scrub('from ::1 here')).toBe('from [ip] here')
+    }
+    expect(scrubQuery('Boomie? 99')).toBe('Boomie? 99')
+  })
+
   test('scrubQuery removes urls and secrets', () => {
     const scrubbed = scrubQuery('  token=abc https://x.y/p  ')
     expect(scrubbed).not.toContain('abc')

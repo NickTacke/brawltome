@@ -34,6 +34,10 @@ const stripSecrets = (text: string): string =>
   text
     .replace(/https?:\/\/\S+/gi, '[url]')
     .replace(/(api_key|token|secret|password|bearer)([\s:=]+\S+|\S*)/gi, '[redacted]')
+    .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]')
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[ip]')
+    .replace(/(?<![\w:])(?=[0-9a-f:]*[0-9a-f])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w:])/gi, '[ip]')
+    .replace(/\b\d{5,}\b/g, '[id]')
 
 export const scrubQuery = (text: string): string => stripSecrets(text).trim().replace(/\s+/g, ' ').slice(0, 64)
 
