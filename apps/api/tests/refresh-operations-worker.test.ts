@@ -3,7 +3,7 @@ import { RateLimitError } from '@brawltome/bhapi'
 import { LeaderboardSourceError } from '@brawltome/ranking/composition'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { retryDelayForAttempt, runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
@@ -131,6 +131,61 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('lease_lost')
   })
 
+  test('logs failed attempts with safe structured failure codes instead of free text', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'proof:diagnosable-failure',
+      kind: 'proof',
+      workClass: 'interactive',
+      payload: { value: 'proof' },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      fail: async () => 'transitioned' as const,
+    }
+    const failedRecords = async (error: Error) => {
+      const sink = createMemorySink()
+      const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        telemetry,
+        executeEffect: async () => {
+          throw error
+        },
+      })
+      await telemetry.flush(50)
+      return sink.records.filter((record) => record.event === 'operation.attempt.failed')
+    }
+
+    const [sourceFailure] = await failedRecords(
+      new LeaderboardSourceError('source_contract_invalid', 'GET https://x/?api_key=leaked-key failed', false),
+    )
+    expect(sourceFailure?.error).toMatchObject({ code: 'source_contract_invalid' })
+    expect(sourceFailure?.attributes).toMatchObject({ failureCode: 'source_contract_invalid' })
+    expect(JSON.stringify(sourceFailure)).not.toContain('leaked-key')
+
+    const [postgresFailure] = await failedRecords(
+      Object.assign(new Error('relation "secret_table" does not exist'), { code: '42P01' }),
+    )
+    expect(postgresFailure?.error).toMatchObject({ code: '42P01' })
+    expect(postgresFailure?.attributes).toMatchObject({ failureCode: '42P01' })
+    expect(JSON.stringify(postgresFailure)).not.toContain('secret_table')
+
+    const [genericFailure] = await failedRecords(new Error('execution failed'))
+    expect(genericFailure?.attributes).toMatchObject({ failureCode: 'proof_execution_failed' })
+  })
+
   test('records leaderboard source calls without correlation IDs in labels', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
@@ -253,6 +308,151 @@ describe('refresh operations worker source retry', () => {
     expect(reservations[1]).toBe(reservations[0])
   })
 
+  test('retries a transient leaderboard page failure in place through fresh source admission', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:page-retry',
+      kind: 'leaderboard-3v3',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 4,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    const reservations: string[] = []
+    const retryWaits: number[] = []
+    const calls: string[] = []
+    let completed = false
+    let deferred = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      defer: async () => {
+        deferred = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async ({ reservationKey }) => {
+          reservations.push(reservationKey)
+          return { outcome: 'admitted', deduplicated: false }
+        },
+        pauseSource: async () => {},
+      },
+      waitForSourceRetry: async (delayMs) => {
+        retryWaits.push(delayMs)
+      },
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async ({ region }) => {
+          calls.push(region)
+          if (region === 'EU' && calls.filter((called) => called === 'EU').length === 1) {
+            throw new LeaderboardSourceError('source_transport_failed', 'socket reset', true)
+          }
+          if (region === 'SEA' && calls.filter((called) => called === 'SEA').length <= 2) {
+            throw new LeaderboardSourceError('source_unavailable', 'V1 leaderboard returned 504', true)
+          }
+          const id = calls.length
+          return {
+            rankings: [
+              {
+                identity: { type: 'three-vs-three-player', player: { id, username: `Player ${id}` } },
+                rating: 2_100,
+                best_rating: 2_100,
+                rank: 1,
+                wins: 1,
+                losses: 0,
+                region,
+                tier: 'Diamond',
+              },
+            ],
+            totalPages: 1,
+          }
+        },
+      },
+    })
+
+    expect(completed).toBe(true)
+    expect(deferred).toBe(false)
+    expect(calls).toHaveLength(12)
+    expect(retryWaits).toEqual([500, 500, 2_000])
+    expect(reservations).toHaveLength(12)
+    expect(new Set(reservations).size).toBe(12)
+    expect(reservations).toContain(`${lease.operationId}:4:3v3:EU:1:retry-1`)
+    expect(reservations).toContain(`${lease.operationId}:4:3v3:SEA:1:retry-2`)
+  })
+
+  test('leaves leaderboard rate limits to durable backoff instead of retrying in place', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:rate-limited',
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    let sourceCalls = 0
+    let deferred: OperationFailure | undefined
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async (_lease: OperationLease, failure: OperationFailure) => {
+        deferred = failure
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
+      waitForSourceRetry: async () => {},
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async () => {
+          sourceCalls += 1
+          throw new LeaderboardSourceError('source_rate_limited', 'V1 leaderboard returned 429', true)
+        },
+      },
+    })
+
+    expect(sourceCalls).toBe(1)
+    expect(deferred).toMatchObject({ code: 'source_rate_limited' })
+  })
+
   test('defers retryable leaderboard source outages without consuming the final attempt', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const lease: OperationLease = {
@@ -272,6 +472,7 @@ describe('refresh operations worker source retry', () => {
     }
     let deferredMs: number | undefined
     let failed = false
+    let sourceCalls = 0
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -299,13 +500,16 @@ describe('refresh operations worker source retry', () => {
         publishGeneration: async () => 'published' as const,
         recordCollectionFailure: async () => 'recorded' as const,
       },
+      waitForSourceRetry: async () => {},
       leaderboardSource: {
         fetchPage: async () => {
+          sourceCalls += 1
           throw new LeaderboardSourceError('source_unavailable', 'V1 leaderboard returned 502', true)
         },
       },
     })
 
+    expect(sourceCalls).toBe(3)
     expect(deferredMs).toBe(60_000)
     expect(failed).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
@@ -1008,5 +1212,170 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
     })
     expect(deferred).toBe(false)
+  })
+
+  test('backs off retryable execution failures exponentially so a brief source hiccup is not dead-lettered', async () => {
+    const delays: number[] = []
+    for (const attemptNumber of [1, 2, 3]) {
+      const lease: OperationLease = {
+        operationId: crypto.randomUUID(),
+        effectOperationId: crypto.randomUUID(),
+        effectCreatedAt: new Date().toISOString(),
+        operationKey: `proof:backoff:${attemptNumber}`,
+        kind: 'proof',
+        workClass: 'interactive',
+        payload: { value: 'proof' },
+        provenance: { source: 'test' },
+        leaseOwner: 'worker',
+        leaseToken: 1,
+        attemptNumber,
+        maxAttempts: 4,
+        scheduleWindowAt: null,
+      }
+      await runOneRefreshOperation(
+        {
+          claim: async () => lease,
+          renew: async () => 'renewed' as const,
+          fail: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
+            delays.push(retryDelayMs)
+            return 'transitioned' as const
+          },
+        } as never,
+        'worker',
+        {
+          leaseMs: 1_000,
+          retryDelayMs: 2_000,
+          retryBackoff: { multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2, random: () => 0.5 },
+          admission,
+          executeEffect: async () => {
+            throw new Error('Brawlhalla v0 returned 502')
+          },
+        },
+      )
+    }
+
+    expect(delays).toEqual([2_000, 6_000, 15_000])
+  })
+
+  test('jitters retry delays within the configured ratio and never beyond the maximum', () => {
+    const policy = { baseDelayMs: 2_000, multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2 }
+    expect(retryDelayForAttempt(1, { ...policy, random: () => 0 })).toBe(1_600)
+    expect(retryDelayForAttempt(1, { ...policy, random: () => 0.999_999 })).toBe(2_399)
+    expect(retryDelayForAttempt(2, { ...policy, random: () => 0 })).toBe(4_800)
+    expect(retryDelayForAttempt(3, { ...policy, random: () => 0.999_999 })).toBe(15_000)
+    expect(retryDelayForAttempt(20, { ...policy, random: () => 0.5 })).toBe(15_000)
+    expect(retryDelayForAttempt(2, { ...policy, multiplier: 1, jitterRatio: 0, random: Math.random })).toBe(2_000)
+    let total = 0
+    for (let attempt = 1; attempt < 4; attempt++) total += retryDelayForAttempt(attempt, { ...policy, random: () => 1 })
+    expect(total).toBeLessThan(30_000)
+  })
+
+  test('propagates published leaderboard player names without failing the publication', async () => {
+    const leaseFor = (kind: 'leaderboard-1v1' | 'leaderboard-2v2'): OperationLease => ({
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: `leaderboard:names:${kind}`,
+      kind,
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    })
+    const run = async (
+      lease: OperationLease,
+      published: 'published' | 'already-published' | 'effect-conflict',
+      applyLeaderboardNames: (input: {
+        observedAt: Date
+        players: Array<{ brawlhallaId: number; name: string }>
+      }) => Promise<{ changed: number }>,
+    ) => {
+      let completed = false
+      const operations = {
+        claim: async () => lease,
+        renew: async () => 'renewed' as const,
+        complete: async () => {
+          completed = true
+          return 'transitioned' as const
+        },
+        fail: async () => 'transitioned' as const,
+      }
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        sourceAdmission: {
+          admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+          pauseSource: async () => {},
+        },
+        ranking: {
+          publishGeneration: async () => published,
+          recordCollectionFailure: async () => 'recorded' as const,
+        },
+        leaderboardPlayerNames: { applyLeaderboardNames },
+        leaderboardSource: {
+          fetchPage: async ({ region }) => {
+            const base = (regionIndex.get(region) ?? 0) * 10 + 1
+            return {
+              rankings: [
+                {
+                  identity:
+                    lease.kind === 'leaderboard-2v2'
+                      ? {
+                          type: 'fixed-two-vs-two-team',
+                          players: [
+                            { id: base, username: `First ${base}` },
+                            { id: base + 1, username: `Second ${base + 1}` },
+                          ],
+                        }
+                      : { type: 'one-vs-one-player', player: { id: base, username: `Solo ${base}` } },
+                  rating: 2_100,
+                  best_rating: 2_100,
+                  rank: 1,
+                  wins: 1,
+                  losses: 0,
+                  region,
+                  tier: 'Diamond',
+                },
+              ],
+              totalPages: 1,
+            }
+          },
+        },
+      })
+      return completed
+    }
+    const regionIndex = new Map(['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'].map((r, i) => [r, i]))
+
+    const applied: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; name: string }> }> = []
+    const record = async (input: { observedAt: Date; players: Array<{ brawlhallaId: number; name: string }> }) => {
+      applied.push(input)
+      return { changed: input.players.length }
+    }
+
+    expect(await run(leaseFor('leaderboard-2v2'), 'published', record)).toBe(true)
+    expect(applied).toHaveLength(1)
+    expect(applied[0].observedAt).toBeInstanceOf(Date)
+    expect(applied[0].players).toHaveLength(18)
+    expect(applied[0].players).toContainEqual({ brawlhallaId: 1, name: 'First 1' })
+    expect(applied[0].players).toContainEqual({ brawlhallaId: 2, name: 'Second 2' })
+
+    expect(await run(leaseFor('leaderboard-1v1'), 'already-published', record)).toBe(true)
+    expect(applied).toHaveLength(2)
+    expect(applied[1].players).toHaveLength(9)
+    expect(applied[1].players).toContainEqual({ brawlhallaId: 81, name: 'Solo 81' })
+
+    await run(leaseFor('leaderboard-1v1'), 'effect-conflict', record)
+    expect(applied).toHaveLength(2)
+
+    expect(
+      await run(leaseFor('leaderboard-1v1'), 'published', async () => {
+        throw new Error('players database unavailable')
+      }),
+    ).toBe(true)
   })
 })

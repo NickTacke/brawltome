@@ -14,6 +14,7 @@ import {
   type DeadLetterListItem,
   type DeadLetterOperations,
   type DeadLetterPage,
+  type DeadLetterReason,
   type DiscoveryProjectionKind,
   type FencedResult,
   type InteractiveClanRefreshReservation,
@@ -31,8 +32,10 @@ import {
   type StatisticsCollectionKind,
   type TransitionResult,
   type WorkClass,
+  admissionRejectionCodes,
   backgroundWorkClasses,
   discoveryProjectionKinds,
+  interactiveRefreshMaxAttempts,
   leaderboardOperationKinds,
   primaryMonitoringIntervalMs,
   statisticsCollectionKinds,
@@ -188,6 +191,12 @@ function toLease(row: OperationRow): OperationLease {
   if (row.kind === 'ranked-player-pulse') {
     if (row.work_class !== 'primary-monitoring' || !('brawlhallaId' in row.payload) || 'staleSections' in row.payload) {
       throw new Error('invalid durable ranked player pulse operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+  if (row.kind === 'player-name-verification') {
+    if (row.work_class !== 'maintenance' || !('playerName' in row.payload) || !('brawlhallaId' in row.payload)) {
+      throw new Error('invalid durable player name verification operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -567,7 +576,7 @@ export function createPostgresRefreshOperations(
               (${operationId}, ${operationId}, 'interactive-player-refresh', ${input.dedupeKey},
                ${input.operationKey}, ${`player:${input.brawlhallaId}`}, 'interactive',
                ${sql.json({ brawlhallaId: input.brawlhallaId, staleSections: input.staleSections })},
-               ${sql.json(input.provenance)}, 'awaiting_admission', 3, ${reservationToken},
+               ${sql.json(input.provenance)}, 'awaiting_admission', ${interactiveRefreshMaxAttempts}, ${reservationToken},
                clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
             ON CONFLICT DO NOTHING
             RETURNING id
@@ -608,7 +617,7 @@ export function createPostgresRefreshOperations(
             VALUES
               (${operationId}, ${operationId}, 'clan-refresh', ${input.dedupeKey}, ${input.operationKey}, 'interactive',
                ${sql.json({ clanId: input.clanId, staleSections: input.staleSections })},
-               ${sql.json(input.provenance)}, 'awaiting_admission', 3, ${reservationToken},
+               ${sql.json(input.provenance)}, 'awaiting_admission', ${interactiveRefreshMaxAttempts}, ${reservationToken},
                clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
             ON CONFLICT (kind, dedupe_key)
               WHERE status IN ('awaiting_admission', 'pending', 'leased')
@@ -940,6 +949,16 @@ export function createPostgresRefreshOperations(
         const { brawlhallaId } = input.payload as { brawlhallaId: number }
         if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
           throw new Error('ranked player pulse brawlhallaId must be a positive 32-bit integer')
+        }
+      } else if (kind === 'player-name-verification') {
+        const { brawlhallaId, playerName } = input.payload as { brawlhallaId: number; playerName: string }
+        if (input.workClass !== 'maintenance')
+          throw new Error('player name verification requires maintenance work class')
+        if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
+          throw new Error('player name verification brawlhallaId must be a positive 32-bit integer')
+        }
+        if (typeof playerName !== 'string' || playerName.length === 0) {
+          throw new Error('player name verification playerName must be a non-empty string')
         }
       }
       if (isDiscoveryProjectionKind(kind)) {
@@ -1491,7 +1510,7 @@ export function createPostgresRefreshOperations(
                     FROM refresh_operations.operations operation
                     WHERE operation.id = ${candidate.id}
                   `
-                : candidate.kind === 'ranked-player-pulse'
+                : candidate.kind === 'ranked-player-pulse' || candidate.kind === 'player-name-verification'
                   ? await sql<{ complete: boolean }[]>`
                       SELECT EXISTS (
                         SELECT 1
@@ -2097,9 +2116,17 @@ export function createPostgresRefreshOperations(
         GROUP BY work_class
       `
       const deadLetters = await client<
-        { work_class: WorkClass; kind: OperationLease['kind']; count: string | number }[]
+        {
+          work_class: WorkClass
+          kind: OperationLease['kind']
+          reason: DeadLetterReason
+          count: string | number
+        }[]
       >`
-        SELECT operation.work_class, operation.kind, count(*)::bigint AS count
+        SELECT operation.work_class, operation.kind,
+               CASE WHEN operation.last_error ->> 'code' IN ${client([...admissionRejectionCodes])}
+                 THEN 'admission_rejected' ELSE 'execution' END AS reason,
+               count(*)::bigint AS count
         FROM refresh_operations.operations AS operation
         WHERE operation.status = 'dead_letter'
           AND NOT EXISTS (
@@ -2107,7 +2134,7 @@ export function createPostgresRefreshOperations(
             FROM refresh_operations.dead_letter_actions AS action
             WHERE action.target_operation_id = operation.id
           )
-        GROUP BY operation.work_class, operation.kind
+        GROUP BY 1, 2, 3
       `
       const scheduleLateness = await client<{ kind: OperationLease['kind']; lateness_ms: string | number }[]>`
         SELECT kind,
@@ -2118,8 +2145,8 @@ export function createPostgresRefreshOperations(
         GROUP BY kind
       `
       const pendingByClass = new Map(oldestPending.map((row) => [row.work_class, Number(row.age_ms)]))
-      const deadLettersByClassAndKind = new Map(
-        deadLetters.map((row) => [`${row.work_class}:${row.kind}`, Number(row.count)]),
+      const deadLettersByClassKindAndReason = new Map(
+        deadLetters.map((row) => [`${row.work_class}:${row.kind}:${row.reason}`, Number(row.count)]),
       )
       const allOperationKinds: OperationLease['kind'][] = [
         'proof',
@@ -2129,6 +2156,7 @@ export function createPostgresRefreshOperations(
         'clan-discovery-projection',
         'discovery-reconciliation',
         'ranked-player-pulse',
+        'player-name-verification',
         ...leaderboardOperationKinds,
         ...statisticsCollectionKinds,
         'statistics-publication',
@@ -2141,12 +2169,23 @@ export function createPostgresRefreshOperations(
           workClass,
           ageMs: pendingByClass.get(workClass) ?? 0,
         })),
+        // Execution series are always present so rate-based alerts see a zero baseline. Admission series stay
+        // sparse outside the interactive kinds to keep the gauge under the per-metric series bound.
         deadLetters: workClasses.flatMap((workClass) =>
-          allOperationKinds.map((kind) => ({
-            workClass,
-            kind,
-            count: deadLettersByClassAndKind.get(`${workClass}:${kind}`) ?? 0,
-          })),
+          allOperationKinds.flatMap((kind) => {
+            const admissionRejected = deadLettersByClassKindAndReason.get(`${workClass}:${kind}:admission_rejected`)
+            return [
+              {
+                workClass,
+                kind,
+                reason: 'execution' as const,
+                count: deadLettersByClassKindAndReason.get(`${workClass}:${kind}:execution`) ?? 0,
+              },
+              ...(admissionRejected !== undefined || kind === 'interactive-player-refresh' || kind === 'clan-refresh'
+                ? [{ workClass, kind, reason: 'admission_rejected' as const, count: admissionRejected ?? 0 }]
+                : []),
+            ]
+          }),
         ),
         scheduleLateness: (
           ['proof', 'interactive-player-refresh', ...leaderboardOperationKinds] as OperationLease['kind'][]
@@ -2155,6 +2194,13 @@ export function createPostgresRefreshOperations(
           latenessMs: latenessByKind.get(kind) ?? 0,
         })),
       }
+    },
+
+    async operationStatus(operationId: string): Promise<string | null> {
+      const [operation] = await client<{ status: string }[]>`
+        SELECT status FROM refresh_operations.operations WHERE id = ${operationId}
+      `
+      return operation?.status ?? null
     },
 
     async inspect(operationId: string) {

@@ -94,4 +94,50 @@ describe('ProfileHeader', () => {
     expect(html).toContain('Son of God')
     expect(html).not.toContain('Current Membership')
   })
+
+  test('shows how old the oldest profile section is', () => {
+    const now = Date.now()
+    const html = renderToStaticMarkup(
+      <ProfileHeader
+        player={{
+          ...player,
+          currentSeason: { snapshot: null, lastSuccessAt: new Date(now - 20 * 60_000).toISOString() },
+          career: { snapshot: null, lastSuccessAt: new Date(now - 3 * 3_600_000).toISOString() },
+        }}
+        topLegend={null}
+        aliases={[]}
+        refreshing={false}
+      />,
+    )
+
+    expect(html).toContain('Updated')
+    expect(html).toContain('3h ago')
+    expect(html).not.toContain('Checking for updates')
+  })
+
+  test('keeps the refresh badge instead of the data age while refreshing', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHeader
+        player={{
+          ...player,
+          currentSeason: { snapshot: null, lastSuccessAt: new Date(Date.now() - 3 * 3_600_000).toISOString() },
+          career: null,
+        }}
+        topLegend={null}
+        aliases={[]}
+        refreshing
+      />,
+    )
+
+    expect(html).toContain('Checking for updates')
+    expect(html).not.toContain('Updated')
+  })
+
+  test('omits the data age when no section has been fetched yet', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHeader player={{ ...player, career: null }} topLegend={null} aliases={[]} refreshing={false} />,
+    )
+
+    expect(html).not.toContain('Updated')
+  })
 })

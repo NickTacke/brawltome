@@ -16,7 +16,9 @@ const expectedHealthPaths: Record<string, string> = {
   api: '/health/ready',
   postgres: 'pg_isready',
   'operations-worker': '/health/ready',
-  web: '/api/health/ready',
+  // Liveness only: web readiness depends on the API and PostgreSQL, and an unhealthy container is dropped by the
+  // proxy, which would take the whole site offline instead of rendering its error state during a database outage.
+  web: '/api/health/live',
 }
 
 const expectedStopGracePeriods: Record<string, string> = {

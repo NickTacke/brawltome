@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { PlayerReferenceQueries } from '@brawltome/player'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmissionResult, SourceAdmissionResult } from '@brawltome/request-admission'
+import { type Telemetry, createTelemetry, renderPrometheus } from '@brawltome/telemetry'
 import { createCanonicalPlayerRefreshRouter, createV2PlayerRefreshRouter } from '../src/router/player.router'
 import type { Context } from '../src/trpc/context'
 import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/trpc'
@@ -27,6 +28,7 @@ function harness(
     careerSnapshotSource?: 'v0-player-snapshot' | 'legacy-v2'
     discordCredential?: boolean
     now?: () => number
+    telemetry?: Telemetry
   } = {},
 ) {
   const calls = { verify: 0, actor: 0, actorKind: '', source: 0, reserve: 0, activate: 0, grant: 0 }
@@ -73,6 +75,7 @@ function harness(
     internalSecret: secret,
     discordInternalSecret: options.discordCredential === false ? undefined : discordSecret,
     clientIp: '203.0.113.42',
+    telemetry: options.telemetry,
     account: options.authenticated
       ? { id: 'account-42', displayName: 'Ada', avatarUrl: null, createdAt: new Date('2026-01-01T00:00:00.000Z') }
       : null,
@@ -290,6 +293,39 @@ describe('canonical player interactive refresh', () => {
       player: cached,
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
     })
+  })
+
+  test('counts each user-facing refresh outcome by kind and source', async () => {
+    const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
+    await caller({
+      telemetry,
+      player: { rankedLastUpdated: new Date(), statsLastUpdated: new Date() },
+    }).canonical.requestRefresh({ id: 42 })
+    await caller({ telemetry, verification: 'invalid' }).canonical.requestRefresh({ id: 42 })
+    await caller({ telemetry, verification: 'unavailable' }).canonical.requestRefresh({ id: 42, turnstileToken: 't' })
+    await caller({
+      telemetry,
+      trusted: true,
+      actor: { outcome: 'rate-limited', retryAfterSeconds: 5 },
+    }).canonical.requestRefresh({ id: 42 })
+    await caller({ telemetry, trusted: true }).canonical.requestRefresh({ id: 42 })
+    await caller({ telemetry, trusted: true }).canonical.requestRefresh({ id: 42 })
+    await caller({ telemetry, activeOperationId: crypto.randomUUID() }).canonical.requestRefresh({ id: 42 })
+    await caller({ telemetry }).canonical.refreshDiscord({ id: 42, discordUserId: '123456789012345678' })
+
+    const output = renderPrometheus(telemetry.metrics.snapshot())
+    const count = (outcome: string, source = 'interactive-api') =>
+      output.match(
+        new RegExp(`^refresh_requests_total\\{kind="player",outcome="${outcome}",source="${source}"\\} (\\d+)$`, 'm'),
+      )?.[1]
+    expect(count('notNeeded')).toBe('1')
+    expect(count('verificationRequired')).toBe('1')
+    expect(count('temporarilyUnavailable')).toBe('1')
+    expect(count('rateLimited')).toBe('1')
+    expect(count('accepted')).toBe('2')
+    expect(count('alreadyRefreshing')).toBe('1')
+    expect(count('accepted', 'discord')).toBe('1')
+    expect(telemetry.stats().seriesDropped).toBe(0)
   })
 
   test('authenticated and trusted callers bypass verification without rolling trust', async () => {

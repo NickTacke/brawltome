@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { type Telemetry, createTelemetry, renderPrometheus } from '@brawltome/telemetry'
 import { createClanRouter } from '../src/router/clan.router'
 import type { Context } from '../src/trpc/context'
 import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/trpc'
@@ -40,6 +41,7 @@ function harness(
     membership?: { clanId: number; clanName: string } | null
     discordCredential?: boolean
     now?: () => number
+    telemetry?: Telemetry
   } = {},
 ) {
   const operationId = crypto.randomUUID()
@@ -50,6 +52,7 @@ function harness(
     internalSecret: secret,
     discordInternalSecret: options.discordCredential === false ? undefined : discordSecret,
     clientIp: '203.0.113.1',
+    telemetry: options.telemetry,
     user: null,
     clanRepo: {
       getById: async () => options.stored ?? cached,
@@ -153,6 +156,26 @@ describe('canonical clan router', () => {
       clan: { clanId: 77 },
       refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: 12 } },
     })
+  })
+
+  test('counts each user-facing clan refresh outcome', async () => {
+    const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
+    await harness({ telemetry, active: true }).caller.refresh({ id: 77 })
+    await harness({ telemetry, trusted: true, actorLimited: true }).caller.refresh({ id: 77 })
+    await harness({ telemetry }).caller.refresh({ id: 77 })
+    await harness({ telemetry, trusted: true }).caller.refresh({ id: 77 })
+    await harness({ telemetry }).caller.refreshDiscord({ id: 77, discordUserId: '123456789012345678' })
+
+    const output = renderPrometheus(telemetry.metrics.snapshot())
+    expect(output).toContain(
+      'refresh_requests_total{kind="clan",outcome="alreadyRefreshing",source="interactive-api"} 1',
+    )
+    expect(output).toContain('refresh_requests_total{kind="clan",outcome="rateLimited",source="interactive-api"} 1')
+    expect(output).toContain(
+      'refresh_requests_total{kind="clan",outcome="verificationRequired",source="interactive-api"} 1',
+    )
+    expect(output).toContain('refresh_requests_total{kind="clan",outcome="accepted",source="interactive-api"} 1')
+    expect(output).toContain('refresh_requests_total{kind="clan",outcome="accepted",source="discord"} 1')
   })
 
   test('changes dedupe identity when another clan section becomes stale without changing stored timestamps', async () => {

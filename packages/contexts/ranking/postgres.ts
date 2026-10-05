@@ -512,7 +512,7 @@ export function createPostgresRanking(connectionString: string) {
         if (candidate.snapshots.size !== requiredScopes.length) throw new Error('candidate must contain ten scopes')
         for (const scope of requiredScopes) {
           const rows = candidate.snapshots.get(scope)
-          if (!rows || rows.length === 0) throw new Error(`candidate scope ${scope} is empty`)
+          if (!rows || (scope === 'all' && rows.length === 0)) throw new Error(`candidate scope ${scope} is empty`)
         }
 
         const effect = await recordOperationEffect(sql, authorization)

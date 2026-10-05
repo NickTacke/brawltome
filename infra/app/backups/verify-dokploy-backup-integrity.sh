@@ -8,9 +8,12 @@ MAX_BACKUP_AGE_SECONDS=${MAX_BACKUP_AGE_SECONDS:-28800}
 BACKUP_INTEGRITY_METRICS_FILE=${BACKUP_INTEGRITY_METRICS_FILE:-/srv/brawltome-observability/backup-integrity/brawltome-backup-integrity.prom}
 metrics_dir=${BACKUP_INTEGRITY_METRICS_FILE%/*}
 last_verified=0
+# Fixed failure reasons published as metric labels; update failure_reason before each check that can exit.
+failure_reasons=(stale uploading missing hash_invalid sidecar_mismatch config unknown)
+failure_reason=config
 
 write_metrics() {
-  local ok=$1 now=$2 verified=$3 temporary
+  local ok=$1 now=$2 verified=$3 temporary reason value
   temporary=$(mktemp "$metrics_dir/.backup-integrity.XXXXXX")
   chmod 0644 "$temporary"
   cat >"$temporary" <<METRICS
@@ -23,7 +26,14 @@ brawltome_postgres_backup_integrity_last_run_timestamp_seconds $now
 # HELP brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds Backup timestamp of the latest verified recurring PostgreSQL backup.
 # TYPE brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds gauge
 brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds $verified
+# HELP brawltome_postgres_backup_integrity_failure_reason Why the latest verifier run failed (1 for the active reason).
+# TYPE brawltome_postgres_backup_integrity_failure_reason gauge
 METRICS
+  for reason in "${failure_reasons[@]}"; do
+    value=0
+    [[ $ok == 0 && $reason == "$failure_reason" ]] && value=1
+    printf 'brawltome_postgres_backup_integrity_failure_reason{reason="%s"} %s\n' "$reason" "$value" >>"$temporary"
+  done
   mv "$temporary" "$BACKUP_INTEGRITY_METRICS_FILE"
 }
 
@@ -72,6 +82,8 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# A listing failure usually means the prefix does not exist, so it is reported as missing.
+failure_reason=missing
 remote="${BACKUP_REMOTE}:${BACKUP_BUCKET}/${BACKUP_PREFIX%/}"
 latest=$(
   "$RCLONE_BIN" lsf --files-only --include '*.sql.gz' "$remote" |
@@ -91,8 +103,12 @@ PY
 )
 now=$(date -u +%s)
 backup_age=$((now - backup_timestamp))
+failure_reason=uploading
 (( backup_age >= MIN_BACKUP_AGE_SECONDS )) || { printf '%s\n' 'Latest backup is still being uploaded' >&2; exit 1; }
+failure_reason=stale
 (( backup_age <= MAX_BACKUP_AGE_SECONDS )) || { printf '%s\n' 'Latest backup is stale' >&2; exit 1; }
+
+failure_reason=unknown
 
 work_dir=$(mktemp -d)
 hash_file=$work_dir/hash
@@ -101,6 +117,7 @@ mkfifo "$hash_pipe"
 trap 'status=$?; rm -rf "$work_dir"; on_exit "$status"' EXIT
 sha256sum <"$hash_pipe" | awk '{ print $1 }' >"$hash_file" &
 hash_pid=$!
+failure_reason=hash_invalid
 if ! "$RCLONE_BIN" cat "$remote/$latest" | tee "$hash_pipe" | gzip -t; then
   wait "$hash_pid" || true
   printf '%s\n' 'Latest backup could not be read and validated' >&2
@@ -113,6 +130,7 @@ fi
 computed=$(<"$hash_file")
 [[ $computed =~ ^[a-f0-9]{64}$ ]] || { printf '%s\n' 'Latest backup hash is invalid' >&2; exit 1; }
 
+failure_reason=sidecar_mismatch
 sidecar="$latest.sha256"
 expected="$computed  $latest"
 sidecar_listing=$("$RCLONE_BIN" lsf --files-only --include "$sidecar" "$remote")

@@ -112,8 +112,8 @@
       },
       "targets": [
         {
-          "expr": "max by (work_class, kind) (operation_dead_letters)",
-          "legendFormat": "{{work_class}} / {{kind}}",
+          "expr": "max by (work_class, kind, reason) (operation_dead_letters)",
+          "legendFormat": "{{work_class}} / {{kind}} / {{reason}}",
           "refId": "A"
         }
       ],

@@ -1,5 +1,15 @@
 const RANKED_FRESHNESS_MS = 3_600_000
 const CAREER_FRESHNESS_MS = 43_200_000
+const FAST_POLL_WINDOW_MS = 20_000
+const FAST_POLL_MS = 2_000
+const SLOW_POLL_MS = 5_000
+
+/** Upstream worker retries back off up to ~30s, so allow several retry rounds before giving up. */
+export const PLAYER_REFRESH_MAX_WAIT_MS = 90_000
+
+export function playerRefreshPollDelayMs(elapsedMs: number): number {
+  return elapsedMs < FAST_POLL_WINDOW_MS ? FAST_POLL_MS : SLOW_POLL_MS
+}
 
 export interface PlayerRefreshTimestamps {
   currentSeason?: { lastSuccessAt?: Date | string | null } | null
@@ -36,6 +46,15 @@ export function getPendingPlayerSections(
       careerUpdatedAt === 0 ||
       now - careerUpdatedAt > CAREER_FRESHNESS_MS,
   }
+}
+
+/** The oldest successful section fetch, i.e. how outdated the profile could be. */
+export function getPlayerDataUpdatedAt(player: PlayerRefreshTimestamps | null): Date | null {
+  if (!player) return null
+  const fetched = [timestamp(player.currentSeason?.lastSuccessAt), timestamp(player.career?.lastSuccessAt)].filter(
+    (value) => value > 0,
+  )
+  return fetched.length > 0 ? new Date(Math.min(...fetched)) : null
 }
 
 export function hasCompletedPlayerRefresh(

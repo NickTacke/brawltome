@@ -11,6 +11,7 @@ import {
 import {
   type LeaderboardGenerationCandidate,
   type RankingPublicationAuthorization,
+  collectAndPublishLeaderboardGeneration,
   createPostgresRanking,
   rankingMigrationInventory,
 } from '@brawltome/ranking/composition'
@@ -1411,6 +1412,41 @@ describe('durable multi-mode collection operations', () => {
     }
     await restarted.close()
     await control.end()
+  })
+
+  test('publishes an empty region as a fresh empty snapshot instead of serving older rows', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const ranking = createPostgresRanking(connectionString)
+    const firstWindow = new Date('2200-01-01T00:00:00Z')
+    const secondWindow = new Date(firstWindow.getTime() + intervalMs)
+    for (const [label, window, emptyRegion] of [
+      ['empty-region-full', firstWindow, null],
+      ['empty-region-reset', secondWindow, 'JPN'],
+    ] as const) {
+      const lease = await leaseOperation(operations, '3v3', label)
+      const full = validSource('3v3', 900)
+      expect(
+        await collectAndPublishLeaderboardGeneration({
+          mode: '3v3',
+          authorization: authorization(lease, window.toISOString()),
+          source: {
+            fetchPage: async (input) =>
+              input.region === emptyRegion ? { rankings: [], totalPages: 0 } : full.fetchPage(input),
+          },
+          publication: ranking,
+        }),
+      ).toBe('published')
+      await operations.complete(lease)
+    }
+
+    const japan = await ranking.queries.getLeaderboard({ mode: '3v3', region: 'JPN', page: 1, now: secondWindow })
+    expect(japan).toMatchObject({ status: 'fresh', totalRows: 0, hasMore: false, entries: [] })
+    expect(japan.status !== 'unavailable' && japan.provenance).toMatchObject({ pageDepth: 1 })
+    expect(
+      await ranking.queries.getLeaderboard({ mode: '3v3', region: 'all', page: 1, now: secondWindow }),
+    ).toMatchObject({ status: 'fresh', totalRows: 8 })
+    await ranking.close()
+    await operations.close()
   })
 
   test('admits every V1 page with stable attempt/mode/region/page identity before source access', async () => {

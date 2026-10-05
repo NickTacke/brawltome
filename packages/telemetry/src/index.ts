@@ -35,8 +35,10 @@ export type TelemetryRecord = Readonly<{
   traceId?: string
   spanId?: string
   attributes?: Readonly<Record<string, TelemetryScalar>>
-  error?: Readonly<{ name: string; message: string }>
+  error?: Readonly<TelemetryError>
 }>
+
+export type TelemetryError = { name: string; message: string; code?: string; status?: number }
 
 export interface TelemetrySink {
   export(records: readonly TelemetryRecord[], signal: AbortSignal): Promise<void>
@@ -58,7 +60,10 @@ export type MetricName =
   | 'source_quota_used'
   | 'source_quota_limit'
   | 'refresh_failures_total'
+  | 'refresh_requests_total'
   | 'discord_interactions_total'
+  | 'player_name_verifications_total'
+  | 'player_name_verification_backlog'
 
 export type MetricLabels = Readonly<Record<string, string>>
 
@@ -112,6 +117,7 @@ const operationKind = [
   'interactive-player-refresh',
   'clan-refresh',
   'ranked-player-pulse',
+  'player-name-verification',
   'player-discovery-projection',
   'clan-discovery-projection',
   'discovery-reconciliation',
@@ -180,8 +186,8 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   },
   operation_dead_letters: {
     kind: 'gauge',
-    help: 'Current durable dead letters',
-    labels: { work_class: workClass, kind: operationKind },
+    help: 'Current unresolved durable dead letters',
+    labels: { work_class: workClass, kind: operationKind, reason: ['execution', 'admission_rejected'] },
   },
   schedule_lateness_ms: { kind: 'gauge', help: 'Maximum current schedule lateness', labels: { kind: operationKind } },
   schedule_materializations_total: {
@@ -213,10 +219,36 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     help: 'Refresh failures',
     labels: { kind: operationKind, failure_category: failureCategory },
   },
+  refresh_requests_total: {
+    kind: 'counter',
+    help: 'User-facing interactive refresh request outcomes',
+    labels: {
+      kind: ['player', 'clan'],
+      outcome: [
+        'accepted',
+        'alreadyRefreshing',
+        'notNeeded',
+        'verificationRequired',
+        'rateLimited',
+        'temporarilyUnavailable',
+      ],
+      source: ['interactive-api', 'discord'],
+    },
+  },
   discord_interactions_total: {
     kind: 'counter',
     help: 'Discord interactions',
     labels: { interaction_kind: interactionKind, command, outcome: ['succeeded', 'failed', 'rejected'] },
+  },
+  player_name_verifications_total: {
+    kind: 'counter',
+    help: 'Budget-capped V0 checks of leaderboard player names',
+    labels: { outcome: ['renamed', 'unchanged', 'failed', 'skipped_budget', 'resolved_free'] },
+  },
+  player_name_verification_backlog: {
+    kind: 'gauge',
+    help: 'Players whose newer leaderboard name awaits V0 verification',
+    labels: { tier: ['rename_signal', 'demand', 'other'] },
   },
 }
 
@@ -277,7 +309,42 @@ const safeErrorNames = new Set([
   'RateLimitError',
 ])
 
-function normalizeError(error: unknown): { name: string; message: string } {
+const safeErrorCode = /^[a-z0-9_.-]{1,64}$/i
+
+function readProperty(value: object, key: string): unknown {
+  try {
+    return (value as Record<string, unknown>)[key]
+  } catch {
+    return undefined
+  }
+}
+
+// Messages may embed upstream URLs carrying credentials, so only allow-listed structured fields leave the process.
+function errorDiagnostics(error: Error): { code?: string; status?: number } {
+  let code: string | undefined
+  let status: number | undefined
+  let current: unknown = error
+  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth++) {
+    if (code === undefined) {
+      const candidate = readProperty(current, 'code')
+      if (typeof candidate === 'string' && safeErrorCode.test(candidate)) code = candidate
+    }
+    if (status === undefined) {
+      for (const key of ['status', 'statusCode']) {
+        const candidate = readProperty(current, key)
+        if (Number.isInteger(candidate) && (candidate as number) >= 100 && (candidate as number) <= 599) {
+          status = candidate as number
+          break
+        }
+      }
+    }
+    if (code !== undefined && status !== undefined) break
+    current = readProperty(current, 'cause')
+  }
+  return { ...(code !== undefined ? { code } : {}), ...(status !== undefined ? { status } : {}) }
+}
+
+function normalizeError(error: unknown): TelemetryError {
   if (!(error instanceof Error)) return { name: 'Error', message: 'Unknown failure' }
   const name = safeErrorNames.has(error.name) ? error.name : 'Error'
   const message =
@@ -288,7 +355,7 @@ function normalizeError(error: unknown): { name: string; message: string } {
         : name === 'RateLimitError'
           ? 'Operation rate limited'
           : 'Operation failed'
-  return { name, message }
+  return { name, message, ...errorDiagnostics(error) }
 }
 
 function labelsKey(labels: MetricLabels): string {

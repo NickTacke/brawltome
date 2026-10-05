@@ -4,7 +4,11 @@ import { createPostgresClans } from '@brawltome/clan/composition'
 import { closeDatabase, db } from '@brawltome/database'
 import { globalMigrationInventory } from '@brawltome/database/migrations'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
-import { createPostgresCareerPlayers, createPostgresRankedPlayers } from '@brawltome/player/composition'
+import {
+  createPostgresCareerPlayers,
+  createPostgresLeaderboardPlayerNames,
+  createPostgresRankedPlayers,
+} from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
 import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis/composition'
@@ -63,11 +67,13 @@ const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
 const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
 })
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databaseUrl)
 const discovery = createPostgresDiscovery(databaseUrl)
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(
   db,
   (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => careerPlayerQueries.referenceById(brawlhallaId),
+  (brawlhallaId) => leaderboardPlayerNames.referenceById(brawlhallaId),
 )
 const refreshOperations = createPostgresRefreshOperations(databaseUrl)
 const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
@@ -99,6 +105,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'discovery-postgres', close: discovery.close },
     { name: 'players-ranked-postgres', close: rankedPlayerQueries.close },
     { name: 'players-career-postgres', close: careerPlayerQueries.close },
+    { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -255,7 +262,11 @@ app.get('/metrics', async (c) => {
       telemetry.metrics.set('operation_oldest_pending_age_ms', item.ageMs, { work_class: item.workClass })
     }
     for (const item of operations.deadLetters) {
-      telemetry.metrics.set('operation_dead_letters', item.count, { work_class: item.workClass, kind: item.kind })
+      telemetry.metrics.set('operation_dead_letters', item.count, {
+        work_class: item.workClass,
+        kind: item.kind,
+        reason: item.reason,
+      })
     }
     for (const item of operations.scheduleLateness) {
       telemetry.metrics.set('schedule_lateness_ms', item.latenessMs, { kind: item.kind })
