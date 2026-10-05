@@ -107,9 +107,13 @@ export function createPostgresCareerPlayers(
   connectionString: string,
   options: { now?: () => Date } = {},
 ): CareerPlayerQueries & {
-  referenceById(
-    brawlhallaId: number,
-  ): Promise<{ brawlhallaId: number; name: string; observedAt: Date; bestLegendNameKey: string | null } | null>
+  referenceById(brawlhallaId: number): Promise<{
+    brawlhallaId: number
+    name: string
+    observedAt: Date
+    legacy: boolean
+    bestLegendNameKey: string | null
+  } | null>
   mainLegendById(brawlhallaId: number): Promise<{ legendId: number; legendNameKey: string } | null>
   recordChecked(brawlhallaId: number, effect: CanonicalCareerEffect): Promise<FencedResult>
   applySnapshot(snapshot: V0CareerSnapshot, effect: CanonicalCareerEffect): Promise<FencedResult>
@@ -121,9 +125,16 @@ export function createPostgresCareerPlayers(
   return {
     async referenceById(brawlhallaId) {
       const [profile] = await client<
-        { brawlhalla_id: number; player_name: string; last_success_at: Date; legend_name_key: string | null }[]
+        {
+          brawlhalla_id: number
+          player_name: string
+          last_success_at: Date
+          snapshot_source: string
+          legend_name_key: string | null
+        }[]
       >`
-        SELECT profile.brawlhalla_id, profile.player_name, profile.last_success_at, legend.legend_name_key
+        SELECT profile.brawlhalla_id, profile.player_name, profile.last_success_at, profile.snapshot_source,
+          legend.legend_name_key
         FROM players.career_profiles profile
         LEFT JOIN LATERAL (
           SELECT legend_name_key
@@ -139,6 +150,7 @@ export function createPostgresCareerPlayers(
             brawlhallaId: profile.brawlhalla_id,
             name: profile.player_name,
             observedAt: profile.last_success_at,
+            legacy: profile.snapshot_source === 'legacy-v2',
             bestLegendNameKey: profile.legend_name_key,
           }
         : null

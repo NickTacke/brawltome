@@ -77,7 +77,16 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
           ),
           changed AS (
             SELECT pending.brawlhalla_id, pending.player_name,
-                   CASE WHEN previous.observed_at < ${input.observedAt} THEN previous.player_name END AS previous_name
+                   -- A live V0 name stays canonical, so a leaderboard change does not displace it into an alias.
+                   CASE WHEN previous.observed_at < ${input.observedAt} AND NOT EXISTS (
+                     SELECT 1 FROM players.ranked_profiles
+                     WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
+                       AND player_name IS NOT NULL
+                     UNION ALL
+                     SELECT 1 FROM players.career_profiles
+                     WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
+                       AND player_name IS NOT NULL AND snapshot_source <> 'legacy-v2'
+                   ) THEN previous.player_name END AS previous_name
             FROM pending
             LEFT JOIN LATERAL (
               SELECT candidate.player_name, candidate.observed_at
