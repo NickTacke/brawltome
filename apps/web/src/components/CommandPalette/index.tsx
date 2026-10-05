@@ -3,6 +3,7 @@ import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { navItems } from '@/components/sidebar/nav-items'
 import { Avatar, AvatarFallback, AvatarImage, Card } from '@/components/ui'
+import { track } from '@/lib/analytics/browser'
 import { trpc } from '@/lib/trpc'
 import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
 import { Shield } from 'lucide-react'
@@ -40,16 +41,25 @@ export function CommandPalette() {
 
   const activate = useCallback(
     (cmd: Command) => {
+      if (cmd.kind === 'player' || cmd.kind === 'clan') {
+        track({
+          name: 'search.selected',
+          source: 'palette',
+          position: Math.min(commands.indexOf(cmd), 100),
+          viaAlias: cmd.kind === 'player' && Boolean(cmd.matchedAlias),
+        })
+      }
       router.push(cmd.href)
       close()
     },
-    [router, close],
+    [router, close, commands],
   )
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
+        if (!open) track({ name: 'feature.used', feature: 'command_palette.open' })
         setOpen((o) => !o)
       } else if (e.key === 'Escape' && open) {
         e.preventDefault()
@@ -89,16 +99,30 @@ export function CommandPalette() {
       return
     }
     setIsSearching(true)
+    const started = performance.now()
     trpc.search.local
       .query({ query: debouncedQuery })
       .then((data) => {
         if (cancelled) return
+        track({
+          name: 'search.performed',
+          source: 'palette',
+          query: debouncedQuery,
+          results: Math.min(data.players.length + data.clans.length, 100),
+          aliasResults: Math.min(data.players.filter((p) => p.matchedAlias).length, 100),
+          latencyMs: Math.min(Math.round(performance.now() - started), 600000),
+        })
         setPlayerResults(data.players)
         setClanResults(data.clans)
         setIsSearching(false)
       })
       .catch(() => {
         if (cancelled) return
+        track({
+          name: 'search.failed',
+          source: 'palette',
+          latencyMs: Math.min(Math.round(performance.now() - started), 600000),
+        })
         setIsSearching(false)
       })
     return () => {

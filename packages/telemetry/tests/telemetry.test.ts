@@ -556,4 +556,24 @@ describe('telemetry foundation', () => {
 
     expect(telemetry.stats().seriesDropped).toBe(0)
   })
+
+  test('accepts analytics metrics with allow-listed labels and drops unknown values', () => {
+    const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
+    telemetry.metrics.add('analytics_pageviews_total', 1, { route: '/player/[id]', device: 'mobile' })
+    telemetry.metrics.add('analytics_pageviews_total', 1, { route: '/player/123', device: 'mobile' })
+    telemetry.metrics.observe('analytics_web_vitals', 0.08, { name: 'CLS', route: '/', device: 'desktop' })
+    telemetry.metrics.add('analytics_events_dropped_total', 3, { reason: 'invalid' })
+    const snapshot = telemetry.metrics.snapshot()
+    const pageviews = snapshot.find((metric) => metric.name === 'analytics_pageviews_total')
+    expect(pageviews?.series).toHaveLength(1)
+    expect(snapshot.some((metric) => metric.name === 'analytics_web_vitals')).toBe(true)
+    expect(telemetry.stats().seriesDropped).toBe(1)
+  })
+
+  test('web vitals buckets resolve CLS above 0.25 and keep millisecond buckets', () => {
+    const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
+    telemetry.metrics.observe('analytics_web_vitals', 0.8, { name: 'CLS', route: '/', device: 'desktop' })
+    const output = renderPrometheus(telemetry.metrics.snapshot())
+    for (const le of ['0.5', '1', '2.5', '0.25', '100', '8000']) expect(output).toContain(`le="${le}"`)
+  })
 })

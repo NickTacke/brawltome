@@ -71,6 +71,10 @@ export default function Home() {
               Blue Mammoth Games
             </Link>
             .
+            <br />
+            <Link href="/privacy" className="hover:text-foreground transition-colors underline">
+              Privacy
+            </Link>
           </p>
         </div>
       </footer>

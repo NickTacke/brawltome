@@ -4,6 +4,7 @@ import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
+import { track } from '@/lib/analytics/browser'
 import { getPendingClanSections, hasCompletedClanRefresh } from '@/lib/clan-refresh'
 import type { ClanProfileContract, RefreshOutcomeContract } from '@brawltome/contracts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -64,6 +65,11 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
       setRefresh({ outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } }),
     )
   }, [requestRefresh])
+
+  const hasClan = Boolean(clan)
+  useEffect(() => {
+    if (hasClan) track({ name: 'feature.used', feature: 'clan.view' })
+  }, [hasClan])
 
   if (error && !(error instanceof RefreshTimeoutError)) throw error
   const delayed =

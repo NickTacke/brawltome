@@ -40,7 +40,7 @@ wait_grafana_dashboard() {
 wait_http http://127.0.0.1:13100/ready
 wait_http http://127.0.0.1:13200/ready
 wait_http http://127.0.0.1:13000/api/health
-for uid in brawltome-operations brawltome-http-health brawltome-telemetry-storage; do
+for uid in brawltome-operations brawltome-http-health brawltome-telemetry-storage brawltome-product-health; do
 	wait_grafana_dashboard "$uid"
 done
 sleep 2
@@ -62,6 +62,7 @@ trace_id=$(SYNTHETIC_MARKER="$marker" bun -e '
   const marker = process.env.SYNTHETIC_MARKER
   if (!marker) throw new Error("synthetic marker is required")
   telemetry.logger.info(marker)
+  telemetry.logger.info("analytics.pageview", { tabId: "synthetic", route: "/" })
   await telemetry.run(context, () => telemetry.trace("synthetic.runtime", {}, async () => undefined))
   await telemetry.shutdown(2000)
   console.log(context.traceId)
@@ -70,6 +71,14 @@ trace_id=$(SYNTHETIC_MARKER="$marker" bun -e '
 attempts=0
 until curl -fsS --get --data-urlencode 'query={service_name="synthetic-runtime"}' \
 	http://127.0.0.1:13100/loki/api/v1/query_range | grep -q "$marker"; do
+	attempts=$((attempts + 1))
+	[ "$attempts" -lt 60 ] || exit 1
+	sleep 1
+done
+
+attempts=0
+until curl -fsS --get --data-urlencode 'query={service_name="synthetic-runtime"}' \
+	http://127.0.0.1:13100/loki/api/v1/query_range | grep -q 'analytics.pageview'; do
 	attempts=$((attempts + 1))
 	[ "$attempts" -lt 60 ] || exit 1
 	sleep 1

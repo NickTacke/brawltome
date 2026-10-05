@@ -39,6 +39,7 @@ COPY packages/contexts/statistics/package.json packages/contexts/statistics/
 COPY packages/contexts/discovery/package.json packages/contexts/discovery/
 COPY packages/game-data/package.json packages/game-data/
 COPY packages/contracts/package.json packages/contracts/
+COPY tooling/analytics-review/package.json tooling/analytics-review/
 COPY tooling/architecture/package.json tooling/architecture/
 COPY tooling/database-migrations/package.json tooling/database-migrations/
 # bun 1.3.14 intermittently fails extracting large tarballs (e.g. next) at the default network concurrency.
@@ -84,8 +85,10 @@ CMD ["discord-bot"]
 FROM build AS web-build
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=""
+ARG NEXT_PUBLIC_ANALYTICS_ENABLED=false
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_ANALYTICS_ENABLED=$NEXT_PUBLIC_ANALYTICS_ENABLED
 RUN test -n "$NEXT_PUBLIC_API_URL" && bun run --filter @brawltome/web build
 
 FROM node:22.14.0-bookworm-slim@sha256:1c18d9ab3af4585870b92e4dbc5cac5a0dc77dd13df1a5905cea89fc720eb05b AS web

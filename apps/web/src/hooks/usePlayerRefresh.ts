@@ -2,6 +2,15 @@
 
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import type { PlayerData } from '@/components/player/shared'
+import { flushAnalytics, track } from '@/lib/analytics/browser'
+import {
+  abandonRefresh,
+  clampRetries,
+  clampWaitMs,
+  createStateDeduper,
+  isPageExit,
+  refreshStateEvent,
+} from '@/lib/analytics/refresh-events'
 import {
   PLAYER_REFRESH_MAX_WAIT_MS,
   type PendingPlayerSections,
@@ -41,6 +50,11 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const mountedRef = useRef(false)
   const initialRequestedRef = useRef(false)
   const tokenInFlightRef = useRef(false)
+  const previousStatusRef = useRef(state.status)
+  const cycleStartedAtRef = useRef(0)
+  const retriesRef = useRef(0)
+  const abandonedRef = useRef(false)
+  const stateDeduperRef = useRef(createStateDeduper())
   const requestTrackerRef = useRef(createLatestRequestTracker())
   stateRef.current = state
 
@@ -54,13 +68,29 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
     runKey: state.pollRun,
     pollMs: playerRefreshPollDelayMs,
     maxRefreshMs: PLAYER_REFRESH_MAX_WAIT_MS,
-    onSettled: (settlement) => dispatch({ type: 'pollSettled', settlement }),
+    onSettled: (settlement) => {
+      if (settlement === 'done') {
+        track({
+          name: 'refresh.completed',
+          waitMs: clampWaitMs(performance.now() - cycleStartedAtRef.current),
+          retries: clampRetries(retriesRef.current),
+        })
+        retriesRef.current = 0
+      }
+      dispatch({ type: 'pollSettled', settlement })
+    },
   })
   const dataRef = useRef(data)
   dataRef.current = data
 
   const request = useCallback(
     async (manual: boolean, token?: string) => {
+      if (manual) {
+        cycleStartedAtRef.current = performance.now()
+        abandonedRef.current = false
+        stateDeduperRef.current.reset()
+        retriesRef.current = 0
+      }
       const sequence = requestTrackerRef.current.start()
       // An older in-flight response must not overwrite the outcome of a newer request.
       const isCurrent = () => mountedRef.current && requestTrackerRef.current.isLatest(sequence)
@@ -83,8 +113,19 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
 
   useEffect(() => {
     mountedRef.current = true
+    const abandon = () =>
+      abandonRefresh(stateRef.current.status.kind, abandonedRef, performance.now() - cycleStartedAtRef.current, {
+        track,
+        flush: flushAnalytics,
+      })
+    const onPageHide = (event: PageTransitionEvent) => {
+      if (isPageExit(event)) abandon()
+    }
+    window.addEventListener('pagehide', onPageHide)
     return () => {
       mountedRef.current = false
+      window.removeEventListener('pagehide', onPageHide)
+      abandon()
     }
   }, [])
 
@@ -99,10 +140,22 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const { status } = state
 
   useEffect(() => {
+    const event = refreshStateEvent(previousStatusRef.current, status, Boolean(dataRef.current))
+    previousStatusRef.current = status
+    if (event && stateDeduperRef.current.allow(event)) track(event)
+  }, [status])
+
+  useEffect(() => {
     if (status.kind !== 'waiting') return
     setNow(Date.now())
     const intervalId = setInterval(() => setNow(Date.now()), 1_000)
-    const timeoutId = setTimeout(() => void request(false), Math.max(0, status.retryAt - Date.now()))
+    const timeoutId = setTimeout(
+      () => {
+        retriesRef.current += 1
+        void request(false)
+      },
+      Math.max(0, status.retryAt - Date.now()),
+    )
     return () => {
       clearInterval(intervalId)
       clearTimeout(timeoutId)

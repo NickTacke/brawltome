@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./node": "./src/node.ts",
-    "./propagation": "./src/propagation.ts"
+    "./propagation": "./src/propagation.ts",
+    "./analytics-labels": "./src/analytics-labels.ts"
   },
   "scripts": {
     "test": "bun test",

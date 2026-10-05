@@ -102,3 +102,14 @@ export function getRankStyle(rank: number): string {
   if (rank === 3) return 'text-amber-700 font-black text-xl'
   return 'text-muted-foreground font-mono'
 }
+
+export function leaderboardPageFeatures(
+  currentPage: number,
+  next: { bracket?: unknown; region?: unknown; page?: number },
+): Array<'leaderboard.page_next' | 'leaderboard.page_depth_5plus'> {
+  if (next.page === undefined || next.bracket !== undefined || next.region !== undefined) return []
+  if (next.page <= currentPage) return []
+  return currentPage < 5 && next.page >= 5
+    ? ['leaderboard.page_next', 'leaderboard.page_depth_5plus']
+    : ['leaderboard.page_next']
+}
