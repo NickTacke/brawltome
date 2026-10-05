@@ -221,6 +221,7 @@ describe('compact V2 Player reference-history import', () => {
         `
 
         await client.unsafe(playerMigrationInventory[12].sql)
+        await client.unsafe(playerMigrationInventory[13].sql)
         const completed = await importLegacyReferenceHistory(databaseUrl, quiesced)
         expect(completed).toEqual({
           status: 'complete',
@@ -247,7 +248,7 @@ describe('compact V2 Player reference-history import', () => {
         `
         expect(retained).toEqual({ code: 'history-player-identity-invalid' })
       },
-      playerMigrationInventory.slice(0, -1),
+      playerMigrationInventory.slice(0, 12),
     )
   }, 60_000)
 })
