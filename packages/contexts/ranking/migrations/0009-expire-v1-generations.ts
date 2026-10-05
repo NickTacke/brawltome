@@ -45,7 +45,8 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION rankings.expire_v1_generations(cutoff timestamptz, max_generations integer) RETURNS integer
+CREATE FUNCTION rankings.expire_v1_generations(cutoff timestamptz, max_generations integer)
+RETURNS TABLE (deleted_generations integer, expirable_generations integer)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
@@ -53,6 +54,7 @@ SET lock_timeout = '5s'
 AS $$
 DECLARE
   expired uuid[];
+  eligible_count integer;
   deleted integer;
 BEGIN
   -- 24 hours is the decided retention policy; no configuration may expire anything younger.
@@ -78,7 +80,7 @@ BEGIN
         AND generation.finalized
     ) ranked
     WHERE ranked.recency <= 2
-  ), candidates AS (
+  ), eligible AS (
     SELECT generation.id
     FROM rankings.generations generation
     WHERE generation.source = 'brawlhalla-v1-ranked-leaderboard'
@@ -94,14 +96,23 @@ BEGIN
         JOIN rankings.snapshots snapshot ON snapshot.id = legacy_set.snapshot_id
         WHERE snapshot.generation_id = generation.id
       )
+  ), batch AS (
+    SELECT generation.id
+    FROM rankings.generations generation
+    WHERE generation.id IN (SELECT eligible.id FROM eligible)
     ORDER BY generation.schedule_window_at, generation.id
     LIMIT max_generations
     FOR UPDATE OF generation SKIP LOCKED
   )
-  SELECT coalesce(array_agg(candidates.id), ARRAY[]::uuid[]) INTO expired FROM candidates;
+  SELECT coalesce((SELECT array_agg(batch.id) FROM batch), ARRAY[]::uuid[]),
+         (SELECT count(*)::integer FROM eligible)
+  INTO expired, eligible_count;
 
   IF cardinality(expired) = 0 THEN
-    RETURN 0;
+    deleted_generations := 0;
+    expirable_generations := eligible_count;
+    RETURN NEXT;
+    RETURN;
   END IF;
 
   PERFORM set_config('rankings.retention_delete', 'on', true);
@@ -114,7 +125,10 @@ BEGIN
   DELETE FROM rankings.generations generation WHERE generation.id = ANY(expired);
   GET DIAGNOSTICS deleted = ROW_COUNT;
   PERFORM set_config('rankings.retention_delete', 'off', true);
-  RETURN deleted;
+  -- What is still past the window after this batch (including rows a concurrent call holds) feeds the backlog gauge.
+  deleted_generations := deleted;
+  expirable_generations := greatest(eligible_count - deleted, 0);
+  RETURN NEXT;
 END;
 $$;
 
@@ -130,6 +144,6 @@ $$;`
 export const expireV1RankingGenerations = {
   identity: 'rankings/0009',
   predecessor: 'rankings/0008',
-  checksum: '3f1b8dcb35f0f7834c5173aaf78221bee871d00747fdaae9e0f873146eba0d71',
+  checksum: 'f39239ec2b509286ed3b52338a0d264da2415c9e02ac4557085874aa99da992f',
   sql,
 } as const

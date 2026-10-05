@@ -65,6 +65,8 @@ export type MetricName =
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
   | 'ranking_retention_deleted_generations_total'
+  | 'ranking_retention_expirable_generations'
+  | 'ranking_retention_duration_ms'
 
 export type MetricLabels = Readonly<Record<string, string>>
 
@@ -256,6 +258,17 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Expired brawlhalla-v1 leaderboard generations deleted by ranking retention',
     labels: {},
+  },
+  ranking_retention_expirable_generations: {
+    kind: 'gauge',
+    help: 'brawlhalla-v1 leaderboard generations still past the retention window after the last run',
+    labels: {},
+  },
+  ranking_retention_duration_ms: {
+    kind: 'histogram',
+    help: 'Duration of one ranking retention batch, including its lease check and completion',
+    labels: {},
+    buckets: [100, 250, 500, 1000, 2500, 5000, 10000, 20000, 30000, 60000],
   },
 }
 
