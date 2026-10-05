@@ -138,6 +138,58 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     })
   }
 
+  for (const mode of ['1v1', '3v3'] as const) {
+    test(`publishes an empty ${mode} region as an empty regional snapshot`, async () => {
+      const calls: RegionalLeaderboardScope[] = []
+      const recorder = publicationRecorder()
+      await collectAndPublishLeaderboardGeneration({
+        mode,
+        authorization: auth(mode),
+        source: {
+          async fetchPage({ region, page }) {
+            calls.push(region)
+            if (region === 'JPN') return { rankings: [], totalPages: 0 }
+            return { rankings: [row(region, mode, regionalLeaderboardScopes.indexOf(region) + 1, page)], totalPages: 1 }
+          },
+        },
+        publication: recorder.publication,
+      })
+      expect(recorder.failures).toEqual([])
+      expect(calls.filter((region) => region === 'JPN')).toHaveLength(1)
+      expect(recorder.published[0].snapshots.get('JPN')).toEqual([])
+      expect(recorder.published[0].snapshots.get('all')).toHaveLength(8)
+      expect(recorder.published[0].scopePageDepths).toMatchObject({ JPN: 1, all: 1 })
+    })
+  }
+
+  test('rejects an empty page from a non-empty region and a fully empty mode', async () => {
+    for (const [emptyRegion, message] of [
+      [(region: RegionalLeaderboardScope) => (region === 'EU' ? { rankings: [], totalPages: 1 } : null), 'is empty'],
+      [() => ({ rankings: [], totalPages: 0 }), 'no ranked rows'],
+    ] as const) {
+      const recorder = publicationRecorder()
+      await expect(
+        collectAndPublishLeaderboardGeneration({
+          mode: '3v3',
+          authorization: auth('3v3'),
+          source: {
+            async fetchPage({ region }) {
+              return (
+                emptyRegion(region) ?? {
+                  rankings: [row(region, '3v3', regionalLeaderboardScopes.indexOf(region) + 1)],
+                  totalPages: 1,
+                }
+              )
+            },
+          },
+          publication: recorder.publication,
+        }),
+      ).rejects.toThrow(message)
+      expect(recorder.failures).toEqual([expect.objectContaining({ code: 'leaderboard_candidate_invalid' })])
+      expect(recorder.published).toHaveLength(0)
+    }
+  })
+
   test('orders Global ties by wins before peak rating', async () => {
     const recorder = publicationRecorder()
     await collectAndPublishLeaderboardGeneration({

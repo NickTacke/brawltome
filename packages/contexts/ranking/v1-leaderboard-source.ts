@@ -148,8 +148,10 @@ export function decodeLeaderboardPage(
   if (!isObject(value)) invalid('leaderboard response must be an object')
   if (!Array.isArray(value.rankings)) invalid('rankings must be an array')
   if (value.rankings.length > 50) invalid('rankings cannot contain more than 50 rows')
-  const totalPages = requiredInteger(value.total_pages, 'total_pages', 1)
-  if (!Number.isSafeInteger(expected.page) || expected.page < 1 || expected.page > totalPages) {
+  const totalPages = requiredInteger(value.total_pages, 'total_pages', 0)
+  // Empty regions report zero pages, e.g. after a season reset.
+  if (totalPages === 0 && value.rankings.length > 0) invalid('total_pages 0 cannot contain rankings')
+  if (!Number.isSafeInteger(expected.page) || expected.page < 1 || expected.page > Math.max(1, totalPages)) {
     invalid(`requested page ${expected.page} exceeds total_pages ${totalPages}`)
   }
   return {

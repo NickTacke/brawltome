@@ -59,4 +59,5 @@ export const globalMigrationInventory = [
   replayAnalysisMigrationInventory[0],
   accountsMigrationInventory[7],
   accountsMigrationInventory[8],
+  rankingMigrationInventory[6],
 ] as const
