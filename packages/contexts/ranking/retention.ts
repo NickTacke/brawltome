@@ -13,7 +13,8 @@ export type RankingRetentionInput = {
   maxGenerations: number
 }
 
-export type RankingRetentionResult = { outcome: 'expired'; deletedGenerations: number } | { outcome: 'lease-lost' }
+// 'completed' means the batch was deleted and the operation marked succeeded in one transaction.
+export type RankingRetentionResult = { outcome: 'completed'; deletedGenerations: number } | { outcome: 'lease-lost' }
 
 export interface RankingRetentionStore {
   expireGenerations(

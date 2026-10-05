@@ -673,6 +673,17 @@ describe('Ranking snapshot retention', () => {
         ),
       ).toEqual({ outcome: 'lease-lost' })
       expect(await storedGenerationIds(sql)).toContain(expiredGenerations[0]?.generationId)
+      // Completion is only possible from the transaction that locked the current lease row.
+      expect(
+        await errorMessage(
+          () => sql`
+            SELECT refresh_operations.complete_ranking_retention_lease(
+              ${lease.operationId}, ${lease.leaseOwner}, ${lease.leaseToken}
+            )
+          `,
+        ),
+      ).toContain('ranking retention lease row is not locked by this transaction')
+      expect(await operations.operationStatus(lease.operationId)).toBe('leased')
       await sql`
         UPDATE refresh_operations.operations SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${lease.operationId}
@@ -707,6 +718,71 @@ describe('Ranking snapshot retention', () => {
       })
     } finally {
       await telemetry.shutdown(50)
+      await ranking.close()
+      await operations.close()
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('completes a retention batch that outlives its lease together with the delete', async () => {
+    const { sql, url } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations(url)
+    const ranking = createPostgresRanking(url)
+    try {
+      const now = await databaseNow(sql)
+      const old = [
+        await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * hour) }),
+        await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 29 * hour) }),
+        await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 28 * hour) }),
+      ]
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * minute) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
+      const config = readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '2' }).rankingRetention
+      await operations.reconcileRankingRetentionSchedule(rankingRetentionScheduleDefinition(config))
+      await operations.materializeDueSchedules()
+
+      // A reader holding SHARE on snapshot_rows stalls the delete for longer than the 300ms lease.
+      const leaseMs = 300
+      let release: () => void = () => undefined
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let locked: () => void = () => undefined
+      const tableLocked = new Promise<void>((resolve) => {
+        locked = resolve
+      })
+      const blocker = sql.begin(async (transaction) => {
+        await transaction`LOCK TABLE rankings.snapshot_rows IN SHARE MODE`
+        locked()
+        await held
+      })
+      await tableLocked
+      const run = runOneRefreshOperation(operations, 'retention-worker', {
+        leaseMs,
+        retryDelayMs: 1_000,
+        admission,
+        rankingRetention: ranking,
+      })
+      await Bun.sleep(4 * leaseMs)
+      release()
+      await blocker
+      expect(await run).toBe(true)
+
+      const [operation] = await sql<{ id: string; status: string }[]>`
+        SELECT id, status FROM refresh_operations.operations WHERE kind = 'ranking-retention'
+      `
+      expect(operation?.status).toBe('succeeded')
+      const attempts = await sql<{ outcome: string | null }[]>`
+        SELECT outcome FROM refresh_operations.attempts WHERE operation_id = ${operation?.id as string}
+      `
+      expect(attempts).toEqual([{ outcome: 'succeeded' }])
+      // Nothing is left to reclaim, so the batch is not re-run back to back.
+      expect(await operations.claim('retention-worker', leaseMs, admission, 'ranking-retention')).toBeNull()
+      const remaining = await storedGenerationIds(sql)
+      expect(remaining).not.toContain(old[0]?.generationId)
+      expect(remaining).not.toContain(old[1]?.generationId)
+      expect(remaining).toContain(old[2]?.generationId)
+    } finally {
       await ranking.close()
       await operations.close()
       await sql.end()

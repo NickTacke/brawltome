@@ -608,7 +608,8 @@ export function createPostgresRanking(connectionString: string) {
     },
 
     // The retention delete commits only while this worker still holds the maintenance lease: the lease row stays
-    // locked until commit, so an expired or replaced lease cannot delete a batch twice or after a takeover.
+    // locked until commit, so an expired or replaced lease cannot delete a batch twice or after a takeover. The
+    // operation is completed in the same transaction, so a batch that outlives the lease is not re-run.
     async expireGenerations(
       authorization: RankingRetentionAuthorization,
       input: RankingRetentionInput,
@@ -630,7 +631,16 @@ export function createPostgresRanking(connectionString: string) {
             ${maxGenerations}::integer
           ) AS deleted
         `
-        return { outcome: 'expired' as const, deletedGenerations: expired?.deleted ?? 0 }
+        const [completed] = await sql<{ completed: boolean }[]>`
+          SELECT refresh_operations.complete_ranking_retention_lease(
+            ${authorization.operationId},
+            ${authorization.leaseOwner},
+            ${authorization.leaseToken}
+          ) AS completed
+        `
+        // The lease row has been locked since the check above, so completion cannot lose it; fail loudly if it did.
+        if (completed?.completed !== true) throw new Error('ranking retention lease changed while its row was locked')
+        return { outcome: 'completed' as const, deletedGenerations: expired?.deleted ?? 0 }
       })
     },
 
