@@ -137,4 +137,38 @@ describe('Player names observed on leaderboards', () => {
       await Promise.all([control.end(), source.close(), names.close()])
     }
   })
+
+  test('applies a full leaderboard generation of renamed players in bounded statements', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const names = createPostgresLeaderboardPlayerNames(connectionString)
+    try {
+      await control`
+        INSERT INTO players.career_profiles
+          (brawlhalla_id, player_name, checked_at, last_success_at, xp, level, xp_percentage, games, wins, match_time,
+           damage_bomb, damage_mine, damage_spikeball, damage_sidekick, snowball_hits, bomb_kos, mine_kos,
+           spikeball_kos, sidekick_kos, snowball_kos)
+        SELECT identity, 'Career ' || identity, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z',
+               0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        FROM generate_series(1000000, 1019999) AS identity
+      `
+      const players = Array.from({ length: 20_000 }, (_, index) => ({
+        brawlhallaId: 1_000_000 + index,
+        name: `Board ${index}`,
+      }))
+      await expect(
+        names.applyLeaderboardNames({ observedAt: new Date('2026-10-05T00:00:00Z'), players }),
+      ).resolves.toEqual({ changed: 20_000 })
+      await expect(
+        names.applyLeaderboardNames({ observedAt: new Date('2026-10-05T00:15:00Z'), players }),
+      ).resolves.toEqual({ changed: 0 })
+      const [counts] = await control<{ aliases: number; events: number }[]>`
+        SELECT
+          (SELECT count(*)::integer FROM players.discovery_aliases WHERE brawlhalla_id >= 1000000) AS aliases,
+          (SELECT count(*)::integer FROM players.discovery_outbox WHERE brawlhalla_id >= 1000000) AS events
+      `
+      expect(counts).toEqual({ aliases: 20_000, events: 20_000 })
+    } finally {
+      await Promise.all([control.end(), names.close()])
+    }
+  }, 30_000)
 })

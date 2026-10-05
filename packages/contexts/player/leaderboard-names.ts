@@ -48,7 +48,7 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
           ),
           resolved AS (
             SELECT input.brawlhalla_id,
-                   CASE WHEN input.repaired_name IN (
+                   CASE WHEN input.repaired_name IS NOT NULL AND input.repaired_name IN (
                      SELECT player_name FROM players.ranked_profiles
                      WHERE brawlhalla_id = input.brawlhalla_id AND player_name IS NOT NULL
                      UNION ALL
@@ -68,30 +68,34 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
                    ) THEN input.repaired_name ELSE input.player_name END AS player_name
             FROM input
           ),
-          changed AS (
-            SELECT resolved.brawlhalla_id, resolved.player_name,
-                   CASE WHEN previous.observed_at < ${input.observedAt} THEN previous.player_name END AS previous_name
+          pending AS MATERIALIZED (
+            SELECT resolved.brawlhalla_id, resolved.player_name
             FROM resolved
             LEFT JOIN players.leaderboard_name_observations observation USING (brawlhalla_id)
+            WHERE observation.brawlhalla_id IS NULL
+               OR (observation.player_name <> resolved.player_name AND observation.observed_at < ${input.observedAt})
+          ),
+          changed AS (
+            SELECT pending.brawlhalla_id, pending.player_name,
+                   CASE WHEN previous.observed_at < ${input.observedAt} THEN previous.player_name END AS previous_name
+            FROM pending
             LEFT JOIN LATERAL (
               SELECT candidate.player_name, candidate.observed_at
               FROM (
                 SELECT player_name, last_success_at AS observed_at, 0 AS priority FROM players.career_profiles
-                WHERE brawlhalla_id = resolved.brawlhalla_id AND last_success_at IS NOT NULL
+                WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
                   AND player_name IS NOT NULL
                 UNION ALL
                 SELECT player_name, last_success_at, 1 FROM players.ranked_profiles
-                WHERE brawlhalla_id = resolved.brawlhalla_id AND last_success_at IS NOT NULL
+                WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
                   AND player_name IS NOT NULL
                 UNION ALL
                 SELECT player_name, observed_at, 2 FROM players.leaderboard_name_observations
-                WHERE brawlhalla_id = resolved.brawlhalla_id
+                WHERE brawlhalla_id = pending.brawlhalla_id
               ) candidate
               ORDER BY candidate.observed_at DESC, candidate.priority
               LIMIT 1
             ) previous ON true
-            WHERE observation.brawlhalla_id IS NULL
-               OR (observation.player_name <> resolved.player_name AND observation.observed_at < ${input.observedAt})
           ),
           written AS (
             INSERT INTO players.leaderboard_name_observations AS current (brawlhalla_id, player_name, observed_at)
@@ -108,33 +112,28 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
         `
         if (changed.length === 0) return { changed: 0 }
 
-        const aliases = changed.flatMap(({ brawlhalla_id, player_name, previous_name }) =>
-          previous_name &&
-          previous_name !== player_name &&
-          decodeV0CareerNameCandidate(previous_name) !== player_name &&
-          isUsablePlayerName(previous_name, brawlhalla_id)
-            ? [
-                {
-                  brawlhalla_id,
-                  normalized_alias: previous_name.toLowerCase(),
-                  display_alias: previous_name,
-                  observed_at: input.observedAt,
-                },
-              ]
-            : [],
-        )
+        const aliases = changed.filter(
+          ({ brawlhalla_id, player_name, previous_name }): boolean =>
+            !!previous_name &&
+            previous_name !== player_name &&
+            decodeV0CareerNameCandidate(previous_name) !== player_name &&
+            isUsablePlayerName(previous_name, brawlhalla_id),
+        ) as Array<ChangedRow & { previous_name: string }>
         if (aliases.length > 0) {
+          // The outbox insert below already covers these identities; skip the per-row alias trigger.
+          await sql`SELECT set_config('players.suppress_discovery_outbox', 'on', true)`
           await sql`
-            INSERT INTO players.discovery_aliases ${sql(
-              aliases,
-              'brawlhalla_id',
-              'normalized_alias',
-              'display_alias',
-              'observed_at',
-            )}
+            INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
+            SELECT brawlhalla_id, normalized_alias, display_alias, ${input.observedAt}
+            FROM unnest(
+              ${aliases.map(({ brawlhalla_id }) => brawlhalla_id)}::integer[],
+              ${aliases.map(({ previous_name }) => previous_name.toLowerCase())}::text[],
+              ${aliases.map(({ previous_name }) => previous_name)}::text[]
+            ) AS alias(brawlhalla_id, normalized_alias, display_alias)
             ON CONFLICT (brawlhalla_id, normalized_alias) DO UPDATE
             SET display_alias = EXCLUDED.display_alias, observed_at = EXCLUDED.observed_at
           `
+          await sql`SELECT set_config('players.suppress_discovery_outbox', 'off', true)`
         }
         await sql`
           WITH version AS (
