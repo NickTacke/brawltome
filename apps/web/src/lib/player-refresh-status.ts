@@ -148,9 +148,7 @@ export function getPlayerRefreshNotice(
     }
     case 'gaveUp': {
       const cause =
-        status.reason === 'rateLimited'
-          ? 'Too many update requests right now.'
-          : "Brawlhalla's servers are still busy."
+        status.reason === 'rateLimited' ? 'Too many update requests right now.' : "Brawlhalla's servers are still busy."
       return {
         tone: 'warning',
         title: "Couldn't update this player",
