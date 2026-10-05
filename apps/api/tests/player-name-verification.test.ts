@@ -39,6 +39,7 @@ function plannerFixture(options: { usage?: () => number; perWindow?: number } = 
         calls.claim.push(policy)
         return { backlog, usedInWindow: 0, claimed: [candidate] }
       },
+      release: async () => {},
     },
     operations: {
       accept: async (input) => {
@@ -109,6 +110,38 @@ describe('player name verification planner', () => {
       }),
     ])
     expect(metric(telemetry, 'player_name_verification_backlog', 'tier')).toEqual(backlog)
+  })
+
+  test('releases a claim whose operation was not accepted without failing the rest of the batch', async () => {
+    const released: Array<[number, string]> = []
+    const accepted: number[] = []
+    const planner = createPlayerNameVerificationPlanner({
+      config,
+      readSourceUsage: async () => ({ used: 0, limit: 180 }),
+      verifications: {
+        claim: async () => ({
+          backlog,
+          usedInWindow: 0,
+          claimed: [
+            { brawlhallaId: 7, playerName: 'New', v0Name: 'Old' },
+            { brawlhallaId: 8, playerName: 'Newer', v0Name: 'Older' },
+          ],
+        }),
+        release: async (brawlhallaId, playerName) => {
+          released.push([brawlhallaId, playerName])
+        },
+      },
+      operations: {
+        accept: async (input) => {
+          if (input.payload.brawlhallaId === 7) throw new Error('database unavailable')
+          accepted.push(input.payload.brawlhallaId)
+          return { outcome: 'accepted', operationId: 'operation' }
+        },
+      },
+    })
+    expect(await planner.tick()).toBe(1)
+    expect(accepted).toEqual([8])
+    expect(released).toEqual([[7, 'New']])
   })
 
   test('the kill switch makes no database or source reads', async () => {
