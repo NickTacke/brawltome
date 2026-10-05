@@ -105,7 +105,9 @@ describe('ingestBatch', () => {
   test('drops hostile bodies with a reason and never throws', () => {
     const { telemetry, salt, limiter, ipLimiter } = setup()
     for (const body of [null, 'x', { events: 'no' }, { events: [{ ...base, name: 'evil' }] }]) {
-      expect(() => ingestBatch({ body, ip: '1.1.1.1', userAgent: 'a' }, { telemetry, salt, limiter, ipLimiter })).not.toThrow()
+      expect(() =>
+        ingestBatch({ body, ip: '1.1.1.1', userAgent: 'a' }, { telemetry, salt, limiter, ipLimiter }),
+      ).not.toThrow()
     }
     ingestBatch(
       {
