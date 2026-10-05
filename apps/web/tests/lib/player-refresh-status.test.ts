@@ -247,7 +247,12 @@ describe('getPlayerRefreshNotice', () => {
   })
 
   test('shows nothing while idle, requesting, polling or verifying', () => {
-    for (const status of [{ kind: 'idle' }, { kind: 'requesting' }, { kind: 'polling' }, { kind: 'verifying' }] as const) {
+    for (const status of [
+      { kind: 'idle' },
+      { kind: 'requesting' },
+      { kind: 'polling' },
+      { kind: 'verifying' },
+    ] as const) {
       expect(getPlayerRefreshNotice(status, { hasData: true, secondsLeft: null, dataAge: '1h ago' })).toBeNull()
     }
   })

@@ -12,9 +12,9 @@ describe('getPlayerDataUpdatedAt', () => {
   })
 
   test('falls back to whichever section has been fetched', () => {
-    expect(
-      getPlayerDataUpdatedAt({ currentSeason: { lastSuccessAt: '2026-08-10T09:00:00Z' }, career: null }),
-    ).toEqual(new Date('2026-08-10T09:00:00Z'))
+    expect(getPlayerDataUpdatedAt({ currentSeason: { lastSuccessAt: '2026-08-10T09:00:00Z' }, career: null })).toEqual(
+      new Date('2026-08-10T09:00:00Z'),
+    )
     expect(
       getPlayerDataUpdatedAt({ currentSeason: { lastSuccessAt: 'not-a-date' }, career: { lastSuccessAt: null } }),
     ).toBeNull()
