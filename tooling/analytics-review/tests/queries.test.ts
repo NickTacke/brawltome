@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { GrafanaApi } from '../src/grafana'
-import { resolveOutputPath } from '../src/output-path'
+import { resolveOutputPath, writeReport } from '../src/output-path'
 import { collectReview } from '../src/queries'
 
 type Call = { query: string; time: Date }
@@ -93,5 +95,14 @@ describe('resolveOutputPath', () => {
     expect(resolveOutputPath(undefined, end, '/work')).toBe('/work/analytics-review-2026-10-12.md')
     expect(resolveOutputPath('out/r.md', end, '/work')).toBe(resolve('/work', 'out/r.md'))
     expect(resolveOutputPath('/abs/r.md', end, '/work')).toBe('/abs/r.md')
+  })
+})
+
+describe('writeReport', () => {
+  test('creates missing parent directories', () => {
+    const base = mkdtempSync(join(tmpdir(), 'analytics-review-'))
+    const target = join(base, 'reports', 'nested', 'review.md')
+    writeReport(target, '# report')
+    expect(readFileSync(target, 'utf8')).toBe('# report')
   })
 })

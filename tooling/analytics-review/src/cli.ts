@@ -1,7 +1,6 @@
-import { writeFileSync } from 'node:fs'
 import { resolveGrafanaConfig } from './config'
 import { createGrafanaApi } from './grafana'
-import { resolveOutputPath } from './output-path'
+import { resolveOutputPath, writeReport } from './output-path'
 import { collectReview } from './queries'
 import { buildReport } from './report'
 
@@ -28,5 +27,5 @@ try {
 const api = createGrafanaApi(config.baseUrl, config.password)
 const report = buildReport(await collectReview(api, days, end), { days, end })
 const path = resolveOutputPath(out, end, process.env.INIT_CWD ?? process.cwd())
-writeFileSync(path, report)
+writeReport(path, report)
 console.log(path)
