@@ -467,3 +467,93 @@ tests:
       - eval_time: 6m
         alertname: TelemetryStorageNearQuota
         exp_alerts: []
+
+  - name: PostgreSQL data filesystem warns, escalates, and recovers
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="node",device="/dev/loop3",fstype="ext4",mountpoint="/storage/postgres"}'
+        values: "50 15x15 5x10 50x15"
+      - series: 'node_filesystem_size_bytes{job="node",device="/dev/loop3",fstype="ext4",mountpoint="/storage/postgres"}'
+        values: "100x45"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PostgresDiskSpaceLow
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: PostgresDiskSpaceLow
+        exp_alerts:
+          - exp_labels:
+              job: node
+              device: /dev/loop3
+              fstype: ext4
+              mountpoint: /storage/postgres
+              severity: warning
+              service: brawltome
+              signal: postgres-disk
+            exp_annotations:
+              summary: "PostgreSQL data filesystem has less than 20 percent free"
+              description: "Only 15% of the PostgreSQL data filesystem is available. Grow the loop image or reclaim space before writes fail."
+      - eval_time: 24m
+        alertname: PostgresDiskSpaceLow
+        exp_alerts:
+          - exp_labels:
+              job: node
+              device: /dev/loop3
+              fstype: ext4
+              mountpoint: /storage/postgres
+              severity: warning
+              service: brawltome
+              signal: postgres-disk
+            exp_annotations:
+              summary: "PostgreSQL data filesystem has less than 20 percent free"
+              description: "Only 5% of the PostgreSQL data filesystem is available. Grow the loop image or reclaim space before writes fail."
+          - exp_labels:
+              job: node
+              device: /dev/loop3
+              fstype: ext4
+              mountpoint: /storage/postgres
+              severity: critical
+              service: brawltome
+              signal: postgres-disk
+            exp_annotations:
+              summary: "PostgreSQL data filesystem has less than 10 percent free"
+              description: "Only 5% of the PostgreSQL data filesystem is available. PostgreSQL stops when it cannot extend files or WAL."
+      - eval_time: 24m
+        alertname: FilesystemSpaceCritical
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: PostgresDiskSpaceLow
+        exp_alerts: []
+
+  - name: any nearly full ext4 filesystem pages
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="node",device="/dev/loop4",fstype="ext4",mountpoint="/storage/loki"}'
+        values: "5x15 50x5"
+      - series: 'node_filesystem_size_bytes{job="node",device="/dev/loop4",fstype="ext4",mountpoint="/storage/loki"}'
+        values: "100x20"
+      - series: 'node_filesystem_avail_bytes{job="node",device="tmpfs",fstype="tmpfs",mountpoint="/run"}'
+        values: "1x20"
+      - series: 'node_filesystem_size_bytes{job="node",device="tmpfs",fstype="tmpfs",mountpoint="/run"}'
+        values: "100x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: FilesystemSpaceCritical
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: FilesystemSpaceCritical
+        exp_alerts:
+          - exp_labels:
+              job: node
+              device: /dev/loop4
+              fstype: ext4
+              mountpoint: /storage/loki
+              severity: critical
+              service: brawltome
+              signal: filesystem-space
+            exp_annotations:
+              summary: "/storage/loki has less than 10 percent free"
+              description: "Only 5% of the ext4 filesystem mounted at /storage/loki is available."
+      - eval_time: 18m
+        alertname: FilesystemSpaceCritical
+        exp_alerts: []

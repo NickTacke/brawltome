@@ -139,7 +139,7 @@ function validTopology(): TopologyFixture {
         command: [
           '--collector.disable-defaults',
           '--collector.filesystem',
-          '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+          '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo|postgres)$$',
           '--collector.textfile',
           '--collector.textfile.directory=/textfile',
         ],
@@ -148,6 +148,7 @@ function validTopology(): TopologyFixture {
           ['/srv/brawltome-observability/loki', '/storage/loki'],
           ['/srv/brawltome-observability/tempo', '/storage/tempo'],
           ['/srv/brawltome-observability/backup-integrity', '/textfile'],
+          ['/srv/brawltome/postgres', '/storage/postgres'],
         ].map(([source, target]) => ({ type: 'bind', source, target, read_only: true })),
       },
       'otel-collector': service(

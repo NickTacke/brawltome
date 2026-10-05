@@ -20,6 +20,8 @@ const requiredAlerts = [
   'HttpErrorRateHigh',
   'PostgresBackupIntegrityFailed',
   'TelemetryStorageNearQuota',
+  'PostgresDiskSpaceLow',
+  'FilesystemSpaceCritical',
 ] as const
 
 const legacyDimension = ['gene', 'ration'].join('')
@@ -157,10 +159,17 @@ describe('observability deployment contract', () => {
     expect(nodeExporter?.command).toEqual([
       '--collector.disable-defaults',
       '--collector.filesystem',
-      '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+      '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo|postgres)$$',
       '--collector.textfile',
       '--collector.textfile.directory=/textfile',
     ])
+    expect(nodeExporter?.volumes).toContainEqual({
+      type: 'bind',
+      source: '/srv/brawltome/postgres',
+      target: '/storage/postgres',
+      read_only: true,
+      bind: { create_host_path: true },
+    })
     expect(nodeExporter?.volumes).toContainEqual({
       type: 'bind',
       source: '/srv/brawltome-observability/backup-integrity',
@@ -218,7 +227,8 @@ describe('observability deployment contract', () => {
     const evidence = read('prometheus', 'tests', 'alerts.test.yml')
 
     const declaredAlerts = Array.from(rules.matchAll(/^\s+- alert: (\S+)$/gm), ([, alert]) => alert)
-    expect(declaredAlerts).toEqual([...requiredAlerts])
+    // PostgresDiskSpaceLow is declared once per severity tier.
+    expect([...new Set(declaredAlerts)]).toEqual([...requiredAlerts])
     for (const alert of requiredAlerts) expect(evidence).toContain(`alertname: ${alert}`)
     expect(rules).not.toMatch(/\b(request_id|trace_id|job_id|operation_id|user_id|guild_id)\b/)
     for (const aggregation of ['max by (runtime)', 'sum by (runtime, le)', 'sum by (runtime)', 'max by (work_class)']) {
