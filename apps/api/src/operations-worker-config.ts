@@ -114,10 +114,33 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     ) as Record<BackgroundWorkClass, number>,
   }
 
+  // Retryable failures back off exponentially (2s, 6s, then capped at 15s by default) with +/-20% jitter so a
+  // brief upstream hiccup is ridden out across four interactive attempts while the whole retry window stays
+  // inside the ~30s the profile page waits for a refresh. Rate-limited work keeps its Retry-After delay.
+  const retryDelayMs = positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 2_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000)
+  const retryBackoff = {
+    multiplier: boundedInteger(
+      env.OPERATIONS_RETRY_BACKOFF_MULTIPLIER,
+      3,
+      'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
+      1,
+      10,
+    ),
+    maxDelayMs: boundedInteger(
+      env.OPERATIONS_RETRY_MAX_DELAY_MS,
+      Math.max(15_000, retryDelayMs),
+      'OPERATIONS_RETRY_MAX_DELAY_MS',
+      retryDelayMs,
+      900_000,
+    ),
+    jitterRatio: 0.2,
+  }
+
   return {
     leaseMs: positiveInteger(env.OPERATIONS_LEASE_MS, 30_000, 'OPERATIONS_LEASE_MS', 300_000),
     pollMs: positiveInteger(env.OPERATIONS_POLL_MS, 1_000, 'OPERATIONS_POLL_MS', 60_000),
-    retryDelayMs: positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 1_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000),
+    retryDelayMs,
+    retryBackoff,
     sourceUnavailableRetryMs: boundedInteger(
       env.SOURCE_UNAVAILABLE_RETRY_MS,
       60_000,

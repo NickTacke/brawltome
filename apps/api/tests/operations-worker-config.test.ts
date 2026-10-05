@@ -12,7 +12,8 @@ describe('operations worker configuration', () => {
     expect(readOperationsWorkerConfig({})).toEqual({
       leaseMs: 30_000,
       pollMs: 1_000,
-      retryDelayMs: 1_000,
+      retryDelayMs: 2_000,
+      retryBackoff: { multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2 },
       sourceUnavailableRetryMs: 60_000,
       scheduleBatchSize: 100,
       discovery: {
@@ -56,6 +57,19 @@ describe('operations worker configuration', () => {
     )
     expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_INTERVAL_MS: '59999' })).toThrow(
       'DISCOVERY_RECONCILIATION_INTERVAL_MS',
+    )
+    expect(
+      readOperationsWorkerConfig({
+        OPERATIONS_RETRY_DELAY_MS: '1000',
+        OPERATIONS_RETRY_BACKOFF_MULTIPLIER: '2',
+        OPERATIONS_RETRY_MAX_DELAY_MS: '8000',
+      }),
+    ).toMatchObject({ retryDelayMs: 1_000, retryBackoff: { multiplier: 2, maxDelayMs: 8_000, jitterRatio: 0.2 } })
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_BACKOFF_MULTIPLIER: '0' })).toThrow(
+      'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
+    )
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_MAX_DELAY_MS: '1999' })).toThrow(
+      'OPERATIONS_RETRY_MAX_DELAY_MS',
     )
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')

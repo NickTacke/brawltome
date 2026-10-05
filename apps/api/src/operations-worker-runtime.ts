@@ -1,13 +1,14 @@
 import type { AdmissionConfig } from '@brawltome/refresh-operations'
 import type { PostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
 import type { Telemetry } from '@brawltome/telemetry'
-import { runOneRefreshOperation } from './refresh-operations-worker'
+import { type RetryBackoff, runOneRefreshOperation } from './refresh-operations-worker'
 import type { RuntimeLifecycle } from './runtime-lifecycle'
 
 type WorkerConfig = {
   leaseMs: number
   pollMs: number
   retryDelayMs: number
+  retryBackoff?: RetryBackoff
   scheduleBatchSize: number
   admission: AdmissionConfig
 }
@@ -259,6 +260,7 @@ export async function runOperationsWorker({
         runOne(operations, `${workerId}:${slot}`, {
           leaseMs: config.leaseMs,
           retryDelayMs: config.retryDelayMs,
+          retryBackoff: config.retryBackoff,
           admission: config.admission,
           telemetry,
         }),
