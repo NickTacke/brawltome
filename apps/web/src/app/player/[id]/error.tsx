@@ -1,5 +1,6 @@
 'use client'
 
+import { track } from '@/lib/analytics/browser'
 import { useEffect } from 'react'
 
 interface ErrorProps {
@@ -10,6 +11,7 @@ interface ErrorProps {
 export default function PlayerError({ error, reset }: ErrorProps) {
   useEffect(() => {
     console.error('[player route]', error)
+    track({ name: 'error.client', kind: 'render', message: String(error.message) })
   }, [error])
 
   return (

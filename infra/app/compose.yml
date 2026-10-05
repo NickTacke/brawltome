@@ -199,6 +199,7 @@ services:
       target: web
       args:
         NEXT_PUBLIC_API_URL: https://api.brawltome.app
+        NEXT_PUBLIC_ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-false}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
     environment:
       HOSTNAME: 0.0.0.0
