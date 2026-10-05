@@ -78,7 +78,7 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <PlayerProfile initialData={initialData} id={id} />
+      <PlayerProfile key={id} initialData={initialData} id={id} />
     </div>
   )
 }
