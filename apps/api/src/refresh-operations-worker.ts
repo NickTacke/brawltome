@@ -203,6 +203,8 @@ export async function reconcileInteractiveAdmissions(
   return activated
 }
 
+const safeFailureCode = /^[a-z0-9_.-]{1,64}$/i
+
 function failureDetails(error: unknown, fallbackCode: string) {
   if (error && typeof error === 'object') {
     return {
@@ -879,6 +881,7 @@ export async function runOneRefreshOperation(
           workClass: lease.workClass,
           outcome: attemptOutcome,
           failureCategory,
+          ...(safeFailureCode.test(failure.code) ? { failureCode: failure.code } : {}),
         }),
       )
     } finally {

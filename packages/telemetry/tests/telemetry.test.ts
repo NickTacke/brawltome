@@ -78,6 +78,48 @@ describe('telemetry foundation', () => {
     })
   })
 
+  test('keeps redacted messages but exposes allow-listed error codes and HTTP statuses', async () => {
+    const sink = createMemorySink()
+    const telemetry = createTelemetry({ service: 'test', sink, drainIntervalMs: 0 })
+    class LeaderboardSourceError extends Error {
+      readonly code = 'source_transport_failed'
+    }
+    const postgresError = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      name: 'PostgresError',
+      code: '23505',
+      detail: 'Key (id)=(secret-row) already exists.',
+    })
+    const httpError = Object.assign(new Error('Brawlhalla API error: 503 for /player/1?api_key=leaked-key'), {
+      status: 503,
+    })
+    const wrapped = new Error('Brawlhalla API timeout', {
+      cause: Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }),
+    })
+
+    telemetry.logger.error('leaderboard', new LeaderboardSourceError('upstream https://x/?api_key=leaked-key'))
+    telemetry.logger.error('postgres', postgresError)
+    telemetry.logger.error('http', httpError)
+    telemetry.logger.error('wrapped', wrapped)
+    telemetry.logger.error('unsafe-code', Object.assign(new Error('x'), { code: 'api_key=leaked-key value' }))
+    telemetry.logger.error('long-code', Object.assign(new Error('x'), { code: 'a'.repeat(65) }))
+    telemetry.logger.error('numeric-code', Object.assign(new Error('x'), { code: 42, status: 99, statusCode: 'x' }))
+    telemetry.logger.error('status-code', Object.assign(new Error('x'), { statusCode: 429 }))
+    await telemetry.flush(50)
+
+    expect(JSON.stringify(sink.records)).not.toContain('leaked-key')
+    expect(JSON.stringify(sink.records)).not.toContain('secret-row')
+    expect(sink.records.map((record) => record.error)).toEqual([
+      { name: 'Error', message: 'Operation failed', code: 'source_transport_failed' },
+      { name: 'Error', message: 'Operation failed', code: '23505' },
+      { name: 'Error', message: 'Operation failed', status: 503 },
+      { name: 'Error', message: 'Operation failed', code: 'ETIMEDOUT' },
+      { name: 'Error', message: 'Operation failed' },
+      { name: 'Error', message: 'Operation failed' },
+      { name: 'Error', message: 'Operation failed' },
+      { name: 'Error', message: 'Operation failed', status: 429 },
+    ])
+  })
+
   test('rejects nested, cyclic, non-finite, huge, and malicious runtime values deterministically', async () => {
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'test', sink, drainIntervalMs: 0 })
@@ -509,7 +551,7 @@ describe('telemetry foundation', () => {
         work_class: workClass,
         outcome: 'succeeded',
       })
-      telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass })
+      telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass, reason: 'execution' })
     }
 
     expect(telemetry.stats().seriesDropped).toBe(0)

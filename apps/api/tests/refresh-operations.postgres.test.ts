@@ -202,6 +202,19 @@ describe('durable Refresh Operations', () => {
             last_error = ${control.json({ code: 'test_failure', message: 'safe', retryable: false })}
         WHERE id = ${dead.operationId}
       `
+      const rejected = await operations.accept({
+        dedupeKey: `telemetry-rejected:${randomUUID()}`,
+        operationKey: `telemetry-rejected:${randomUUID()}`,
+        workClass: 'projection',
+        payload: { value: 'rejected' },
+        provenance: { source: 'telemetry-test' },
+      })
+      await control`
+        UPDATE refresh_operations.operations
+        SET status = 'dead_letter', completed_at = clock_timestamp(),
+            last_error = ${control.json({ code: 'actor_rate_limited', message: 'Interactive refresh admission rejected' })}
+        WHERE id = ${rejected.operationId}
+      `
       await operations.createSchedule({
         scheduleKey: `telemetry-schedule:${randomUUID()}`,
         operationKeyPrefix: `telemetry-schedule:${randomUUID()}`,
@@ -217,9 +230,22 @@ describe('durable Refresh Operations', () => {
         0,
       )
       const unresolvedDeadLetters = snapshot.deadLetters.find(
-        ({ workClass, kind }) => workClass === 'projection' && kind === 'proof',
+        ({ workClass, kind, reason }) => workClass === 'projection' && kind === 'proof' && reason === 'execution',
       )?.count
       expect(unresolvedDeadLetters).toBeGreaterThanOrEqual(1)
+      expect(
+        snapshot.deadLetters.find(
+          ({ workClass, kind, reason }) =>
+            workClass === 'projection' && kind === 'proof' && reason === 'admission_rejected',
+        )?.count,
+      ).toBeGreaterThanOrEqual(1)
+      expect(
+        snapshot.deadLetters.find(
+          ({ workClass, kind, reason }) =>
+            workClass === 'interactive' && kind === 'interactive-player-refresh' && reason === 'admission_rejected',
+        ),
+      ).toBeDefined()
+      expect(snapshot.deadLetters.length).toBeLessThanOrEqual(128)
       expect(
         await operations.discardDeadLetter({
           operationId: dead.operationId,
@@ -229,8 +255,9 @@ describe('durable Refresh Operations', () => {
       ).toMatchObject({ outcome: 'discarded' })
       const resolvedSnapshot = await operations.inspectTelemetry()
       expect(
-        resolvedSnapshot.deadLetters.find(({ workClass, kind }) => workClass === 'projection' && kind === 'proof')
-          ?.count,
+        resolvedSnapshot.deadLetters.find(
+          ({ workClass, kind, reason }) => workClass === 'projection' && kind === 'proof' && reason === 'execution',
+        )?.count,
       ).toBe((unresolvedDeadLetters ?? 1) - 1)
       expect(snapshot.scheduleLateness.find(({ kind }) => kind === 'proof')?.latenessMs).toBeGreaterThan(0)
       expect(snapshot.oldestPending).toHaveLength(6)
@@ -864,7 +891,8 @@ describe('durable Refresh Operations', () => {
       expect(history.occurrences.map(({ operation_status }) => operation_status)).toEqual(['dead_letter', 'pending'])
       expect(
         (await operations.inspectTelemetry()).deadLetters.find(
-          ({ workClass, kind }) => workClass === 'leaderboard' && kind === 'leaderboard-1v1',
+          ({ workClass, kind, reason }) =>
+            workClass === 'leaderboard' && kind === 'leaderboard-1v1' && reason === 'execution',
         )?.count,
       ).toBe(0)
       const current = requireLease(

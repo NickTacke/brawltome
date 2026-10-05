@@ -14,6 +14,7 @@ import {
   type DeadLetterListItem,
   type DeadLetterOperations,
   type DeadLetterPage,
+  type DeadLetterReason,
   type DiscoveryProjectionKind,
   type FencedResult,
   type InteractiveClanRefreshReservation,
@@ -31,6 +32,7 @@ import {
   type StatisticsCollectionKind,
   type TransitionResult,
   type WorkClass,
+  admissionRejectionCodes,
   backgroundWorkClasses,
   discoveryProjectionKinds,
   interactiveRefreshMaxAttempts,
@@ -2098,9 +2100,17 @@ export function createPostgresRefreshOperations(
         GROUP BY work_class
       `
       const deadLetters = await client<
-        { work_class: WorkClass; kind: OperationLease['kind']; count: string | number }[]
+        {
+          work_class: WorkClass
+          kind: OperationLease['kind']
+          reason: DeadLetterReason
+          count: string | number
+        }[]
       >`
-        SELECT operation.work_class, operation.kind, count(*)::bigint AS count
+        SELECT operation.work_class, operation.kind,
+               CASE WHEN operation.last_error ->> 'code' IN ${client([...admissionRejectionCodes])}
+                 THEN 'admission_rejected' ELSE 'execution' END AS reason,
+               count(*)::bigint AS count
         FROM refresh_operations.operations AS operation
         WHERE operation.status = 'dead_letter'
           AND NOT EXISTS (
@@ -2108,7 +2118,7 @@ export function createPostgresRefreshOperations(
             FROM refresh_operations.dead_letter_actions AS action
             WHERE action.target_operation_id = operation.id
           )
-        GROUP BY operation.work_class, operation.kind
+        GROUP BY 1, 2, 3
       `
       const scheduleLateness = await client<{ kind: OperationLease['kind']; lateness_ms: string | number }[]>`
         SELECT kind,
@@ -2119,8 +2129,8 @@ export function createPostgresRefreshOperations(
         GROUP BY kind
       `
       const pendingByClass = new Map(oldestPending.map((row) => [row.work_class, Number(row.age_ms)]))
-      const deadLettersByClassAndKind = new Map(
-        deadLetters.map((row) => [`${row.work_class}:${row.kind}`, Number(row.count)]),
+      const deadLettersByClassKindAndReason = new Map(
+        deadLetters.map((row) => [`${row.work_class}:${row.kind}:${row.reason}`, Number(row.count)]),
       )
       const allOperationKinds: OperationLease['kind'][] = [
         'proof',
@@ -2142,12 +2152,23 @@ export function createPostgresRefreshOperations(
           workClass,
           ageMs: pendingByClass.get(workClass) ?? 0,
         })),
+        // Execution series are always present so rate-based alerts see a zero baseline. Admission series stay
+        // sparse outside the interactive kinds to keep the gauge under the per-metric series bound.
         deadLetters: workClasses.flatMap((workClass) =>
-          allOperationKinds.map((kind) => ({
-            workClass,
-            kind,
-            count: deadLettersByClassAndKind.get(`${workClass}:${kind}`) ?? 0,
-          })),
+          allOperationKinds.flatMap((kind) => {
+            const admissionRejected = deadLettersByClassKindAndReason.get(`${workClass}:${kind}:admission_rejected`)
+            return [
+              {
+                workClass,
+                kind,
+                reason: 'execution' as const,
+                count: deadLettersByClassKindAndReason.get(`${workClass}:${kind}:execution`) ?? 0,
+              },
+              ...(admissionRejected !== undefined || kind === 'interactive-player-refresh' || kind === 'clan-refresh'
+                ? [{ workClass, kind, reason: 'admission_rejected' as const, count: admissionRejected ?? 0 }]
+                : []),
+            ]
+          }),
         ),
         scheduleLateness: (
           ['proof', 'interactive-player-refresh', ...leaderboardOperationKinds] as OperationLease['kind'][]
