@@ -3,7 +3,8 @@
 import { track } from '@/lib/analytics/browser'
 import { useEffect } from 'react'
 
-type DeadEndKind = '404' | 'player_not_found' | 'clan_not_found'
+// Only definitive dead ends are tracked here; polling timeouts are already counted as refresh.state 'timed_out'.
+type DeadEndKind = '404'
 
 export function trackDeadEndOnce(kind: DeadEndKind, trackFn: typeof track): void {
   trackFn({ name: 'deadend', kind })
