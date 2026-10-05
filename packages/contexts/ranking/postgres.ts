@@ -181,7 +181,11 @@ function publishedProvenance(
   }
 }
 
-export function createPostgresRanking(connectionString: string) {
+export function createPostgresRanking(
+  connectionString: string,
+  // Test seam: runs inside the read transaction after the snapshot metadata is selected.
+  options: { afterMetadataRead?: () => Promise<void> } = {},
+) {
   const client = postgres(connectionString)
 
   async function lockAuthorizedOperation(
@@ -269,7 +273,11 @@ export function createPostgresRanking(connectionString: string) {
     validateMode(input.mode)
     validateScope(input.region)
     const { page, pageSize } = boundedPagination(input.page, input.pageSize)
-    const [snapshot] = await client<SnapshotRow[]>`
+    // One repeatable-read snapshot so retention cannot delete the selected snapshot between the
+    // metadata read and the row read.
+    return client.begin('isolation level repeatable read read only', async (transaction) => {
+      const sql = transaction as unknown as typeof client
+      const [snapshot] = await sql<SnapshotRow[]>`
       SELECT snapshot.id AS snapshot_id, snapshot.generation_id, snapshot.mode, snapshot.scope,
              generation.observed_at, generation.published_at, generation.expected_next_publication_at,
              generation.page_depth, generation.source, generation.source_contract_version,
@@ -295,18 +303,19 @@ export function createPostgresRanking(connectionString: string) {
       ORDER BY generation.schedule_window_at DESC, generation.id DESC
       LIMIT 1
     `
-    if (!snapshot) {
-      return {
-        status: 'unavailable',
-        reason: input.snapshotId ? 'snapshot_not_found' : 'not_yet_published',
-        mode: input.mode,
-        page,
-        pageSize,
+      await options.afterMetadataRead?.()
+      if (!snapshot) {
+        return {
+          status: 'unavailable',
+          reason: input.snapshotId ? 'snapshot_not_found' : 'not_yet_published',
+          mode: input.mode,
+          page,
+          pageSize,
+        }
       }
-    }
 
-    const offset = (page - 1) * pageSize
-    const entries = await client<StandingRow[]>`
+      const offset = (page - 1) * pageSize
+      const entries = await sql<StandingRow[]>`
       SELECT standing, source_rank, identity_kind, player_one_id, player_one_name,
              player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier
       FROM rankings.snapshot_rows
@@ -315,37 +324,38 @@ export function createPostgresRanking(connectionString: string) {
       OFFSET ${offset}
       LIMIT ${pageSize}
     `
-    const now = input.now ?? new Date()
-    const stale =
-      now >= snapshot.expected_next_publication_at ||
-      (snapshot.latest_failure_at !== null && snapshot.latest_failure_at > snapshot.published_at)
-    return {
-      status: stale ? 'stale' : 'fresh',
-      snapshotId: snapshot.snapshot_id,
-      generationId: snapshot.generation_id,
-      mode: snapshot.mode,
-      region: snapshot.scope,
-      observedAt: snapshot.observed_at.toISOString(),
-      publishedAt: snapshot.published_at.toISOString(),
-      expectedNextPublicationAt: snapshot.expected_next_publication_at.toISOString(),
-      provenance: publishedProvenance(snapshot),
-      page,
-      pageSize,
-      hasMore: offset + entries.length < snapshot.row_count,
-      totalRows: snapshot.row_count,
-      entries: entries.map((entry) => ({
-        standing: entry.standing,
-        sourceRank: entry.source_rank,
-        identity: publishedIdentity(entry),
-        region: entry.region,
-        rating: entry.rating,
-        peakRating: entry.peak_rating,
-        wins: entry.wins,
-        losses: entry.losses,
-        games: entry.wins + entry.losses,
-        tier: entry.tier,
-      })),
-    }
+      const now = input.now ?? new Date()
+      const stale =
+        now >= snapshot.expected_next_publication_at ||
+        (snapshot.latest_failure_at !== null && snapshot.latest_failure_at > snapshot.published_at)
+      return {
+        status: stale ? 'stale' : 'fresh',
+        snapshotId: snapshot.snapshot_id,
+        generationId: snapshot.generation_id,
+        mode: snapshot.mode,
+        region: snapshot.scope,
+        observedAt: snapshot.observed_at.toISOString(),
+        publishedAt: snapshot.published_at.toISOString(),
+        expectedNextPublicationAt: snapshot.expected_next_publication_at.toISOString(),
+        provenance: publishedProvenance(snapshot),
+        page,
+        pageSize,
+        hasMore: offset + entries.length < snapshot.row_count,
+        totalRows: snapshot.row_count,
+        entries: entries.map((entry) => ({
+          standing: entry.standing,
+          sourceRank: entry.source_rank,
+          identity: publishedIdentity(entry),
+          region: entry.region,
+          rating: entry.rating,
+          peakRating: entry.peak_rating,
+          wins: entry.wins,
+          losses: entry.losses,
+          games: entry.wins + entry.losses,
+          tier: entry.tier,
+        })),
+      }
+    })
   }
 
   async function getRecentActivity(input: {
@@ -359,7 +369,11 @@ export function createPostgresRanking(connectionString: string) {
     validateMode(input.mode)
     validateScope(input.region)
     const { page, pageSize } = boundedPagination(input.page, input.pageSize)
-    const [interval] = await client<ActivityIntervalRow[]>`
+    // One repeatable-read snapshot so retention cannot delete the selected snapshot between the
+    // metadata read and the row read.
+    return client.begin('isolation level repeatable read read only', async (transaction) => {
+      const sql = transaction as unknown as typeof client
+      const [interval] = await sql<ActivityIntervalRow[]>`
       WITH current_generation AS (
         SELECT generation.*
         FROM rankings.generations generation
@@ -412,18 +426,19 @@ export function createPostgresRanking(connectionString: string) {
        AND previous_snapshot.mode = current_endpoint.mode
        AND previous_snapshot.scope = current_endpoint.scope
     `
-    if (!interval) {
-      return {
-        status: 'unavailable',
-        reason: 'not_enough_history',
-        mode: input.mode,
-        region: input.region,
-        page,
-        pageSize,
+      await options.afterMetadataRead?.()
+      if (!interval) {
+        return {
+          status: 'unavailable',
+          reason: 'not_enough_history',
+          mode: input.mode,
+          region: input.region,
+          page,
+          pageSize,
+        }
       }
-    }
-    const offset = (page - 1) * pageSize
-    const entries = await client<ActivityStandingRow[]>`
+      const offset = (page - 1) * pageSize
+      const entries = await sql<ActivityStandingRow[]>`
       SELECT current.standing, current.identity_kind, current.player_one_id, current.player_one_name,
              current.player_two_id, current.player_two_name, current.region, current.rating,
              current.rating - previous.rating AS rating_delta,
@@ -445,9 +460,9 @@ export function createPostgresRanking(connectionString: string) {
       OFFSET ${offset}
       LIMIT ${pageSize}
     `
-    let totalRows = entries[0]?.total_count ?? 0
-    if (entries.length === 0 && offset > 0) {
-      const [count] = await client<{ total_count: number }[]>`
+      let totalRows = entries[0]?.total_count ?? 0
+      if (entries.length === 0 && offset > 0) {
+        const [count] = await sql<{ total_count: number }[]>`
         SELECT count(*)::integer AS total_count
         FROM rankings.snapshot_rows current
         JOIN rankings.snapshot_rows previous
@@ -458,41 +473,42 @@ export function createPostgresRanking(connectionString: string) {
           AND current.losses >= previous.losses
           AND current.wins + current.losses > previous.wins + previous.losses
       `
-      totalRows = count?.total_count ?? 0
-    }
-    const now = input.now ?? new Date()
-    const publicationIntervalMs =
-      interval.expected_next_publication_at.getTime() - interval.schedule_window_at.getTime()
-    const stale = now.getTime() >= interval.expected_next_publication_at.getTime() + publicationIntervalMs
-    const provenance = publishedProvenance(interval)
-    if (provenance.source !== 'brawlhalla-v1-ranked-leaderboard') {
-      throw new Error('recent activity requires official leaderboard provenance')
-    }
-    return {
-      status: stale ? 'stale' : 'fresh',
-      mode: interval.mode,
-      region: interval.scope,
-      currentSnapshotId: interval.snapshot_id,
-      previousObservedAt: interval.previous_observed_at.toISOString(),
-      currentObservedAt: interval.observed_at.toISOString(),
-      publishedAt: interval.published_at.toISOString(),
-      expectedNextPublicationAt: interval.expected_next_publication_at.toISOString(),
-      provenance,
-      page,
-      pageSize,
-      hasMore: offset + entries.length < totalRows,
-      totalRows,
-      entries: entries.map((entry) => ({
-        standing: entry.standing,
-        identity: publishedIdentity(entry),
-        region: entry.region,
-        rating: entry.rating,
-        ratingDelta: entry.rating_delta,
-        winsDelta: entry.wins_delta,
-        lossesDelta: entry.losses_delta,
-        gamesDelta: entry.games_delta,
-      })),
-    }
+        totalRows = count?.total_count ?? 0
+      }
+      const now = input.now ?? new Date()
+      const publicationIntervalMs =
+        interval.expected_next_publication_at.getTime() - interval.schedule_window_at.getTime()
+      const stale = now.getTime() >= interval.expected_next_publication_at.getTime() + publicationIntervalMs
+      const provenance = publishedProvenance(interval)
+      if (provenance.source !== 'brawlhalla-v1-ranked-leaderboard') {
+        throw new Error('recent activity requires official leaderboard provenance')
+      }
+      return {
+        status: stale ? 'stale' : 'fresh',
+        mode: interval.mode,
+        region: interval.scope,
+        currentSnapshotId: interval.snapshot_id,
+        previousObservedAt: interval.previous_observed_at.toISOString(),
+        currentObservedAt: interval.observed_at.toISOString(),
+        publishedAt: interval.published_at.toISOString(),
+        expectedNextPublicationAt: interval.expected_next_publication_at.toISOString(),
+        provenance,
+        page,
+        pageSize,
+        hasMore: offset + entries.length < totalRows,
+        totalRows,
+        entries: entries.map((entry) => ({
+          standing: entry.standing,
+          identity: publishedIdentity(entry),
+          region: entry.region,
+          rating: entry.rating,
+          ratingDelta: entry.rating_delta,
+          winsDelta: entry.wins_delta,
+          lossesDelta: entry.losses_delta,
+          gamesDelta: entry.games_delta,
+        })),
+      }
+    })
   }
 
   const queries: RankingQueries & PlayerValhallanQueries = {
