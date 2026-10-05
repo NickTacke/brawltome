@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createGrafanaApi } from './grafana'
+import { resolveOutputPath } from './output-path'
 import { collectReview } from './queries'
 import { buildReport } from './report'
 
@@ -37,6 +38,6 @@ const baseUrl = process.env.GRAFANA_URL ?? 'https://observability.brawltome.app'
 const end = new Date()
 const api = createGrafanaApi(baseUrl, readPassword())
 const report = buildReport(await collectReview(api, days, end), { days, end })
-const path = out ?? `analytics-review-${end.toISOString().slice(0, 10)}.md`
+const path = resolveOutputPath(out, end, process.env.INIT_CWD ?? process.cwd())
 writeFileSync(path, report)
 console.log(path)
