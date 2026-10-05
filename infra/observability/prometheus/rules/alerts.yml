@@ -144,3 +144,38 @@ groups:
         annotations:
           summary: "Telemetry storage is at least 80 percent used"
           description: "A dedicated quota-backed telemetry filesystem is nearing capacity."
+
+      # node-exporter sees the loop-mounted PostgreSQL ext4 filesystem through its read-only /storage/postgres bind.
+      - alert: PostgresDiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/storage/postgres"} / node_filesystem_size_bytes{mountpoint="/storage/postgres"} < 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: postgres-disk
+        annotations:
+          summary: "PostgreSQL data filesystem has less than 20 percent free"
+          description: "Only {{ $value | humanizePercentage }} of the PostgreSQL data filesystem is available. Grow the loop image or reclaim space before writes fail."
+
+      - alert: PostgresDiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/storage/postgres"} / node_filesystem_size_bytes{mountpoint="/storage/postgres"} < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: postgres-disk
+        annotations:
+          summary: "PostgreSQL data filesystem has less than 10 percent free"
+          description: "Only {{ $value | humanizePercentage }} of the PostgreSQL data filesystem is available. PostgreSQL stops when it cannot extend files or WAL."
+
+      # PostgreSQL is excluded because PostgresDiskSpaceLow already pages for it.
+      - alert: FilesystemSpaceCritical
+        expr: node_filesystem_avail_bytes{fstype="ext4",mountpoint!="/storage/postgres"} / node_filesystem_size_bytes{fstype="ext4",mountpoint!="/storage/postgres"} < 0.1
+        for: 10m
+        labels:
+          severity: critical
+          service: brawltome
+          signal: filesystem-space
+        annotations:
+          summary: "{{ $labels.mountpoint }} has less than 10 percent free"
+          description: "Only {{ $value | humanizePercentage }} of the ext4 filesystem mounted at {{ $labels.mountpoint }} is available."
