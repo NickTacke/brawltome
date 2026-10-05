@@ -2,6 +2,8 @@
 
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import type { PlayerData } from '@/components/player/shared'
+import { flushAnalytics, track } from '@/lib/analytics/browser'
+import { clampRetries, clampWaitMs, refreshStateEvent } from '@/lib/analytics/refresh-events'
 import {
   PLAYER_REFRESH_MAX_WAIT_MS,
   type PendingPlayerSections,
@@ -40,6 +42,9 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const mountedRef = useRef(false)
   const initialRequestedRef = useRef(false)
   const tokenInFlightRef = useRef(false)
+  const previousStatusRef = useRef(state.status)
+  const cycleStartedAtRef = useRef(0)
+  const retriesRef = useRef(0)
   stateRef.current = state
 
   const queryFn = useCallback(() => getPlayerAction(Number(id)), [id])
@@ -52,13 +57,27 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
     runKey: state.pollRun,
     pollMs: playerRefreshPollDelayMs,
     maxRefreshMs: PLAYER_REFRESH_MAX_WAIT_MS,
-    onSettled: (settlement) => dispatch({ type: 'pollSettled', settlement }),
+    onSettled: (settlement) => {
+      if (settlement === 'done') {
+        track({
+          name: 'refresh.completed',
+          waitMs: clampWaitMs(performance.now() - cycleStartedAtRef.current),
+          retries: clampRetries(retriesRef.current),
+        })
+        retriesRef.current = 0
+      }
+      dispatch({ type: 'pollSettled', settlement })
+    },
   })
   const dataRef = useRef(data)
   dataRef.current = data
 
   const request = useCallback(
     async (manual: boolean, token?: string) => {
+      if (manual) {
+        cycleStartedAtRef.current = performance.now()
+        retriesRef.current = 0
+      }
       dispatch({ type: 'request', manual, now: Date.now() })
       try {
         const result = await refreshPlayerAction(Number(id), token)
@@ -80,6 +99,11 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      const { kind } = stateRef.current.status
+      if (kind === 'requesting' || kind === 'polling' || kind === 'waiting') {
+        track({ name: 'refresh.abandoned', waitedMs: clampWaitMs(performance.now() - cycleStartedAtRef.current) })
+        flushAnalytics()
+      }
     }
   }, [])
 
@@ -94,10 +118,22 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const { status } = state
 
   useEffect(() => {
+    const event = refreshStateEvent(previousStatusRef.current, status, Boolean(dataRef.current))
+    previousStatusRef.current = status
+    if (event) track(event)
+  }, [status])
+
+  useEffect(() => {
     if (status.kind !== 'waiting') return
     setNow(Date.now())
     const intervalId = setInterval(() => setNow(Date.now()), 1_000)
-    const timeoutId = setTimeout(() => void request(false), Math.max(0, status.retryAt - Date.now()))
+    const timeoutId = setTimeout(
+      () => {
+        retriesRef.current += 1
+        void request(false)
+      },
+      Math.max(0, status.retryAt - Date.now()),
+    )
     return () => {
       clearInterval(intervalId)
       clearTimeout(timeoutId)

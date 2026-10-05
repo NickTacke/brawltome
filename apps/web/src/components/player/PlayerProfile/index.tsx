@@ -4,13 +4,15 @@ import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { usePlayerRefresh } from '@/hooks/usePlayerRefresh'
 import { RefreshTimeoutError } from '@/hooks/useStaleRefresh'
+import { track } from '@/lib/analytics/browser'
+import { dataAgeBucket } from '@/lib/analytics/schema'
 import { useAccount, usePrimaryPlayer } from '@/lib/auth'
 import { pinPlayer, unpinPlayer, usePinnedPlayers } from '@/lib/pinnedPlayers'
 import { getPlayerDataUpdatedAt } from '@/lib/player-refresh'
 import { getPlayerRefreshNotice } from '@/lib/player-refresh-status'
 import { timeAgo } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
 import { PinnedPlayerButton } from './PinnedPlayerButton'
@@ -50,6 +52,15 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   } = usePlayerRefresh({ id, initialData })
 
   const displayPlayer = player
+  const firstRenderDataRef = useRef(initialData)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fires once per player id using the data as first rendered.
+  useEffect(() => {
+    track({
+      name: 'profile.viewed',
+      dataAge: dataAgeBucket(getPlayerDataUpdatedAt(firstRenderDataRef.current), Date.now()),
+    })
+  }, [id])
   const brawlhallaId = Number(id)
   const primaryPlayerKnown = !primaryPlayerLoading && !primaryPlayerError
   const primaryPlayerId = primaryPlayerKnown ? (primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null) : null
