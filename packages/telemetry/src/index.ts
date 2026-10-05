@@ -62,6 +62,8 @@ export type MetricName =
   | 'refresh_failures_total'
   | 'refresh_requests_total'
   | 'discord_interactions_total'
+  | 'player_name_verifications_total'
+  | 'player_name_verification_backlog'
 
 export type MetricLabels = Readonly<Record<string, string>>
 
@@ -115,6 +117,7 @@ const operationKind = [
   'interactive-player-refresh',
   'clan-refresh',
   'ranked-player-pulse',
+  'player-name-verification',
   'player-discovery-projection',
   'clan-discovery-projection',
   'discovery-reconciliation',
@@ -236,6 +239,16 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Discord interactions',
     labels: { interaction_kind: interactionKind, command, outcome: ['succeeded', 'failed', 'rejected'] },
+  },
+  player_name_verifications_total: {
+    kind: 'counter',
+    help: 'Budget-capped V0 checks of leaderboard player names',
+    labels: { outcome: ['renamed', 'unchanged', 'failed', 'skipped_budget', 'resolved_free'] },
+  },
+  player_name_verification_backlog: {
+    kind: 'gauge',
+    help: 'Players whose newer leaderboard name awaits V0 verification',
+    labels: { tier: ['rename_signal', 'demand', 'other'] },
   },
 }
 

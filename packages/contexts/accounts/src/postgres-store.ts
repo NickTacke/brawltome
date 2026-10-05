@@ -110,11 +110,22 @@ LEFT JOIN accounts.primary_player_verification_outcomes outcomes ON outcomes.att
 
 export function createPostgresAccountsStore(connectionString: string): {
   store: AccountsStore
+  readDemandedPlayerIds: () => Promise<number[]>
   close: () => Promise<void>
 } {
   const client = postgres(connectionString)
   return {
     store: postgresAccountsStore(client),
+    // Players someone pinned or linked as their Primary Player.
+    readDemandedPlayerIds: async () => {
+      const rows = await client.unsafe<{ brawlhalla_id: number }[]>(
+        `SELECT brawlhalla_id::int FROM accounts.pinned_players
+         UNION
+         SELECT brawlhalla_id::int FROM accounts.primary_players
+         ORDER BY brawlhalla_id`,
+      )
+      return rows.map(({ brawlhalla_id }) => brawlhalla_id)
+    },
     close: () => client.end(),
   }
 }
