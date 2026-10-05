@@ -113,14 +113,19 @@ tests:
         alertname: ScheduleMaterializationLate
         exp_alerts: []
 
-  - name: dead letters firing and recovery
+  - name: new execution dead letters fire from the attempt counter and recover
     interval: 1m
     input_series:
-      - series: 'operation_dead_letters{work_class="leaderboard",kind="leaderboard-1v1"}'
-        values: "1 1 0 0"
+      - series: 'operation_attempts_total{job="operations-worker",kind="leaderboard-1v1",work_class="leaderboard",outcome="dead_letter"}'
+        values: "0 0 1 1x40"
+      - series: 'operation_dead_letters{job="operations-worker",work_class="leaderboard",kind="leaderboard-1v1",reason="execution"}'
+        values: "0 0 1 1x40"
     alert_rule_test:
       - eval_time: 1m
-        alertname: DeadLettersPresent
+        alertname: NewDeadLetters
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: NewDeadLetters
         exp_alerts:
           - exp_labels:
               work_class: leaderboard
@@ -129,10 +134,49 @@ tests:
               service: brawltome
               signal: dead-letters
             exp_annotations:
-              summary: "leaderboard-1v1 has unexplained dead letters"
-              description: "At least one durable operation is in dead-letter state."
-      - eval_time: 2m
-        alertname: DeadLettersPresent
+              summary: "leaderboard-1v1 produced new dead letters"
+              description: "At least one leaderboard operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
+      - eval_time: 40m
+        alertname: NewDeadLetters
+        exp_alerts: []
+
+  - name: dead letters outside the worker attempt path fire from the gauge
+    interval: 1m
+    input_series:
+      - series: 'operation_dead_letters{job="api",work_class="projection",kind="player-discovery-projection",reason="execution"}'
+        values: "3 3 4 4x40"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: NewDeadLetters
+        exp_alerts:
+          - exp_labels:
+              work_class: projection
+              kind: player-discovery-projection
+              severity: critical
+              service: brawltome
+              signal: dead-letters
+            exp_annotations:
+              summary: "player-discovery-projection produced new dead letters"
+              description: "At least one projection operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
+      - eval_time: 40m
+        alertname: NewDeadLetters
+        exp_alerts: []
+
+  - name: unresolved historical dead letters and admission rejections do not page
+    interval: 1m
+    input_series:
+      - series: 'operation_dead_letters{job="operations-worker",work_class="leaderboard",kind="leaderboard-1v1",reason="execution"}'
+        values: "57x60"
+      - series: 'operation_dead_letters{job="operations-worker",work_class="interactive",kind="interactive-player-refresh",reason="admission_rejected"}'
+        values: "0+5x60"
+      - series: 'operation_dead_letters{job="operations-worker",work_class="projection",kind="clan-discovery-projection",reason="execution"}'
+        values: "9 9 2 2x40"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: NewDeadLetters
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: NewDeadLetters
         exp_alerts: []
 
   - name: source quota firing and recovery

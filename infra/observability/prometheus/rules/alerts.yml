@@ -57,16 +57,21 @@ groups:
           summary: "{{ $labels.kind }} schedule is late"
           description: "An enabled schedule has remained more than five minutes late."
 
-      - alert: DeadLettersPresent
-        expr: max by (work_class, kind) (operation_dead_letters) > 0
+      # Fires on newly dead-lettered work only. The gauge counts every unresolved dead letter, so alerting on its
+      # level paged continuously; admission rejections (reason="admission_rejected") are expected user outcomes.
+      # The gauge delta also covers dead letters that bypass the worker attempt counter (expired leases, restarts).
+      - alert: NewDeadLetters
+        expr: |
+          sum by (work_class, kind) (increase(operation_attempts_total{outcome="dead_letter"}[30m])) > 0
+          or max by (work_class, kind) (delta(operation_dead_letters{reason="execution"}[30m])) > 0
         for: 1m
         labels:
           severity: critical
           service: brawltome
           signal: dead-letters
         annotations:
-          summary: "{{ $labels.kind }} has unexplained dead letters"
-          description: "At least one durable operation is in dead-letter state."
+          summary: "{{ $labels.kind }} produced new dead letters"
+          description: "At least one {{ $labels.work_class }} operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
 
       - alert: SourceQuotaNearLimit
         expr: max by (domain) (source_quota_used) / clamp_min(max by (domain) (source_quota_limit), 1) >= 0.9

@@ -182,8 +182,8 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   },
   operation_dead_letters: {
     kind: 'gauge',
-    help: 'Current durable dead letters',
-    labels: { work_class: workClass, kind: operationKind },
+    help: 'Current unresolved durable dead letters',
+    labels: { work_class: workClass, kind: operationKind, reason: ['execution', 'admission_rejected'] },
   },
   schedule_lateness_ms: { kind: 'gauge', help: 'Maximum current schedule lateness', labels: { kind: operationKind } },
   schedule_materializations_total: {

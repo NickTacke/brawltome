@@ -551,7 +551,7 @@ describe('telemetry foundation', () => {
         work_class: workClass,
         outcome: 'succeeded',
       })
-      telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass })
+      telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass, reason: 'execution' })
     }
 
     expect(telemetry.stats().seriesDropped).toBe(0)
