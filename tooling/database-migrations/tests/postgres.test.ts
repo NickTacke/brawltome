@@ -106,8 +106,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0004',
       'rankings/0005',
       'rankings/0006',
+      'rankings/0007',
     ])
-    expect(globalMigrationInventory.slice(-7).map(({ identity }): string => identity)).toEqual([
+    expect(globalMigrationInventory.slice(-8).map(({ identity }): string => identity)).toEqual([
       'clans/0004',
       'players/0011',
       'players/0012',
@@ -115,6 +116,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'replay-analysis/0001',
       'accounts/0008',
       'accounts/0009',
+      'rankings/0007',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -202,6 +204,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       replayAnalysisMigrationInventory[0],
       accountsMigrationInventory[7],
       accountsMigrationInventory[8],
+      rankingMigrationInventory[6],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -234,7 +237,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(59)
+    expect(globalMigrationInventory).toHaveLength(60)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -261,6 +264,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       replayAnalysisMigrationInventory[0],
       accountsMigrationInventory[7],
       accountsMigrationInventory[8],
+      rankingMigrationInventory[6],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -273,7 +277,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(25)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(26)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -508,6 +512,57 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         `
         expect(activeLeaseFence.function_name).toContain('acquire_active_lease')
         expect(interactiveSectionFence.function_name).toContain('commit_interactive_section_if_owned')
+      } finally {
+        await client.end()
+      }
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  })
+
+  test('drops redundant snapshot row indexes while keeping the standing uniqueness constraint', async () => {
+    const databaseName = `brawltome_ranking_indexes_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), rankingMigrationInventory.slice(0, 6))).toBe(6)
+      const client = postgres(databaseUrl.toString(), { max: 1 })
+      try {
+        const snapshotRowIndexes = async () =>
+          (
+            await client<{ indexname: string }[]>`
+              SELECT indexname FROM pg_indexes
+              WHERE schemaname = 'rankings' AND tablename = 'snapshot_rows'
+              ORDER BY indexname
+            `
+          ).map(({ indexname }) => indexname)
+        expect(await snapshotRowIndexes()).toEqual([
+          'rankings_snapshot_rows_mode_standing',
+          'rankings_snapshot_rows_standing',
+          'snapshot_rows_pkey',
+          'snapshot_rows_snapshot_id_standing_key',
+          'snapshot_rows_snapshot_identity_key',
+        ])
+
+        expect(await migratePostgres(databaseUrl.toString(), rankingMigrationInventory)).toBe(1)
+        expect(await snapshotRowIndexes()).toEqual([
+          'snapshot_rows_pkey',
+          'snapshot_rows_snapshot_id_standing_key',
+          'snapshot_rows_snapshot_identity_key',
+        ])
+        const [standingConstraint] = await client<{ definition: string }[]>`
+          SELECT pg_get_constraintdef(oid) AS definition
+          FROM pg_constraint
+          WHERE conrelid = 'rankings.snapshot_rows'::regclass
+            AND conname = 'snapshot_rows_snapshot_id_standing_key'
+        `
+        expect(standingConstraint.definition).toBe('UNIQUE (snapshot_id, standing)')
       } finally {
         await client.end()
       }
