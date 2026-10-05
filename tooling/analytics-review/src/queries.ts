@@ -55,7 +55,9 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
   const prom = (query: string) => api.promInstant(query, end)
   const loki = (query: string) => api.lokiInstant(query, end)
 
-  const dayTimes = Array.from({ length: days }, (_, i) => new Date(end.getTime() - i * DAY_MS)).reverse()
+  // Complete UTC days only: each is evaluated at the end of that day (the next UTC midnight) over a [1d] window.
+  const todayStart = Math.floor(end.getTime() / DAY_MS) * DAY_MS
+  const dayEnds = Array.from({ length: days }, (_, i) => new Date(todayStart - i * DAY_MS)).reverse()
 
   const [
     searchMissRate,
@@ -111,7 +113,7 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
       `topk(20, sum by (attributes_referrerDomain) (count_over_time({service_name="web"} | json | event="analytics.pageview" | attributes_referrerDomain!="" [${w}])))`,
     ),
     Promise.all(
-      dayTimes.map(async (time) => {
+      dayEnds.map(async (time) => {
         const [sample] = await api.lokiInstant(
           `count(sum by (attributes_visitorKey) (count_over_time({service_name="web"} | json | event="analytics.pageview" [1d])))`,
           time,
