@@ -93,7 +93,11 @@ describe('observability deployment contract', () => {
           image?: string
           environment?: Record<string, string>
           command?: string[]
-          deploy?: { resources?: { limits?: { cpus?: number; memory?: string; pids?: number } } }
+          deploy?: {
+            resources?: {
+              limits?: { cpus?: number; memory?: string; pids?: number }
+            }
+          }
           security_opt?: string[]
           ports?: Array<{
             host_ip?: string
@@ -187,7 +191,7 @@ describe('observability deployment contract', () => {
 
     expect(compose).toContain('--storage.tsdb.retention.time=30d')
     expect(compose).toContain('--storage.tsdb.retention.size=')
-    expect(loki).toContain('retention_period: 336h')
+    expect(loki).toContain('retention_period: 720h')
     expect(tempo).toContain('block_retention: 168h')
     expect(prometheus).toContain('rules/alerts.yml')
     for (const [service, quota] of Object.entries(persistentQuotas)) {
@@ -201,14 +205,20 @@ describe('observability deployment contract', () => {
     const config = parse(read('prometheus', 'prometheus.yml')) as {
       scrape_configs: Array<{
         job_name: string
-        static_configs: Array<{ targets: string[]; labels?: Record<string, string> }>
+        static_configs: Array<{
+          targets: string[]
+          labels?: Record<string, string>
+        }>
       }>
     }
     const job = (name: string) => config.scrape_configs.find(({ job_name }) => job_name === name)?.static_configs
 
     expect(job('api')).toEqual([{ targets: ['api:3000'], labels: { runtime: 'api' } }])
     expect(job('operations-worker')).toEqual([
-      { targets: ['operations-worker:3001'], labels: { runtime: 'operations-worker' } },
+      {
+        targets: ['operations-worker:3001'],
+        labels: { runtime: 'operations-worker' },
+      },
     ])
     expect(job('web')).toEqual([{ targets: ['web:3000'], labels: { runtime: 'web' } }])
     expect(job('discord')).toBeUndefined()
@@ -282,6 +292,37 @@ describe('observability deployment contract', () => {
     ]) {
       expect(queries).toContain(metric)
     }
+  })
+
+  test('product health dashboard covers every friction question', async () => {
+    const dashboard = JSON.parse(await Bun.file('infra/observability/grafana/dashboards/product-health.json').text())
+    expect(dashboard.uid).toBe('brawltome-product-health')
+    const exprs = JSON.stringify(dashboard.panels)
+    for (const metric of [
+      'analytics_searches_total',
+      'analytics_search_latency_ms',
+      'analytics_profile_views_total',
+      'analytics_refresh_wait_ms',
+      'analytics_refresh_states_total',
+      'analytics_web_vitals',
+      'analytics_client_errors_total',
+      'analytics_trpc_failures_total',
+      'analytics_deadends_total',
+      'analytics_pageviews_total',
+      'analytics_feature_use_total',
+      'analytics_events_dropped_total',
+      'player_name_verification_backlog',
+      'discord_interactions_total',
+    ]) {
+      expect(exprs).toContain(metric)
+    }
+    expect(exprs).toContain('analytics.search.performed')
+  })
+
+  test('loki keeps logs for 30 days', async () => {
+    const config = await Bun.file('infra/observability/loki/loki.yml').text()
+    expect(config).toContain('retention_period: 720h')
+    expect(config).toContain('max_query_lookback: 720h')
   })
 
   test('contains no persisted webhook, credentials, or high-cardinality Loki labels', () => {
