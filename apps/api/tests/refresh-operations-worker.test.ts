@@ -131,6 +131,61 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('lease_lost')
   })
 
+  test('logs failed attempts with safe structured failure codes instead of free text', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'proof:diagnosable-failure',
+      kind: 'proof',
+      workClass: 'interactive',
+      payload: { value: 'proof' },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      fail: async () => 'transitioned' as const,
+    }
+    const failedRecords = async (error: Error) => {
+      const sink = createMemorySink()
+      const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        telemetry,
+        executeEffect: async () => {
+          throw error
+        },
+      })
+      await telemetry.flush(50)
+      return sink.records.filter((record) => record.event === 'operation.attempt.failed')
+    }
+
+    const [sourceFailure] = await failedRecords(
+      new LeaderboardSourceError('source_contract_invalid', 'GET https://x/?api_key=leaked-key failed', false),
+    )
+    expect(sourceFailure?.error).toMatchObject({ code: 'source_contract_invalid' })
+    expect(sourceFailure?.attributes).toMatchObject({ failureCode: 'source_contract_invalid' })
+    expect(JSON.stringify(sourceFailure)).not.toContain('leaked-key')
+
+    const [postgresFailure] = await failedRecords(
+      Object.assign(new Error('relation "secret_table" does not exist'), { code: '42P01' }),
+    )
+    expect(postgresFailure?.error).toMatchObject({ code: '42P01' })
+    expect(postgresFailure?.attributes).toMatchObject({ failureCode: '42P01' })
+    expect(JSON.stringify(postgresFailure)).not.toContain('secret_table')
+
+    const [genericFailure] = await failedRecords(new Error('execution failed'))
+    expect(genericFailure?.attributes).toMatchObject({ failureCode: 'proof_execution_failed' })
+  })
+
   test('records leaderboard source calls without correlation IDs in labels', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),

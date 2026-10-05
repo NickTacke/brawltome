@@ -83,7 +83,11 @@ export function createOperationsTelemetryObserver(options: {
     }
     for (const item of snapshot.deadLetters) {
       record((active) =>
-        active.metrics.set('operation_dead_letters', item.count, { work_class: item.workClass, kind: item.kind }),
+        active.metrics.set('operation_dead_letters', item.count, {
+          work_class: item.workClass,
+          kind: item.kind,
+          reason: item.reason,
+        }),
       )
     }
     for (const item of snapshot.scheduleLateness) {

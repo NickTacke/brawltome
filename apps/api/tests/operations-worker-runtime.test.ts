@@ -5,7 +5,9 @@ import { createOperationsTelemetryObserver } from '../src/operations-worker-runt
 const snapshot = {
   observedAt: '2025-01-01T00:00:00.000Z',
   oldestPending: [{ workClass: 'leaderboard' as const, ageMs: 42 }],
-  deadLetters: [{ workClass: 'leaderboard' as const, kind: 'leaderboard-1v1' as const, count: 2 }],
+  deadLetters: [
+    { workClass: 'leaderboard' as const, kind: 'leaderboard-1v1' as const, reason: 'execution' as const, count: 2 },
+  ],
   scheduleLateness: [{ kind: 'leaderboard-1v1' as const, latenessMs: 17 }],
 }
 
@@ -62,7 +64,10 @@ describe('operations worker telemetry observer', () => {
 
     const metrics = telemetry.metrics.snapshot()
     expect(metrics.find(({ name }) => name === 'operation_oldest_pending_age_ms')?.series[0]?.value).toBe(42)
-    expect(metrics.find(({ name }) => name === 'operation_dead_letters')?.series[0]?.value).toBe(2)
+    expect(metrics.find(({ name }) => name === 'operation_dead_letters')?.series[0]).toMatchObject({
+      labels: { work_class: 'leaderboard', kind: 'leaderboard-1v1', reason: 'execution' },
+      value: 2,
+    })
     expect(metrics.find(({ name }) => name === 'schedule_lateness_ms')?.series[0]?.value).toBe(17)
   })
 })

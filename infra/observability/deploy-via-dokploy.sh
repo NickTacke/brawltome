@@ -110,6 +110,7 @@ rendered=$(
       OBSERVABILITY_METRICS_QUOTA_BYTES=12884901888 \
       OBSERVABILITY_TRACES_QUOTA_BYTES=12884901888 \
       OTEL_INGEST_TOKEN_FILE=/var/lib/brawltome-observability-secrets/otel-ingest-token \
+      POSTGRES_DATA_ROOT=/srv/brawltome/postgres \
       PROMETHEUS_RETENTION_SIZE=9GB \
       docker compose --file - config --format json
 )

@@ -209,7 +209,7 @@ services:
     command:
       - --collector.disable-defaults
       - --collector.filesystem
-      - --collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$
+      - --collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo|postgres)$
       - --collector.textfile
       - --collector.textfile.directory=/textfile
     volumes:
@@ -217,6 +217,8 @@ services:
       - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/loki:/storage/loki:ro
       - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/tempo:/storage/tempo:ro
       - ${OBSERVABILITY_DATA_ROOT:?Set quota-backed root}/backup-integrity:/textfile:ro
+      # The PostgreSQL data root is its own loop-mounted ext4 filesystem; host df does not reflect it.
+      - ${POSTGRES_DATA_ROOT:-/srv/brawltome/postgres}:/storage/postgres:ro
     expose:
       - "9100"
     deploy:

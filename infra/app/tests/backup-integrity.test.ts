@@ -85,6 +85,20 @@ esac
   return { env, metrics, name, remote }
 }
 
+const failureReasons = ['stale', 'uploading', 'missing', 'hash_invalid', 'sidecar_mismatch', 'config', 'unknown']
+
+function failureReason(metrics: string): string[] {
+  const active: string[] = []
+  for (const reason of failureReasons) {
+    const match = readFileSync(metrics, 'utf8').match(
+      new RegExp(`^brawltome_postgres_backup_integrity_failure_reason\\{reason="${reason}"\\} ([01])$`, 'm'),
+    )
+    expect(match, `missing ${reason} series`).not.toBeNull()
+    if (match?.[1] === '1') active.push(reason)
+  }
+  return active
+}
+
 function run(env: Record<string, string | undefined>) {
   return Bun.spawnSync(['bash', verifier], { env, stderr: 'pipe', stdout: 'pipe' })
 }
@@ -101,6 +115,7 @@ describe('recurring backup integrity verifier', () => {
     expect(sidecarName).toBe(name)
     expect(sidecar.endsWith('\n')).toBe(true)
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 1')
+    expect(failureReason(metrics)).toEqual([])
 
     const verified = run(env)
     expect(verified.exitCode, verified.stderr.toString()).toBe(0)
@@ -119,6 +134,7 @@ describe('recurring backup integrity verifier', () => {
     const failedMetrics = readFileSync(metrics, 'utf8')
     expect(failedMetrics).toContain('brawltome_postgres_backup_integrity_ok 0')
     expect(failedMetrics).toMatch(/brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds [1-9][0-9]*/)
+    expect(failureReason(metrics)).toEqual(['sidecar_mismatch'])
   })
 
   test('publishes failure when required configuration is missing', () => {
@@ -128,6 +144,7 @@ describe('recurring backup integrity verifier', () => {
     const result = run(missingRemoteEnv)
     expect(result.exitCode).not.toBe(0)
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
+    expect(failureReason(metrics)).toEqual(['config'])
   })
 
   test('rejects a backup older than the eight-hour verification window', () => {
@@ -137,5 +154,22 @@ describe('recurring backup integrity verifier', () => {
     expect(result.exitCode).not.toBe(0)
     expect(result.stderr.toString()).toContain('Latest backup is stale')
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
+    expect(failureReason(metrics)).toEqual(['stale'])
+  })
+
+  test('labels in-progress uploads, missing backups, and corrupt archives', () => {
+    const uploading = fixture(0)
+    expect(run(uploading.env).exitCode).not.toBe(0)
+    expect(failureReason(uploading.metrics)).toEqual(['uploading'])
+
+    const missing = fixture()
+    rmSync(join(missing.remote, missing.name))
+    expect(run(missing.env).exitCode).not.toBe(0)
+    expect(failureReason(missing.metrics)).toEqual(['missing'])
+
+    const corrupt = fixture()
+    writeFileSync(join(corrupt.remote, corrupt.name), 'not gzip')
+    expect(run(corrupt.env).exitCode).not.toBe(0)
+    expect(failureReason(corrupt.metrics)).toEqual(['hash_invalid'])
   })
 })
