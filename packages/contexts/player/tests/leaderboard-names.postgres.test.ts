@@ -142,6 +142,33 @@ describe('Player names observed on leaderboards', () => {
     }
   })
 
+  test('keeps the previous leaderboard name searchable when a live V0 name stays canonical', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const source = createPostgresPlayerDiscoverySource(connectionString)
+    const names = createPostgresLeaderboardPlayerNames(connectionString)
+    try {
+      await insertRanked(control, 110, 'Current V0', '2026-09-01T00:00:00Z')
+      await names.applyLeaderboardNames({
+        observedAt: new Date('2026-10-05T01:00:00Z'),
+        players: [{ brawlhallaId: 110, name: 'Old Board' }],
+      })
+      await names.applyLeaderboardNames({
+        observedAt: new Date('2026-10-05T01:15:00Z'),
+        players: [{ brawlhallaId: 110, name: 'New Board' }],
+      })
+      const fact = (await source.snapshot()).facts.find((candidate) => candidate.brawlhallaId === 110)
+      expect(fact?.name).toBe('Current V0')
+      expect(fact?.aliases).toEqual(expect.arrayContaining(['Old Board', 'New Board']))
+      expect(fact?.aliases).not.toContain('Current V0')
+      const recorded = await control<{ display_alias: string }[]>`
+        SELECT display_alias FROM players.discovery_aliases WHERE brawlhalla_id = 110
+      `
+      expect(recorded.map((row) => row.display_alias)).toEqual(['Old Board'])
+    } finally {
+      await Promise.all([control.end(), source.close(), names.close()])
+    }
+  })
+
   // Legacy-imported careers are not live V0 names, so a full board legitimately renames all of them.
   test('applies a full leaderboard generation of renamed players in bounded statements', async () => {
     const control = postgres(connectionString, { max: 1 })

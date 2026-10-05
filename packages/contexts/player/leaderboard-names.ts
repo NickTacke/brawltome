@@ -69,7 +69,7 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
             FROM input
           ),
           pending AS MATERIALIZED (
-            SELECT resolved.brawlhalla_id, resolved.player_name
+            SELECT resolved.brawlhalla_id, resolved.player_name, observation.player_name AS previous_observation
             FROM resolved
             LEFT JOIN players.leaderboard_name_observations observation USING (brawlhalla_id)
             WHERE observation.brawlhalla_id IS NULL
@@ -77,17 +77,29 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
           ),
           changed AS (
             SELECT pending.brawlhalla_id, pending.player_name,
-                   -- A live V0 name stays canonical, so a leaderboard change does not displace it into an alias.
-                   CASE WHEN previous.observed_at < ${input.observedAt} AND NOT EXISTS (
-                     SELECT 1 FROM players.ranked_profiles
-                     WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
-                       AND player_name IS NOT NULL
-                     UNION ALL
-                     SELECT 1 FROM players.career_profiles
-                     WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
-                       AND player_name IS NOT NULL AND snapshot_source <> 'legacy-v2'
-                   ) THEN previous.player_name END AS previous_name
+                   CASE
+                     -- A live V0 name stays canonical, so the former leaderboard name becomes the alias instead.
+                     WHEN live.v0_names IS NOT NULL THEN
+                       CASE WHEN NOT EXISTS (
+                         SELECT 1 FROM unnest(live.v0_names) AS v0_name
+                         WHERE players.names_match(v0_name, pending.previous_observation)
+                       ) THEN pending.previous_observation END
+                     WHEN previous.observed_at < ${input.observedAt} THEN previous.player_name
+                   END AS previous_name
             FROM pending
+            LEFT JOIN LATERAL (
+              SELECT array_agg(live_name) AS v0_names
+              FROM (
+                SELECT player_name AS live_name FROM players.ranked_profiles
+                WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
+                  AND player_name IS NOT NULL
+                UNION ALL
+                SELECT player_name FROM players.career_profiles
+                WHERE brawlhalla_id = pending.brawlhalla_id AND last_success_at IS NOT NULL
+                  AND player_name IS NOT NULL AND snapshot_source <> 'legacy-v2'
+              ) live_names
+              HAVING count(*) > 0
+            ) live ON true
             LEFT JOIN LATERAL (
               SELECT candidate.player_name, candidate.observed_at
               FROM (
