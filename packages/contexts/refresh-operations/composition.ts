@@ -16,6 +16,7 @@ import { addStatisticsPublication } from './migrations/0015-add-statistics-publi
 import { addLegendMetaPublication } from './migrations/0016-add-legend-meta-publication'
 import { addPlayerNameVerification } from './migrations/0017-add-player-name-verification'
 import { addRankingRetention } from './migrations/0018-add-ranking-retention'
+import { validateRankingRetentionChecks } from './migrations/0019-validate-ranking-retention-checks'
 
 export {
   createPostgresDeadLetterOperations,
@@ -42,4 +43,5 @@ export const refreshOperationsMigrationInventory = [
   addLegendMetaPublication,
   addPlayerNameVerification,
   addRankingRetention,
+  validateRankingRetentionChecks,
 ] as const

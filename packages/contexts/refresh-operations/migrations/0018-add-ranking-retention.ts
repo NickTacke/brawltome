@@ -1,3 +1,6 @@
+// The widened checks are added NOT VALID so this migration never scans a table while it holds ACCESS EXCLUSIVE.
+// They are enforced for new rows at once; refresh-operations/0019 validates existing rows in its own transaction
+// under SHARE UPDATE EXCLUSIVE. Every existing row already satisfies them: they only add an alternative.
 const sql = `SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE refresh_operations.operations
@@ -8,7 +11,7 @@ ALTER TABLE refresh_operations.operations
     'player-discovery-projection', 'clan-discovery-projection', 'discovery-reconciliation',
     'statistics-ranked-collection', 'statistics-lifetime-collection', 'statistics-publication',
     'statistics-legend-meta-publication', 'player-name-verification', 'ranking-retention'
-  ));
+  )) NOT VALID;
 
 ALTER TABLE refresh_operations.operations DROP CONSTRAINT operations_payload_by_kind;
 ALTER TABLE refresh_operations.operations
@@ -102,14 +105,14 @@ ALTER TABLE refresh_operations.operations
         'retentionHours', payload->'retentionHours',
         'maxGenerations', payload->'maxGenerations'
       ))
-  );
+  ) NOT VALID;
 
 ALTER TABLE refresh_operations.schedules
   DROP CONSTRAINT schedules_kind_check,
   ADD CONSTRAINT schedules_kind_check CHECK (kind IN (
     'proof', 'interactive-player-refresh', 'leaderboard-1v1', 'leaderboard-2v2',
     'leaderboard-solo-2v2', 'leaderboard-3v3', 'ranking-retention'
-  ));
+  )) NOT VALID;
 
 ALTER TABLE refresh_operations.schedules DROP CONSTRAINT schedules_payload_by_kind;
 ALTER TABLE refresh_operations.schedules
@@ -147,7 +150,7 @@ ALTER TABLE refresh_operations.schedules
         'retentionHours', payload->'retentionHours',
         'maxGenerations', payload->'maxGenerations'
       ))
-  );
+  ) NOT VALID;
 
 CREATE FUNCTION refresh_operations.lock_active_ranking_retention_lease(
   p_operation_id uuid,
@@ -215,6 +218,6 @@ $$;`
 export const addRankingRetention = {
   identity: 'refresh-operations/0018',
   predecessor: 'refresh-operations/0017',
-  checksum: '50f1e04acefbc52359b7b9f014c54962f71422a198d9d1d5cd95596bddd54f2a',
+  checksum: 'd30748d7520efbcefa5e734380da575f326d608070529975fcd9fd5b9b1e8c51',
   sql,
 } as const
