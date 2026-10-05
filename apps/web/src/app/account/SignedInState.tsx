@@ -1,5 +1,6 @@
 'use client'
 
+import { track } from '@/lib/analytics/browser'
 import { saveAccountPreferences, signOut, useAccountPreferences, usePrimaryPlayer } from '@/lib/auth'
 import { movePinnedPlayer, reorderPinnedPlayers, unpinPlayer, usePinnedPlayers } from '@/lib/pinnedPlayers'
 import { invalidatePlayerNavigation } from '@/lib/playerShortcuts'
@@ -54,6 +55,7 @@ export function SignedInState({ account }: SignedInStateProps) {
     setThemeError(null)
     try {
       await saveAccountPreferences(queryClient, account.id, { theme })
+      track({ name: 'feature.used', feature: 'theme.change' })
     } catch {
       setThemeError('Could not save your theme. Try again.')
     } finally {

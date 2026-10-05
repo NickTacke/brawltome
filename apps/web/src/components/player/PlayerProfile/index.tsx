@@ -1,6 +1,7 @@
 'use client'
 
 import { NavBar } from '@/components/NavBar'
+import { TrackDeadEnd } from '@/components/TrackDeadEnd'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { usePlayerRefresh } from '@/hooks/usePlayerRefresh'
 import { RefreshTimeoutError } from '@/hooks/useStaleRefresh'
@@ -121,8 +122,18 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     dataAge: updatedAt ? timeAgo(updatedAt) : null,
   })
 
+  function retryWithTracking() {
+    if (!displayPlayer || refreshStatus.kind === 'gaveUp') track({ name: 'deadend', kind: 'try_again_clicked' })
+    retry()
+  }
+
   if (!displayPlayer) {
-    return <LookupState id={id} notice={refreshNotice} onAction={retry} turnstile={turnstile} />
+    return (
+      <>
+        {refreshStatus.kind === 'timedOut' && <TrackDeadEnd kind="player_not_found" />}
+        <LookupState id={id} notice={refreshNotice} onAction={retryWithTracking} turnstile={turnstile} />
+      </>
+    )
   }
 
   return (
@@ -159,7 +170,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         </p>
       )}
       {turnstile}
-      {refreshNotice && <RefreshStatusBanner notice={refreshNotice} onAction={retry} />}
+      {refreshNotice && <RefreshStatusBanner notice={refreshNotice} onAction={retryWithTracking} />}
       <PlayerProfileHierarchy
         player={displayPlayer}
         refreshing={isRefreshing}

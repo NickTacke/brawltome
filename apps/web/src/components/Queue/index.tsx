@@ -14,9 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui'
+import { track } from '@/lib/analytics/browser'
 import { fixEncoding } from '@/lib/utils'
 import type { LeaderboardRecentActivityEntry, LeaderboardRecentActivityOutput } from '@brawltome/contracts'
 import Link from 'next/link'
+import { useEffect } from 'react'
 import {
   BRACKETS,
   type QueueFilters,
@@ -257,6 +259,9 @@ function Pagination({ view, filters }: { view: AvailableActivity; filters: Queue
 }
 
 export function QueueView({ view, filters }: { view: LeaderboardRecentActivityOutput; filters: QueueFilters }) {
+  useEffect(() => {
+    track({ name: 'feature.used', feature: 'queue.view' })
+  }, [])
   return (
     <div className="space-y-8 pb-10">
       <QueueHeader filters={filters} />

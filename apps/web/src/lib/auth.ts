@@ -10,6 +10,7 @@ import {
   parsePrimaryPlayerVerificationStateOutput,
 } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
+import { track } from './analytics/browser'
 import { publicApiUrl } from './api-url'
 import { trpc } from './trpc'
 
@@ -74,6 +75,7 @@ function authUrl(path: '/auth/discord/login' | '/auth/steam/link'): string {
 }
 
 export function signIn(): void {
+  track({ name: 'feature.used', feature: 'discord.link' })
   window.location.assign(authUrl('/auth/discord/login'))
 }
 

@@ -2,8 +2,10 @@
 
 import { getClanAction, refreshClanAction } from '@/app/clan/[id]/actions'
 import { NavBar } from '@/components/NavBar'
+import { TrackDeadEnd } from '@/components/TrackDeadEnd'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
+import { track } from '@/lib/analytics/browser'
 import { getPendingClanSections, hasCompletedClanRefresh } from '@/lib/clan-refresh'
 import type { ClanProfileContract, RefreshOutcomeContract } from '@brawltome/contracts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -65,6 +67,11 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
     )
   }, [requestRefresh])
 
+  const hasClan = Boolean(clan)
+  useEffect(() => {
+    if (hasClan) track({ name: 'feature.used', feature: 'clan.view' })
+  }, [hasClan])
+
   if (error && !(error instanceof RefreshTimeoutError)) throw error
   const delayed =
     error instanceof RefreshTimeoutError ||
@@ -74,6 +81,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   if (!clan) {
     return (
       <div>
+        {delayed && <TrackDeadEnd kind="clan_not_found" />}
         <NavBar showBack />
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           {!delayed && !needsVerification && <p>Looking up clan...</p>}
