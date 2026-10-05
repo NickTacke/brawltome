@@ -33,6 +33,7 @@ import {
   type WorkClass,
   backgroundWorkClasses,
   discoveryProjectionKinds,
+  interactiveRefreshMaxAttempts,
   leaderboardOperationKinds,
   primaryMonitoringIntervalMs,
   statisticsCollectionKinds,
@@ -567,7 +568,7 @@ export function createPostgresRefreshOperations(
               (${operationId}, ${operationId}, 'interactive-player-refresh', ${input.dedupeKey},
                ${input.operationKey}, ${`player:${input.brawlhallaId}`}, 'interactive',
                ${sql.json({ brawlhallaId: input.brawlhallaId, staleSections: input.staleSections })},
-               ${sql.json(input.provenance)}, 'awaiting_admission', 3, ${reservationToken},
+               ${sql.json(input.provenance)}, 'awaiting_admission', ${interactiveRefreshMaxAttempts}, ${reservationToken},
                clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
             ON CONFLICT DO NOTHING
             RETURNING id
@@ -608,7 +609,7 @@ export function createPostgresRefreshOperations(
             VALUES
               (${operationId}, ${operationId}, 'clan-refresh', ${input.dedupeKey}, ${input.operationKey}, 'interactive',
                ${sql.json({ clanId: input.clanId, staleSections: input.staleSections })},
-               ${sql.json(input.provenance)}, 'awaiting_admission', 3, ${reservationToken},
+               ${sql.json(input.provenance)}, 'awaiting_admission', ${interactiveRefreshMaxAttempts}, ${reservationToken},
                clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
             ON CONFLICT (kind, dedupe_key)
               WHERE status IN ('awaiting_admission', 'pending', 'leased')
@@ -2155,6 +2156,13 @@ export function createPostgresRefreshOperations(
           latenessMs: latenessByKind.get(kind) ?? 0,
         })),
       }
+    },
+
+    async operationStatus(operationId: string): Promise<string | null> {
+      const [operation] = await client<{ status: string }[]>`
+        SELECT status FROM refresh_operations.operations WHERE id = ${operationId}
+      `
+      return operation?.status ?? null
     },
 
     async inspect(operationId: string) {

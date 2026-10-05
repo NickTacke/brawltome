@@ -223,7 +223,7 @@ services:
         - CMD
         - node
         - -e
-        - fetch('http://localhost:3000/api/health/ready').then(r => { if (!r.ok) process.exit(1) })
+        - fetch('http://localhost:3000/api/health/live').then(r => { if (!r.ok) process.exit(1) })
       interval: 10s
       timeout: 3s
       retries: 12
@@ -286,7 +286,7 @@ services:
         - -e
         - const r = await fetch('http://localhost:3001/health/ready'); if (!r.ok) process.exit(1)
       interval: 10s
-      timeout: 3s
+      timeout: 10s
       retries: 12
       start_period: 15s
     stop_grace_period: 70s

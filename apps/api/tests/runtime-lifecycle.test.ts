@@ -225,6 +225,76 @@ describe('runtime lifecycle', () => {
     expect(reconciliations).toBe(1)
   })
 
+  test('reports a stall once when every worker loop is blocked on a hung dependency', async () => {
+    const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
+    lifecycle.markReady()
+    const hung = new Promise<never>(() => {})
+    const stalls: number[] = []
+    void runOperationsWorker({
+      operations: {
+        configureAdmission: async () => undefined,
+        materializeDueSchedules: async () => ({ occurrencesCreated: 0 }),
+      } as never,
+      lifecycle,
+      workerId: 'stalled-worker',
+      config: {
+        leaseMs: 30,
+        pollMs: 1,
+        retryDelayMs: 1,
+        scheduleBatchSize: 1,
+        stallTimeoutMs: 30,
+        admission: testAdmission,
+      },
+      reconcile: () => hung,
+      runOne: () => hung,
+      onStall: (stalledForMs) => stalls.push(stalledForMs),
+    })
+
+    await Bun.sleep(120)
+    expect(stalls).toHaveLength(1)
+    expect(stalls[0]).toBeGreaterThanOrEqual(30)
+  })
+
+  test('does not report a stall while loops keep polling through an unavailable database', async () => {
+    const lifecycle = createRuntimeLifecycle({
+      shutdownDeadlineMs: 100,
+      cleanupReserveMs: 20,
+      readinessProbes: [
+        {
+          name: 'postgres-schema',
+          check: async () => {
+            throw new Error('could not extend file: No space left on device')
+          },
+        },
+      ],
+    })
+    lifecycle.markReady()
+    const stalls: number[] = []
+    const worker = runOperationsWorker({
+      operations: {
+        configureAdmission: async () => undefined,
+        materializeDueSchedules: async () => ({ occurrencesCreated: 0 }),
+      } as never,
+      lifecycle,
+      workerId: 'polling-worker',
+      config: {
+        leaseMs: 30,
+        pollMs: 1,
+        retryDelayMs: 1,
+        scheduleBatchSize: 1,
+        stallTimeoutMs: 30,
+        admission: testAdmission,
+      },
+      runOne: async () => false,
+      onStall: (stalledForMs) => stalls.push(stalledForMs),
+    })
+
+    await Bun.sleep(120)
+    await lifecycle.shutdown()
+    await worker
+    expect(stalls).toEqual([])
+  })
+
   test('records a failed schedule materialization before generic loop handling', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
     const telemetry = createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 })

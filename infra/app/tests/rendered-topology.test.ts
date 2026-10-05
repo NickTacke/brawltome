@@ -152,11 +152,24 @@ describe('rendered application topology', () => {
     expect(verifyAppRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
         'api dependencies must match the approved topology',
-        'web health check must use /api/health/ready',
+        'web health check must use /api/health/live',
         'postgres must retain stop grace period 30s',
         'operations-worker must retain bounded memory and PID resources',
       ]),
     )
+  })
+
+  test('keeps web routable through an API or database outage by probing liveness, not readiness', () => {
+    const topology = renderedTopology()
+    const current = services(topology)
+    ;(current.web.healthcheck as Record<string, unknown>).test = [
+      'CMD',
+      'node',
+      '-e',
+      "fetch('http://localhost:3000/api/health/ready').then(r => { if (!r.ok) process.exit(1) })",
+    ]
+
+    expect(verifyAppRenderedTopology(topology)).toContain('web health check must use /api/health/live')
   })
 
   test('rejects malformed service shapes and profile leakage', () => {

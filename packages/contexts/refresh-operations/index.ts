@@ -23,6 +23,9 @@ export const minLeaderboardIntervalMs = 60_000
 export const maxLeaderboardIntervalMs = 24 * 60 * 60 * 1000
 export const maxLeaderboardPageDepth = 20
 export const primaryMonitoringIntervalMs = 24 * 60 * 60 * 1000
+// Four attempts with the worker's exponential retry backoff span roughly 2s + 6s + 15s, so a brief upstream
+// outage is ridden out while the profile page is still waiting for the refresh.
+export const interactiveRefreshMaxAttempts = 4
 
 export type OperationProvenance = {
   source: string
