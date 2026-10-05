@@ -102,7 +102,7 @@ export function createPlayerNameVerificationPlanner(deps: {
   config: PlayerNameVerificationConfig
   readSourceUsage: () => Promise<SourceUsage>
   readDemandIds?: () => Promise<number[]>
-  verifications: Pick<PostgresPlayerNameVerifications, 'claim'>
+  verifications: Pick<PostgresPlayerNameVerifications, 'claim' | 'release'>
   operations: { accept(input: AcceptPlayerNameVerificationOperation): Promise<AcceptOperationResult> }
   telemetry?: Telemetry
   now?: () => number
