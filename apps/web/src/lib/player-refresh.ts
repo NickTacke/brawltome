@@ -48,6 +48,15 @@ export function getPendingPlayerSections(
   }
 }
 
+/** The oldest successful section fetch, i.e. how outdated the profile could be. */
+export function getPlayerDataUpdatedAt(player: PlayerRefreshTimestamps | null): Date | null {
+  if (!player) return null
+  const fetched = [timestamp(player.currentSeason?.lastSuccessAt), timestamp(player.career?.lastSuccessAt)].filter(
+    (value) => value > 0,
+  )
+  return fetched.length > 0 ? new Date(Math.min(...fetched)) : null
+}
+
 export function hasCompletedPlayerRefresh(
   initial: PlayerRefreshTimestamps | null,
   next: PlayerRefreshTimestamps | null,
