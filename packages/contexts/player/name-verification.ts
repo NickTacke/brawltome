@@ -159,7 +159,7 @@ export function createPostgresPlayerNameVerifications(connectionString: string) 
       return { backlog: backlogOf(rows), candidates: rows.map(toCandidate) }
     },
 
-    // Atomically reserves up to the remaining per-window budget; spent checks count toward the window.
+    // Atomically reserves up to the remaining per-window budget; spent checks and still-pending claims count toward the window.
     async claim(
       policy: NameVerificationPolicy,
     ): Promise<{ backlog: NameVerificationBacklog; usedInWindow: number; claimed: NameVerificationCandidate[] }> {
@@ -169,8 +169,12 @@ export function createPostgresPlayerNameVerifications(connectionString: string) 
         const now = policy.now ?? null
         const [window] = await sql<{ used: number }[]>`
           SELECT count(*)::integer AS used FROM players.name_verifications
-          WHERE spent AND checked_at > coalesce(${now}::timestamptz, clock_timestamp())
-            - ${policy.windowMs} * interval '1 millisecond'
+          WHERE spent AND (
+            checked_at > coalesce(${now}::timestamptz, clock_timestamp()) - ${policy.windowMs} * interval '1 millisecond'
+            -- A claim whose source call has not happened yet will still spend budget, however long the queue delays it.
+            OR (outcome = 'pending'
+              AND checked_at > coalesce(${now}::timestamptz, clock_timestamp()) - ${pendingHoldMs} * interval '1 millisecond')
+          )
         `
         const remaining = Math.max(0, policy.perWindow - window.used)
         const rows = await selectCandidates(sql, policy, Math.max(1, remaining))

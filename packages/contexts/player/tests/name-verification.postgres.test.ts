@@ -238,6 +238,9 @@ describe('Player name verification claims', () => {
       usedInWindow: 3,
       claimed: [],
     })
+    // Unexecuted claims keep counting however long they wait, so settle the first batch before the window rolls.
+    await verifications.recordChecked(1, 'New')
+    await verifications.recordChecked(2, 'New')
     const later = await verifications.claim({ ...policy, now: new Date(now.getTime() + 16 * 60 * 1000) })
     expect(later.claimed.map(({ brawlhallaId }) => brawlhallaId)).toEqual([3, 4, 5, 6])
 
@@ -245,6 +248,23 @@ describe('Player name verification claims', () => {
     expect((await verifications.claim({ ...policy, now: new Date(now.getTime() + 17 * 60 * 1000) })).claimed).toEqual([
       { brawlhallaId: 3, playerName: 'New', v0Name: 'Old' },
     ])
+  })
+
+  test('claims still pending count toward the window even when queue delay outlasts it', async () => {
+    for (const id of [1, 2, 3]) {
+      await ranked(id, 'Old', '2026-06-01T00:00:00Z', { rating: 3000 - id })
+      await board(id, 'New', '2026-10-05T00:00:00Z')
+    }
+    await attempt(100, 'Delayed A', ago(40 * 60 * 1000), 'pending')
+    await attempt(101, 'Delayed B', ago(30 * 60 * 1000), 'pending')
+    // Past the pending hold the claim is abandoned and no longer counts.
+    await attempt(102, 'Abandoned', ago(25 * hourMs), 'pending')
+
+    const blocked = await verifications.claim({ ...policy, perWindow: 2 })
+    expect(blocked.claimed).toEqual([])
+    expect(blocked.usedInWindow).toBe(2)
+    const open = await verifications.claim({ ...policy, perWindow: 3 })
+    expect(open.claimed.map(({ brawlhallaId }) => brawlhallaId)).toEqual([1])
   })
 
   test('records renamed, confirmed stale, and failed outcomes', async () => {
