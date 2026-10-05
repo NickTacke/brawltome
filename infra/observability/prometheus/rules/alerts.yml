@@ -131,7 +131,8 @@ groups:
           service: brawltome
           signal: backup-integrity
         annotations:
-          summary: "PostgreSQL backup integrity verification failed"
+          # Discord notifications render the summary, so the verifier failure reason is included there.
+          summary: 'PostgreSQL backup integrity verification failed (reason: {{ with query "max by (reason) (brawltome_postgres_backup_integrity_failure_reason == 1)" }}{{ (index . 0).Labels.reason }}{{ else }}not reported{{ end }})'
           description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
 
       - alert: TelemetryStorageNearQuota
