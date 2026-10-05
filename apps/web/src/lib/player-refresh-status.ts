@@ -168,8 +168,8 @@ export function getPlayerRefreshNotice(
           }
         : {
             tone: 'warning',
-            title: 'Player not found',
-            detail: "We couldn't load a Brawlhalla player with this ID. New accounts can take a minute to appear.",
+            title: "Couldn't load this player yet",
+            detail: "Brawlhalla hasn't answered in time. Check the player ID, or try again in a minute.",
             countdownSeconds: null,
             action: { label: 'Try again' },
           }

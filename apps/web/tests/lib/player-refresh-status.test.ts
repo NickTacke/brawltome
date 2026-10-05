@@ -231,9 +231,10 @@ describe('getPlayerRefreshNotice', () => {
     })
   })
 
-  test('reports a missing player when polling times out without data', () => {
+  test('does not claim the player is missing when polling times out without data', () => {
     const notice = getPlayerRefreshNotice({ kind: 'timedOut' }, { hasData: false, secondsLeft: null, dataAge: null })
-    expect(notice?.title).toBe('Player not found')
+    expect(notice?.title).toBe("Couldn't load this player yet")
+    expect(notice?.detail).toContain('Check the player ID')
     expect(notice?.action).toEqual({ label: 'Try again' })
   })
 
