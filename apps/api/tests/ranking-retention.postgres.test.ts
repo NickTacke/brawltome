@@ -2,15 +2,40 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import type { LeaderboardMode, LeaderboardScope } from '@brawltome/ranking'
 import { createPostgresRanking, rankingMigrationInventory } from '@brawltome/ranking/composition'
-import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
+import {
+  createPostgresRefreshOperations,
+  refreshOperationsMigrationInventory,
+} from '@brawltome/refresh-operations/composition'
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
+import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
+import { rankingRetentionScheduleDefinition, readOperationsWorkerConfig } from '../src/operations-worker-config'
+import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const baseUrl = process.env.DATABASE_URL
 const hour = 60 * 60 * 1000
 const minute = 60 * 1000
 const v1Source = 'brawlhalla-v1-ranked-leaderboard'
 const runtimeRole = 'brawltome_runtime'
+const admission = {
+  totalConcurrency: 8,
+  interactiveReservation: 2,
+  classConcurrency: {
+    interactive: 4,
+    'primary-monitoring': 2,
+    leaderboard: 1,
+    'global-statistics': 1,
+    projection: 2,
+    maintenance: 1,
+  },
+  backgroundWeights: {
+    'primary-monitoring': 8,
+    leaderboard: 4,
+    'global-statistics': 2,
+    projection: 4,
+    maintenance: 1,
+  },
+} as const
 let admin: ReturnType<typeof postgres>
 let createdRuntimeRole = false
 const databases: string[] = []
@@ -432,6 +457,142 @@ describe('Ranking snapshot retention', () => {
       expect(partner.generationId).toBeDefined()
     } finally {
       await ranking.close()
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('runs the scheduled maintenance operation lease-fenced and records what it expired', async () => {
+    const { sql, url } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations(url)
+    const ranking = createPostgresRanking(url)
+    const sink = createMemorySink()
+    const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+    try {
+      const now = await databaseNow(sql)
+      const expiredGenerations = [
+        await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * hour) }),
+        await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 29 * hour) }),
+        await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 28 * hour) }),
+      ]
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * minute) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
+
+      const config = readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '2' }).rankingRetention
+      const schedule = await operations.reconcileRankingRetentionSchedule(rankingRetentionScheduleDefinition(config))
+      expect(schedule.outcome).toBe('created')
+      expect(
+        (await operations.reconcileRankingRetentionSchedule(rankingRetentionScheduleDefinition(config))).outcome,
+      ).toBe('already-exists')
+      const materialized = await operations.materializeDueSchedules()
+      expect(materialized.occurrences).toEqual([
+        expect.objectContaining({
+          scheduleId: schedule.scheduleId,
+          kind: 'ranking-retention',
+          workClass: 'maintenance',
+        }),
+      ])
+
+      // A stale lease cannot expire anything: the delete commits only with the lease row locked and current.
+      const lease = await operations.claim('retention-worker', 30_000, admission, 'ranking-retention')
+      if (!lease || lease.kind !== 'ranking-retention') throw new Error('Expected a ranking retention lease')
+      expect(lease.payload).toEqual({ retentionHours: 24, maxGenerations: 2 })
+      expect(
+        await ranking.expireGenerations(
+          { operationId: lease.operationId, leaseOwner: lease.leaseOwner, leaseToken: lease.leaseToken + 1 },
+          lease.payload,
+        ),
+      ).toEqual({ outcome: 'lease-lost' })
+      expect(await storedGenerationIds(sql)).toContain(expiredGenerations[0]?.generationId)
+      await sql`
+        UPDATE refresh_operations.operations SET lease_expires_at = clock_timestamp() - interval '1 second'
+        WHERE id = ${lease.operationId}
+      `
+
+      expect(
+        await runOneRefreshOperation(operations, 'retention-worker', {
+          leaseMs: 30_000,
+          retryDelayMs: 1_000,
+          admission,
+          rankingRetention: ranking,
+          telemetry,
+        }),
+      ).toBe(true)
+      const remaining = await storedGenerationIds(sql)
+      expect(remaining).not.toContain(expiredGenerations[0]?.generationId)
+      expect(remaining).not.toContain(expiredGenerations[1]?.generationId)
+      expect(remaining).toContain(expiredGenerations[2]?.generationId)
+      expect(await operations.operationStatus(lease.operationId)).toBe('succeeded')
+
+      await telemetry.flush(50)
+      const counter = telemetry.metrics
+        .snapshot()
+        .find(({ name }) => name === 'ranking_retention_deleted_generations_total')
+      expect(counter?.series).toEqual([expect.objectContaining({ labels: {}, value: 2 })])
+      expect(sink.records.find(({ event }) => event === 'ranking.retention.completed')?.attributes).toMatchObject({
+        operationId: lease.operationId,
+        deletedGenerations: 2,
+        retentionHours: 24,
+        maxGenerations: 2,
+        batchFull: true,
+      })
+    } finally {
+      await telemetry.shutdown(50)
+      await ranking.close()
+      await operations.close()
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('rejects ranking retention payloads outside the safe bounds before and inside the database', async () => {
+    const { sql, url } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations(url)
+    try {
+      const definition = rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)
+      await expect(
+        operations.reconcileRankingRetentionSchedule({
+          ...definition,
+          payload: { retentionHours: 1, maxGenerations: 100 },
+        }),
+      ).rejects.toThrow('ranking retention retentionHours must be an integer between 2 and 8760')
+      await expect(
+        operations.reconcileRankingRetentionSchedule({
+          ...definition,
+          payload: { retentionHours: 24, maxGenerations: 1001 },
+        }),
+      ).rejects.toThrow('ranking retention maxGenerations must be an integer between 1 and 1000')
+      for (const payload of [
+        { retentionHours: 1, maxGenerations: 100 },
+        { retentionHours: 24, maxGenerations: 0 },
+        { retentionHours: 24, maxGenerations: 100, extra: true },
+      ]) {
+        expect(
+          await errorMessage(
+            () => sql`
+              INSERT INTO refresh_operations.schedules
+                (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at, operation_key_prefix,
+                 payload, provenance, max_attempts)
+              VALUES
+                (${randomUUID()}, ${`retention-check:${randomUUID()}`}, 'ranking-retention', 'maintenance', 900000,
+                 now(), now(), 'retention-check', ${sql.json(payload)}, ${sql.json({ source: 'test' })}, 3)
+            `,
+          ),
+        ).toContain('schedules_payload_by_kind')
+        const operationId = randomUUID()
+        expect(
+          await errorMessage(
+            () => sql`
+              INSERT INTO refresh_operations.operations
+                (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
+                 max_attempts)
+              VALUES
+                (${operationId}, ${operationId}, 'ranking-retention', ${randomUUID()}, ${randomUUID()}, 'maintenance',
+                 ${sql.json(payload)}, ${sql.json({ source: 'test' })}, 3)
+            `,
+          ),
+        ).toContain('operations_payload_by_kind')
+      }
+    } finally {
+      await operations.close()
       await sql.end()
     }
   }, 30_000)

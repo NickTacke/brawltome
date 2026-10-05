@@ -20,6 +20,15 @@ export {
 } from './leaderboard'
 export { createPostgresRanking, type PostgresRanking } from './postgres'
 export {
+  maxRankingRetentionBatch,
+  maxRankingRetentionHours,
+  minRankingRetentionHours,
+  type RankingRetentionAuthorization,
+  type RankingRetentionInput,
+  type RankingRetentionResult,
+  type RankingRetentionStore,
+} from './retention'
+export {
   importLegacyRankings,
   type LegacyRankingImportOptions,
   type LegacyRankingImportResult,

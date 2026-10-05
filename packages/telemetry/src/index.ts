@@ -64,6 +64,7 @@ export type MetricName =
   | 'discord_interactions_total'
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
+  | 'ranking_retention_deleted_generations_total'
 
 export type MetricLabels = Readonly<Record<string, string>>
 
@@ -118,6 +119,7 @@ const operationKind = [
   'clan-refresh',
   'ranked-player-pulse',
   'player-name-verification',
+  'ranking-retention',
   'player-discovery-projection',
   'clan-discovery-projection',
   'discovery-reconciliation',
@@ -249,6 +251,11 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'gauge',
     help: 'Players whose newer leaderboard name awaits V0 verification',
     labels: { tier: ['rename_signal', 'demand', 'other'] },
+  },
+  ranking_retention_deleted_generations_total: {
+    kind: 'counter',
+    help: 'Expired brawlhalla-v1 leaderboard generations deleted by ranking retention',
+    labels: {},
   },
 }
 

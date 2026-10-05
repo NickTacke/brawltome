@@ -14,6 +14,12 @@ import type {
 } from './leaderboard'
 import { leaderboardModeFromOperationKind } from './leaderboard'
 import {
+  type RankingRetentionAuthorization,
+  type RankingRetentionInput,
+  type RankingRetentionResult,
+  validateRankingRetentionInput,
+} from './retention'
+import {
   type LeaderboardMode,
   type RegionalLeaderboardScope,
   leaderboardModes,
@@ -598,6 +604,33 @@ export function createPostgresRanking(connectionString: string) {
         }
         await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
         return 'published' as const
+      })
+    },
+
+    // The retention delete commits only while this worker still holds the maintenance lease: the lease row stays
+    // locked until commit, so an expired or replaced lease cannot delete a batch twice or after a takeover.
+    async expireGenerations(
+      authorization: RankingRetentionAuthorization,
+      input: RankingRetentionInput,
+    ): Promise<RankingRetentionResult> {
+      const { retentionHours, maxGenerations } = validateRankingRetentionInput(input)
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        const [lease] = await sql<{ active: boolean }[]>`
+          SELECT refresh_operations.lock_active_ranking_retention_lease(
+            ${authorization.operationId},
+            ${authorization.leaseOwner},
+            ${authorization.leaseToken}
+          ) AS active
+        `
+        if (lease?.active !== true) return { outcome: 'lease-lost' as const }
+        const [expired] = await sql<{ deleted: number }[]>`
+          SELECT rankings.expire_v1_generations(
+            clock_timestamp() - make_interval(hours => ${retentionHours}::integer),
+            ${maxGenerations}::integer
+          ) AS deleted
+        `
+        return { outcome: 'expired' as const, deletedGenerations: expired?.deleted ?? 0 }
       })
     },
 
