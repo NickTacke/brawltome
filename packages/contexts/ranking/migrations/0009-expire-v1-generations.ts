@@ -1,7 +1,9 @@
 const sql = `SET LOCAL lock_timeout = '5s';
 
 CREATE FUNCTION rankings.retention_delete_authorized(relation oid) RETURNS boolean
-LANGUAGE plpgsql STABLE AS $$
+LANGUAGE plpgsql STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
 BEGIN
   -- Only the definer-rights retention function sets this, and it runs as the table owner. Any other role that
   -- forges the transaction-local setting still fails the owner check.
@@ -53,11 +55,12 @@ DECLARE
   expired uuid[];
   deleted integer;
 BEGIN
-  IF cutoff IS NULL OR cutoff > clock_timestamp() - interval '2 hours' THEN
-    RAISE EXCEPTION 'ranking retention cutoff must be at least 2 hours in the past';
+  -- 24 hours is the decided retention policy; no configuration may expire anything younger.
+  IF cutoff IS NULL OR cutoff > clock_timestamp() - interval '24 hours' THEN
+    RAISE EXCEPTION 'ranking retention cutoff must be at least 24 hours in the past';
   END IF;
-  IF max_generations IS NULL OR max_generations < 1 OR max_generations > 1000 THEN
-    RAISE EXCEPTION 'ranking retention batch must be between 1 and 1000';
+  IF max_generations IS NULL OR max_generations < 1 OR max_generations > 200 THEN
+    RAISE EXCEPTION 'ranking retention batch must be between 1 and 200';
   END IF;
 
   -- schedule_window_at is the publication's identity in time: readers pick the latest generation and the Queue
@@ -127,6 +130,6 @@ $$;`
 export const expireV1RankingGenerations = {
   identity: 'rankings/0009',
   predecessor: 'rankings/0008',
-  checksum: '19981b7aae59e1f0df4c338d4b08f32efbc52637131739db5d071f7109da1a12',
+  checksum: '3f1b8dcb35f0f7834c5173aaf78221bee871d00747fdaae9e0f873146eba0d71',
   sql,
 } as const

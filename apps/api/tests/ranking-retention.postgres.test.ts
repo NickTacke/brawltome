@@ -279,15 +279,17 @@ describe('Ranking snapshot retention', () => {
     const { sql } = await migratedDatabase()
     try {
       const now = await databaseNow(sql)
-      expect(await errorMessage(() => expire(sql, new Date(now.getTime() - 1 * hour), 10))).toContain(
-        'ranking retention cutoff must be at least 2 hours in the past',
-      )
-      expect(await errorMessage(() => expire(sql, new Date(now.getTime() - 24 * hour), 0))).toContain(
-        'ranking retention batch must be between 1 and 1000',
-      )
-      expect(await errorMessage(() => expire(sql, new Date(now.getTime() - 24 * hour), 1001))).toContain(
-        'ranking retention batch must be between 1 and 1000',
-      )
+      for (const cutoff of [new Date(now.getTime() - 1 * hour), new Date(now.getTime() - 23 * hour)]) {
+        expect(await errorMessage(() => expire(sql, cutoff, 10))).toContain(
+          'ranking retention cutoff must be at least 24 hours in the past',
+        )
+      }
+      for (const batch of [0, 201, 1000]) {
+        expect(await errorMessage(() => expire(sql, new Date(now.getTime() - 24 * hour), batch))).toContain(
+          'ranking retention batch must be between 1 and 200',
+        )
+      }
+      expect(await expire(sql, new Date(now.getTime() - 24 * hour), 200)).toBe(0)
     } finally {
       await sql.end()
     }
@@ -363,6 +365,13 @@ describe('Ranking snapshot retention', () => {
       `
       expect(definition?.security_definer).toBe(true)
       expect(definition?.config).toContain('search_path=pg_catalog, pg_temp')
+      // The trigger helper runs inside the definer function's deletes, so it pins its own search_path too.
+      const [helper] = await sql<{ config: string[] | null }[]>`
+        SELECT proconfig AS config
+        FROM pg_proc
+        WHERE oid = 'rankings.retention_delete_authorized(oid)'::regprocedure
+      `
+      expect(helper?.config).toContain('search_path=pg_catalog, pg_temp')
       const [privileges] = await sql<{ runtime: boolean; public: boolean }[]>`
         SELECT
           has_function_privilege(${runtimeRole}, 'rankings.expire_v1_generations(timestamptz, integer)', 'EXECUTE')
@@ -551,19 +560,20 @@ describe('Ranking snapshot retention', () => {
       await expect(
         operations.reconcileRankingRetentionSchedule({
           ...definition,
-          payload: { retentionHours: 1, maxGenerations: 100 },
+          payload: { retentionHours: 23, maxGenerations: 20 },
         }),
-      ).rejects.toThrow('ranking retention retentionHours must be an integer between 2 and 8760')
+      ).rejects.toThrow('ranking retention retentionHours must be an integer between 24 and 8760')
       await expect(
         operations.reconcileRankingRetentionSchedule({
           ...definition,
-          payload: { retentionHours: 24, maxGenerations: 1001 },
+          payload: { retentionHours: 24, maxGenerations: 201 },
         }),
-      ).rejects.toThrow('ranking retention maxGenerations must be an integer between 1 and 1000')
+      ).rejects.toThrow('ranking retention maxGenerations must be an integer between 1 and 200')
       for (const payload of [
-        { retentionHours: 1, maxGenerations: 100 },
+        { retentionHours: 23, maxGenerations: 20 },
         { retentionHours: 24, maxGenerations: 0 },
-        { retentionHours: 24, maxGenerations: 100, extra: true },
+        { retentionHours: 24, maxGenerations: 201 },
+        { retentionHours: 24, maxGenerations: 20, extra: true },
       ]) {
         expect(
           await errorMessage(

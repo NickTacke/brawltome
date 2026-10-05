@@ -94,10 +94,10 @@ ALTER TABLE refresh_operations.operations
       AND work_class = 'maintenance'
       AND jsonb_typeof(payload->'retentionHours') = 'number'
       AND (payload->>'retentionHours') ~ '^[0-9]+$'
-      AND (payload->>'retentionHours')::numeric BETWEEN 2 AND 8760
+      AND (payload->>'retentionHours')::numeric BETWEEN 24 AND 8760
       AND jsonb_typeof(payload->'maxGenerations') = 'number'
       AND (payload->>'maxGenerations') ~ '^[0-9]+$'
-      AND (payload->>'maxGenerations')::numeric BETWEEN 1 AND 1000
+      AND (payload->>'maxGenerations')::numeric BETWEEN 1 AND 200
       AND payload = jsonb_build_object(
         'retentionHours', payload->'retentionHours',
         'maxGenerations', payload->'maxGenerations'
@@ -139,10 +139,10 @@ ALTER TABLE refresh_operations.schedules
       AND work_class = 'maintenance'
       AND jsonb_typeof(payload->'retentionHours') = 'number'
       AND (payload->>'retentionHours') ~ '^[0-9]+$'
-      AND (payload->>'retentionHours')::numeric BETWEEN 2 AND 8760
+      AND (payload->>'retentionHours')::numeric BETWEEN 24 AND 8760
       AND jsonb_typeof(payload->'maxGenerations') = 'number'
       AND (payload->>'maxGenerations') ~ '^[0-9]+$'
-      AND (payload->>'maxGenerations')::numeric BETWEEN 1 AND 1000
+      AND (payload->>'maxGenerations')::numeric BETWEEN 1 AND 200
       AND payload = jsonb_build_object(
         'retentionHours', payload->'retentionHours',
         'maxGenerations', payload->'maxGenerations'
@@ -174,6 +174,6 @@ $$;`
 export const addRankingRetention = {
   identity: 'refresh-operations/0018',
   predecessor: 'refresh-operations/0017',
-  checksum: '20b7dc7f885fcb83905d2510540baba81cfd5301d74470cbd47f21646847a010',
+  checksum: '7b5460d45762bd9f7af1e6b7acd7b304771ff77e15f1e2f8cec1d1fad5e4f333',
   sql,
 } as const

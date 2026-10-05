@@ -37,7 +37,7 @@ describe('operations worker configuration', () => {
       },
       rankingRetention: {
         retentionHours: 24,
-        maxGenerations: 100,
+        maxGenerations: 20,
         intervalMs: 15 * 60 * 1000,
         firstDueAt: '2020-01-01T00:05:00.000Z',
       },
@@ -158,11 +158,13 @@ describe('operations worker configuration', () => {
       intervalMs: 15 * 60 * 1000,
       firstDueAt: '2020-01-01T00:05:00.000Z',
     })
-    expect(readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '2' }).rankingRetention.retentionHours).toBe(2)
-    for (const value of ['1', '0', '-24', '24.5', 'NaN', '8761']) {
+    // 24 hours is the decided policy floor; the database function enforces the same floor.
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '24' }).rankingRetention.retentionHours).toBe(24)
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '200' }).rankingRetention.maxGenerations).toBe(200)
+    for (const value of ['23', '2', '1', '0', '-24', '24.5', 'NaN', '8761']) {
       expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: value })).toThrow('RANKING_RETENTION_HOURS')
     }
-    for (const value of ['0', '1001', '1.5']) {
+    for (const value of ['0', '201', '1001', '1.5']) {
       expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: value })).toThrow('RANKING_RETENTION_BATCH')
     }
   })
@@ -175,7 +177,7 @@ describe('operations worker configuration', () => {
       workClass: 'maintenance',
       intervalMs: 15 * 60 * 1000,
       firstDueAt: '2020-01-01T00:05:00.000Z',
-      payload: { retentionHours: 24, maxGenerations: 100 },
+      payload: { retentionHours: 24, maxGenerations: 20 },
       provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
     })
   })

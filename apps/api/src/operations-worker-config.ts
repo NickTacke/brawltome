@@ -290,7 +290,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       ),
       maxGenerations: boundedInteger(
         env.RANKING_RETENTION_BATCH,
-        100,
+        20,
         'RANKING_RETENTION_BATCH',
         1,
         maxRankingRetentionBatch,
