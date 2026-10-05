@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   leaderboardScheduleDefinitions,
+  rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
@@ -33,6 +34,13 @@ describe('operations worker configuration', () => {
         pageDepth: 20,
         intervalMs: 15 * 60 * 1000,
         firstDueAt: '2020-01-01T00:00:00.000Z',
+      },
+      rankingRetention: {
+        enabled: true,
+        retentionHours: 24,
+        maxGenerations: 20,
+        intervalMs: 15 * 60 * 1000,
+        firstDueAt: '2020-01-01T00:05:00.000Z',
       },
       admission: {
         totalConcurrency: 8,
@@ -140,6 +148,51 @@ describe('operations worker configuration', () => {
       '2020-01-01T00:07:30.000Z',
       '2020-01-01T00:11:15.000Z',
     ])
+  })
+
+  test('reads a bounded ranking retention window and batch', () => {
+    expect(
+      readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '48', RANKING_RETENTION_BATCH: '25' }).rankingRetention,
+    ).toEqual({
+      enabled: true,
+      retentionHours: 48,
+      maxGenerations: 25,
+      intervalMs: 15 * 60 * 1000,
+      firstDueAt: '2020-01-01T00:05:00.000Z',
+    })
+    // 24 hours is the decided policy floor; the database function enforces the same floor.
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '24' }).rankingRetention.retentionHours).toBe(24)
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '200' }).rankingRetention.maxGenerations).toBe(200)
+    for (const value of ['23', '2', '1', '0', '-24', '24.5', 'NaN', '8761']) {
+      expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: value })).toThrow('RANKING_RETENTION_HOURS')
+    }
+    for (const value of ['0', '201', '1001', '1.5']) {
+      expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: value })).toThrow('RANKING_RETENTION_BATCH')
+    }
+  })
+
+  test('reads the ranking retention kill switch strictly', () => {
+    expect(readOperationsWorkerConfig({}).rankingRetention.enabled).toBe(true)
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_ENABLED: 'true' }).rankingRetention.enabled).toBe(true)
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_ENABLED: 'false' }).rankingRetention.enabled).toBe(false)
+    for (const value of ['0', 'no', 'off', 'FALSE ', 'yes']) {
+      expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_ENABLED: value })).toThrow(
+        'RANKING_RETENTION_ENABLED',
+      )
+    }
+  })
+
+  test('defines one 15-minute ranking retention schedule in the maintenance work class', () => {
+    expect(rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)).toEqual({
+      kind: 'ranking-retention',
+      scheduleKey: 'rankings:retention:v1',
+      operationKeyPrefix: 'rankings:retention',
+      workClass: 'maintenance',
+      intervalMs: 15 * 60 * 1000,
+      firstDueAt: '2020-01-01T00:05:00.000Z',
+      payload: { retentionHours: 24, maxGenerations: 20 },
+      provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
+    })
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {

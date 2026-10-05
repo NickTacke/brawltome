@@ -5,6 +5,7 @@ import {
   type AdmissionConfig,
   type BackgroundWorkClass,
   type CreateLeaderboardSchedule,
+  type CreateRankingRetentionSchedule,
   type CreateSchedule,
   type CreateScheduleResult,
   type DeadLetterDisposition,
@@ -41,6 +42,7 @@ import {
   statisticsCollectionKinds,
   validateAdmissionConfig,
   validateLeaderboardOperationPayload,
+  validateRankingRetentionPayload,
   workClasses,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
@@ -69,7 +71,7 @@ type OperationRow = {
 type ScheduleRow = {
   id: string
   schedule_key: string
-  kind: 'proof' | 'interactive-player-refresh' | LeaderboardOperationKind
+  kind: 'proof' | 'interactive-player-refresh' | LeaderboardOperationKind | 'ranking-retention'
   work_class: WorkClass
   interval_ms: string | number
   first_due_at: Date
@@ -80,6 +82,7 @@ type ScheduleRow = {
   payload:
     | { value: string }
     | { pageDepth: number; intervalMs: number }
+    | { retentionHours: number; maxGenerations: number }
     | { assignmentId: string; brawlhallaId: number; staleSections: ['ranked', 'stats'] }
   provenance: { source: string; requestedBy?: string }
   max_attempts: number
@@ -200,6 +203,12 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+  if (row.kind === 'ranking-retention') {
+    if (row.work_class !== 'maintenance' || !('retentionHours' in row.payload) || !('maxGenerations' in row.payload)) {
+      throw new Error('invalid durable ranking retention operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
   if (isStatisticsCollectionKind(row.kind)) {
     if (row.work_class !== 'global-statistics' || !('cohortId' in row.payload) || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable statistics collection operation')
@@ -307,6 +316,10 @@ function validateSchedule(input: CreateSchedule): Date {
       throw new Error('leaderboard payload intervalMs must match the schedule intervalMs')
     }
   }
+  if (kind === 'ranking-retention') {
+    if (input.workClass !== 'maintenance') throw new Error('ranking retention requires maintenance work class')
+    validateRankingRetentionPayload(input.payload as { retentionHours: number; maxGenerations: number })
+  }
   return firstDueAt
 }
 
@@ -393,6 +406,61 @@ export function createPostgresRefreshOperations(
       : postgres(connectionString, { max: executionConcurrency + 2 })
   const renewalClient =
     executionConcurrency === undefined ? client : postgres(connectionString, { max: executionConcurrency })
+
+  // Fixed schedules are owned by worker configuration: a changed definition retires the old schedule and starts
+  // a new one under the same key instead of rewriting history.
+  async function reconcileFixedSchedule(
+    input: CreateLeaderboardSchedule | CreateRankingRetentionSchedule,
+    options: { reenable?: boolean } = {},
+  ): Promise<CreateScheduleResult> {
+    const firstDueAt = validateSchedule(input)
+    return client.begin(async (transaction) => {
+      const sql = transaction as unknown as typeof client
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
+      const [existing] = await sql<{ id: string; enabled: boolean; matches: boolean }[]>`
+        SELECT id, enabled,
+          kind = ${input.kind}
+          AND work_class = ${input.workClass}
+          AND interval_ms = ${input.intervalMs}
+          AND first_due_at = ${firstDueAt}
+          AND operation_key_prefix = ${input.operationKeyPrefix}
+          AND payload = ${sql.json(input.payload)}::jsonb
+          AND provenance = ${sql.json(input.provenance)}::jsonb
+          AND max_attempts = ${input.maxAttempts ?? 3} AS matches
+        FROM refresh_operations.schedules
+        WHERE schedule_key = ${input.scheduleKey}
+        FOR UPDATE
+      `
+      if (existing?.matches && options.reenable && !existing.enabled) {
+        await sql`
+          UPDATE refresh_operations.schedules SET enabled = true, updated_at = clock_timestamp()
+          WHERE id = ${existing.id}
+        `
+        return { outcome: 'reconciled' as const, scheduleId: existing.id }
+      }
+      if (existing?.matches) return { outcome: 'already-exists' as const, scheduleId: existing.id }
+      if (existing) {
+        await sql`
+          UPDATE refresh_operations.schedules
+          SET enabled = false,
+              schedule_key = schedule_key || ':retired:' || id::text,
+              updated_at = clock_timestamp()
+          WHERE id = ${existing.id}
+        `
+      }
+      const scheduleId = randomUUID()
+      await sql`
+        INSERT INTO refresh_operations.schedules
+          (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
+           operation_key_prefix, payload, provenance, max_attempts)
+        VALUES
+          (${scheduleId}, ${input.scheduleKey}, ${input.kind}, ${input.workClass}, ${input.intervalMs},
+           ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${sql.json(input.payload)},
+           ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
+      `
+      return { outcome: existing ? ('reconciled' as const) : ('created' as const), scheduleId }
+    })
+  }
 
   async function disposeDeadLetter(
     disposition: DeadLetterDisposition,
@@ -1141,45 +1209,32 @@ export function createPostgresRefreshOperations(
     },
 
     async reconcileLeaderboardSchedule(input: CreateLeaderboardSchedule): Promise<CreateScheduleResult> {
-      const firstDueAt = validateSchedule(input)
+      return reconcileFixedSchedule(input)
+    },
+
+    // Worker configuration owns this schedule's enabled flag: reconciling turns a paused schedule back on.
+    async reconcileRankingRetentionSchedule(input: CreateRankingRetentionSchedule): Promise<CreateScheduleResult> {
+      return reconcileFixedSchedule(input, { reenable: true })
+    },
+
+    async disableRankingRetentionSchedule(
+      scheduleKey: string,
+    ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
-        await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
-        const [existing] = await sql<{ id: string; matches: boolean }[]>`
-          SELECT id,
-            kind = ${input.kind}
-            AND work_class = 'leaderboard'
-            AND interval_ms = ${input.intervalMs}
-            AND first_due_at = ${firstDueAt}
-            AND operation_key_prefix = ${input.operationKeyPrefix}
-            AND payload = ${sql.json(input.payload)}::jsonb
-            AND provenance = ${sql.json(input.provenance)}::jsonb
-            AND max_attempts = ${input.maxAttempts ?? 3} AS matches
-          FROM refresh_operations.schedules
-          WHERE schedule_key = ${input.scheduleKey}
+        await sql`SELECT pg_advisory_xact_lock(hashtext(${scheduleKey}))`
+        const [existing] = await sql<{ id: string; enabled: boolean }[]>`
+          SELECT id, enabled FROM refresh_operations.schedules
+          WHERE schedule_key = ${scheduleKey} AND kind = 'ranking-retention'
           FOR UPDATE
         `
-        if (existing?.matches) return { outcome: 'already-exists' as const, scheduleId: existing.id }
-        if (existing) {
-          await sql`
-            UPDATE refresh_operations.schedules
-            SET enabled = false,
-                schedule_key = schedule_key || ':retired:' || id::text,
-                updated_at = clock_timestamp()
-            WHERE id = ${existing.id}
-          `
-        }
-        const scheduleId = randomUUID()
+        if (!existing) return { outcome: 'absent' as const }
+        if (!existing.enabled) return { outcome: 'already-disabled' as const }
         await sql`
-          INSERT INTO refresh_operations.schedules
-            (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
-             operation_key_prefix, payload, provenance, max_attempts)
-          VALUES
-            (${scheduleId}, ${input.scheduleKey}, ${input.kind}, 'leaderboard', ${input.intervalMs},
-             ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${sql.json(input.payload)},
-             ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
+          UPDATE refresh_operations.schedules SET enabled = false, updated_at = clock_timestamp()
+          WHERE id = ${existing.id}
         `
-        return { outcome: existing ? ('reconciled' as const) : ('created' as const), scheduleId }
+        return { outcome: 'disabled' as const }
       })
     },
 
@@ -2157,6 +2212,7 @@ export function createPostgresRefreshOperations(
         'discovery-reconciliation',
         'ranked-player-pulse',
         'player-name-verification',
+        'ranking-retention',
         ...leaderboardOperationKinds,
         ...statisticsCollectionKinds,
         'statistics-publication',
@@ -2188,7 +2244,12 @@ export function createPostgresRefreshOperations(
           }),
         ),
         scheduleLateness: (
-          ['proof', 'interactive-player-refresh', ...leaderboardOperationKinds] as OperationLease['kind'][]
+          [
+            'proof',
+            'interactive-player-refresh',
+            ...leaderboardOperationKinds,
+            'ranking-retention',
+          ] as OperationLease['kind'][]
         ).map((kind) => ({
           kind,
           latenessMs: latenessByKind.get(kind) ?? 0,

@@ -2,9 +2,13 @@ import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@braw
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
+  type CreateRankingRetentionSchedule,
   type WorkClass,
   maxLeaderboardIntervalMs,
+  maxRankingRetentionBatch,
+  maxRankingRetentionHours,
   minLeaderboardIntervalMs,
+  minRankingRetentionHours,
   validateAdmissionConfig,
 } from '@brawltome/refresh-operations'
 
@@ -22,6 +26,13 @@ function boundedInteger(value: string | undefined, fallback: number, name: strin
     throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
   }
   return parsed
+}
+
+function strictBoolean(value: string | undefined, fallback: boolean, name: string): boolean {
+  if (value === undefined || value === '') return fallback
+  if (value === 'true') return true
+  if (value === 'false') return false
+  throw new Error(`${name} must be true or false`)
 }
 
 export function readBrawlhallaV1RequestLimit(value: string | undefined): number {
@@ -97,6 +108,29 @@ export function leaderboardScheduleDefinitions(config: {
     payload: { pageDepth: config.pageDepth, intervalMs: config.intervalMs },
     provenance: { source: 'rankings-schedule', requestedBy: 'issue-202' },
   }))
+}
+
+export type RankingRetentionConfig = {
+  // false pauses retention: the schedule is disabled and leftover runs complete without deleting anything.
+  enabled: boolean
+  retentionHours: number
+  maxGenerations: number
+  intervalMs: number
+  firstDueAt: string
+}
+
+// One maintenance run every 15 minutes, offset from the leaderboard windows, expires at most one bounded batch.
+export function rankingRetentionScheduleDefinition(config: RankingRetentionConfig): CreateRankingRetentionSchedule {
+  return {
+    kind: 'ranking-retention',
+    scheduleKey: 'rankings:retention:v1',
+    operationKeyPrefix: 'rankings:retention',
+    workClass: 'maintenance',
+    intervalMs: config.intervalMs,
+    firstDueAt: config.firstDueAt,
+    payload: { retentionHours: config.retentionHours, maxGenerations: config.maxGenerations },
+    provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
+  }
 }
 
 export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
@@ -255,6 +289,25 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       ),
       firstDueAt: '2020-01-01T00:00:00.000Z',
     },
+    rankingRetention: {
+      enabled: strictBoolean(env.RANKING_RETENTION_ENABLED, true, 'RANKING_RETENTION_ENABLED'),
+      retentionHours: boundedInteger(
+        env.RANKING_RETENTION_HOURS,
+        24,
+        'RANKING_RETENTION_HOURS',
+        minRankingRetentionHours,
+        maxRankingRetentionHours,
+      ),
+      maxGenerations: boundedInteger(
+        env.RANKING_RETENTION_BATCH,
+        20,
+        'RANKING_RETENTION_BATCH',
+        1,
+        maxRankingRetentionBatch,
+      ),
+      intervalMs: 15 * 60 * 1000,
+      firstDueAt: '2020-01-01T00:05:00.000Z',
+    } satisfies RankingRetentionConfig,
     admission: validateAdmissionConfig(admission),
   }
 }
