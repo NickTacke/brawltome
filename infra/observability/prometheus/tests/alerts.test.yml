@@ -343,11 +343,15 @@ tests:
         alertname: HttpErrorRateHigh
         exp_alerts: []
 
-  - name: backup integrity failure and recovery
+  - name: backup integrity failure reports its reason and recovers
     interval: 1m
     input_series:
       - series: 'brawltome_postgres_backup_integrity_ok'
         values: "0 0 0 0 0 0 1 1"
+      - series: 'brawltome_postgres_backup_integrity_failure_reason{reason="stale"}'
+        values: "1 1 1 1 1 1 0 0"
+      - series: 'brawltome_postgres_backup_integrity_failure_reason{reason="config"}'
+        values: "0 0 0 0 0 0 0 0"
       - series: 'brawltome_postgres_backup_integrity_last_run_timestamp_seconds'
         values: "0 60 120 180 240 300 360 420"
       - series: 'brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds'
@@ -361,7 +365,7 @@ tests:
               service: brawltome
               signal: backup-integrity
             exp_annotations:
-              summary: "PostgreSQL backup integrity verification failed"
+              summary: "PostgreSQL backup integrity verification failed (reason: stale)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
       - eval_time: 6m
         alertname: PostgresBackupIntegrityFailed
@@ -383,7 +387,7 @@ tests:
               service: brawltome
               signal: backup-integrity
             exp_annotations:
-              summary: "PostgreSQL backup integrity verification failed"
+              summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
 
   - name: missing backup last-run metric fires
@@ -402,7 +406,7 @@ tests:
               service: brawltome
               signal: backup-integrity
             exp_annotations:
-              summary: "PostgreSQL backup integrity verification failed"
+              summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
 
   - name: missing latest verified backup metric fires
@@ -421,7 +425,7 @@ tests:
               service: brawltome
               signal: backup-integrity
             exp_annotations:
-              summary: "PostgreSQL backup integrity verification failed"
+              summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
 
   - name: stale backup verification fires
@@ -442,7 +446,7 @@ tests:
               service: brawltome
               signal: backup-integrity
             exp_annotations:
-              summary: "PostgreSQL backup integrity verification failed"
+              summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
 
   - name: telemetry storage firing and recovery
