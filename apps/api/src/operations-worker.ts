@@ -11,6 +11,7 @@ import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
   createPostgresPlayerDiscoverySource,
+  createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
   createSteamPlayerEvidenceResolver,
   refreshCanonicalCareerPlayer,
@@ -35,6 +36,11 @@ import {
   workerDatabaseUrl,
 } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
+import {
+  createPlayerNameVerificationExecutor,
+  createPlayerNameVerificationPlanner,
+  readPlayerNameVerificationConfig,
+} from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
 import {
   SourceAdmissionLimitedError,
@@ -103,6 +109,7 @@ const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
+const playerNameVerifications = createPostgresPlayerNameVerifications(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
@@ -136,6 +143,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'players-career-postgres', close: careerPlayers.close },
     { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
+    { name: 'players-name-verifications-postgres', close: playerNameVerifications.close },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
@@ -190,6 +198,33 @@ const discoveryReconciliationBackoff = createDiscoveryReconciliationBackoff({
   operationStatus: operations.operationStatus,
 })
 const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
+const nameVerificationConfig = readPlayerNameVerificationConfig(process.env)
+// The same rolling-window usage request admission enforces and source_quota_used reports.
+async function readV0SourceUsage() {
+  const usage = await requestAdmission.inspectCurrentUsage()
+  const v0 = usage.domains.find(({ domain }) => domain === 'brawlhalla-v0')
+  if (!v0) throw new Error('brawlhalla-v0 source admission is not configured')
+  return v0
+}
+const nameVerificationPlanner = createPlayerNameVerificationPlanner({
+  config: nameVerificationConfig,
+  readSourceUsage: readV0SourceUsage,
+  readDemandIds: accounts.demand.readPlayerIds,
+  verifications: playerNameVerifications,
+  operations,
+  telemetry,
+})
+const executePlayerNameVerification = createPlayerNameVerificationExecutor({
+  config: nameVerificationConfig,
+  readSourceUsage: readV0SourceUsage,
+  verifications: playerNameVerifications,
+  rankedPlayers,
+  rankedSource: (admitSourceCall) => {
+    const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
+    return { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) }
+  },
+  telemetry,
+})
 let leaderboardSchedulesReconciled = false
 try {
   await runOperationsWorker({
@@ -250,7 +285,9 @@ try {
           if (reconciliation.outcome === 'accepted') reconciledDiscovery++
         }
       }
-      const reconciledStatistics = await reconcileStatisticsCohort(statistics, operations, ranking.queries)
+      const reconciledStatistics =
+        (await reconcileStatisticsCohort(statistics, operations, ranking.queries)) +
+        (await nameVerificationPlanner.tick())
       if (leaderboardSchedulesReconciled) {
         return (
           interactiveAdmissions +
@@ -407,6 +444,7 @@ try {
             )
           }
         },
+        executePlayerNameVerification,
         executeRankedPulse: async (lease, admitSourceCall) => {
           const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
           await refreshRankedPlayerPulse(

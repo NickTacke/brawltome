@@ -21,6 +21,7 @@ type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
+type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
 type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
 type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
@@ -59,6 +60,10 @@ type RunOneRefreshOperationOptions = {
     caller: 'on-demand' | 'background',
   ): Promise<void>
   executeRankedPulse?(lease: RankedPulseLease, admitSourceCall: (domain: SourceDomain) => Promise<void>): Promise<void>
+  executePlayerNameVerification?(
+    lease: NameVerificationLease,
+    admitSourceCall: (domain: SourceDomain) => Promise<void>,
+  ): Promise<unknown>
   isPrimaryMonitoringTarget?(lease: Extract<PlayerLease, { workClass: 'primary-monitoring' }>): Promise<boolean>
   executeClanSection?(
     lease: ClanLease,
@@ -245,8 +250,8 @@ async function executeProof(
 
 function createSourceAdmission(
   options: RunOneRefreshOperationOptions,
-  lease: InteractiveLease | RankedPulseLease,
-  section: InteractiveSection | 'ranked-pulse',
+  lease: InteractiveLease | RankedPulseLease | NameVerificationLease,
+  section: InteractiveSection | 'ranked-pulse' | 'name-verification',
 ): (domain: SourceDomain) => Promise<void> {
   let sourceCall = 0
   return async (domain) => {
@@ -385,6 +390,29 @@ async function executeRankedPulse(
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
   await options.executeRankedPulse(lease, createSourceAdmission(options, lease, 'ranked-pulse'))
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
+// The executor spends at most one V0 call and records its own outcome, so only a lost lease fails the attempt.
+async function executeNameVerification(
+  operations: RefreshOperationWorker,
+  lease: NameVerificationLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.executePlayerNameVerification || !options.sourceAdmission) {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'name_verification_executor_unavailable',
+        message: 'Player name verification executor is not configured',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+  await options.executePlayerNameVerification(lease, createSourceAdmission(options, lease, 'name-verification'))
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -824,6 +852,8 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeDiscoveryReconciliation(operations, lease, options)
       } else if (lease.kind === 'ranked-player-pulse') {
         attemptOutcome = await executeRankedPulse(operations, lease, options)
+      } else if (lease.kind === 'player-name-verification') {
+        attemptOutcome = await executeNameVerification(operations, lease, options)
       } else if (lease.kind === 'statistics-publication') {
         attemptOutcome = await executeStatisticsPublication(operations, lease, options)
       } else if (lease.kind === 'statistics-legend-meta-publication') {
@@ -910,14 +940,16 @@ export async function runOneRefreshOperation(
                       ? 'discovery_reconciliation_failed'
                       : lease.kind === 'ranked-player-pulse'
                         ? 'ranked_player_pulse_failed'
-                        : lease.kind === 'statistics-ranked-collection' ||
-                            lease.kind === 'statistics-lifetime-collection'
-                          ? 'statistics_collection_failed'
-                          : lease.kind === 'statistics-publication'
-                            ? 'statistics_publication_failed'
-                            : lease.kind === 'statistics-legend-meta-publication'
-                              ? 'statistics_legend_meta_publication_failed'
-                              : 'leaderboard_collection_failed'
+                        : lease.kind === 'player-name-verification'
+                          ? 'player_name_verification_failed'
+                          : lease.kind === 'statistics-ranked-collection' ||
+                              lease.kind === 'statistics-lifetime-collection'
+                            ? 'statistics_collection_failed'
+                            : lease.kind === 'statistics-publication'
+                              ? 'statistics_publication_failed'
+                              : lease.kind === 'statistics-legend-meta-publication'
+                                ? 'statistics_legend_meta_publication_failed'
+                                : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'

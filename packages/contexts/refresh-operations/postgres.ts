@@ -194,6 +194,12 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+  if (row.kind === 'player-name-verification') {
+    if (row.work_class !== 'maintenance' || !('playerName' in row.payload) || !('brawlhallaId' in row.payload)) {
+      throw new Error('invalid durable player name verification operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
   if (isStatisticsCollectionKind(row.kind)) {
     if (row.work_class !== 'global-statistics' || !('cohortId' in row.payload) || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable statistics collection operation')
@@ -944,6 +950,16 @@ export function createPostgresRefreshOperations(
         if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
           throw new Error('ranked player pulse brawlhallaId must be a positive 32-bit integer')
         }
+      } else if (kind === 'player-name-verification') {
+        const { brawlhallaId, playerName } = input.payload as { brawlhallaId: number; playerName: string }
+        if (input.workClass !== 'maintenance')
+          throw new Error('player name verification requires maintenance work class')
+        if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
+          throw new Error('player name verification brawlhallaId must be a positive 32-bit integer')
+        }
+        if (typeof playerName !== 'string' || playerName.length === 0) {
+          throw new Error('player name verification playerName must be a non-empty string')
+        }
       }
       if (isDiscoveryProjectionKind(kind)) {
         const { batchSize } = input.payload as { batchSize: number }
@@ -1494,7 +1510,7 @@ export function createPostgresRefreshOperations(
                     FROM refresh_operations.operations operation
                     WHERE operation.id = ${candidate.id}
                   `
-                : candidate.kind === 'ranked-player-pulse'
+                : candidate.kind === 'ranked-player-pulse' || candidate.kind === 'player-name-verification'
                   ? await sql<{ complete: boolean }[]>`
                       SELECT EXISTS (
                         SELECT 1
@@ -2140,6 +2156,7 @@ export function createPostgresRefreshOperations(
         'clan-discovery-projection',
         'discovery-reconciliation',
         'ranked-player-pulse',
+        'player-name-verification',
         ...leaderboardOperationKinds,
         ...statisticsCollectionKinds,
         'statistics-publication',
