@@ -724,6 +724,75 @@ describe('Ranking snapshot retention', () => {
     }
   }, 30_000)
 
+  test('pauses the schedule and completes leftover runs as no-ops when retention is disabled', async () => {
+    const { sql, url } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations(url)
+    const sink = createMemorySink()
+    const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+    try {
+      const now = await databaseNow(sql)
+      const old = await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * hour) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * minute) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
+      const definition = rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)
+      expect(await operations.disableRankingRetentionSchedule(definition.scheduleKey)).toEqual({ outcome: 'absent' })
+      const schedule = await operations.reconcileRankingRetentionSchedule(definition)
+      expect((await operations.materializeDueSchedules()).occurrences).toHaveLength(1)
+
+      expect(await operations.disableRankingRetentionSchedule(definition.scheduleKey)).toEqual({
+        outcome: 'disabled',
+      })
+      expect(await operations.disableRankingRetentionSchedule(definition.scheduleKey)).toEqual({
+        outcome: 'already-disabled',
+      })
+      await sql`
+        UPDATE refresh_operations.schedules SET next_due_at = clock_timestamp() - interval '1 hour'
+        WHERE id = ${schedule.scheduleId}
+      `
+      expect((await operations.materializeDueSchedules()).occurrences).toEqual([])
+
+      // The run materialized before the switch flipped completes without touching the retention function.
+      const untouchable = {
+        expireGenerations: async () => {
+          throw new Error('ranking retention must not run while disabled')
+        },
+      }
+      expect(
+        await runOneRefreshOperation(operations, 'retention-worker', {
+          leaseMs: 30_000,
+          retryDelayMs: 1_000,
+          admission,
+          rankingRetention: untouchable,
+          rankingRetentionEnabled: false,
+          telemetry,
+        }),
+      ).toBe(true)
+      const [operation] = await sql<{ id: string; status: string }[]>`
+        SELECT id, status FROM refresh_operations.operations WHERE kind = 'ranking-retention'
+      `
+      expect(operation?.status).toBe('succeeded')
+      expect(await storedGenerationIds(sql)).toContain(old.generationId)
+      await telemetry.flush(50)
+      expect(sink.records.find(({ event }) => event === 'ranking.retention.skipped')?.attributes).toMatchObject({
+        operationId: operation?.id,
+        reason: 'disabled',
+        deletedGenerations: 0,
+      })
+
+      // Turning retention back on re-enables the same schedule.
+      expect((await operations.reconcileRankingRetentionSchedule(definition)).outcome).toBe('reconciled')
+      const [enabled] = await sql<{ enabled: boolean }[]>`
+        SELECT enabled FROM refresh_operations.schedules WHERE id = ${schedule.scheduleId}
+      `
+      expect(enabled?.enabled).toBe(true)
+      expect((await operations.materializeDueSchedules()).occurrences).toHaveLength(1)
+    } finally {
+      await telemetry.shutdown(50)
+      await operations.close()
+      await sql.end()
+    }
+  }, 30_000)
+
   test('completes a retention batch that outlives its lease together with the delete', async () => {
     const { sql, url } = await migratedDatabase()
     const operations = createPostgresRefreshOperations(url)

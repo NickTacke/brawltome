@@ -77,6 +77,8 @@ type RunOneRefreshOperationOptions = {
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
   rankingRetention?: RankingRetentionStore
+  // Explicitly false pauses retention: runs already materialized complete without deleting anything.
+  rankingRetentionEnabled?: boolean
   leaderboardPlayerNames?: {
     applyLeaderboardNames(input: {
       observedAt: Date
@@ -426,6 +428,20 @@ async function executeRankingRetention(
   lease: RankingRetentionLease,
   options: RunOneRefreshOperationOptions,
 ): Promise<AttemptExecutionOutcome> {
+  if (options.rankingRetentionEnabled === false) {
+    const transition = await operations.complete(lease)
+    if (transition === 'lease-lost') return 'lease_lost'
+    try {
+      options.telemetry?.logger.info('ranking.retention.skipped', {
+        operationId: lease.operationId,
+        reason: 'disabled',
+        deletedGenerations: 0,
+      })
+    } catch {
+      // Telemetry never decides the outcome of committed work.
+    }
+    return 'succeeded'
+  }
   if (!options.rankingRetention) {
     const transition = await operations.fail(
       lease,

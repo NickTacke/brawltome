@@ -36,6 +36,7 @@ describe('operations worker configuration', () => {
         firstDueAt: '2020-01-01T00:00:00.000Z',
       },
       rankingRetention: {
+        enabled: true,
         retentionHours: 24,
         maxGenerations: 20,
         intervalMs: 15 * 60 * 1000,
@@ -153,6 +154,7 @@ describe('operations worker configuration', () => {
     expect(
       readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '48', RANKING_RETENTION_BATCH: '25' }).rankingRetention,
     ).toEqual({
+      enabled: true,
       retentionHours: 48,
       maxGenerations: 25,
       intervalMs: 15 * 60 * 1000,
@@ -166,6 +168,17 @@ describe('operations worker configuration', () => {
     }
     for (const value of ['0', '201', '1001', '1.5']) {
       expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: value })).toThrow('RANKING_RETENTION_BATCH')
+    }
+  })
+
+  test('reads the ranking retention kill switch strictly', () => {
+    expect(readOperationsWorkerConfig({}).rankingRetention.enabled).toBe(true)
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_ENABLED: 'true' }).rankingRetention.enabled).toBe(true)
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_ENABLED: 'false' }).rankingRetention.enabled).toBe(false)
+    for (const value of ['0', 'no', 'off', 'FALSE ', 'yes']) {
+      expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_ENABLED: value })).toThrow(
+        'RANKING_RETENTION_ENABLED',
+      )
     }
   })
 

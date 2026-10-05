@@ -304,9 +304,12 @@ try {
         const schedule = await operations.reconcileLeaderboardSchedule(definition)
         if (schedule.outcome !== 'already-exists') reconciledSchedules++
       }
-      const retention = await operations.reconcileRankingRetentionSchedule(rankingRetentionSchedule)
-      if (retention.outcome !== 'already-exists') reconciledSchedules++
+      const retention = workerConfig.rankingRetention.enabled
+        ? await operations.reconcileRankingRetentionSchedule(rankingRetentionSchedule)
+        : await operations.disableRankingRetentionSchedule(rankingRetentionSchedule.scheduleKey)
+      if (retention.outcome !== 'already-exists' && retention.outcome !== 'already-disabled') reconciledSchedules++
       telemetry.logger.info('ranking.retention.scheduled', {
+        enabled: workerConfig.rankingRetention.enabled,
         outcome: retention.outcome,
         retentionHours: workerConfig.rankingRetention.retentionHours,
         maxGenerations: workerConfig.rankingRetention.maxGenerations,
@@ -350,6 +353,7 @@ try {
         },
         ranking,
         rankingRetention: ranking,
+        rankingRetentionEnabled: workerConfig.rankingRetention.enabled,
         leaderboardPlayerNames,
         leaderboardSource: {
           fetchPage: (input) =>

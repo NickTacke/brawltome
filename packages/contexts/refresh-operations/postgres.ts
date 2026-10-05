@@ -411,13 +411,14 @@ export function createPostgresRefreshOperations(
   // a new one under the same key instead of rewriting history.
   async function reconcileFixedSchedule(
     input: CreateLeaderboardSchedule | CreateRankingRetentionSchedule,
+    options: { reenable?: boolean } = {},
   ): Promise<CreateScheduleResult> {
     const firstDueAt = validateSchedule(input)
     return client.begin(async (transaction) => {
       const sql = transaction as unknown as typeof client
       await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
-      const [existing] = await sql<{ id: string; matches: boolean }[]>`
-        SELECT id,
+      const [existing] = await sql<{ id: string; enabled: boolean; matches: boolean }[]>`
+        SELECT id, enabled,
           kind = ${input.kind}
           AND work_class = ${input.workClass}
           AND interval_ms = ${input.intervalMs}
@@ -430,6 +431,13 @@ export function createPostgresRefreshOperations(
         WHERE schedule_key = ${input.scheduleKey}
         FOR UPDATE
       `
+      if (existing?.matches && options.reenable && !existing.enabled) {
+        await sql`
+          UPDATE refresh_operations.schedules SET enabled = true, updated_at = clock_timestamp()
+          WHERE id = ${existing.id}
+        `
+        return { outcome: 'reconciled' as const, scheduleId: existing.id }
+      }
       if (existing?.matches) return { outcome: 'already-exists' as const, scheduleId: existing.id }
       if (existing) {
         await sql`
@@ -1204,8 +1212,30 @@ export function createPostgresRefreshOperations(
       return reconcileFixedSchedule(input)
     },
 
+    // Worker configuration owns this schedule's enabled flag: reconciling turns a paused schedule back on.
     async reconcileRankingRetentionSchedule(input: CreateRankingRetentionSchedule): Promise<CreateScheduleResult> {
-      return reconcileFixedSchedule(input)
+      return reconcileFixedSchedule(input, { reenable: true })
+    },
+
+    async disableRankingRetentionSchedule(
+      scheduleKey: string,
+    ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
+      return client.begin(async (transaction) => {
+        const sql = transaction as unknown as typeof client
+        await sql`SELECT pg_advisory_xact_lock(hashtext(${scheduleKey}))`
+        const [existing] = await sql<{ id: string; enabled: boolean }[]>`
+          SELECT id, enabled FROM refresh_operations.schedules
+          WHERE schedule_key = ${scheduleKey} AND kind = 'ranking-retention'
+          FOR UPDATE
+        `
+        if (!existing) return { outcome: 'absent' as const }
+        if (!existing.enabled) return { outcome: 'already-disabled' as const }
+        await sql`
+          UPDATE refresh_operations.schedules SET enabled = false, updated_at = clock_timestamp()
+          WHERE id = ${existing.id}
+        `
+        return { outcome: 'disabled' as const }
+      })
     },
 
     async materializeDueSchedules(limit = 100): Promise<MaterializeSchedulesResult> {

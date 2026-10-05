@@ -28,6 +28,13 @@ function boundedInteger(value: string | undefined, fallback: number, name: strin
   return parsed
 }
 
+function strictBoolean(value: string | undefined, fallback: boolean, name: string): boolean {
+  if (value === undefined || value === '') return fallback
+  if (value === 'true') return true
+  if (value === 'false') return false
+  throw new Error(`${name} must be true or false`)
+}
+
 export function readBrawlhallaV1RequestLimit(value: string | undefined): number {
   return boundedInteger(value, 1_800, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 1_800)
 }
@@ -104,6 +111,8 @@ export function leaderboardScheduleDefinitions(config: {
 }
 
 export type RankingRetentionConfig = {
+  // false pauses retention: the schedule is disabled and leftover runs complete without deleting anything.
+  enabled: boolean
   retentionHours: number
   maxGenerations: number
   intervalMs: number
@@ -281,6 +290,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       firstDueAt: '2020-01-01T00:00:00.000Z',
     },
     rankingRetention: {
+      enabled: strictBoolean(env.RANKING_RETENTION_ENABLED, true, 'RANKING_RETENTION_ENABLED'),
       retentionHours: boundedInteger(
         env.RANKING_RETENTION_HOURS,
         24,
