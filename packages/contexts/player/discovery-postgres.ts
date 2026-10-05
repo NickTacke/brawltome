@@ -14,7 +14,7 @@ type FactRow = {
   rating: number | null
   ranked_main_legend_name_key: string | null
 }
-type CareerProfileRow = { brawlhalla_id: number; player_name: string | null }
+type CareerProfileRow = { brawlhalla_id: number; player_name: string | null; last_success_at: Date | null }
 type LegacyRow = {
   brawlhalla_id: number
   player_name: string
@@ -49,7 +49,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
   const careers = await sql<CareerProfileRow[]>`
-    SELECT brawlhalla_id, player_name
+    SELECT brawlhalla_id, player_name, last_success_at
     FROM players.career_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
@@ -109,8 +109,8 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
       const fallback = legacyById.get(brawlhallaId)
       const nameEvidence = selectCanonicalPlayerName({
         brawlhallaId,
-        ranked: canonical?.player_name ? { name: canonical.player_name } : null,
-        career: career?.player_name ? { name: career.player_name } : null,
+        ranked: canonical?.player_name ? { name: canonical.player_name, observedAt: canonical.last_success_at } : null,
+        career: career?.player_name ? { name: career.player_name, observedAt: career.last_success_at } : null,
       })
       const name = nameEvidence?.name ?? fallback?.player_name
       if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
