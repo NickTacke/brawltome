@@ -875,6 +875,65 @@ describe('Ranking snapshot retention', () => {
     }
   }, 30_000)
 
+  test('adds the widened kind and payload checks unvalidated and validates them without blocking writers', async () => {
+    const name = `bt_retention_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    await admin.unsafe(`CREATE DATABASE "${name}"`)
+    databases.push(name)
+    const url = new URL(baseUrl as string)
+    url.pathname = `/${name}`
+    const sql = postgres(url.toString(), { max: 2, onnotice: () => undefined })
+    try {
+      const validation = refreshOperationsMigrationInventory.at(-1)
+      const widening = refreshOperationsMigrationInventory.at(-2)
+      expect(widening?.identity).toBe('refresh-operations/0018')
+      expect(validation?.identity).toBe('refresh-operations/0019')
+      for (const migration of refreshOperationsMigrationInventory.slice(0, -1)) {
+        await sql.begin((transaction) => transaction.unsafe(migration.sql))
+      }
+      const constraints = async () =>
+        sql<{ name: string; validated: boolean }[]>`
+          SELECT conname AS name, convalidated AS validated
+          FROM pg_constraint
+          WHERE conname IN (
+            'operations_kind_check', 'operations_payload_by_kind', 'schedules_kind_check', 'schedules_payload_by_kind'
+          )
+          ORDER BY conname
+        `
+      expect((await constraints()).map(({ validated }) => validated)).toEqual([false, false, false, false])
+      // Unvalidated checks are still enforced for new rows.
+      expect(
+        await errorMessage(
+          () => sql`
+            INSERT INTO refresh_operations.schedules
+              (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at, operation_key_prefix,
+               payload, provenance, max_attempts)
+            VALUES
+              (${randomUUID()}, 'retention-check', 'ranking-retention', 'maintenance', 900000, now(), now(),
+               'retention-check', ${sql.json({ retentionHours: 1, maxGenerations: 20 })}, ${sql.json({ source: 'test' })}, 3)
+          `,
+        ),
+      ).toContain('schedules_payload_by_kind')
+
+      const locks = await sql.begin(async (transaction) => {
+        await transaction.unsafe(validation?.sql as string)
+        return transaction<{ relation: string; mode: string }[]>`
+          SELECT relation::regclass::text AS relation, mode
+          FROM pg_locks
+          WHERE pid = pg_backend_pid()
+            AND relation IN ('refresh_operations.operations'::regclass, 'refresh_operations.schedules'::regclass)
+          ORDER BY 1, 2
+        `
+      })
+      // VALIDATE CONSTRAINT scans under SHARE UPDATE EXCLUSIVE, which lets reads and writes continue.
+      expect(locks.map(({ mode }) => mode)).not.toContain('AccessExclusiveLock')
+      expect(locks).toContainEqual({ relation: 'refresh_operations.operations', mode: 'ShareUpdateExclusiveLock' })
+      expect(locks).toContainEqual({ relation: 'refresh_operations.schedules', mode: 'ShareUpdateExclusiveLock' })
+      expect((await constraints()).map(({ validated }) => validated)).toEqual([true, true, true, true])
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
   test('rejects ranking retention payloads outside the safe bounds before and inside the database', async () => {
     const { sql, url } = await migratedDatabase()
     const operations = createPostgresRefreshOperations(url)
