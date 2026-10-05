@@ -10,6 +10,9 @@ import {
   context as otelContext,
   trace as otelTrace,
 } from '@opentelemetry/api'
+import { analyticsDevices, analyticsFeatures, analyticsRoutes } from './analytics-labels'
+
+export { analyticsDevices, analyticsFeatures, analyticsRoutes } from './analytics-labels'
 import { otlpSignalUrl } from './otlp'
 import {
   type TelemetryContext,
@@ -64,6 +67,22 @@ export type MetricName =
   | 'discord_interactions_total'
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
+  | 'analytics_pageviews_total'
+  | 'analytics_searches_total'
+  | 'analytics_search_latency_ms'
+  | 'analytics_search_selections_total'
+  | 'analytics_profile_views_total'
+  | 'analytics_refresh_states_total'
+  | 'analytics_refresh_wait_ms'
+  | 'analytics_refresh_retries_total'
+  | 'analytics_refresh_abandoned_total'
+  | 'analytics_web_vitals'
+  | 'analytics_client_errors_total'
+  | 'analytics_trpc_failures_total'
+  | 'analytics_deadends_total'
+  | 'analytics_feature_use_total'
+  | 'analytics_events_dropped_total'
+  | 'search_requests_total'
 
 export type MetricLabels = Readonly<Record<string, string>>
 
@@ -155,6 +174,37 @@ const failureCategory = [
   'lease_lost',
   'unknown',
 ] as const
+
+const analyticsTrpcProcedure = [
+  'account.current',
+  'account.preferences',
+  'account.updatePreferences',
+  'account.primaryPlayer',
+  'account.playerShortcuts',
+  'account.pinnedPlayers',
+  'account.pinPlayer',
+  'account.unpinPlayer',
+  'account.reorderPinnedPlayers',
+  'status.discordReady',
+  'contractProof.get',
+  'player.referenceById',
+  'player.rankedById',
+  'player.careerById',
+  'player.requestRefresh',
+  'player.refresh',
+  'clan.byId',
+  'clan.membershipByPlayerId',
+  'clan.refresh',
+  'search.local',
+  'leaderboard.get',
+  'leaderboard.recentActivity',
+  'statistics.legendMeta',
+  'statistics.legendMetaHistory',
+  'statistics.careerWeaponUsage',
+  'statistics.careerWeaponUsageHistory',
+  'other',
+] as const
+const analyticsSource = ['bar', 'palette'] as const
 
 const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   http_server_requests_total: {
@@ -249,6 +299,96 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'gauge',
     help: 'Players whose newer leaderboard name awaits V0 verification',
     labels: { tier: ['rename_signal', 'demand', 'other'] },
+  },
+  analytics_pageviews_total: {
+    kind: 'counter',
+    help: 'Product analytics pageviews',
+    labels: { route: analyticsRoutes, device: analyticsDevices },
+  },
+  analytics_searches_total: {
+    kind: 'counter',
+    help: 'Product analytics searches',
+    labels: { outcome: ['hit', 'miss', 'error'], source: analyticsSource },
+  },
+  analytics_search_latency_ms: {
+    kind: 'histogram',
+    help: 'Search latency observed by the browser in milliseconds',
+    labels: { source: analyticsSource },
+    buckets: [50, 100, 250, 500, 1000, 2500, 5000],
+  },
+  analytics_search_selections_total: {
+    kind: 'counter',
+    help: 'Search result selections',
+    labels: { via_alias: ['true', 'false'], source: analyticsSource },
+  },
+  analytics_profile_views_total: {
+    kind: 'counter',
+    help: 'Profile views by data age',
+    labels: { data_age: ['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never'] },
+  },
+  analytics_refresh_states_total: {
+    kind: 'counter',
+    help: 'Refresh UI states shown to users',
+    labels: {
+      state: ['looking_up', 'busy', 'rate_limited', 'gave_up', 'timed_out', 'still_updating', 'verify_failed'],
+    },
+  },
+  analytics_refresh_wait_ms: {
+    kind: 'histogram',
+    help: 'Time users waited on a refresh in milliseconds',
+    labels: {},
+    buckets: [1000, 2000, 5000, 10000, 20000, 30000, 60000, 90000],
+  },
+  analytics_refresh_retries_total: { kind: 'counter', help: 'Refresh retries clicked by users', labels: {} },
+  analytics_refresh_abandoned_total: { kind: 'counter', help: 'Refreshes abandoned by users', labels: {} },
+  analytics_web_vitals: {
+    kind: 'histogram',
+    help: 'Web vitals (CLS unitless, others in milliseconds)',
+    labels: { name: ['LCP', 'INP', 'CLS', 'TTFB'], route: analyticsRoutes, device: analyticsDevices },
+    buckets: [0.01, 0.05, 0.1, 0.25, 100, 200, 500, 800, 1000, 1800, 2500, 4000, 8000],
+  },
+  analytics_client_errors_total: {
+    kind: 'counter',
+    help: 'Client-side errors',
+    labels: { kind: ['render', 'unhandled', 'rejection'], route: analyticsRoutes },
+  },
+  analytics_trpc_failures_total: {
+    kind: 'counter',
+    help: 'Browser-observed tRPC failures',
+    labels: {
+      procedure: analyticsTrpcProcedure,
+      code: [
+        'BAD_REQUEST',
+        'UNAUTHORIZED',
+        'FORBIDDEN',
+        'NOT_FOUND',
+        'TIMEOUT',
+        'TOO_MANY_REQUESTS',
+        'INTERNAL_SERVER_ERROR',
+        'NETWORK',
+        'OTHER',
+      ],
+    },
+  },
+  analytics_deadends_total: {
+    kind: 'counter',
+    help: 'User dead ends',
+    labels: { kind: ['404', 'player_not_found', 'clan_not_found', 'try_again_clicked'], route: analyticsRoutes },
+  },
+  analytics_feature_use_total: {
+    kind: 'counter',
+    help: 'Feature usage',
+    labels: { feature: analyticsFeatures },
+  },
+  analytics_events_dropped_total: {
+    kind: 'counter',
+    help: 'Analytics events dropped at ingestion',
+    labels: { reason: ['invalid', 'too_many', 'rate_limited', 'opted_out'] },
+  },
+  search_requests_total: {
+    kind: 'counter',
+    help: 'Search requests served',
+    labels: { outcome: ['hit', 'miss'] },
   },
 }
 
