@@ -12,16 +12,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui'
+import { getPlayerDataUpdatedAt } from '@/lib/player-refresh'
 import { fixEncoding } from '@/lib/utils'
 import Link from 'next/link'
 import { formatHours } from '../shared'
+import { DataAge } from './DataAge'
 import { StaleBadge } from './StaleBadge'
 
 interface ProfileHeaderPlayer {
   brawlhallaId: number
   name: string
-  currentSeason?: { snapshot: { oneVsOne: { region: string | null } } | null } | null
+  currentSeason?: {
+    snapshot: { oneVsOne: { region: string | null } } | null
+    lastSuccessAt?: Date | string | null
+  } | null
   career?: {
+    lastSuccessAt?: Date | string | null
     snapshot: {
       guild: { guildId: number; guildName: string } | null
       combat: { matchTime: number }
@@ -42,6 +48,7 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
   const playtime = career?.combat.matchTime
   const region = player.currentSeason?.snapshot?.oneVsOne.region
   const guild = career ? career.guild : player.clan
+  const updatedAt = getPlayerDataUpdatedAt(player)
 
   return (
     <div id="overview" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -123,7 +130,7 @@ export function ProfileHeader({ player, topLegend, aliases, refreshing }: Profil
         </div>
       </div>
 
-      {refreshing && <StaleBadge />}
+      {refreshing ? <StaleBadge /> : updatedAt && <DataAge updatedAt={updatedAt} />}
     </div>
   )
 }
