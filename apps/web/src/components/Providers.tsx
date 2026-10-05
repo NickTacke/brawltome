@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AccountTheme } from './AccountTheme'
+import { AnalyticsProvider } from './AnalyticsProvider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AccountTheme />
+      <AnalyticsProvider />
       {children}
     </QueryClientProvider>
   )
