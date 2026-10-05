@@ -1,4 +1,5 @@
-import { type Telemetry, analyticsTrpcCode, analyticsTrpcProcedure } from '@brawltome/telemetry'
+import type { Telemetry } from '@brawltome/telemetry'
+import { analyticsTrpcCode, analyticsTrpcProcedure } from '@brawltome/telemetry/analytics-labels'
 import type { createTabRateLimiter } from './rate-limit'
 import type { createDailySalt } from './salt'
 import { type AnalyticsEvent, analyticsBatchSchema, scrubError, scrubQuery } from './schema'
