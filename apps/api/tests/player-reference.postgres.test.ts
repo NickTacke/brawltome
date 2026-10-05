@@ -14,6 +14,7 @@ describe('stored Player Reference', () => {
     const invalidCareerId = storedId + 5
     const storedMetadataId = storedId + 6
     const renamedId = storedId + 7
+    const leaderboardOnlyId = storedId + 8
     const rollback = new Error('rollback Player Reference integration test')
 
     try {
@@ -87,6 +88,15 @@ describe('stored Player Reference', () => {
             }
             return null
           },
+          async (brawlhallaId) => {
+            if (brawlhallaId === renamedId) {
+              return { brawlhallaId, name: 'Older Leaderboard Name', observedAt: new Date('2026-10-01T00:00:00Z') }
+            }
+            if (brawlhallaId === leaderboardOnlyId) {
+              return { brawlhallaId, name: 'Leaderboard Climber', observedAt: new Date('2026-10-05T00:00:00Z') }
+            }
+            return null
+          },
         )
 
         expect(await queries.byId(storedId)).toEqual({
@@ -126,6 +136,11 @@ describe('stored Player Reference', () => {
           legacyRating: 1_800,
         })
         expect(await queries.byId(renamedId)).toEqual({ brawlhallaId: renamedId, name: 'Renamed Player', aliases: [] })
+        expect(await queries.byId(leaderboardOnlyId)).toEqual({
+          brawlhallaId: leaderboardOnlyId,
+          name: 'Leaderboard Climber',
+          aliases: [],
+        })
         expect(await queries.byId(placeholderId)).toBeNull()
         expect(await queries.byId(storedId - 1)).toBeNull()
         throw rollback
