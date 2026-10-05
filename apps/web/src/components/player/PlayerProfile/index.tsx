@@ -1,19 +1,21 @@
 'use client'
 
-import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
-import { RefreshTimeoutError, useStaleRefresh } from '@/hooks/useStaleRefresh'
+import { usePlayerRefresh } from '@/hooks/usePlayerRefresh'
+import { RefreshTimeoutError } from '@/hooks/useStaleRefresh'
 import { useAccount, usePrimaryPlayer } from '@/lib/auth'
 import { pinPlayer, unpinPlayer, usePinnedPlayers } from '@/lib/pinnedPlayers'
-import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '@/lib/player-refresh'
-import { getRefreshClientAction } from '@/lib/refresh-outcome'
+import { getPlayerDataUpdatedAt } from '@/lib/player-refresh'
+import { getPlayerRefreshNotice } from '@/lib/player-refresh-status'
+import { timeAgo } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
 import { PinnedPlayerButton } from './PinnedPlayerButton'
 import { PlayerProfileHierarchy } from './PlayerProfileHierarchy'
+import { RefreshStatusBanner } from './RefreshStatusBanner'
 import { hasPinnedPlayerLimitReached, shouldShowPinnedPlayerButton } from './player-profile-state'
 
 interface PlayerProfileProps {
@@ -35,61 +37,17 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const [optimisticPinned, setOptimisticPinned] = useState<boolean | null>(null)
   const [pinnedPlayerError, setPinnedPlayerError] = useState<string | null>(null)
   const [pinnedPlayerStatus, setPinnedPlayerStatus] = useState('')
-  const [turnstileError, setTurnstileError] = useState(false)
-  const [refreshAccepted, setRefreshAccepted] = useState(false)
-  const [verificationRequired, setVerificationRequired] = useState(false)
-  const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
-  const initialRefreshHandled = useRef(false)
-  const tokenHandled = useRef(false)
-
-  const pendingSections = useMemo(() => getPendingPlayerSections(initialData), [initialData])
-  const queryFn = () => getPlayerAction(Number(id))
-  const shouldStart = () => pendingSections.ranked || pendingSections.stats
-  const isDone = (_prev: PlayerData | null, next: PlayerData | null) =>
-    hasCompletedPlayerRefresh(initialData, next, pendingSections)
-
   const {
     data: player,
-    isRefreshing,
     error,
-  } = useStaleRefresh<PlayerData | null>({
-    initialData,
-    queryFn,
-    shouldStart,
-    isDone,
-    startSignal: refreshAccepted,
-  })
-
-  const applyRefreshOutcome = useCallback((refresh: Parameters<typeof getRefreshClientAction>[0]) => {
-    const action = getRefreshClientAction(refresh)
-    setRefreshAccepted(action.poll)
-    setVerificationRequired(action.verify)
-    setRefreshMessage(action.message)
-    return action
-  }, [])
-
-  useEffect(() => {
-    if (initialRefreshHandled.current || (!pendingSections.ranked && !pendingSections.stats)) return
-    initialRefreshHandled.current = true
-    void refreshPlayerAction(Number(id))
-      .then((result) => applyRefreshOutcome(result.refresh))
-      .catch(() => setRefreshAccepted(false))
-  }, [applyRefreshOutcome, id, pendingSections.ranked, pendingSections.stats])
-
-  const handleToken = useCallback(
-    async (token: string) => {
-      if (tokenHandled.current) return
-      tokenHandled.current = true
-      try {
-        const result = await refreshPlayerAction(Number(id), token)
-        const action = applyRefreshOutcome(result.refresh)
-        if (action.verify) tokenHandled.current = false
-      } catch {
-        tokenHandled.current = false
-      }
-    },
-    [applyRefreshOutcome, id],
-  )
+    status: refreshStatus,
+    isRefreshing,
+    careerRefreshing,
+    secondsLeft,
+    retry,
+    submitToken,
+    failVerification,
+  } = usePlayerRefresh({ id, initialData })
 
   const displayPlayer = player
   const brawlhallaId = Number(id)
@@ -138,23 +96,26 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
     }
   }
 
-  const turnstile = verificationRequired ? (
-    <TurnstileGate onToken={handleToken} onError={() => setTurnstileError(true)} />
-  ) : null
+  const turnstile =
+    refreshStatus.kind === 'verifying' ? <TurnstileGate onToken={submitToken} onError={failVerification} /> : null
 
   if (error && !(error instanceof RefreshTimeoutError)) {
     throw error
   }
 
+  const updatedAt = getPlayerDataUpdatedAt(displayPlayer)
+  const refreshNotice = getPlayerRefreshNotice(refreshStatus, {
+    hasData: Boolean(displayPlayer),
+    secondsLeft,
+    dataAge: updatedAt ? timeAgo(updatedAt) : null,
+  })
+
   if (!displayPlayer) {
-    const lookupFailed = turnstileError || error instanceof RefreshTimeoutError
-    return <LookupState errored={lookupFailed} message={refreshMessage} turnstile={turnstile} />
+    return <LookupState id={id} notice={refreshNotice} onAction={retry} turnstile={turnstile} />
   }
 
   return (
     <div className="space-y-8 pb-10">
-      {turnstile}
-      {refreshMessage && <output className="text-sm text-muted-foreground">{refreshMessage}</output>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NavBar showBack />
         {account && (
@@ -186,10 +147,12 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           {pinnedPlayerError}
         </p>
       )}
+      {turnstile}
+      {refreshNotice && <RefreshStatusBanner notice={refreshNotice} onAction={retry} />}
       <PlayerProfileHierarchy
         player={displayPlayer}
         refreshing={isRefreshing}
-        careerRefreshing={isRefreshing && pendingSections.stats}
+        careerRefreshing={isRefreshing && careerRefreshing}
       />
     </div>
   )
