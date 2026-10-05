@@ -104,3 +104,15 @@ describe('createAnalyticsClient', () => {
     expect(touched).toEqual([])
   })
 })
+
+describe('createAnalyticsClient timing', () => {
+  test('clamps t to 24 hours', () => {
+    let now = 0
+    const { env: e, sent } = env({ now: () => now })
+    const client = createAnalyticsClient(e as never)
+    now = 90_000_000
+    client.track({ name: 'feature.used', feature: 'pin' })
+    client.flush()
+    expect(JSON.parse(sent[0]).events[0].t).toBe(86_400_000)
+  })
+})

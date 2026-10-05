@@ -27,6 +27,10 @@ const sections = [
     title: 'Sign-in cookies',
     body: 'Signing in with Discord uses cookies for your login session. They are strictly necessary for signing in and are not used for analytics.',
   },
+  {
+    title: 'Preference cookies',
+    body: 'The /queue page remembers your Queue view preference in a functional cookie. It is not used for analytics.',
+  },
 ]
 
 export default function PrivacyPage() {

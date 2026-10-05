@@ -569,4 +569,11 @@ describe('telemetry foundation', () => {
     expect(snapshot.some((metric) => metric.name === 'analytics_web_vitals')).toBe(true)
     expect(telemetry.stats().seriesDropped).toBe(1)
   })
+
+  test('web vitals buckets resolve CLS above 0.25 and keep millisecond buckets', () => {
+    const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
+    telemetry.metrics.observe('analytics_web_vitals', 0.8, { name: 'CLS', route: '/', device: 'desktop' })
+    const output = renderPrometheus(telemetry.metrics.snapshot())
+    for (const le of ['0.5', '1', '2.5', '0.25', '100', '8000']) expect(output).toContain(`le="${le}"`)
+  })
 })

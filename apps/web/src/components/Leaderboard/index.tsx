@@ -36,6 +36,7 @@ import {
   type RegionId,
   buildLeaderboardQueryString,
   isTeamEntry,
+  leaderboardPageFeatures,
   parseLeaderboardSearchParams,
   preferencesForLeaderboardUpdate,
   snapshotNotice,
@@ -75,10 +76,7 @@ export function Leaderboard() {
       const merged: LeaderboardFilters = { ...filters, ...next }
       if (next.bracket !== undefined) track({ name: 'feature.used', feature: 'leaderboard.mode' })
       if (next.region !== undefined) track({ name: 'feature.used', feature: 'leaderboard.region' })
-      if (next.page !== undefined && next.bracket === undefined && next.region === undefined) {
-        track({ name: 'feature.used', feature: 'leaderboard.page_next' })
-        if (next.page >= 5) track({ name: 'feature.used', feature: 'leaderboard.page_depth_5plus' })
-      }
+      for (const feature of leaderboardPageFeatures(filters.page, next)) track({ name: 'feature.used', feature })
       const qs = buildLeaderboardQueryString(merged)
       router.push(`${pathname}?${qs}`, { scroll: false })
 

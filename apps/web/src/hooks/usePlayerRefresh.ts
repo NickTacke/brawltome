@@ -3,7 +3,13 @@
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import type { PlayerData } from '@/components/player/shared'
 import { flushAnalytics, track } from '@/lib/analytics/browser'
-import { clampRetries, clampWaitMs, refreshStateEvent } from '@/lib/analytics/refresh-events'
+import {
+  abandonRefresh,
+  clampRetries,
+  clampWaitMs,
+  createStateDeduper,
+  refreshStateEvent,
+} from '@/lib/analytics/refresh-events'
 import {
   PLAYER_REFRESH_MAX_WAIT_MS,
   type PendingPlayerSections,
@@ -45,6 +51,8 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const previousStatusRef = useRef(state.status)
   const cycleStartedAtRef = useRef(0)
   const retriesRef = useRef(0)
+  const abandonedRef = useRef(false)
+  const stateDeduperRef = useRef(createStateDeduper())
   stateRef.current = state
 
   const queryFn = useCallback(() => getPlayerAction(Number(id)), [id])
@@ -76,6 +84,8 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
     async (manual: boolean, token?: string) => {
       if (manual) {
         cycleStartedAtRef.current = performance.now()
+        abandonedRef.current = false
+        stateDeduperRef.current.reset()
         retriesRef.current = 0
       }
       dispatch({ type: 'request', manual, now: Date.now() })
@@ -97,13 +107,16 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
 
   useEffect(() => {
     mountedRef.current = true
+    const abandon = () =>
+      abandonRefresh(stateRef.current.status.kind, abandonedRef, performance.now() - cycleStartedAtRef.current, {
+        track,
+        flush: flushAnalytics,
+      })
+    window.addEventListener('pagehide', abandon)
     return () => {
       mountedRef.current = false
-      const { kind } = stateRef.current.status
-      if (kind === 'requesting' || kind === 'polling' || kind === 'waiting') {
-        track({ name: 'refresh.abandoned', waitedMs: clampWaitMs(performance.now() - cycleStartedAtRef.current) })
-        flushAnalytics()
-      }
+      window.removeEventListener('pagehide', abandon)
+      abandon()
     }
   }, [])
 
@@ -120,7 +133,7 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   useEffect(() => {
     const event = refreshStateEvent(previousStatusRef.current, status, Boolean(dataRef.current))
     previousStatusRef.current = status
-    if (event) track(event)
+    if (event && stateDeduperRef.current.allow(event)) track(event)
   }, [status])
 
   useEffect(() => {

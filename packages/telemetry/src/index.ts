@@ -328,7 +328,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'histogram',
     help: 'Web vitals (CLS unitless, others in milliseconds)',
     labels: { name: ['LCP', 'INP', 'CLS', 'TTFB'], route: analyticsRoutes, device: analyticsDevices },
-    buckets: [0.01, 0.05, 0.1, 0.25, 100, 200, 500, 800, 1000, 1800, 2500, 4000, 8000],
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 100, 200, 500, 800, 1000, 1800, 2500, 4000, 8000],
   },
   analytics_client_errors_total: {
     kind: 'counter',

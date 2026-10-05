@@ -47,3 +47,32 @@ export function refreshStateEvent(
       return null
   }
 }
+
+/** Lets each refresh.state value through at most once per refresh cycle. */
+export function createStateDeduper() {
+  const seen = new Set<string>()
+  return {
+    allow(event: AnalyticsEventInput): boolean {
+      if (event.name !== 'refresh.state') return true
+      if (seen.has(event.state)) return false
+      seen.add(event.state)
+      return true
+    },
+    reset: () => seen.clear(),
+  }
+}
+
+/** Tracks refresh.abandoned once per cycle while a refresh is still active. */
+export function abandonRefresh(
+  statusKind: string,
+  trackedRef: { current: boolean },
+  waitedMs: number,
+  deps: { track: (event: AnalyticsEventInput) => void; flush: () => void },
+): boolean {
+  if (trackedRef.current) return false
+  if (statusKind !== 'requesting' && statusKind !== 'polling' && statusKind !== 'waiting') return false
+  trackedRef.current = true
+  deps.track({ name: 'refresh.abandoned', waitedMs: clampWaitMs(waitedMs) })
+  deps.flush()
+  return true
+}

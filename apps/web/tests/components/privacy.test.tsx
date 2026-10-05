@@ -17,3 +17,11 @@ describe('privacy page', () => {
     expect(html).not.toContain('discarded and never stored')
   })
 })
+
+describe('privacy page cookies', () => {
+  test('discloses the functional queue preference cookie', () => {
+    const html = renderToStaticMarkup(<PrivacyPage />)
+    expect(html).toContain('/queue')
+    expect(html).toContain('functional cookie')
+  })
+})

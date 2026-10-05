@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
   buildLeaderboardQueryString,
+  leaderboardPageFeatures,
   parseLeaderboardSearchParams,
   playerHref,
   preferencesForLeaderboardUpdate,
@@ -101,5 +102,25 @@ describe('buildLeaderboardQueryString', () => {
     expect(params.get('page')).toBe('5')
     expect(params.get('sort')).toBeNull()
     expect(params.get('order')).toBeNull()
+  })
+})
+
+describe('leaderboardPageFeatures', () => {
+  it('reports page_next only when moving forward', () => {
+    expect(leaderboardPageFeatures(2, { page: 3 })).toEqual(['leaderboard.page_next'])
+    expect(leaderboardPageFeatures(3, { page: 2 })).toEqual([])
+    expect(leaderboardPageFeatures(3, { page: 3 })).toEqual([])
+  })
+
+  it('reports page_depth_5plus only when crossing from below 5 to 5 or more', () => {
+    expect(leaderboardPageFeatures(4, { page: 5 })).toEqual(['leaderboard.page_next', 'leaderboard.page_depth_5plus'])
+    expect(leaderboardPageFeatures(5, { page: 6 })).toEqual(['leaderboard.page_next'])
+    expect(leaderboardPageFeatures(8, { page: 2 })).toEqual([])
+  })
+
+  it('ignores bracket and region changes and updates without a page', () => {
+    expect(leaderboardPageFeatures(1, { bracket: '2v2', page: 1 })).toEqual([])
+    expect(leaderboardPageFeatures(1, { region: 'EU', page: 5 })).toEqual([])
+    expect(leaderboardPageFeatures(1, {})).toEqual([])
   })
 })
