@@ -4,6 +4,7 @@ import { addV2LegacyRankingImport } from './migrations/0003-add-v2-legacy-import
 import { addLeaderboardProviderCompatibility } from './migrations/0004-add-provider-compatibility'
 import { indexLegacyRankingEvaluation } from './migrations/0005-index-legacy-evaluation'
 import { supportCouchLeaderboardTeams } from './migrations/0006-support-couch-teams'
+import { dropRedundantSnapshotRowIndexes } from './migrations/0007-drop-redundant-snapshot-row-indexes'
 
 export {
   LeaderboardCandidateError,
@@ -34,4 +35,5 @@ export const rankingMigrationInventory = [
   addLeaderboardProviderCompatibility,
   indexLegacyRankingEvaluation,
   supportCouchLeaderboardTeams,
+  dropRedundantSnapshotRowIndexes,
 ] as const
