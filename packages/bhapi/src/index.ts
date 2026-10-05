@@ -1,5 +1,6 @@
 export {
   BhApiClient,
+  BhApiHttpError,
   RateLimitError,
   type BhApiClientOptions,
   type BhApiSourceDomain,
