@@ -254,10 +254,19 @@ export type MaterializeSchedulesResult = {
   }[]
 }
 
+// Admission rejections reuse the dead_letter status but are expected user-facing outcomes, not failed work.
+export const admissionRejectionCodes = ['actor_rate_limited', 'admission_reservation_expired'] as const
+export type DeadLetterReason = 'execution' | 'admission_rejected'
+
 export type OperationsTelemetrySnapshot = {
   observedAt: string
   oldestPending: { workClass: WorkClass; ageMs: number }[]
-  deadLetters: { workClass: WorkClass; kind: OperationLease['kind']; count: number }[]
+  deadLetters: {
+    workClass: WorkClass
+    kind: OperationLease['kind']
+    reason: DeadLetterReason
+    count: number
+  }[]
   scheduleLateness: { kind: OperationLease['kind']; latenessMs: number }[]
 }
 

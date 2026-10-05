@@ -13,7 +13,7 @@ const requiredAlerts = [
   'WorkerHeartbeatStale',
   'OldestRunnableJobDelayed',
   'ScheduleMaterializationLate',
-  'DeadLettersPresent',
+  'NewDeadLetters',
   'SourceQuotaNearLimit',
   'RefreshFailuresElevated',
   'HttpLatencyHigh',
