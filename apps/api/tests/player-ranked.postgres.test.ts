@@ -184,6 +184,7 @@ describe('Players-owned canonical ranked state', () => {
       expect(await players.referenceById(91913839)).toEqual({
         brawlhallaId: 91913839,
         name: 'Canonical Player',
+        observedAt: expect.any(Date),
         bestLegendNameKey: null,
         legacyRating: null,
       })
@@ -277,6 +278,7 @@ describe('Players-owned canonical ranked state', () => {
       expect(await players.referenceById(brawlhallaId)).toEqual({
         brawlhallaId,
         name: 'Canonical Player',
+        observedAt: expect.any(Date),
         bestLegendNameKey: null,
         legacyRating: null,
       })

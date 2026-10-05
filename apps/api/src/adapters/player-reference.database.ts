@@ -15,11 +15,13 @@ export function createDatabasePlayerReferenceQueries(
   db: Database,
   findRankedReference: FindCanonicalReference = async () => null,
   findCareerReference: FindCanonicalReference = async () => null,
+  findLeaderboardReference: FindCanonicalReference = async () => null,
 ) {
   return createPlayerReferenceQueries(async (brawlhallaId) => {
-    const [rankedReference, careerReference, aliasRows] = await Promise.all([
+    const [rankedReference, careerReference, leaderboardReference, aliasRows] = await Promise.all([
       findRankedReference(brawlhallaId),
       findCareerReference(brawlhallaId),
+      findLeaderboardReference(brawlhallaId),
       db.execute<{ display_alias: string }>(sql`
         SELECT display_alias
         FROM (
@@ -40,6 +42,7 @@ export function createDatabasePlayerReferenceQueries(
       brawlhallaId,
       ranked: rankedReference,
       career: careerReference,
+      leaderboard: leaderboardReference,
     })
     if (!nameEvidence) return null
     return {

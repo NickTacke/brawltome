@@ -1,4 +1,5 @@
 import {
+  type LeaderboardGenerationCandidate,
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
   LeaderboardSourceError,
@@ -68,6 +69,12 @@ type RunOneRefreshOperationOptions = {
   syncClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster', leaseExpiresAt: Date): Promise<void>
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
+  leaderboardPlayerNames?: {
+    applyLeaderboardNames(input: {
+      observedAt: Date
+      players: Array<{ brawlhallaId: number; name: string }>
+    }): Promise<{ changed: number }>
+  }
   leaderboardSource?: LeaderboardPageSource
   statistics?: Pick<
     StatisticsTracer,
@@ -637,6 +644,54 @@ function isTransientLeaderboardPageFailure(error: unknown): boolean {
   )
 }
 
+function leaderboardContestants(candidate: LeaderboardGenerationCandidate) {
+  const contestants = new Map<number, string>()
+  for (const rows of candidate.snapshots.values()) {
+    for (const { identity } of rows) {
+      const players = identity.type === 'fixed-two-vs-two-team' ? identity.players : [identity.player]
+      for (const player of players) {
+        if (!contestants.has(player.brawlhallaId)) contestants.set(player.brawlhallaId, player.name)
+      }
+    }
+  }
+  return [...contestants].map(([brawlhallaId, name]) => ({ brawlhallaId, name }))
+}
+
+// Leaderboards observe current names for thousands of players nobody visits; feed them to Players after the
+// generation is durable. Failure only delays names until the next scan, so it never fails the publication.
+function withLeaderboardNamePropagation(
+  ranking: RankingPublicationStore,
+  names: RunOneRefreshOperationOptions['leaderboardPlayerNames'],
+  telemetry: Telemetry | undefined,
+): RankingPublicationStore {
+  if (!names) return ranking
+  return {
+    recordCollectionFailure: (authorization, failure) => ranking.recordCollectionFailure(authorization, failure),
+    async publishGeneration(authorization, candidate) {
+      const result = await ranking.publishGeneration(authorization, candidate)
+      if (result !== 'published' && result !== 'already-published') return result
+      const log = (write: (active: Telemetry) => void) => {
+        if (!telemetry) return
+        try {
+          write(telemetry)
+        } catch {
+          return
+        }
+      }
+      try {
+        const { changed } = await names.applyLeaderboardNames({
+          observedAt: candidate.observedAt,
+          players: leaderboardContestants(candidate),
+        })
+        log((active) => active.logger.info('leaderboard.player_names.applied', { mode: candidate.mode, changed }))
+      } catch (error) {
+        log((active) => active.logger.error('leaderboard.player_names.failed', error, { mode: candidate.mode }))
+      }
+      return result
+    },
+  }
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -699,7 +754,7 @@ async function executeLeaderboard(
         }
       },
     },
-    publication: ranking,
+    publication: withLeaderboardNamePropagation(ranking, options.leaderboardPlayerNames, options.telemetry),
     pageDepth: lease.payload.pageDepth,
     intervalMs: lease.payload.intervalMs,
   })

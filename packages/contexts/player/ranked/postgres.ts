@@ -148,6 +148,7 @@ export function createPostgresRankedPlayers(
   referenceById(brawlhallaId: number): Promise<{
     brawlhallaId: number
     name: string
+    observedAt: Date | null
     bestLegendNameKey: string | null
     legacyRating: number | null
   } | null>
@@ -167,25 +168,26 @@ export function createPostgresRankedPlayers(
         {
           brawlhalla_id: number
           player_name: string
+          observed_at: Date | null
           legend_name_key: string | null
           best_legend: number | null
           legacy_rating: number | null
         }[]
       >`
-        SELECT identity.brawlhalla_id, identity.player_name, identity.legend_name_key,
+        SELECT identity.brawlhalla_id, identity.player_name, identity.observed_at, identity.legend_name_key,
                profile.best_legend, profile.rating AS legacy_rating
         FROM (
-          SELECT ranked.brawlhalla_id, ranked.player_name,
+          SELECT ranked.brawlhalla_id, ranked.player_name, ranked.last_success_at AS observed_at,
                  ranked.ranked_main_legend_name_key AS legend_name_key, 0 AS source_rank
           FROM players.ranked_profiles ranked
           WHERE ranked.brawlhalla_id = ${brawlhallaId}
             AND ranked.last_success_at IS NOT NULL AND ranked.player_name IS NOT NULL
           UNION ALL
-          SELECT legacy.brawlhalla_id, legacy.player_name, NULL::text, 1 AS source_rank
+          SELECT legacy.brawlhalla_id, legacy.player_name, NULL::timestamptz, NULL::text, 1 AS source_rank
           FROM players.legacy_discovery_profiles legacy
           WHERE legacy.brawlhalla_id = ${brawlhallaId}
           UNION ALL
-          SELECT profile.brawlhalla_id, profile.player_name, NULL::text, 2 AS source_rank
+          SELECT profile.brawlhalla_id, profile.player_name, NULL::timestamptz, NULL::text, 2 AS source_rank
           FROM players.legacy_profile_discovery profile
           WHERE profile.brawlhalla_id = ${brawlhallaId}
         ) identity
@@ -197,6 +199,7 @@ export function createPostgresRankedPlayers(
       return {
         brawlhallaId: profile.brawlhalla_id,
         name: profile.player_name,
+        observedAt: profile.observed_at,
         bestLegendNameKey:
           profile.legend_name_key ??
           (() => {
