@@ -14,7 +14,12 @@ type FactRow = {
   rating: number | null
   ranked_main_legend_name_key: string | null
 }
-type CareerProfileRow = { brawlhalla_id: number; player_name: string | null; last_success_at: Date | null }
+type CareerProfileRow = {
+  brawlhalla_id: number
+  player_name: string | null
+  last_success_at: Date | null
+  snapshot_source: string
+}
 type LegacyRow = {
   brawlhalla_id: number
   player_name: string
@@ -50,7 +55,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
   const careers = await sql<CareerProfileRow[]>`
-    SELECT brawlhalla_id, player_name, last_success_at
+    SELECT brawlhalla_id, player_name, last_success_at, snapshot_source
     FROM players.career_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
@@ -123,14 +128,20 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
       const nameEvidence = selectCanonicalPlayerName({
         brawlhallaId,
         ranked: canonical?.player_name ? { name: canonical.player_name, observedAt: canonical.last_success_at } : null,
-        career: career?.player_name ? { name: career.player_name, observedAt: career.last_success_at } : null,
+        career: career?.player_name
+          ? {
+              name: career.player_name,
+              observedAt: career.last_success_at,
+              legacy: career.snapshot_source === 'legacy-v2',
+            }
+          : null,
         leaderboard: leaderboard ? { name: leaderboard.player_name, observedAt: leaderboard.observed_at } : null,
       })
       const name = nameEvidence?.name ?? fallback?.player_name
       if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
       const canonicalAvailable = canonical?.last_success_at !== null && canonical?.last_success_at !== undefined
       const aliases = (aliasesById.get(brawlhallaId) ?? []).filter(
-        (alias) => decodeV0CareerNameCandidate(alias) !== name,
+        (alias) => alias !== name && decodeV0CareerNameCandidate(alias) !== name,
       )
       for (const candidate of [
         canonical?.player_name,

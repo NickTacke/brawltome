@@ -32,23 +32,53 @@ describe('selectCanonicalPlayerName', () => {
     ).toBe('Current')
   })
 
-  test('uses a newer leaderboard observation over profile snapshots', () => {
+  test('never lets a cached leaderboard name override a live v0 name', () => {
+    // V1 leaderboard names are heavily cached upstream; a newer scan can still carry a name the player dropped.
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
-        ranked: { name: 'Old Ranked', observedAt: older },
-        career: { name: 'Old Career', observedAt: older },
-        leaderboard: { name: 'Leaderboard', observedAt: newer },
+        ranked: { name: 'Current V0', observedAt: older },
+        career: null,
+        leaderboard: { name: 'Cached Old', observedAt: newer },
       })?.name,
-    ).toBe('Leaderboard')
+    ).toBe('Current V0')
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
         ranked: null,
-        career: { name: 'Fresh Career', observedAt: newer },
+        career: { name: 'Current V0', observedAt: older },
+        leaderboard: { name: 'Cached Old', observedAt: newer },
+      })?.name,
+    ).toBe('Current V0')
+  })
+
+  test('uses the leaderboard name when no live v0 name exists', () => {
+    expect(
+      selectCanonicalPlayerName({
+        brawlhallaId: 42,
+        ranked: null,
+        career: null,
+        leaderboard: { name: 'Climber', observedAt: newer },
+      })?.name,
+    ).toBe('Climber')
+    expect(
+      selectCanonicalPlayerName({
+        brawlhallaId: 42,
+        ranked: { name: 'Legacy Ranked Reference', observedAt: null },
+        career: { name: 'Imported V2', observedAt: older, legacy: true },
         leaderboard: { name: 'Leaderboard', observedAt: older },
       })?.name,
-    ).toBe('Fresh Career')
+    ).toBe('Leaderboard')
+  })
+
+  test('still prefers the newest legacy name when nothing live or observed on a leaderboard exists', () => {
+    expect(
+      selectCanonicalPlayerName({
+        brawlhallaId: 42,
+        ranked: { name: 'Legacy Ranked Reference', observedAt: null },
+        career: { name: 'Imported V2', observedAt: older, legacy: true },
+      })?.name,
+    ).toBe('Imported V2')
   })
 
   test('falls back to career-first priority when observation times are missing or equal', () => {

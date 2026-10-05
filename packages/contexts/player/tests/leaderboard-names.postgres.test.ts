@@ -76,6 +76,7 @@ describe('Player names observed on leaderboards', () => {
       await insertRanked(control, 101, 'Same Name', '2026-09-01T00:00:00Z')
       await insertCareer(control, 103, 'Müller', '2026-09-01T00:00:00Z')
       await insertCareer(control, 105, 'Fresh Career', '2026-10-05T12:00:00Z')
+      await insertRanked(control, 107, 'Current V0', '2026-09-01T00:00:00Z')
 
       const before = await outboxCount()
       const firstScan = new Date('2026-10-05T00:00:00Z')
@@ -90,6 +91,7 @@ describe('Player names observed on leaderboards', () => {
           { brawlhallaId: 104, name: 'Name unavailable #104' },
           { brawlhallaId: 105, name: 'Stale Board' },
           { brawlhallaId: 106, name: 'Player 106' },
+          { brawlhallaId: 107, name: 'Cached Old' },
         ],
       })
       expect(await outboxCount()).toBeGreaterThan(before)
@@ -102,6 +104,8 @@ describe('Player names observed on leaderboards', () => {
       expect(facts.has(104)).toBe(false)
       expect(facts.get(105)).toMatchObject({ name: 'Fresh Career' })
       expect(facts.has(106)).toBe(false)
+      // A cached V1 name never replaces a live V0 name, but stays searchable as an alias.
+      expect(facts.get(107)).toMatchObject({ name: 'Current V0', aliases: ['Cached Old'] })
       const recordedAliases = await control<{ brawlhalla_id: number; display_alias: string }[]>`
         SELECT brawlhalla_id, display_alias FROM players.discovery_aliases ORDER BY brawlhalla_id, display_alias
       `
@@ -138,16 +142,17 @@ describe('Player names observed on leaderboards', () => {
     }
   })
 
+  // Legacy-imported careers are not live V0 names, so a full board legitimately renames all of them.
   test('applies a full leaderboard generation of renamed players in bounded statements', async () => {
     const control = postgres(connectionString, { max: 1 })
     const names = createPostgresLeaderboardPlayerNames(connectionString)
     try {
       await control`
         INSERT INTO players.career_profiles
-          (brawlhalla_id, player_name, checked_at, last_success_at, xp, level, xp_percentage, games, wins, match_time,
-           damage_bomb, damage_mine, damage_spikeball, damage_sidekick, snowball_hits, bomb_kos, mine_kos,
-           spikeball_kos, sidekick_kos, snowball_kos)
-        SELECT identity, 'Career ' || identity, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z',
+          (brawlhalla_id, player_name, checked_at, last_success_at, snapshot_source, xp, level, xp_percentage, games,
+           wins, match_time, damage_bomb, damage_mine, damage_spikeball, damage_sidekick, snowball_hits, bomb_kos,
+           mine_kos, spikeball_kos, sidekick_kos, snowball_kos)
+        SELECT identity, 'Career ' || identity, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', 'legacy-v2',
                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         FROM generate_series(1000000, 1019999) AS identity
       `
