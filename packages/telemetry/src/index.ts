@@ -35,8 +35,10 @@ export type TelemetryRecord = Readonly<{
   traceId?: string
   spanId?: string
   attributes?: Readonly<Record<string, TelemetryScalar>>
-  error?: Readonly<{ name: string; message: string }>
+  error?: Readonly<TelemetryError>
 }>
+
+export type TelemetryError = { name: string; message: string; code?: string; status?: number }
 
 export interface TelemetrySink {
   export(records: readonly TelemetryRecord[], signal: AbortSignal): Promise<void>
@@ -277,7 +279,42 @@ const safeErrorNames = new Set([
   'RateLimitError',
 ])
 
-function normalizeError(error: unknown): { name: string; message: string } {
+const safeErrorCode = /^[a-z0-9_.-]{1,64}$/i
+
+function readProperty(value: object, key: string): unknown {
+  try {
+    return (value as Record<string, unknown>)[key]
+  } catch {
+    return undefined
+  }
+}
+
+// Messages may embed upstream URLs carrying credentials, so only allow-listed structured fields leave the process.
+function errorDiagnostics(error: Error): { code?: string; status?: number } {
+  let code: string | undefined
+  let status: number | undefined
+  let current: unknown = error
+  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth++) {
+    if (code === undefined) {
+      const candidate = readProperty(current, 'code')
+      if (typeof candidate === 'string' && safeErrorCode.test(candidate)) code = candidate
+    }
+    if (status === undefined) {
+      for (const key of ['status', 'statusCode']) {
+        const candidate = readProperty(current, key)
+        if (Number.isInteger(candidate) && (candidate as number) >= 100 && (candidate as number) <= 599) {
+          status = candidate as number
+          break
+        }
+      }
+    }
+    if (code !== undefined && status !== undefined) break
+    current = readProperty(current, 'cause')
+  }
+  return { ...(code !== undefined ? { code } : {}), ...(status !== undefined ? { status } : {}) }
+}
+
+function normalizeError(error: unknown): TelemetryError {
   if (!(error instanceof Error)) return { name: 'Error', message: 'Unknown failure' }
   const name = safeErrorNames.has(error.name) ? error.name : 'Error'
   const message =
@@ -288,7 +325,7 @@ function normalizeError(error: unknown): { name: string; message: string } {
         : name === 'RateLimitError'
           ? 'Operation rate limited'
           : 'Operation failed'
-  return { name, message }
+  return { name, message, ...errorDiagnostics(error) }
 }
 
 function labelsKey(labels: MetricLabels): string {
