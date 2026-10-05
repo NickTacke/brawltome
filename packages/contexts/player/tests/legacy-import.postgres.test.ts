@@ -112,6 +112,7 @@ describe('Players V2 import', () => {
           await expect(reducedRoute.referenceById(43)).resolves.toEqual({
             brawlhallaId: 43,
             name: 'Legacy Forty Three',
+            observedAt: null,
             bestLegendNameKey: 'bodvar',
             legacyRating: 1800,
           })
@@ -353,6 +354,7 @@ describe('Players V2 import', () => {
         await expect(migratedRoute.referenceById(42)).resolves.toEqual({
           brawlhallaId: 42,
           name: 'Legacy | Forty Two',
+          observedAt: null,
           bestLegendNameKey: null,
           legacyRating: null,
         })

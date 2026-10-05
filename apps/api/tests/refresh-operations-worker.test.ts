@@ -1269,4 +1269,113 @@ describe('refresh operations worker source retry', () => {
     for (let attempt = 1; attempt < 4; attempt++) total += retryDelayForAttempt(attempt, { ...policy, random: () => 1 })
     expect(total).toBeLessThan(30_000)
   })
+
+  test('propagates published leaderboard player names without failing the publication', async () => {
+    const leaseFor = (kind: 'leaderboard-1v1' | 'leaderboard-2v2'): OperationLease => ({
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: `leaderboard:names:${kind}`,
+      kind,
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    })
+    const run = async (
+      lease: OperationLease,
+      published: 'published' | 'already-published' | 'effect-conflict',
+      applyLeaderboardNames: (input: {
+        observedAt: Date
+        players: Array<{ brawlhallaId: number; name: string }>
+      }) => Promise<{ changed: number }>,
+    ) => {
+      let completed = false
+      const operations = {
+        claim: async () => lease,
+        renew: async () => 'renewed' as const,
+        complete: async () => {
+          completed = true
+          return 'transitioned' as const
+        },
+        fail: async () => 'transitioned' as const,
+      }
+      await runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        sourceAdmission: {
+          admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+          pauseSource: async () => {},
+        },
+        ranking: {
+          publishGeneration: async () => published,
+          recordCollectionFailure: async () => 'recorded' as const,
+        },
+        leaderboardPlayerNames: { applyLeaderboardNames },
+        leaderboardSource: {
+          fetchPage: async ({ region }) => {
+            const base = (regionIndex.get(region) ?? 0) * 10 + 1
+            return {
+              rankings: [
+                {
+                  identity:
+                    lease.kind === 'leaderboard-2v2'
+                      ? {
+                          type: 'fixed-two-vs-two-team',
+                          players: [
+                            { id: base, username: `First ${base}` },
+                            { id: base + 1, username: `Second ${base + 1}` },
+                          ],
+                        }
+                      : { type: 'one-vs-one-player', player: { id: base, username: `Solo ${base}` } },
+                  rating: 2_100,
+                  best_rating: 2_100,
+                  rank: 1,
+                  wins: 1,
+                  losses: 0,
+                  region,
+                  tier: 'Diamond',
+                },
+              ],
+              totalPages: 1,
+            }
+          },
+        },
+      })
+      return completed
+    }
+    const regionIndex = new Map(['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'].map((r, i) => [r, i]))
+
+    const applied: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; name: string }> }> = []
+    const record = async (input: { observedAt: Date; players: Array<{ brawlhallaId: number; name: string }> }) => {
+      applied.push(input)
+      return { changed: input.players.length }
+    }
+
+    expect(await run(leaseFor('leaderboard-2v2'), 'published', record)).toBe(true)
+    expect(applied).toHaveLength(1)
+    expect(applied[0].observedAt).toBeInstanceOf(Date)
+    expect(applied[0].players).toHaveLength(18)
+    expect(applied[0].players).toContainEqual({ brawlhallaId: 1, name: 'First 1' })
+    expect(applied[0].players).toContainEqual({ brawlhallaId: 2, name: 'Second 2' })
+
+    expect(await run(leaseFor('leaderboard-1v1'), 'already-published', record)).toBe(true)
+    expect(applied).toHaveLength(2)
+    expect(applied[1].players).toHaveLength(9)
+    expect(applied[1].players).toContainEqual({ brawlhallaId: 81, name: 'Solo 81' })
+
+    await run(leaseFor('leaderboard-1v1'), 'effect-conflict', record)
+    expect(applied).toHaveLength(2)
+
+    expect(
+      await run(leaseFor('leaderboard-1v1'), 'published', async () => {
+        throw new Error('players database unavailable')
+      }),
+    ).toBe(true)
+  })
 })
