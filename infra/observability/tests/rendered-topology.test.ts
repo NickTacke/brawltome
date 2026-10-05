@@ -171,6 +171,28 @@ describe('rendered Dokploy observability topology', () => {
     expect(verifyRenderedTopology(validTopology())).toEqual([])
   })
 
+  test("accepts Dokploy's injected project default network on grafana only", () => {
+    const topology = validTopology() as TopologyFixture & { networks: Record<string, unknown> }
+    topology.networks.default = { name: 'brawltome-observability-bc1eng_default' }
+    topology.services.grafana.networks.default = null
+    expect(verifyRenderedTopology(topology)).toEqual([])
+  })
+
+  test('rejects the default network on other services or as an external network', () => {
+    const onPrometheus = validTopology() as TopologyFixture & { networks: Record<string, unknown> }
+    onPrometheus.networks.default = { name: 'brawltome-observability-bc1eng_default' }
+    onPrometheus.services.grafana.networks.default = null
+    onPrometheus.services.prometheus.networks.default = null
+    expect(verifyRenderedTopology(onPrometheus)).toEqual(
+      expect.arrayContaining(['prometheus networks must be exactly: application, observability']),
+    )
+
+    const external = validTopology() as TopologyFixture & { networks: Record<string, unknown> }
+    external.networks.default = { external: true, name: 'brawltome' }
+    external.services.grafana.networks.default = null
+    expect(verifyRenderedTopology(external)).not.toEqual([])
+  })
+
   test('rejects exposure and network drift introduced after source rendering', () => {
     const topology = validTopology()
     topology.services.prometheus.networks.public = null
