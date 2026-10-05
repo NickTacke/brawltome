@@ -1,5 +1,7 @@
 'use client'
 
+import { track } from '@/lib/analytics/browser'
+import { scrubError } from '@/lib/analytics/labels'
 import { useEffect } from 'react'
 
 interface ErrorProps {
@@ -10,6 +12,7 @@ interface ErrorProps {
 export default function ClanError({ error, reset }: ErrorProps) {
   useEffect(() => {
     console.error('[clan route]', error)
+    track({ name: 'error.client', kind: 'render', message: scrubError(String(error.message)) })
   }, [error])
 
   return (

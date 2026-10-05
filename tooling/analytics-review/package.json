@@ -1,0 +1,16 @@
+{
+  "name": "@brawltome/analytics-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "review": "bun src/cli.ts",
+    "test": "bun test tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "typescript": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

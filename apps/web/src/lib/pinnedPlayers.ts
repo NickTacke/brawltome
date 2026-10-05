@@ -2,6 +2,7 @@
 
 import type { PinnedPlayersContract } from '@brawltome/contracts'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
+import { track } from './analytics/browser'
 import { parsePinnedPlayersResponse, pinnedPlayersKey, updatePinnedPlayersCache } from './pinnedPlayersCache'
 import { invalidatePlayerShortcuts } from './playerShortcuts'
 import { trpc } from './trpc'
@@ -60,7 +61,12 @@ export function pinPlayer(
   accountId: string,
   brawlhallaId: number,
 ): Promise<PinnedPlayersContract> {
-  return updatePinnedPlayers(queryClient, accountId, () => trpc.account.pinPlayer.mutate({ brawlhallaId }))
+  return updatePinnedPlayers(queryClient, accountId, () => trpc.account.pinPlayer.mutate({ brawlhallaId })).then(
+    (pinned) => {
+      track({ name: 'feature.used', feature: 'pin' })
+      return pinned
+    },
+  )
 }
 
 export function unpinPlayer(
@@ -68,7 +74,12 @@ export function unpinPlayer(
   accountId: string,
   brawlhallaId: number,
 ): Promise<PinnedPlayersContract> {
-  return updatePinnedPlayers(queryClient, accountId, () => trpc.account.unpinPlayer.mutate({ brawlhallaId }))
+  return updatePinnedPlayers(queryClient, accountId, () => trpc.account.unpinPlayer.mutate({ brawlhallaId })).then(
+    (pinned) => {
+      track({ name: 'feature.used', feature: 'unpin' })
+      return pinned
+    },
+  )
 }
 
 export function reorderPinnedPlayers(

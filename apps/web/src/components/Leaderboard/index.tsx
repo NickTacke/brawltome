@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui'
+import { track } from '@/lib/analytics/browser'
 import { saveAccountPreferences, useAccount, useAccountPreferences } from '@/lib/auth'
 import { trpc } from '@/lib/trpc'
 import { useQueryClient } from '@tanstack/react-query'
@@ -35,6 +36,7 @@ import {
   type RegionId,
   buildLeaderboardQueryString,
   isTeamEntry,
+  leaderboardPageFeatures,
   parseLeaderboardSearchParams,
   preferencesForLeaderboardUpdate,
   snapshotNotice,
@@ -72,6 +74,9 @@ export function Leaderboard() {
   const updateFilters = useCallback(
     (next: Partial<LeaderboardFilters>) => {
       const merged: LeaderboardFilters = { ...filters, ...next }
+      if (next.bracket !== undefined) track({ name: 'feature.used', feature: 'leaderboard.mode' })
+      if (next.region !== undefined) track({ name: 'feature.used', feature: 'leaderboard.region' })
+      for (const feature of leaderboardPageFeatures(filters.page, next)) track({ name: 'feature.used', feature })
       const qs = buildLeaderboardQueryString(merged)
       router.push(`${pathname}?${qs}`, { scroll: false })
 

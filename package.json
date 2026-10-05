@@ -16,6 +16,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --fix .",
     "format": "biome format --write .",
+    "analytics:review": "bun run --filter @brawltome/analytics-review review --",
     "architecture:check": "bun run --filter @brawltome/architecture check",
     "infra:app:check": "DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres TURNSTILE_SITE_KEY=test-site-key docker compose -f infra/app/compose.yml config --format json | bun infra/app/verify-rendered-topology.ts",
     "infra:app:storage-preflight": "sh infra/app/storage/verify-postgres-mount.sh",
