@@ -31,6 +31,7 @@ import {
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
+  workerDatabaseUrl,
 } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
 import { createPostgresReadiness } from './postgres-readiness'
@@ -45,8 +46,8 @@ import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
 
-const connectionString = process.env.DATABASE_URL
-if (!connectionString) throw new Error('DATABASE_URL is required')
+const configuredConnectionString = process.env.DATABASE_URL
+if (!configuredConnectionString) throw new Error('DATABASE_URL is required')
 const configuredApiKey = process.env.BRAWLHALLA_API_KEY
 if (!configuredApiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 const apiKey: string = configuredApiKey
@@ -64,6 +65,7 @@ const legendReferences = createLegendReferenceIndex(
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
+const connectionString = workerDatabaseUrl(configuredConnectionString, workerConfig.database)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
@@ -193,6 +195,13 @@ try {
     workerId,
     config: workerConfig,
     telemetry,
+    onStall: (stalledForMs) => {
+      telemetry.logger.error('operations_worker.stalled', new Error('Operations worker loops stopped progressing'), {
+        stalledForMs,
+      })
+      process.exitCode = 1
+      requestShutdown()
+    },
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
       const primaryMonitoring = await operations.reconcilePrimaryMonitoring(
