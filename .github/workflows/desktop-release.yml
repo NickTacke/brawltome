@@ -50,7 +50,7 @@ jobs:
           no-cache: true
 
       - name: Install JavaScript dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
 
       - name: Run release Rust and TypeScript gates
         shell: pwsh
