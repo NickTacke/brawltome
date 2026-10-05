@@ -12,6 +12,7 @@ import { reconcileCareerNameMojibake } from './migrations/0011-reconcile-career-
 import { addHistoricalCareerSource } from './migrations/0012-add-historical-career-source'
 import { addCompactReferenceImport } from './migrations/0013-add-compact-reference-import'
 import { addLeaderboardNameObservations } from './migrations/0014-add-leaderboard-name-observations'
+import { addNameVerifications } from './migrations/0015-add-name-verifications'
 
 export {
   createPostgresCareerPlayers,
@@ -36,6 +37,15 @@ export {
   type LeaderboardPlayerName,
   type PostgresLeaderboardPlayerNames,
 } from './leaderboard-names'
+export {
+  createPostgresPlayerNameVerifications,
+  type NameVerificationBacklog,
+  type NameVerificationCandidate,
+  type NameVerificationOutcome,
+  type NameVerificationPolicy,
+  type NameVerificationPreparation,
+  type PostgresPlayerNameVerifications,
+} from './name-verification'
 export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
 export {
   createPostgresPlayerDiscoverySource,
@@ -79,4 +89,5 @@ export const playerMigrationInventory = [
   addHistoricalCareerSource,
   addCompactReferenceImport,
   addLeaderboardNameObservations,
+  addNameVerifications,
 ] as const
