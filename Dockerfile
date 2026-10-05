@@ -41,7 +41,8 @@ COPY packages/game-data/package.json packages/game-data/
 COPY packages/contracts/package.json packages/contracts/
 COPY tooling/architecture/package.json tooling/architecture/
 COPY tooling/database-migrations/package.json tooling/database-migrations/
-RUN bun install --frozen-lockfile
+# bun 1.3.14 intermittently fails extracting large tarballs (e.g. next) at the default network concurrency.
+RUN bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
 
 FROM base AS build
 COPY --from=install /app/node_modules node_modules
