@@ -6,6 +6,7 @@ import { indexLegacyRankingEvaluation } from './migrations/0005-index-legacy-eva
 import { supportCouchLeaderboardTeams } from './migrations/0006-support-couch-teams'
 import { allowEmptyRegionalLeaderboardSnapshots } from './migrations/0007-allow-empty-regional-snapshots'
 import { dropRedundantSnapshotRowIndexes } from './migrations/0008-drop-redundant-snapshot-row-indexes'
+import { expireV1RankingGenerations } from './migrations/0009-expire-v1-generations'
 
 export {
   LeaderboardCandidateError,
@@ -18,6 +19,15 @@ export {
   type RankingPublicationStore,
 } from './leaderboard'
 export { createPostgresRanking, type PostgresRanking } from './postgres'
+export {
+  maxRankingRetentionBatch,
+  maxRankingRetentionHours,
+  minRankingRetentionHours,
+  type RankingRetentionAuthorization,
+  type RankingRetentionInput,
+  type RankingRetentionResult,
+  type RankingRetentionStore,
+} from './retention'
 export {
   importLegacyRankings,
   type LegacyRankingImportOptions,
@@ -38,4 +48,5 @@ export const rankingMigrationInventory = [
   supportCouchLeaderboardTeams,
   allowEmptyRegionalLeaderboardSnapshots,
   dropRedundantSnapshotRowIndexes,
+  expireV1RankingGenerations,
 ] as const
