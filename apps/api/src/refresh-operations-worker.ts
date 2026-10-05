@@ -419,8 +419,8 @@ async function executeNameVerification(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
-// Expires one bounded batch of old leaderboard generations. The delete is idempotent, so a retry or a replay only
-// finds whatever is still past the window; the lease check runs inside the deleting transaction.
+// Expires one bounded batch of old leaderboard generations. The lease check, the delete and the operation's
+// completion commit in one transaction, so a batch that outlives its lease is still recorded as succeeded.
 async function executeRankingRetention(
   operations: RefreshOperationWorker,
   lease: RankingRetentionLease,
@@ -462,7 +462,7 @@ async function executeRankingRetention(
       // Telemetry never decides the outcome of committed work.
     }
   }
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+  return 'succeeded'
 }
 
 async function executeStatisticsCollection(

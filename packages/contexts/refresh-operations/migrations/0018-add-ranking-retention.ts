@@ -167,13 +167,54 @@ BEGIN
     AND operation.lease_token = p_lease_token
     AND operation.lease_expires_at > clock_timestamp()
   FOR UPDATE;
+  IF active THEN
+    -- Remembers, for this transaction only, which lease row it holds locked so completion can be fenced on it.
+    PERFORM set_config(
+      'refresh_operations.ranking_retention_lease', p_operation_id::text || ':' || p_lease_token::text, true
+    );
+  END IF;
   RETURN coalesce(active, false);
+END;
+$$;
+
+-- Completes the attempt in the transaction that deleted the batch. The lease was current when
+-- lock_active_ranking_retention_lease locked its row, and that row lock is held until commit, so no other worker
+-- can have reclaimed it; completing here is fenced even if the batch outlived lease_expires_at.
+CREATE FUNCTION refresh_operations.complete_ranking_retention_lease(
+  p_operation_id uuid,
+  p_lease_owner text,
+  p_lease_token bigint
+) RETURNS boolean
+LANGUAGE plpgsql VOLATILE AS $$
+DECLARE
+  attempt integer;
+BEGIN
+  IF coalesce(pg_catalog.current_setting('refresh_operations.ranking_retention_lease', true), '')
+    <> p_operation_id::text || ':' || p_lease_token::text THEN
+    RAISE EXCEPTION 'ranking retention lease row is not locked by this transaction';
+  END IF;
+  UPDATE refresh_operations.operations operation
+  SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
+      completed_at = clock_timestamp(), updated_at = clock_timestamp()
+  WHERE operation.id = p_operation_id
+    AND operation.kind = 'ranking-retention'
+    AND operation.status = 'leased'
+    AND operation.lease_owner = p_lease_owner
+    AND operation.lease_token = p_lease_token
+  RETURNING operation.attempt_count INTO attempt;
+  IF attempt IS NULL THEN
+    RETURN false;
+  END IF;
+  UPDATE refresh_operations.attempts
+  SET finished_at = clock_timestamp(), outcome = 'succeeded'
+  WHERE operation_id = p_operation_id AND attempt_number = attempt;
+  RETURN true;
 END;
 $$;`
 
 export const addRankingRetention = {
   identity: 'refresh-operations/0018',
   predecessor: 'refresh-operations/0017',
-  checksum: '7b5460d45762bd9f7af1e6b7acd7b304771ff77e15f1e2f8cec1d1fad5e4f333',
+  checksum: '50f1e04acefbc52359b7b9f014c54962f71422a198d9d1d5cd95596bddd54f2a',
   sql,
 } as const
