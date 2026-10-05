@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { readBoundedText } from '@/lib/analytics/body'
 import { ingestBatch } from '@/lib/analytics/ingest'
 import { createTabRateLimiter } from '@/lib/analytics/rate-limit'
 import { createDailySalt } from '@/lib/analytics/salt'
@@ -21,8 +22,12 @@ function clientIp(request: Request): string {
 export async function POST(request: Request): Promise<Response> {
   let body: unknown = null
   try {
-    const text = await request.text()
-    if (text.length <= 64_000) body = JSON.parse(text)
+    const text = await readBoundedText(request)
+    if (text === null) {
+      webTelemetry.metrics.add('analytics_events_dropped_total', 1, { reason: 'invalid' })
+      return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } })
+    }
+    body = JSON.parse(text)
   } catch {
     body = null
   }
