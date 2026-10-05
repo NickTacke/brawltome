@@ -122,12 +122,16 @@ describe('Player name verification candidates', () => {
     await board(5, 'Cached V1', '2026-10-05T00:00:00Z')
     // Without a live V0 name the leaderboard name is already canonical.
     await board(6, 'Only Board', '2026-10-05T00:00:00Z')
+    // A live V0 career snapshot alone is enough to verify; the executor's ranked refresh creates the ranked profile.
     await career(7, 'Career Only', '2026-06-01T00:00:00Z')
     await board(7, 'Board Name', '2026-10-05T00:00:00Z')
 
     expect(await verifications.candidates(policy)).toEqual({
-      backlog: { rename_signal: 0, demand: 0, other: 1 },
-      candidates: [{ brawlhallaId: 1, playerName: 'New Name', v0Name: 'Old Name' }],
+      backlog: { rename_signal: 0, demand: 0, other: 2 },
+      candidates: [
+        { brawlhallaId: 1, playerName: 'New Name', v0Name: 'Old Name' },
+        { brawlhallaId: 7, playerName: 'Board Name', v0Name: 'Career Only' },
+      ],
     })
   })
 
