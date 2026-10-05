@@ -76,7 +76,10 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
     backlog,
   ] = await Promise.all([
     period(
-      ratio(`increase(analytics_searches_total{outcome="miss"}[${w}])`, `increase(analytics_searches_total[${w}])`),
+      ratio(
+        `increase(analytics_searches_total{outcome="miss"}[${w}])`,
+        `increase(analytics_searches_total{outcome=~"hit|miss"}[${w}])`,
+      ),
     ),
     period(`sum(increase(analytics_searches_total[${w}]))`),
     period(

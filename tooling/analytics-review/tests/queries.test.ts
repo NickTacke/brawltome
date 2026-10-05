@@ -27,6 +27,14 @@ describe('collectReview', () => {
     expect(data.abandonedRefreshRate.current).toBe(0.1)
   })
 
+  test('computes miss rate as miss / (hit + miss), excluding errors', async () => {
+    const { api, calls } = fakeApi(() => 1)
+    await collectReview(api, 7, end)
+    const query = calls.find((c) => c.query.includes('outcome="miss"'))?.query
+    expect(query).toContain('outcome=~"hit|miss"')
+    expect(query).not.toContain('analytics_searches_total[')
+  })
+
   test('evaluates previous period at end - days', async () => {
     const { api, calls } = fakeApi((q, t) =>
       q.includes('abandoned')
