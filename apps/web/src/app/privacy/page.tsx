@@ -13,7 +13,7 @@ const sections = [
   },
   {
     title: 'How we count visitors',
-    body: 'Your IP address and browser information are used only to compute a one-way hash together with a secret that is replaced every day. The hash is discarded and never stored. A random per-tab ID is kept in memory only and disappears when the tab closes.',
+    body: 'We use a one-way hash of your IP address and browser details combined with a secret that is replaced every day and then discarded, so the hash can’t be turned back into your IP address or linked across days. We use it only to count unique visitors per day, and we never store your IP address or browser details. Each browser tab also gets a random visit ID held in memory (not on your device) to connect pages within one visit.',
   },
   {
     title: 'Opting out',
@@ -21,7 +21,7 @@ const sections = [
   },
   {
     title: 'Retention',
-    body: 'Measurement data is kept for 30 days and then deleted.',
+    body: 'The hash and visit ID are kept with the other measurement data for 30 days, then deleted.',
   },
   {
     title: 'Sign-in cookies',

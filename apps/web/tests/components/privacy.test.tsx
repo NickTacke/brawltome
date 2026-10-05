@@ -9,4 +9,11 @@ describe('privacy page', () => {
       expect(html).toContain(phrase)
     }
   })
+
+  test('is accurate about stored identifiers and sign-in cookies', () => {
+    const html = renderToStaticMarkup(<PrivacyPage />)
+    expect(html).toContain('random visit ID')
+    expect(html).toContain('strictly necessary for signing in')
+    expect(html).not.toContain('discarded and never stored')
+  })
 })

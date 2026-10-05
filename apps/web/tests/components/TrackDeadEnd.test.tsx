@@ -1,10 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test'
 
-const actual = await import('../../src/lib/analytics/browser')
-const trackMock = mock(() => {})
-mock.module('../../src/lib/analytics/browser', () => ({ ...actual, track: trackMock, flushAnalytics: () => {} }))
+import { trackDeadEndOnce } from '../../src/components/TrackDeadEnd'
 
-const { trackDeadEndOnce } = await import('../../src/components/TrackDeadEnd')
+const trackMock = mock(() => {})
 
 describe('trackDeadEndOnce', () => {
   test('tracks a single deadend event', () => {
