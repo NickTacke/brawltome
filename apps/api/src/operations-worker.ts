@@ -9,6 +9,7 @@ import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
 import {
   createPostgresCareerPlayers,
+  createPostgresLeaderboardPlayerNames,
   createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
   createSteamPlayerEvidenceResolver,
@@ -98,6 +99,7 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
 const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
@@ -130,6 +132,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'accounts-postgres', close: accounts.close },
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'players-career-postgres', close: careerPlayers.close },
+    { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
@@ -281,6 +284,7 @@ try {
           return operations.commitProofEffect(lease)
         },
         ranking,
+        leaderboardPlayerNames,
         leaderboardSource: {
           fetchPage: (input) =>
             fetchLeaderboardPage(input, {
