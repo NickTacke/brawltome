@@ -39,6 +39,19 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
     const [current, previous] = await Promise.all([first(query, end), first(query, start)])
     return { current, previous }
   }
+  const abandonedRate = async (): Promise<PeriodValue> => {
+    const at = async (time: Date): Promise<number | null> => {
+      const [abandoned, completed] = await Promise.all([
+        first(`sum(increase(analytics_refresh_abandoned_total[${w}]))`, time),
+        first(`sum(increase(analytics_refresh_wait_ms_count[${w}]))`, time),
+      ])
+      if (abandoned === null && completed === null) return null
+      const total = (abandoned ?? 0) + (completed ?? 0)
+      return total > 0 ? (abandoned ?? 0) / total : null
+    }
+    const [current, previous] = await Promise.all([at(end), at(start)])
+    return { current, previous }
+  }
   const prom = (query: string) => api.promInstant(query, end)
   const loki = (query: string) => api.lokiInstant(query, end)
 
@@ -73,12 +86,7 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
       ),
     ),
     period(`histogram_quantile(0.95, sum by (le) (increase(analytics_refresh_wait_ms_bucket[${w}])))`),
-    period(
-      ratio(
-        `increase(analytics_refresh_abandoned_total[${w}])`,
-        `increase(analytics_refresh_abandoned_total[${w}]) or increase(analytics_refresh_wait_ms_count[${w}])`,
-      ),
-    ),
+    abandonedRate(),
     period(
       ratio(
         `increase(analytics_profile_views_total{data_age=~"12h_7d|gt_7d"}[${w}])`,
