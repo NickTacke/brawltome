@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   MAX_AUTO_RETRIES,
   type PlayerRefreshState,
+  createLatestRequestTracker,
   getPlayerRefreshNotice,
   initialPlayerRefreshState,
   playerRefreshReducer,
@@ -262,5 +263,16 @@ describe('getPlayerRefreshNotice', () => {
     expect(
       getPlayerRefreshNotice({ kind: 'timedOut' }, { hasData: true, secondsLeft: null, dataAge: null })?.detail,
     ).toBe('Showing the latest saved data. Fresh stats can take a little longer to arrive.')
+  })
+})
+
+describe('createLatestRequestTracker', () => {
+  test('only the most recently started request is current', () => {
+    const tracker = createLatestRequestTracker()
+    const first = tracker.start()
+    expect(tracker.isLatest(first)).toBe(true)
+    const second = tracker.start()
+    expect(tracker.isLatest(first)).toBe(false)
+    expect(tracker.isLatest(second)).toBe(true)
   })
 })

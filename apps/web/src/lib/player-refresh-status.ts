@@ -187,3 +187,12 @@ export function getPlayerRefreshNotice(
       return null
   }
 }
+
+/** Tags each request so a slower, older response can never overwrite the outcome of a newer one. */
+export function createLatestRequestTracker() {
+  let latest = 0
+  return {
+    start: () => ++latest,
+    isLatest: (sequence: number) => sequence === latest,
+  }
+}

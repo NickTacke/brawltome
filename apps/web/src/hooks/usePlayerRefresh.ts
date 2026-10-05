@@ -10,6 +10,7 @@ import {
   playerRefreshPollDelayMs,
 } from '@/lib/player-refresh'
 import {
+  createLatestRequestTracker,
   initialPlayerRefreshState,
   playerRefreshReducer,
   secondsUntil,
@@ -40,6 +41,7 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const mountedRef = useRef(false)
   const initialRequestedRef = useRef(false)
   const tokenInFlightRef = useRef(false)
+  const requestTrackerRef = useRef(createLatestRequestTracker())
   stateRef.current = state
 
   const queryFn = useCallback(() => getPlayerAction(Number(id)), [id])
@@ -59,12 +61,15 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
 
   const request = useCallback(
     async (manual: boolean, token?: string) => {
+      const sequence = requestTrackerRef.current.start()
+      // An older in-flight response must not overwrite the outcome of a newer request.
+      const isCurrent = () => mountedRef.current && requestTrackerRef.current.isLatest(sequence)
       dispatch({ type: 'request', manual, now: Date.now() })
       try {
         const result = await refreshPlayerAction(Number(id), token)
-        if (mountedRef.current) dispatch({ type: 'outcome', refresh: result.refresh, now: Date.now() })
+        if (isCurrent()) dispatch({ type: 'outcome', refresh: result.refresh, now: Date.now() })
       } catch {
-        if (mountedRef.current) dispatch({ type: 'requestFailed', now: Date.now() })
+        if (isCurrent()) dispatch({ type: 'requestFailed', now: Date.now() })
       }
     },
     [id],
