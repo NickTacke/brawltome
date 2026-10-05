@@ -30,6 +30,7 @@ import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation
 import { createHealthRoutes } from './health-routes'
 import {
   leaderboardScheduleDefinitions,
+  rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
@@ -198,6 +199,7 @@ const discoveryReconciliationBackoff = createDiscoveryReconciliationBackoff({
   operationStatus: operations.operationStatus,
 })
 const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
+const rankingRetentionSchedule = rankingRetentionScheduleDefinition(workerConfig.rankingRetention)
 const nameVerificationConfig = readPlayerNameVerificationConfig(process.env)
 // The same rolling-window usage request admission enforces and source_quota_used reports.
 async function readV0SourceUsage() {
@@ -302,6 +304,13 @@ try {
         const schedule = await operations.reconcileLeaderboardSchedule(definition)
         if (schedule.outcome !== 'already-exists') reconciledSchedules++
       }
+      const retention = await operations.reconcileRankingRetentionSchedule(rankingRetentionSchedule)
+      if (retention.outcome !== 'already-exists') reconciledSchedules++
+      telemetry.logger.info('ranking.retention.scheduled', {
+        outcome: retention.outcome,
+        retentionHours: workerConfig.rankingRetention.retentionHours,
+        maxGenerations: workerConfig.rankingRetention.maxGenerations,
+      })
       leaderboardSchedulesReconciled = true
       return (
         interactiveAdmissions +
@@ -340,6 +349,7 @@ try {
           return operations.commitProofEffect(lease)
         },
         ranking,
+        rankingRetention: ranking,
         leaderboardPlayerNames,
         leaderboardSource: {
           fetchPage: (input) =>

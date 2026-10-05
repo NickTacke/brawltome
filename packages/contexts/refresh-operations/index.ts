@@ -105,6 +105,37 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
   return payload
 }
 
+export const rankingRetentionKind = 'ranking-retention'
+export const minRankingRetentionHours = 2
+export const maxRankingRetentionHours = 365 * 24
+export const maxRankingRetentionBatch = 1_000
+
+export type RankingRetentionPayload = {
+  retentionHours: number
+  maxGenerations: number
+}
+
+export function validateRankingRetentionPayload(payload: RankingRetentionPayload): RankingRetentionPayload {
+  if (
+    !Number.isSafeInteger(payload.retentionHours) ||
+    payload.retentionHours < minRankingRetentionHours ||
+    payload.retentionHours > maxRankingRetentionHours
+  ) {
+    throw new Error(
+      `ranking retention retentionHours must be an integer between ${minRankingRetentionHours} and ${maxRankingRetentionHours}`,
+    )
+  }
+  if (
+    !Number.isSafeInteger(payload.maxGenerations) ||
+    payload.maxGenerations < 1 ||
+    payload.maxGenerations > maxRankingRetentionBatch
+  ) {
+    throw new Error(`ranking retention maxGenerations must be an integer between 1 and ${maxRankingRetentionBatch}`)
+  }
+  if (Object.keys(payload).length !== 2) throw new Error('ranking retention payload has unexpected fields')
+  return payload
+}
+
 export type AcceptProofOperation = {
   kind?: 'proof'
   dedupeKey: string
@@ -234,7 +265,19 @@ export type CreateLeaderboardSchedule = {
   maxAttempts?: number
 }
 
-export type CreateSchedule = CreateProofSchedule | CreateLeaderboardSchedule
+export type CreateRankingRetentionSchedule = {
+  kind: typeof rankingRetentionKind
+  scheduleKey: string
+  operationKeyPrefix: string
+  workClass: 'maintenance'
+  intervalMs: number
+  firstDueAt: string
+  payload: RankingRetentionPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type CreateSchedule = CreateProofSchedule | CreateLeaderboardSchedule | CreateRankingRetentionSchedule
 
 export type PrimaryMonitoringTarget = {
   assignmentId: string
@@ -397,6 +440,11 @@ export type OperationLease =
       kind: 'player-name-verification'
       workClass: 'maintenance'
       payload: PlayerNameVerificationPayload
+    })
+  | (LeaseFields & {
+      kind: typeof rankingRetentionKind
+      workClass: 'maintenance'
+      payload: RankingRetentionPayload
     })
   | (LeaseFields & {
       kind: StatisticsCollectionKind

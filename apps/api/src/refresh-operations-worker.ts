@@ -4,6 +4,7 @@ import {
   type LeaderboardPageSource,
   LeaderboardSourceError,
   type RankingPublicationStore,
+  type RankingRetentionStore,
   collectAndPublishLeaderboardGeneration,
   leaderboardModeFromOperationKind,
 } from '@brawltome/ranking/composition'
@@ -22,6 +23,7 @@ type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' 
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
+type RankingRetentionLease = Extract<OperationLease, { kind: 'ranking-retention' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
 type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
 type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
@@ -74,6 +76,7 @@ type RunOneRefreshOperationOptions = {
   syncClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster', leaseExpiresAt: Date): Promise<void>
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
+  rankingRetention?: RankingRetentionStore
   leaderboardPlayerNames?: {
     applyLeaderboardNames(input: {
       observedAt: Date
@@ -413,6 +416,52 @@ async function executeNameVerification(
   }
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
   await options.executePlayerNameVerification(lease, createSourceAdmission(options, lease, 'name-verification'))
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
+// Expires one bounded batch of old leaderboard generations. The delete is idempotent, so a retry or a replay only
+// finds whatever is still past the window; the lease check runs inside the deleting transaction.
+async function executeRankingRetention(
+  operations: RefreshOperationWorker,
+  lease: RankingRetentionLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.rankingRetention) {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'ranking_retention_executor_unavailable',
+        message: 'Ranking retention executor is not configured',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+  const started = performance.now()
+  const result = await options.rankingRetention.expireGenerations(
+    { operationId: lease.operationId, leaseOwner: lease.leaseOwner, leaseToken: lease.leaseToken },
+    lease.payload,
+  )
+  if (result.outcome === 'lease-lost') return 'lease_lost'
+  const telemetry = options.telemetry
+  if (telemetry) {
+    try {
+      telemetry.metrics.add('ranking_retention_deleted_generations_total', result.deletedGenerations, {})
+      telemetry.logger.info('ranking.retention.completed', {
+        operationId: lease.operationId,
+        deletedGenerations: result.deletedGenerations,
+        retentionHours: lease.payload.retentionHours,
+        maxGenerations: lease.payload.maxGenerations,
+        // A full batch means more expired generations are waiting for the next run.
+        batchFull: result.deletedGenerations >= lease.payload.maxGenerations,
+        durationMs: Math.round(performance.now() - started),
+      })
+    } catch {
+      // Telemetry never decides the outcome of committed work.
+    }
+  }
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -854,6 +903,8 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeRankedPulse(operations, lease, options)
       } else if (lease.kind === 'player-name-verification') {
         attemptOutcome = await executeNameVerification(operations, lease, options)
+      } else if (lease.kind === 'ranking-retention') {
+        attemptOutcome = await executeRankingRetention(operations, lease, options)
       } else if (lease.kind === 'statistics-publication') {
         attemptOutcome = await executeStatisticsPublication(operations, lease, options)
       } else if (lease.kind === 'statistics-legend-meta-publication') {
@@ -942,14 +993,16 @@ export async function runOneRefreshOperation(
                         ? 'ranked_player_pulse_failed'
                         : lease.kind === 'player-name-verification'
                           ? 'player_name_verification_failed'
-                          : lease.kind === 'statistics-ranked-collection' ||
-                              lease.kind === 'statistics-lifetime-collection'
-                            ? 'statistics_collection_failed'
-                            : lease.kind === 'statistics-publication'
-                              ? 'statistics_publication_failed'
-                              : lease.kind === 'statistics-legend-meta-publication'
-                                ? 'statistics_legend_meta_publication_failed'
-                                : 'leaderboard_collection_failed'
+                          : lease.kind === 'ranking-retention'
+                            ? 'ranking_retention_failed'
+                            : lease.kind === 'statistics-ranked-collection' ||
+                                lease.kind === 'statistics-lifetime-collection'
+                              ? 'statistics_collection_failed'
+                              : lease.kind === 'statistics-publication'
+                                ? 'statistics_publication_failed'
+                                : lease.kind === 'statistics-legend-meta-publication'
+                                  ? 'statistics_legend_meta_publication_failed'
+                                  : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'

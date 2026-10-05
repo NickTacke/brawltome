@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   leaderboardScheduleDefinitions,
+  rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
@@ -33,6 +34,12 @@ describe('operations worker configuration', () => {
         pageDepth: 20,
         intervalMs: 15 * 60 * 1000,
         firstDueAt: '2020-01-01T00:00:00.000Z',
+      },
+      rankingRetention: {
+        retentionHours: 24,
+        maxGenerations: 100,
+        intervalMs: 15 * 60 * 1000,
+        firstDueAt: '2020-01-01T00:05:00.000Z',
       },
       admission: {
         totalConcurrency: 8,
@@ -140,6 +147,37 @@ describe('operations worker configuration', () => {
       '2020-01-01T00:07:30.000Z',
       '2020-01-01T00:11:15.000Z',
     ])
+  })
+
+  test('reads a bounded ranking retention window and batch', () => {
+    expect(
+      readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '48', RANKING_RETENTION_BATCH: '25' }).rankingRetention,
+    ).toEqual({
+      retentionHours: 48,
+      maxGenerations: 25,
+      intervalMs: 15 * 60 * 1000,
+      firstDueAt: '2020-01-01T00:05:00.000Z',
+    })
+    expect(readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '2' }).rankingRetention.retentionHours).toBe(2)
+    for (const value of ['1', '0', '-24', '24.5', 'NaN', '8761']) {
+      expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: value })).toThrow('RANKING_RETENTION_HOURS')
+    }
+    for (const value of ['0', '1001', '1.5']) {
+      expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: value })).toThrow('RANKING_RETENTION_BATCH')
+    }
+  })
+
+  test('defines one 15-minute ranking retention schedule in the maintenance work class', () => {
+    expect(rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)).toEqual({
+      kind: 'ranking-retention',
+      scheduleKey: 'rankings:retention:v1',
+      operationKeyPrefix: 'rankings:retention',
+      workClass: 'maintenance',
+      intervalMs: 15 * 60 * 1000,
+      firstDueAt: '2020-01-01T00:05:00.000Z',
+      payload: { retentionHours: 24, maxGenerations: 100 },
+      provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
+    })
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {
