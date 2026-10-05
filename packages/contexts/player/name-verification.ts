@@ -55,9 +55,8 @@ async function selectCandidates(
              ranked.global_rank, ranked.rating, attempt.outcome, attempt.checked_at, attempt.failures,
              attempt.observed_at AS attempt_observed_at, clock.now
       FROM players.leaderboard_name_observations observation
-      JOIN players.ranked_profiles ranked
-        ON ranked.brawlhalla_id = observation.brawlhalla_id AND ranked.last_success_at IS NOT NULL
-      -- The canonical live V0 name: newest of ranked and live career, ties keep career.
+      LEFT JOIN players.ranked_profiles ranked ON ranked.brawlhalla_id = observation.brawlhalla_id
+      -- The canonical live V0 name: newest of ranked and live career, ties keep career. Either alone qualifies.
       CROSS JOIN LATERAL (
         SELECT candidate.player_name, candidate.observed_at
         FROM (
@@ -65,7 +64,9 @@ async function selectCandidates(
           WHERE brawlhalla_id = observation.brawlhalla_id AND last_success_at IS NOT NULL
             AND player_name IS NOT NULL AND snapshot_source <> 'legacy-v2'
           UNION ALL
-          SELECT ranked.player_name, ranked.last_success_at, 1
+          SELECT player_name, last_success_at, 1 FROM players.ranked_profiles
+          WHERE brawlhalla_id = observation.brawlhalla_id AND last_success_at IS NOT NULL
+            AND player_name IS NOT NULL
         ) candidate
         ORDER BY candidate.observed_at DESC, candidate.priority
         LIMIT 1
@@ -159,7 +160,7 @@ export function createPostgresPlayerNameVerifications(connectionString: string) 
       return { backlog: backlogOf(rows), candidates: rows.map(toCandidate) }
     },
 
-    // Atomically reserves up to the remaining per-window budget; spent checks count toward the window.
+    // Atomically reserves up to the remaining per-window budget; spent checks and still-pending claims count toward the window.
     async claim(
       policy: NameVerificationPolicy,
     ): Promise<{ backlog: NameVerificationBacklog; usedInWindow: number; claimed: NameVerificationCandidate[] }> {
@@ -169,8 +170,12 @@ export function createPostgresPlayerNameVerifications(connectionString: string) 
         const now = policy.now ?? null
         const [window] = await sql<{ used: number }[]>`
           SELECT count(*)::integer AS used FROM players.name_verifications
-          WHERE spent AND checked_at > coalesce(${now}::timestamptz, clock_timestamp())
-            - ${policy.windowMs} * interval '1 millisecond'
+          WHERE spent AND (
+            checked_at > coalesce(${now}::timestamptz, clock_timestamp()) - ${policy.windowMs} * interval '1 millisecond'
+            -- A claim whose source call has not happened yet will still spend budget, however long the queue delays it.
+            OR (outcome = 'pending'
+              AND checked_at > coalesce(${now}::timestamptz, clock_timestamp()) - ${pendingHoldMs} * interval '1 millisecond')
+          )
         `
         const remaining = Math.max(0, policy.perWindow - window.used)
         const rows = await selectCandidates(sql, policy, Math.max(1, remaining))
