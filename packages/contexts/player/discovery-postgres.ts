@@ -25,6 +25,7 @@ type LegacyRow = {
 }
 type AliasRow = { brawlhalla_id: number; display_alias: string }
 type CareerLegendRow = { brawlhalla_id: number; legend_name_key: string }
+type LeaderboardNameRow = { brawlhalla_id: number; player_name: string; observed_at: Date }
 
 const snapshotBatchSize = 1_000
 
@@ -51,6 +52,11 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   const careers = await sql<CareerProfileRow[]>`
     SELECT brawlhalla_id, player_name, last_success_at
     FROM players.career_profiles
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+  `
+  const leaderboardNames = await sql<LeaderboardNameRow[]>`
+    SELECT brawlhalla_id, player_name, observed_at
+    FROM players.leaderboard_name_observations
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
   const careerLegends = await sql<CareerLegendRow[]>`
@@ -84,6 +90,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
 
   const rankedById = new Map(ranked.map((row) => [row.brawlhalla_id, row]))
   const careerById = new Map(careers.map((row) => [row.brawlhalla_id, row]))
+  const leaderboardById = new Map(leaderboardNames.map((row) => [row.brawlhalla_id, row]))
   const careerLegendById = new Map(careerLegends.map((row) => [row.brawlhalla_id, row.legend_name_key]))
   const profileLegacyById = new Map(profileLegacy.map((row) => [row.brawlhalla_id, row]))
   const legacyById = new Map(profileLegacyById)
@@ -100,17 +107,24 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     aliasesById.set(alias.brawlhalla_id, aliases)
   }
 
-  const identities = new Set([...rankedById.keys(), ...careerById.keys(), ...legacyById.keys()])
+  const identities = new Set([
+    ...rankedById.keys(),
+    ...careerById.keys(),
+    ...leaderboardById.keys(),
+    ...legacyById.keys(),
+  ])
   return [...identities]
     .sort((left, right) => left - right)
     .flatMap((brawlhallaId) => {
       const canonical = rankedById.get(brawlhallaId)
       const career = careerById.get(brawlhallaId)
+      const leaderboard = leaderboardById.get(brawlhallaId)
       const fallback = legacyById.get(brawlhallaId)
       const nameEvidence = selectCanonicalPlayerName({
         brawlhallaId,
         ranked: canonical?.player_name ? { name: canonical.player_name, observedAt: canonical.last_success_at } : null,
         career: career?.player_name ? { name: career.player_name, observedAt: career.last_success_at } : null,
+        leaderboard: leaderboard ? { name: leaderboard.player_name, observedAt: leaderboard.observed_at } : null,
       })
       const name = nameEvidence?.name ?? fallback?.player_name
       if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
@@ -118,7 +132,12 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
       const aliases = (aliasesById.get(brawlhallaId) ?? []).filter(
         (alias) => decodeV0CareerNameCandidate(alias) !== name,
       )
-      for (const candidate of [canonical?.player_name, career?.player_name, fallback?.player_name]) {
+      for (const candidate of [
+        canonical?.player_name,
+        career?.player_name,
+        leaderboard?.player_name,
+        fallback?.player_name,
+      ]) {
         if (
           candidate &&
           candidate !== name &&
@@ -225,6 +244,8 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
                   SELECT brawlhalla_id FROM players.ranked_profiles WHERE brawlhalla_id > ${afterId}
                   UNION
                   SELECT brawlhalla_id FROM players.career_profiles WHERE brawlhalla_id > ${afterId}
+                  UNION
+                  SELECT brawlhalla_id FROM players.leaderboard_name_observations WHERE brawlhalla_id > ${afterId}
                   UNION
                   SELECT brawlhalla_id FROM players.legacy_discovery_profiles WHERE brawlhalla_id > ${afterId}
                   UNION
