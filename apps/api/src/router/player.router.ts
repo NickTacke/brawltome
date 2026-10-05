@@ -41,6 +41,23 @@ async function requestPlayerRefresh(
   discordUserId?: string,
   now = Date.now(),
 ): Promise<PlayerRefreshResponseContract> {
+  const response = await resolvePlayerRefresh(ctx, input, discordUserId, now)
+  recordTelemetry(() =>
+    ctx.telemetry.metrics.add('refresh_requests_total', 1, {
+      kind: 'player',
+      outcome: response.refresh.outcome,
+      source: discordUserId ? 'discord' : 'interactive-api',
+    }),
+  )
+  return response
+}
+
+async function resolvePlayerRefresh(
+  ctx: Context,
+  input: PlayerRefreshInputContract,
+  discordUserId: string | undefined,
+  now: number,
+): Promise<PlayerRefreshResponseContract> {
   const [player, ranked, career] = await Promise.all([
     ctx.playerReferenceQueries.byId(input.id),
     ctx.rankedPlayerQueries.byId(input.id),

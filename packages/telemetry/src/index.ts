@@ -60,6 +60,7 @@ export type MetricName =
   | 'source_quota_used'
   | 'source_quota_limit'
   | 'refresh_failures_total'
+  | 'refresh_requests_total'
   | 'discord_interactions_total'
 
 export type MetricLabels = Readonly<Record<string, string>>
@@ -214,6 +215,22 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Refresh failures',
     labels: { kind: operationKind, failure_category: failureCategory },
+  },
+  refresh_requests_total: {
+    kind: 'counter',
+    help: 'User-facing interactive refresh request outcomes',
+    labels: {
+      kind: ['player', 'clan'],
+      outcome: [
+        'accepted',
+        'alreadyRefreshing',
+        'notNeeded',
+        'verificationRequired',
+        'rateLimited',
+        'temporarilyUnavailable',
+      ],
+      source: ['interactive-api', 'discord'],
+    },
   },
   discord_interactions_total: {
     kind: 'counter',
