@@ -106,9 +106,9 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
 }
 
 export const rankingRetentionKind = 'ranking-retention'
-export const minRankingRetentionHours = 2
+export const minRankingRetentionHours = 24
 export const maxRankingRetentionHours = 365 * 24
-export const maxRankingRetentionBatch = 1_000
+export const maxRankingRetentionBatch = 200
 
 export type RankingRetentionPayload = {
   retentionHours: number
