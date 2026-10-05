@@ -4,6 +4,7 @@ import {
   clampRetries,
   clampWaitMs,
   createStateDeduper,
+  isPageExit,
   refreshStateEvent,
 } from '../../../src/lib/analytics/refresh-events'
 
@@ -99,5 +100,12 @@ describe('abandonRefresh', () => {
     const { log, deps } = calls()
     expect(abandonRefresh('idle', { current: false }, 5, deps)).toBe(false)
     expect(log).toEqual([])
+  })
+})
+
+describe('isPageExit', () => {
+  test('treats back/forward-cache page hides as not leaving', () => {
+    expect(isPageExit({ persisted: true })).toBe(false)
+    expect(isPageExit({ persisted: false })).toBe(true)
   })
 })

@@ -8,6 +8,7 @@ import {
   clampRetries,
   clampWaitMs,
   createStateDeduper,
+  isPageExit,
   refreshStateEvent,
 } from '@/lib/analytics/refresh-events'
 import {
@@ -117,10 +118,13 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
         track,
         flush: flushAnalytics,
       })
-    window.addEventListener('pagehide', abandon)
+    const onPageHide = (event: PageTransitionEvent) => {
+      if (isPageExit(event)) abandon()
+    }
+    window.addEventListener('pagehide', onPageHide)
     return () => {
       mountedRef.current = false
-      window.removeEventListener('pagehide', abandon)
+      window.removeEventListener('pagehide', onPageHide)
       abandon()
     }
   }, [])
