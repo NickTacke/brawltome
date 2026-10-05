@@ -322,7 +322,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     labels: {},
     buckets: [1000, 2000, 5000, 10000, 20000, 30000, 60000, 90000],
   },
-  analytics_refresh_retries_total: { kind: 'counter', help: 'Refresh retries clicked by users', labels: {} },
+  analytics_refresh_retries_total: { kind: 'counter', help: 'Automatic retries per completed refresh cycle', labels: {} },
   analytics_refresh_abandoned_total: { kind: 'counter', help: 'Refreshes abandoned by users', labels: {} },
   analytics_web_vitals: {
     kind: 'histogram',
