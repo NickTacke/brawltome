@@ -57,11 +57,32 @@ const expectedSecretFiles: Record<string, string> = {
   otel_ingest_token: '/var/lib/brawltome-observability-secrets/otel-ingest-token',
 }
 
+// Dokploy attaches the project's internal default network to the service it routes the domain to. Tolerate exactly
+// that: a non-external `default` network that grafana alone joins. Anything else still fails the exact checks.
+function withoutInjectedDefaultNetwork(
+  services: Record<string, unknown>,
+  networks: Record<string, unknown>,
+): { services: Record<string, unknown>; networks: Record<string, unknown> } {
+  const injected = networks.default
+  if (!isRecord(injected) || injected.external === true) return { services, networks }
+  const others = Object.entries(services).filter(([name]) => name !== 'grafana')
+  if (others.some(([, service]) => isRecord(service) && isRecord(service.networks) && 'default' in service.networks)) {
+    return { services, networks }
+  }
+  const grafana = services.grafana
+  if (!isRecord(grafana) || !isRecord(grafana.networks)) return { services, networks }
+  const { default: _injectedNetwork, ...restNetworks } = networks
+  const { default: _grafanaDefault, ...grafanaNetworks } = grafana.networks
+  return { services: { ...services, grafana: { ...grafana, networks: grafanaNetworks } }, networks: restNetworks }
+}
+
 export function verifyRenderedTopology(document: unknown, applicationNetworkName = 'brawltome'): string[] {
   if (!isRecord(document)) return ['rendered Compose must be an object']
 
-  const services = isRecord(document.services) ? document.services : {}
-  const networks = isRecord(document.networks) ? document.networks : {}
+  const { services, networks } = withoutInjectedDefaultNetwork(
+    isRecord(document.services) ? document.services : {},
+    isRecord(document.networks) ? document.networks : {},
+  )
   const secrets = isRecord(document.secrets) ? document.secrets : {}
   const violations: string[] = []
 
