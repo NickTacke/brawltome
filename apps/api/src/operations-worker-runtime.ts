@@ -10,6 +10,7 @@ type WorkerConfig = {
   retryDelayMs: number
   retryBackoff?: RetryBackoff
   scheduleBatchSize: number
+  stallTimeoutMs?: number
   admission: AdmissionConfig
 }
 
@@ -27,6 +28,7 @@ type OperationsWorkerDependencies = {
   telemetry?: Telemetry
   telemetryIntervalMs?: number
   telemetryTimeoutMs?: number
+  onStall?: (stalledForMs: number) => void
 }
 
 function createWakeupWaiter(intervalMs: number, signal: AbortSignal) {
@@ -129,6 +131,7 @@ export async function runOperationsWorker({
   telemetry,
   telemetryIntervalMs = 5_000,
   telemetryTimeoutMs = 250,
+  onStall,
 }: OperationsWorkerDependencies): Promise<void> {
   const wakeup = createWakeupWaiter(config.pollMs, lifecycle.signal)
   let admissionInitialization: Promise<void> | undefined
@@ -211,8 +214,30 @@ export async function runOperationsWorker({
     }
   }
 
+  // Every loop iteration, including ones that only find the database unavailable, counts as progress. If no loop
+  // has iterated for stallTimeoutMs, every loop is blocked on a hung call and the process should be replaced.
+  let lastProgressAt = Date.now()
+  function markProgress(): void {
+    lastProgressAt = Date.now()
+  }
+  const stallTimeoutMs = config.stallTimeoutMs
+  const watchdog =
+    onStall && stallTimeoutMs !== undefined
+      ? setInterval(
+          () => {
+            const stalledForMs = Date.now() - lastProgressAt
+            if (stalledForMs < stallTimeoutMs || lifecycle.signal.aborted) return
+            clearInterval(watchdog)
+            onStall(stalledForMs)
+          },
+          Math.max(1, Math.floor(stallTimeoutMs / 4)),
+        )
+      : undefined
+  watchdog?.unref?.()
+
   async function scheduleLoop(): Promise<void> {
     while (!lifecycle.signal.aborted) {
+      markProgress()
       if (!(await prepare())) continue
       const active = await runTracked(async () => {
         const reconciled = !lifecycle.signal.aborted && reconcile ? await reconcile() : 0
@@ -255,6 +280,7 @@ export async function runOperationsWorker({
 
   async function operationLoop(slot: number): Promise<void> {
     while (!lifecycle.signal.aborted) {
+      markProgress()
       if (!(await prepare())) continue
       const processed = await runTracked(() =>
         runOne(operations, `${workerId}:${slot}`, {
@@ -270,8 +296,12 @@ export async function runOperationsWorker({
     }
   }
 
-  await Promise.all([
-    scheduleLoop(),
-    ...Array.from({ length: config.admission.totalConcurrency }, (_, slot) => operationLoop(slot)),
-  ])
+  try {
+    await Promise.all([
+      scheduleLoop(),
+      ...Array.from({ length: config.admission.totalConcurrency }, (_, slot) => operationLoop(slot)),
+    ])
+  } finally {
+    clearInterval(watchdog)
+  }
 }
