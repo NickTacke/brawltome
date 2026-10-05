@@ -263,7 +263,7 @@ services:
       OPERATIONS_LEADERBOARD_CONCURRENCY: "1"
       OPERATIONS_TOTAL_CONCURRENCY: "3"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      RANKING_RETENTION_BATCH: "20"
+      RANKING_RETENTION_BATCH: "80"
       # Set RANKING_RETENTION_ENABLED=false in the deployment environment to pause retention without a code change.
       RANKING_RETENTION_ENABLED: ${RANKING_RETENTION_ENABLED:-true}
       RANKING_RETENTION_HOURS: "24"
