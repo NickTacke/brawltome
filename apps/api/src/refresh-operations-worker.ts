@@ -33,9 +33,17 @@ type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'st
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
+export type RetryBackoff = {
+  multiplier: number
+  maxDelayMs: number
+  jitterRatio: number
+  random?: () => number
+}
+
 type RunOneRefreshOperationOptions = {
   leaseMs: number
   retryDelayMs: number
+  retryBackoff?: RetryBackoff
   sourceUnavailableRetryMs?: number
   admission: AdmissionConfig
   renewEveryMs?: number
@@ -103,6 +111,27 @@ function sourceRetryAfterMs(error: unknown): number | null {
     return Math.max(0, error.retryAfterMs)
   }
   return null
+}
+
+export function retryDelayForAttempt(
+  attemptNumber: number,
+  policy: { baseDelayMs: number; multiplier: number; maxDelayMs: number; jitterRatio: number; random: () => number },
+): number {
+  const exponent = Math.max(0, attemptNumber - 1)
+  const nominal = policy.baseDelayMs * policy.multiplier ** exponent
+  const jitter = 1 + policy.jitterRatio * (2 * policy.random() - 1)
+  return Math.max(0, Math.min(policy.maxDelayMs, Math.floor(nominal * jitter)))
+}
+
+function executionRetryDelayMs(lease: OperationLease, options: RunOneRefreshOperationOptions): number {
+  if (!options.retryBackoff) return options.retryDelayMs
+  return retryDelayForAttempt(lease.attemptNumber, {
+    baseDelayMs: options.retryDelayMs,
+    multiplier: options.retryBackoff.multiplier,
+    maxDelayMs: options.retryBackoff.maxDelayMs,
+    jitterRatio: options.retryBackoff.jitterRatio,
+    random: options.retryBackoff.random ?? Math.random,
+  })
 }
 
 function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise<void> {
@@ -812,7 +841,9 @@ export async function runOneRefreshOperation(
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'
-      if ((await operations.fail(lease, failure, sourceRetryMs ?? options.retryDelayMs)) === 'lease-lost') {
+      if (
+        (await operations.fail(lease, failure, sourceRetryMs ?? executionRetryDelayMs(lease, options))) === 'lease-lost'
+      ) {
         attemptOutcome = 'lease_lost'
         failureCategory = 'lease_lost'
       }

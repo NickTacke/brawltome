@@ -3,7 +3,7 @@ import { RateLimitError } from '@brawltome/bhapi'
 import { LeaderboardSourceError } from '@brawltome/ranking/composition'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { retryDelayForAttempt, runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
@@ -1008,5 +1008,61 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
     })
     expect(deferred).toBe(false)
+  })
+
+  test('backs off retryable execution failures exponentially so a brief source hiccup is not dead-lettered', async () => {
+    const delays: number[] = []
+    for (const attemptNumber of [1, 2, 3]) {
+      const lease: OperationLease = {
+        operationId: crypto.randomUUID(),
+        effectOperationId: crypto.randomUUID(),
+        effectCreatedAt: new Date().toISOString(),
+        operationKey: `proof:backoff:${attemptNumber}`,
+        kind: 'proof',
+        workClass: 'interactive',
+        payload: { value: 'proof' },
+        provenance: { source: 'test' },
+        leaseOwner: 'worker',
+        leaseToken: 1,
+        attemptNumber,
+        maxAttempts: 4,
+        scheduleWindowAt: null,
+      }
+      await runOneRefreshOperation(
+        {
+          claim: async () => lease,
+          renew: async () => 'renewed' as const,
+          fail: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
+            delays.push(retryDelayMs)
+            return 'transitioned' as const
+          },
+        } as never,
+        'worker',
+        {
+          leaseMs: 1_000,
+          retryDelayMs: 2_000,
+          retryBackoff: { multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2, random: () => 0.5 },
+          admission,
+          executeEffect: async () => {
+            throw new Error('Brawlhalla v0 returned 502')
+          },
+        },
+      )
+    }
+
+    expect(delays).toEqual([2_000, 6_000, 15_000])
+  })
+
+  test('jitters retry delays within the configured ratio and never beyond the maximum', () => {
+    const policy = { baseDelayMs: 2_000, multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2 }
+    expect(retryDelayForAttempt(1, { ...policy, random: () => 0 })).toBe(1_600)
+    expect(retryDelayForAttempt(1, { ...policy, random: () => 0.999_999 })).toBe(2_399)
+    expect(retryDelayForAttempt(2, { ...policy, random: () => 0 })).toBe(4_800)
+    expect(retryDelayForAttempt(3, { ...policy, random: () => 0.999_999 })).toBe(15_000)
+    expect(retryDelayForAttempt(20, { ...policy, random: () => 0.5 })).toBe(15_000)
+    expect(retryDelayForAttempt(2, { ...policy, multiplier: 1, jitterRatio: 0, random: Math.random })).toBe(2_000)
+    let total = 0
+    for (let attempt = 1; attempt < 4; attempt++) total += retryDelayForAttempt(attempt, { ...policy, random: () => 1 })
+    expect(total).toBeLessThan(30_000)
   })
 })

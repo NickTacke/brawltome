@@ -410,6 +410,29 @@ describe('durable Refresh Operations', () => {
     await operations.close()
   })
 
+  test('gives interactive player and clan refreshes four attempts to ride out brief source failures', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const player = await operations.reserveInteractivePlayerRefresh({
+      dedupeKey: `interactive:${randomUUID()}`,
+      operationKey: `interactive:${randomUUID()}`,
+      brawlhallaId: 4_404,
+      staleSections: ['ranked'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    const clan = await operations.reserveInteractiveClanRefresh({
+      dedupeKey: `clan:${randomUUID()}`,
+      operationKey: `clan:${randomUUID()}`,
+      clanId: 4_404,
+      staleSections: ['profile'],
+      provenance: { source: 'integration-test' },
+      reservationTtlSeconds: 30,
+    })
+    expect((await operations.inspect(player.operationId)).operation).toMatchObject({ max_attempts: 4 })
+    expect((await operations.inspect(clan.operationId)).operation).toMatchObject({ max_attempts: 4 })
+    await operations.close()
+  })
+
   test('checkpoints completed interactive sections across lease expiry', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const reserved = await operations.reserveInteractivePlayerRefresh({
