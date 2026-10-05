@@ -10,9 +10,21 @@ import {
   context as otelContext,
   trace as otelTrace,
 } from '@opentelemetry/api'
-import { analyticsDevices, analyticsFeatures, analyticsRoutes } from './analytics-labels'
+import {
+  analyticsDevices,
+  analyticsFeatures,
+  analyticsRoutes,
+  analyticsTrpcCode,
+  analyticsTrpcProcedure,
+} from './analytics-labels'
 
-export { analyticsDevices, analyticsFeatures, analyticsRoutes } from './analytics-labels'
+export {
+  analyticsDevices,
+  analyticsFeatures,
+  analyticsRoutes,
+  analyticsTrpcCode,
+  analyticsTrpcProcedure,
+} from './analytics-labels'
 import { otlpSignalUrl } from './otlp'
 import {
   type TelemetryContext,
@@ -175,46 +187,6 @@ const failureCategory = [
   'unknown',
 ] as const
 
-export const analyticsTrpcProcedure = [
-  'account.current',
-  'account.preferences',
-  'account.updatePreferences',
-  'account.primaryPlayer',
-  'account.playerShortcuts',
-  'account.pinnedPlayers',
-  'account.pinPlayer',
-  'account.unpinPlayer',
-  'account.reorderPinnedPlayers',
-  'status.discordReady',
-  'contractProof.get',
-  'player.referenceById',
-  'player.rankedById',
-  'player.careerById',
-  'player.requestRefresh',
-  'player.refresh',
-  'clan.byId',
-  'clan.membershipByPlayerId',
-  'clan.refresh',
-  'search.local',
-  'leaderboard.get',
-  'leaderboard.recentActivity',
-  'statistics.legendMeta',
-  'statistics.legendMetaHistory',
-  'statistics.careerWeaponUsage',
-  'statistics.careerWeaponUsageHistory',
-  'other',
-] as const
-export const analyticsTrpcCode = [
-  'BAD_REQUEST',
-  'UNAUTHORIZED',
-  'FORBIDDEN',
-  'NOT_FOUND',
-  'TIMEOUT',
-  'TOO_MANY_REQUESTS',
-  'INTERNAL_SERVER_ERROR',
-  'NETWORK',
-  'OTHER',
-] as const
 const analyticsSource = ['bar', 'palette'] as const
 
 const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {

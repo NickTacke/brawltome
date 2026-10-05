@@ -51,6 +51,12 @@ describe('scrubbers', () => {
     expect(scrubbed).not.toContain('abc')
     expect(scrubError('e'.repeat(500))).toHaveLength(200)
   })
+  test('scrubQuery removes urls and secrets', () => {
+    const scrubbed = scrubQuery('  token=abc https://x.y/p  ')
+    expect(scrubbed).not.toContain('abc')
+    expect(scrubbed).not.toContain('https://x.y')
+    expect(scrubQuery('  hello   world ')).toBe('hello world')
+  })
   test('redacts spaced and prefixed secrets', () => {
     for (const [input, secret] of [
       ['token: abc123', 'abc123'],

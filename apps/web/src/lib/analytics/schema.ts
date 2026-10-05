@@ -30,14 +30,15 @@ export function dataAgeBucket(updatedAt: Date | null, now: number): 'lt_1h' | '1
   return 'gt_7d'
 }
 
-export const scrubQuery = (text: string): string => text.trim().replace(/\s+/g, ' ').slice(0, 64)
-
-export const scrubError = (text: string): string =>
+const stripSensitive = (text: string): string =>
   text
     .replace(/https?:\/\/\S+/gi, '[url]')
     .replace(/\?\S*/g, '')
     .replace(/(api_key|token|secret|password|bearer)([\s:=]+\S+|\S*)/gi, '[redacted]')
-    .slice(0, 200)
+
+export const scrubQuery = (text: string): string => stripSensitive(text).trim().replace(/\s+/g, ' ').slice(0, 64)
+
+export const scrubError = (text: string): string => stripSensitive(text).slice(0, 200)
 
 const common = {
   tabId: z.string().regex(/^[0-9a-f]{32}$/),
