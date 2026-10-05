@@ -36,7 +36,7 @@ export const scrubError = (text: string): string =>
   text
     .replace(/https?:\/\/\S+/gi, '[url]')
     .replace(/\?\S*/g, '')
-    .replace(/(api_key|token|secret)\S*/gi, '[redacted]')
+    .replace(/(api_key|token|secret|password|bearer)([\s:=]+\S+|\S*)/gi, '[redacted]')
     .slice(0, 200)
 
 const common = {

@@ -175,7 +175,7 @@ const failureCategory = [
   'unknown',
 ] as const
 
-const analyticsTrpcProcedure = [
+export const analyticsTrpcProcedure = [
   'account.current',
   'account.preferences',
   'account.updatePreferences',
@@ -203,6 +203,17 @@ const analyticsTrpcProcedure = [
   'statistics.careerWeaponUsage',
   'statistics.careerWeaponUsageHistory',
   'other',
+] as const
+export const analyticsTrpcCode = [
+  'BAD_REQUEST',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'TIMEOUT',
+  'TOO_MANY_REQUESTS',
+  'INTERNAL_SERVER_ERROR',
+  'NETWORK',
+  'OTHER',
 ] as const
 const analyticsSource = ['bar', 'palette'] as const
 
@@ -357,17 +368,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     help: 'Browser-observed tRPC failures',
     labels: {
       procedure: analyticsTrpcProcedure,
-      code: [
-        'BAD_REQUEST',
-        'UNAUTHORIZED',
-        'FORBIDDEN',
-        'NOT_FOUND',
-        'TIMEOUT',
-        'TOO_MANY_REQUESTS',
-        'INTERNAL_SERVER_ERROR',
-        'NETWORK',
-        'OTHER',
-      ],
+      code: analyticsTrpcCode,
     },
   },
   analytics_deadends_total: {

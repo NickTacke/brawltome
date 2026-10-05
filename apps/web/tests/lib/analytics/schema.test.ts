@@ -51,6 +51,19 @@ describe('scrubbers', () => {
     expect(scrubbed).not.toContain('abc')
     expect(scrubError('e'.repeat(500))).toHaveLength(200)
   })
+  test('redacts spaced and prefixed secrets', () => {
+    for (const [input, secret] of [
+      ['token: abc123', 'abc123'],
+      ['Authorization Bearer xyz789', 'xyz789'],
+      ['password=hunter2', 'hunter2'],
+      ['api_key = k3y', 'k3y'],
+      ['client secret: s3cr3t', 's3cr3t'],
+    ] as const) {
+      const scrubbed = scrubError(input)
+      expect(scrubbed).not.toContain(secret)
+      expect(scrubbed).toContain('[redacted]')
+    }
+  })
 })
 
 describe('analyticsBatchSchema', () => {
