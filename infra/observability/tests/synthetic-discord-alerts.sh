@@ -2,7 +2,8 @@
 set -eu
 
 compose='docker compose -f infra/observability/tests/fixtures/compose.yml'
-alerts=$(awk '/^[[:space:]]+- alert:/{print $3}' infra/observability/prometheus/rules/alerts.yml)
+# Severity tiers share an alert name, so each name is exercised once.
+alerts=$(awk '/^[[:space:]]+- alert:/{print $3}' infra/observability/prometheus/rules/alerts.yml | sort -u)
 alert_count=$(printf '%s\n' "$alerts" | awk 'NF { count++ } END { print count + 0 }')
 
 cleanup() {
