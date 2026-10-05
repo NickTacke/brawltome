@@ -61,6 +61,33 @@ describe('collectReview', () => {
   })
 })
 
+describe('daily uniques', () => {
+  test('evaluates each complete UTC day at its midnight boundary and excludes the partial day', async () => {
+    const lokiCalls: Call[] = []
+    const api: GrafanaApi = {
+      promInstant: async () => [],
+      lokiInstant: async (query, time) => {
+        lokiCalls.push({ query, time })
+        return query.includes('visitorKey') ? [{ metric: {}, value: time.getUTCDate() }] : []
+      },
+    }
+    const midday = new Date('2026-10-12T15:30:00Z')
+    const data = await collectReview(api, 3, midday)
+    const uniqueCalls = lokiCalls.filter((c) => c.query.includes('visitorKey'))
+    expect(uniqueCalls.map((c) => c.time.toISOString()).sort()).toEqual([
+      '2026-10-10T00:00:00.000Z',
+      '2026-10-11T00:00:00.000Z',
+      '2026-10-12T00:00:00.000Z',
+    ])
+    expect(uniqueCalls.every((c) => c.query.includes('[1d]'))).toBe(true)
+    expect(data.dailyUniques).toEqual([
+      { day: '2026-10-09', count: 10 },
+      { day: '2026-10-10', count: 11 },
+      { day: '2026-10-11', count: 12 },
+    ])
+  })
+})
+
 describe('resolveOutputPath', () => {
   test('resolves default and relative paths against the base dir, keeps absolute', () => {
     expect(resolveOutputPath(undefined, end, '/work')).toBe('/work/analytics-review-2026-10-12.md')
