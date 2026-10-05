@@ -1,7 +1,6 @@
 'use client'
 
 import { NavBar } from '@/components/NavBar'
-import { TrackDeadEnd } from '@/components/TrackDeadEnd'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { usePlayerRefresh } from '@/hooks/usePlayerRefresh'
 import { RefreshTimeoutError } from '@/hooks/useStaleRefresh'
@@ -130,7 +129,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   if (!displayPlayer) {
     return (
       <>
-        {refreshStatus.kind === 'timedOut' && <TrackDeadEnd kind="player_not_found" />}
         <LookupState id={id} notice={refreshNotice} onAction={retryWithTracking} turnstile={turnstile} />
       </>
     )
