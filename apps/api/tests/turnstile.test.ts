@@ -1,6 +1,12 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { verifyTurnstile, verifyTurnstileResult } from '../src/auth/turnstile'
 
+// Assigning undefined to process.env stores the string 'undefined', so unset by deleting the key.
+function restoreEnv(env: Record<string, string | undefined>, name: string, value: string | undefined) {
+  if (value === undefined) Reflect.deleteProperty(env, name)
+  else env[name] = value
+}
+
 describe('verifyTurnstile', () => {
   test('returns true for valid token', async () => {
     process.env.TURNSTILE_SECRET_KEY = 'test-secret'
@@ -13,7 +19,7 @@ describe('verifyTurnstile', () => {
       expect(result).toBe(true)
     } finally {
       globalThis.fetch = originalFetch
-      process.env.TURNSTILE_SECRET_KEY = undefined
+      Reflect.deleteProperty(process.env, 'TURNSTILE_SECRET_KEY')
     }
   })
 
@@ -28,7 +34,7 @@ describe('verifyTurnstile', () => {
       expect(result).toBe(false)
     } finally {
       globalThis.fetch = originalFetch
-      process.env.TURNSTILE_SECRET_KEY = undefined
+      Reflect.deleteProperty(process.env, 'TURNSTILE_SECRET_KEY')
     }
   })
 
@@ -42,7 +48,7 @@ describe('verifyTurnstile', () => {
       expect(await verifyTurnstileResult('token', '1.2.3.4')).toBe('unavailable')
     } finally {
       globalThis.fetch = originalFetch
-      process.env.TURNSTILE_SECRET_KEY = undefined
+      Reflect.deleteProperty(process.env, 'TURNSTILE_SECRET_KEY')
     }
   })
 
@@ -55,7 +61,7 @@ describe('verifyTurnstile', () => {
       expect(result).toBe(false)
     } finally {
       globalThis.fetch = originalFetch
-      process.env.TURNSTILE_SECRET_KEY = undefined
+      Reflect.deleteProperty(process.env, 'TURNSTILE_SECRET_KEY')
     }
   })
 
@@ -63,14 +69,14 @@ describe('verifyTurnstile', () => {
     const env = process.env as Record<string, string | undefined>
     const originalEnv = env.TURNSTILE_SECRET_KEY
     const originalNodeEnv = env.NODE_ENV
-    env.TURNSTILE_SECRET_KEY = undefined
-    env.NODE_ENV = undefined
+    Reflect.deleteProperty(env, 'TURNSTILE_SECRET_KEY')
+    Reflect.deleteProperty(env, 'NODE_ENV')
     try {
       const result = await verifyTurnstile('any-token', '1.2.3.4')
       expect(result).toBe(true)
     } finally {
       if (originalEnv !== undefined) env.TURNSTILE_SECRET_KEY = originalEnv
-      env.NODE_ENV = originalNodeEnv
+      restoreEnv(env, 'NODE_ENV', originalNodeEnv)
     }
   })
 
@@ -78,14 +84,14 @@ describe('verifyTurnstile', () => {
     const env = process.env as Record<string, string | undefined>
     const originalEnv = env.TURNSTILE_SECRET_KEY
     const originalNodeEnv = env.NODE_ENV
-    env.TURNSTILE_SECRET_KEY = undefined
+    Reflect.deleteProperty(env, 'TURNSTILE_SECRET_KEY')
     env.NODE_ENV = 'production'
     try {
       const result = await verifyTurnstile('any-token', '1.2.3.4')
       expect(result).toBe(false)
     } finally {
       if (originalEnv !== undefined) env.TURNSTILE_SECRET_KEY = originalEnv
-      env.NODE_ENV = originalNodeEnv
+      restoreEnv(env, 'NODE_ENV', originalNodeEnv)
     }
   })
 })
