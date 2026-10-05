@@ -111,7 +111,9 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
             SELECT brawlhalla_id, player_name, ${input.observedAt} FROM changed ORDER BY brawlhalla_id
             ON CONFLICT (brawlhalla_id) DO UPDATE SET
               player_name = EXCLUDED.player_name,
-              observed_at = EXCLUDED.observed_at
+              observed_at = EXCLUDED.observed_at,
+              -- Lets name verification spot a rename V1 itself saw.
+              previous_player_name = current.player_name
             WHERE current.observed_at < EXCLUDED.observed_at
             RETURNING brawlhalla_id
           )
