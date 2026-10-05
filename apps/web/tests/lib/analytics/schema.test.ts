@@ -56,6 +56,8 @@ describe('scrubbers', () => {
     expect(scrubbed).not.toContain('abc')
     expect(scrubbed).not.toContain('https://x.y')
     expect(scrubQuery('  hello   world ')).toBe('hello world')
+    expect(scrubQuery('why? not')).toBe('why? not')
+    expect(scrubQuery('see https://x.y/p?a=1 ok')).toBe('see [url] ok')
   })
   test('redacts spaced and prefixed secrets', () => {
     for (const [input, secret] of [
