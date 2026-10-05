@@ -639,6 +639,106 @@ describe('Ranking snapshot retention', () => {
     }
   }, 30_000)
 
+  test('reads a pinned snapshot consistently when retention deletes it between metadata and rows', async () => {
+    const { sql, url } = await migratedDatabase()
+    let deleteOnce: (() => Promise<void>) | undefined
+    const ranking = createPostgresRanking(url, {
+      afterMetadataRead: async () => {
+        const run = deleteOnce
+        deleteOnce = undefined
+        await run?.()
+      },
+    })
+    try {
+      const now = await databaseNow(sql)
+      const cutoff = new Date(now.getTime() - 24 * hour)
+      const previous = await insertGeneration(sql, {
+        mode: '1v1',
+        windowAt: new Date(now.getTime() - 31 * hour),
+        wins: 1,
+      })
+      const pinned = await insertGeneration(sql, {
+        mode: '1v1',
+        windowAt: new Date(now.getTime() - 30 * hour),
+        wins: 4,
+      })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 75 * minute), wins: 10 })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute), wins: 13 })
+
+      deleteOnce = async () => {
+        expect(await expire(sql, cutoff, 100)).toBe(2)
+      }
+      const leaderboard = await ranking.queries.getLeaderboard({
+        mode: '1v1',
+        region: 'all',
+        page: 1,
+        snapshotId: pinned.snapshots.all,
+      })
+      if (leaderboard.status === 'unavailable') throw new Error(`Expected leaderboard, got ${leaderboard.reason}`)
+      expect(leaderboard.totalRows).toBe(2)
+      expect(leaderboard.entries).toHaveLength(2)
+      expect(await storedGenerationIds(sql)).not.toContain(pinned.generationId)
+      expect(await storedGenerationIds(sql)).not.toContain(previous.generationId)
+
+      // The pin is gone for later requests, so it reports snapshot_not_found rather than an empty success.
+      expect(
+        await ranking.queries.getLeaderboard({
+          mode: '1v1',
+          region: 'all',
+          page: 1,
+          snapshotId: pinned.snapshots.all,
+        }),
+      ).toMatchObject({ status: 'unavailable', reason: 'snapshot_not_found' })
+    } finally {
+      await ranking.close()
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('reads recent activity consistently when retention deletes the compared snapshots mid-request', async () => {
+    const { sql, url } = await migratedDatabase()
+    let deleteOnce: (() => Promise<void>) | undefined
+    const ranking = createPostgresRanking(url, {
+      afterMetadataRead: async () => {
+        const run = deleteOnce
+        deleteOnce = undefined
+        await run?.()
+      },
+    })
+    try {
+      const now = await databaseNow(sql)
+      const previous = await insertGeneration(sql, {
+        mode: '1v1',
+        windowAt: new Date(now.getTime() - 31 * hour),
+        wins: 1,
+      })
+      const pinned = await insertGeneration(sql, {
+        mode: '1v1',
+        windowAt: new Date(now.getTime() - 30 * hour),
+        wins: 4,
+      })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 75 * minute), wins: 10 })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute), wins: 13 })
+
+      deleteOnce = async () => {
+        expect(await expire(sql, new Date(now.getTime() - 24 * hour), 100)).toBe(2)
+      }
+      const activity = await ranking.queries.getRecentActivity({
+        mode: '1v1',
+        region: 'all',
+        page: 1,
+        snapshotId: pinned.snapshots.all,
+      })
+      if (activity.status === 'unavailable') throw new Error(`Expected recent activity, got ${activity.reason}`)
+      expect(activity.totalRows).toBe(2)
+      expect(activity.entries.map(({ gamesDelta }) => gamesDelta)).toEqual([3, 3])
+      expect(await storedGenerationIds(sql)).not.toContain(previous.generationId)
+    } finally {
+      await ranking.close()
+      await sql.end()
+    }
+  }, 30_000)
+
   test('runs the scheduled maintenance operation lease-fenced and records what it expired', async () => {
     const { sql, url } = await migratedDatabase()
     const operations = createPostgresRefreshOperations(url)
