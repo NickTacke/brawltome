@@ -105,7 +105,7 @@ describe('V1 ranked leaderboard source', () => {
     for (const body of [
       null,
       [],
-      { rankings: [], total_pages: 0 },
+      { rankings: [realShapedRows['1v1']], total_pages: 0 },
       { rankings: [{ ...valid, players: [{ id: 42 }] }], total_pages: 1 },
       { rankings: [{ ...valid, players: undefined, id: 42, username: 'Ada' }], total_pages: 1 },
       { rankings: [{ ...valid, rating: Number.NaN }], total_pages: 1 },
@@ -117,6 +117,20 @@ describe('V1 ranked leaderboard source', () => {
       { rankings: [{ ...valid, tier: '' }], total_pages: 1 },
     ]) {
       expect(() => decodeLeaderboardPage(body, { mode: '1v1', region: 'EU', page: 1 })).toThrow(LeaderboardSourceError)
+    }
+  })
+
+  test('decodes an empty region as zero total pages', () => {
+    expect(decodeLeaderboardPage({ rankings: [], total_pages: 0 }, { mode: '3v3', region: 'JPN', page: 1 })).toEqual({
+      rankings: [],
+      totalPages: 0,
+    })
+    for (const [body, page] of [
+      [{ rankings: [], total_pages: 0 }, 2],
+      [{ rankings: [], total_pages: 2 }, 3],
+      [{ rankings: [], total_pages: -1 }, 1],
+    ] as const) {
+      expect(() => decodeLeaderboardPage(body, { mode: '3v3', region: 'JPN', page })).toThrow(LeaderboardSourceError)
     }
   })
 

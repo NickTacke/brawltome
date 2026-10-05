@@ -23,6 +23,9 @@ export const minLeaderboardIntervalMs = 60_000
 export const maxLeaderboardIntervalMs = 24 * 60 * 60 * 1000
 export const maxLeaderboardPageDepth = 20
 export const primaryMonitoringIntervalMs = 24 * 60 * 60 * 1000
+// Four attempts with the worker's exponential retry backoff span roughly 2s + 6s + 15s, so a brief upstream
+// outage is ridden out while the profile page is still waiting for the refresh.
+export const interactiveRefreshMaxAttempts = 4
 
 export type OperationProvenance = {
   source: string
@@ -122,6 +125,18 @@ export type AcceptRankedPlayerPulseOperation = {
   maxAttempts?: number
 }
 
+export type PlayerNameVerificationPayload = { brawlhallaId: number; playerName: string }
+
+export type AcceptPlayerNameVerificationOperation = {
+  kind: 'player-name-verification'
+  dedupeKey: string
+  operationKey: string
+  workClass: 'maintenance'
+  payload: PlayerNameVerificationPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
 export type AcceptLeaderboardOperation = {
   kind: LeaderboardOperationKind
   dedupeKey: string
@@ -185,6 +200,7 @@ export type ReserveStatisticsLegendMetaPublication = {
 export type AcceptOperation =
   | AcceptProofOperation
   | AcceptRankedPlayerPulseOperation
+  | AcceptPlayerNameVerificationOperation
   | AcceptLeaderboardOperation
   | AcceptDiscoveryProjection
   | AcceptDiscoveryReconciliation
@@ -254,10 +270,19 @@ export type MaterializeSchedulesResult = {
   }[]
 }
 
+// Admission rejections reuse the dead_letter status but are expected user-facing outcomes, not failed work.
+export const admissionRejectionCodes = ['actor_rate_limited', 'admission_reservation_expired'] as const
+export type DeadLetterReason = 'execution' | 'admission_rejected'
+
 export type OperationsTelemetrySnapshot = {
   observedAt: string
   oldestPending: { workClass: WorkClass; ageMs: number }[]
-  deadLetters: { workClass: WorkClass; kind: OperationLease['kind']; count: number }[]
+  deadLetters: {
+    workClass: WorkClass
+    kind: OperationLease['kind']
+    reason: DeadLetterReason
+    count: number
+  }[]
   scheduleLateness: { kind: OperationLease['kind']; latenessMs: number }[]
 }
 
@@ -367,6 +392,11 @@ export type OperationLease =
       kind: 'ranked-player-pulse'
       workClass: 'primary-monitoring'
       payload: { brawlhallaId: number }
+    })
+  | (LeaseFields & {
+      kind: 'player-name-verification'
+      workClass: 'maintenance'
+      payload: PlayerNameVerificationPayload
     })
   | (LeaseFields & {
       kind: StatisticsCollectionKind

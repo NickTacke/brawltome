@@ -9,7 +9,9 @@ import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
 import {
   createPostgresCareerPlayers,
+  createPostgresLeaderboardPlayerNames,
   createPostgresPlayerDiscoverySource,
+  createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
   createSteamPlayerEvidenceResolver,
   refreshCanonicalCareerPlayer,
@@ -24,14 +26,21 @@ import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
 import { internalSecretValid } from './auth/internal-secret'
+import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation-backoff'
 import { createHealthRoutes } from './health-routes'
 import {
   leaderboardScheduleDefinitions,
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
+  workerDatabaseUrl,
 } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
+import {
+  createPlayerNameVerificationExecutor,
+  createPlayerNameVerificationPlanner,
+  readPlayerNameVerificationConfig,
+} from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
 import {
   SourceAdmissionLimitedError,
@@ -44,8 +53,8 @@ import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
 
-const connectionString = process.env.DATABASE_URL
-if (!connectionString) throw new Error('DATABASE_URL is required')
+const configuredConnectionString = process.env.DATABASE_URL
+if (!configuredConnectionString) throw new Error('DATABASE_URL is required')
 const configuredApiKey = process.env.BRAWLHALLA_API_KEY
 if (!configuredApiKey) throw new Error('BRAWLHALLA_API_KEY is required')
 const apiKey: string = configuredApiKey
@@ -63,6 +72,7 @@ const legendReferences = createLegendReferenceIndex(
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
+const connectionString = workerDatabaseUrl(configuredConnectionString, workerConfig.database)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
@@ -98,6 +108,8 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
 const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
+const playerNameVerifications = createPostgresPlayerNameVerifications(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
@@ -130,6 +142,8 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'accounts-postgres', close: accounts.close },
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'players-career-postgres', close: careerPlayers.close },
+    { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
+    { name: 'players-name-verifications-postgres', close: playerNameVerifications.close },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
@@ -178,7 +192,39 @@ function requestShutdown(): void {
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 
+const discoveryReconciliationBackoff = createDiscoveryReconciliationBackoff({
+  baseMs: workerConfig.discovery.reconciliationFailureBackoffMs,
+  maxMs: workerConfig.discovery.reconciliationMaxFailureBackoffMs,
+  operationStatus: operations.operationStatus,
+})
 const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
+const nameVerificationConfig = readPlayerNameVerificationConfig(process.env)
+// The same rolling-window usage request admission enforces and source_quota_used reports.
+async function readV0SourceUsage() {
+  const usage = await requestAdmission.inspectCurrentUsage()
+  const v0 = usage.domains.find(({ domain }) => domain === 'brawlhalla-v0')
+  if (!v0) throw new Error('brawlhalla-v0 source admission is not configured')
+  return v0
+}
+const nameVerificationPlanner = createPlayerNameVerificationPlanner({
+  config: nameVerificationConfig,
+  readSourceUsage: readV0SourceUsage,
+  readDemandIds: accounts.demand.readPlayerIds,
+  verifications: playerNameVerifications,
+  operations,
+  telemetry,
+})
+const executePlayerNameVerification = createPlayerNameVerificationExecutor({
+  config: nameVerificationConfig,
+  readSourceUsage: readV0SourceUsage,
+  verifications: playerNameVerifications,
+  rankedPlayers,
+  rankedSource: (admitSourceCall) => {
+    const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
+    return { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) }
+  },
+  telemetry,
+})
 let leaderboardSchedulesReconciled = false
 try {
   await runOperationsWorker({
@@ -187,6 +233,13 @@ try {
     workerId,
     config: workerConfig,
     telemetry,
+    onStall: (stalledForMs) => {
+      telemetry.logger.error('operations_worker.stalled', new Error('Operations worker loops stopped progressing'), {
+        stalledForMs,
+      })
+      process.exitCode = 1
+      requestShutdown()
+    },
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
       const primaryMonitoring = await operations.reconcilePrimaryMonitoring(
@@ -216,7 +269,10 @@ try {
           })
           if (projection.outcome === 'accepted') reconciledDiscovery++
         }
-        if (await discovery.reconciliationDue(definition.owner, workerConfig.discovery.reconciliationIntervalMs)) {
+        if (
+          (await discovery.reconciliationDue(definition.owner, workerConfig.discovery.reconciliationIntervalMs)) &&
+          (await discoveryReconciliationBackoff.shouldEnqueue(definition.owner))
+        ) {
           const reconciliation = await operations.accept({
             kind: 'discovery-reconciliation',
             dedupeKey: `discovery:${definition.owner}:reconciliation`,
@@ -225,10 +281,13 @@ try {
             payload: { owner: definition.owner },
             provenance: { source: 'owner-fact-reconciliation', requestedBy: 'issue-200' },
           })
+          discoveryReconciliationBackoff.recordEnqueued(definition.owner, reconciliation.operationId)
           if (reconciliation.outcome === 'accepted') reconciledDiscovery++
         }
       }
-      const reconciledStatistics = await reconcileStatisticsCohort(statistics, operations, ranking.queries)
+      const reconciledStatistics =
+        (await reconcileStatisticsCohort(statistics, operations, ranking.queries)) +
+        (await nameVerificationPlanner.tick())
       if (leaderboardSchedulesReconciled) {
         return (
           interactiveAdmissions +
@@ -281,6 +340,7 @@ try {
           return operations.commitProofEffect(lease)
         },
         ranking,
+        leaderboardPlayerNames,
         leaderboardSource: {
           fetchPage: (input) =>
             fetchLeaderboardPage(input, {
@@ -384,6 +444,7 @@ try {
             )
           }
         },
+        executePlayerNameVerification,
         executeRankedPulse: async (lease, admitSourceCall) => {
           const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
           await refreshRankedPlayerPulse(

@@ -120,7 +120,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
   const expectedCommand = [
     '--collector.disable-defaults',
     '--collector.filesystem',
-    '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo)$$',
+    '--collector.filesystem.mount-points-include=^/storage/(prometheus|loki|tempo|postgres)$$',
     '--collector.textfile',
     '--collector.textfile.directory=/textfile',
   ]
@@ -136,6 +136,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
     ['/srv/brawltome-observability/loki', '/storage/loki'],
     ['/srv/brawltome-observability/tempo', '/storage/tempo'],
     ['/srv/brawltome-observability/backup-integrity', '/textfile'],
+    ['/srv/brawltome/postgres', '/storage/postgres'],
   ]
   const volumes = Array.isArray(nodeExporter.volumes) ? nodeExporter.volumes : []
   const volumesMatch =

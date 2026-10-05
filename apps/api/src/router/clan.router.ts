@@ -87,6 +87,23 @@ async function requestClanRefresh(
   discordUserId?: string,
   now = Date.now(),
 ): Promise<ClanRefreshResponseContract> {
+  const response = await resolveClanRefresh(ctx, input, discordUserId, now)
+  recordTelemetry(() =>
+    ctx.telemetry.metrics.add('refresh_requests_total', 1, {
+      kind: 'clan',
+      outcome: response.refresh.outcome,
+      source: discordUserId ? 'discord' : 'interactive-api',
+    }),
+  )
+  return response
+}
+
+async function resolveClanRefresh(
+  ctx: Context,
+  input: ClanRefreshInputContract,
+  discordUserId: string | undefined,
+  now: number,
+): Promise<ClanRefreshResponseContract> {
   const stored = await ctx.clanRepo.getById(input.id)
   const clan = await mapClan(ctx.clanRepo, input.id)
   const staleSections = [

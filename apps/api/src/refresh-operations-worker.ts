@@ -1,4 +1,5 @@
 import {
+  type LeaderboardGenerationCandidate,
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
   LeaderboardSourceError,
@@ -20,6 +21,7 @@ type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
+type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
 type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
 type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
@@ -33,14 +35,23 @@ type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'st
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
 
+export type RetryBackoff = {
+  multiplier: number
+  maxDelayMs: number
+  jitterRatio: number
+  random?: () => number
+}
+
 type RunOneRefreshOperationOptions = {
   leaseMs: number
   retryDelayMs: number
+  retryBackoff?: RetryBackoff
   sourceUnavailableRetryMs?: number
   admission: AdmissionConfig
   renewEveryMs?: number
   sourceAdmission?: SourceAdmission
   waitForSourceAdmission?: (retryAfterMs: number, signal: AbortSignal) => Promise<void>
+  waitForSourceRetry?: (delayMs: number, signal: AbortSignal) => Promise<void>
   executeEffect?: (lease: ProofLease) => Promise<FencedResult>
   executeSection?(
     lease: PlayerLease,
@@ -49,6 +60,10 @@ type RunOneRefreshOperationOptions = {
     caller: 'on-demand' | 'background',
   ): Promise<void>
   executeRankedPulse?(lease: RankedPulseLease, admitSourceCall: (domain: SourceDomain) => Promise<void>): Promise<void>
+  executePlayerNameVerification?(
+    lease: NameVerificationLease,
+    admitSourceCall: (domain: SourceDomain) => Promise<void>,
+  ): Promise<unknown>
   isPrimaryMonitoringTarget?(lease: Extract<PlayerLease, { workClass: 'primary-monitoring' }>): Promise<boolean>
   executeClanSection?(
     lease: ClanLease,
@@ -59,6 +74,12 @@ type RunOneRefreshOperationOptions = {
   syncClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster', leaseExpiresAt: Date): Promise<void>
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
+  leaderboardPlayerNames?: {
+    applyLeaderboardNames(input: {
+      observedAt: Date
+      players: Array<{ brawlhallaId: number; name: string }>
+    }): Promise<{ changed: number }>
+  }
   leaderboardSource?: LeaderboardPageSource
   statistics?: Pick<
     StatisticsTracer,
@@ -103,6 +124,27 @@ function sourceRetryAfterMs(error: unknown): number | null {
     return Math.max(0, error.retryAfterMs)
   }
   return null
+}
+
+export function retryDelayForAttempt(
+  attemptNumber: number,
+  policy: { baseDelayMs: number; multiplier: number; maxDelayMs: number; jitterRatio: number; random: () => number },
+): number {
+  const exponent = Math.max(0, attemptNumber - 1)
+  const nominal = policy.baseDelayMs * policy.multiplier ** exponent
+  const jitter = 1 + policy.jitterRatio * (2 * policy.random() - 1)
+  return Math.max(0, Math.min(policy.maxDelayMs, Math.floor(nominal * jitter)))
+}
+
+function executionRetryDelayMs(lease: OperationLease, options: RunOneRefreshOperationOptions): number {
+  if (!options.retryBackoff) return options.retryDelayMs
+  return retryDelayForAttempt(lease.attemptNumber, {
+    baseDelayMs: options.retryDelayMs,
+    multiplier: options.retryBackoff.multiplier,
+    maxDelayMs: options.retryBackoff.maxDelayMs,
+    jitterRatio: options.retryBackoff.jitterRatio,
+    random: options.retryBackoff.random ?? Math.random,
+  })
 }
 
 function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise<void> {
@@ -173,6 +215,8 @@ export async function reconcileInteractiveAdmissions(
   return activated
 }
 
+const safeFailureCode = /^[a-z0-9_.-]{1,64}$/i
+
 function failureDetails(error: unknown, fallbackCode: string) {
   if (error && typeof error === 'object') {
     return {
@@ -206,8 +250,8 @@ async function executeProof(
 
 function createSourceAdmission(
   options: RunOneRefreshOperationOptions,
-  lease: InteractiveLease | RankedPulseLease,
-  section: InteractiveSection | 'ranked-pulse',
+  lease: InteractiveLease | RankedPulseLease | NameVerificationLease,
+  section: InteractiveSection | 'ranked-pulse' | 'name-verification',
 ): (domain: SourceDomain) => Promise<void> {
   let sourceCall = 0
   return async (domain) => {
@@ -346,6 +390,29 @@ async function executeRankedPulse(
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
   await options.executeRankedPulse(lease, createSourceAdmission(options, lease, 'ranked-pulse'))
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
+// The executor spends at most one V0 call and records its own outcome, so only a lost lease fails the attempt.
+async function executeNameVerification(
+  operations: RefreshOperationWorker,
+  lease: NameVerificationLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptExecutionOutcome> {
+  if (!options.executePlayerNameVerification || !options.sourceAdmission) {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'name_verification_executor_unavailable',
+        message: 'Player name verification executor is not configured',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+  await options.executePlayerNameVerification(lease, createSourceAdmission(options, lease, 'name-verification'))
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -594,6 +661,65 @@ async function executeStatisticsLegendMetaPublication(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
+// Transient V1 page failures retry in place; 429s stay with durable rate-limit backoff.
+const leaderboardPageRetryDelaysMs = [500, 2_000] as const
+
+function isTransientLeaderboardPageFailure(error: unknown): boolean {
+  return (
+    error instanceof LeaderboardSourceError &&
+    error.retryable &&
+    (error.code === 'source_transport_failed' || error.code === 'source_unavailable')
+  )
+}
+
+function leaderboardContestants(candidate: LeaderboardGenerationCandidate) {
+  const contestants = new Map<number, string>()
+  for (const rows of candidate.snapshots.values()) {
+    for (const { identity } of rows) {
+      const players = identity.type === 'fixed-two-vs-two-team' ? identity.players : [identity.player]
+      for (const player of players) {
+        if (!contestants.has(player.brawlhallaId)) contestants.set(player.brawlhallaId, player.name)
+      }
+    }
+  }
+  return [...contestants].map(([brawlhallaId, name]) => ({ brawlhallaId, name }))
+}
+
+// Leaderboards observe current names for thousands of players nobody visits; feed them to Players after the
+// generation is durable. Failure only delays names until the next scan, so it never fails the publication.
+function withLeaderboardNamePropagation(
+  ranking: RankingPublicationStore,
+  names: RunOneRefreshOperationOptions['leaderboardPlayerNames'],
+  telemetry: Telemetry | undefined,
+): RankingPublicationStore {
+  if (!names) return ranking
+  return {
+    recordCollectionFailure: (authorization, failure) => ranking.recordCollectionFailure(authorization, failure),
+    async publishGeneration(authorization, candidate) {
+      const result = await ranking.publishGeneration(authorization, candidate)
+      if (result !== 'published' && result !== 'already-published') return result
+      const log = (write: (active: Telemetry) => void) => {
+        if (!telemetry) return
+        try {
+          write(telemetry)
+        } catch {
+          return
+        }
+      }
+      try {
+        const { changed } = await names.applyLeaderboardNames({
+          observedAt: candidate.observedAt,
+          players: leaderboardContestants(candidate),
+        })
+        log((active) => active.logger.info('leaderboard.player_names.applied', { mode: candidate.mode, changed }))
+      } catch (error) {
+        log((active) => active.logger.error('leaderboard.player_names.failed', error, { mode: candidate.mode }))
+      }
+      return result
+    },
+  }
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -626,26 +752,37 @@ async function executeLeaderboard(
     },
     source: {
       async fetchPage(input) {
-        await renewLeaderboardLease()
-        for (;;) {
-          const admission = await sourceAdmission.admitSource({
-            domain: 'brawlhalla-v1',
-            reservationKey: `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`,
-            units: 1,
-            caller: 'background',
-          })
-          if (admission.outcome === 'admitted') break
-          await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
-          if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+        const pageKey = `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`
+        for (let retry = 0; ; retry += 1) {
           await renewLeaderboardLease()
+          for (;;) {
+            const admission = await sourceAdmission.admitSource({
+              domain: 'brawlhalla-v1',
+              // Each retry is a real source call, so it needs its own reservation.
+              reservationKey: retry === 0 ? pageKey : `${pageKey}:retry-${retry}`,
+              units: 1,
+              caller: 'background',
+            })
+            if (admission.outcome === 'admitted') break
+            await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
+            if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+            await renewLeaderboardLease()
+          }
+          await renewLeaderboardLease()
+          try {
+            return await (options.telemetry
+              ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
+              : leaderboardSource.fetchPage(input))
+          } catch (error) {
+            const delayMs = leaderboardPageRetryDelaysMs[retry]
+            if (delayMs === undefined || !isTransientLeaderboardPageFailure(error)) throw error
+            await (options.waitForSourceRetry ?? waitForRenewal)(delayMs, authorityLost)
+            if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+          }
         }
-        await renewLeaderboardLease()
-        return options.telemetry
-          ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
-          : leaderboardSource.fetchPage(input)
       },
     },
-    publication: ranking,
+    publication: withLeaderboardNamePropagation(ranking, options.leaderboardPlayerNames, options.telemetry),
     pageDepth: lease.payload.pageDepth,
     intervalMs: lease.payload.intervalMs,
   })
@@ -715,6 +852,8 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeDiscoveryReconciliation(operations, lease, options)
       } else if (lease.kind === 'ranked-player-pulse') {
         attemptOutcome = await executeRankedPulse(operations, lease, options)
+      } else if (lease.kind === 'player-name-verification') {
+        attemptOutcome = await executeNameVerification(operations, lease, options)
       } else if (lease.kind === 'statistics-publication') {
         attemptOutcome = await executeStatisticsPublication(operations, lease, options)
       } else if (lease.kind === 'statistics-legend-meta-publication') {
@@ -801,18 +940,22 @@ export async function runOneRefreshOperation(
                       ? 'discovery_reconciliation_failed'
                       : lease.kind === 'ranked-player-pulse'
                         ? 'ranked_player_pulse_failed'
-                        : lease.kind === 'statistics-ranked-collection' ||
-                            lease.kind === 'statistics-lifetime-collection'
-                          ? 'statistics_collection_failed'
-                          : lease.kind === 'statistics-publication'
-                            ? 'statistics_publication_failed'
-                            : lease.kind === 'statistics-legend-meta-publication'
-                              ? 'statistics_legend_meta_publication_failed'
-                              : 'leaderboard_collection_failed'
+                        : lease.kind === 'player-name-verification'
+                          ? 'player_name_verification_failed'
+                          : lease.kind === 'statistics-ranked-collection' ||
+                              lease.kind === 'statistics-lifetime-collection'
+                            ? 'statistics_collection_failed'
+                            : lease.kind === 'statistics-publication'
+                              ? 'statistics_publication_failed'
+                              : lease.kind === 'statistics-legend-meta-publication'
+                                ? 'statistics_legend_meta_publication_failed'
+                                : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'
-      if ((await operations.fail(lease, failure, sourceRetryMs ?? options.retryDelayMs)) === 'lease-lost') {
+      if (
+        (await operations.fail(lease, failure, sourceRetryMs ?? executionRetryDelayMs(lease, options))) === 'lease-lost'
+      ) {
         attemptOutcome = 'lease_lost'
         failureCategory = 'lease_lost'
       }
@@ -825,6 +968,7 @@ export async function runOneRefreshOperation(
           workClass: lease.workClass,
           outcome: attemptOutcome,
           failureCategory,
+          ...(safeFailureCode.test(failure.code) ? { failureCode: failure.code } : {}),
         }),
       )
     } finally {

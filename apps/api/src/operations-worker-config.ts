@@ -32,6 +32,29 @@ export function readSourceBackgroundHeadroom(value: string | undefined, minimumS
   return boundedInteger(value, 30, 'SOURCE_BACKGROUND_HEADROOM', 0, minimumSourceLimit - 1)
 }
 
+export type WorkerDatabaseSessionConfig = {
+  connectTimeoutSeconds: number
+  statementTimeoutMs: number
+  idleInTransactionSessionTimeoutMs: number
+}
+
+/**
+ * Adds connection and server-side session timeouts to the worker's connection string so every postgres.js client
+ * the worker creates inherits them. Parameters already present in the URL win, so operators can still override.
+ */
+export function workerDatabaseUrl(connectionString: string, config: WorkerDatabaseSessionConfig): string {
+  const url = new URL(connectionString)
+  const defaults: Record<string, number> = {
+    connect_timeout: config.connectTimeoutSeconds,
+    statement_timeout: config.statementTimeoutMs,
+    idle_in_transaction_session_timeout: config.idleInTransactionSessionTimeoutMs,
+  }
+  for (const [name, value] of Object.entries(defaults)) {
+    if (!url.searchParams.has(name)) url.searchParams.set(name, String(value))
+  }
+  return url.toString()
+}
+
 const classEnvironment: Record<WorkClass, string> = {
   interactive: 'OPERATIONS_INTERACTIVE_CONCURRENCY',
   'primary-monitoring': 'OPERATIONS_PRIMARY_MONITORING_CONCURRENCY',
@@ -114,10 +137,43 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     ) as Record<BackgroundWorkClass, number>,
   }
 
+  // Retryable failures back off exponentially (2s, 6s, then capped at 15s by default) with +/-20% jitter so a
+  // brief upstream hiccup is ridden out across four interactive attempts while the whole retry window stays
+  // inside the ~30s the profile page waits for a refresh. Rate-limited work keeps its Retry-After delay.
+  const retryDelayMs = positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 2_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000)
+  const retryBackoff = {
+    multiplier: boundedInteger(
+      env.OPERATIONS_RETRY_BACKOFF_MULTIPLIER,
+      3,
+      'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
+      1,
+      10,
+    ),
+    maxDelayMs: boundedInteger(
+      env.OPERATIONS_RETRY_MAX_DELAY_MS,
+      Math.max(15_000, retryDelayMs),
+      'OPERATIONS_RETRY_MAX_DELAY_MS',
+      retryDelayMs,
+      900_000,
+    ),
+    jitterRatio: 0.2,
+  }
+
+  // After a dead-lettered discovery reconciliation, wait 5 minutes (doubling per consecutive failure, capped at
+  // an hour) before enqueueing another one instead of re-enqueueing on every scheduler tick.
+  const reconciliationFailureBackoffMs = boundedInteger(
+    env.DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS,
+    5 * 60 * 1000,
+    'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
+    60_000,
+    24 * 60 * 60 * 1000,
+  )
+
   return {
     leaseMs: positiveInteger(env.OPERATIONS_LEASE_MS, 30_000, 'OPERATIONS_LEASE_MS', 300_000),
     pollMs: positiveInteger(env.OPERATIONS_POLL_MS, 1_000, 'OPERATIONS_POLL_MS', 60_000),
-    retryDelayMs: positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 1_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000),
+    retryDelayMs,
+    retryBackoff,
     sourceUnavailableRetryMs: boundedInteger(
       env.SOURCE_UNAVAILABLE_RETRY_MS,
       60_000,
@@ -131,6 +187,39 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       'OPERATIONS_SCHEDULE_BATCH_SIZE',
       1_000,
     ),
+    // Exit (and let Docker restart the worker) when no loop has iterated for 10 minutes: every call is hung.
+    stallTimeoutMs: boundedInteger(
+      env.OPERATIONS_STALL_TIMEOUT_MS,
+      10 * 60 * 1000,
+      'OPERATIONS_STALL_TIMEOUT_MS',
+      60_000,
+      60 * 60 * 1000,
+    ),
+    // Worker statements are batched (discovery reconciliation streams ~188s as many short statements), so a
+    // 5-minute per-statement and idle-in-transaction ceiling only ends sessions that are genuinely stuck.
+    database: {
+      connectTimeoutSeconds: boundedInteger(
+        env.OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS,
+        10,
+        'OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS',
+        1,
+        120,
+      ),
+      statementTimeoutMs: boundedInteger(
+        env.OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS,
+        5 * 60 * 1000,
+        'OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS',
+        1_000,
+        60 * 60 * 1000,
+      ),
+      idleInTransactionSessionTimeoutMs: boundedInteger(
+        env.OPERATIONS_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+        5 * 60 * 1000,
+        'OPERATIONS_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS',
+        1_000,
+        60 * 60 * 1000,
+      ),
+    } satisfies WorkerDatabaseSessionConfig,
     discovery: {
       projectionBatchSize: boundedInteger(
         env.DISCOVERY_PROJECTION_BATCH_SIZE,
@@ -144,6 +233,14 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
         60 * 60 * 1000,
         'DISCOVERY_RECONCILIATION_INTERVAL_MS',
         60_000,
+        24 * 60 * 60 * 1000,
+      ),
+      reconciliationFailureBackoffMs,
+      reconciliationMaxFailureBackoffMs: boundedInteger(
+        env.DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS,
+        Math.max(60 * 60 * 1000, reconciliationFailureBackoffMs),
+        'DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS',
+        reconciliationFailureBackoffMs,
         24 * 60 * 60 * 1000,
       ),
     },

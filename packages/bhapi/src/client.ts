@@ -33,6 +33,26 @@ import type {
 } from './types'
 
 const BASE_URL = 'https://api.brawlhalla.com'
+
+export class BhApiHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message)
+    this.name = 'BhApiHttpError'
+  }
+}
+
+// Log paths as bounded templates: no query string (api_key) and no player, clan or page identifiers.
+function logPath(path: string): string {
+  return path
+    .split('?')[0]
+    .split('/')
+    .map((segment) => (/^\d+$/.test(segment) ? ':id' : segment))
+    .join('/')
+    .slice(0, 120)
+}
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000
 
 export interface BhApiMetricsSink {
@@ -127,13 +147,7 @@ export class BhApiClient {
     const caller: Caller = opts.caller ?? 'background'
     const path = endpoint.split('?')[0]
 
-    const waitMs = await this.queue.acquire(caller)
-    if (waitMs > 0) {
-      console.log(`[bhapi] ${path} queue wait: ${(waitMs / 1000).toFixed(1)}s (caller=${caller})`)
-    }
-
-    const remaining = this.remainingTokens(caller)
-    console.log(`[bhapi] ${path} (${remaining} ${caller} tokens left)`)
+    await this.acquire(caller, path, 'brawlhalla-v0')
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
@@ -144,16 +158,21 @@ export class BhApiClient {
     const caller: Caller = opts.caller ?? 'background'
     const path = endpoint.split('?')[0]
 
-    const waitMs = await this.queue.acquire(caller)
-    if (waitMs > 0) {
-      console.log(`[bhapi] ${path} queue wait: ${(waitMs / 1000).toFixed(1)}s (caller=${caller})`)
-    }
-
-    const remaining = this.remainingTokens(caller)
-    console.log(`[bhapi] v1 ${path} (${remaining} ${caller} tokens left)`)
+    await this.acquire(caller, path, 'brawlhalla-v1')
 
     const url = `${this.baseUrl}/v1${endpoint}`
     return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true, opts.onAttempt)
+  }
+
+  private async acquire(caller: Caller, path: string, domain: BhApiSourceDomain): Promise<void> {
+    const waitMs = await this.queue.acquire(caller)
+    this.telemetry?.logger.debug('source.queue.acquired', {
+      domain,
+      path: logPath(path),
+      caller,
+      waitMs,
+      remainingTokens: this.remainingTokens(caller),
+    })
   }
 
   private async sendRequest<T>(
@@ -169,7 +188,7 @@ export class BhApiClient {
     const started = performance.now()
     let outcome: 'succeeded' | 'not_found' | 'rate_limited' | 'failed' = 'failed'
     try {
-      const performRequest = () => this.performRequest<T>(url, path, endpoint, rejectNullPayload)
+      const performRequest = () => this.performRequest<T>(url, path, endpoint, domain, rejectNullPayload)
       const result = this.telemetry
         ? await this.telemetry.trace('source.call', { domain }, performRequest)
         : await performRequest()
@@ -196,8 +215,24 @@ export class BhApiClient {
     url: string,
     path: string,
     endpoint: string,
+    domain: BhApiSourceDomain,
     rejectNullPayload: boolean,
   ): Promise<T | null> {
+    const logResponse = (
+      level: 'info' | 'warn',
+      status: number,
+      outcome: 'succeeded' | 'not_found' | 'rate_limited' | 'failed',
+      durationMs: number,
+      extra: Record<string, number | boolean> = {},
+    ) =>
+      this.telemetry?.logger[level]('source.call.response', {
+        domain,
+        path: logPath(path),
+        status,
+        outcome,
+        durationMs,
+        ...extra,
+      })
     const fetchStart = Date.now()
     let res: Response
     try {
@@ -212,7 +247,7 @@ export class BhApiClient {
     const fetchMs = Date.now() - fetchStart
 
     if (res.status === 404) {
-      console.log(`[bhapi] ${path} -> 404 (${fetchMs}ms)`)
+      logResponse('info', 404, 'not_found', fetchMs)
       return null
     }
 
@@ -226,24 +261,21 @@ export class BhApiClient {
           : Number.isFinite(parsedDateMs) && parsedDateMs > Date.now()
             ? Math.ceil((parsedDateMs - Date.now()) / 1000)
             : 5
-      console.warn(
-        `[bhapi] ${path} -> 429 UNEXPECTED (${fetchMs}ms, retry-after: ${retryAfter}s) — queue should have prevented this`,
-      )
-
       const pauseMs = (retryAfter + 1) * 1000
+      // The queue should have prevented this; the pause protects the shared upstream quota.
+      logResponse('warn', 429, 'rate_limited', fetchMs, { retryAfterSeconds: retryAfter, queuePausedMs: pauseMs })
       this.queue.pause(pauseMs)
-      console.warn(`[bhapi] paused queue for ${retryAfter + 1}s`)
 
       throw new RateLimitError(`Brawlhalla API rate limited for ${endpoint}`, pauseMs)
     }
 
     if (!res.ok) {
-      console.log(`[bhapi] ${path} -> ${res.status} (${fetchMs}ms)`)
-      throw new Error(`Brawlhalla API error: ${res.status} ${res.statusText} for ${endpoint}`)
+      logResponse('warn', res.status, 'failed', fetchMs)
+      throw new BhApiHttpError(`Brawlhalla API error: ${res.status} ${res.statusText} for ${endpoint}`, res.status)
     }
 
     if (fetchMs > 5000) {
-      console.log(`[bhapi] ${path} -> 200 SLOW (${fetchMs}ms)`)
+      logResponse('info', res.status, 'succeeded', fetchMs, { slow: true })
     }
 
     let payload: unknown

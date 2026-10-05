@@ -4,6 +4,7 @@ import {
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
+  workerDatabaseUrl,
 } from '../src/operations-worker-config'
 import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
 
@@ -12,12 +13,21 @@ describe('operations worker configuration', () => {
     expect(readOperationsWorkerConfig({})).toEqual({
       leaseMs: 30_000,
       pollMs: 1_000,
-      retryDelayMs: 1_000,
+      retryDelayMs: 2_000,
+      retryBackoff: { multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2 },
       sourceUnavailableRetryMs: 60_000,
       scheduleBatchSize: 100,
+      stallTimeoutMs: 10 * 60 * 1000,
+      database: {
+        connectTimeoutSeconds: 10,
+        statementTimeoutMs: 5 * 60 * 1000,
+        idleInTransactionSessionTimeoutMs: 5 * 60 * 1000,
+      },
       discovery: {
         projectionBatchSize: 500,
         reconciliationIntervalMs: 60 * 60 * 1000,
+        reconciliationFailureBackoffMs: 5 * 60 * 1000,
+        reconciliationMaxFailureBackoffMs: 60 * 60 * 1000,
       },
       leaderboard: {
         pageDepth: 20,
@@ -57,9 +67,54 @@ describe('operations worker configuration', () => {
     expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_INTERVAL_MS: '59999' })).toThrow(
       'DISCOVERY_RECONCILIATION_INTERVAL_MS',
     )
+    expect(
+      readOperationsWorkerConfig({
+        OPERATIONS_RETRY_DELAY_MS: '1000',
+        OPERATIONS_RETRY_BACKOFF_MULTIPLIER: '2',
+        OPERATIONS_RETRY_MAX_DELAY_MS: '8000',
+      }),
+    ).toMatchObject({ retryDelayMs: 1_000, retryBackoff: { multiplier: 2, maxDelayMs: 8_000, jitterRatio: 0.2 } })
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_BACKOFF_MULTIPLIER: '0' })).toThrow(
+      'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
+    )
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_MAX_DELAY_MS: '1999' })).toThrow(
+      'OPERATIONS_RETRY_MAX_DELAY_MS',
+    )
+    expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS: '59999' })).toThrow(
+      'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
+    )
+    expect(() =>
+      readOperationsWorkerConfig({
+        DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS: '600000',
+        DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS: '599999',
+      }),
+    ).toThrow('DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS')
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }
+  })
+
+  test('bounds worker database sessions without overriding explicit connection parameters', () => {
+    const database = readOperationsWorkerConfig({}).database
+    const bounded = new URL(workerDatabaseUrl('postgres://worker:p%40ss@db:5432/brawltome?sslmode=disable', database))
+    expect(bounded.password).toBe('p%40ss')
+    expect(Object.fromEntries(bounded.searchParams)).toEqual({
+      sslmode: 'disable',
+      connect_timeout: '10',
+      statement_timeout: '300000',
+      idle_in_transaction_session_timeout: '300000',
+    })
+    const explicit = new URL(workerDatabaseUrl('postgres://worker@db/brawltome?statement_timeout=900000', database))
+    expect(explicit.searchParams.get('statement_timeout')).toBe('900000')
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS: '999' })).toThrow(
+      'OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS',
+    )
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS: '0' })).toThrow(
+      'OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS',
+    )
+    expect(() => readOperationsWorkerConfig({ OPERATIONS_STALL_TIMEOUT_MS: '59999' })).toThrow(
+      'OPERATIONS_STALL_TIMEOUT_MS',
+    )
   })
 
   test('validates the source ceiling and explicit background headroom', () => {
