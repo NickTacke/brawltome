@@ -14,7 +14,9 @@ export type RankingRetentionInput = {
 }
 
 // 'completed' means the batch was deleted and the operation marked succeeded in one transaction.
-export type RankingRetentionResult = { outcome: 'completed'; deletedGenerations: number } | { outcome: 'lease-lost' }
+export type RankingRetentionResult =
+  | { outcome: 'completed'; deletedGenerations: number; expirableGenerations: number }
+  | { outcome: 'lease-lost' }
 
 export interface RankingRetentionStore {
   expireGenerations(

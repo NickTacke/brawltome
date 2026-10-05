@@ -625,11 +625,12 @@ export function createPostgresRanking(connectionString: string) {
           ) AS active
         `
         if (lease?.active !== true) return { outcome: 'lease-lost' as const }
-        const [expired] = await sql<{ deleted: number }[]>`
-          SELECT rankings.expire_v1_generations(
+        const [expired] = await sql<{ deleted_generations: number; expirable_generations: number }[]>`
+          SELECT deleted_generations, expirable_generations
+          FROM rankings.expire_v1_generations(
             clock_timestamp() - make_interval(hours => ${retentionHours}::integer),
             ${maxGenerations}::integer
-          ) AS deleted
+          )
         `
         const [completed] = await sql<{ completed: boolean }[]>`
           SELECT refresh_operations.complete_ranking_retention_lease(
@@ -640,7 +641,11 @@ export function createPostgresRanking(connectionString: string) {
         `
         // The lease row has been locked since the check above, so completion cannot lose it; fail loudly if it did.
         if (completed?.completed !== true) throw new Error('ranking retention lease changed while its row was locked')
-        return { outcome: 'completed' as const, deletedGenerations: expired?.deleted ?? 0 }
+        return {
+          outcome: 'completed' as const,
+          deletedGenerations: expired?.deleted_generations ?? 0,
+          expirableGenerations: expired?.expirable_generations ?? 0,
+        }
       })
     },
 

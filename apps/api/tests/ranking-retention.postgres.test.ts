@@ -196,11 +196,17 @@ async function orphanCounts(sql: Sql, generationIds: string[]) {
   return counts
 }
 
-async function expire(sql: Sql, cutoff: Date, maxGenerations: number): Promise<number> {
-  const [row] = await sql<{ deleted: number }[]>`
-    SELECT rankings.expire_v1_generations(${cutoff}, ${maxGenerations}) AS deleted
+async function expireWithBacklog(sql: Sql, cutoff: Date, maxGenerations: number) {
+  const [row] = await sql<{ deleted_generations: number; expirable_generations: number }[]>`
+    SELECT deleted_generations, expirable_generations
+    FROM rankings.expire_v1_generations(${cutoff}, ${maxGenerations})
   `
-  return row?.deleted ?? -1
+  if (!row) throw new Error('Expected a retention result')
+  return { deleted: row.deleted_generations, expirable: row.expirable_generations }
+}
+
+async function expire(sql: Sql, cutoff: Date, maxGenerations: number): Promise<number> {
+  return (await expireWithBacklog(sql, cutoff, maxGenerations)).deleted
 }
 
 async function errorMessage(work: () => Promise<unknown>): Promise<string> {
@@ -252,15 +258,16 @@ describe('Ranking snapshot retention', () => {
       const unfinalized = await insertGeneration(sql, { mode: 'solo2v2', windowAt: at(60 * hour), finalized: false })
 
       const cutoff = at(24 * hour)
-      expect(await expire(sql, cutoff, 2)).toBe(2)
+      // Each call also reports how many generations are still expirable after its batch.
+      expect(await expireWithBacklog(sql, cutoff, 2)).toEqual({ deleted: 2, expirable: 2 })
       const afterFirstBatch = await storedGenerationIds(sql)
       expect(afterFirstBatch).not.toContain(twoVsTwoOldest.generationId)
       expect(afterFirstBatch).not.toContain(oneVsOneOld[0]?.generationId)
       expect(afterFirstBatch).toContain(oneVsOneOld[1]?.generationId)
       expect(afterFirstBatch).toContain(oneVsOneOld[2]?.generationId)
 
-      expect(await expire(sql, cutoff, 100)).toBe(2)
-      expect(await expire(sql, cutoff, 100)).toBe(0)
+      expect(await expireWithBacklog(sql, cutoff, 100)).toEqual({ deleted: 2, expirable: 0 })
+      expect(await expireWithBacklog(sql, cutoff, 100)).toEqual({ deleted: 0, expirable: 0 })
 
       const expired = [twoVsTwoOldest, ...oneVsOneOld].map(({ generationId }) => generationId)
       const kept = [
@@ -349,7 +356,7 @@ describe('Ranking snapshot retention', () => {
       const before = await storedGenerationIds(sql)
       const first = sql.begin(async (transaction) => {
         const [row] = await transaction<{ deleted: number }[]>`
-          SELECT rankings.expire_v1_generations(${cutoff}, 3) AS deleted
+          SELECT deleted_generations AS deleted FROM rankings.expire_v1_generations(${cutoff}, 3)
         `
         const visible = await expiredBy(transaction)
         firstStarted()
@@ -359,7 +366,7 @@ describe('Ranking snapshot retention', () => {
       await started
       const second = await sql.begin(async (transaction) => {
         const [row] = await transaction<{ deleted: number }[]>`
-          SELECT rankings.expire_v1_generations(${cutoff}, 3) AS deleted
+          SELECT deleted_generations AS deleted FROM rankings.expire_v1_generations(${cutoff}, 3)
         `
         return { deleted: row?.deleted, remaining: await storedGenerationIdsVisibleTo(transaction) }
       })
@@ -564,7 +571,8 @@ describe('Ranking snapshot retention', () => {
 
       const deleted = await asRuntime(async (transaction) => {
         const [row] = await transaction<{ deleted: number }[]>`
-          SELECT rankings.expire_v1_generations(clock_timestamp() - interval '24 hours', 10) AS deleted
+          SELECT deleted_generations AS deleted
+          FROM rankings.expire_v1_generations(clock_timestamp() - interval '24 hours', 10)
         `
         return row?.deleted
       })
@@ -709,12 +717,21 @@ describe('Ranking snapshot retention', () => {
         .snapshot()
         .find(({ name }) => name === 'ranking_retention_deleted_generations_total')
       expect(counter?.series).toEqual([expect.objectContaining({ labels: {}, value: 2 })])
+      const metrics = telemetry.metrics.snapshot()
+      // One old generation is still past the window after the batch of two.
+      expect(metrics.find(({ name }) => name === 'ranking_retention_expirable_generations')?.series).toEqual([
+        expect.objectContaining({ labels: {}, value: 1 }),
+      ])
+      expect(metrics.find(({ name }) => name === 'ranking_retention_duration_ms')?.series).toEqual([
+        expect.objectContaining({ labels: {}, count: 1 }),
+      ])
       expect(sink.records.find(({ event }) => event === 'ranking.retention.completed')?.attributes).toMatchObject({
         operationId: lease.operationId,
         deletedGenerations: 2,
         retentionHours: 24,
         maxGenerations: 2,
         batchFull: true,
+        expirableGenerations: 1,
       })
     } finally {
       await telemetry.shutdown(50)

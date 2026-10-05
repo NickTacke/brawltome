@@ -464,7 +464,10 @@ async function executeRankingRetention(
   const telemetry = options.telemetry
   if (telemetry) {
     try {
+      const durationMs = Math.round(performance.now() - started)
       telemetry.metrics.add('ranking_retention_deleted_generations_total', result.deletedGenerations, {})
+      telemetry.metrics.set('ranking_retention_expirable_generations', result.expirableGenerations, {})
+      telemetry.metrics.observe('ranking_retention_duration_ms', durationMs, {})
       telemetry.logger.info('ranking.retention.completed', {
         operationId: lease.operationId,
         deletedGenerations: result.deletedGenerations,
@@ -472,7 +475,8 @@ async function executeRankingRetention(
         maxGenerations: lease.payload.maxGenerations,
         // A full batch means more expired generations are waiting for the next run.
         batchFull: result.deletedGenerations >= lease.payload.maxGenerations,
-        durationMs: Math.round(performance.now() - started),
+        expirableGenerations: result.expirableGenerations,
+        durationMs,
       })
     } catch {
       // Telemetry never decides the outcome of committed work.
