@@ -88,7 +88,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(analytics_searches_total{outcome=\"miss\"}[$__rate_interval])) / clamp_min(sum(rate(analytics_searches_total[$__rate_interval])), 1e-9)",
+          "expr": "sum(rate(analytics_searches_total{outcome=\"miss\"}[$__rate_interval])) / clamp_min(sum(rate(analytics_searches_total{outcome=~\"hit|miss\"}[$__rate_interval])), 1e-9)",
           "refId": "A",
           "legendFormat": "miss rate"
         }

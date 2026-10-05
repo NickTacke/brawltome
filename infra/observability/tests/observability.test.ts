@@ -317,6 +317,11 @@ describe('observability deployment contract', () => {
       expect(exprs).toContain(metric)
     }
     expect(exprs).toContain('analytics.search.performed')
+    const missRate = dashboard.panels
+      .flatMap((panel: { targets?: Array<{ expr?: string }> }) => panel.targets ?? [])
+      .map((target: { expr?: string }) => target.expr ?? '')
+      .find((expr: string) => expr.includes('outcome=\\"miss\\"') || expr.includes('outcome="miss"'))
+    expect(missRate).toContain('outcome=~"hit|miss"')
   })
 
   test('loki keeps logs for 30 days', async () => {
