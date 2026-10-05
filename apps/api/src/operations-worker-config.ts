@@ -136,6 +136,16 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     jitterRatio: 0.2,
   }
 
+  // After a dead-lettered discovery reconciliation, wait 5 minutes (doubling per consecutive failure, capped at
+  // an hour) before enqueueing another one instead of re-enqueueing on every scheduler tick.
+  const reconciliationFailureBackoffMs = boundedInteger(
+    env.DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS,
+    5 * 60 * 1000,
+    'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
+    60_000,
+    24 * 60 * 60 * 1000,
+  )
+
   return {
     leaseMs: positiveInteger(env.OPERATIONS_LEASE_MS, 30_000, 'OPERATIONS_LEASE_MS', 300_000),
     pollMs: positiveInteger(env.OPERATIONS_POLL_MS, 1_000, 'OPERATIONS_POLL_MS', 60_000),
@@ -167,6 +177,14 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
         60 * 60 * 1000,
         'DISCOVERY_RECONCILIATION_INTERVAL_MS',
         60_000,
+        24 * 60 * 60 * 1000,
+      ),
+      reconciliationFailureBackoffMs,
+      reconciliationMaxFailureBackoffMs: boundedInteger(
+        env.DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS,
+        Math.max(60 * 60 * 1000, reconciliationFailureBackoffMs),
+        'DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS',
+        reconciliationFailureBackoffMs,
         24 * 60 * 60 * 1000,
       ),
     },
