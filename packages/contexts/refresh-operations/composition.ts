@@ -14,6 +14,7 @@ import { addDiscoveryOperations } from './migrations/0013-add-discovery-operatio
 import { addStatisticsCollection } from './migrations/0014-add-statistics-collection'
 import { addStatisticsPublication } from './migrations/0015-add-statistics-publication'
 import { addLegendMetaPublication } from './migrations/0016-add-legend-meta-publication'
+import { addPlayerNameVerification } from './migrations/0017-add-player-name-verification'
 
 export {
   createPostgresDeadLetterOperations,
@@ -38,4 +39,5 @@ export const refreshOperationsMigrationInventory = [
   addStatisticsCollection,
   addStatisticsPublication,
   addLegendMetaPublication,
+  addPlayerNameVerification,
 ] as const

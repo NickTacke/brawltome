@@ -20,10 +20,11 @@ export { AccountsMaintenanceError, InvalidPinnedPlayerError, MAX_PINNED_PLAYERS 
 import { createPostgresAccountsStore } from './src/postgres-store'
 
 export function createPostgresAccounts(connectionString: string) {
-  const { store, close } = createPostgresAccountsStore(connectionString)
+  const { store, readDemandedPlayerIds, close } = createPostgresAccountsStore(connectionString)
   return {
     accounts: createAccounts({ store }),
     primaryMonitoring: { readSnapshot: store.readPrimaryMonitoringSnapshot },
+    demand: { readPlayerIds: readDemandedPlayerIds },
     close,
   }
 }

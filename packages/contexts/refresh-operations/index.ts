@@ -125,6 +125,18 @@ export type AcceptRankedPlayerPulseOperation = {
   maxAttempts?: number
 }
 
+export type PlayerNameVerificationPayload = { brawlhallaId: number; playerName: string }
+
+export type AcceptPlayerNameVerificationOperation = {
+  kind: 'player-name-verification'
+  dedupeKey: string
+  operationKey: string
+  workClass: 'maintenance'
+  payload: PlayerNameVerificationPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
 export type AcceptLeaderboardOperation = {
   kind: LeaderboardOperationKind
   dedupeKey: string
@@ -188,6 +200,7 @@ export type ReserveStatisticsLegendMetaPublication = {
 export type AcceptOperation =
   | AcceptProofOperation
   | AcceptRankedPlayerPulseOperation
+  | AcceptPlayerNameVerificationOperation
   | AcceptLeaderboardOperation
   | AcceptDiscoveryProjection
   | AcceptDiscoveryReconciliation
@@ -379,6 +392,11 @@ export type OperationLease =
       kind: 'ranked-player-pulse'
       workClass: 'primary-monitoring'
       payload: { brawlhallaId: number }
+    })
+  | (LeaseFields & {
+      kind: 'player-name-verification'
+      workClass: 'maintenance'
+      payload: PlayerNameVerificationPayload
     })
   | (LeaseFields & {
       kind: StatisticsCollectionKind
