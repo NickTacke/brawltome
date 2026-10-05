@@ -1,6 +1,30 @@
 import { createAnalyticsClient } from './client'
 import type { AnalyticsEventInput } from './schema'
 
+type BeaconNavigator = { sendBeacon?: (url: string, data: Blob) => boolean }
+type FetchLike = (url: string, init: RequestInit) => Promise<unknown>
+
+/** Sends via sendBeacon, falling back to a keepalive fetch. Never throws. */
+export function sendPayload(body: string, nav: BeaconNavigator, fetchFn: FetchLike | undefined): boolean {
+  try {
+    if (nav.sendBeacon?.('/api/a', new Blob([body], { type: 'application/json' })) === true) return true
+  } catch {
+    // fall through to fetch
+  }
+  try {
+    const pending = fetchFn?.('/api/a', {
+      method: 'POST',
+      body,
+      keepalive: true,
+      headers: { 'content-type': 'application/json' },
+    })
+    pending?.catch(() => {})
+    return pending !== undefined
+  } catch {
+    return false
+  }
+}
+
 export function referrerDomain(referrer: string, ownHost: string): string | undefined {
   if (!referrer) return 'direct'
   try {
@@ -26,14 +50,22 @@ function instance() {
       Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (value) => value.toString(16).padStart(2, '0')).join(
         '',
       ),
-    send: (body) => navigator.sendBeacon?.('/api/a', new Blob([body], { type: 'application/json' })) ?? false,
+    send: (body) => sendPayload(body, navigator, (url, init) => fetch(url, init)),
   })
   return client
 }
 
 export const track = (event: AnalyticsEventInput): void => {
-  instance()?.track(event)
+  try {
+    instance()?.track(event)
+  } catch {
+    // Analytics must never break the page.
+  }
 }
 export const flushAnalytics = (): void => {
-  instance()?.flush()
+  try {
+    instance()?.flush()
+  } catch {
+    // Analytics must never break the page.
+  }
 }

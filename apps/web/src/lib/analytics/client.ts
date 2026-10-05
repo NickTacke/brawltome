@@ -1,6 +1,8 @@
-import { type AnalyticsEventInput, deviceClass, routeTemplate, viewportBucket } from './schema'
+import { deviceClass, routeTemplate, viewportBucket } from './labels'
+import type { AnalyticsEventInput } from './schema'
 
 const MAX_BATCH = 60
+const MAX_T_MS = 86_400_000
 
 export type ClientEnv = {
   enabled: boolean
@@ -38,7 +40,7 @@ export function createAnalyticsClient(env: ClientEnv) {
       route: routeTemplate(env.pathname()),
       device: deviceClass(width),
       viewport: viewportBucket(width),
-      t: Math.max(0, Math.round(env.now() - startedAt)),
+      t: Math.min(MAX_T_MS, Math.max(0, Math.round(env.now() - startedAt))),
     })
     if (queue.length >= MAX_BATCH) flush()
   }

@@ -1,6 +1,7 @@
 'use client'
 
 import { flushAnalytics, referrerDomain, track } from '@/lib/analytics/browser'
+import { scrubError } from '@/lib/analytics/labels'
 import { usePathname } from 'next/navigation'
 import { useReportWebVitals } from 'next/web-vitals'
 import { useEffect, useRef } from 'react'
@@ -27,9 +28,9 @@ export function AnalyticsProvider() {
 
   useEffect(() => {
     const onError = (event: ErrorEvent) =>
-      track({ name: 'error.client', kind: 'unhandled', message: String(event.message) })
+      track({ name: 'error.client', kind: 'unhandled', message: scrubError(String(event.message)) })
     const onRejection = (event: PromiseRejectionEvent) =>
-      track({ name: 'error.client', kind: 'rejection', message: String(event.reason) })
+      track({ name: 'error.client', kind: 'rejection', message: scrubError(String(event.reason)) })
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flushAnalytics()
     }

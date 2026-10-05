@@ -1,14 +1,18 @@
 import type { Telemetry } from '@brawltome/telemetry'
 import { analyticsTrpcCode, analyticsTrpcProcedure } from '@brawltome/telemetry/analytics-labels'
+import { z } from 'zod'
+import { scrubError, scrubQuery } from './labels'
 import type { createTabRateLimiter } from './rate-limit'
 import type { createDailySalt } from './salt'
-import { type AnalyticsEvent, analyticsBatchSchema, scrubError, scrubQuery } from './schema'
+import { type AnalyticsEvent, analyticsEventSchema } from './schema'
 
 type IngestDeps = {
   telemetry: Pick<Telemetry, 'metrics' | 'logger'>
   salt: ReturnType<typeof createDailySalt>
   limiter: ReturnType<typeof createTabRateLimiter>
 }
+
+const envelopeSchema = z.object({ events: z.array(z.unknown()).min(1).max(60) })
 
 const oneOf = <T extends string>(list: readonly T[], value: string, fallback: T): T =>
   (list as readonly string[]).includes(value) ? (value as T) : fallback
@@ -92,13 +96,21 @@ function record(event: AnalyticsEvent, visitorKey: () => string, { telemetry }: 
 export function ingestBatch(input: { body: unknown; ip: string; userAgent: string }, deps: IngestDeps): void {
   const { metrics } = deps.telemetry
   try {
-    const parsed = analyticsBatchSchema.safeParse(input.body)
+    const parsed = envelopeSchema.safeParse(input.body)
     if (!parsed.success) {
       const tooMany = parsed.error.issues.some((issue) => issue.code === 'too_big' && issue.path[0] === 'events')
       metrics.add('analytics_events_dropped_total', 1, { reason: tooMany ? 'too_many' : 'invalid' })
       return
     }
-    const { events } = parsed.data
+    const events: AnalyticsEvent[] = []
+    let invalid = 0
+    for (const candidate of parsed.data.events) {
+      const result = analyticsEventSchema.safeParse(candidate)
+      if (result.success) events.push(result.data)
+      else invalid += 1
+    }
+    if (invalid > 0) metrics.add('analytics_events_dropped_total', invalid, { reason: 'invalid' })
+    if (events.length === 0) return
     if (!deps.limiter.allow(events[0].tabId)) {
       metrics.add('analytics_events_dropped_total', events.length, { reason: 'rate_limited' })
       return

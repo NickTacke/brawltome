@@ -142,3 +142,29 @@ describe('createDailySalt', () => {
     expect(salt.visitorKey('1.2.3.4', 'ua')).not.toBe(first)
   })
 })
+
+describe('ingestBatch per-event validation', () => {
+  test('records valid events and drops only the invalid one', () => {
+    const { telemetry, salt, limiter } = setup()
+    ingestBatch(
+      {
+        body: {
+          events: [
+            { ...base, name: 'feature.used', feature: 'pin' },
+            { ...base, name: 'feature.used', feature: 'not-a-feature' },
+            { ...base, name: 'feature.used', feature: 'pin' },
+          ],
+        },
+        ip: '1.1.1.1',
+        userAgent: 'ua',
+      },
+      { telemetry, salt, limiter },
+    )
+    const snapshot = telemetry.metrics.snapshot()
+    const uses = snapshot.find((metric) => metric.name === 'analytics_feature_use_total')
+    const dropped = snapshot.find((metric) => metric.name === 'analytics_events_dropped_total')
+    expect(JSON.stringify(uses?.series)).toContain('"value":2')
+    expect(JSON.stringify(dropped?.series)).toContain('"value":1')
+    expect(JSON.stringify(dropped?.series)).toContain('invalid')
+  })
+})

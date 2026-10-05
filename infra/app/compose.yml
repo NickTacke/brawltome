@@ -229,6 +229,11 @@ services:
       timeout: 3s
       retries: 12
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     stop_grace_period: 20s
     restart: unless-stopped
     read_only: true

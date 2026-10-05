@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { clampRetries, clampWaitMs, refreshStateEvent } from '../../../src/lib/analytics/refresh-events'
+import {
+  abandonRefresh,
+  clampRetries,
+  clampWaitMs,
+  createStateDeduper,
+  refreshStateEvent,
+} from '../../../src/lib/analytics/refresh-events'
 
 describe('refreshStateEvent', () => {
   const idle = { kind: 'idle' } as const
@@ -59,5 +65,39 @@ describe('clamps', () => {
     expect(clampRetries(3)).toBe(3)
     expect(clampRetries(50)).toBe(10)
     expect(clampRetries(-1)).toBe(0)
+  })
+})
+
+describe('createStateDeduper', () => {
+  test('lets each state through once per cycle and resets on a new cycle', () => {
+    const dedupe = createStateDeduper()
+    const busy = { name: 'refresh.state', state: 'busy' } as const
+    const gaveUp = { name: 'refresh.state', state: 'gave_up' } as const
+    expect(dedupe.allow(busy)).toBe(true)
+    expect(dedupe.allow(busy)).toBe(false)
+    expect(dedupe.allow(gaveUp)).toBe(true)
+    dedupe.reset()
+    expect(dedupe.allow(busy)).toBe(true)
+  })
+})
+
+describe('abandonRefresh', () => {
+  const calls = () => {
+    const log: string[] = []
+    return { log, deps: { track: (e: { name: string }) => log.push(e.name), flush: () => log.push('flush') } }
+  }
+
+  test('tracks and flushes once per cycle for active statuses', () => {
+    const { log, deps } = calls()
+    const flag = { current: false }
+    expect(abandonRefresh('polling', flag, 1234, deps)).toBe(true)
+    expect(abandonRefresh('polling', flag, 1234, deps)).toBe(false)
+    expect(log).toEqual(['refresh.abandoned', 'flush'])
+  })
+
+  test('ignores inactive statuses', () => {
+    const { log, deps } = calls()
+    expect(abandonRefresh('idle', { current: false }, 5, deps)).toBe(false)
+    expect(log).toEqual([])
   })
 })

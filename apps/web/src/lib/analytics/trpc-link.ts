@@ -26,8 +26,13 @@ export const analyticsLink: TRPCLink<AppRouter> = () => {
       next(op).subscribe({
         next: (value) => observer.next(value),
         error: (err) => {
-          track(trpcFailureEvent(op.path, err) as Parameters<typeof track>[0])
-          observer.error(err)
+          try {
+            track(trpcFailureEvent(op.path, err) as Parameters<typeof track>[0])
+          } catch {
+            // Tracking must never swallow the original error.
+          } finally {
+            observer.error(err)
+          }
         },
         complete: () => observer.complete(),
       }),
