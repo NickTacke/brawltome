@@ -253,6 +253,151 @@ describe('refresh operations worker source retry', () => {
     expect(reservations[1]).toBe(reservations[0])
   })
 
+  test('retries a transient leaderboard page failure in place through fresh source admission', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:page-retry',
+      kind: 'leaderboard-3v3',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 4,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    const reservations: string[] = []
+    const retryWaits: number[] = []
+    const calls: string[] = []
+    let completed = false
+    let deferred = false
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      complete: async () => {
+        completed = true
+        return 'transitioned' as const
+      },
+      defer: async () => {
+        deferred = true
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async ({ reservationKey }) => {
+          reservations.push(reservationKey)
+          return { outcome: 'admitted', deduplicated: false }
+        },
+        pauseSource: async () => {},
+      },
+      waitForSourceRetry: async (delayMs) => {
+        retryWaits.push(delayMs)
+      },
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async ({ region }) => {
+          calls.push(region)
+          if (region === 'EU' && calls.filter((called) => called === 'EU').length === 1) {
+            throw new LeaderboardSourceError('source_transport_failed', 'socket reset', true)
+          }
+          if (region === 'SEA' && calls.filter((called) => called === 'SEA').length <= 2) {
+            throw new LeaderboardSourceError('source_unavailable', 'V1 leaderboard returned 504', true)
+          }
+          const id = calls.length
+          return {
+            rankings: [
+              {
+                identity: { type: 'three-vs-three-player', player: { id, username: `Player ${id}` } },
+                rating: 2_100,
+                best_rating: 2_100,
+                rank: 1,
+                wins: 1,
+                losses: 0,
+                region,
+                tier: 'Diamond',
+              },
+            ],
+            totalPages: 1,
+          }
+        },
+      },
+    })
+
+    expect(completed).toBe(true)
+    expect(deferred).toBe(false)
+    expect(calls).toHaveLength(12)
+    expect(retryWaits).toEqual([500, 500, 2_000])
+    expect(reservations).toHaveLength(12)
+    expect(new Set(reservations).size).toBe(12)
+    expect(reservations).toContain(`${lease.operationId}:4:3v3:EU:1:retry-1`)
+    expect(reservations).toContain(`${lease.operationId}:4:3v3:SEA:1:retry-2`)
+  })
+
+  test('leaves leaderboard rate limits to durable backoff instead of retrying in place', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'leaderboard:rate-limited',
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    }
+    let sourceCalls = 0
+    let deferred: OperationFailure | undefined
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async (_lease: OperationLease, failure: OperationFailure) => {
+        deferred = failure
+        return 'transitioned' as const
+      },
+      fail: async () => 'transitioned' as const,
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      sourceAdmission: {
+        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+        pauseSource: async () => {},
+      },
+      waitForSourceRetry: async () => {},
+      ranking: {
+        publishGeneration: async () => 'published' as const,
+        recordCollectionFailure: async () => 'recorded' as const,
+      },
+      leaderboardSource: {
+        fetchPage: async () => {
+          sourceCalls += 1
+          throw new LeaderboardSourceError('source_rate_limited', 'V1 leaderboard returned 429', true)
+        },
+      },
+    })
+
+    expect(sourceCalls).toBe(1)
+    expect(deferred).toMatchObject({ code: 'source_rate_limited' })
+  })
+
   test('defers retryable leaderboard source outages without consuming the final attempt', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const lease: OperationLease = {
@@ -272,6 +417,7 @@ describe('refresh operations worker source retry', () => {
     }
     let deferredMs: number | undefined
     let failed = false
+    let sourceCalls = 0
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -299,13 +445,16 @@ describe('refresh operations worker source retry', () => {
         publishGeneration: async () => 'published' as const,
         recordCollectionFailure: async () => 'recorded' as const,
       },
+      waitForSourceRetry: async () => {},
       leaderboardSource: {
         fetchPage: async () => {
+          sourceCalls += 1
           throw new LeaderboardSourceError('source_unavailable', 'V1 leaderboard returned 502', true)
         },
       },
     })
 
+    expect(sourceCalls).toBe(3)
     expect(deferredMs).toBe(60_000)
     expect(failed).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
