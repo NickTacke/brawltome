@@ -549,7 +549,7 @@ describe('Ranking snapshot retention', () => {
     }
   }, 30_000)
 
-  test('pins the bitmap-scan setting on the definer function', async () => {
+  test('pins the bitmap-scan settings on the definer function', async () => {
     const { sql } = await migratedDatabase()
     try {
       const [definition] = await sql<{ config: string[] | null }[]>`
@@ -558,6 +558,7 @@ describe('Ranking snapshot retention', () => {
         WHERE oid = 'rankings.expire_v1_generations(timestamptz, integer)'::regprocedure
       `
       expect(definition?.config).toContain('enable_indexscan=off')
+      expect(definition?.config).toContain('enable_seqscan=off')
       expect(definition?.config).toContain('search_path=pg_catalog, pg_temp')
       expect(definition?.config).toContain('lock_timeout=5s')
     } finally {
@@ -575,12 +576,14 @@ describe('Ranking snapshot retention', () => {
       const connection = await sql.reserve()
       try {
         expect((await connection`SHOW enable_indexscan`)[0]?.enable_indexscan).toBe('on')
+        expect((await connection`SHOW enable_seqscan`)[0]?.enable_seqscan).toBe('on')
         const [row] = await connection<{ deleted_generations: number }[]>`
           SELECT deleted_generations FROM rankings.expire_v1_generations(clock_timestamp() - interval '24 hours', 5)
         `
         expect(row?.deleted_generations).toBe(1)
-        // The function-scoped setting is restored on exit: the same session keeps its own planner configuration.
+        // The function-scoped settings are restored on exit: the same session keeps its own planner configuration.
         expect((await connection`SHOW enable_indexscan`)[0]?.enable_indexscan).toBe('on')
+        expect((await connection`SHOW enable_seqscan`)[0]?.enable_seqscan).toBe('on')
       } finally {
         connection.release()
       }
