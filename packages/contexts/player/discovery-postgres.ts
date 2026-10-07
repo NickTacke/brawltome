@@ -5,6 +5,8 @@ import { decodeV0CareerNameCandidate } from './career/source'
 import type { PlayerDiscoveryFact, PlayerDiscoverySnapshotStream, PlayerDiscoverySource } from './discovery-facts'
 import { isUsablePlayerName, selectCanonicalPlayerName } from './reference'
 
+const deliveredTrimBatch = 1_000
+
 type Sql = ReturnType<typeof postgres>
 type FactRow = {
   brawlhalla_id: number
@@ -223,6 +225,16 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
       await client`
         UPDATE players.discovery_outbox SET delivered_at = clock_timestamp()
         WHERE event_id IN ${client(eventIds)} AND delivered_at IS NULL
+      `
+      // Delivered events are never read again. Each acknowledgement trims a bounded batch of day-old ones, so the
+      // outbox stays small without a separate maintenance job.
+      await client`
+        DELETE FROM players.discovery_outbox
+        WHERE event_id IN (
+          SELECT event_id FROM players.discovery_outbox
+          WHERE delivered_at < clock_timestamp() - interval '1 day'
+          LIMIT ${deliveredTrimBatch}
+        )
       `
     },
 

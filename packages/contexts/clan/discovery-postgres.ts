@@ -1,6 +1,8 @@
 import postgres from 'postgres'
 import type { ClanDiscoveryFact, ClanDiscoverySource } from './discovery-facts'
 
+const deliveredTrimBatch = 1_000
+
 type Sql = ReturnType<typeof postgres>
 
 async function sourceVersion(sql: Sql): Promise<number> {
@@ -65,6 +67,16 @@ export function createPostgresClanDiscoverySource(connectionString: string): Cla
       await client`
         UPDATE clans.discovery_outbox SET delivered_at = clock_timestamp()
         WHERE event_id IN ${client(eventIds)} AND delivered_at IS NULL
+      `
+      // Delivered events are never read again. Each acknowledgement trims a bounded batch of day-old ones, so the
+      // outbox stays small without a separate maintenance job.
+      await client`
+        DELETE FROM clans.discovery_outbox
+        WHERE event_id IN (
+          SELECT event_id FROM clans.discovery_outbox
+          WHERE delivered_at < clock_timestamp() - interval '1 day'
+          LIMIT ${deliveredTrimBatch}
+        )
       `
     },
 
