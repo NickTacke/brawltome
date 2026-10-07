@@ -188,6 +188,8 @@ describe('durable Refresh Operations', () => {
       'players/0017',
       'refresh-operations/0020',
       'refresh-operations/0021',
+      'refresh-operations/0022',
+      'refresh-operations/0023',
     ])
   })
 

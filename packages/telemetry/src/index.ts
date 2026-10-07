@@ -82,6 +82,8 @@ export type MetricName =
   | 'freshness_refreshes_total'
   | 'freshness_due_players'
   | 'freshness_planner_skips_total'
+  | 'leaderboard_deep_crawl_pages_total'
+  | 'leaderboard_deep_crawl_changed_total'
   | 'analytics_pageviews_total'
   | 'analytics_searches_total'
   | 'analytics_search_latency_ms'
@@ -151,6 +153,7 @@ const workClass = [
   'projection',
   'maintenance',
 ] as const
+const deepCrawlRegion = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
 const operationKind = [
   'proof',
   'interactive-player-refresh',
@@ -158,6 +161,7 @@ const operationKind = [
   'ranked-player-pulse',
   'player-name-verification',
   'ranking-retention',
+  'leaderboard-deep-crawl',
   'player-discovery-projection',
   'clan-discovery-projection',
   'discovery-reconciliation',
@@ -301,6 +305,16 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'gauge',
     help: 'Recently viewed players whose full profile is older than their tier interval',
     labels: { tier: ['hot', 'warm', 'cold'] },
+  },
+  leaderboard_deep_crawl_pages_total: {
+    kind: 'counter',
+    help: 'V1 1v1 leaderboard pages the deep crawl read or skipped as malformed',
+    labels: { region: deepCrawlRegion, outcome: ['read', 'skipped'] },
+  },
+  leaderboard_deep_crawl_changed_total: {
+    kind: 'counter',
+    help: 'Players whose name or 1v1 standing the deep crawl changed',
+    labels: { region: deepCrawlRegion, change: ['name', 'standing'] },
   },
   freshness_planner_skips_total: {
     kind: 'counter',
