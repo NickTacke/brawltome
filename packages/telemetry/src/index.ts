@@ -310,7 +310,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   },
   leaderboard_deep_crawl_pages_total: {
     kind: 'counter',
-    help: 'V1 1v1 leaderboard pages the deep crawl read or skipped as malformed',
+    help: 'V1 leaderboard pages the deep crawl read or skipped as malformed',
     labels: { mode: deepCrawlMode, region: deepCrawlRegion, outcome: ['read', 'skipped'] },
   },
   leaderboard_deep_crawl_changed_total: {

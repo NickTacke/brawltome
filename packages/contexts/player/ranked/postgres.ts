@@ -407,10 +407,8 @@ export function createPostgresRankedPlayers(
           createdAt: profile.v0_effect_created_at,
           operationId: profile.v0_effect_operation_id,
         }
-        const refreshedAt = Math.max(
-          profile.last_success_at?.getTime() ?? 0,
-          profile.pulse_last_success_at?.getTime() ?? 0,
-        )
+        // The 1v1 pulse never touches solo queue or team rows, so those compare against the V0 refresh alone.
+        const v0RefreshedAt = profile.last_success_at?.getTime() ?? 0
         const oneVsOne = withLeaderboardObservation(profile, {
           ...effectiveValues(profile as ProfileRow & ValuesRow, canonicalOrder),
           region: profile.region as string,
@@ -461,14 +459,14 @@ export function createPostgresRankedPlayers(
               teamName: row.team_name,
               region: row.region,
               globalRank: row.global_rank,
-              ...withNewerObservation(effectiveValues(row, canonicalOrder), row, refreshedAt),
+              ...withNewerObservation(effectiveValues(row, canonicalOrder), row, v0RefreshedAt),
             })),
             soloQueue: soloRows.map((row) => ({
               secondPlayerId: row.second_player_id,
               teamName: row.team_name,
               region: row.region,
               globalRank: row.global_rank,
-              ...withNewerObservation(values(row), row, refreshedAt),
+              ...withNewerObservation(values(row), row, v0RefreshedAt),
             })),
             ratingHistory,
             observedRatingDirection: deriveObservedRatingDirection(ratingHistory),

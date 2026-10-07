@@ -1718,7 +1718,7 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     })
-    const run = async (mode: 'solo2v2' | '2v2') => {
+    const run = async (mode: 'solo2v2' | '2v2', totalPages = 1) => {
       const writes: string[] = []
       const modes: string[] = []
       let saved: { mode: string } | undefined
@@ -1773,7 +1773,7 @@ describe('refresh operations worker source retry', () => {
               modes.push(requested)
               expect(region).toBe('EU')
               return {
-                totalPages: 1,
+                totalPages,
                 rankings: [
                   {
                     identity:

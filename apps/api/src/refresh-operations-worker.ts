@@ -973,7 +973,7 @@ export class LeaderboardDeepCrawlYield extends Error {
   }
 }
 
-// Reads every V1 1v1 page of one region in slices, writing each chunk of pages straight to Players without
+// Reads every V1 leaderboard page of one mode and region in slices, writing each chunk of pages straight to Players without
 // publishing a ranking generation. Progress is saved per chunk, so a yielded, failed, or interrupted crawl resumes.
 async function executeLeaderboardDeepCrawl(
   operations: RefreshOperationWorker,

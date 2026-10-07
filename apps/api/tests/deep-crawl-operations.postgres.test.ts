@@ -63,6 +63,7 @@ describe('Leaderboard deep crawl operations', () => {
         intervalMs: 3 * 60 * 60 * 1000,
         firstDueAt: '2020-01-01T00:07:00.000Z',
         pageDelayMs: 0,
+        soloIntervalMs: 3 * 60 * 60 * 1000,
         teamsIntervalMs: 3 * 60 * 60 * 1000,
       })
       for (const definition of definitions) {
@@ -123,6 +124,9 @@ describe('Leaderboard deep crawl operations', () => {
       await expect(insert({ mode: '3v3', region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
         'operations_payload_by_kind',
       )
+      await expect(insert({ mode: null, region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
+        'operations_payload_by_kind',
+      )
     } finally {
       await control.end()
     }
@@ -155,6 +159,7 @@ describe('Leaderboard deep crawl operations', () => {
         totalPages: 900,
       })
       expect(await operations.readLeaderboardDeepCrawlProgress('2v2', 'EU')).toMatchObject({ nextPage: 7 })
+      expect(await operations.readLeaderboardDeepCrawlProgress('solo2v2', 'EU')).toBeNull()
       expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toEqual({
         windowAt,
         nextPage: 141,

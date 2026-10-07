@@ -108,7 +108,8 @@ ALTER TABLE refresh_operations.operations
       AND (
         payload = jsonb_build_object('region', payload->'region', 'intervalMs', payload->'intervalMs')
         OR (
-          payload->>'mode' IN ('1v1', 'solo2v2', '2v2')
+          jsonb_typeof(payload->'mode') = 'string'
+          AND payload->>'mode' IN ('1v1', 'solo2v2', '2v2')
           AND payload = jsonb_build_object(
             'mode', payload->'mode', 'region', payload->'region', 'intervalMs', payload->'intervalMs'
           )
@@ -163,7 +164,8 @@ ALTER TABLE refresh_operations.schedules
       AND (
         payload = jsonb_build_object('region', payload->'region', 'intervalMs', payload->'intervalMs')
         OR (
-          payload->>'mode' IN ('1v1', 'solo2v2', '2v2')
+          jsonb_typeof(payload->'mode') = 'string'
+          AND payload->>'mode' IN ('1v1', 'solo2v2', '2v2')
           AND payload = jsonb_build_object(
             'mode', payload->'mode', 'region', payload->'region', 'intervalMs', payload->'intervalMs'
           )
@@ -171,15 +173,21 @@ ALTER TABLE refresh_operations.schedules
       ))
   ) NOT VALID;
 
--- Progress is per mode and region now. Existing rows are 1v1 crawls.
-ALTER TABLE refresh_operations.leaderboard_deep_crawl_progress
-  ADD COLUMN mode text NOT NULL DEFAULT '1v1' CHECK (mode IN ('1v1', 'solo2v2', '2v2')),
-  DROP CONSTRAINT leaderboard_deep_crawl_progress_pkey,
-  ADD PRIMARY KEY (mode, region);`
+-- The new modes keep progress in their own table: the released worker still writes 1v1 progress keyed by region
+-- while this migration runs ahead of the worker swap, so the existing table must not change.
+CREATE TABLE refresh_operations.leaderboard_deep_crawl_mode_progress (
+  mode text NOT NULL CHECK (mode IN ('solo2v2', '2v2')),
+  region text NOT NULL CHECK (region IN ('US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA')),
+  window_at timestamptz NOT NULL,
+  next_page integer NOT NULL CHECK (next_page >= 1),
+  total_pages integer NOT NULL CHECK (total_pages >= 0),
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (mode, region)
+);`
 
 export const addDeepCrawlModes = {
   identity: 'refresh-operations/0024',
   predecessor: 'refresh-operations/0023',
-  checksum: '9a5e19a67b573ed0b42d60982c36ee3bc20dae5290035858ad883ce39efd7588',
+  checksum: 'a0575b055abcfea780f9c99d0b6e1e61725f8412092c7200d025e067b35a47b7',
   sql,
 } as const

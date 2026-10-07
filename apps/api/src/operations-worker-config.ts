@@ -146,7 +146,9 @@ export type LeaderboardDeepCrawlConfig = {
   // Pause after each page. Pages took ~0.33 s unpaced in production, so 150 ms gives ~2 pages/s: a full 1v1 pass
   // (~5,600 pages) in ~45 minutes at roughly 600 V1 calls per 5 minutes, well under the 1800 limit.
   pageDelayMs: number
-  // Fixed 2v2 teams (~2,600 pages) run less often than 1v1 and solo 2v2.
+  // Solo 2v2 (~800 pages) and fixed 2v2 teams (~2,600 pages) run less often so an hourly 1v1 pass still fits the hour
+  // on the single leaderboard slot.
+  soloIntervalMs: number
   teamsIntervalMs: number
 }
 
@@ -173,12 +175,12 @@ export function leaderboardDeepCrawlScheduleDefinitions(
       provenance: { source: 'leaderboard-deep-crawl-schedule', requestedBy: 'proactive-freshness' },
     }))
   }
-  // Solo 2v2 regions fall halfway between the 1v1 ones; 2v2 runs on its own slower cadence.
+  // Solo 2v2 regions start halfway between the 1v1 ones; each mode then keeps its own cadence.
   return [
     ...definitions('1v1', config.intervalMs, 0),
     ...definitions(
       'solo2v2',
-      config.intervalMs,
+      config.soloIntervalMs,
       Math.floor(config.intervalMs / leaderboardDeepCrawlRegions.length / 2),
     ),
     ...definitions('2v2', config.teamsIntervalMs, 15 * 60 * 1000),
@@ -381,9 +383,16 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       // Hourly windows start after the first 3-hour pass; regions then stay staggered across the hour.
       firstDueAt: '2026-10-07T19:30:00.000Z',
       pageDelayMs: boundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, 150, 'DEEP_CRAWL_PAGE_DELAY_MS', 0, 5_000),
+      soloIntervalMs: boundedInteger(
+        env.DEEP_CRAWL_SOLO_INTERVAL_MS,
+        3 * 60 * 60 * 1000,
+        'DEEP_CRAWL_SOLO_INTERVAL_MS',
+        minLeaderboardDeepCrawlIntervalMs,
+        maxLeaderboardDeepCrawlIntervalMs,
+      ),
       teamsIntervalMs: boundedInteger(
         env.DEEP_CRAWL_TEAMS_INTERVAL_MS,
-        3 * 60 * 60 * 1000,
+        6 * 60 * 60 * 1000,
         'DEEP_CRAWL_TEAMS_INTERVAL_MS',
         minLeaderboardDeepCrawlIntervalMs,
         maxLeaderboardDeepCrawlIntervalMs,
