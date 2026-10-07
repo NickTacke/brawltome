@@ -159,6 +159,31 @@ describe('PostgreSQL interactive refresh admission', () => {
     await admission.close()
   })
 
+  test('profile views have their own per-IP budget, apart from refreshes', async () => {
+    const admission = createPostgresRequestAdmission(connectionString, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180 },
+    })
+    try {
+      const viewer = { kind: 'profile-view', ip: '203.0.113.90' } as const
+      for (let view = 0; view < 20; view++) {
+        expect(await admission.admitActorOnce(viewer)).toEqual({ outcome: 'admitted' })
+      }
+      expect(await admission.admitActorOnce(viewer)).toMatchObject({
+        outcome: 'rate-limited',
+        retryAfterSeconds: expect.any(Number),
+      })
+      expect(await admission.admitActorOnce({ kind: 'profile-view', ip: '203.0.113.91' })).toEqual({
+        outcome: 'admitted',
+      })
+      expect(await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.90' }, randomUUID())).toEqual({
+        outcome: 'admitted',
+      })
+    } finally {
+      await admission.close()
+    }
+  })
+
   test('removes actor reservations after their reconciliation retention period', async () => {
     const admission = createPostgresRequestAdmission(connectionString, {
       authenticatedIpLimit: 120,

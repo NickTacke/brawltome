@@ -26,7 +26,8 @@ async function createServerTrpc(propagateRefreshTrust: boolean) {
   )
 
   const outHeaders: Record<string, string> = {}
-  if (ip) outHeaders['x-client-ip'] = ip
+  // The API derives the client IP itself and only trusts forwarding headers from private peers such as this server.
+  if (ip) outHeaders['x-forwarded-for'] = ip
   if (ua) outHeaders['x-original-ua'] = ua
   if (incomingCookie) outHeaders.cookie = incomingCookie
   if (internalSecret) outHeaders['x-internal-secret'] = internalSecret

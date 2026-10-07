@@ -180,6 +180,43 @@ describe('freshness planner', () => {
     expect(await planner({ enabled: false }).instance.tick()).toBe(0)
   })
 
+  test('reads attempt history past a short demand window so cooldowns still hold', async () => {
+    const day = 24 * hour
+    // The fake history behaves like the operations query: only attempts inside the requested window come back.
+    const history = [
+      { brawlhallaId: 1, lastPlannedAt: new Date(now - 2 * day), lastFailedAt: new Date(now - 2 * day) },
+      { brawlhallaId: 2, lastPlannedAt: new Date(now - 9 * day), lastFailedAt: new Date(now - 9 * day) },
+    ]
+    const requestedWindows: number[] = []
+    const enqueued: number[][] = []
+    const instance = createFreshnessPlanner({
+      config: { ...config, windowDays: 1 },
+      readSourceUsage: async () => ({ used: 10, limit: 180 }),
+      operations: {
+        refreshRequestDemand: async () => [],
+        recentFreshnessAttempts: async ({ windowDays }) => {
+          requestedWindows.push(windowDays)
+          return history.filter(({ lastPlannedAt }) => now - lastPlannedAt.getTime() < windowDays * day)
+        },
+        activeRecentlyViewedRefreshes: async () => 0,
+        enqueueRecentlyViewedRefreshes: async (ids) => {
+          enqueued.push([...ids])
+          return [...ids]
+        },
+      },
+      profileViews: {
+        viewDemand: async () => [1, 2].map((brawlhallaId) => ({ brawlhallaId, viewDays: 1 })),
+        trim: async () => 0,
+      },
+      freshness: { lastRefreshedById: async (ids) => new Map(ids.map((id) => [id, null])) },
+      now: () => now,
+    })
+    expect(await instance.tick()).toBe(1)
+    // The week-long failure cooldown outlasts the one-day view window.
+    expect(requestedWindows).toEqual([7])
+    expect(enqueued).toEqual([[2]])
+  })
+
   test('never throws from a failed plan', async () => {
     const { instance } = planner({
       enqueue: async () => {

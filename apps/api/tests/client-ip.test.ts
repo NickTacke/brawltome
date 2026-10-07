@@ -22,4 +22,10 @@ describe('verified client IP', () => {
     expect(verified('127.0.0.1', { 'x-forwarded-for': '198.51.100.5, 172.18.0.2' })).toBe('198.51.100.5')
     expect(verified('172.18.0.2', { 'cf-connecting-ip': 'not-an-ip' })).toBe('172.18.0.2')
   })
+
+  test('trusts private proxies reported as IPv4-mapped IPv6 peers', () => {
+    expect(verified('::ffff:10.0.5.114', { 'x-forwarded-for': '203.0.113.7' })).toBe('203.0.113.7')
+    expect(verified('::ffff:127.0.0.1', { 'cf-connecting-ip': '203.0.113.8' })).toBe('203.0.113.8')
+    expect(verified('::ffff:203.0.113.10', { 'x-forwarded-for': '198.51.100.3' })).toBe('::ffff:203.0.113.10')
+  })
 })

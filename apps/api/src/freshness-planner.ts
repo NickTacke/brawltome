@@ -3,7 +3,8 @@ import type { Telemetry } from '@brawltome/telemetry'
 import { type SourceUsage, sourceBudgetOpen } from './player-name-verification'
 
 const hourMs = 60 * 60 * 1000
-const failedBackoffMs = 7 * 24 * hourMs
+const dayMs = 24 * hourMs
+const failedBackoffMs = 7 * dayMs
 const viewRetentionDays = 30
 const viewTrimIntervalMs = hourMs
 
@@ -114,6 +115,13 @@ export function createFreshnessPlanner(deps: {
   now?: () => number
 }) {
   const now = deps.now ?? Date.now
+  // Attempt history must cover the longest cooldown, not just the demand window, or a short window would let a
+  // player's older planned or failed attempt drop out and re-queue them early.
+  const attemptHistoryDays = Math.max(
+    deps.config.windowDays,
+    Math.ceil(failedBackoffMs / dayMs),
+    Math.ceil(deps.config.refreshIntervalMs / dayMs),
+  )
   let nextRunAt = 0
   let nextTrimAt = 0
   const record = (write: (active: Telemetry) => void) => {
@@ -146,7 +154,7 @@ export function createFreshnessPlanner(deps: {
     const [views, requests, attempts] = await Promise.all([
       deps.profileViews.viewDemand({ days: deps.config.windowDays }),
       deps.operations.refreshRequestDemand(window),
-      deps.operations.recentFreshnessAttempts(window),
+      deps.operations.recentFreshnessAttempts({ windowDays: attemptHistoryDays }),
     ])
     const demand = mergeViewDemand(views, requests)
     const ids = demand.map(({ brawlhallaId }) => brawlhallaId)

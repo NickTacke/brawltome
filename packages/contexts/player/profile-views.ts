@@ -8,11 +8,26 @@ export function createPostgresProfileViews(connectionString: string) {
   const client = postgres(connectionString)
 
   return {
+    // Counts only players with a name source behind their reference (the same sources the reference read uses), so
+    // made-up IDs never become background refresh demand. New players arrive through the admitted interactive refresh.
     async recordView(brawlhallaId: number): Promise<void> {
       if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) return
       await client`
         INSERT INTO players.profile_view_days (day, brawlhalla_id, views)
-        VALUES ((clock_timestamp() AT TIME ZONE 'UTC')::date, ${brawlhallaId}, 1)
+        SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date, ${brawlhallaId}, 1
+        WHERE EXISTS (
+          SELECT 1 FROM players.ranked_profiles
+          WHERE brawlhalla_id = ${brawlhallaId} AND last_success_at IS NOT NULL AND player_name IS NOT NULL
+          UNION ALL
+          SELECT 1 FROM players.career_profiles
+          WHERE brawlhalla_id = ${brawlhallaId} AND last_success_at IS NOT NULL AND player_name IS NOT NULL
+          UNION ALL
+          SELECT 1 FROM players.leaderboard_name_observations WHERE brawlhalla_id = ${brawlhallaId}
+          UNION ALL
+          SELECT 1 FROM players.legacy_discovery_profiles WHERE brawlhalla_id = ${brawlhallaId}
+          UNION ALL
+          SELECT 1 FROM players.legacy_profile_discovery WHERE brawlhalla_id = ${brawlhallaId}
+        )
         ON CONFLICT (day, brawlhalla_id) DO UPDATE SET views = profile_view_days.views + 1
       `
     },

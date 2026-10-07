@@ -36,6 +36,10 @@ describe('Profile view demand', () => {
     const control = postgres(connectionString, { max: 1 })
     const views = createPostgresProfileViews(connectionString)
     try {
+      await control`
+        INSERT INTO players.leaderboard_name_observations (brawlhalla_id, player_name, observed_at)
+        VALUES (1, 'Known One', clock_timestamp()), (2, 'Known Two', clock_timestamp())
+      `
       await views.recordView(1)
       await views.recordView(1)
       await views.recordView(2)
@@ -68,6 +72,41 @@ describe('Profile view demand', () => {
           ({ brawlhalla_id }) => brawlhalla_id,
         ),
       ).not.toContain(4)
+    } finally {
+      await Promise.all([control.end(), views.close()])
+    }
+  })
+
+  test('counts views only for players the Players context already knows', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const views = createPostgresProfileViews(connectionString)
+    const checksum = 'a'.repeat(64)
+    try {
+      await control`
+        INSERT INTO players.ranked_profiles
+          (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
+        VALUES (101, 'Ranked', clock_timestamp(), clock_timestamp(), 'EU', 1500, 1600, 'Gold 1', 10, 20)
+      `
+      // A ranked row from a failed first check carries no identity yet.
+      await control`INSERT INTO players.ranked_profiles (brawlhalla_id, checked_at) VALUES (102, clock_timestamp())`
+      await control`
+        INSERT INTO players.legacy_discovery_profiles
+          (brawlhalla_id, player_name, view_count, observed_at, archive_checksum)
+        VALUES (103, 'Legacy', 0, clock_timestamp(), ${checksum})
+      `
+      await control`
+        INSERT INTO players.legacy_profile_discovery (brawlhalla_id, player_name, observed_at, archive_checksum)
+        VALUES (104, 'Archived', clock_timestamp(), ${checksum})
+      `
+      await control`
+        INSERT INTO players.career_profiles (brawlhalla_id, checked_at) VALUES (106, clock_timestamp())
+      `
+      for (const brawlhallaId of [101, 102, 103, 104, 105, 106]) await views.recordView(brawlhallaId)
+
+      const recorded = await control<{ brawlhalla_id: number }[]>`
+        SELECT brawlhalla_id FROM players.profile_view_days WHERE brawlhalla_id > 100 ORDER BY brawlhalla_id
+      `
+      expect(recorded.map(({ brawlhalla_id }) => brawlhalla_id)).toEqual([101, 103, 104])
     } finally {
       await Promise.all([control.end(), views.close()])
     }
