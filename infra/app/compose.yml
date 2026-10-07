@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
       target: postgres
     user: "70:70"
+    # Parallel queries allocate dynamic shared memory in /dev/shm; Docker's 64 MB default is too small for work_mem=16MB.
+    shm_size: 256m
     environment:
       POSTGRES_DB: brawltome
       POSTGRES_USER: brawltome_owner
@@ -39,7 +41,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 2G
+          memory: 6G
           pids: 256
         reservations:
           memory: 512M
