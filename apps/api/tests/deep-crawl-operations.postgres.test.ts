@@ -62,6 +62,8 @@ describe('Leaderboard deep crawl operations', () => {
         enabled: true,
         intervalMs: 3 * 60 * 60 * 1000,
         firstDueAt: '2020-01-01T00:07:00.000Z',
+        pageDelayMs: 0,
+        teamsIntervalMs: 3 * 60 * 60 * 1000,
       })
       for (const definition of definitions) {
         expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('created')
@@ -81,8 +83,8 @@ describe('Leaderboard deep crawl operations', () => {
             ON occurrence.id = operation.origin_schedule_occurrence_id
           WHERE operation.kind = 'leaderboard-deep-crawl'
         `
-        // Eight enabled regions, each keyed to its schedule so a later window cannot stack a second crawl.
-        expect(keys).toHaveLength(8)
+        // Every enabled region and mode, each keyed to its schedule so a later window cannot stack a second crawl.
+        expect(keys).toHaveLength(definitions.length - 1)
         for (const { dedupe_key, schedule_id } of keys) expect(dedupe_key).toBe(`schedule:${schedule_id}:deep-crawl`)
       } finally {
         await control.end()
@@ -117,6 +119,10 @@ describe('Leaderboard deep crawl operations', () => {
       await expect(insert({ region: 'EU', intervalMs: 10_800_000, page: 3 })).rejects.toThrow(
         'operations_payload_by_kind',
       )
+      await insert({ mode: 'solo2v2', region: 'EU', intervalMs: 10_800_000 })
+      await expect(insert({ mode: '3v3', region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
+        'operations_payload_by_kind',
+      )
     } finally {
       await control.end()
     }
@@ -125,11 +131,31 @@ describe('Leaderboard deep crawl operations', () => {
   test('saves and replaces crawl progress per region', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     try {
-      expect(await operations.readLeaderboardDeepCrawlProgress('EU')).toBeNull()
+      expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toBeNull()
       const windowAt = new Date('2026-10-07T16:00:00.000Z')
-      await operations.saveLeaderboardDeepCrawlProgress({ region: 'EU', windowAt, nextPage: 41, totalPages: 1630 })
-      await operations.saveLeaderboardDeepCrawlProgress({ region: 'EU', windowAt, nextPage: 141, totalPages: 1630 })
-      expect(await operations.readLeaderboardDeepCrawlProgress('EU')).toEqual({
+      await operations.saveLeaderboardDeepCrawlProgress({
+        mode: '1v1',
+        region: 'EU',
+        windowAt,
+        nextPage: 41,
+        totalPages: 1630,
+      })
+      await operations.saveLeaderboardDeepCrawlProgress({
+        mode: '1v1',
+        region: 'EU',
+        windowAt,
+        nextPage: 141,
+        totalPages: 1630,
+      })
+      await operations.saveLeaderboardDeepCrawlProgress({
+        mode: '2v2',
+        region: 'EU',
+        windowAt,
+        nextPage: 7,
+        totalPages: 900,
+      })
+      expect(await operations.readLeaderboardDeepCrawlProgress('2v2', 'EU')).toMatchObject({ nextPage: 7 })
+      expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toEqual({
         windowAt,
         nextPage: 141,
         totalPages: 1630,

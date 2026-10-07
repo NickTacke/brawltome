@@ -95,7 +95,7 @@ type ScheduleRow = {
     | { value: string }
     | { pageDepth: number; intervalMs: number }
     | { retentionHours: number; maxGenerations: number }
-    | { region: string; intervalMs: number }
+    | { mode?: string; region: string; intervalMs: number }
     | { assignmentId: string; brawlhallaId: number; staleSections: ['ranked', 'stats'] }
   provenance: { source: string; requestedBy?: string }
   max_attempts: number
@@ -1351,25 +1351,28 @@ export function createPostgresRefreshOperations(
     },
 
     async readLeaderboardDeepCrawlProgress(
+      mode: string,
       region: string,
     ): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null> {
       const [row] = await client<{ window_at: Date; next_page: number; total_pages: number }[]>`
         SELECT window_at, next_page, total_pages
-        FROM refresh_operations.leaderboard_deep_crawl_progress WHERE region = ${region}
+        FROM refresh_operations.leaderboard_deep_crawl_progress WHERE mode = ${mode} AND region = ${region}
       `
       return row ? { windowAt: row.window_at, nextPage: row.next_page, totalPages: row.total_pages } : null
     },
 
     async saveLeaderboardDeepCrawlProgress(input: {
+      mode: string
       region: string
       windowAt: Date
       nextPage: number
       totalPages: number
     }): Promise<void> {
       await client`
-        INSERT INTO refresh_operations.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
-        VALUES (${input.region}, ${input.windowAt}, ${input.nextPage}, ${input.totalPages})
-        ON CONFLICT (region) DO UPDATE SET
+        INSERT INTO refresh_operations.leaderboard_deep_crawl_progress
+          (mode, region, window_at, next_page, total_pages)
+        VALUES (${input.mode}, ${input.region}, ${input.windowAt}, ${input.nextPage}, ${input.totalPages})
+        ON CONFLICT (mode, region) DO UPDATE SET
           window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
           total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
       `

@@ -162,4 +162,105 @@ describe('Ranked standings observed on leaderboards', () => {
       await Promise.all([control.end(), standings.close(), names.close(), ranked.close(), source.close()])
     }
   })
+
+  test('overlays newer solo queue and fixed team standings and records them changed-only', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const standings = createPostgresLeaderboardRanked(connectionString)
+    const ranked = createPostgresRankedPlayers(connectionString)
+    try {
+      await insertRanked(control, 400, '2026-10-07T10:00:00Z')
+      await control`
+        INSERT INTO players.ranked_solo_queue
+          (brawlhalla_id, ordinal, team_name, rating, peak_rating, tier, wins, games, region, global_rank)
+        VALUES (400, 0, 'Solo Queue', 1500, 1600, 'Gold 3', 5, 10, 'EU', 900)
+      `
+      await control`
+        INSERT INTO players.ranked_fixed_teams
+          (brawlhalla_id, ordinal, brawlhalla_id_one, brawlhalla_id_two, team_name, rating, peak_rating, tier, wins,
+           games, region, global_rank)
+        VALUES (400, 0, 401, 400, 'Duo', 1700, 1750, 'Platinum 2', 7, 12, 'EU', 300),
+               (400, 1, 400, 402, 'Other Duo', 1400, 1450, 'Gold 1', 2, 4, 'EU', NULL)
+      `
+      const observedAt = new Date('2026-10-07T12:00:00Z')
+      expect(
+        await standings.applyLeaderboardSoloQueue({
+          observedAt,
+          players: [{ ...standing(400, 1620), region: 'EU', peakRating: 1640, tier: 'Gold 5', wins: 9, games: 16 }],
+        }),
+      ).toEqual({ changed: 1 })
+      expect(
+        await standings.applyLeaderboardTeams({
+          observedAt,
+          teams: [
+            // Pairs are stored lower id first, whichever order the leaderboard lists them in.
+            {
+              brawlhallaIdOne: 401,
+              brawlhallaIdTwo: 400,
+              region: 'EU',
+              rating: 1810,
+              peakRating: 1820,
+              tier: 'Platinum 4',
+              wins: 11,
+              games: 18,
+            },
+            {
+              brawlhallaIdOne: 400,
+              brawlhallaIdTwo: 401,
+              region: 'EU',
+              rating: 1,
+              peakRating: 1,
+              tier: null,
+              wins: 0,
+              games: 0,
+            },
+          ],
+        }),
+      ).toEqual({ changed: 1 })
+      // Unchanged values write nothing.
+      expect(
+        await standings.applyLeaderboardTeams({
+          observedAt: new Date('2026-10-07T12:15:00Z'),
+          teams: [
+            {
+              brawlhallaIdOne: 400,
+              brawlhallaIdTwo: 401,
+              region: 'EU',
+              rating: 1810,
+              peakRating: 1820,
+              tier: 'Platinum 4',
+              wins: 11,
+              games: 18,
+            },
+          ],
+        }),
+      ).toEqual({ changed: 0 })
+
+      const profile = await ranked.byId(400)
+      expect(profile?.snapshot?.soloQueue).toEqual([
+        {
+          secondPlayerId: 0,
+          teamName: 'Solo Queue',
+          region: 'EU',
+          globalRank: 900,
+          rating: 1620,
+          peakRating: 1640,
+          tier: 'Gold 5',
+          wins: 9,
+          games: 16,
+        },
+      ])
+      expect(profile?.snapshot?.fixedTeams).toEqual([
+        expect.objectContaining({ teamName: 'Duo', globalRank: 300, rating: 1810, wins: 11, games: 18 }),
+        expect.objectContaining({ teamName: 'Other Duo', rating: 1400, wins: 2, games: 4 }),
+      ])
+
+      // A V0 refresh newer than the observation wins.
+      await control`UPDATE players.ranked_profiles SET last_success_at = '2026-10-07T13:00:00Z' WHERE brawlhalla_id = 400`
+      const refreshed = await ranked.byId(400)
+      expect(refreshed?.snapshot?.soloQueue[0]?.rating).toBe(1500)
+      expect(refreshed?.snapshot?.fixedTeams[0]?.rating).toBe(1700)
+    } finally {
+      await Promise.all([control.end(), standings.close(), ranked.close()])
+    }
+  })
 })

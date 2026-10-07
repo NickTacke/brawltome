@@ -77,4 +77,7 @@ export const globalMigrationInventory = [
   refreshOperationsMigrationInventory[21],
   refreshOperationsMigrationInventory[22],
   playerMigrationInventory[17],
+  refreshOperationsMigrationInventory[23],
+  refreshOperationsMigrationInventory[24],
+  playerMigrationInventory[18],
 ] as const

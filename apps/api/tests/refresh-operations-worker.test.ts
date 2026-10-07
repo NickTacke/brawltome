@@ -1702,6 +1702,119 @@ describe('refresh operations worker source retry', () => {
     expect(resumed.transitions).toEqual(['complete'])
   })
 
+  test('deep crawls solo 2v2 and 2v2 into their own observations without touching names', async () => {
+    const leaseFor = (mode: 'solo2v2' | '2v2'): OperationLease => ({
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: `rankings:${mode}:deep:EU:1`,
+      kind: 'leaderboard-deep-crawl',
+      workClass: 'leaderboard',
+      payload: { mode, region: 'EU', intervalMs: 60 * 60 * 1000 },
+      provenance: { source: 'leaderboard-deep-crawl-schedule' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    })
+    const run = async (mode: 'solo2v2' | '2v2') => {
+      const writes: string[] = []
+      const modes: string[] = []
+      let saved: { mode: string } | undefined
+      await runOneRefreshOperation(
+        {
+          claim: async () => leaseFor(mode),
+          renew: async () => 'renewed' as const,
+          complete: async () => 'transitioned' as const,
+          fail: async () => 'transitioned' as const,
+        } as never,
+        'worker',
+        {
+          leaseMs: 1_000,
+          retryDelayMs: 10,
+          admission,
+          leaderboardDeepCrawlProgress: {
+            read: async () => null,
+            save: async (progress) => {
+              saved = progress
+            },
+          },
+          sourceAdmission: {
+            admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+            pauseSource: async () => {},
+          },
+          leaderboardPlayerNames: {
+            applyLeaderboardNames: async () => {
+              writes.push('names')
+              return { changed: 0 }
+            },
+          },
+          leaderboardRanked: {
+            applyLeaderboardRanked: async () => {
+              writes.push('1v1')
+              return { changed: 0 }
+            },
+          },
+          leaderboardTeamModes: {
+            applyLeaderboardSoloQueue: async ({ players }) => {
+              writes.push(`solo:${players.length}`)
+              return { changed: players.length }
+            },
+            applyLeaderboardTeams: async ({ teams }) => {
+              writes.push(
+                `teams:${teams.map(({ brawlhallaIdOne, brawlhallaIdTwo }) => `${brawlhallaIdOne}+${brawlhallaIdTwo}`)}`,
+              )
+              return { changed: teams.length }
+            },
+          },
+          leaderboardSource: {
+            fetchPage: async ({ mode: requested, region }) => {
+              modes.push(requested)
+              expect(region).toBe('EU')
+              return {
+                totalPages: 1,
+                rankings: [
+                  {
+                    identity:
+                      requested === '2v2'
+                        ? {
+                            type: 'fixed-two-vs-two-team',
+                            players: [
+                              { id: 5, username: 'Stale One' },
+                              { id: 6, username: 'Stale Two' },
+                            ],
+                          }
+                        : { type: 'solo-two-vs-two-player', player: { id: 5, username: 'Stale Solo' } },
+                    rating: 1_700,
+                    best_rating: 1_750,
+                    rank: 1,
+                    wins: 3,
+                    losses: 1,
+                    region: 'EU',
+                    tier: 'Platinum 1',
+                  },
+                ],
+              }
+            },
+          },
+        },
+      )
+      return { writes, modes, saved }
+    }
+
+    expect(await run('solo2v2')).toEqual({
+      writes: ['solo:1'],
+      modes: ['solo2v2'],
+      saved: expect.objectContaining({ mode: 'solo2v2' }),
+    })
+    expect(await run('2v2')).toEqual({
+      writes: ['teams:5+6'],
+      modes: ['2v2'],
+      saved: expect.objectContaining({ mode: '2v2' }),
+    })
+  })
+
   test('propagates published 1v1 standings without failing the publication', async () => {
     const standings: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; rating: number }> }> = []
     const recordStandings = async (input: {

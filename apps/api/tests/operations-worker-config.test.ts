@@ -13,7 +13,18 @@ import { readHealthPort, readRuntimeConfig, readShutdownAnnounceMs } from '../sr
 describe('operations worker configuration', () => {
   test('schedules one staggered deep crawl per region and bounds its interval', () => {
     const config = readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: String(2 * 60 * 60 * 1000) }).deepCrawl
-    const schedules = leaderboardDeepCrawlScheduleDefinitions(config)
+    const all = leaderboardDeepCrawlScheduleDefinitions(config)
+    expect(all).toHaveLength(27)
+    // The original 1v1 schedules keep a mode-less payload, so their definitions do not change.
+    const schedules = all.filter(({ payload }) => payload.mode === undefined)
+    const solo = all.filter(({ payload }) => payload.mode === 'solo2v2')
+    const teams = all.filter(({ payload }) => payload.mode === '2v2')
+    expect(solo[0]).toMatchObject({ scheduleKey: 'rankings:solo2v2:deep:US-E', intervalMs: 2 * 60 * 60 * 1000 })
+    expect(teams[0]).toMatchObject({
+      scheduleKey: 'rankings:2v2:deep:US-E',
+      intervalMs: 3 * 60 * 60 * 1000,
+      payload: { mode: '2v2', region: 'US-E', intervalMs: 3 * 60 * 60 * 1000 },
+    })
     expect(schedules.map(({ payload }) => payload.region)).toEqual([
       'US-E',
       'US-W',
@@ -40,6 +51,9 @@ describe('operations worker configuration', () => {
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: '60000' })).toThrow('DEEP_CRAWL_INTERVAL_MS')
     expect(readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '0' }).deepCrawl.pageDelayMs).toBe(0)
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '5001' })).toThrow('DEEP_CRAWL_PAGE_DELAY_MS')
+    expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_TEAMS_INTERVAL_MS: '60000' })).toThrow(
+      'DEEP_CRAWL_TEAMS_INTERVAL_MS',
+    )
   })
 
   test('uses conservative runtime defaults and rejects unsafe values', () => {
@@ -80,6 +94,7 @@ describe('operations worker configuration', () => {
         intervalMs: 60 * 60 * 1000,
         firstDueAt: '2026-10-07T19:30:00.000Z',
         pageDelayMs: 150,
+        teamsIntervalMs: 3 * 60 * 60 * 1000,
       },
       admission: {
         totalConcurrency: 8,

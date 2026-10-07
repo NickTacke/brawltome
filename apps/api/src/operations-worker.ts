@@ -392,6 +392,7 @@ try {
         leaderboardPlayerNames,
         leaderboardRanked,
         deepCrawlPageDelayMs: workerConfig.deepCrawl.pageDelayMs,
+        leaderboardTeamModes: leaderboardRanked,
         leaderboardDeepCrawlProgress: {
           read: operations.readLeaderboardDeepCrawlProgress,
           save: operations.saveLeaderboardDeepCrawlProgress,

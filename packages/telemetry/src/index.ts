@@ -154,6 +154,7 @@ const workClass = [
   'projection',
   'maintenance',
 ] as const
+const deepCrawlMode = ['1v1', 'solo2v2', '2v2'] as const
 const deepCrawlRegion = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
 const operationKind = [
   'proof',
@@ -310,12 +311,12 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   leaderboard_deep_crawl_pages_total: {
     kind: 'counter',
     help: 'V1 1v1 leaderboard pages the deep crawl read or skipped as malformed',
-    labels: { region: deepCrawlRegion, outcome: ['read', 'skipped'] },
+    labels: { mode: deepCrawlMode, region: deepCrawlRegion, outcome: ['read', 'skipped'] },
   },
   leaderboard_deep_crawl_changed_total: {
     kind: 'counter',
-    help: 'Players whose name or 1v1 standing the deep crawl changed',
-    labels: { region: deepCrawlRegion, change: ['name', 'standing'] },
+    help: 'Names and standings the deep crawl changed',
+    labels: { mode: deepCrawlMode, region: deepCrawlRegion, change: ['name', 'standing', 'solo', 'team'] },
   },
   freshness_planner_skips_total: {
     kind: 'counter',

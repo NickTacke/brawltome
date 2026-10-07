@@ -145,6 +145,41 @@ function effectiveValues(row: ValuesRow & PulseValuesRow, canonicalOrder: Update
   }
 }
 
+type ObservationValuesRow = {
+  observation_rating: number | null
+  observation_peak_rating: number | null
+  observation_tier: string | null
+  observation_wins: number | null
+  observation_games: number | null
+  observation_observed_at: Date | null
+}
+
+// Solo queue and fixed team numbers from a leaderboard observation newer than the V0 refresh; names, regions and
+// ranks stay with the V0 snapshot.
+function withNewerObservation(
+  current: ReturnType<typeof values>,
+  row: ObservationValuesRow,
+  refreshedAt: number,
+): ReturnType<typeof values> {
+  if (
+    !row.observation_observed_at ||
+    row.observation_observed_at.getTime() <= refreshedAt ||
+    row.observation_rating === null ||
+    row.observation_peak_rating === null ||
+    row.observation_wins === null ||
+    row.observation_games === null
+  ) {
+    return current
+  }
+  return {
+    rating: row.observation_rating,
+    peakRating: row.observation_peak_rating,
+    tier: row.observation_tier ?? current.tier,
+    wins: row.observation_wins,
+    games: row.observation_games,
+  }
+}
+
 // The leaderboard re-observes ranked 1v1 standings every scan, so a player's numbers can be newer there than in the
 // last V0 refresh. Only those numbers move; ranks, legends, and teams stay with the V0 snapshot they came from.
 function withLeaderboardObservation(
@@ -307,7 +342,8 @@ export function createPostgresRankedPlayers(
           sql<
             Array<
               ValuesRow &
-                PulseValuesRow & {
+                PulseValuesRow &
+                ObservationValuesRow & {
                   brawlhalla_id_one: number
                   brawlhalla_id_two: number
                   team_name: string
@@ -322,21 +358,40 @@ export function createPostgresRankedPlayers(
                  pulse.wins AS pulse_wins, pulse.games AS pulse_games,
                  to_char(pulse.effect_created_at AT TIME ZONE 'UTC',
                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS pulse_effect_created_at,
-                 pulse.effect_operation_id AS pulse_effect_operation_id
+                 pulse.effect_operation_id AS pulse_effect_operation_id,
+                 observation.rating AS observation_rating, observation.peak_rating AS observation_peak_rating,
+                 observation.tier AS observation_tier, observation.wins AS observation_wins,
+                 observation.games AS observation_games, observation.observed_at AS observation_observed_at
           FROM players.ranked_fixed_teams team
           LEFT JOIN players.ranked_v1_fixed_team_pulses pulse
             ON pulse.brawlhalla_id = team.brawlhalla_id
             AND pulse.brawlhalla_id_one = LEAST(team.brawlhalla_id_one, team.brawlhalla_id_two)
             AND pulse.brawlhalla_id_two = GREATEST(team.brawlhalla_id_one, team.brawlhalla_id_two)
+          LEFT JOIN players.leaderboard_team_observations observation
+            ON observation.brawlhalla_id_one = LEAST(team.brawlhalla_id_one, team.brawlhalla_id_two)
+            AND observation.brawlhalla_id_two = GREATEST(team.brawlhalla_id_one, team.brawlhalla_id_two)
           WHERE team.brawlhalla_id = ${brawlhallaId}
           ORDER BY team.ordinal
         `,
           sql<
-            Array<ValuesRow & { second_player_id: 0; team_name: string; region: string; global_rank: number | null }>
+            Array<
+              ValuesRow &
+                ObservationValuesRow & {
+                  second_player_id: 0
+                  team_name: string
+                  region: string
+                  global_rank: number | null
+                }
+            >
           >`
-          SELECT second_player_id, team_name, rating, peak_rating, tier, wins, games, region, global_rank
-          FROM players.ranked_solo_queue
-          WHERE brawlhalla_id = ${brawlhallaId}
+          SELECT solo.second_player_id, solo.team_name, solo.rating, solo.peak_rating, solo.tier, solo.wins,
+                 solo.games, solo.region, solo.global_rank,
+                 observation.rating AS observation_rating, observation.peak_rating AS observation_peak_rating,
+                 observation.tier AS observation_tier, observation.wins AS observation_wins,
+                 observation.games AS observation_games, observation.observed_at AS observation_observed_at
+          FROM players.ranked_solo_queue solo
+          LEFT JOIN players.leaderboard_solo_queue_observations observation USING (brawlhalla_id)
+          WHERE solo.brawlhalla_id = ${brawlhallaId}
           ORDER BY ordinal
         `,
           sql<HistoryRow[]>`
@@ -352,6 +407,10 @@ export function createPostgresRankedPlayers(
           createdAt: profile.v0_effect_created_at,
           operationId: profile.v0_effect_operation_id,
         }
+        const refreshedAt = Math.max(
+          profile.last_success_at?.getTime() ?? 0,
+          profile.pulse_last_success_at?.getTime() ?? 0,
+        )
         const oneVsOne = withLeaderboardObservation(profile, {
           ...effectiveValues(profile as ProfileRow & ValuesRow, canonicalOrder),
           region: profile.region as string,
@@ -402,14 +461,14 @@ export function createPostgresRankedPlayers(
               teamName: row.team_name,
               region: row.region,
               globalRank: row.global_rank,
-              ...effectiveValues(row, canonicalOrder),
+              ...withNewerObservation(effectiveValues(row, canonicalOrder), row, refreshedAt),
             })),
             soloQueue: soloRows.map((row) => ({
               secondPlayerId: row.second_player_id,
               teamName: row.team_name,
               region: row.region,
               globalRank: row.global_rank,
-              ...values(row),
+              ...withNewerObservation(values(row), row, refreshedAt),
             })),
             ratingHistory,
             observedRatingDirection: deriveObservedRatingDirection(ratingHistory),
