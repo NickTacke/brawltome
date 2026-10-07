@@ -159,3 +159,21 @@ export type PlayerRankedProfileContract = z.infer<typeof playerRankedProfileSche
 export function parsePlayerRankedProfileOutput(value: unknown): PlayerRankedProfileContract | null {
   return nullablePlayerRankedProfileSchema.parse(value)
 }
+
+// The latest 1v1 standing seen on the V1 leaderboard: shown for players whose profile has no V0 ranked snapshot yet.
+// Kept apart from PlayerRankedProfile, which the desktop overlay deserializes strictly.
+export const leaderboardStandingSchema = z
+  .object({
+    brawlhallaId: brawlhallaIdSchema,
+    region: visibleText,
+    rating: int32,
+    peakRating: int32,
+    tier: visibleText.nullable(),
+    wins: int32,
+    games: int32,
+    observedAt: utcDateTime,
+  })
+  .strict()
+
+export const nullableLeaderboardStandingSchema = leaderboardStandingSchema.nullable()
+export type LeaderboardStandingContract = z.infer<typeof leaderboardStandingSchema>

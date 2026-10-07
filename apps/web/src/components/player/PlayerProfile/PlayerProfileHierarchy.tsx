@@ -1,3 +1,4 @@
+import type { LeaderboardStanding } from '@/lib/player-reference'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
 import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
@@ -19,6 +20,7 @@ export interface CanonicalPlayerProfileView {
   clan: { clanId: number; clanName: string } | null
   currentSeason: PlayerRankedProfileContract | null
   career: PlayerCareerProfileContract | null
+  leaderboardStanding?: LeaderboardStanding | null
 }
 
 interface PlayerProfileHierarchyProps {
@@ -64,7 +66,9 @@ function rankedTeams(profile: PlayerRankedProfileContract | null) {
 function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): PlayerData {
   const ranked = player.currentSeason?.snapshot
   const career = player.career?.snapshot
-  const oneVsOne = ranked?.oneVsOne
+  // Until the first V0 refresh lands, the 1v1 leaderboard standing stands in for the ranked snapshot.
+  const standing = ranked ? null : (player.leaderboardStanding ?? null)
+  const oneVsOne = ranked?.oneVsOne ?? standing
   return {
     brawlhallaId: player.brawlhallaId,
     name: player.name,
@@ -77,7 +81,8 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
     tier: oneVsOne?.tier ?? null,
     rankedGames: oneVsOne?.games,
     rankedWins: oneVsOne?.wins,
-    rankedLastUpdated: player.currentSeason?.lastSuccessAt ?? null,
+    rankedLastUpdated: standing ? standing.observedAt : (player.currentSeason?.lastSuccessAt ?? null),
+    rankedSource: standing ? 'leaderboard' : ranked ? 'v0' : null,
     ratingHistory: ranked?.ratingHistory ?? [],
     rankedLegends: ranked?.rankedLegends ?? [],
     xp: career?.account.xp ?? null,

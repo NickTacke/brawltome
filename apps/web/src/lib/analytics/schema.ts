@@ -56,6 +56,7 @@ export const analyticsEventSchema = z.discriminatedUnion('name', [
       dataAge: dataAge,
       rankedAge: dataAge.optional(),
       statsAge: dataAge.optional(),
+      rankedSource: z.enum(['v0', 'leaderboard', 'none']).optional(),
     })
     .strict(),
   z
