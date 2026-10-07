@@ -1211,12 +1211,24 @@ describe('durable Refresh Operations', () => {
       'interactive-player-refresh',
     )
     expect(await operations.commitInteractiveSection(splitLease, 'ranked')).toBe('transitioned')
-    await control`
-      UPDATE refresh_operations.schedules
-      SET first_due_at = statement_timestamp(), next_due_at = statement_timestamp()
-      WHERE resource_key = ${`player:${splitTarget.brawlhallaId}`} AND enabled
-    `
-    await Bun.sleep(5)
+    // The scheduler reads due watermarks as millisecond-precision JS Dates, so the watermark must be a whole
+    // millisecond that is strictly after the ranked checkpoint, or a fast database can place both in one
+    // millisecond and the truncated watermark would count the ranked checkpoint as post-watermark.
+    let watermarked = 0
+    for (let attempt = 0; watermarked === 0 && attempt < 1_000; attempt += 1) {
+      const updated = await control`
+        UPDATE refresh_operations.schedules schedule
+        SET first_due_at = clock.watermark, next_due_at = clock.watermark
+        FROM refresh_operations.interactive_refresh_effects ranked,
+             (SELECT date_trunc('milliseconds', clock_timestamp()) AS watermark) clock
+        WHERE ranked.operation_id = ${splitLease.effectOperationId} AND ranked.section = 'ranked'
+          AND clock.watermark > ranked.completed_at
+          AND schedule.resource_key = ${`player:${splitTarget.brawlhallaId}`} AND schedule.enabled
+      `
+      watermarked = updated.count
+      if (watermarked === 0) await Bun.sleep(1)
+    }
+    expect(watermarked).toBe(1)
     expect(await operations.commitInteractiveSection(splitLease, 'stats')).toBe('transitioned')
     expect(await operations.complete(splitLease)).toBe('transitioned')
 
