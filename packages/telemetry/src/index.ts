@@ -129,6 +129,7 @@ const route = [
   'trpc',
   'health_live',
   'health_ready',
+  'health_serving',
   'metrics',
   'auth',
   'operations',
@@ -1034,6 +1035,7 @@ export function createTelemetry(options: {
 export function normalizeHttpRoute(pathname: string): (typeof route)[number] {
   if (pathname === '/health/live') return 'health_live'
   if (pathname === '/health/ready') return 'health_ready'
+  if (pathname === '/health/serving' || pathname === '/api/health/serving') return 'health_serving'
   if (pathname === '/metrics' || pathname === '/internal/metrics' || pathname === '/api/metrics') return 'metrics'
   if (pathname.startsWith('/trpc')) return 'trpc'
   if (pathname.startsWith('/auth')) return 'auth'

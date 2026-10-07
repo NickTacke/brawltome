@@ -57,6 +57,28 @@ describe('runtime lifecycle', () => {
     expect(await (await health.request('/ready')).json()).toEqual({ status: 'unready', reason: 'draining' })
   })
 
+  test('announces shutdown to health checks while still admitting work', async () => {
+    const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100 })
+    const health = createHealthRoutes(lifecycle)
+
+    expect((await health.request('/serving')).status).toBe(503)
+    lifecycle.markReady()
+    expect(await (await health.request('/serving')).json()).toEqual({ status: 'serving' })
+
+    lifecycle.announceShutdown()
+    expect(await (await health.request('/serving')).json()).toEqual({ status: 'draining' })
+    expect((await health.request('/serving')).status).toBe(503)
+    expect(await (await health.request('/ready')).json()).toEqual({ status: 'unready', reason: 'draining' })
+    expect((await health.request('/live')).status).toBe(200)
+    const finishWork = lifecycle.startWork()
+    expect(finishWork).not.toBeNull()
+    finishWork?.()
+
+    lifecycle.beginShutdown()
+    expect(lifecycle.startWork()).toBeNull()
+    expect((await health.request('/serving')).status).toBe(503)
+  })
+
   test('synchronously stops admission and drains active work before bounded cleanup', async () => {
     const events: string[] = []
     let finishWork: (() => void) | undefined

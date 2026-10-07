@@ -98,8 +98,8 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     }
     if (service.labels !== undefined && !isRecord(service.labels)) {
       violations.push(`${name} labels must be an object`)
-    } else if (hasTraefikLabels(service.labels)) {
-      violations.push(`${name} must not have Traefik labels`)
+    } else if (hasUnapprovedTraefikLabels(service.labels)) {
+      violations.push(`${name} must not have Traefik labels beyond retry and health checks`)
     }
     if (!sameSecretAttachments(service.secrets, expectedServiceSecrets[name])) {
       violations.push(`${name} secrets must match approved attachments exactly`)
@@ -324,8 +324,16 @@ function hasBind(value: unknown, source: string, target: string): boolean {
   )
 }
 
-function hasTraefikLabels(value: unknown): boolean {
-  return isRecord(value) && Object.keys(value).some((key) => key.toLowerCase().startsWith('traefik.'))
+// Dokploy owns routing. Compose may only tune the routes Dokploy creates (retries and load balancer health checks for
+// zero-downtime deploys); without traefik.enable or a rule these labels cannot expose anything.
+const approvedTraefikLabel =
+  /^traefik\.http\.(?:middlewares\.[a-z0-9-]+\.retry\.[a-z]+|routers\.[a-z0-9-]+\.middlewares|services\.[a-z0-9-]+\.loadbalancer\.healthcheck\.[a-z]+)$/
+
+function hasUnapprovedTraefikLabels(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.keys(value).some((key) => key.toLowerCase().startsWith('traefik.') && !approvedTraefikLabel.test(key))
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

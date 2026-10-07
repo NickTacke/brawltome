@@ -84,7 +84,7 @@ describe('application secret bootstrap', () => {
     })
 
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain('args=apps/web/server.js')
+    expect(result.stdout).toContain('args=infra/app/web-server.cjs')
     for (const value of Object.values(values)) expect(result.stdout).toContain(value)
     expect(result.stdout.split('\n')[0]).not.toContain('secret')
   })

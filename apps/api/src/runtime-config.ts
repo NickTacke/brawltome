@@ -30,6 +30,10 @@ export function readRuntimeConfig(env: NodeJS.ProcessEnv) {
   return { shutdownDeadlineMs, cleanupReserveMs }
 }
 
+export function readShutdownAnnounceMs(value: string | undefined): number {
+  return integerInRange(value, 0, 'RUNTIME_SHUTDOWN_ANNOUNCE_MS', 0, 30_000)
+}
+
 export function readHealthPort(value: string | undefined, fallback: number): number {
   return integerInRange(value, fallback, 'HEALTH_PORT', 1, 65_535)
 }

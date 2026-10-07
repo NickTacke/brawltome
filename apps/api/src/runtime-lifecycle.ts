@@ -40,6 +40,7 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
   }
 
   let state: RuntimeState = 'starting'
+  let shutdownAnnounced = false
   let activeWork = 0
   let shutdownPromise: Promise<ShutdownResult> | undefined
   const drainWaiters = new Set<() => void>()
@@ -64,6 +65,16 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
     }
   }
 
+  // Reports draining to health checks while still admitting work, so a proxy can route new requests elsewhere
+  // before admission stops.
+  function announceShutdown(): void {
+    shutdownAnnounced = true
+  }
+
+  function serving(): boolean {
+    return state === 'ready' && !shutdownAnnounced
+  }
+
   function beginShutdown(): void {
     if (state === 'draining' || state === 'stopped') return
     state = 'draining'
@@ -73,6 +84,7 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
 
   async function readiness(): Promise<ReadinessResult> {
     if (state !== 'ready') return { ready: false, reason: state }
+    if (shutdownAnnounced) return { ready: false, reason: 'draining' }
     for (const probe of options.readinessProbes ?? []) {
       try {
         await probe.check()
@@ -155,6 +167,8 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
   return {
     markReady,
     startWork,
+    announceShutdown,
+    serving,
     beginShutdown,
     readiness,
     shutdown,

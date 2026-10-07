@@ -46,7 +46,7 @@ async function waitFor(
   throw new Error(`Timed out waiting for ${message}`)
 }
 
-async function healthStatus(port: number, endpoint: 'live' | 'ready'): Promise<number | null> {
+async function healthStatus(port: number, endpoint: 'live' | 'ready' | 'serving'): Promise<number | null> {
   try {
     return (await fetch(`http://127.0.0.1:${port}/health/${endpoint}`)).status
   } catch {
@@ -245,6 +245,29 @@ describe('real production runtime lifecycle', () => {
       }
     }, 20_000)
   }
+
+  test('API announces shutdown to the load balancer and keeps serving before it drains', async () => {
+    const port = await allocatePort()
+    const environment = { ...apiEnvironment(port), RUNTIME_SHUTDOWN_ANNOUNCE_MS: '1000' }
+    const runtime = spawnRuntime('apps/api/src/serve.ts', environment)
+    const metrics = () =>
+      fetch(`http://127.0.0.1:${port}/metrics`, { headers: { 'x-metrics-secret': environment.METRICS_SCRAPE_SECRET } })
+    try {
+      await waitFor(async () => (await healthStatus(port, 'serving')) === 200, 'API serving')
+
+      const startedAt = Date.now()
+      runtime.process.kill('SIGTERM')
+      await waitFor(async () => (await healthStatus(port, 'serving')) === 503, 'API draining announcement', 500)
+      expect((await metrics()).status).toBe(200)
+      expect(Date.now() - startedAt).toBeLessThan(1_000)
+
+      const exited = await waitForExit(runtime, 4_000)
+      expect(exited.exitCode).toBe(0)
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(1_000)
+    } finally {
+      if (runtime.process.exitCode === null) runtime.process.kill('SIGKILL')
+    }
+  }, 20_000)
 
   test('overlapping API and worker replicas preserve background separation and one durable effect', async () => {
     const operations = createPostgresRefreshOperations(connectionString)

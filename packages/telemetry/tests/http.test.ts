@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { createMemorySink, createTelemetry, instrumentHttpHandler, telemetryFetch } from '../src/index'
+import {
+  createMemorySink,
+  createTelemetry,
+  instrumentHttpHandler,
+  normalizeHttpRoute,
+  telemetryFetch,
+} from '../src/index'
 
 describe('HTTP telemetry adapters', () => {
   test('mints public ingress correlation and records bounded route metrics without changing response', async () => {
@@ -23,6 +29,12 @@ describe('HTTP telemetry adapters', () => {
       value: 1,
     })
     expect(JSON.stringify(sink.records)).not.toContain('private=value')
+  })
+
+  test('keeps load balancer health checks apart from product routes', () => {
+    expect(normalizeHttpRoute('/health/serving')).toBe('health_serving')
+    expect(normalizeHttpRoute('/api/health/serving')).toBe('health_serving')
+    expect(normalizeHttpRoute('/health/ready')).toBe('health_ready')
   })
 
   test('accepts explicitly trusted internal propagation', async () => {
