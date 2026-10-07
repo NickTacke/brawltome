@@ -4,6 +4,7 @@ import {
   type BackgroundWorkClass,
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateRankingRetentionSchedule,
+  type LeaderboardDeepCrawlMode,
   type WorkClass,
   leaderboardDeepCrawlRegions,
   maxLeaderboardDeepCrawlIntervalMs,
@@ -145,6 +146,10 @@ export type LeaderboardDeepCrawlConfig = {
   // Pause after each page. Pages took ~0.33 s unpaced in production, so 150 ms gives ~2 pages/s: a full 1v1 pass
   // (~5,600 pages) in ~45 minutes at roughly 600 V1 calls per 5 minutes, well under the 1800 limit.
   pageDelayMs: number
+  // Solo 2v2 (~800 pages) and fixed 2v2 teams (~2,600 pages) run less often so an hourly 1v1 pass still fits the hour
+  // on the single leaderboard slot.
+  soloIntervalMs: number
+  teamsIntervalMs: number
 }
 
 // One crawl per region per interval, spread evenly so the regions never compete for V1 admission at once.
@@ -152,17 +157,34 @@ export function leaderboardDeepCrawlScheduleDefinitions(
   config: LeaderboardDeepCrawlConfig,
 ): CreateLeaderboardDeepCrawlSchedule[] {
   const baseDueAt = new Date(config.firstDueAt).getTime()
-  const staggerMs = Math.floor(config.intervalMs / leaderboardDeepCrawlRegions.length)
-  return leaderboardDeepCrawlRegions.map((region, index) => ({
-    kind: 'leaderboard-deep-crawl' as const,
-    scheduleKey: `rankings:1v1:deep:${region}`,
-    operationKeyPrefix: `rankings:1v1:deep:${region}`,
-    workClass: 'leaderboard' as const,
-    intervalMs: config.intervalMs,
-    firstDueAt: new Date(baseDueAt + index * staggerMs).toISOString(),
-    payload: { region, intervalMs: config.intervalMs },
-    provenance: { source: 'leaderboard-deep-crawl-schedule', requestedBy: 'proactive-freshness' },
-  }))
+  const definitions = (
+    mode: LeaderboardDeepCrawlMode,
+    intervalMs: number,
+    offsetMs: number,
+  ): CreateLeaderboardDeepCrawlSchedule[] => {
+    const staggerMs = Math.floor(intervalMs / leaderboardDeepCrawlRegions.length)
+    return leaderboardDeepCrawlRegions.map((region, index) => ({
+      kind: 'leaderboard-deep-crawl' as const,
+      scheduleKey: `rankings:${mode}:deep:${region}`,
+      operationKeyPrefix: `rankings:${mode}:deep:${region}`,
+      workClass: 'leaderboard' as const,
+      intervalMs,
+      firstDueAt: new Date(baseDueAt + offsetMs + index * staggerMs).toISOString(),
+      // The original 1v1 schedules carry no mode; keeping their payload keeps their definition unchanged.
+      payload: mode === '1v1' ? { region, intervalMs } : { mode, region, intervalMs },
+      provenance: { source: 'leaderboard-deep-crawl-schedule', requestedBy: 'proactive-freshness' },
+    }))
+  }
+  // Solo 2v2 regions start halfway between the 1v1 ones; each mode then keeps its own cadence.
+  return [
+    ...definitions('1v1', config.intervalMs, 0),
+    ...definitions(
+      'solo2v2',
+      config.soloIntervalMs,
+      Math.floor(config.intervalMs / leaderboardDeepCrawlRegions.length / 2),
+    ),
+    ...definitions('2v2', config.teamsIntervalMs, 15 * 60 * 1000),
+  ]
 }
 
 export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
@@ -361,6 +383,20 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       // Hourly windows start after the first 3-hour pass; regions then stay staggered across the hour.
       firstDueAt: '2026-10-07T19:30:00.000Z',
       pageDelayMs: boundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, 150, 'DEEP_CRAWL_PAGE_DELAY_MS', 0, 5_000),
+      soloIntervalMs: boundedInteger(
+        env.DEEP_CRAWL_SOLO_INTERVAL_MS,
+        3 * 60 * 60 * 1000,
+        'DEEP_CRAWL_SOLO_INTERVAL_MS',
+        minLeaderboardDeepCrawlIntervalMs,
+        maxLeaderboardDeepCrawlIntervalMs,
+      ),
+      teamsIntervalMs: boundedInteger(
+        env.DEEP_CRAWL_TEAMS_INTERVAL_MS,
+        6 * 60 * 60 * 1000,
+        'DEEP_CRAWL_TEAMS_INTERVAL_MS',
+        minLeaderboardDeepCrawlIntervalMs,
+        maxLeaderboardDeepCrawlIntervalMs,
+      ),
     } satisfies LeaderboardDeepCrawlConfig,
     admission: validateAdmissionConfig(admission),
   }

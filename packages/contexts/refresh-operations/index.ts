@@ -112,7 +112,14 @@ export const minLeaderboardDeepCrawlIntervalMs = 60 * 60 * 1000
 export const maxLeaderboardDeepCrawlIntervalMs = 24 * 60 * 60 * 1000
 
 export type LeaderboardDeepCrawlRegion = (typeof leaderboardDeepCrawlRegions)[number]
-export type LeaderboardDeepCrawlPayload = { region: LeaderboardDeepCrawlRegion; intervalMs: number }
+export const leaderboardDeepCrawlModes = ['1v1', 'solo2v2', '2v2'] as const
+export type LeaderboardDeepCrawlMode = (typeof leaderboardDeepCrawlModes)[number]
+// A payload without a mode is a 1v1 crawl (the original schedules).
+export type LeaderboardDeepCrawlPayload = {
+  mode?: LeaderboardDeepCrawlMode
+  region: LeaderboardDeepCrawlRegion
+  intervalMs: number
+}
 
 export function validateLeaderboardDeepCrawlPayload(payload: LeaderboardDeepCrawlPayload): LeaderboardDeepCrawlPayload {
   if (!(leaderboardDeepCrawlRegions as readonly string[]).includes(payload.region)) {
@@ -127,7 +134,12 @@ export function validateLeaderboardDeepCrawlPayload(payload: LeaderboardDeepCraw
       `leaderboard deep crawl intervalMs must be an integer between ${minLeaderboardDeepCrawlIntervalMs} and ${maxLeaderboardDeepCrawlIntervalMs}`,
     )
   }
-  if (Object.keys(payload).length !== 2) throw new Error('leaderboard deep crawl payload has unexpected fields')
+  if (payload.mode !== undefined && !(leaderboardDeepCrawlModes as readonly string[]).includes(payload.mode)) {
+    throw new Error('leaderboard deep crawl mode must be 1v1, solo2v2, or 2v2')
+  }
+  if (Object.keys(payload).length !== (payload.mode === undefined ? 2 : 3)) {
+    throw new Error('leaderboard deep crawl payload has unexpected fields')
+  }
   return payload
 }
 

@@ -248,15 +248,41 @@ export type LeaderboardDeepCrawlStanding = {
   games: number
 }
 
-// The deep crawl feeds Players directly rather than publishing a generation: one standing per 1v1 player row, with the
+// The deep crawl feeds Players directly rather than publishing a generation: one standing per 1v1 or solo 2v2 player
+// row, with the
 // tier resolved the same way publication does.
 export function leaderboardDeepCrawlStandings(page: SourceLeaderboardPage): LeaderboardDeepCrawlStanding[] {
   return page.rankings.flatMap((row) => {
-    if (row.identity.type !== 'one-vs-one-player') return []
+    if (row.identity.type !== 'one-vs-one-player' && row.identity.type !== 'solo-two-vs-two-player') return []
     return [
       {
         brawlhallaId: row.identity.player.id,
         name: row.identity.player.username,
+        region: row.region,
+        rating: row.rating,
+        peakRating: row.best_rating,
+        tier: resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier,
+        wins: row.wins,
+        games: row.wins + row.losses,
+      },
+    ]
+  })
+}
+
+export type LeaderboardDeepCrawlTeam = Omit<LeaderboardDeepCrawlStanding, 'brawlhallaId' | 'name'> & {
+  brawlhallaIdOne: number
+  brawlhallaIdTwo: number
+}
+
+// Fixed 2v2 rows carry the usernames from when the team formed, so only the team's numbers are kept.
+export function leaderboardDeepCrawlTeams(page: SourceLeaderboardPage): LeaderboardDeepCrawlTeam[] {
+  return page.rankings.flatMap((row) => {
+    if (row.identity.type !== 'fixed-two-vs-two-team') return []
+    const [one, two] = row.identity.players
+    return [
+      {
+        brawlhallaIdOne: one.id,
+        brawlhallaIdTwo: two.id,
         region: row.region,
         rating: row.rating,
         peakRating: row.best_rating,
