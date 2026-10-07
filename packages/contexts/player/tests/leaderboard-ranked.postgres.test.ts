@@ -263,4 +263,64 @@ describe('Ranked standings observed on leaderboards', () => {
       await Promise.all([control.end(), standings.close(), ranked.close()])
     }
   })
+
+  test('shows whichever of the V0 refresh, a team pulse, and a team observation is newest', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const standings = createPostgresLeaderboardRanked(connectionString)
+    const ranked = createPostgresRankedPlayers(connectionString)
+    const team = (rating: number, wins: number, games: number) => ({
+      brawlhallaIdOne: 500,
+      brawlhallaIdTwo: 501,
+      region: 'EU',
+      rating,
+      peakRating: 1900,
+      tier: 'Platinum 4',
+      wins,
+      games,
+    })
+    const pulseAt = async (observedAt: string) => {
+      await control`
+        INSERT INTO players.ranked_v1_fixed_team_pulses
+          (brawlhalla_id, brawlhalla_id_one, brawlhalla_id_two, rating, peak_rating, wins, games, effect_created_at,
+           effect_operation_id, observed_at)
+        VALUES (500, 500, 501, 1850, 1900, 15, 25, ${observedAt}, ${randomUUID()}::uuid, ${observedAt})
+        ON CONFLICT (brawlhalla_id, brawlhalla_id_one, brawlhalla_id_two) DO UPDATE SET
+          effect_created_at = EXCLUDED.effect_created_at, observed_at = EXCLUDED.observed_at
+      `
+    }
+    try {
+      await insertRanked(control, 500, '2026-10-07T10:00:00Z')
+      await control`
+        UPDATE players.ranked_profiles SET v0_effect_created_at = '2026-10-07T10:00:00Z' WHERE brawlhalla_id = 500
+      `
+      await control`
+        INSERT INTO players.ranked_fixed_teams
+          (brawlhalla_id, ordinal, brawlhalla_id_one, brawlhalla_id_two, team_name, rating, peak_rating, tier, wins,
+           games, region, global_rank)
+        VALUES (500, 0, 500, 501, 'Duo', 1700, 1750, 'Platinum 2', 7, 12, 'EU', 300)
+      `
+
+      // V0 10:00, crawl 11:00, pulse 12:00: the pulse is newest.
+      await standings.applyLeaderboardTeams({
+        observedAt: new Date('2026-10-07T11:00:00Z'),
+        teams: [team(1800, 11, 18)],
+      })
+      await pulseAt('2026-10-07T12:00:00Z')
+      expect((await ranked.byId(500))?.snapshot?.fixedTeams[0]).toEqual(
+        expect.objectContaining({ rating: 1850, wins: 15, games: 25 }),
+      )
+
+      // V0 10:00, pulse 11:00, crawl 12:00: the crawl is newest.
+      await pulseAt('2026-10-07T11:00:00Z')
+      await standings.applyLeaderboardTeams({
+        observedAt: new Date('2026-10-07T12:00:00Z'),
+        teams: [team(1820, 13, 21)],
+      })
+      expect((await ranked.byId(500))?.snapshot?.fixedTeams[0]).toEqual(
+        expect.objectContaining({ rating: 1820, wins: 13, games: 21 }),
+      )
+    } finally {
+      await Promise.all([control.end(), standings.close(), ranked.close()])
+    }
+  })
 })

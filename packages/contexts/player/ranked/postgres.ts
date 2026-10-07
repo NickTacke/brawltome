@@ -130,12 +130,12 @@ function isNewer(left: UpdateOrder, right: UpdateOrder): boolean {
   return (left.operationId ?? '') > (right.operationId ?? '')
 }
 
+function pulseIsEffective(row: PulseValuesRow, canonicalOrder: UpdateOrder): boolean {
+  return isNewer({ createdAt: row.pulse_effect_created_at, operationId: row.pulse_effect_operation_id }, canonicalOrder)
+}
+
 function effectiveValues(row: ValuesRow & PulseValuesRow, canonicalOrder: UpdateOrder) {
-  if (
-    !isNewer({ createdAt: row.pulse_effect_created_at, operationId: row.pulse_effect_operation_id }, canonicalOrder)
-  ) {
-    return values(row)
-  }
+  if (!pulseIsEffective(row, canonicalOrder)) return values(row)
   return {
     rating: row.pulse_rating ?? row.rating,
     peakRating: row.pulse_peak_rating ?? row.peak_rating,
@@ -143,6 +143,18 @@ function effectiveValues(row: ValuesRow & PulseValuesRow, canonicalOrder: Update
     wins: row.pulse_wins ?? row.wins,
     games: row.pulse_games ?? row.games,
   }
+}
+
+// When the values effectiveValues picked were fetched: the V0 refresh, or the pulse that overrides it. A leaderboard
+// observation only wins when it is newer than that, so the newest source is always the one shown.
+function effectiveValuesAt(
+  row: PulseValuesRow,
+  canonicalOrder: UpdateOrder,
+  v0RefreshedAt: number,
+  pulseAt: Date | null,
+): number {
+  if (!pulseIsEffective(row, canonicalOrder)) return v0RefreshedAt
+  return Math.max(v0RefreshedAt, pulseAt?.getTime() ?? 0)
 }
 
 type ObservationValuesRow = {
@@ -154,8 +166,8 @@ type ObservationValuesRow = {
   observation_observed_at: Date | null
 }
 
-// Solo queue and fixed team numbers from a leaderboard observation newer than the V0 refresh; names, regions and
-// ranks stay with the V0 snapshot.
+// Solo queue and fixed team numbers from a leaderboard observation newer than the values currently shown; names,
+// regions and ranks stay with the V0 snapshot.
 function withNewerObservation(
   current: ReturnType<typeof values>,
   row: ObservationValuesRow,
@@ -185,6 +197,7 @@ function withNewerObservation(
 function withLeaderboardObservation(
   profile: ProfileRow,
   current: ReturnType<typeof values> & { region: string },
+  refreshedAt: number,
 ): ReturnType<typeof values> & { region: string } {
   const observedAt = profile.observation_observed_at
   if (
@@ -197,7 +210,6 @@ function withLeaderboardObservation(
   ) {
     return current
   }
-  const refreshedAt = Math.max(profile.last_success_at?.getTime() ?? 0, profile.pulse_last_success_at?.getTime() ?? 0)
   if (observedAt.getTime() <= refreshedAt) return current
   return {
     rating: profile.observation_rating,
@@ -344,6 +356,7 @@ export function createPostgresRankedPlayers(
               ValuesRow &
                 PulseValuesRow &
                 ObservationValuesRow & {
+                  pulse_observed_at: Date | null
                   brawlhalla_id_one: number
                   brawlhalla_id_two: number
                   team_name: string
@@ -358,7 +371,7 @@ export function createPostgresRankedPlayers(
                  pulse.wins AS pulse_wins, pulse.games AS pulse_games,
                  to_char(pulse.effect_created_at AT TIME ZONE 'UTC',
                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS pulse_effect_created_at,
-                 pulse.effect_operation_id AS pulse_effect_operation_id,
+                 pulse.effect_operation_id AS pulse_effect_operation_id, pulse.observed_at AS pulse_observed_at,
                  observation.rating AS observation_rating, observation.peak_rating AS observation_peak_rating,
                  observation.tier AS observation_tier, observation.wins AS observation_wins,
                  observation.games AS observation_games, observation.observed_at AS observation_observed_at
@@ -407,12 +420,18 @@ export function createPostgresRankedPlayers(
           createdAt: profile.v0_effect_created_at,
           operationId: profile.v0_effect_operation_id,
         }
-        // The 1v1 pulse never touches solo queue or team rows, so those compare against the V0 refresh alone.
+        // Each leaderboard observation competes with the source its values currently come from: the V0 refresh, or a
+        // pulse that overrides it. Solo queue has no pulse. The pulse state's last_success_at also moves on team-only
+        // pulses, so for 1v1 it is an upper bound on when the effective 1v1 pulse landed.
         const v0RefreshedAt = profile.last_success_at?.getTime() ?? 0
-        const oneVsOne = withLeaderboardObservation(profile, {
-          ...effectiveValues(profile as ProfileRow & ValuesRow, canonicalOrder),
-          region: profile.region as string,
-        })
+        const oneVsOne = withLeaderboardObservation(
+          profile,
+          {
+            ...effectiveValues(profile as ProfileRow & ValuesRow, canonicalOrder),
+            region: profile.region as string,
+          },
+          effectiveValuesAt(profile, canonicalOrder, v0RefreshedAt, profile.pulse_last_success_at),
+        )
         const rankedMainLegend =
           profile.ranked_main_legend_id && profile.ranked_main_legend_name_key
             ? {
@@ -459,7 +478,11 @@ export function createPostgresRankedPlayers(
               teamName: row.team_name,
               region: row.region,
               globalRank: row.global_rank,
-              ...withNewerObservation(effectiveValues(row, canonicalOrder), row, v0RefreshedAt),
+              ...withNewerObservation(
+                effectiveValues(row, canonicalOrder),
+                row,
+                effectiveValuesAt(row, canonicalOrder, v0RefreshedAt, row.pulse_observed_at),
+              ),
             })),
             soloQueue: soloRows.map((row) => ({
               secondPlayerId: row.second_player_id,
