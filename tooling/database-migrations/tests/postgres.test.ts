@@ -663,7 +663,13 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         expect(
           nodes.filter((node) => node['Node Type'] === 'Seq Scan' && node['Relation Name'] === 'career_legends'),
         ).toEqual([])
-        expect(nodes.some((node) => node['Index Name'] === 'players_career_legends_best_order')).toBe(true)
+        expect(
+          nodes.some(
+            (node) =>
+              node['Node Type'] === 'Index Only Scan' && node['Index Name'] === 'players_career_legends_best_order',
+          ),
+        ).toBe(true)
+        expect(nodes.filter((node) => node['Node Type'] === 'Sort')).toEqual([])
       } finally {
         await client.end()
       }
