@@ -513,7 +513,10 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       for (const event of events) {
         if (!insertedEventIds.has(event.eventId) || processedEventIds.has(event.eventId)) continue
         processedEventIds.add(event.eventId)
-        if (event.sourceVersion > snapshotVersion && event.sourceVersion >= projectedVersion) {
+        // Events carry the source version their fact was read at. A bulk write enqueues many events under one version
+        // and delivery splits them into batches, so an event at the version the generation already reached still holds
+        // a current fact; only strictly older facts are stale.
+        if (event.sourceVersion >= snapshotVersion && event.sourceVersion >= projectedVersion) {
           if (owner === 'player') {
             const playerEvent = event as PlayerProjectionEvent
             await replacePlayer(sql, generation.generation_id, playerEvent.fact, playerEvent.brawlhallaId)
