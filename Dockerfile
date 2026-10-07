@@ -5,10 +5,22 @@ LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
       org.opencontainers.image.title="BrawlTome" \
       org.opencontainers.image.url="https://brawltome.app"
 COPY --chmod=0555 infra/app/postgres/10-runtime-role.sh /docker-entrypoint-initdb.d/10-runtime-role.sh
+# Defaults (128 MB shared_buffers) left a 112 GB database at a ~60% cache hit ratio with 475 GB of temp spills.
+# Sized for the 6 GB container limit in infra/app/compose.yml.
+CMD ["postgres", \
+     "-c", "shared_buffers=1536MB", \
+     "-c", "effective_cache_size=4GB", \
+     "-c", "work_mem=16MB", \
+     "-c", "maintenance_work_mem=256MB", \
+     "-c", "random_page_cost=1.1", \
+     "-c", "effective_io_concurrency=200", \
+     "-c", "track_io_timing=on", \
+     "-c", "shared_preload_libraries=pg_stat_statements"]
 
 FROM postgres AS dead-letter-role
 COPY --chmod=0555 infra/app/postgres/configure-dead-letter-role.sh /usr/local/bin/configure-dead-letter-role
 ENTRYPOINT ["/usr/local/bin/configure-dead-letter-role"]
+CMD []
 
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS base
 LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
