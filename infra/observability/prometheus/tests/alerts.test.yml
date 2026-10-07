@@ -352,6 +352,10 @@ tests:
         values: "0+5x14"
       - series: 'http_server_requests_total{runtime="operations-worker",route="metrics",status_class="2xx"}'
         values: "0+4x14"
+      - series: 'http_server_requests_total{runtime="web",route="health_serving",status_class="5xx"}'
+        values: "0+5x14"
+      - series: 'http_server_requests_total{runtime="web",route="web",status_class="2xx"}'
+        values: "0+20x14"
     alert_rule_test:
       - eval_time: 12m
         alertname: HttpErrorRateHigh

@@ -317,6 +317,7 @@ describe('durable Refresh Operations', () => {
       `
       const snapshot = await operations.inspectTelemetry()
       const ageMs = snapshot.oldestPending.find(({ workClass }) => workClass === 'leaderboard')?.ageMs ?? 0
+      expect(ageMs).toBeGreaterThan(0)
       expect(ageMs).toBeLessThan(60 * 60 * 1000)
     } finally {
       // Later tests lease leaderboard work from this shared database; leave nothing pending behind.
