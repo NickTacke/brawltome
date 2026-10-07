@@ -560,8 +560,65 @@ describe('Ranking snapshot retention', () => {
       expect(definition?.config).toContain('enable_indexscan=off')
       expect(definition?.config).toContain('search_path=pg_catalog, pg_temp')
       expect(definition?.config).toContain('lock_timeout=5s')
-      // The setting is function-scoped: the session keeps its own planner configuration.
-      expect((await sql`SHOW enable_indexscan`)[0]?.enable_indexscan).toBe('on')
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('restores the session planner setting after the function runs', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const now = await databaseNow(sql)
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 30 * hour) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 2 * hour) })
+      await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 1 * hour) })
+      const connection = await sql.reserve()
+      try {
+        expect((await connection`SHOW enable_indexscan`)[0]?.enable_indexscan).toBe('on')
+        const [row] = await connection<{ deleted_generations: number }[]>`
+          SELECT deleted_generations FROM rankings.expire_v1_generations(clock_timestamp() - interval '24 hours', 5)
+        `
+        expect(row?.deleted_generations).toBe(1)
+        // The function-scoped setting is restored on exit: the same session keeps its own planner configuration.
+        expect((await connection`SHOW enable_indexscan`)[0]?.enable_indexscan).toBe('on')
+      } finally {
+        connection.release()
+      }
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('expires a batch made only of generations without snapshots', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const now = await databaseNow(sql)
+      const at = (offsetMs: number) => new Date(now.getTime() - offsetMs)
+      const emptyGenerationId = randomUUID()
+      await sql`
+        INSERT INTO rankings.generations
+          (id, operation_id, operation_key, mode, observed_at, schedule_window_at, published_at,
+           expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+        VALUES
+          (${emptyGenerationId}, ${randomUUID()}, ${`retention-empty:${emptyGenerationId}`}, '2v2',
+           ${at(60 * hour)}, ${at(61 * hour)}, ${at(60 * hour)}, ${at(59 * hour)}, 1, ${v1Source}, 2, true,
+           ${sql.json({ source: v1Source, contractVersion: 2, pageDepth: 1 })})
+      `
+      const keepers = [
+        await insertGeneration(sql, { mode: '2v2', windowAt: at(40 * hour) }),
+        await insertGeneration(sql, { mode: '2v2', windowAt: at(39 * hour) }),
+      ]
+      expect(await expireWithBacklog(sql, at(24 * hour), 1)).toEqual({ deleted: 1, expirable: 0 })
+      expect((await storedGenerationIds(sql)).sort()).toEqual(keepers.map(({ generationId }) => generationId).sort())
+      expect(
+        await orphanCounts(
+          sql,
+          keepers.map(({ generationId }) => generationId),
+        ),
+      ).toEqual({
+        snapshots: 4,
+        rows: 8,
+      })
     } finally {
       await sql.end()
     }
