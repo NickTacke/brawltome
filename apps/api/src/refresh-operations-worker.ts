@@ -103,6 +103,11 @@ type RunOneRefreshOperationOptions = {
     }): Promise<{ changed: number }>
   }
   leaderboardSource?: LeaderboardPageSource
+  leaderboardDeepCrawlProgress?: {
+    read(region: string): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null>
+    save(input: { region: string; windowAt: Date; nextPage: number; totalPages: number }): Promise<void>
+  }
+  deepCrawlSlicePages?: number
   statistics?: Pick<
     StatisticsTracer,
     | 'preflightCollection'
@@ -927,9 +932,18 @@ function admittedLeaderboardPageFetch(
 }
 
 const deepCrawlChunkPages = 20
+const defaultDeepCrawlSlicePages = 100
 
-// Reads every V1 1v1 page of one region and writes each chunk of pages straight to Players, without publishing a
-// ranking generation. Chunks already written survive a failed attempt; a retry simply reads the pages again.
+// Thrown after a slice so the crawl gives the leaderboard slot back; the worker defers it without spending an attempt
+// and the regular 15-minute collections, queued earlier, run first.
+export class LeaderboardDeepCrawlYield extends Error {
+  constructor() {
+    super('Leaderboard deep crawl yielded between slices')
+  }
+}
+
+// Reads every V1 1v1 page of one region in slices, writing each chunk of pages straight to Players without
+// publishing a ranking generation. Progress is saved per chunk, so a yielded, failed, or interrupted crawl resumes.
 async function executeLeaderboardDeepCrawl(
   operations: RefreshOperationWorker,
   lease: LeaderboardDeepCrawlLease,
@@ -950,6 +964,9 @@ async function executeLeaderboardDeepCrawl(
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
   const { region } = lease.payload
+  const progress = options.leaderboardDeepCrawlProgress
+  const slicePages = options.deepCrawlSlicePages ?? defaultDeepCrawlSlicePages
+  const windowAt = new Date(lease.scheduleWindowAt ?? lease.effectCreatedAt)
   const fetchPage = admittedLeaderboardPageFetch(
     operations,
     lease,
@@ -967,54 +984,85 @@ async function executeLeaderboardDeepCrawl(
     }
   }
   const started = performance.now()
+  const saved = await progress?.read(region)
+  const resuming = saved !== undefined && saved !== null && saved.windowAt.getTime() === windowAt.getTime()
+  let page = resuming ? saved.nextPage : 1
+  let totalPages = resuming ? saved.totalPages : 1
   let chunk: LeaderboardDeepCrawlStanding[] = []
   let chunkObservedAt = new Date()
   let changedNames = 0
   let changedStandings = 0
-  const flush = async () => {
-    if (chunk.length === 0) return
-    const names = await leaderboardPlayerNames.applyLeaderboardNames({
-      observedAt: chunkObservedAt,
-      players: chunk.map(({ brawlhallaId, name }) => ({ brawlhallaId, name })),
-    })
-    const standings = await leaderboardRanked.applyLeaderboardRanked({
-      observedAt: chunkObservedAt,
-      players: chunk.map(({ name: _name, ...standing }) => standing),
-    })
-    changedNames += names.changed
-    changedStandings += standings.changed
-    record((active) => {
-      active.metrics.add('leaderboard_deep_crawl_changed_total', names.changed, { region, change: 'name' })
-      active.metrics.add('leaderboard_deep_crawl_changed_total', standings.changed, { region, change: 'standing' })
-    })
-    chunk = []
-  }
-
-  let totalPages = 1
   let pagesRead = 0
-  for (let page = 1; page <= totalPages; page += 1) {
+  let pagesSkipped = 0
+  const flush = async () => {
+    if (chunk.length > 0) {
+      const names = await leaderboardPlayerNames.applyLeaderboardNames({
+        observedAt: chunkObservedAt,
+        players: chunk.map(({ brawlhallaId, name }) => ({ brawlhallaId, name })),
+      })
+      const standings = await leaderboardRanked.applyLeaderboardRanked({
+        observedAt: chunkObservedAt,
+        players: chunk.map(({ name: _name, ...standing }) => standing),
+      })
+      changedNames += names.changed
+      changedStandings += standings.changed
+      record((active) => {
+        active.metrics.add('leaderboard_deep_crawl_changed_total', names.changed, { region, change: 'name' })
+        active.metrics.add('leaderboard_deep_crawl_changed_total', standings.changed, { region, change: 'standing' })
+      })
+      chunk = []
+    }
+    await progress?.save({ region, windowAt, nextPage: page, totalPages })
+  }
+  const log = (outcome: 'completed' | 'yielded') =>
+    record((active) =>
+      active.logger.info(`leaderboard.deep_crawl.${outcome}`, {
+        region,
+        nextPage: page,
+        totalPages,
+        pagesRead,
+        pagesSkipped,
+        changedNames,
+        changedStandings,
+        durationMs: Math.round(performance.now() - started),
+      }),
+    )
+
+  while (page <= totalPages) {
     if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
     if (chunk.length === 0) chunkObservedAt = new Date()
-    const result = await fetchPage({ mode: '1v1', region, page })
-    // Ranks shift while the crawl runs, so the page count read first bounds the crawl and an empty page ends it.
+    let result: Awaited<ReturnType<LeaderboardPageSource['fetchPage']>>
+    try {
+      result = await fetchPage({ mode: '1v1', region, page })
+    } catch (error) {
+      // Deep pages are never read by the regular collections: one bad page must not cost the whole region, and a
+      // leaderboard that shrank while the crawl ran simply ends it. A failure on page 1 still fails the attempt.
+      if (!(error instanceof LeaderboardSourceError) || error.code !== 'source_contract_invalid' || page === 1) {
+        throw error
+      }
+      if (/exceeds total_pages/.test(error.message)) break
+      pagesSkipped += 1
+      record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region, outcome: 'skipped' }))
+      page += 1
+      continue
+    }
     if (page === 1) totalPages = result.totalPages
     if (result.rankings.length === 0) break
     pagesRead += 1
-    record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region }))
+    record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region, outcome: 'read' }))
     chunk.push(...leaderboardDeepCrawlStandings(result))
-    if (pagesRead % deepCrawlChunkPages === 0) await flush()
+    page += 1
+    if (pagesRead % deepCrawlChunkPages === 0) {
+      await flush()
+      if (pagesRead >= slicePages && page <= totalPages) {
+        log('yielded')
+        throw new LeaderboardDeepCrawlYield()
+      }
+    }
   }
+  page = totalPages + 1
   await flush()
-  record((active) =>
-    active.logger.info('leaderboard.deep_crawl.completed', {
-      region,
-      pages: pagesRead,
-      totalPages,
-      changedNames,
-      changedStandings,
-      durationMs: Math.round(performance.now() - started),
-    }),
-  )
+  log('completed')
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -1150,6 +1198,16 @@ export async function runOneRefreshOperation(
       if (error instanceof LeaderboardLeaseLostError) {
         attemptOutcome = 'lease_lost'
         failureCategory = 'lease_lost'
+        return true
+      }
+      if (error instanceof LeaderboardDeepCrawlYield) {
+        const transition = await operations.defer(
+          lease,
+          { code: 'deep_crawl_yield', message: error.message, retryable: true },
+          0,
+        )
+        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
+        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'admission_deferred'
         return true
       }
       if (error instanceof SourceAdmissionLimitedError) {

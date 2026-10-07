@@ -170,11 +170,21 @@ ALTER TABLE refresh_operations.schedules
       AND (payload->>'intervalMs')::numeric BETWEEN 3600000 AND 86400000
       AND (payload->>'intervalMs')::bigint = interval_ms
       AND payload = jsonb_build_object('region', payload->'region', 'intervalMs', payload->'intervalMs'))
-  ) NOT VALID;`
+  ) NOT VALID;
+
+-- Where each region's crawl of a schedule window stopped, so a crawl can yield the leaderboard slot between slices
+-- and resume after a failed or interrupted attempt.
+CREATE TABLE refresh_operations.leaderboard_deep_crawl_progress (
+  region text PRIMARY KEY CHECK (region IN ('US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA')),
+  window_at timestamptz NOT NULL,
+  next_page integer NOT NULL CHECK (next_page >= 1),
+  total_pages integer NOT NULL CHECK (total_pages >= 0),
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);`
 
 export const addLeaderboardDeepCrawl = {
   identity: 'refresh-operations/0022',
   predecessor: 'refresh-operations/0021',
-  checksum: 'd2718fae515892acbbd85a89349b27e136f6e8b2d4c89ca1082934f6967ad66a',
+  checksum: 'bcc16bf5ef7b46d12d7b7da53e0ea547672f229586e06e2791a0111161620865',
   sql,
 } as const

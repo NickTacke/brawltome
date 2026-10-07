@@ -1537,11 +1537,16 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
-    const run = async (totalPages: number, failOnPage?: number, failure?: LeaderboardSourceError) => {
+    type Progress = { windowAt: Date; nextPage: number; totalPages: number }
+    const run = async (
+      totalPages: number,
+      input: { failOnPage?: number; failure?: LeaderboardSourceError; slicePages?: number; saved?: Progress } = {},
+    ) => {
       const fetched: number[] = []
       const nameWrites: number[] = []
       const standingWrites: Array<Array<{ brawlhallaId: number; games: number }>> = []
       const transitions: string[] = []
+      let progress: Progress | null = input.saved ?? null
       await runOneRefreshOperation(
         {
           claim: async () => lease,
@@ -1564,6 +1569,13 @@ describe('refresh operations worker source retry', () => {
           leaseMs: 1_000,
           retryDelayMs: 10,
           admission,
+          deepCrawlSlicePages: input.slicePages,
+          leaderboardDeepCrawlProgress: {
+            read: async () => progress,
+            save: async (saved) => {
+              progress = { windowAt: saved.windowAt, nextPage: saved.nextPage, totalPages: saved.totalPages }
+            },
+          },
           sourceAdmission: {
             admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
             pauseSource: async () => {},
@@ -1591,7 +1603,7 @@ describe('refresh operations worker source retry', () => {
               expect(mode).toBe('1v1')
               expect(region).toBe('AUS')
               fetched.push(page)
-              if (page === failOnPage) throw failure
+              if (page === input.failOnPage) throw input.failure
               if (totalPages === 0) return { rankings: [], totalPages: 0 }
               return {
                 totalPages,
@@ -1612,7 +1624,7 @@ describe('refresh operations worker source retry', () => {
           },
         },
       )
-      return { fetched, nameWrites, standingWrites, transitions }
+      return { fetched, nameWrites, standingWrites, transitions, progress }
     }
 
     const crawl = await run(45)
@@ -1629,16 +1641,49 @@ describe('refresh operations worker source retry', () => {
       games: 5,
     })
     expect(crawl.transitions).toEqual(['complete'])
+    expect(crawl.progress).toMatchObject({ nextPage: 46, totalPages: 45 })
 
     const empty = await run(0)
     expect(empty).toMatchObject({ fetched: [1], nameWrites: [], transitions: ['complete'] })
 
-    // A failure keeps the chunks already written; an unavailable source defers instead of spending the attempt.
-    const failed = await run(45, 30, new LeaderboardSourceError('source_contract_invalid', 'bad page', false))
-    expect(failed.nameWrites).toEqual([20])
-    expect(failed.transitions).toEqual(['fail:source_contract_invalid'])
-    const unavailable = await run(45, 3, new LeaderboardSourceError('source_unavailable', 'maintenance', true))
+    // A malformed deep page is skipped rather than failing the region.
+    const skipped = await run(45, {
+      failOnPage: 30,
+      failure: new LeaderboardSourceError('source_contract_invalid', 'rating exceeds best_rating', false),
+    })
+    expect(skipped.nameWrites).toEqual([20, 20, 4])
+    expect(skipped.transitions).toEqual(['complete'])
+
+    // A leaderboard that shrank mid-crawl ends it.
+    const shrank = await run(45, {
+      failOnPage: 31,
+      failure: new LeaderboardSourceError('source_contract_invalid', 'requested page 31 exceeds total_pages 30', false),
+    })
+    expect(shrank.fetched.at(-1)).toBe(31)
+    expect(shrank.nameWrites).toEqual([20, 10])
+    expect(shrank.transitions).toEqual(['complete'])
+
+    // An unavailable source defers; a bad first page still fails.
+    const unavailable = await run(45, {
+      failOnPage: 3,
+      failure: new LeaderboardSourceError('source_unavailable', 'maintenance', true),
+    })
     expect(unavailable.transitions).toEqual(['defer:source_unavailable'])
+    const badFirst = await run(45, {
+      failOnPage: 1,
+      failure: new LeaderboardSourceError('source_contract_invalid', 'bad page', false),
+    })
+    expect(badFirst.transitions).toEqual(['fail:source_contract_invalid'])
+
+    // Slices yield the leaderboard slot and the next attempt resumes where the last chunk stopped.
+    const firstSlice = await run(100, { slicePages: 40 })
+    expect(firstSlice.fetched).toEqual(Array.from({ length: 40 }, (_, index) => index + 1))
+    expect(firstSlice.transitions).toEqual(['defer:deep_crawl_yield'])
+    expect(firstSlice.progress).toMatchObject({ nextPage: 41, totalPages: 100 })
+    const resumed = await run(100, { slicePages: 100, saved: firstSlice.progress as Progress })
+    expect(resumed.fetched[0]).toBe(41)
+    expect(resumed.fetched).toHaveLength(60)
+    expect(resumed.transitions).toEqual(['complete'])
   })
 
   test('propagates published 1v1 standings without failing the publication', async () => {

@@ -30,7 +30,7 @@ describe('operations worker configuration', () => {
       scheduleKey: 'rankings:1v1:deep:US-E',
       workClass: 'leaderboard',
       intervalMs: 2 * 60 * 60 * 1000,
-      firstDueAt: '2020-01-01T00:07:00.000Z',
+      firstDueAt: '2026-10-07T16:00:00.000Z',
       payload: { region: 'US-E', intervalMs: 2 * 60 * 60 * 1000 },
     })
     expect(Date.parse(schedules[1].firstDueAt) - Date.parse(schedules[0].firstDueAt)).toBe(
@@ -76,7 +76,7 @@ describe('operations worker configuration', () => {
       deepCrawl: {
         enabled: true,
         intervalMs: 3 * 60 * 60 * 1000,
-        firstDueAt: '2020-01-01T00:07:00.000Z',
+        firstDueAt: '2026-10-07T16:00:00.000Z',
       },
       admission: {
         totalConcurrency: 8,

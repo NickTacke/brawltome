@@ -72,6 +72,21 @@ describe('Leaderboard deep crawl operations', () => {
       })
 
       await operations.materializeDueSchedules()
+      const control = postgres(connectionString, { max: 1 })
+      try {
+        const keys = await control<{ dedupe_key: string; schedule_id: string }[]>`
+          SELECT operation.dedupe_key, occurrence.schedule_id
+          FROM refresh_operations.operations operation
+          JOIN refresh_operations.schedule_occurrences occurrence
+            ON occurrence.id = operation.origin_schedule_occurrence_id
+          WHERE operation.kind = 'leaderboard-deep-crawl'
+        `
+        // Eight enabled regions, each keyed to its schedule so a later window cannot stack a second crawl.
+        expect(keys).toHaveLength(8)
+        for (const { dedupe_key, schedule_id } of keys) expect(dedupe_key).toBe(`schedule:${schedule_id}:deep-crawl`)
+      } finally {
+        await control.end()
+      }
       const lease = await operations.claim('worker', 1_000, admission)
       expect(lease).toMatchObject({
         kind: 'leaderboard-deep-crawl',
@@ -104,6 +119,23 @@ describe('Leaderboard deep crawl operations', () => {
       )
     } finally {
       await control.end()
+    }
+  })
+
+  test('saves and replaces crawl progress per region', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    try {
+      expect(await operations.readLeaderboardDeepCrawlProgress('EU')).toBeNull()
+      const windowAt = new Date('2026-10-07T16:00:00.000Z')
+      await operations.saveLeaderboardDeepCrawlProgress({ region: 'EU', windowAt, nextPage: 41, totalPages: 1630 })
+      await operations.saveLeaderboardDeepCrawlProgress({ region: 'EU', windowAt, nextPage: 141, totalPages: 1630 })
+      expect(await operations.readLeaderboardDeepCrawlProgress('EU')).toEqual({
+        windowAt,
+        nextPage: 141,
+        totalPages: 1630,
+      })
+    } finally {
+      await operations.close()
     }
   })
 })

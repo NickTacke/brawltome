@@ -387,6 +387,10 @@ try {
         rankingRetentionEnabled: workerConfig.rankingRetention.enabled,
         leaderboardPlayerNames,
         leaderboardRanked,
+        leaderboardDeepCrawlProgress: {
+          read: operations.readLeaderboardDeepCrawlProgress,
+          save: operations.saveLeaderboardDeepCrawlProgress,
+        },
         leaderboardSource: {
           fetchPage: (input) =>
             fetchLeaderboardPage(input, {

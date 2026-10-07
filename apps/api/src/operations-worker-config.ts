@@ -355,7 +355,8 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
         minLeaderboardDeepCrawlIntervalMs,
         maxLeaderboardDeepCrawlIntervalMs,
       ),
-      firstDueAt: '2020-01-01T00:07:00.000Z',
+      // The first windows land after the rollout instead of all being overdue at once; regions then stay staggered.
+      firstDueAt: '2026-10-07T16:00:00.000Z',
     } satisfies LeaderboardDeepCrawlConfig,
     admission: validateAdmissionConfig(admission),
   }

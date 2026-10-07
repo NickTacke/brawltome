@@ -1364,6 +1364,31 @@ export function createPostgresRefreshOperations(
       return reconcileFixedSchedule(input, { reenable: true })
     },
 
+    async readLeaderboardDeepCrawlProgress(
+      region: string,
+    ): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null> {
+      const [row] = await client<{ window_at: Date; next_page: number; total_pages: number }[]>`
+        SELECT window_at, next_page, total_pages
+        FROM refresh_operations.leaderboard_deep_crawl_progress WHERE region = ${region}
+      `
+      return row ? { windowAt: row.window_at, nextPage: row.next_page, totalPages: row.total_pages } : null
+    },
+
+    async saveLeaderboardDeepCrawlProgress(input: {
+      region: string
+      windowAt: Date
+      nextPage: number
+      totalPages: number
+    }): Promise<void> {
+      await client`
+        INSERT INTO refresh_operations.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
+        VALUES (${input.region}, ${input.windowAt}, ${input.nextPage}, ${input.totalPages})
+        ON CONFLICT (region) DO UPDATE SET
+          window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
+          total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
+      `
+    },
+
     async reconcileLeaderboardDeepCrawlSchedule(
       input: CreateLeaderboardDeepCrawlSchedule,
     ): Promise<CreateScheduleResult> {
@@ -1501,7 +1526,12 @@ export function createPostgresRefreshOperations(
                   (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
                    provenance, max_attempts, available_at)
                 VALUES
-                  (${operationId}, ${operationId}, ${schedule.kind}, ${`schedule:${windowIdentity}`},
+                  (${operationId}, ${operationId}, ${schedule.kind}, ${
+                    // One active crawl per region: a window arriving mid-crawl waits instead of stacking another.
+                    schedule.kind === 'leaderboard-deep-crawl'
+                      ? `schedule:${schedule.id}:deep-crawl`
+                      : `schedule:${windowIdentity}`
+                  },
                    ${`${schedule.operation_key_prefix}:${schedule.id}:${firstWindowNumber}`}, ${schedule.resource_key},
                    ${schedule.work_class}, ${sql.json(schedule.payload)}, ${sql.json(schedule.provenance)},
                    ${schedule.max_attempts}, ${materializedAt})
