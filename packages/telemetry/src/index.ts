@@ -90,6 +90,7 @@ export type MetricName =
   | 'analytics_search_selections_total'
   | 'analytics_profile_views_total'
   | 'analytics_profile_section_age_total'
+  | 'analytics_profile_ranked_source_total'
   | 'analytics_refresh_states_total'
   | 'analytics_refresh_wait_ms'
   | 'analytics_refresh_retries_total'
@@ -346,6 +347,11 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Profile views by data age',
     labels: { data_age: ['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never'] },
+  },
+  analytics_profile_ranked_source_total: {
+    kind: 'counter',
+    help: 'Profile views by where the ranked 1v1 numbers came from on first paint',
+    labels: { source: ['v0', 'leaderboard', 'none'] },
   },
   analytics_profile_section_age_total: {
     kind: 'counter',

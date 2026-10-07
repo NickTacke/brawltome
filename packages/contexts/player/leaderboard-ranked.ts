@@ -12,6 +12,8 @@ export type LeaderboardRankedObservation = {
   games: number
 }
 
+export type LeaderboardRankedStanding = LeaderboardRankedObservation & { observedAt: Date }
+
 const INT32_MAX = 2_147_483_647
 
 function isInt32(value: number, minimum: number): boolean {
@@ -97,6 +99,37 @@ export function createPostgresLeaderboardRanked(connectionString: string) {
         `
         return { changed: changed.length }
       })
+    },
+
+    // The player's latest 1v1 leaderboard standing, for profiles that have no V0 ranked snapshot yet.
+    async standingById(brawlhallaId: number): Promise<LeaderboardRankedStanding | null> {
+      const [row] = await client<
+        {
+          region: string
+          rating: number
+          peak_rating: number
+          tier: string | null
+          wins: number
+          games: number
+          observed_at: Date
+        }[]
+      >`
+        SELECT region, rating, peak_rating, tier, wins, games, observed_at
+        FROM players.leaderboard_ranked_observations
+        WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      return row
+        ? {
+            brawlhallaId,
+            region: row.region,
+            rating: row.rating,
+            peakRating: row.peak_rating,
+            tier: row.tier,
+            wins: row.wins,
+            games: row.games,
+            observedAt: row.observed_at,
+          }
+        : null
     },
 
     close: () => client.end(),

@@ -1,4 +1,8 @@
-import { nullablePlayerRankedProfileSchema, playerReferenceByIdInputSchema } from '@brawltome/contracts'
+import {
+  nullableLeaderboardStandingSchema,
+  nullablePlayerRankedProfileSchema,
+  playerReferenceByIdInputSchema,
+} from '@brawltome/contracts'
 import type { RankedPlayerProfile } from '@brawltome/player'
 import type { PlayerValhallanEvidence } from '@brawltome/ranking'
 import { mapPlayerRankedProfile } from '../mappers/player-ranked.mapper'
@@ -49,6 +53,13 @@ export function createPlayerRankedRouter(procedure = internalProcedure) {
           ctx.rankingQueries.playerValhallanEvidenceById(input.id),
         ])
         return mapPlayerRankedProfile(withOfficialValhallanTier(profile, evidence))
+      }),
+    leaderboardStandingById: procedure
+      .input(playerReferenceByIdInputSchema)
+      .output(nullableLeaderboardStandingSchema)
+      .query(async ({ ctx, input }) => {
+        const standing = await ctx.leaderboardStandings?.standingById(input.id)
+        return standing ? { ...standing, observedAt: standing.observedAt.toISOString() } : null
       }),
   })
 }

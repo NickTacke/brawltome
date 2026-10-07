@@ -34,6 +34,7 @@ interface ProfileHeaderPlayer {
     } | null
   } | null
   clan: { clanId: number; clanName: string } | null
+  leaderboardStanding?: { region: string } | null
 }
 
 interface ProfileHeaderProps {
@@ -46,7 +47,7 @@ interface ProfileHeaderProps {
 export function ProfileHeader({ player, topLegend, aliases, refreshing }: ProfileHeaderProps) {
   const career = player.career?.snapshot
   const playtime = career?.combat.matchTime
-  const region = player.currentSeason?.snapshot?.oneVsOne.region
+  const region = player.currentSeason?.snapshot?.oneVsOne.region ?? player.leaderboardStanding?.region
   const guild = career ? career.guild : player.clan
   const updatedAt = getPlayerDataUpdatedAt(player)
 

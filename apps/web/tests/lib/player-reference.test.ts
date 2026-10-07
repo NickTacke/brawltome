@@ -7,6 +7,17 @@ function client(reference: { brawlhallaId: number; name: string; aliases: string
       referenceById: { query: async () => reference },
       rankedById: { query: async () => ({ brawlhallaId: 42, snapshot: null }) },
       careerById: { query: async () => ({ brawlhallaId: 42, snapshot: null }) },
+      leaderboardStandingById: {
+        query: async () => ({
+          region: 'AUS',
+          rating: 1973,
+          peakRating: 2039,
+          tier: 'Diamond',
+          wins: 39,
+          games: 69,
+          observedAt: '2026-10-07T13:30:15.000Z',
+        }),
+      },
     },
     clan: {
       membershipByPlayerId: { query: async () => ({ clanId: 7, clanName: 'Current Clan' }) },
@@ -31,6 +42,7 @@ describe('loadPlayerWithReference', () => {
         bestLegendNameKey: null,
         currentSeason: { brawlhallaId: 42, snapshot: null },
         career: { brawlhallaId: 42, snapshot: null },
+        leaderboardStanding: expect.objectContaining({ rating: 1973, region: 'AUS' }),
       },
     })
   })
@@ -57,5 +69,25 @@ describe('loadPlayerWithReference', () => {
     failing.player.referenceById.query = async () => Promise.reject(new Error('transport failed'))
 
     await expect(loadPlayerWithReference(failing, 42)).rejects.toThrow('transport failed')
+  })
+
+  test('renders without a leaderboard standing when that lookup fails', async () => {
+    const result = await loadPlayerWithReference(
+      {
+        player: {
+          referenceById: { query: async () => ({ brawlhallaId: 42, name: 'Player', aliases: [] }) },
+          rankedById: { query: async () => null },
+          careerById: { query: async () => null },
+          leaderboardStandingById: {
+            query: async () => {
+              throw new Error('api unavailable')
+            },
+          },
+        },
+        clan: { membershipByPlayerId: { query: async () => null } },
+      },
+      42,
+    )
+    expect(result.player?.leaderboardStanding).toBeNull()
   })
 })

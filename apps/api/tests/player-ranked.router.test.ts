@@ -237,4 +237,30 @@ describe('player.rankedById', () => {
     } as unknown as RankedPlayerQueries
     await expect(callerFor(malformedProducer).rankedById({ id: 42 })).rejects.toThrow()
   })
+
+  test('returns the leaderboard standing with an ISO observation time, or null', async () => {
+    const observedAt = new Date('2026-10-07T13:30:15.000Z')
+    const standing = {
+      brawlhallaId: 5806297,
+      region: 'AUS',
+      rating: 1973,
+      peakRating: 2039,
+      tier: 'Diamond',
+      wins: 39,
+      games: 69,
+      observedAt,
+    }
+    const context = (leaderboardStandings?: Context['leaderboardStandings']) =>
+      ({ internalSecret: secret, leaderboardStandings }) as Context
+    const router = createPlayerRankedRouter(createInternalProcedure(secret))
+    expect(
+      await router
+        .createCaller(context({ standingById: async () => standing }))
+        .leaderboardStandingById({ id: 5806297 }),
+    ).toEqual({ ...standing, observedAt: '2026-10-07T13:30:15.000Z' })
+    expect(
+      await router.createCaller(context({ standingById: async () => null })).leaderboardStandingById({ id: 1 }),
+    ).toBeNull()
+    expect(await router.createCaller(context()).leaderboardStandingById({ id: 1 })).toBeNull()
+  })
 })

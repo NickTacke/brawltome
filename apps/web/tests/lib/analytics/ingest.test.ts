@@ -37,7 +37,14 @@ describe('ingestBatch', () => {
       {
         body: {
           events: [
-            { ...base, name: 'profile.viewed', dataAge: '12h_7d', rankedAge: 'lt_1h', statsAge: '12h_7d' },
+            {
+              ...base,
+              name: 'profile.viewed',
+              dataAge: '12h_7d',
+              rankedAge: 'lt_1h',
+              statsAge: '12h_7d',
+              rankedSource: 'leaderboard',
+            },
             { ...base, name: 'profile.viewed', dataAge: 'never' },
           ],
         },
@@ -50,6 +57,10 @@ describe('ingestBatch', () => {
     expect(sections?.series.map(({ labels, value }) => ({ ...labels, value }))).toEqual([
       { section: 'ranked', data_age: 'lt_1h', value: 1 },
       { section: 'stats', data_age: '12h_7d', value: 1 },
+    ])
+    const sources = telemetry.metrics.snapshot().find(({ name }) => name === 'analytics_profile_ranked_source_total')
+    expect(sources?.series.map(({ labels, value }) => ({ ...labels, value }))).toEqual([
+      { source: 'leaderboard', value: 1 },
     ])
   })
 

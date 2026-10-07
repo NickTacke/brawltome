@@ -38,7 +38,7 @@ import type {
   leaderboardRecentActivityOutputSchema,
 } from './leaderboard'
 import type { nullablePlayerCareerProfileSchema } from './player-career'
-import type { nullablePlayerRankedProfileSchema } from './player-ranked'
+import type { nullableLeaderboardStandingSchema, nullablePlayerRankedProfileSchema } from './player-ranked'
 import type { nullablePlayerReferenceSchema, playerReferenceByIdInputSchema } from './player-reference'
 import type {
   discordPlayerRefreshInputSchema,
@@ -87,6 +87,10 @@ type AppRouterRecord = {
   player: {
     referenceById: Query<Output<typeof playerReferenceByIdInputSchema>, Output<typeof nullablePlayerReferenceSchema>>
     rankedById: Query<Output<typeof playerReferenceByIdInputSchema>, Output<typeof nullablePlayerRankedProfileSchema>>
+    leaderboardStandingById: Query<
+      Output<typeof playerReferenceByIdInputSchema>,
+      Output<typeof nullableLeaderboardStandingSchema>
+    >
     careerById: Query<Output<typeof playerReferenceByIdInputSchema>, Output<typeof nullablePlayerCareerProfileSchema>>
     requestRefresh: Mutation<Output<typeof playerRefreshInputSchema>, Output<typeof playerRefreshResponseSchema>>
     refreshDiscord: Mutation<Output<typeof discordPlayerRefreshInputSchema>, Output<typeof playerRefreshResponseSchema>>

@@ -32,7 +32,9 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
           {player.rankedLastUpdated && (
             <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
               <Clock className="w-3 h-3" aria-hidden="true" />
-              <span className="hidden sm:inline">Updated </span>
+              <span className="hidden sm:inline">
+                {player.rankedSource === 'leaderboard' ? 'From leaderboard ' : 'Updated '}
+              </span>
               {timeAgo(player.rankedLastUpdated)}
             </Badge>
           )}

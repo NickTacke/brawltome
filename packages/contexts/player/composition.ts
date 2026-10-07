@@ -49,6 +49,7 @@ export {
 export {
   createPostgresLeaderboardRanked,
   type LeaderboardRankedObservation,
+  type LeaderboardRankedStanding,
   type PostgresLeaderboardRanked,
 } from './leaderboard-ranked'
 export {

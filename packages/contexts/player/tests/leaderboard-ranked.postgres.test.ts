@@ -97,6 +97,17 @@ describe('Ranked standings observed on leaderboards', () => {
         SELECT rating, observed_at FROM players.leaderboard_ranked_observations WHERE brawlhalla_id = 200
       `
       expect(row).toEqual({ rating: 1990, observed_at: moved })
+      expect(await standings.standingById(200)).toEqual({
+        brawlhallaId: 200,
+        region: 'AUS',
+        rating: 1990,
+        peakRating: 2200,
+        tier: 'Diamond',
+        wins: 39,
+        games: 69,
+        observedAt: moved,
+      })
+      expect(await standings.standingById(999)).toBeNull()
       expect(await outboxFor(200)).toBe(2)
     } finally {
       await Promise.all([control.end(), standings.close()])
