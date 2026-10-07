@@ -10,6 +10,7 @@ import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } 
 import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
+  createPostgresLeaderboardRanked,
   createPostgresPlayerDiscoverySource,
   createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
@@ -114,6 +115,7 @@ const ranking = createPostgresRanking(connectionString)
 const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
+const leaderboardRanked = createPostgresLeaderboardRanked(connectionString)
 const playerNameVerifications = createPostgresPlayerNameVerifications(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
@@ -148,6 +150,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'players-ranked-postgres', close: rankedPlayers.close },
     { name: 'players-career-postgres', close: careerPlayers.close },
     { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
+    { name: 'players-leaderboard-ranked-postgres', close: leaderboardRanked.close },
     { name: 'players-name-verifications-postgres', close: playerNameVerifications.close },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -359,6 +362,7 @@ try {
         rankingRetention: ranking,
         rankingRetentionEnabled: workerConfig.rankingRetention.enabled,
         leaderboardPlayerNames,
+        leaderboardRanked,
         leaderboardSource: {
           fetchPage: (input) =>
             fetchLeaderboardPage(input, {

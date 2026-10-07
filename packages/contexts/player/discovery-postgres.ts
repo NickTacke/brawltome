@@ -33,6 +33,7 @@ type LegacyRow = {
 type AliasRow = { brawlhalla_id: number; display_alias: string }
 type CareerLegendRow = { brawlhalla_id: number; legend_name_key: string }
 type LeaderboardNameRow = { brawlhalla_id: number; player_name: string; observed_at: Date }
+type LeaderboardRankedRow = { brawlhalla_id: number; region: string; rating: number; observed_at: Date }
 
 const snapshotBatchSize = 1_000
 
@@ -64,6 +65,11 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   const leaderboardNames = await sql<LeaderboardNameRow[]>`
     SELECT brawlhalla_id, player_name, observed_at
     FROM players.leaderboard_name_observations
+    ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
+  `
+  const leaderboardRanked = await sql<LeaderboardRankedRow[]>`
+    SELECT brawlhalla_id, region, rating, observed_at
+    FROM players.leaderboard_ranked_observations
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
   const careerLegends = await sql<CareerLegendRow[]>`
@@ -98,6 +104,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   const rankedById = new Map(ranked.map((row) => [row.brawlhalla_id, row]))
   const careerById = new Map(careers.map((row) => [row.brawlhalla_id, row]))
   const leaderboardById = new Map(leaderboardNames.map((row) => [row.brawlhalla_id, row]))
+  const leaderboardRankedById = new Map(leaderboardRanked.map((row) => [row.brawlhalla_id, row]))
   const careerLegendById = new Map(careerLegends.map((row) => [row.brawlhalla_id, row.legend_name_key]))
   const profileLegacyById = new Map(profileLegacy.map((row) => [row.brawlhalla_id, row]))
   const legacyById = new Map(profileLegacyById)
@@ -161,14 +168,26 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
           aliases.push(candidate)
         }
       }
-      const rawRating = canonicalAvailable ? canonical.rating : fallback?.rating
+      // A leaderboard observation newer than the last V0 refresh carries the current rating and region.
+      const observed = leaderboardRankedById.get(brawlhallaId)
+      const observedIsNewest =
+        observed !== undefined &&
+        (!canonicalAvailable || observed.observed_at.getTime() > (canonical.last_success_at as Date).getTime())
+      const rawRating = observedIsNewest ? observed.rating : canonicalAvailable ? canonical.rating : fallback?.rating
       return [
         {
           brawlhallaId,
           name,
-          region: canonicalAvailable ? canonical.region : (fallback?.region ?? null),
+          region: observedIsNewest
+            ? observed.region
+            : canonicalAvailable
+              ? canonical.region
+              : (fallback?.region ?? null),
           rating:
-            rawRating !== undefined && rawRating !== null && rawRating >= 0 && (canonicalAvailable || rawRating > 0)
+            rawRating !== undefined &&
+            rawRating !== null &&
+            rawRating >= 0 &&
+            (canonicalAvailable || observedIsNewest || rawRating > 0)
               ? rawRating
               : null,
           viewCount: Math.max(0, fallback?.view_count ?? 0),

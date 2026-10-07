@@ -14,6 +14,7 @@ import { addCompactReferenceImport } from './migrations/0013-add-compact-referen
 import { addLeaderboardNameObservations } from './migrations/0014-add-leaderboard-name-observations'
 import { addNameVerifications } from './migrations/0015-add-name-verifications'
 import { addCareerLegendsBestOrderIndex } from './migrations/0016-add-career-legends-best-order-index'
+import { addLeaderboardRankedObservations } from './migrations/0017-add-leaderboard-ranked-observations'
 
 export {
   createPostgresCareerPlayers,
@@ -38,6 +39,11 @@ export {
   type LeaderboardPlayerName,
   type PostgresLeaderboardPlayerNames,
 } from './leaderboard-names'
+export {
+  createPostgresLeaderboardRanked,
+  type LeaderboardRankedObservation,
+  type PostgresLeaderboardRanked,
+} from './leaderboard-ranked'
 export {
   createPostgresPlayerNameVerifications,
   type NameVerificationBacklog,
@@ -92,4 +98,5 @@ export const playerMigrationInventory = [
   addLeaderboardNameObservations,
   addNameVerifications,
   addCareerLegendsBestOrderIndex,
+  addLeaderboardRankedObservations,
 ] as const
