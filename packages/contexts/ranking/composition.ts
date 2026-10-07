@@ -8,6 +8,7 @@ import { allowEmptyRegionalLeaderboardSnapshots } from './migrations/0007-allow-
 import { dropRedundantSnapshotRowIndexes } from './migrations/0008-drop-redundant-snapshot-row-indexes'
 import { expireV1RankingGenerations } from './migrations/0009-expire-v1-generations'
 import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete'
+import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delete-without-seqscan'
 
 export {
   LeaderboardCandidateError,
@@ -51,4 +52,5 @@ export const rankingMigrationInventory = [
   dropRedundantSnapshotRowIndexes,
   expireV1RankingGenerations,
   bitmapRetentionDelete,
+  retentionDeleteWithoutSeqScan,
 ] as const
