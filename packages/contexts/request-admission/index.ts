@@ -3,6 +3,7 @@ export type AdmissionActor =
   | { kind: 'authenticated'; accountId: string; ip: string }
   | { kind: 'discord'; discordUserId: string }
   | { kind: 'desktop'; ip: string }
+  | { kind: 'profile-view'; ip: string }
 
 export type ActorAdmissionResult = { outcome: 'admitted' } | { outcome: 'rate-limited'; retryAfterSeconds: number }
 
