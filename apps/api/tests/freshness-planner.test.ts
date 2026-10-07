@@ -31,12 +31,12 @@ describe('freshness planner', () => {
 
   test('keeps only players older than their tier interval, hottest and oldest first', () => {
     const candidates: RecentlyViewedPlayer[] = [
-      { brawlhallaId: 1, recentViews: 5, views: 5 },
-      { brawlhallaId: 2, recentViews: 5, views: 5 },
-      { brawlhallaId: 3, recentViews: 1, views: 1 },
-      { brawlhallaId: 4, recentViews: 0, views: 2 },
-      { brawlhallaId: 5, recentViews: 0, views: 1 },
-      { brawlhallaId: 6, recentViews: 1, views: 1 },
+      { brawlhallaId: 1, recentViews: 5, views: 5, lastPlannedAt: null, lastFailedAt: null },
+      { brawlhallaId: 2, recentViews: 5, views: 5, lastPlannedAt: null, lastFailedAt: null },
+      { brawlhallaId: 3, recentViews: 1, views: 1, lastPlannedAt: null, lastFailedAt: null },
+      { brawlhallaId: 4, recentViews: 0, views: 2, lastPlannedAt: null, lastFailedAt: null },
+      { brawlhallaId: 5, recentViews: 0, views: 1, lastPlannedAt: null, lastFailedAt: null },
+      { brawlhallaId: 6, recentViews: 1, views: 1, lastPlannedAt: null, lastFailedAt: null },
     ]
     const lastRefreshed = new Map<number, Date | null>([
       [1, new Date(now - 5 * hour)],
@@ -58,6 +58,33 @@ describe('freshness planner', () => {
     ])
   })
 
+  test('backs off players the planner recently tried, and for a week after a dead letter', () => {
+    const candidates: RecentlyViewedPlayer[] = [
+      { brawlhallaId: 1, recentViews: 3, views: 3, lastPlannedAt: new Date(now - 3 * hour), lastFailedAt: null },
+      { brawlhallaId: 2, recentViews: 3, views: 3, lastPlannedAt: new Date(now - 5 * hour), lastFailedAt: null },
+      {
+        brawlhallaId: 3,
+        recentViews: 3,
+        views: 3,
+        lastPlannedAt: new Date(now - 5 * 24 * hour),
+        lastFailedAt: new Date(now - 6 * 24 * hour),
+      },
+      {
+        brawlhallaId: 4,
+        recentViews: 3,
+        views: 3,
+        lastPlannedAt: new Date(now - 8 * 24 * hour),
+        lastFailedAt: new Date(now - 8 * 24 * hour),
+      },
+    ]
+    const lastRefreshed = new Map<number, Date | null>(candidates.map(({ brawlhallaId }) => [brawlhallaId, null]))
+    expect(
+      dueRefreshes({ candidates, lastRefreshed, tierIntervalsMs: config.tierIntervalsMs, now }).map(
+        ({ brawlhallaId }) => brawlhallaId,
+      ),
+    ).toEqual([2, 4])
+  })
+
   const planner = (overrides: {
     used?: number
     active?: number
@@ -70,7 +97,13 @@ describe('freshness planner', () => {
       readSourceUsage: async () => ({ used: overrides.used ?? 10, limit: 180 }),
       operations: {
         recentlyViewedPlayers: async () =>
-          [1, 2, 3, 4, 5, 6].map((id) => ({ brawlhallaId: id, recentViews: 3, views: 3 })),
+          [1, 2, 3, 4, 5, 6].map((id) => ({
+            brawlhallaId: id,
+            recentViews: 3,
+            views: 3,
+            lastPlannedAt: null,
+            lastFailedAt: null,
+          })),
         activeRecentlyViewedRefreshes: async () => overrides.active ?? 0,
         enqueueRecentlyViewedRefreshes:
           overrides.enqueue ??

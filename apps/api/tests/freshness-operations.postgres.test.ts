@@ -58,6 +58,8 @@ async function insertVisitorRefresh(
   brawlhallaId: number,
   ageDays: number,
   settled: boolean,
+  source = 'interactive-api',
+  errorCode?: string,
 ): Promise<void> {
   const id = randomUUID()
   await sql`
@@ -65,10 +67,16 @@ async function insertVisitorRefresh(
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts, created_at)
     VALUES
       (${id}, ${id}, 'interactive-player-refresh', ${`visit:${id}`}, ${`visit:${id}`}, 'interactive',
-       ${sql.json({ brawlhallaId, staleSections: ['ranked'] })}, ${sql.json({ source: 'interactive-api' })}, 4,
+       ${sql.json({ brawlhallaId, staleSections: ['ranked'] })}, ${sql.json({ source })}, 4,
        clock_timestamp() - make_interval(days => ${ageDays}))
   `
-  if (settled) {
+  if (errorCode) {
+    await sql`
+      UPDATE refresh_operations.operations
+      SET status = 'dead_letter', completed_at = clock_timestamp(), last_error = ${sql.json({ code: errorCode })}
+      WHERE id = ${id}
+    `
+  } else if (settled) {
     await sql`
       UPDATE refresh_operations.operations
       SET status = 'succeeded', completed_at = clock_timestamp()
@@ -85,11 +93,26 @@ describe('Recently viewed freshness operations', () => {
       for (let index = 0; index < 3; index++) await insertVisitorRefresh(control, 10, 1, true)
       await insertVisitorRefresh(control, 11, 10, true)
       await insertVisitorRefresh(control, 12, 40, true)
+      // Overlay lookups and rate-limited or abandoned requests are not profile views.
+      await insertVisitorRefresh(control, 13, 1, true, 'desktop-api')
+      await insertVisitorRefresh(control, 14, 1, false, 'interactive-api', 'actor_rate_limited')
+      await insertVisitorRefresh(control, 14, 1, false, 'interactive-api', 'admission_reservation_expired')
+      await operations.enqueueRecentlyViewedRefreshes([11])
+      await control`
+        UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
+        WHERE provenance->>'source' = 'freshness-planner'
+      `
 
       const viewed = await operations.recentlyViewedPlayers({ windowDays: 30, hotDays: 7 })
       expect(viewed.sort((left, right) => left.brawlhallaId - right.brawlhallaId)).toEqual([
-        { brawlhallaId: 10, recentViews: 3, views: 3 },
-        { brawlhallaId: 11, recentViews: 0, views: 1 },
+        { brawlhallaId: 10, recentViews: 3, views: 3, lastPlannedAt: null, lastFailedAt: null },
+        {
+          brawlhallaId: 11,
+          recentViews: 0,
+          views: 1,
+          lastPlannedAt: expect.any(Date),
+          lastFailedAt: expect.any(Date),
+        },
       ])
     } finally {
       await Promise.all([control.end(), operations.close()])
@@ -149,6 +172,33 @@ describe('Recently viewed freshness operations', () => {
       await expect(insertOrphan()).rejects.toThrow('operations_payload_by_kind')
     } finally {
       await control.end()
+    }
+  })
+
+  test('promotes a queued background refresh when a visitor asks for the same player', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const operations = createPostgresRefreshOperations(connectionString)
+    try {
+      const activeBefore = await operations.activeRecentlyViewedRefreshes()
+      expect(await operations.enqueueRecentlyViewedRefreshes([50])).toEqual([50])
+      const reservation = await operations.reserveInteractivePlayerRefresh({
+        brawlhallaId: 50,
+        dedupeKey: 'player:50:visit',
+        operationKey: `player:50:${randomUUID()}`,
+        staleSections: ['ranked'],
+        provenance: { source: 'interactive-api' },
+        reservationTtlSeconds: 30,
+      })
+      const [background] = await control<{ id: string; work_class: string }[]>`
+        SELECT id, work_class FROM refresh_operations.operations
+        WHERE provenance->>'source' = 'freshness-planner' AND payload->>'brawlhallaId' = '50'
+      `
+      expect(reservation).toEqual({ outcome: 'already-active', operationId: background.id })
+      expect(background.work_class).toBe('interactive')
+      // The promoted refresh no longer occupies a background slot.
+      expect(await operations.activeRecentlyViewedRefreshes()).toBe(activeBefore)
+    } finally {
+      await Promise.all([control.end(), operations.close()])
     }
   })
 })

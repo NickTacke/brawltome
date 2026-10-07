@@ -3,6 +3,7 @@ import type { Telemetry } from '@brawltome/telemetry'
 import { type SourceUsage, sourceBudgetOpen } from './player-name-verification'
 
 const hourMs = 60 * 60 * 1000
+const failedBackoffMs = 7 * 24 * hourMs
 
 export type FreshnessTier = 'hot' | 'warm' | 'cold'
 
@@ -62,8 +63,13 @@ export function dueRefreshes(input: {
   const due: DueRefresh[] = []
   for (const candidate of input.candidates) {
     const tier = freshnessTier(candidate)
+    const interval = input.tierIntervalsMs[tier]
     const refreshedAt = input.lastRefreshed.get(candidate.brawlhallaId) ?? null
-    if (refreshedAt && input.now - refreshedAt.getTime() <= input.tierIntervalsMs[tier]) continue
+    if (refreshedAt && input.now - refreshedAt.getTime() <= interval) continue
+    // One background attempt per tier interval, and a week's rest after one dead-letters: a player whose V0 refresh
+    // keeps failing must not hold the slots, spend the budget, or page every interval.
+    if (candidate.lastPlannedAt && input.now - candidate.lastPlannedAt.getTime() <= interval) continue
+    if (candidate.lastFailedAt && input.now - candidate.lastFailedAt.getTime() <= failedBackoffMs) continue
     due.push({ brawlhallaId: candidate.brawlhallaId, tier, refreshedAt })
   }
   return due.sort(
@@ -103,7 +109,8 @@ export function createFreshnessPlanner(deps: {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'budget' }))
       return 0
     }
-    // A few in flight at a time: a visitor whose player is mid-refresh waits behind at most this many.
+    // A few in flight at a time keeps the monitoring queue short; a visitor arriving while one is still queued
+    // promotes it to interactive work (reserveInteractivePlayerRefresh).
     const slots = deps.config.batch - (await deps.operations.activeRecentlyViewedRefreshes())
     if (slots <= 0) {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'slots' }))
