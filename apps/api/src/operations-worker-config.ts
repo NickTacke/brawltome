@@ -255,6 +255,15 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       ),
     } satisfies WorkerDatabaseSessionConfig,
     discovery: {
+      // Full-snapshot reconciliation reads every player in long single statements; the worker-wide 5 min limit
+      // cancelled it (SQLSTATE 57014) and turned it into a retry loop, so discovery sessions get their own ceiling.
+      statementTimeoutMs: boundedInteger(
+        env.OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS,
+        30 * 60 * 1000,
+        'OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS',
+        60_000,
+        2 * 60 * 60 * 1000,
+      ),
       projectionBatchSize: boundedInteger(
         env.DISCOVERY_PROJECTION_BATCH_SIZE,
         500,

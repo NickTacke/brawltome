@@ -26,6 +26,7 @@ describe('operations worker configuration', () => {
       },
       discovery: {
         projectionBatchSize: 500,
+        statementTimeoutMs: 30 * 60 * 1000,
         reconciliationIntervalMs: 60 * 60 * 1000,
         reconciliationFailureBackoffMs: 5 * 60 * 1000,
         reconciliationMaxFailureBackoffMs: 60 * 60 * 1000,
@@ -228,5 +229,16 @@ describe('operations worker configuration', () => {
     ).toThrow('RUNTIME_CLEANUP_RESERVE_MS')
     expect(readHealthPort(undefined, 3001)).toBe(3001)
     expect(() => readHealthPort('70000', 3001)).toThrow('HEALTH_PORT')
+  })
+
+  test('gives discovery its own statement timeout for full-snapshot reconciliation', () => {
+    expect(
+      readOperationsWorkerConfig({ OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS: '3600000' }).discovery.statementTimeoutMs,
+    ).toBe(3_600_000)
+    for (const value of ['59999', '7200001', 'x']) {
+      expect(() => readOperationsWorkerConfig({ OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS: value })).toThrow(
+        'OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS',
+      )
+    }
   })
 })

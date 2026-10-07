@@ -74,13 +74,17 @@ const legendReferences = createLegendReferenceIndex(
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
 const connectionString = workerDatabaseUrl(configuredConnectionString, workerConfig.database)
+const discoveryConnectionString = workerDatabaseUrl(configuredConnectionString, {
+  ...workerConfig.database,
+  statementTimeoutMs: workerConfig.discovery.statementTimeoutMs,
+})
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
   Math.min(180, brawlhallaV1RequestLimit),
 )
 const accounts = createPostgresAccounts(connectionString)
-const discovery = createPostgresDiscovery(connectionString)
+const discovery = createPostgresDiscovery(discoveryConnectionString)
 const operations = createPostgresRefreshOperations(connectionString, {
   executionConcurrency: workerConfig.admission.totalConcurrency,
   playerProjectionEffectState: discovery.playerProjectionEffectState,
@@ -115,8 +119,8 @@ const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
 const clans = createPostgresClans(connectionString)
-const playerDiscoverySource = createPostgresPlayerDiscoverySource(connectionString)
-const clanDiscoverySource = createPostgresClanDiscoverySource(connectionString)
+const playerDiscoverySource = createPostgresPlayerDiscoverySource(discoveryConnectionString)
+const clanDiscoverySource = createPostgresClanDiscoverySource(discoveryConnectionString)
 const postgresReadiness = createPostgresReadiness(connectionString, globalMigrationInventory)
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
