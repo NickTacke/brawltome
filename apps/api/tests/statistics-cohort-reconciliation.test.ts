@@ -12,6 +12,7 @@ type LeaderboardQueries = Pick<RankingQueries, 'getLeaderboard'>
 
 const snapshotId = '00000000-0000-4000-8000-000000000001'
 const generationId = '10000000-0000-4000-8000-000000000001'
+const newerGenerationId = '10000000-0000-4000-8000-000000000002'
 
 function view(page: number, ids: number[], hasMore: boolean) {
   return {
@@ -194,6 +195,61 @@ describe('Statistics immutable Ranking adapter', () => {
     expect(legacyReconciliations).toBe(1)
     expect(launchReconciliations).toBe(0)
   })
+
+  for (const scenario of [
+    { name: 'probes one row per region while the launch generation is current', current: generationId },
+    { name: 'reloads every region once a newer generation is published', current: newerGenerationId },
+  ]) {
+    test(scenario.name, async () => {
+      const requests: { pageSize?: number }[] = []
+      let launchReconciliations = 0
+      const statistics = {
+        reconciliationState: async () => ({
+          legacyCohortExists: true,
+          launch: { generationId, sourceGenerationId: generationId, decisionCount: 2, cohortIds: [] },
+        }),
+        reconcileLaunchCohort: async () => {
+          launchReconciliations++
+          return { generationId, sourceGenerationId: scenario.current, decisions: [], cells: [] }
+        },
+        boundCollectionOperationIds: async () => [],
+        collectionIntents: async () => [],
+        boundPublicationOperationIds: async () => [],
+        publicationIntents: async () => [],
+        boundLegendMetaPublicationOperationIds: async () => [],
+        legendMetaPublicationIntents: async () => [],
+      } as unknown as StatisticsTracer
+      const operations = {
+        listAwaitingStatisticsCollections: async () => [],
+        listAwaitingStatisticsPublications: async () => [],
+        listAwaitingStatisticsLegendMetaPublications: async () => [],
+      } as unknown as StatisticsOperations
+      const ranking: LeaderboardQueries = {
+        async getLeaderboard(input) {
+          requests.push({ pageSize: input.pageSize })
+          const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
+          return {
+            ...view(1, [regionIndex + 1], false),
+            generationId: scenario.current,
+            snapshotId: `00000000-0000-4000-8000-${String(regionIndex + 1).padStart(12, '0')}`,
+            region: input.region as (typeof launchCohortRegions)[number],
+          }
+        },
+      }
+
+      await reconcileStatisticsCohort(statistics, operations, ranking)
+
+      const probes = requests.filter(({ pageSize }) => pageSize === 1)
+      expect(probes).toHaveLength(launchCohortRegions.length)
+      if (scenario.current === generationId) {
+        expect(requests).toHaveLength(launchCohortRegions.length)
+        expect(launchReconciliations).toBe(0)
+      } else {
+        expect(requests.length).toBeGreaterThan(launchCohortRegions.length)
+        expect(launchReconciliations).toBe(1)
+      }
+    })
+  }
 
   test('bounds one saturated reconciliation pass without loading the full cohort audit', async () => {
     const awaitingCollections = Array.from({ length: 500 }, (_, index) => `awaiting-collection-${index}`)
