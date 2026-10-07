@@ -19,6 +19,7 @@ import {
   type DeadLetterReason,
   type DiscoveryProjectionKind,
   type FencedResult,
+  type FreshnessAttempt,
   type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
   type LeaderboardDeepCrawlPayload,
@@ -27,8 +28,8 @@ import {
   type OperationFailure,
   type OperationLease,
   type PrimaryMonitoringSnapshot,
-  type RecentlyViewedPlayer,
   type ReconcilePrimaryMonitoringResult,
+  type RefreshRequestDemand,
   type ReserveInteractiveRefreshResult,
   type ReserveStatisticsCollection,
   type ReserveStatisticsLegendMetaPublication,
@@ -1069,49 +1070,34 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    // Players people opened recently. A page view records a refresh request when it finds stale data, so request
-    // counts are the view signal. Only site and Discord views count: overlay opponent lookups and requests that were
-    // rate limited or abandoned are not someone reading the profile. Views answered from fresh data record nothing,
-    // so a player kept fresh in the background gradually counts fewer views and drifts to a slower tier.
-    async recentlyViewedPlayers(input: { windowDays: number; hotDays: number }): Promise<RecentlyViewedPlayer[]> {
-      const rows = await client<
-        {
-          brawlhalla_id: number
-          recent_views: number
-          views: number
-          last_planned_at: Date | null
-          last_failed_at: Date | null
-        }[]
-      >`
-        WITH views AS (
-          SELECT (payload->>'brawlhallaId')::integer AS brawlhalla_id,
-                 (count(*) FILTER (
-                   WHERE created_at > clock_timestamp() - make_interval(days => ${input.hotDays})
-                 ))::integer AS recent_views,
-                 count(*)::integer AS views
-          FROM refresh_operations.operations
-          WHERE kind = 'interactive-player-refresh' AND work_class = 'interactive'
-            AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
-            AND provenance->>'source' IN ('interactive-api', 'discord')
-            AND coalesce(last_error->>'code', '') NOT IN ('actor_rate_limited', 'admission_reservation_expired')
-          GROUP BY 1
-        ),
-        planned AS (
-          SELECT (payload->>'brawlhallaId')::integer AS brawlhalla_id,
-                 max(created_at) AS last_planned_at,
-                 max(created_at) FILTER (WHERE status = 'dead_letter') AS last_failed_at
-          FROM refresh_operations.operations
-          WHERE kind = 'interactive-player-refresh' AND provenance->>'source' = ${freshnessPlannerSource}
-            AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
-          GROUP BY 1
-        )
-        SELECT views.brawlhalla_id, views.recent_views, views.views, planned.last_planned_at, planned.last_failed_at
-        FROM views LEFT JOIN planned USING (brawlhalla_id)
+    // Distinct days on which site or Discord visitors requested a player's refresh. Overlay lookups and requests that
+    // were rate limited or abandoned are not someone reading the profile.
+    async refreshRequestDemand(input: { windowDays: number }): Promise<RefreshRequestDemand[]> {
+      const rows = await client<{ brawlhalla_id: number; view_days: number }[]>`
+        SELECT (payload->>'brawlhallaId')::integer AS brawlhalla_id,
+               count(DISTINCT (created_at AT TIME ZONE 'UTC')::date)::integer AS view_days
+        FROM refresh_operations.operations
+        WHERE kind = 'interactive-player-refresh' AND work_class = 'interactive'
+          AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
+          AND provenance->>'source' IN ('interactive-api', 'discord')
+          AND coalesce(last_error->>'code', '') NOT IN ('actor_rate_limited', 'admission_reservation_expired')
+        GROUP BY 1
+      `
+      return rows.map((row) => ({ brawlhallaId: row.brawlhalla_id, viewDays: row.view_days }))
+    },
+
+    async recentFreshnessAttempts(input: { windowDays: number }): Promise<FreshnessAttempt[]> {
+      const rows = await client<{ brawlhalla_id: number; last_planned_at: Date; last_failed_at: Date | null }[]>`
+        SELECT (payload->>'brawlhallaId')::integer AS brawlhalla_id,
+               max(created_at) AS last_planned_at,
+               max(created_at) FILTER (WHERE status = 'dead_letter') AS last_failed_at
+        FROM refresh_operations.operations
+        WHERE kind = 'interactive-player-refresh' AND provenance->>'source' = ${freshnessPlannerSource}
+          AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
+        GROUP BY 1
       `
       return rows.map((row) => ({
         brawlhallaId: row.brawlhalla_id,
-        recentViews: row.recent_views,
-        views: row.views,
         lastPlannedAt: row.last_planned_at,
         lastFailedAt: row.last_failed_at,
       }))

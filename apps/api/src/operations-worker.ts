@@ -14,6 +14,7 @@ import {
   createPostgresPlayerDiscoverySource,
   createPostgresPlayerFreshness,
   createPostgresPlayerNameVerifications,
+  createPostgresProfileViews,
   createPostgresRankedPlayers,
   createSteamPlayerEvidenceResolver,
   refreshCanonicalCareerPlayer,
@@ -120,6 +121,7 @@ const careerPlayers = createPostgresCareerPlayers(connectionString)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
 const leaderboardRanked = createPostgresLeaderboardRanked(connectionString)
 const playerFreshness = createPostgresPlayerFreshness(connectionString)
+const profileViews = createPostgresProfileViews(connectionString)
 const playerNameVerifications = createPostgresPlayerNameVerifications(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
@@ -156,6 +158,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
     { name: 'players-leaderboard-ranked-postgres', close: leaderboardRanked.close },
     { name: 'players-freshness-postgres', close: playerFreshness.close },
+    { name: 'players-profile-views-postgres', close: profileViews.close },
     { name: 'players-name-verifications-postgres', close: playerNameVerifications.close },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -233,6 +236,7 @@ const freshnessPlanner = createFreshnessPlanner({
   config: readFreshnessPlannerConfig(process.env),
   readSourceUsage: readV0SourceUsage,
   operations,
+  profileViews,
   freshness: playerFreshness,
   telemetry,
 })

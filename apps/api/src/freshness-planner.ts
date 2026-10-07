@@ -1,11 +1,14 @@
-import type { RecentlyViewedPlayer } from '@brawltome/refresh-operations'
+import type { FreshnessAttempt, RefreshRequestDemand } from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
 import { type SourceUsage, sourceBudgetOpen } from './player-name-verification'
 
 const hourMs = 60 * 60 * 1000
 const failedBackoffMs = 7 * 24 * hourMs
+const viewRetentionDays = 30
+const viewTrimIntervalMs = hourMs
 
-export type FreshnessTier = 'hot' | 'warm' | 'cold'
+// 'repeat' players were viewed on two or more days in the window and go first.
+export type FreshnessTier = 'repeat' | 'single'
 
 export type FreshnessPlannerConfig = {
   enabled: boolean
@@ -13,8 +16,7 @@ export type FreshnessPlannerConfig = {
   batch: number
   intervalMs: number
   windowDays: number
-  hotDays: number
-  tierIntervalsMs: Record<FreshnessTier, number>
+  refreshIntervalMs: number
 }
 
 function boundedInteger(value: string | undefined, fallback: number, name: string, minimum: number, maximum: number) {
@@ -37,44 +39,48 @@ export function readFreshnessPlannerConfig(env: NodeJS.ProcessEnv): FreshnessPla
     maxUsageRatio,
     batch: boundedInteger(env.FRESHNESS_BATCH, 4, 'FRESHNESS_BATCH', 1, 20),
     intervalMs: boundedInteger(env.FRESHNESS_INTERVAL_MS, 30_000, 'FRESHNESS_INTERVAL_MS', 5_000, 15 * 60 * 1000),
-    windowDays: 30,
-    hotDays: 7,
-    tierIntervalsMs: { hot: 4 * hourMs, warm: 12 * hourMs, cold: 24 * hourMs },
+    windowDays: boundedInteger(env.FRESHNESS_WINDOW_DAYS, 14, 'FRESHNESS_WINDOW_DAYS', 1, viewRetentionDays),
+    refreshIntervalMs: boundedInteger(env.FRESHNESS_REFRESH_HOURS, 12, 'FRESHNESS_REFRESH_HOURS', 1, 7 * 24) * hourMs,
   }
 }
 
-export function freshnessTier(player: Pick<RecentlyViewedPlayer, 'recentViews'>): FreshnessTier {
-  if (player.recentViews >= 3) return 'hot'
-  if (player.recentViews >= 1) return 'warm'
-  return 'cold'
-}
+export type ViewDemand = { brawlhallaId: number; viewDays: number }
 
-const tierRank: Record<FreshnessTier, number> = { hot: 0, warm: 1, cold: 2 }
+// Merges both demand signals per player: profile view days and on-request refresh days.
+export function mergeViewDemand(...sources: ReadonlyArray<readonly ViewDemand[]>): ViewDemand[] {
+  const merged = new Map<number, number>()
+  for (const source of sources) {
+    for (const { brawlhallaId, viewDays } of source) {
+      merged.set(brawlhallaId, Math.max(merged.get(brawlhallaId) ?? 0, viewDays))
+    }
+  }
+  return [...merged].map(([brawlhallaId, viewDays]) => ({ brawlhallaId, viewDays }))
+}
 
 export type DueRefresh = { brawlhallaId: number; tier: FreshnessTier; refreshedAt: Date | null }
 
-// Due players, hottest tier first and then the oldest data (never refreshed first).
+// Players whose full profile is older than the refresh interval, repeat viewers first and then the oldest data.
+// One planner attempt per interval and a week's rest after a dead letter keep a player whose V0 refresh keeps failing
+// from holding the slots, spending the budget, or paging every interval.
 export function dueRefreshes(input: {
-  candidates: readonly RecentlyViewedPlayer[]
+  demand: readonly ViewDemand[]
   lastRefreshed: ReadonlyMap<number, Date | null>
-  tierIntervalsMs: Record<FreshnessTier, number>
+  attempts: ReadonlyMap<number, Pick<FreshnessAttempt, 'lastPlannedAt' | 'lastFailedAt'>>
+  refreshIntervalMs: number
   now: number
 }): DueRefresh[] {
   const due: DueRefresh[] = []
-  for (const candidate of input.candidates) {
-    const tier = freshnessTier(candidate)
-    const interval = input.tierIntervalsMs[tier]
-    const refreshedAt = input.lastRefreshed.get(candidate.brawlhallaId) ?? null
-    if (refreshedAt && input.now - refreshedAt.getTime() <= interval) continue
-    // One background attempt per tier interval, and a week's rest after one dead-letters: a player whose V0 refresh
-    // keeps failing must not hold the slots, spend the budget, or page every interval.
-    if (candidate.lastPlannedAt && input.now - candidate.lastPlannedAt.getTime() <= interval) continue
-    if (candidate.lastFailedAt && input.now - candidate.lastFailedAt.getTime() <= failedBackoffMs) continue
-    due.push({ brawlhallaId: candidate.brawlhallaId, tier, refreshedAt })
+  for (const { brawlhallaId, viewDays } of input.demand) {
+    const refreshedAt = input.lastRefreshed.get(brawlhallaId) ?? null
+    if (refreshedAt && input.now - refreshedAt.getTime() <= input.refreshIntervalMs) continue
+    const attempt = input.attempts.get(brawlhallaId)
+    if (attempt?.lastPlannedAt && input.now - attempt.lastPlannedAt.getTime() <= input.refreshIntervalMs) continue
+    if (attempt?.lastFailedAt && input.now - attempt.lastFailedAt.getTime() <= failedBackoffMs) continue
+    due.push({ brawlhallaId, tier: viewDays >= 2 ? 'repeat' : 'single', refreshedAt })
   }
   return due.sort(
     (left, right) =>
-      tierRank[left.tier] - tierRank[right.tier] ||
+      Number(left.tier === 'single') - Number(right.tier === 'single') ||
       (left.refreshedAt?.getTime() ?? 0) - (right.refreshedAt?.getTime() ?? 0) ||
       left.brawlhallaId - right.brawlhallaId,
   )
@@ -84,9 +90,14 @@ export function createFreshnessPlanner(deps: {
   config: FreshnessPlannerConfig
   readSourceUsage: () => Promise<SourceUsage>
   operations: {
-    recentlyViewedPlayers(input: { windowDays: number; hotDays: number }): Promise<RecentlyViewedPlayer[]>
+    refreshRequestDemand(input: { windowDays: number }): Promise<RefreshRequestDemand[]>
+    recentFreshnessAttempts(input: { windowDays: number }): Promise<FreshnessAttempt[]>
     activeRecentlyViewedRefreshes(): Promise<number>
     enqueueRecentlyViewedRefreshes(brawlhallaIds: readonly number[]): Promise<number[]>
+  }
+  profileViews: {
+    viewDemand(input: { days: number }): Promise<ViewDemand[]>
+    trim(input: { keepDays: number }): Promise<number>
   }
   freshness: { lastRefreshedById(brawlhallaIds: readonly number[]): Promise<Map<number, Date | null>> }
   telemetry?: Telemetry
@@ -94,6 +105,7 @@ export function createFreshnessPlanner(deps: {
 }) {
   const now = deps.now ?? Date.now
   let nextRunAt = 0
+  let nextTrimAt = 0
   const record = (write: (active: Telemetry) => void) => {
     if (!deps.telemetry) return
     try {
@@ -104,30 +116,38 @@ export function createFreshnessPlanner(deps: {
   }
 
   async function plan(): Promise<number> {
+    if (now() >= nextTrimAt) {
+      nextTrimAt = now() + viewTrimIntervalMs
+      await deps.profileViews.trim({ keepDays: viewRetentionDays })
+    }
     const usage = await deps.readSourceUsage()
     if (!sourceBudgetOpen(usage, deps.config.maxUsageRatio)) {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'budget' }))
       return 0
     }
-    // A few in flight at a time keeps the monitoring queue short; a visitor arriving while one is still queued
-    // promotes it to interactive work (reserveInteractivePlayerRefresh).
+    // Few in flight at a time keeps V0 calls spread out and the monitoring queue short; a visitor arriving while one
+    // is still queued promotes it to interactive work (reserveInteractivePlayerRefresh).
     const slots = deps.config.batch - (await deps.operations.activeRecentlyViewedRefreshes())
     if (slots <= 0) {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'slots' }))
       return 0
     }
-    const candidates = await deps.operations.recentlyViewedPlayers({
-      windowDays: deps.config.windowDays,
-      hotDays: deps.config.hotDays,
-    })
+    const window = { windowDays: deps.config.windowDays }
+    const [views, requests, attempts] = await Promise.all([
+      deps.profileViews.viewDemand({ days: deps.config.windowDays }),
+      deps.operations.refreshRequestDemand(window),
+      deps.operations.recentFreshnessAttempts(window),
+    ])
+    const demand = mergeViewDemand(views, requests)
     const due = dueRefreshes({
-      candidates,
-      lastRefreshed: await deps.freshness.lastRefreshedById(candidates.map(({ brawlhallaId }) => brawlhallaId)),
-      tierIntervalsMs: deps.config.tierIntervalsMs,
+      demand,
+      lastRefreshed: await deps.freshness.lastRefreshedById(demand.map(({ brawlhallaId }) => brawlhallaId)),
+      attempts: new Map(attempts.map((attempt) => [attempt.brawlhallaId, attempt])),
+      refreshIntervalMs: deps.config.refreshIntervalMs,
       now: now(),
     })
     record((active) => {
-      for (const tier of ['hot', 'warm', 'cold'] as const) {
+      for (const tier of ['repeat', 'single'] as const) {
         active.metrics.set('freshness_due_players', due.filter((entry) => entry.tier === tier).length, { tier })
       }
     })
@@ -144,6 +164,7 @@ export function createFreshnessPlanner(deps: {
         })
       }
       active.logger.info('freshness_planner.planned', {
+        demand: demand.length,
         due: due.length,
         enqueued: enqueued.size,
         sourceUsed: usage.used,

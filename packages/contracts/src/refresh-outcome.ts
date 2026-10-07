@@ -44,6 +44,8 @@ export const playerRefreshInputSchema = z
   .object({ id: brawlhallaIdSchema, turnstileToken: z.string().max(2_048).optional() })
   .strict()
 
+export const playerViewInputSchema = z.object({ id: brawlhallaIdSchema }).strict()
+
 export const discordPlayerRefreshInputSchema = z
   .object({
     id: brawlhallaIdSchema,
