@@ -44,6 +44,7 @@ import type {
   discordPlayerRefreshInputSchema,
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
+  playerViewInputSchema,
 } from './refresh-outcome'
 import type { legendMetaHistoryOutputSchema, legendMetaInputSchema, legendMetaOutputSchema } from './statistics'
 
@@ -90,6 +91,7 @@ type AppRouterRecord = {
     requestRefresh: Mutation<Output<typeof playerRefreshInputSchema>, Output<typeof playerRefreshResponseSchema>>
     refreshDiscord: Mutation<Output<typeof discordPlayerRefreshInputSchema>, Output<typeof playerRefreshResponseSchema>>
     refresh: Mutation<{ id: number; turnstileToken: string }, { isRefreshing: boolean }>
+    recordView: Mutation<Output<typeof playerViewInputSchema>, { recorded: boolean }>
   }
   search: {
     local: Query<Output<typeof discoverySearchInputSchema>, Output<typeof discoverySearchOutputSchema>>

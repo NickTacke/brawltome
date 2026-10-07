@@ -5,6 +5,7 @@ import {
   discordPlayerRefreshInputSchema,
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
+  playerViewInputSchema,
 } from '@brawltome/contracts'
 import { CAREER_FRESHNESS_SECONDS, RANKED_FRESHNESS_SECONDS } from '@brawltome/player'
 import { z } from 'zod'
@@ -163,10 +164,27 @@ export function createV2PlayerRefreshRouter(procedure = internalProcedure) {
   })
 }
 
+// Counts a profile view for background refresh demand. Bots are not demand; failures never reach the visitor.
+export function createPlayerViewRouter(procedure = internalProcedure) {
+  return router({
+    recordView: procedure.input(playerViewInputSchema).mutation(async ({ ctx, input }) => {
+      if (ctx.isBot || !ctx.profileViews) return { recorded: false }
+      try {
+        await ctx.profileViews.recordView(input.id)
+        return { recorded: true }
+      } catch (error) {
+        recordTelemetry(() => ctx.telemetry.logger.error('player.view.record_failed', error))
+        return { recorded: false }
+      }
+    }),
+  })
+}
+
 export const playerRouter = mergeRouters(
   createPlayerReferenceRouter(),
   createPlayerRankedRouter(),
   createPlayerCareerRouter(),
   createCanonicalPlayerRefreshRouter(),
   createV2PlayerRefreshRouter(),
+  createPlayerViewRouter(),
 )

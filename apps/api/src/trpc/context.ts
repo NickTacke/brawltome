@@ -27,4 +27,6 @@ export interface Context {
   internalSecret: string | undefined
   discordInternalSecret: string | undefined
   account: Account | null
+  // Optional so router tests need not provide it; production wires the Players view counter.
+  profileViews?: { recordView(brawlhallaId: number): Promise<void> }
 }

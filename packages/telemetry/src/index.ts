@@ -299,12 +299,12 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   freshness_refreshes_total: {
     kind: 'counter',
     help: 'Background V0 refreshes the freshness planner requested for recently viewed players',
-    labels: { tier: ['hot', 'warm', 'cold'], outcome: ['enqueued', 'already_active'] },
+    labels: { tier: ['repeat', 'single'], outcome: ['enqueued', 'already_active'] },
   },
   freshness_due_players: {
     kind: 'gauge',
-    help: 'Recently viewed players whose full profile is older than their tier interval',
-    labels: { tier: ['hot', 'warm', 'cold'] },
+    help: 'Recently viewed players whose full profile is older than the refresh interval',
+    labels: { tier: ['repeat', 'single'] },
   },
   leaderboard_deep_crawl_pages_total: {
     kind: 'counter',

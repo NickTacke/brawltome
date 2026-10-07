@@ -15,6 +15,7 @@ import { addLeaderboardNameObservations } from './migrations/0014-add-leaderboar
 import { addNameVerifications } from './migrations/0015-add-name-verifications'
 import { addCareerLegendsBestOrderIndex } from './migrations/0016-add-career-legends-best-order-index'
 import { addLeaderboardRankedObservations } from './migrations/0017-add-leaderboard-ranked-observations'
+import { addProfileViewDays } from './migrations/0018-add-profile-view-days'
 
 export {
   createPostgresCareerPlayers,
@@ -40,6 +41,11 @@ export {
   type PostgresLeaderboardPlayerNames,
 } from './leaderboard-names'
 export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
+export {
+  createPostgresProfileViews,
+  type PostgresProfileViews,
+  type ProfileViewDemand,
+} from './profile-views'
 export {
   createPostgresLeaderboardRanked,
   type LeaderboardRankedObservation,
@@ -100,4 +106,5 @@ export const playerMigrationInventory = [
   addNameVerifications,
   addCareerLegendsBestOrderIndex,
   addLeaderboardRankedObservations,
+  addProfileViewDays,
 ] as const

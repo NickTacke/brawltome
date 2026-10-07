@@ -442,14 +442,11 @@ type LeaseFields = {
 export const recentlyViewedCohort = 'recently-viewed' as const
 export const freshnessPlannerSource = 'freshness-planner' as const
 
-export type RecentlyViewedPlayer = {
-  brawlhallaId: number
-  recentViews: number
-  views: number
-  // The planner's own last background refresh for the player and its last dead-lettered one, if any.
-  lastPlannedAt: Date | null
-  lastFailedAt: Date | null
-}
+// Days within the window on which a player's profile was refreshed on request: demand the view counter cannot see
+// (Discord lookups, views before the counter existed).
+export type RefreshRequestDemand = { brawlhallaId: number; viewDays: number }
+// The freshness planner's own last background refresh for a player and its last dead-lettered one, if any.
+export type FreshnessAttempt = { brawlhallaId: number; lastPlannedAt: Date | null; lastFailedAt: Date | null }
 
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
