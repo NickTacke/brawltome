@@ -300,8 +300,9 @@ describe('durable Refresh Operations', () => {
   test('measures the oldest pending job from when it last became runnable, not from its creation', async () => {
     const operations = createPostgresRefreshOperations(connectionString)
     const control = postgres(connectionString, { max: 1 })
+    let yielded: Awaited<ReturnType<typeof operations.accept>> | undefined
     try {
-      const yielded = await operations.accept({
+      yielded = await operations.accept({
         dedupeKey: `telemetry-yielded:${randomUUID()}`,
         operationKey: `telemetry-yielded:${randomUUID()}`,
         workClass: 'leaderboard',
@@ -318,6 +319,8 @@ describe('durable Refresh Operations', () => {
       const ageMs = snapshot.oldestPending.find(({ workClass }) => workClass === 'leaderboard')?.ageMs ?? 0
       expect(ageMs).toBeLessThan(60 * 60 * 1000)
     } finally {
+      // Later tests lease leaderboard work from this shared database; leave nothing pending behind.
+      if (yielded) await control`DELETE FROM refresh_operations.operations WHERE id = ${yielded.operationId}`
       await control.end()
       await operations.close()
     }
