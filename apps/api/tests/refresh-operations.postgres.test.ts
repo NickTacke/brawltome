@@ -297,6 +297,32 @@ describe('durable Refresh Operations', () => {
     }
   })
 
+  test('measures the oldest pending job from when it last became runnable, not from its creation', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const control = postgres(connectionString, { max: 1 })
+    try {
+      const yielded = await operations.accept({
+        dedupeKey: `telemetry-yielded:${randomUUID()}`,
+        operationKey: `telemetry-yielded:${randomUUID()}`,
+        workClass: 'leaderboard',
+        payload: { value: 'yielded' },
+        provenance: { source: 'telemetry-test' },
+      })
+      // A long crawl created two hours ago that just yielded a slice and is runnable again.
+      await control`
+        UPDATE refresh_operations.operations
+        SET created_at = clock_timestamp() - interval '2 hours', available_at = clock_timestamp() - interval '1 second'
+        WHERE id = ${yielded.operationId}
+      `
+      const snapshot = await operations.inspectTelemetry()
+      const ageMs = snapshot.oldestPending.find(({ workClass }) => workClass === 'leaderboard')?.ageMs ?? 0
+      expect(ageMs).toBeLessThan(60 * 60 * 1000)
+    } finally {
+      await control.end()
+      await operations.close()
+    }
+  })
+
   test('accepts a later same-owner migration while rejecting known history mutation', async () => {
     const readiness = createPostgresReadiness(connectionString, refreshOperationsMigrationInventory)
     await readiness.check()

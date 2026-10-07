@@ -343,6 +343,20 @@ tests:
         alertname: HttpErrorRateHigh
         exp_alerts: []
 
+  - name: readiness 503s during a deploy are not HTTP errors
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{runtime="operations-worker",route="health_ready",status_class="2xx"}'
+        values: "0+2x14"
+      - series: 'http_server_requests_total{runtime="operations-worker",route="health_ready",status_class="5xx"}'
+        values: "0+5x14"
+      - series: 'http_server_requests_total{runtime="operations-worker",route="metrics",status_class="2xx"}'
+        values: "0+4x14"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HttpErrorRateHigh
+        exp_alerts: []
+
   - name: backup integrity failure reports its reason and recovers
     interval: 1m
     input_series:

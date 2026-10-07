@@ -2345,7 +2345,9 @@ export function createPostgresRefreshOperations(
       `
       const oldestPending = await client<{ work_class: WorkClass; age_ms: string | number }[]>`
         SELECT work_class,
-               greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(created_at))) * 1000)::bigint AS age_ms
+               -- Waiting time since the work last became runnable: a deep crawl that yields between slices is created once
+               -- but becomes runnable again after every slice, and must not look like one job stuck for the whole crawl.
+               greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(available_at))) * 1000)::bigint AS age_ms
         FROM refresh_operations.operations
         WHERE status = 'pending' AND available_at <= ${databaseTime.observed_at}
         GROUP BY work_class
