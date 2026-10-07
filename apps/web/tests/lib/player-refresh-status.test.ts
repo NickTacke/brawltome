@@ -145,7 +145,13 @@ describe('shouldRecheckOnVisible', () => {
   const fresh = { ranked: false, stats: false }
 
   test('rechecks settled pages whose data went stale', () => {
-    for (const status of [{ kind: 'idle' }, { kind: 'timedOut' }, { kind: 'gaveUp', reason: 'rateLimited' }] as const) {
+    for (const status of [
+      { kind: 'idle' },
+      { kind: 'timedOut' },
+      { kind: 'gaveUp', reason: 'rateLimited' },
+      // Cached profiles show no status bar, so a failed verification recovers silently on the next visit to the tab.
+      { kind: 'verificationFailed' },
+    ] as const) {
       expect(shouldRecheckOnVisible({ ...initialPlayerRefreshState, status }, stale, NOW)).toBe(true)
     }
   })
