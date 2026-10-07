@@ -79,6 +79,9 @@ export type MetricName =
   | 'discord_interactions_total'
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
+  | 'freshness_refreshes_total'
+  | 'freshness_due_players'
+  | 'freshness_planner_skips_total'
   | 'analytics_pageviews_total'
   | 'analytics_searches_total'
   | 'analytics_search_latency_ms'
@@ -287,6 +290,21 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'gauge',
     help: 'Players whose newer leaderboard name awaits V0 verification',
     labels: { tier: ['rename_signal', 'demand', 'other'] },
+  },
+  freshness_refreshes_total: {
+    kind: 'counter',
+    help: 'Background V0 refreshes the freshness planner requested for recently viewed players',
+    labels: { tier: ['hot', 'warm', 'cold'], outcome: ['enqueued', 'already_active'] },
+  },
+  freshness_due_players: {
+    kind: 'gauge',
+    help: 'Recently viewed players whose full profile is older than their tier interval',
+    labels: { tier: ['hot', 'warm', 'cold'] },
+  },
+  freshness_planner_skips_total: {
+    kind: 'counter',
+    help: 'Freshness planner passes that enqueued nothing',
+    labels: { reason: ['budget', 'slots'] },
   },
   analytics_pageviews_total: {
     kind: 'counter',

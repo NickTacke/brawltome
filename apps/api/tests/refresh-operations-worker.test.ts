@@ -581,6 +581,65 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
+  test('runs recently viewed refreshes in the background without a Primary assignment', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'freshness:42:op',
+      kind: 'interactive-player-refresh',
+      workClass: 'primary-monitoring',
+      payload: { cohort: 'recently-viewed', brawlhallaId: 42, staleSections: ['ranked', 'stats'] },
+      provenance: { source: 'freshness-planner' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 4,
+      scheduleWindowAt: null,
+    }
+    const sections: string[] = []
+    const callers: string[] = []
+    let eligibilityChecked = false
+    let completed = false
+    await runOneRefreshOperation(
+      {
+        claim: async () => lease,
+        renew: async () => 'renewed' as const,
+        beginInteractiveSection: async () => 'execute' as const,
+        commitInteractiveSection: async () => 'transitioned' as const,
+        complete: async () => {
+          completed = true
+          return 'transitioned' as const
+        },
+        fail: async () => 'transitioned' as const,
+      } as never,
+      'worker',
+      {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        sourceAdmission: {
+          admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+          pauseSource: async () => {},
+        },
+        isPrimaryMonitoringTarget: async () => {
+          eligibilityChecked = true
+          return false
+        },
+        executeSection: async (_lease, section, admitSourceCall, caller) => {
+          sections.push(section)
+          callers.push(caller)
+          await admitSourceCall('brawlhalla-v0')
+        },
+      },
+    )
+
+    expect(eligibilityChecked).toBe(false)
+    expect(sections).toEqual(['ranked', 'stats'])
+    expect(callers).toEqual(['background', 'background'])
+    expect(completed).toBe(true)
+  })
+
   test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
