@@ -8,6 +8,9 @@ export type ReviewData = {
   refreshWaitP95Ms: PeriodValue
   abandonedRefreshRate: PeriodValue
   staleProfileShare: PeriodValue // share of profile views with data_age 12h_7d or gt_7d
+  staleRankedShare: PeriodValue // same, for the ranked section alone
+  staleStatsShare: PeriodValue // same, for the career stats section alone
+  backgroundRefreshes: PeriodValue // background V0 refreshes the freshness planner enqueued
   lcpP75Ms: Array<{ route: string; device: string; value: number }>
   clientErrors: Array<{ kind: string; route: string; count: number }>
   trpcFailures: Array<{ procedure: string; code: string; count: number }>
@@ -26,6 +29,13 @@ const label = (sample: Sample, key: string) => sample.metric[key] ?? ''
 
 function ratio(numerator: string, denominator: string): string {
   return `sum(${numerator}) / clamp_min(sum(${denominator}), 1e-9)`
+}
+
+function staleSectionShare(section: 'ranked' | 'stats', window: string): string {
+  return ratio(
+    `increase(analytics_profile_section_age_total{section="${section}",data_age=~"12h_7d|gt_7d"}[${window}])`,
+    `increase(analytics_profile_section_age_total{section="${section}"}[${window}])`,
+  )
 }
 
 export async function collectReview(api: GrafanaApi, days: number, end: Date): Promise<ReviewData> {
@@ -66,6 +76,9 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
     refreshWaitP95Ms,
     abandonedRefreshRate,
     staleProfileShare,
+    staleRankedShare,
+    staleStatsShare,
+    backgroundRefreshes,
     lcp,
     clientErrors,
     trpcFailures,
@@ -98,6 +111,9 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
         `increase(analytics_profile_views_total[${w}])`,
       ),
     ),
+    period(staleSectionShare('ranked', w)),
+    period(staleSectionShare('stats', w)),
+    period(`sum(increase(freshness_refreshes_total{outcome="enqueued"}[${w}]))`),
     prom(
       `histogram_quantile(0.75, sum by (le, route, device) (increase(analytics_web_vitals_bucket{name="LCP"}[${w}])))`,
     ),
@@ -137,6 +153,9 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
     refreshWaitP95Ms,
     abandonedRefreshRate,
     staleProfileShare,
+    staleRankedShare,
+    staleStatsShare,
+    backgroundRefreshes,
     lcpP75Ms: counts(lcp, (r) => ({ route: label(r, 'route'), device: label(r, 'device'), value: r.value })),
     clientErrors: counts(clientErrors, (r) => ({ kind: label(r, 'kind'), route: label(r, 'route'), count: r.value })),
     trpcFailures: counts(trpcFailures, (r) => ({

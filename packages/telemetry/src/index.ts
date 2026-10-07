@@ -79,11 +79,15 @@ export type MetricName =
   | 'discord_interactions_total'
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
+  | 'freshness_refreshes_total'
+  | 'freshness_due_players'
+  | 'freshness_planner_skips_total'
   | 'analytics_pageviews_total'
   | 'analytics_searches_total'
   | 'analytics_search_latency_ms'
   | 'analytics_search_selections_total'
   | 'analytics_profile_views_total'
+  | 'analytics_profile_section_age_total'
   | 'analytics_refresh_states_total'
   | 'analytics_refresh_wait_ms'
   | 'analytics_refresh_retries_total'
@@ -288,6 +292,21 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     help: 'Players whose newer leaderboard name awaits V0 verification',
     labels: { tier: ['rename_signal', 'demand', 'other'] },
   },
+  freshness_refreshes_total: {
+    kind: 'counter',
+    help: 'Background V0 refreshes the freshness planner requested for recently viewed players',
+    labels: { tier: ['hot', 'warm', 'cold'], outcome: ['enqueued', 'already_active'] },
+  },
+  freshness_due_players: {
+    kind: 'gauge',
+    help: 'Recently viewed players whose full profile is older than their tier interval',
+    labels: { tier: ['hot', 'warm', 'cold'] },
+  },
+  freshness_planner_skips_total: {
+    kind: 'counter',
+    help: 'Freshness planner passes that enqueued nothing',
+    labels: { reason: ['budget', 'slots'] },
+  },
   analytics_pageviews_total: {
     kind: 'counter',
     help: 'Product analytics pageviews',
@@ -313,6 +332,11 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Profile views by data age',
     labels: { data_age: ['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never'] },
+  },
+  analytics_profile_section_age_total: {
+    kind: 'counter',
+    help: 'Profile views by the age of each section on first paint',
+    labels: { section: ['ranked', 'stats'], data_age: ['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never'] },
   },
   analytics_refresh_states_total: {
     kind: 'counter',

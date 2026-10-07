@@ -39,6 +39,7 @@ export {
   type LeaderboardPlayerName,
   type PostgresLeaderboardPlayerNames,
 } from './leaderboard-names'
+export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
 export {
   createPostgresLeaderboardRanked,
   type LeaderboardRankedObservation,

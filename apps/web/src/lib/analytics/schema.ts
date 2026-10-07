@@ -24,6 +24,7 @@ const common = {
 }
 const ms = z.number().int().min(0).max(600_000)
 const source = z.enum(['bar', 'palette'])
+const dataAge = z.enum(['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never'])
 
 export const analyticsEventSchema = z.discriminatedUnion('name', [
   z.object({ ...common, name: z.literal('pageview'), referrerDomain: z.string().max(253).optional() }).strict(),
@@ -52,7 +53,9 @@ export const analyticsEventSchema = z.discriminatedUnion('name', [
     .object({
       ...common,
       name: z.literal('profile.viewed'),
-      dataAge: z.enum(['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never']),
+      dataAge: dataAge,
+      rankedAge: dataAge.optional(),
+      statsAge: dataAge.optional(),
     })
     .strict(),
   z

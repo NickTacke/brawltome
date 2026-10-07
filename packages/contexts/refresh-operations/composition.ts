@@ -17,6 +17,8 @@ import { addLegendMetaPublication } from './migrations/0016-add-legend-meta-publ
 import { addPlayerNameVerification } from './migrations/0017-add-player-name-verification'
 import { addRankingRetention } from './migrations/0018-add-ranking-retention'
 import { validateRankingRetentionChecks } from './migrations/0019-validate-ranking-retention-checks'
+import { allowRecentlyViewedRefresh } from './migrations/0020-allow-recently-viewed-refresh'
+import { validateRecentlyViewedRefresh } from './migrations/0021-validate-recently-viewed-refresh'
 
 export {
   createPostgresDeadLetterOperations,
@@ -44,4 +46,6 @@ export const refreshOperationsMigrationInventory = [
   addPlayerNameVerification,
   addRankingRetention,
   validateRankingRetentionChecks,
+  allowRecentlyViewedRefresh,
+  validateRecentlyViewedRefresh,
 ] as const

@@ -30,7 +30,7 @@ export type PlayerNameVerificationConfig = {
   windowMs: number
 }
 
-type SourceUsage = { used: number; limit: number }
+export type SourceUsage = { used: number; limit: number }
 type MetricOutcome = 'renamed' | 'unchanged' | 'failed' | 'skipped_budget' | 'resolved_free'
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 
