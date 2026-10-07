@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { BhApiHttpError } from '@brawltome/bhapi'
 import { RateLimitError } from '@brawltome/bhapi'
 import { LeaderboardSourceError } from '@brawltome/ranking/composition'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
@@ -998,6 +999,83 @@ describe('refresh operations worker source retry', () => {
     expect(failed).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
     expect(failures?.series[0]?.labels.failure_category).toBe('admission_deferred')
+  })
+
+  test('waits out Brawlhalla maintenance instead of spending attempts and dead-lettering', async () => {
+    const lease = (attemptNumber: number): OperationLease => ({
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'player:maintenance',
+      kind: 'interactive-player-refresh',
+      workClass: 'interactive',
+      payload: { brawlhallaId: 42, staleSections: ['ranked'] },
+      provenance: { source: 'interactive-api' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    })
+    const run = async (operationLease: OperationLease, error: Error) => {
+      const transitions: Array<{ kind: 'defer' | 'fail'; code: string; retryDelayMs: number }> = []
+      const paused: Array<[string, number]> = []
+      await runOneRefreshOperation(
+        {
+          claim: async () => operationLease,
+          renew: async () => 'renewed' as const,
+          beginInteractiveSection: async () => 'execute' as const,
+          commitInteractiveSection: async () => 'transitioned' as const,
+          complete: async () => 'transitioned' as const,
+          defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
+            transitions.push({ kind: 'defer', code: failure.code, retryDelayMs })
+            return 'transitioned' as const
+          },
+          fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
+            transitions.push({ kind: 'fail', code: failure.code, retryDelayMs })
+            return 'transitioned' as const
+          },
+        } as never,
+        'worker',
+        {
+          leaseMs: 1_000,
+          retryDelayMs: 10,
+          sourceUnavailableRetryMs: 120_000,
+          admission,
+          sourceAdmission: {
+            admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+            pauseSource: async (domain, seconds) => {
+              paused.push([domain, seconds])
+            },
+          },
+          executeSection: async () => {
+            throw error
+          },
+        },
+      )
+      return { transitions, paused }
+    }
+    const unavailable = new BhApiHttpError(
+      'Brawlhalla API error: 503 Service Unavailable for /player/42/ranked',
+      503,
+      'brawlhalla-v0',
+    )
+
+    // Even the final attempt waits for the source: deferral does not spend an attempt.
+    expect(await run(lease(3), unavailable)).toEqual({
+      transitions: [{ kind: 'defer', code: 'source_unavailable', retryDelayMs: 120_000 }],
+      paused: [['brawlhalla-v0', 120]],
+    })
+    expect(
+      (await run(lease(1), new Error('Ranked refresh failed', { cause: unavailable }))).transitions[0],
+    ).toMatchObject({ kind: 'defer', code: 'source_unavailable' })
+
+    const broken = await run(
+      lease(3),
+      new BhApiHttpError('Brawlhalla API error: 500 Internal Server Error', 500, 'brawlhalla-v0'),
+    )
+    expect(broken.transitions[0]?.kind).toBe('fail')
+    expect(broken.paused).toEqual([])
   })
 
   test('revokes active clan authority and skips publication completion after renewal loss', async () => {

@@ -38,6 +38,8 @@ export class BhApiHttpError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    // Which Brawlhalla source failed, so callers can pause that source while it is unavailable.
+    public readonly domain?: BhApiSourceDomain,
   ) {
     super(message)
     this.name = 'BhApiHttpError'
@@ -271,7 +273,11 @@ export class BhApiClient {
 
     if (!res.ok) {
       logResponse('warn', res.status, 'failed', fetchMs)
-      throw new BhApiHttpError(`Brawlhalla API error: ${res.status} ${res.statusText} for ${endpoint}`, res.status)
+      throw new BhApiHttpError(
+        `Brawlhalla API error: ${res.status} ${res.statusText} for ${endpoint}`,
+        res.status,
+        domain,
+      )
     }
 
     if (fetchMs > 5000) {

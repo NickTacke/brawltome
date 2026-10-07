@@ -131,6 +131,24 @@ export class SourceAdmissionLimitedError extends Error {
   }
 }
 
+// Brawlhalla answers 502/503/504 during maintenance and outages. Find such an error anywhere in the cause chain so
+// the attempt can wait for the source instead of spending retries in seconds and dead-lettering.
+function unavailableSourceDomain(error: unknown): SourceDomain | null {
+  for (let current = error, depth = 0; current && depth < 5; depth++) {
+    if (
+      typeof current === 'object' &&
+      'status' in current &&
+      (current.status === 502 || current.status === 503 || current.status === 504) &&
+      'domain' in current &&
+      (current.domain === 'brawlhalla-v0' || current.domain === 'brawlhalla-v1')
+    ) {
+      return current.domain
+    }
+    current = typeof current === 'object' && 'cause' in current ? current.cause : undefined
+  }
+  return null
+}
+
 function sourceRetryAfterMs(error: unknown): number | null {
   if (error instanceof SourceAdmissionLimitedError) return error.retryAfterSeconds * 1_000
   if (
@@ -1029,6 +1047,22 @@ export async function runOneRefreshOperation(
             : error.code === 'source_rate_limited'
               ? 'source_rate_limited'
               : 'source_unavailable'
+        return true
+      }
+      const unavailableDomain = unavailableSourceDomain(error)
+      if (unavailableDomain) {
+        const retryMs = Math.max(60_000, options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs)
+        // Pausing the source holds every other caller too, instead of each discovering the outage on its own.
+        try {
+          await options.sourceAdmission?.pauseSource(unavailableDomain, Math.ceil(retryMs / 1_000))
+        } catch (pauseError) {
+          record((active) =>
+            active.logger.error('source.backoff.persist_failed', pauseError, { domain: unavailableDomain }),
+          )
+        }
+        const transition = await operations.defer(lease, failureDetails(error, 'source_unavailable'), retryMs)
+        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
+        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_unavailable'
         return true
       }
       if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {
