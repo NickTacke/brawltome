@@ -86,11 +86,12 @@ async function insertVisitorRefresh(
 }
 
 describe('Recently viewed freshness operations', () => {
-  test('counts view demand per player within the window', async () => {
+  test('counts request days per player and the planner attempts within the window', async () => {
     const control = postgres(connectionString, { max: 1 })
     const operations = createPostgresRefreshOperations(connectionString)
     try {
       for (let index = 0; index < 3; index++) await insertVisitorRefresh(control, 10, 1, true)
+      await insertVisitorRefresh(control, 10, 3, true)
       await insertVisitorRefresh(control, 11, 10, true)
       await insertVisitorRefresh(control, 12, 40, true)
       // Overlay lookups and rate-limited or abandoned requests are not profile views.
@@ -103,16 +104,14 @@ describe('Recently viewed freshness operations', () => {
         WHERE provenance->>'source' = 'freshness-planner'
       `
 
-      const viewed = await operations.recentlyViewedPlayers({ windowDays: 30, hotDays: 7 })
-      expect(viewed.sort((left, right) => left.brawlhallaId - right.brawlhallaId)).toEqual([
-        { brawlhallaId: 10, recentViews: 3, views: 3, lastPlannedAt: null, lastFailedAt: null },
-        {
-          brawlhallaId: 11,
-          recentViews: 0,
-          views: 1,
-          lastPlannedAt: expect.any(Date),
-          lastFailedAt: expect.any(Date),
-        },
+      // Distinct days, not request counts: three requests on one day count once.
+      const demand = await operations.refreshRequestDemand({ windowDays: 30 })
+      expect(demand.sort((left, right) => left.brawlhallaId - right.brawlhallaId)).toEqual([
+        { brawlhallaId: 10, viewDays: 2 },
+        { brawlhallaId: 11, viewDays: 1 },
+      ])
+      expect(await operations.recentFreshnessAttempts({ windowDays: 30 })).toEqual([
+        { brawlhallaId: 11, lastPlannedAt: expect.any(Date), lastFailedAt: expect.any(Date) },
       ])
     } finally {
       await Promise.all([control.end(), operations.close()])

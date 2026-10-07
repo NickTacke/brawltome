@@ -1,5 +1,6 @@
 'use client'
 
+import { recordProfileViewAction } from '@/app/player/[id]/actions'
 import { NavBar } from '@/components/NavBar'
 import { TurnstileGate } from '@/components/TurnstileGate'
 import { usePlayerRefresh } from '@/hooks/usePlayerRefresh'
@@ -53,8 +54,8 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const displayPlayer = player
   const firstRenderDataRef = useRef(initialData)
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fires once per player id using the data as first rendered.
   useEffect(() => {
+    void recordProfileViewAction(Number(id))
     const viewedAt = Date.now()
     const sectionAge = (lastSuccessAt: string | null | undefined) =>
       dataAgeBucket(lastSuccessAt ? new Date(lastSuccessAt) : null, viewedAt)

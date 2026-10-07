@@ -178,6 +178,7 @@ export {
   parsePlayerRefreshResponseOutput,
   parseRefreshOutcomeOutput,
   playerRefreshInputSchema,
+  playerViewInputSchema,
   playerRefreshResponseSchema,
   refreshOutcomeSchema,
   type DiscordPlayerRefreshInputContract,

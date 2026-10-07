@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { RecentlyViewedPlayer } from '@brawltome/refresh-operations'
 import {
   createFreshnessPlanner,
   dueRefreshes,
-  freshnessTier,
+  mergeViewDemand,
   readFreshnessPlannerConfig,
 } from '../src/freshness-planner'
 
@@ -13,75 +12,89 @@ const config = readFreshnessPlannerConfig({})
 
 describe('freshness planner', () => {
   test('reads bounded defaults and switches', () => {
-    expect(config).toMatchObject({ enabled: true, maxUsageRatio: 0.5, batch: 4, intervalMs: 30_000 })
-    expect(config.tierIntervalsMs).toEqual({ hot: 4 * hour, warm: 12 * hour, cold: 24 * hour })
+    expect(config).toMatchObject({
+      enabled: true,
+      maxUsageRatio: 0.5,
+      batch: 4,
+      intervalMs: 30_000,
+      windowDays: 14,
+      refreshIntervalMs: 12 * hour,
+    })
     expect(readFreshnessPlannerConfig({ FRESHNESS_PLANNER_ENABLED: 'false' }).enabled).toBe(false)
+    expect(readFreshnessPlannerConfig({ FRESHNESS_REFRESH_HOURS: '24' }).refreshIntervalMs).toBe(24 * hour)
     expect(() => readFreshnessPlannerConfig({ FRESHNESS_PLANNER_ENABLED: 'yes' })).toThrow('FRESHNESS_PLANNER_ENABLED')
     expect(() => readFreshnessPlannerConfig({ FRESHNESS_V0_MAX_USAGE_RATIO: '0.9' })).toThrow(
       'FRESHNESS_V0_MAX_USAGE_RATIO',
     )
+    expect(() => readFreshnessPlannerConfig({ FRESHNESS_WINDOW_DAYS: '31' })).toThrow('FRESHNESS_WINDOW_DAYS')
     expect(() => readFreshnessPlannerConfig({ FRESHNESS_BATCH: '0' })).toThrow('FRESHNESS_BATCH')
   })
 
-  test('tiers players by recent views', () => {
-    expect(freshnessTier({ recentViews: 3 })).toBe('hot')
-    expect(freshnessTier({ recentViews: 1 })).toBe('warm')
-    expect(freshnessTier({ recentViews: 0 })).toBe('cold')
+  test('merges profile views and refresh requests by the larger day count', () => {
+    expect(
+      mergeViewDemand(
+        [
+          { brawlhallaId: 1, viewDays: 3 },
+          { brawlhallaId: 2, viewDays: 1 },
+        ],
+        [
+          { brawlhallaId: 2, viewDays: 2 },
+          { brawlhallaId: 3, viewDays: 1 },
+        ],
+      ).sort((left, right) => left.brawlhallaId - right.brawlhallaId),
+    ).toEqual([
+      { brawlhallaId: 1, viewDays: 3 },
+      { brawlhallaId: 2, viewDays: 2 },
+      { brawlhallaId: 3, viewDays: 1 },
+    ])
   })
 
-  test('keeps only players older than their tier interval, hottest and oldest first', () => {
-    const candidates: RecentlyViewedPlayer[] = [
-      { brawlhallaId: 1, recentViews: 5, views: 5, lastPlannedAt: null, lastFailedAt: null },
-      { brawlhallaId: 2, recentViews: 5, views: 5, lastPlannedAt: null, lastFailedAt: null },
-      { brawlhallaId: 3, recentViews: 1, views: 1, lastPlannedAt: null, lastFailedAt: null },
-      { brawlhallaId: 4, recentViews: 0, views: 2, lastPlannedAt: null, lastFailedAt: null },
-      { brawlhallaId: 5, recentViews: 0, views: 1, lastPlannedAt: null, lastFailedAt: null },
-      { brawlhallaId: 6, recentViews: 1, views: 1, lastPlannedAt: null, lastFailedAt: null },
-    ]
+  test('keeps profiles older than the interval, repeat viewers first and then the oldest data', () => {
     const lastRefreshed = new Map<number, Date | null>([
-      [1, new Date(now - 5 * hour)],
+      [1, new Date(now - 13 * hour)],
       [2, null],
-      [3, new Date(now - 13 * hour)],
-      [4, new Date(now - 23 * hour)],
-      [5, new Date(now - 30 * hour)],
-      [6, new Date(now - 2 * hour)],
+      [3, new Date(now - 20 * hour)],
+      [4, new Date(now - 30 * hour)],
+      [5, new Date(now - 2 * hour)],
     ])
     expect(
-      dueRefreshes({ candidates, lastRefreshed, tierIntervalsMs: config.tierIntervalsMs, now }).map(
-        ({ brawlhallaId, tier }) => [brawlhallaId, tier],
-      ),
+      dueRefreshes({
+        demand: [
+          { brawlhallaId: 1, viewDays: 2 },
+          { brawlhallaId: 2, viewDays: 1 },
+          { brawlhallaId: 3, viewDays: 4 },
+          { brawlhallaId: 4, viewDays: 1 },
+          { brawlhallaId: 5, viewDays: 5 },
+        ],
+        lastRefreshed,
+        attempts: new Map(),
+        refreshIntervalMs: config.refreshIntervalMs,
+        now,
+      }).map(({ brawlhallaId, tier }) => [brawlhallaId, tier]),
     ).toEqual([
-      [2, 'hot'],
-      [1, 'hot'],
-      [3, 'warm'],
-      [5, 'cold'],
+      [3, 'repeat'],
+      [1, 'repeat'],
+      [2, 'single'],
+      [4, 'single'],
     ])
   })
 
   test('backs off players the planner recently tried, and for a week after a dead letter', () => {
-    const candidates: RecentlyViewedPlayer[] = [
-      { brawlhallaId: 1, recentViews: 3, views: 3, lastPlannedAt: new Date(now - 3 * hour), lastFailedAt: null },
-      { brawlhallaId: 2, recentViews: 3, views: 3, lastPlannedAt: new Date(now - 5 * hour), lastFailedAt: null },
-      {
-        brawlhallaId: 3,
-        recentViews: 3,
-        views: 3,
-        lastPlannedAt: new Date(now - 5 * 24 * hour),
-        lastFailedAt: new Date(now - 6 * 24 * hour),
-      },
-      {
-        brawlhallaId: 4,
-        recentViews: 3,
-        views: 3,
-        lastPlannedAt: new Date(now - 8 * 24 * hour),
-        lastFailedAt: new Date(now - 8 * 24 * hour),
-      },
-    ]
-    const lastRefreshed = new Map<number, Date | null>(candidates.map(({ brawlhallaId }) => [brawlhallaId, null]))
+    const demand = [1, 2, 3, 4].map((brawlhallaId) => ({ brawlhallaId, viewDays: 2 }))
+    const attempts = new Map([
+      [1, { lastPlannedAt: new Date(now - 3 * hour), lastFailedAt: null }],
+      [2, { lastPlannedAt: new Date(now - 13 * hour), lastFailedAt: null }],
+      [3, { lastPlannedAt: new Date(now - 5 * 24 * hour), lastFailedAt: new Date(now - 6 * 24 * hour) }],
+      [4, { lastPlannedAt: new Date(now - 8 * 24 * hour), lastFailedAt: new Date(now - 8 * 24 * hour) }],
+    ])
     expect(
-      dueRefreshes({ candidates, lastRefreshed, tierIntervalsMs: config.tierIntervalsMs, now }).map(
-        ({ brawlhallaId }) => brawlhallaId,
-      ),
+      dueRefreshes({
+        demand,
+        lastRefreshed: new Map(demand.map(({ brawlhallaId }) => [brawlhallaId, null])),
+        attempts,
+        refreshIntervalMs: config.refreshIntervalMs,
+        now,
+      }).map(({ brawlhallaId }) => brawlhallaId),
     ).toEqual([2, 4])
   })
 
@@ -92,18 +105,13 @@ describe('freshness planner', () => {
     enqueue?: (ids: readonly number[]) => Promise<number[]>
   }) => {
     const enqueued: number[][] = []
+    let trims = 0
     const instance = createFreshnessPlanner({
       config: { ...config, enabled: overrides.enabled ?? true },
       readSourceUsage: async () => ({ used: overrides.used ?? 10, limit: 180 }),
       operations: {
-        recentlyViewedPlayers: async () =>
-          [1, 2, 3, 4, 5, 6].map((id) => ({
-            brawlhallaId: id,
-            recentViews: 3,
-            views: 3,
-            lastPlannedAt: null,
-            lastFailedAt: null,
-          })),
+        refreshRequestDemand: async () => [5, 6].map((brawlhallaId) => ({ brawlhallaId, viewDays: 1 })),
+        recentFreshnessAttempts: async () => [],
         activeRecentlyViewedRefreshes: async () => overrides.active ?? 0,
         enqueueRecentlyViewedRefreshes:
           overrides.enqueue ??
@@ -112,16 +120,24 @@ describe('freshness planner', () => {
             return [...ids]
           }),
       },
+      profileViews: {
+        viewDemand: async () => [1, 2, 3, 4].map((brawlhallaId) => ({ brawlhallaId, viewDays: 3 })),
+        trim: async () => {
+          trims++
+          return 0
+        },
+      },
       freshness: { lastRefreshedById: async (ids) => new Map(ids.map((id) => [id, null])) },
       now: () => now,
     })
-    return { instance, enqueued }
+    return { instance, enqueued, trims: () => trims }
   }
 
-  test('fills the free slots while the V0 budget is open', async () => {
-    const { instance, enqueued } = planner({ active: 1 })
+  test('fills the free slots from both demand sources while the V0 budget is open', async () => {
+    const { instance, enqueued, trims } = planner({ active: 1 })
     expect(await instance.tick()).toBe(3)
     expect(enqueued).toEqual([[1, 2, 3]])
+    expect(trims()).toBe(1)
     // Throttled until the next interval.
     expect(await instance.tick()).toBe(0)
   })
