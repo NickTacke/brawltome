@@ -5,6 +5,7 @@ LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
       org.opencontainers.image.title="BrawlTome" \
       org.opencontainers.image.url="https://brawltome.app"
 COPY --chmod=0555 infra/app/postgres/10-runtime-role.sh /docker-entrypoint-initdb.d/10-runtime-role.sh
+COPY --chmod=0444 infra/app/postgres/20-pg-stat-statements.sql /docker-entrypoint-initdb.d/20-pg-stat-statements.sql
 # Defaults (128 MB shared_buffers) left a 112 GB database at a ~60% cache hit ratio with 475 GB of temp spills.
 # Sized for the 6 GB container limit in infra/app/compose.yml.
 CMD ["postgres", \
