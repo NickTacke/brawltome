@@ -61,6 +61,20 @@ export async function loadFullLaunchCohortCandidates(
   return snapshots.some((snapshot) => snapshot === null) ? null : (snapshots as CohortCandidateSnapshot[])
 }
 
+// A full candidate load pages through every launch region's 1v1 leaderboard (~900 queries). Reconciliation runs on
+// every worker tick, so read one row per region first and only reload when a new generation could change the cohort.
+async function launchSourceMayHaveChanged(
+  ranking: Pick<RankingQueries, 'getLeaderboard'>,
+  sourceGenerationId: string | undefined,
+): Promise<boolean> {
+  const heads = await Promise.all(
+    launchCohortRegions.map((region) => ranking.getLeaderboard({ mode: '1v1', region, page: 1, pageSize: 1 })),
+  )
+  // Matches the full load: an unavailable region leaves nothing to reconcile.
+  if (heads.some((head) => head.status === 'unavailable')) return false
+  return heads.some((head) => head.status !== 'unavailable' && head.generationId !== sourceGenerationId)
+}
+
 export async function reconcileStatisticsCohort(
   statistics: StatisticsTracer,
   operations: StatisticsOperations,
@@ -70,7 +84,10 @@ export async function reconcileStatisticsCohort(
   const state = await statistics.reconciliationState()
   let launchState = state.launch
   const needsLaunchSnapshot = !launchState || launchState.decisionCount === 2
-  if (!state.legacyCohortExists || needsLaunchSnapshot) {
+  if (
+    !state.legacyCohortExists ||
+    (needsLaunchSnapshot && (await launchSourceMayHaveChanged(ranking, launchState?.sourceGenerationId)))
+  ) {
     const candidates = await Promise.all(
       launchCohortRegions.map((region) => loadLaunchCohortCandidates(ranking, region)),
     )
