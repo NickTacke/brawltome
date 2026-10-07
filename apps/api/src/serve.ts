@@ -7,8 +7,8 @@ import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
-  createPostgresProfileViews,
   createPostgresLeaderboardRanked,
+  createPostgresProfileViews,
   createPostgresRankedPlayers,
 } from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
