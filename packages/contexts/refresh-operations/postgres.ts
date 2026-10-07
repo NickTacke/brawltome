@@ -25,6 +25,7 @@ import {
   type OperationFailure,
   type OperationLease,
   type PrimaryMonitoringSnapshot,
+  type RecentlyViewedPlayer,
   type ReconcilePrimaryMonitoringResult,
   type ReserveInteractiveRefreshResult,
   type ReserveStatisticsCollection,
@@ -36,9 +37,11 @@ import {
   admissionRejectionCodes,
   backgroundWorkClasses,
   discoveryProjectionKinds,
+  freshnessPlannerSource,
   interactiveRefreshMaxAttempts,
   leaderboardOperationKinds,
   primaryMonitoringIntervalMs,
+  recentlyViewedCohort,
   statisticsCollectionKinds,
   validateAdmissionConfig,
   validateLeaderboardOperationPayload,
@@ -180,8 +183,13 @@ function toLease(row: OperationRow): OperationLease {
       throw new Error('invalid durable player refresh operation')
     }
     if (row.work_class === 'primary-monitoring') {
-      if (!('assignmentId' in row.payload)) throw new Error('invalid durable Primary monitoring operation')
-      return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+      if ('assignmentId' in row.payload) {
+        return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+      }
+      if ('cohort' in row.payload && row.payload.cohort === recentlyViewedCohort) {
+        return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+      }
+      throw new Error('invalid durable Primary monitoring operation')
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
@@ -1006,6 +1014,61 @@ export function createPostgresRefreshOperations(
           ? ('transitioned' as const)
           : ('lease-lost' as const)
       })
+    },
+
+    // Players people opened recently. A page view only records a refresh request when it found stale data, which is
+    // every view outside a refresh window, so request counts are the view demand signal.
+    async recentlyViewedPlayers(input: { windowDays: number; hotDays: number }): Promise<RecentlyViewedPlayer[]> {
+      const rows = await client<{ brawlhalla_id: number; recent_views: number; views: number }[]>`
+        SELECT (payload->>'brawlhallaId')::integer AS brawlhalla_id,
+               (count(*) FILTER (
+                 WHERE created_at > clock_timestamp() - make_interval(days => ${input.hotDays})
+               ))::integer AS recent_views,
+               count(*)::integer AS views
+        FROM refresh_operations.operations
+        WHERE kind = 'interactive-player-refresh' AND work_class = 'interactive'
+          AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
+        GROUP BY 1
+      `
+      return rows.map((row) => ({ brawlhallaId: row.brawlhalla_id, recentViews: row.recent_views, views: row.views }))
+    },
+
+    async activeRecentlyViewedRefreshes(): Promise<number> {
+      const [row] = await client<{ count: number }[]>`
+        SELECT count(*)::integer AS count
+        FROM refresh_operations.operations
+        WHERE kind = 'interactive-player-refresh' AND work_class = 'primary-monitoring'
+          AND payload->>'cohort' = ${recentlyViewedCohort}
+          AND status IN ('awaiting_admission', 'pending', 'leased')
+      `
+      return row.count
+    },
+
+    // Enqueues background refreshes and returns the players it enqueued. A player with any active refresh (a
+    // visitor's included) is skipped: the active-resource index allows one at a time.
+    async enqueueRecentlyViewedRefreshes(brawlhallaIds: readonly number[]): Promise<number[]> {
+      const enqueued: number[] = []
+      for (const brawlhallaId of brawlhallaIds) {
+        if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
+          throw new Error('recently viewed refresh brawlhallaId must be a positive 32-bit integer')
+        }
+        const operationId = randomUUID()
+        const inserted = await client<{ id: string }[]>`
+          INSERT INTO refresh_operations.operations
+            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
+          VALUES
+            (${operationId}, ${operationId}, 'interactive-player-refresh', ${`freshness:${brawlhallaId}`},
+             ${`freshness:${brawlhallaId}:${operationId}`}, 'primary-monitoring',
+             ${client.json({ cohort: recentlyViewedCohort, brawlhallaId, staleSections: ['ranked', 'stats'] })},
+             ${client.json({ source: freshnessPlannerSource })}, ${interactiveRefreshMaxAttempts})
+          ON CONFLICT DO NOTHING
+          RETURNING id
+        `
+        if (!inserted[0]) continue
+        await client`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+        enqueued.push(brawlhallaId)
+      }
+      return enqueued
     },
 
     async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
