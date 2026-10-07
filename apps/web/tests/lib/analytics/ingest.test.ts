@@ -31,6 +31,28 @@ function setup(now = Date.parse('2026-10-05T23:59:59Z')) {
 }
 
 describe('ingestBatch', () => {
+  test('counts the age of each profile section on first paint', () => {
+    const { telemetry, salt, limiter, ipLimiter } = setup()
+    ingestBatch(
+      {
+        body: {
+          events: [
+            { ...base, name: 'profile.viewed', dataAge: '12h_7d', rankedAge: 'lt_1h', statsAge: '12h_7d' },
+            { ...base, name: 'profile.viewed', dataAge: 'never' },
+          ],
+        },
+        ip: '1.1.1.1',
+        userAgent: 'a',
+      },
+      { telemetry, salt, limiter, ipLimiter },
+    )
+    const sections = telemetry.metrics.snapshot().find(({ name }) => name === 'analytics_profile_section_age_total')
+    expect(sections?.series.map(({ labels, value }) => ({ ...labels, value }))).toEqual([
+      { section: 'ranked', data_age: 'lt_1h', value: 1 },
+      { section: 'stats', data_age: '12h_7d', value: 1 },
+    ])
+  })
+
   test('records metrics and scrubbed logs without ip or user agent', async () => {
     const { sink, telemetry, salt, limiter, ipLimiter } = setup()
     ingestBatch(

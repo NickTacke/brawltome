@@ -12,6 +12,7 @@ import {
   createPostgresLeaderboardPlayerNames,
   createPostgresLeaderboardRanked,
   createPostgresPlayerDiscoverySource,
+  createPostgresPlayerFreshness,
   createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
   createSteamPlayerEvidenceResolver,
@@ -28,6 +29,7 @@ import { serve } from 'bun'
 import { Hono } from 'hono'
 import { internalSecretValid } from './auth/internal-secret'
 import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation-backoff'
+import { createFreshnessPlanner, readFreshnessPlannerConfig } from './freshness-planner'
 import { createHealthRoutes } from './health-routes'
 import {
   leaderboardScheduleDefinitions,
@@ -116,6 +118,7 @@ const statistics = createPostgresStatistics(connectionString)
 const careerPlayers = createPostgresCareerPlayers(connectionString)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
 const leaderboardRanked = createPostgresLeaderboardRanked(connectionString)
+const playerFreshness = createPostgresPlayerFreshness(connectionString)
 const playerNameVerifications = createPostgresPlayerNameVerifications(connectionString)
 const rankedPlayers = createPostgresRankedPlayers(connectionString, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
@@ -151,6 +154,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'players-career-postgres', close: careerPlayers.close },
     { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
     { name: 'players-leaderboard-ranked-postgres', close: leaderboardRanked.close },
+    { name: 'players-freshness-postgres', close: playerFreshness.close },
     { name: 'players-name-verifications-postgres', close: playerNameVerifications.close },
     { name: 'operations-postgres', close: operations.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -221,6 +225,13 @@ const nameVerificationPlanner = createPlayerNameVerificationPlanner({
   readDemandIds: accounts.demand.readPlayerIds,
   verifications: playerNameVerifications,
   operations,
+  telemetry,
+})
+const freshnessPlanner = createFreshnessPlanner({
+  config: readFreshnessPlannerConfig(process.env),
+  readSourceUsage: readV0SourceUsage,
+  operations,
+  freshness: playerFreshness,
   telemetry,
 })
 const executePlayerNameVerification = createPlayerNameVerificationExecutor({
@@ -296,7 +307,8 @@ try {
       }
       const reconciledStatistics =
         (await reconcileStatisticsCohort(statistics, operations, ranking.queries)) +
-        (await nameVerificationPlanner.tick())
+        (await nameVerificationPlanner.tick()) +
+        (await freshnessPlanner.tick())
       if (leaderboardSchedulesReconciled) {
         return (
           interactiveAdmissions +
@@ -411,12 +423,11 @@ try {
         },
         executeSection: async (lease, section, admitSourceCall, caller) => {
           const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
-            if (lease.workClass === 'primary-monitoring') {
+            if (lease.workClass === 'primary-monitoring' && 'assignmentId' in lease.payload) {
+              const { assignmentId } = lease.payload
               const snapshot = await accounts.primaryMonitoring.readSnapshot()
               const current = snapshot.targets.some(
-                (target) =>
-                  target.assignmentId === lease.payload.assignmentId &&
-                  target.brawlhallaId === lease.payload.brawlhallaId,
+                (target) => target.assignmentId === assignmentId && target.brawlhallaId === lease.payload.brawlhallaId,
               )
               if (!current) throw new Error('Primary Player assignment is no longer current')
             }

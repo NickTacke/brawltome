@@ -66,7 +66,7 @@ type RunOneRefreshOperationOptions = {
     lease: NameVerificationLease,
     admitSourceCall: (domain: SourceDomain) => Promise<void>,
   ): Promise<unknown>
-  isPrimaryMonitoringTarget?(lease: Extract<PlayerLease, { workClass: 'primary-monitoring' }>): Promise<boolean>
+  isPrimaryMonitoringTarget?(lease: AccountPrimaryLease): Promise<boolean>
   executeClanSection?(
     lease: ClanLease,
     section: 'profile' | 'roster',
@@ -305,6 +305,16 @@ function createSourceAdmission(
   }
 }
 
+type AccountPrimaryLease = Extract<PlayerLease, { workClass: 'primary-monitoring'; payload: { assignmentId: string } }>
+
+function isAccountPrimaryLease(lease: InteractiveLease): lease is AccountPrimaryLease {
+  return (
+    lease.kind === 'interactive-player-refresh' &&
+    lease.workClass === 'primary-monitoring' &&
+    'assignmentId' in lease.payload
+  )
+}
+
 async function executeInteractive(
   operations: RefreshOperationWorker,
   lease: InteractiveLease,
@@ -317,7 +327,8 @@ async function executeInteractive(
 
   for (const section of lease.payload.staleSections as InteractiveSection[]) {
     if (authorityLost.signal.aborted) return 'lease_lost'
-    if (lease.kind === 'interactive-player-refresh' && lease.workClass === 'primary-monitoring') {
+    // Account Primary refreshes stop once their assignment ends; recently viewed refreshes belong to no account.
+    if (isAccountPrimaryLease(lease)) {
       if (!options.isPrimaryMonitoringTarget) throw new Error('Primary monitoring eligibility is unavailable')
       if (!(await options.isPrimaryMonitoringTarget(lease))) {
         return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'

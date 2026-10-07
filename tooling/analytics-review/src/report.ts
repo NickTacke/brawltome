@@ -75,6 +75,9 @@ export function buildReport(data: ReviewData, meta: { days: number; end: Date })
     )}`,
     `## Fresh\n\n${metricTable([
       ['Stale profile views (12h+ old)', data.staleProfileShare, pct, ratioDelta],
+      ['Stale ranked section (12h+ old)', data.staleRankedShare, pct, ratioDelta],
+      ['Stale stats section (12h+ old)', data.staleStatsShare, pct, ratioDelta],
+      ['Background refreshes', data.backgroundRefreshes, num, countDelta],
       ['Refresh wait p95', data.refreshWaitP95Ms, ms, countDelta],
       ['Abandoned refresh rate', data.abandonedRefreshRate, pct, ratioDelta],
     ])}`,

@@ -55,9 +55,14 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: fires once per player id using the data as first rendered.
   useEffect(() => {
+    const viewedAt = Date.now()
+    const sectionAge = (lastSuccessAt: string | null | undefined) =>
+      dataAgeBucket(lastSuccessAt ? new Date(lastSuccessAt) : null, viewedAt)
     track({
       name: 'profile.viewed',
-      dataAge: dataAgeBucket(getPlayerDataUpdatedAt(firstRenderDataRef.current), Date.now()),
+      dataAge: dataAgeBucket(getPlayerDataUpdatedAt(firstRenderDataRef.current), viewedAt),
+      rankedAge: sectionAge(firstRenderDataRef.current?.currentSeason?.lastSuccessAt),
+      statsAge: sectionAge(firstRenderDataRef.current?.career?.lastSuccessAt),
     })
   }, [id])
   const brawlhallaId = Number(id)

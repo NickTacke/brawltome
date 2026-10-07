@@ -395,6 +395,20 @@ type LeaseFields = {
   scheduleWindowAt: string | null
 }
 
+// Background refreshes that keep recently viewed players fresh; they share the primary-monitoring work class but
+// belong to no account assignment.
+export const recentlyViewedCohort = 'recently-viewed' as const
+export const freshnessPlannerSource = 'freshness-planner' as const
+
+export type RecentlyViewedPlayer = {
+  brawlhallaId: number
+  recentViews: number
+  views: number
+  // The planner's own last background refresh for the player and its last dead-lettered one, if any.
+  lastPlannedAt: Date | null
+  lastFailedAt: Date | null
+}
+
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
   | (LeaseFields & {
@@ -407,6 +421,15 @@ export type OperationLease =
       workClass: 'primary-monitoring'
       payload: {
         assignmentId: string
+        brawlhallaId: number
+        staleSections: ['ranked', 'stats']
+      }
+    })
+  | (LeaseFields & {
+      kind: 'interactive-player-refresh'
+      workClass: 'primary-monitoring'
+      payload: {
+        cohort: typeof recentlyViewedCohort
         brawlhallaId: number
         staleSections: ['ranked', 'stats']
       }

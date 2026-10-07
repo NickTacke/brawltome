@@ -1161,11 +1161,12 @@ describe('Ranking snapshot retention', () => {
     url.pathname = `/${name}`
     const sql = postgres(url.toString(), { max: 2, onnotice: () => undefined })
     try {
-      const validation = refreshOperationsMigrationInventory.at(-1)
-      const widening = refreshOperationsMigrationInventory.at(-2)
-      expect(widening?.identity).toBe('refresh-operations/0018')
-      expect(validation?.identity).toBe('refresh-operations/0019')
-      for (const migration of refreshOperationsMigrationInventory.slice(0, -1)) {
+      const validationIndex = refreshOperationsMigrationInventory.findIndex(
+        ({ identity }) => identity === 'refresh-operations/0019',
+      )
+      const validation = refreshOperationsMigrationInventory[validationIndex]
+      expect(refreshOperationsMigrationInventory[validationIndex - 1]?.identity).toBe('refresh-operations/0018')
+      for (const migration of refreshOperationsMigrationInventory.slice(0, validationIndex)) {
         await sql.begin((transaction) => transaction.unsafe(migration.sql))
       }
       const constraints = async () =>
