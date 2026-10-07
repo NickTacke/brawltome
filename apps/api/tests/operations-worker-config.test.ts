@@ -79,7 +79,7 @@ describe('operations worker configuration', () => {
         enabled: true,
         intervalMs: 60 * 60 * 1000,
         firstDueAt: '2026-10-07T19:30:00.000Z',
-        pageDelayMs: 400,
+        pageDelayMs: 150,
       },
       admission: {
         totalConcurrency: 8,

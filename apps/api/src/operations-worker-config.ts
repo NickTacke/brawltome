@@ -142,7 +142,8 @@ export type LeaderboardDeepCrawlConfig = {
   enabled: boolean
   intervalMs: number
   firstDueAt: string
-  // Pause after each page: caps the crawl's V1 rate (~2.5 pages/s at 400 ms) well under the 1800-per-5-minute limit.
+  // Pause after each page. Pages took ~0.33 s unpaced in production, so 150 ms gives ~2 pages/s: a full 1v1 pass
+  // (~5,600 pages) in ~45 minutes at roughly 600 V1 calls per 5 minutes, well under the 1800 limit.
   pageDelayMs: number
 }
 
@@ -359,7 +360,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       ),
       // Hourly windows start after the first 3-hour pass; regions then stay staggered across the hour.
       firstDueAt: '2026-10-07T19:30:00.000Z',
-      pageDelayMs: boundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, 400, 'DEEP_CRAWL_PAGE_DELAY_MS', 0, 5_000),
+      pageDelayMs: boundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, 150, 'DEEP_CRAWL_PAGE_DELAY_MS', 0, 5_000),
     } satisfies LeaderboardDeepCrawlConfig,
     admission: validateAdmissionConfig(admission),
   }
