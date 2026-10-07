@@ -559,8 +559,23 @@ describe('Ranking snapshot retention', () => {
       `
       expect(definition?.config).toContain('enable_indexscan=off')
       expect(definition?.config).toContain('enable_seqscan=off')
+      expect(definition?.config).toContain('jit=off')
       expect(definition?.config).toContain('search_path=pg_catalog, pg_temp')
       expect(definition?.config).toContain('lock_timeout=5s')
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('checks snapshot row immutability once per statement', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const [trigger] = await sql<{ rowLevel: boolean }[]>`
+        SELECT (tgtype & 1) = 1 AS "rowLevel"
+        FROM pg_trigger
+        WHERE tgrelid = 'rankings.snapshot_rows'::regclass AND tgname = 'snapshot_rows_are_immutable'
+      `
+      expect(trigger?.rowLevel).toBe(false)
     } finally {
       await sql.end()
     }
