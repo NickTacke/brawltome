@@ -17,7 +17,6 @@ import type { PlayerData } from '../shared'
 import { LookupState } from './LookupState'
 import { PinnedPlayerButton } from './PinnedPlayerButton'
 import { PlayerProfileHierarchy } from './PlayerProfileHierarchy'
-import { RefreshStatusBanner } from './RefreshStatusBanner'
 import { hasPinnedPlayerLimitReached, shouldShowPinnedPlayerButton } from './player-profile-state'
 
 interface PlayerProfileProps {
@@ -168,7 +167,6 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         </p>
       )}
       {turnstile}
-      {refreshNotice && <RefreshStatusBanner notice={refreshNotice} onAction={retryWithTracking} />}
       <PlayerProfileHierarchy
         player={displayPlayer}
         refreshing={isRefreshing}
