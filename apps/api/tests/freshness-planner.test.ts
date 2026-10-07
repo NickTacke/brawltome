@@ -79,6 +79,38 @@ describe('freshness planner', () => {
     ])
   })
 
+  test('puts players who played ranked since their last refresh ahead of inactive ones', () => {
+    const demand = [1, 2, 3, 4].map((brawlhallaId) => ({ brawlhallaId, viewDays: 1 }))
+    const lastRefreshed = new Map<number, Date | null>([
+      [1, new Date(now - 40 * hour)],
+      [2, new Date(now - 20 * hour)],
+      [3, new Date(now - 30 * hour)],
+      [4, null],
+    ])
+    const lastPlayed = new Map<number, Date>([
+      // Played after the last refresh: active.
+      [2, new Date(now - 2 * hour)],
+      // Played before the last refresh: nothing new.
+      [3, new Date(now - 35 * hour)],
+      // Never refreshed but seen on the leaderboard: active.
+      [4, new Date(now - 50 * hour)],
+    ])
+    const due = dueRefreshes({
+      demand,
+      lastRefreshed,
+      lastPlayed,
+      attempts: new Map(),
+      refreshIntervalMs: config.refreshIntervalMs,
+      now,
+    })
+    expect(due.map(({ brawlhallaId, active }) => [brawlhallaId, active])).toEqual([
+      [4, true],
+      [2, true],
+      [1, false],
+      [3, false],
+    ])
+  })
+
   test('backs off players the planner recently tried, and for a week after a dead letter', () => {
     const demand = [1, 2, 3, 4].map((brawlhallaId) => ({ brawlhallaId, viewDays: 2 }))
     const attempts = new Map([
