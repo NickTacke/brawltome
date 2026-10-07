@@ -7,6 +7,7 @@ import { supportCouchLeaderboardTeams } from './migrations/0006-support-couch-te
 import { allowEmptyRegionalLeaderboardSnapshots } from './migrations/0007-allow-empty-regional-snapshots'
 import { dropRedundantSnapshotRowIndexes } from './migrations/0008-drop-redundant-snapshot-row-indexes'
 import { expireV1RankingGenerations } from './migrations/0009-expire-v1-generations'
+import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete'
 
 export {
   LeaderboardCandidateError,
@@ -49,4 +50,5 @@ export const rankingMigrationInventory = [
   allowEmptyRegionalLeaderboardSnapshots,
   dropRedundantSnapshotRowIndexes,
   expireV1RankingGenerations,
+  bitmapRetentionDelete,
 ] as const
