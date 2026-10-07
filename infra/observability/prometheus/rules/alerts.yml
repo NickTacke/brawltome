@@ -107,7 +107,8 @@ groups:
           description: "The five-minute HTTP p95 has exceeded the launch threshold."
 
       - alert: HttpErrorRateHigh
-        expr: sum by (runtime) (rate(http_server_requests_total{status_class="5xx"}[5m])) / clamp_min(sum by (runtime) (rate(http_server_requests_total[5m])), 0.001) > 0.01
+        # Health probes are excluded: readiness answers 503 by design while a runtime starts or drains during deploys.
+        expr: sum by (runtime) (rate(http_server_requests_total{status_class="5xx",route!~"health_.*"}[5m])) / clamp_min(sum by (runtime) (rate(http_server_requests_total{route!~"health_.*"}[5m])), 0.001) > 0.01
         for: 5m
         labels:
           severity: critical

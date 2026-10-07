@@ -12,10 +12,18 @@ import { webOtlpHeaders, webTelemetry, webTraceSampleRate } from './web-telemetr
 const NEXT_REQUEST_SPAN = 'BaseServer.handleRequest'
 const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'])
 
-type WebRoute = 'metrics' | 'api' | 'web'
+type WebRoute = 'metrics' | 'health_live' | 'health_ready' | 'health_serving' | 'api' | 'web'
+
+// Health probes get their own labels so alerts can leave out readiness 503s answered while starting or draining.
+const healthRoutes: Record<string, WebRoute> = {
+  '/api/health/live': 'health_live',
+  '/api/health/ready': 'health_ready',
+  '/api/health/serving': 'health_serving',
+}
 
 function normalizeNextRoute(value: unknown): WebRoute {
   if (value === '/api/metrics') return 'metrics'
+  if (typeof value === 'string' && healthRoutes[value]) return healthRoutes[value]
   if (typeof value === 'string' && value.startsWith('/api/')) return 'api'
   return 'web'
 }

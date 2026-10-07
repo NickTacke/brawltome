@@ -29,6 +29,16 @@ describe('web production telemetry registry', () => {
         },
       })
       span.end()
+      const drainingProbe = provider.getTracer('next-server').startSpan('GET /api/health/serving', {
+        kind: SpanKind.SERVER,
+        attributes: {
+          'next.span_type': 'BaseServer.handleRequest',
+          'next.route': '/api/health/serving',
+          'http.method': 'GET',
+          'http.status_code': 503,
+        },
+      })
+      drainingProbe.end()
 
       const { GET } = await import('../../src/app/api/metrics/route')
       const unauthorized = await GET(new Request('http://web/api/metrics'))
@@ -52,6 +62,10 @@ describe('web production telemetry registry', () => {
       )
       expect(output).toContain(
         'http_server_duration_ms_count{method="GET",route="web",runtime="web",status_class="2xx"} 1',
+      )
+      // Readiness probes are labelled apart so HttpErrorRateHigh can leave out deploy-time 503s.
+      expect(output).toContain(
+        'http_server_requests_total{method="GET",route="health_serving",runtime="web",status_class="5xx"} 1',
       )
       await provider.shutdown()
     } finally {
