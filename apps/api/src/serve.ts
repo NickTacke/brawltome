@@ -37,7 +37,7 @@ import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
-import { readRuntimeConfig } from './runtime-config'
+import { readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { createRuntimeTelemetry } from './telemetry'
 
@@ -61,6 +61,7 @@ if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimi
 
 const telemetry = createRuntimeTelemetry('api')
 const runtimeConfig = readRuntimeConfig(process.env)
+const shutdownAnnounceMs = readShutdownAnnounceMs(process.env.RUNTIME_SHUTDOWN_ANNOUNCE_MS)
 const accountsRuntime = createPostgresAccounts(databaseUrl)
 const { accounts } = accountsRuntime
 const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
@@ -323,11 +324,15 @@ let shutdownRequested = false
 function requestShutdown(): void {
   if (shutdownRequested) return
   shutdownRequested = true
-  lifecycle.beginShutdown()
-  void lifecycle.shutdown().then(({ drained, cleanupCompleted, errors }) => {
-    if (!drained || !cleanupCompleted) process.exit(1)
-    if (errors.length > 0) process.exitCode = 1
-  })
+  // Keep serving while /health/serving reports draining, so Traefik stops routing here before admission stops.
+  lifecycle.announceShutdown()
+  setTimeout(() => {
+    lifecycle.beginShutdown()
+    void lifecycle.shutdown().then(({ drained, cleanupCompleted, errors }) => {
+      if (!drained || !cleanupCompleted) process.exit(1)
+      if (errors.length > 0) process.exitCode = 1
+    })
+  }, shutdownAnnounceMs)
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 

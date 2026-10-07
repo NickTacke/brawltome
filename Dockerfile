@@ -118,6 +118,7 @@ COPY --from=web-build --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=web-build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=web-build --chown=node:node /app/apps/web/public ./apps/web/public
 COPY --from=web-build --chown=node:node /app/infra/app/run-with-secrets.sh ./infra/app/run-with-secrets.sh
+COPY --from=web-build --chown=node:node /app/infra/app/web-server.cjs ./infra/app/web-server.cjs
 USER node
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
