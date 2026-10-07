@@ -25,6 +25,19 @@ export function createPostgresPlayerFreshness(connectionString: string) {
       return refreshed
     },
 
+    // When each player's 1v1 leaderboard standing last changed: a ranked game played. Players never seen on the
+    // leaderboard are absent.
+    async lastPlayedById(brawlhallaIds: readonly number[]): Promise<Map<number, Date>> {
+      const ids = [...new Set(brawlhallaIds)]
+      if (ids.length === 0) return new Map()
+      const rows = await client<{ brawlhalla_id: number; observed_at: Date }[]>`
+        SELECT brawlhalla_id, observed_at
+        FROM players.leaderboard_ranked_observations
+        WHERE brawlhalla_id = ANY(${ids}::integer[])
+      `
+      return new Map(rows.map((row) => [row.brawlhalla_id, row.observed_at]))
+    },
+
     close: () => client.end(),
   }
 }

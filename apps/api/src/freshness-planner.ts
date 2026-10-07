@@ -57,14 +57,18 @@ export function mergeViewDemand(...sources: ReadonlyArray<readonly ViewDemand[]>
   return [...merged].map(([brawlhallaId, viewDays]) => ({ brawlhallaId, viewDays }))
 }
 
-export type DueRefresh = { brawlhallaId: number; tier: FreshnessTier; refreshedAt: Date | null }
+// active: the player's leaderboard standing changed since their last full refresh, so their legend, team and career
+// numbers have likely moved too.
+export type DueRefresh = { brawlhallaId: number; tier: FreshnessTier; refreshedAt: Date | null; active: boolean }
 
-// Players whose full profile is older than the refresh interval, repeat viewers first and then the oldest data.
+// Players whose full profile is older than the refresh interval: repeat viewers first, then players who played ranked
+// since their last refresh, then the oldest data.
 // One planner attempt per interval and a week's rest after a dead letter keep a player whose V0 refresh keeps failing
 // from holding the slots, spending the budget, or paging every interval.
 export function dueRefreshes(input: {
   demand: readonly ViewDemand[]
   lastRefreshed: ReadonlyMap<number, Date | null>
+  lastPlayed?: ReadonlyMap<number, Date>
   attempts: ReadonlyMap<number, Pick<FreshnessAttempt, 'lastPlannedAt' | 'lastFailedAt'>>
   refreshIntervalMs: number
   now: number
@@ -76,11 +80,14 @@ export function dueRefreshes(input: {
     const attempt = input.attempts.get(brawlhallaId)
     if (attempt?.lastPlannedAt && input.now - attempt.lastPlannedAt.getTime() <= input.refreshIntervalMs) continue
     if (attempt?.lastFailedAt && input.now - attempt.lastFailedAt.getTime() <= failedBackoffMs) continue
-    due.push({ brawlhallaId, tier: viewDays >= 2 ? 'repeat' : 'single', refreshedAt })
+    const lastPlayed = input.lastPlayed?.get(brawlhallaId)
+    const active = lastPlayed !== undefined && (!refreshedAt || lastPlayed.getTime() > refreshedAt.getTime())
+    due.push({ brawlhallaId, tier: viewDays >= 2 ? 'repeat' : 'single', refreshedAt, active })
   }
   return due.sort(
     (left, right) =>
       Number(left.tier === 'single') - Number(right.tier === 'single') ||
+      Number(right.active) - Number(left.active) ||
       (left.refreshedAt?.getTime() ?? 0) - (right.refreshedAt?.getTime() ?? 0) ||
       left.brawlhallaId - right.brawlhallaId,
   )
@@ -99,7 +106,10 @@ export function createFreshnessPlanner(deps: {
     viewDemand(input: { days: number }): Promise<ViewDemand[]>
     trim(input: { keepDays: number }): Promise<number>
   }
-  freshness: { lastRefreshedById(brawlhallaIds: readonly number[]): Promise<Map<number, Date | null>> }
+  freshness: {
+    lastRefreshedById(brawlhallaIds: readonly number[]): Promise<Map<number, Date | null>>
+    lastPlayedById?(brawlhallaIds: readonly number[]): Promise<Map<number, Date>>
+  }
   telemetry?: Telemetry
   now?: () => number
 }) {
@@ -139,9 +149,15 @@ export function createFreshnessPlanner(deps: {
       deps.operations.recentFreshnessAttempts(window),
     ])
     const demand = mergeViewDemand(views, requests)
+    const ids = demand.map(({ brawlhallaId }) => brawlhallaId)
+    const [lastRefreshed, lastPlayed] = await Promise.all([
+      deps.freshness.lastRefreshedById(ids),
+      deps.freshness.lastPlayedById?.(ids),
+    ])
     const due = dueRefreshes({
       demand,
-      lastRefreshed: await deps.freshness.lastRefreshedById(demand.map(({ brawlhallaId }) => brawlhallaId)),
+      lastRefreshed,
+      lastPlayed,
       attempts: new Map(attempts.map((attempt) => [attempt.brawlhallaId, attempt])),
       refreshIntervalMs: deps.config.refreshIntervalMs,
       now: now(),
@@ -166,6 +182,7 @@ export function createFreshnessPlanner(deps: {
       active.logger.info('freshness_planner.planned', {
         demand: demand.length,
         due: due.length,
+        dueActive: due.filter((entry) => entry.active).length,
         enqueued: enqueued.size,
         sourceUsed: usage.used,
       })
