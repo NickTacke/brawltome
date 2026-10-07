@@ -122,4 +122,31 @@ describe('Clans discovery fact source', () => {
       await Promise.all([clans.close(), source.close(), control.end()])
     }
   })
+
+  test('trims day-old delivered events on acknowledgement and keeps recent and pending ones', async () => {
+    const clans = createPostgresClans(connectionString)
+    const source = createPostgresClanDiscoverySource(connectionString)
+    const control = postgres(connectionString)
+    try {
+      await control`DELETE FROM clans.discovery_outbox`
+      await clans.publishProfile(profile(501, 'Trim One', '1'), new Date('2024-02-01T00:00:00.000Z'), provenance)
+      await clans.publishProfile(profile(502, 'Trim Two', '1'), new Date('2024-02-01T00:00:00.000Z'), provenance)
+      const [stale, recent] = await source.pendingEvents(100)
+      await source.acknowledgeEvents([stale.eventId, recent.eventId])
+      await control`
+        UPDATE clans.discovery_outbox SET delivered_at = clock_timestamp() - interval '25 hours'
+        WHERE event_id = ${stale.eventId}
+      `
+      await clans.publishProfile(profile(503, 'Trim Three', '1'), new Date('2024-02-01T00:00:00.000Z'), provenance)
+      const [pending] = await source.pendingEvents(100)
+
+      await source.acknowledgeEvents(['00000000-0000-4000-8000-000000000000'])
+
+      const remaining = await control<{ event_id: string }[]>`SELECT event_id FROM clans.discovery_outbox`
+      expect(new Set(remaining.map(({ event_id }) => event_id))).toEqual(new Set([recent.eventId, pending.eventId]))
+      expect(await source.lag()).toBe(1)
+    } finally {
+      await Promise.all([clans.close(), source.close(), control.end()])
+    }
+  })
 })
