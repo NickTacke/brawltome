@@ -50,6 +50,13 @@ type ProfileRow = {
   pulse_effect_created_at: string | null
   pulse_effect_operation_id: string | null
   pulse_checked_at: Date | null
+  observation_region: string | null
+  observation_rating: number | null
+  observation_peak_rating: number | null
+  observation_tier: string | null
+  observation_wins: number | null
+  observation_games: number | null
+  observation_observed_at: Date | null
   pulse_last_success_at: Date | null
 }
 
@@ -135,6 +142,35 @@ function effectiveValues(row: ValuesRow & PulseValuesRow, canonicalOrder: Update
     tier: row.tier,
     wins: row.pulse_wins ?? row.wins,
     games: row.pulse_games ?? row.games,
+  }
+}
+
+// The leaderboard re-observes ranked 1v1 standings every scan, so a player's numbers can be newer there than in the
+// last V0 refresh. Only those numbers move; ranks, legends, and teams stay with the V0 snapshot they came from.
+function withLeaderboardObservation(
+  profile: ProfileRow,
+  current: ReturnType<typeof values> & { region: string },
+): ReturnType<typeof values> & { region: string } {
+  const observedAt = profile.observation_observed_at
+  if (
+    !observedAt ||
+    profile.observation_rating === null ||
+    profile.observation_peak_rating === null ||
+    profile.observation_wins === null ||
+    profile.observation_games === null ||
+    !profile.observation_region
+  ) {
+    return current
+  }
+  const refreshedAt = Math.max(profile.last_success_at?.getTime() ?? 0, profile.pulse_last_success_at?.getTime() ?? 0)
+  if (observedAt.getTime() <= refreshedAt) return current
+  return {
+    rating: profile.observation_rating,
+    peakRating: profile.observation_peak_rating,
+    tier: profile.observation_tier ?? current.tier,
+    wins: profile.observation_wins,
+    games: profile.observation_games,
+    region: profile.observation_region,
   }
 }
 
@@ -226,9 +262,14 @@ export function createPostgresRankedPlayers(
                pulse.last_success_at AS pulse_last_success_at,
                to_char(pulse.one_vs_one_effect_created_at AT TIME ZONE 'UTC',
                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS pulse_effect_created_at,
-               pulse.one_vs_one_effect_operation_id AS pulse_effect_operation_id
+               pulse.one_vs_one_effect_operation_id AS pulse_effect_operation_id,
+               observation.region AS observation_region, observation.rating AS observation_rating,
+               observation.peak_rating AS observation_peak_rating, observation.tier AS observation_tier,
+               observation.wins AS observation_wins, observation.games AS observation_games,
+               observation.observed_at AS observation_observed_at
         FROM players.ranked_profiles profile
         LEFT JOIN players.ranked_v1_pulse_state pulse USING (brawlhalla_id)
+        LEFT JOIN players.leaderboard_ranked_observations observation USING (brawlhalla_id)
         WHERE profile.brawlhalla_id = ${brawlhallaId}
       `
         if (!profile) return null
@@ -311,7 +352,10 @@ export function createPostgresRankedPlayers(
           createdAt: profile.v0_effect_created_at,
           operationId: profile.v0_effect_operation_id,
         }
-        const oneVsOneValues = effectiveValues(profile as ProfileRow & ValuesRow, canonicalOrder)
+        const oneVsOne = withLeaderboardObservation(profile, {
+          ...effectiveValues(profile as ProfileRow & ValuesRow, canonicalOrder),
+          region: profile.region as string,
+        })
         const rankedMainLegend =
           profile.ranked_main_legend_id && profile.ranked_main_legend_name_key
             ? {
@@ -342,8 +386,7 @@ export function createPostgresRankedPlayers(
           sparsePulse,
           snapshot: {
             oneVsOne: {
-              ...oneVsOneValues,
-              region: profile.region as string,
+              ...oneVsOne,
               globalRank: profile.global_rank,
               regionRank: profile.region_rank,
             },

@@ -1293,6 +1293,10 @@ describe('refresh operations worker source retry', () => {
         observedAt: Date
         players: Array<{ brawlhallaId: number; name: string }>
       }) => Promise<{ changed: number }>,
+      applyLeaderboardRanked: (input: {
+        observedAt: Date
+        players: Array<{ brawlhallaId: number; rating: number }>
+      }) => Promise<{ changed: number }> = async () => ({ changed: 0 }),
     ) => {
       let completed = false
       const operations = {
@@ -1317,6 +1321,7 @@ describe('refresh operations worker source retry', () => {
           recordCollectionFailure: async () => 'recorded' as const,
         },
         leaderboardPlayerNames: { applyLeaderboardNames },
+        leaderboardRanked: { applyLeaderboardRanked },
         leaderboardSource: {
           fetchPage: async ({ region }) => {
             const base = (regionIndex.get(region) ?? 0) * 10 + 1
@@ -1374,6 +1379,118 @@ describe('refresh operations worker source retry', () => {
 
     expect(
       await run(leaseFor('leaderboard-1v1'), 'published', async () => {
+        throw new Error('players database unavailable')
+      }),
+    ).toBe(true)
+  })
+
+  test('propagates published 1v1 standings without failing the publication', async () => {
+    const standings: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; rating: number }> }> = []
+    const recordStandings = async (input: {
+      observedAt: Date
+      players: Array<{ brawlhallaId: number; rating: number }>
+    }) => {
+      standings.push(input)
+      return { changed: input.players.length }
+    }
+    const noNames = async () => ({ changed: 0 })
+    const lease = (kind: 'leaderboard-1v1' | 'leaderboard-2v2'): OperationLease => ({
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: `leaderboard:standings:${kind}`,
+      kind,
+      workClass: 'leaderboard',
+      payload: { pageDepth: 1, intervalMs: 900_000 },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: new Date().toISOString(),
+    })
+    const regionIndex = new Map(['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'].map((r, i) => [r, i]))
+    const run = (
+      operationLease: OperationLease,
+      applyLeaderboardRanked: typeof recordStandings | (() => Promise<never>),
+    ) => {
+      let completed = false
+      return runOneRefreshOperation(
+        {
+          claim: async () => operationLease,
+          renew: async () => 'renewed' as const,
+          complete: async () => {
+            completed = true
+            return 'transitioned' as const
+          },
+          fail: async () => 'transitioned' as const,
+        } as never,
+        'worker',
+        {
+          leaseMs: 1_000,
+          retryDelayMs: 10,
+          admission,
+          sourceAdmission: {
+            admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
+            pauseSource: async () => {},
+          },
+          ranking: {
+            publishGeneration: async () => 'published' as const,
+            recordCollectionFailure: async () => 'recorded' as const,
+          },
+          leaderboardPlayerNames: { applyLeaderboardNames: noNames },
+          leaderboardRanked: { applyLeaderboardRanked },
+          leaderboardSource: {
+            fetchPage: async ({ region }) => {
+              const id = (regionIndex.get(region) ?? 0) * 10 + 1
+              return {
+                rankings: [
+                  {
+                    identity:
+                      operationLease.kind === 'leaderboard-2v2'
+                        ? {
+                            type: 'fixed-two-vs-two-team',
+                            players: [
+                              { id, username: `First ${id}` },
+                              { id: id + 1, username: `Second ${id + 1}` },
+                            ],
+                          }
+                        : { type: 'one-vs-one-player', player: { id, username: `Solo ${id}` } },
+                    rating: 1_973,
+                    best_rating: 2_039,
+                    rank: 1,
+                    wins: 39,
+                    losses: 30,
+                    region,
+                    tier: 'Diamond',
+                  },
+                ],
+                totalPages: 1,
+              }
+            },
+          },
+        },
+      ).then(() => completed)
+    }
+
+    expect(await run(lease('leaderboard-2v2'), recordStandings)).toBe(true)
+    expect(standings).toHaveLength(0)
+
+    expect(await run(lease('leaderboard-1v1'), recordStandings)).toBe(true)
+    expect(standings).toHaveLength(1)
+    expect(standings[0].players).toHaveLength(9)
+    expect(standings[0].players).toContainEqual({
+      brawlhallaId: 41,
+      region: 'AUS',
+      rating: 1_973,
+      peakRating: 2_039,
+      tier: 'Diamond',
+      wins: 39,
+      games: 69,
+    })
+
+    expect(
+      await run(lease('leaderboard-1v1'), async () => {
         throw new Error('players database unavailable')
       }),
     ).toBe(true)

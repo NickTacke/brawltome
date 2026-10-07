@@ -85,6 +85,20 @@ type RunOneRefreshOperationOptions = {
       players: Array<{ brawlhallaId: number; name: string }>
     }): Promise<{ changed: number }>
   }
+  leaderboardRanked?: {
+    applyLeaderboardRanked(input: {
+      observedAt: Date
+      players: Array<{
+        brawlhallaId: number
+        region: string
+        rating: number
+        peakRating: number
+        tier: string | null
+        wins: number
+        games: number
+      }>
+    }): Promise<{ changed: number }>
+  }
   leaderboardSource?: LeaderboardPageSource
   statistics?: Pick<
     StatisticsTracer,
@@ -754,14 +768,47 @@ function leaderboardContestants(candidate: LeaderboardGenerationCandidate) {
   return [...contestants].map(([brawlhallaId, name]) => ({ brawlhallaId, name }))
 }
 
-// Leaderboards observe current names for thousands of players nobody visits; feed them to Players after the
-// generation is durable. Failure only delays names until the next scan, so it never fails the publication.
+function oneVsOneStandings(candidate: LeaderboardGenerationCandidate) {
+  const standings = new Map<
+    number,
+    {
+      brawlhallaId: number
+      region: string
+      rating: number
+      peakRating: number
+      tier: string | null
+      wins: number
+      games: number
+    }
+  >()
+  for (const rows of candidate.snapshots.values()) {
+    for (const row of rows) {
+      if (row.identity.type !== 'one-vs-one-player') continue
+      const { brawlhallaId } = row.identity.player
+      if (standings.has(brawlhallaId)) continue
+      standings.set(brawlhallaId, {
+        brawlhallaId,
+        region: row.region,
+        rating: row.rating,
+        peakRating: row.peakRating,
+        tier: row.tier,
+        wins: row.wins,
+        games: row.wins + row.losses,
+      })
+    }
+  }
+  return [...standings.values()]
+}
+
+// Leaderboards observe current names and 1v1 standings for thousands of players nobody visits; feed them to Players
+// after the generation is durable. Failure only delays them until the next scan, so it never fails the publication.
 function withLeaderboardNamePropagation(
   ranking: RankingPublicationStore,
   names: RunOneRefreshOperationOptions['leaderboardPlayerNames'],
+  standings: RunOneRefreshOperationOptions['leaderboardRanked'],
   telemetry: Telemetry | undefined,
 ): RankingPublicationStore {
-  if (!names) return ranking
+  if (!names && !standings) return ranking
   return {
     recordCollectionFailure: (authorization, failure) => ranking.recordCollectionFailure(authorization, failure),
     async publishGeneration(authorization, candidate) {
@@ -775,14 +822,27 @@ function withLeaderboardNamePropagation(
           return
         }
       }
-      try {
-        const { changed } = await names.applyLeaderboardNames({
-          observedAt: candidate.observedAt,
-          players: leaderboardContestants(candidate),
-        })
-        log((active) => active.logger.info('leaderboard.player_names.applied', { mode: candidate.mode, changed }))
-      } catch (error) {
-        log((active) => active.logger.error('leaderboard.player_names.failed', error, { mode: candidate.mode }))
+      if (names) {
+        try {
+          const { changed } = await names.applyLeaderboardNames({
+            observedAt: candidate.observedAt,
+            players: leaderboardContestants(candidate),
+          })
+          log((active) => active.logger.info('leaderboard.player_names.applied', { mode: candidate.mode, changed }))
+        } catch (error) {
+          log((active) => active.logger.error('leaderboard.player_names.failed', error, { mode: candidate.mode }))
+        }
+      }
+      if (standings && candidate.mode === '1v1') {
+        try {
+          const { changed } = await standings.applyLeaderboardRanked({
+            observedAt: candidate.observedAt,
+            players: oneVsOneStandings(candidate),
+          })
+          log((active) => active.logger.info('leaderboard.player_ranked.applied', { mode: candidate.mode, changed }))
+        } catch (error) {
+          log((active) => active.logger.error('leaderboard.player_ranked.failed', error, { mode: candidate.mode }))
+        }
       }
       return result
     },
@@ -851,7 +911,12 @@ async function executeLeaderboard(
         }
       },
     },
-    publication: withLeaderboardNamePropagation(ranking, options.leaderboardPlayerNames, options.telemetry),
+    publication: withLeaderboardNamePropagation(
+      ranking,
+      options.leaderboardPlayerNames,
+      options.leaderboardRanked,
+      options.telemetry,
+    ),
     pageDepth: lease.payload.pageDepth,
     intervalMs: lease.payload.intervalMs,
   })
