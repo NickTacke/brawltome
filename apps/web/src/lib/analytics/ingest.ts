@@ -54,7 +54,17 @@ function record(event: AnalyticsEvent, visitorKey: () => string, { telemetry }: 
       return
     case 'profile.viewed':
       metrics.add('analytics_profile_views_total', 1, { data_age: event.dataAge })
-      log({ dataAge: event.dataAge })
+      if (event.rankedAge) {
+        metrics.add('analytics_profile_section_age_total', 1, { section: 'ranked', data_age: event.rankedAge })
+      }
+      if (event.statsAge) {
+        metrics.add('analytics_profile_section_age_total', 1, { section: 'stats', data_age: event.statsAge })
+      }
+      log({
+        dataAge: event.dataAge,
+        ...(event.rankedAge ? { rankedAge: event.rankedAge } : {}),
+        ...(event.statsAge ? { statsAge: event.statsAge } : {}),
+      })
       return
     case 'refresh.state':
       metrics.add('analytics_refresh_states_total', 1, { state: event.state })
