@@ -34,6 +34,7 @@ export async function loadPlayerWithReference<TRanked, TCareer>(
   client: PlayerReferenceClient<TRanked, TCareer>,
   id: number,
 ) {
+  // undefined means the lookup failed (unknown); null means the player has no observed standing.
   const [reference, ranked, career, clan, leaderboardStanding] = await Promise.all([
     client.player.referenceById.query({ id }),
     client.player.rankedById.query({ id }),
@@ -42,7 +43,7 @@ export async function loadPlayerWithReference<TRanked, TCareer>(
     // Best effort: the profile renders without it.
     client.player.leaderboardStandingById
       .query({ id })
-      .catch(() => null),
+      .catch(() => undefined),
   ])
 
   if (!reference) return { reference: null, player: null }
@@ -58,7 +59,16 @@ export async function loadPlayerWithReference<TRanked, TCareer>(
       ...(reference.legacyRating !== undefined ? { legacyRating: reference.legacyRating } : {}),
       currentSeason: ranked,
       career,
-      leaderboardStanding,
+      ...(leaderboardStanding !== undefined ? { leaderboardStanding } : {}),
     },
   }
+}
+
+/** A failed standing lookup (absent field) keeps the last standing read successfully; a successful read replaces it. */
+export function keepLastStanding<T extends { leaderboardStanding?: LeaderboardStanding | null }>(
+  previous: LeaderboardStanding | null | undefined,
+  next: T | null,
+): T | null {
+  if (!next || next.leaderboardStanding !== undefined || previous === undefined) return next
+  return { ...next, leaderboardStanding: previous }
 }

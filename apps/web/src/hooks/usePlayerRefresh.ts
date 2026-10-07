@@ -11,6 +11,7 @@ import {
   isPageExit,
   refreshStateEvent,
 } from '@/lib/analytics/refresh-events'
+import { keepLastStanding } from '@/lib/player-reference'
 import {
   PLAYER_REFRESH_MAX_WAIT_MS,
   type PendingPlayerSections,
@@ -58,7 +59,12 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const requestTrackerRef = useRef(createLatestRequestTracker())
   stateRef.current = state
 
-  const queryFn = useCallback(() => getPlayerAction(Number(id)), [id])
+  const lastStandingRef = useRef(initialData?.leaderboardStanding)
+  const queryFn = useCallback(async () => {
+    const next = keepLastStanding(lastStandingRef.current, await getPlayerAction(Number(id)))
+    if (next && next.leaderboardStanding !== undefined) lastStandingRef.current = next.leaderboardStanding
+    return next
+  }, [id])
   const { data, error } = useStaleRefresh<PlayerData | null>({
     initialData,
     queryFn,
