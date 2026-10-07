@@ -124,14 +124,16 @@ function decodeRow(value: unknown, mode: LeaderboardMode, index: number): Source
   }
   const rating = requiredInteger(value.rating, `rankings[${index}].rating`, 0)
   const bestRating = requiredInteger(value.best_rating, `rankings[${index}].best_rating`, 0)
-  if (bestRating < rating) invalid(`rankings[${index}].best_rating cannot be below rating`)
+  // Live V1 rows sometimes report a season peak below the current rating (several per deep US-E page range). Rejecting
+  // them cost whole 50-row pages, so the peak is raised to the current rating instead: it can never be lower.
+  const peakRating = Math.max(bestRating, rating)
   const wins = requiredInteger(value.wins, `rankings[${index}].wins`, 0)
   const losses = requiredInteger(value.losses, `rankings[${index}].losses`, 0)
   if (wins + losses > 2_147_483_647) invalid(`rankings[${index}] wins plus losses exceeds int32`)
   return {
     identity: decodeIdentity(value.players, mode, index),
     rating,
-    best_rating: bestRating,
+    best_rating: peakRating,
     rank: requiredInteger(value.rank, `rankings[${index}].rank`, 1),
     wins,
     losses,
