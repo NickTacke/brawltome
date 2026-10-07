@@ -101,7 +101,11 @@ export function secondsUntil(at: number, now: number): number {
 }
 
 export function shouldRecheckOnVisible(state: PlayerRefreshState, pending: PendingPlayerSections, now: number) {
-  const settled = state.status.kind === 'idle' || state.status.kind === 'timedOut' || state.status.kind === 'gaveUp'
+  const settled =
+    state.status.kind === 'idle' ||
+    state.status.kind === 'timedOut' ||
+    state.status.kind === 'gaveUp' ||
+    state.status.kind === 'verificationFailed'
   if (!settled || (!pending.ranked && !pending.stats)) return false
   return state.lastRequestAt === null || now - state.lastRequestAt >= VISIBILITY_RECHECK_MIN_INTERVAL_MS
 }
