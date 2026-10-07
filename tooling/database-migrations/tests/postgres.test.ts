@@ -16,6 +16,12 @@ import { migratePostgres } from '../src/postgres'
 
 const connectionString = process.env.DATABASE_URL
 
+type PlanNode = { 'Node Type': string; 'Relation Name'?: string; 'Index Name'?: string; Plans?: PlanNode[] }
+
+function collectPlanNodes(node: PlanNode): PlanNode[] {
+  return [node, ...(node.Plans ?? []).flatMap(collectPlanNodes)]
+}
+
 const deployedGlobalHistory = [
   ['players/0001', '9fff6573583618708c9c931a59389543124d9848ac747012682ea278eda23bc4'],
   ['players/0002', 'fc28d5cfebc3578e98941194f7d3a82f49acb66048c522c60579bc5952b8d813'],
@@ -94,6 +100,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'players/0013',
       'players/0014',
       'players/0015',
+      'players/0016',
     ])
     expect(clanMigrationInventory.map(({ identity }) => identity)).toEqual([
       'clans/0001',
@@ -112,7 +119,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0008',
       'rankings/0009',
     ])
-    expect(globalMigrationInventory.slice(-15).map(({ identity }): string => identity)).toEqual([
+    expect(globalMigrationInventory.slice(-16).map(({ identity }): string => identity)).toEqual([
       'clans/0004',
       'players/0011',
       'players/0012',
@@ -128,6 +135,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0009',
       'refresh-operations/0018',
       'refresh-operations/0019',
+      'players/0016',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -226,6 +234,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       rankingMigrationInventory[8],
       refreshOperationsMigrationInventory[17],
       refreshOperationsMigrationInventory[18],
+      playerMigrationInventory[15],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -258,7 +267,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(67)
+    expect(globalMigrationInventory).toHaveLength(68)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -293,6 +302,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       rankingMigrationInventory[8],
       refreshOperationsMigrationInventory[17],
       refreshOperationsMigrationInventory[18],
+      playerMigrationInventory[15],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -305,7 +315,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(33)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(34)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -323,7 +333,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 2))).toBe(2)
-      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(13)
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(14)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const [rankedProfiles] = await client<{ table_name: string | null }[]>`
@@ -600,6 +610,75 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     }
   })
 
+  test('indexes career legends in best-legend order and lets the discovery facts query use it', async () => {
+    const databaseName = `brawltome_legends_index_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
+        globalMigrationInventory.length,
+      )
+      const client = postgres(databaseUrl.toString(), { max: 1 })
+      try {
+        const [index] = await client<{ indexdef: string }[]>`
+          SELECT indexdef FROM pg_indexes
+          WHERE schemaname = 'players' AND tablename = 'career_legends'
+            AND indexname = 'players_career_legends_best_order'
+        `
+        expect(index?.indexdef).toBe(
+          'CREATE INDEX players_career_legends_best_order ON players.career_legends USING btree (brawlhalla_id, xp DESC, level DESC, ordinal) INCLUDE (legend_name_key)',
+        )
+
+        await client.begin(async (tx) => {
+          await tx.unsafe('SET LOCAL session_replication_role = replica')
+          await tx.unsafe(`
+            INSERT INTO players.career_legends (
+              brawlhalla_id, ordinal, legend_id, legend_name_key, xp, level, xp_percentage, games, wins,
+              match_time, kos, falls, suicides, team_kos, damage_dealt, damage_taken, damage_unarmed,
+              ko_unarmed, damage_thrown_item, ko_thrown_item, damage_gadgets, ko_gadgets,
+              damage_weapon_one, ko_weapon_one, time_held_weapon_one, damage_weapon_two, ko_weapon_two,
+              time_held_weapon_two
+            )
+            SELECT p, l, l + 1, 'legend' || l, (p * 7 + l * 13) % 100000, l % 100, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            FROM generate_series(1, 20000) AS p, generate_series(0, 29) AS l
+          `)
+        })
+        await client.unsafe('VACUUM (ANALYZE) players.career_legends')
+
+        const ids = Array.from({ length: 1000 }, (_, position) => 1 + position * 20)
+        const [{ 'QUERY PLAN': plan }] = await client<{ 'QUERY PLAN': { Plan: PlanNode }[] }[]>`
+          EXPLAIN (FORMAT JSON)
+          SELECT DISTINCT ON (brawlhalla_id) brawlhalla_id, legend_name_key
+          FROM players.career_legends
+          WHERE brawlhalla_id IN ${client(ids)}
+          ORDER BY brawlhalla_id, xp DESC, level DESC, ordinal
+        `
+        const nodes = collectPlanNodes(plan[0].Plan)
+        expect(
+          nodes.filter((node) => node['Node Type'] === 'Seq Scan' && node['Relation Name'] === 'career_legends'),
+        ).toEqual([])
+        expect(
+          nodes.some(
+            (node) =>
+              node['Node Type'] === 'Index Only Scan' && node['Index Name'] === 'players_career_legends_best_order',
+          ),
+        ).toBe(true)
+        expect(nodes.filter((node) => node['Node Type'] === 'Sort')).toEqual([])
+      } finally {
+        await client.end()
+      }
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  }, 60_000)
+
   test('serializes fresh runners, applies once, reruns as a no-op, and rolls back failures', async () => {
     const databaseName = `brawltome_migrations_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
@@ -619,8 +698,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
       const failingMigration: Migration = {
-        identity: 'players/0016',
-        predecessor: 'players/0015',
+        identity: 'players/0017',
+        predecessor: 'players/0016',
         checksum: checksumSql(failingSql),
         sql: failingSql,
       }
