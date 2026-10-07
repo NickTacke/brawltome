@@ -142,6 +142,8 @@ export type LeaderboardDeepCrawlConfig = {
   enabled: boolean
   intervalMs: number
   firstDueAt: string
+  // Pause after each page: caps the crawl's V1 rate (~2.5 pages/s at 400 ms) well under the 1800-per-5-minute limit.
+  pageDelayMs: number
 }
 
 // One crawl per region per interval, spread evenly so the regions never compete for V1 admission at once.
@@ -350,13 +352,14 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       enabled: strictBoolean(env.DEEP_CRAWL_ENABLED, true, 'DEEP_CRAWL_ENABLED'),
       intervalMs: boundedInteger(
         env.DEEP_CRAWL_INTERVAL_MS,
-        3 * 60 * 60 * 1000,
+        60 * 60 * 1000,
         'DEEP_CRAWL_INTERVAL_MS',
         minLeaderboardDeepCrawlIntervalMs,
         maxLeaderboardDeepCrawlIntervalMs,
       ),
-      // The first windows land after the rollout instead of all being overdue at once; regions then stay staggered.
-      firstDueAt: '2026-10-07T16:00:00.000Z',
+      // Hourly windows start after the first 3-hour pass; regions then stay staggered across the hour.
+      firstDueAt: '2026-10-07T19:30:00.000Z',
+      pageDelayMs: boundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, 400, 'DEEP_CRAWL_PAGE_DELAY_MS', 0, 5_000),
     } satisfies LeaderboardDeepCrawlConfig,
     admission: validateAdmissionConfig(admission),
   }
