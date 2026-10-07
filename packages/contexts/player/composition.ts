@@ -13,6 +13,7 @@ import { addHistoricalCareerSource } from './migrations/0012-add-historical-care
 import { addCompactReferenceImport } from './migrations/0013-add-compact-reference-import'
 import { addLeaderboardNameObservations } from './migrations/0014-add-leaderboard-name-observations'
 import { addNameVerifications } from './migrations/0015-add-name-verifications'
+import { addCareerLegendsBestOrderIndex } from './migrations/0016-add-career-legends-best-order-index'
 
 export {
   createPostgresCareerPlayers,
@@ -90,4 +91,5 @@ export const playerMigrationInventory = [
   addCompactReferenceImport,
   addLeaderboardNameObservations,
   addNameVerifications,
+  addCareerLegendsBestOrderIndex,
 ] as const
