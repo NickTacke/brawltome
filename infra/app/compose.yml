@@ -147,6 +147,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       PORT: "3000"
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
+      RUNTIME_SHUTDOWN_ANNOUNCE_MS: "5000"
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
       WEB_ORIGIN: https://brawltome.app
@@ -176,7 +177,16 @@ services:
       timeout: 3s
       retries: 12
       start_period: 15s
+      start_interval: 2s
     stop_grace_period: 70s
+    # Zero-downtime deploys (infra/app/deploy.sh). Dokploy appends its domain labels to this list and names the router
+    # and service after the domain; these names must match the api.brawltome.app domain in Dokploy.
+    labels:
+      - traefik.http.middlewares.brawltome-api-retry.retry.attempts=3
+      - traefik.http.routers.compose-program-virtual-microchip-uqxbrw-11-websecure.middlewares=brawltome-api-retry
+      - traefik.http.services.compose-program-virtual-microchip-uqxbrw-11-websecure.loadbalancer.healthcheck.path=/health/serving
+      - traefik.http.services.compose-program-virtual-microchip-uqxbrw-11-websecure.loadbalancer.healthcheck.interval=2s
+      - traefik.http.services.compose-program-virtual-microchip-uqxbrw-11-websecure.loadbalancer.healthcheck.timeout=1s
     restart: unless-stopped
     read_only: true
     init: true
@@ -231,12 +241,20 @@ services:
       timeout: 3s
       retries: 12
       start_period: 15s
+      start_interval: 2s
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
     stop_grace_period: 20s
+    # See the api labels; these names must match the brawltome.app domain in Dokploy.
+    labels:
+      - traefik.http.middlewares.brawltome-web-retry.retry.attempts=3
+      - traefik.http.routers.compose-program-virtual-microchip-uqxbrw-10-websecure.middlewares=brawltome-web-retry
+      - traefik.http.services.compose-program-virtual-microchip-uqxbrw-10-websecure.loadbalancer.healthcheck.path=/api/health/serving
+      - traefik.http.services.compose-program-virtual-microchip-uqxbrw-10-websecure.loadbalancer.healthcheck.interval=2s
+      - traefik.http.services.compose-program-virtual-microchip-uqxbrw-10-websecure.loadbalancer.healthcheck.timeout=1s
     restart: unless-stopped
     read_only: true
     init: true

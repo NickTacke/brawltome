@@ -86,9 +86,32 @@ describe('rendered application topology', () => {
         expect.stringContaining('services must be exactly'),
         expect.stringContaining('networks must be exactly'),
         'api must not publish ports',
-        'web must not have Traefik labels',
+        'web must not have Traefik labels beyond retry and health checks',
       ]),
     )
+  })
+
+  test('allows only retry and health check tuning of the routes Dokploy owns', () => {
+    const topology = renderedTopology()
+    const current = services(topology)
+    expect(Object.keys(current.api.labels as Record<string, string>)).toContain(
+      'traefik.http.services.compose-program-virtual-microchip-uqxbrw-11-websecure.loadbalancer.healthcheck.path',
+    )
+
+    for (const label of [
+      'traefik.enable',
+      'traefik.http.routers.brawltome.rule',
+      'traefik.http.services.brawltome.loadbalancer.server.port',
+      'traefik.http.middlewares.brawltome.headers.customrequestheaders.x-forwarded-for',
+    ]) {
+      current.web.labels = { ...(current.web.labels as Record<string, string>), [label]: 'x' }
+      expect(verifyAppRenderedTopology(topology)).toContain(
+        'web must not have Traefik labels beyond retry and health checks',
+      )
+      const { [label]: _removed, ...approved } = current.web.labels as Record<string, string>
+      current.web.labels = approved
+    }
+    expect(verifyAppRenderedTopology(topology)).toEqual([])
   })
 
   test('rejects quota, secret, image, and storage drift', () => {

@@ -7,7 +7,7 @@ import {
   readSourceBackgroundHeadroom,
   workerDatabaseUrl,
 } from '../src/operations-worker-config'
-import { readHealthPort, readRuntimeConfig } from '../src/runtime-config'
+import { readHealthPort, readRuntimeConfig, readShutdownAnnounceMs } from '../src/runtime-config'
 
 describe('operations worker configuration', () => {
   test('uses conservative runtime defaults and rejects unsafe values', () => {
@@ -227,6 +227,9 @@ describe('operations worker configuration', () => {
     expect(() =>
       readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '10000', RUNTIME_CLEANUP_RESERVE_MS: '10000' }),
     ).toThrow('RUNTIME_CLEANUP_RESERVE_MS')
+    expect(readShutdownAnnounceMs(undefined)).toBe(0)
+    expect(readShutdownAnnounceMs('5000')).toBe(5_000)
+    expect(() => readShutdownAnnounceMs('30001')).toThrow('RUNTIME_SHUTDOWN_ANNOUNCE_MS')
     expect(readHealthPort(undefined, 3001)).toBe(3001)
     expect(() => readHealthPort('70000', 3001)).toThrow('HEALTH_PORT')
   })
