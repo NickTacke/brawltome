@@ -48,6 +48,11 @@ function actorDimensions(actor: AdmissionActor, authenticatedIpLimit: number) {
       return [{ domain: 'discord-refresh', key: hash(actor.discordUserId), limit: 20 }]
     case 'desktop':
       return [{ domain: 'desktop-ranked-refresh', key: hash(actor.ip), limit: 60 }]
+    // A view only adds background refresh demand, so the cap bounds how many players one address can push into the
+    // planner. 20 per 15-minute window (80 an hour) is well above browsing pace, and a view over it is just not
+    // counted; the visitor never sees a difference.
+    case 'profile-view':
+      return [{ domain: 'profile-view', key: hash(actor.ip), limit: 20 }]
   }
 }
 

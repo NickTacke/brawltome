@@ -1,7 +1,13 @@
 import { isIP } from 'node:net'
 
-function trustedProxyAddress(address: string): boolean {
-  if (address === '::1' || address.startsWith('::ffff:127.')) return true
+// Bun reports IPv4 peers on a dual-stack socket as IPv4-mapped IPv6 (`::ffff:10.0.5.114`).
+function withoutIpv4MappedPrefix(address: string): string {
+  return address.toLowerCase().startsWith('::ffff:') && isIP(address.slice(7)) === 4 ? address.slice(7) : address
+}
+
+function trustedProxyAddress(peerAddress: string): boolean {
+  if (peerAddress === '::1') return true
+  const address = withoutIpv4MappedPrefix(peerAddress)
   const octets = address.split('.').map(Number)
   if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) return false
   return (
