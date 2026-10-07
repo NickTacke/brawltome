@@ -118,8 +118,9 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0007',
       'rankings/0008',
       'rankings/0009',
+      'rankings/0010',
     ])
-    expect(globalMigrationInventory.slice(-16).map(({ identity }): string => identity)).toEqual([
+    expect(globalMigrationInventory.slice(-17).map(({ identity }): string => identity)).toEqual([
       'clans/0004',
       'players/0011',
       'players/0012',
@@ -136,6 +137,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'refresh-operations/0018',
       'refresh-operations/0019',
       'players/0016',
+      'rankings/0010',
     ])
     expect(discoveryMigrationInventory.map(({ identity }) => identity)).toEqual([
       'discovery/0001',
@@ -235,6 +237,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       refreshOperationsMigrationInventory[17],
       refreshOperationsMigrationInventory[18],
       playerMigrationInventory[15],
+      rankingMigrationInventory[9],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -267,7 +270,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(68)
+    expect(globalMigrationInventory).toHaveLength(69)
     expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
@@ -303,6 +306,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       refreshOperationsMigrationInventory[17],
       refreshOperationsMigrationInventory[18],
       playerMigrationInventory[15],
+      rankingMigrationInventory[9],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -315,7 +319,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(34)
+      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(35)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()

@@ -68,4 +68,5 @@ export const globalMigrationInventory = [
   refreshOperationsMigrationInventory[17],
   refreshOperationsMigrationInventory[18],
   playerMigrationInventory[15],
+  rankingMigrationInventory[9],
 ] as const
