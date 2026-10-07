@@ -1,5 +1,6 @@
 import {
   type LeaderboardDeepCrawlStanding,
+  type LeaderboardDeepCrawlTeam,
   type LeaderboardGenerationCandidate,
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
@@ -8,6 +9,7 @@ import {
   type RankingRetentionStore,
   collectAndPublishLeaderboardGeneration,
   leaderboardDeepCrawlStandings,
+  leaderboardDeepCrawlTeams,
   leaderboardModeFromOperationKind,
 } from '@brawltome/ranking/composition'
 import type {
@@ -104,8 +106,36 @@ type RunOneRefreshOperationOptions = {
   }
   leaderboardSource?: LeaderboardPageSource
   leaderboardDeepCrawlProgress?: {
-    read(region: string): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null>
-    save(input: { region: string; windowAt: Date; nextPage: number; totalPages: number }): Promise<void>
+    read(mode: string, region: string): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null>
+    save(input: { mode: string; region: string; windowAt: Date; nextPage: number; totalPages: number }): Promise<void>
+  }
+  // Solo 2v2 and fixed 2v2 standings from the deep crawl.
+  leaderboardTeamModes?: {
+    applyLeaderboardSoloQueue(input: {
+      observedAt: Date
+      players: Array<{
+        brawlhallaId: number
+        region: string
+        rating: number
+        peakRating: number
+        tier: string | null
+        wins: number
+        games: number
+      }>
+    }): Promise<{ changed: number }>
+    applyLeaderboardTeams(input: {
+      observedAt: Date
+      teams: Array<{
+        brawlhallaIdOne: number
+        brawlhallaIdTwo: number
+        region: string
+        rating: number
+        peakRating: number
+        tier: string | null
+        wins: number
+        games: number
+      }>
+    }): Promise<{ changed: number }>
   }
   deepCrawlSlicePages?: number
   deepCrawlPageDelayMs?: number
@@ -943,7 +973,7 @@ export class LeaderboardDeepCrawlYield extends Error {
   }
 }
 
-// Reads every V1 1v1 page of one region in slices, writing each chunk of pages straight to Players without
+// Reads every V1 leaderboard page of one mode and region in slices, writing each chunk of pages straight to Players without
 // publishing a ranking generation. Progress is saved per chunk, so a yielded, failed, or interrupted crawl resumes.
 async function executeLeaderboardDeepCrawl(
   operations: RefreshOperationWorker,
@@ -951,8 +981,14 @@ async function executeLeaderboardDeepCrawl(
   options: RunOneRefreshOperationOptions,
   authorityLost: AbortSignal,
 ): Promise<AttemptExecutionOutcome> {
-  const { leaderboardSource, sourceAdmission, leaderboardPlayerNames, leaderboardRanked } = options
-  if (!leaderboardSource || !sourceAdmission || !leaderboardPlayerNames || !leaderboardRanked) {
+  const { leaderboardSource, sourceAdmission, leaderboardPlayerNames, leaderboardRanked, leaderboardTeamModes } =
+    options
+  const mode = lease.payload.mode ?? '1v1'
+  if (
+    !leaderboardSource ||
+    !sourceAdmission ||
+    (mode === '1v1' ? !leaderboardPlayerNames || !leaderboardRanked : !leaderboardTeamModes)
+  ) {
     const transition = await operations.fail(
       lease,
       {
@@ -985,18 +1021,21 @@ async function executeLeaderboardDeepCrawl(
     }
   }
   const started = performance.now()
-  const saved = await progress?.read(region)
+  const saved = await progress?.read(mode, region)
   const resuming = saved !== undefined && saved !== null && saved.windowAt.getTime() === windowAt.getTime()
   let page = resuming ? saved.nextPage : 1
   let totalPages = resuming ? saved.totalPages : 1
   let chunk: LeaderboardDeepCrawlStanding[] = []
+  let teamChunk: LeaderboardDeepCrawlTeam[] = []
   let chunkObservedAt = new Date()
   let changedNames = 0
   let changedStandings = 0
   let pagesRead = 0
   let pagesSkipped = 0
+  const changed = (change: 'name' | 'standing' | 'solo' | 'team', count: number) =>
+    record((active) => active.metrics.add('leaderboard_deep_crawl_changed_total', count, { mode, region, change }))
   const flush = async () => {
-    if (chunk.length > 0) {
+    if (chunk.length > 0 && mode === '1v1' && leaderboardPlayerNames && leaderboardRanked) {
       const names = await leaderboardPlayerNames.applyLeaderboardNames({
         observedAt: chunkObservedAt,
         players: chunk.map(({ brawlhallaId, name }) => ({ brawlhallaId, name })),
@@ -1007,17 +1046,29 @@ async function executeLeaderboardDeepCrawl(
       })
       changedNames += names.changed
       changedStandings += standings.changed
-      record((active) => {
-        active.metrics.add('leaderboard_deep_crawl_changed_total', names.changed, { region, change: 'name' })
-        active.metrics.add('leaderboard_deep_crawl_changed_total', standings.changed, { region, change: 'standing' })
+      changed('name', names.changed)
+      changed('standing', standings.changed)
+    } else if (chunk.length > 0 && mode === 'solo2v2' && leaderboardTeamModes) {
+      // Solo 2v2 names are as cached as 2v2 ones; only the numbers are kept.
+      const solo = await leaderboardTeamModes.applyLeaderboardSoloQueue({
+        observedAt: chunkObservedAt,
+        players: chunk.map(({ name: _name, ...standing }) => standing),
       })
-      chunk = []
+      changedStandings += solo.changed
+      changed('solo', solo.changed)
+    } else if (teamChunk.length > 0 && leaderboardTeamModes) {
+      const teams = await leaderboardTeamModes.applyLeaderboardTeams({ observedAt: chunkObservedAt, teams: teamChunk })
+      changedStandings += teams.changed
+      changed('team', teams.changed)
     }
-    await progress?.save({ region, windowAt, nextPage: page, totalPages })
+    chunk = []
+    teamChunk = []
+    await progress?.save({ mode, region, windowAt, nextPage: page, totalPages })
   }
   const log = (outcome: 'completed' | 'yielded') =>
     record((active) =>
       active.logger.info(`leaderboard.deep_crawl.${outcome}`, {
+        mode,
         region,
         nextPage: page,
         totalPages,
@@ -1031,10 +1082,10 @@ async function executeLeaderboardDeepCrawl(
 
   while (page <= totalPages) {
     if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
-    if (chunk.length === 0) chunkObservedAt = new Date()
+    if (chunk.length === 0 && teamChunk.length === 0) chunkObservedAt = new Date()
     let result: Awaited<ReturnType<LeaderboardPageSource['fetchPage']>>
     try {
-      result = await fetchPage({ mode: '1v1', region, page })
+      result = await fetchPage({ mode, region, page })
     } catch (error) {
       // Deep pages are never read by the regular collections: one bad page must not cost the whole region, and a
       // leaderboard that shrank while the crawl ran simply ends it. A failure on page 1 still fails the attempt.
@@ -1043,15 +1094,18 @@ async function executeLeaderboardDeepCrawl(
       }
       if (/exceeds total_pages/.test(error.message)) break
       pagesSkipped += 1
-      record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region, outcome: 'skipped' }))
+      record((active) =>
+        active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode, region, outcome: 'skipped' }),
+      )
       page += 1
       continue
     }
     if (page === 1) totalPages = result.totalPages
     if (result.rankings.length === 0) break
     pagesRead += 1
-    record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region, outcome: 'read' }))
-    chunk.push(...leaderboardDeepCrawlStandings(result))
+    record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode, region, outcome: 'read' }))
+    if (mode === '2v2') teamChunk.push(...leaderboardDeepCrawlTeams(result))
+    else chunk.push(...leaderboardDeepCrawlStandings(result))
     page += 1
     if (options.deepCrawlPageDelayMs && page <= totalPages) {
       await (options.waitForSourceRetry ?? waitForRenewal)(options.deepCrawlPageDelayMs, authorityLost)

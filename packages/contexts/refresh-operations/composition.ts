@@ -21,6 +21,8 @@ import { allowRecentlyViewedRefresh } from './migrations/0020-allow-recently-vie
 import { validateRecentlyViewedRefresh } from './migrations/0021-validate-recently-viewed-refresh'
 import { addLeaderboardDeepCrawl } from './migrations/0022-add-leaderboard-deep-crawl'
 import { validateLeaderboardDeepCrawl } from './migrations/0023-validate-leaderboard-deep-crawl'
+import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
+import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 
 export {
   createPostgresDeadLetterOperations,
@@ -52,4 +54,6 @@ export const refreshOperationsMigrationInventory = [
   validateRecentlyViewedRefresh,
   addLeaderboardDeepCrawl,
   validateLeaderboardDeepCrawl,
+  addDeepCrawlModes,
+  validateDeepCrawlModes,
 ] as const
