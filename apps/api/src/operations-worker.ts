@@ -32,6 +32,7 @@ import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation
 import { createFreshnessPlanner, readFreshnessPlannerConfig } from './freshness-planner'
 import { createHealthRoutes } from './health-routes'
 import {
+  leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
@@ -211,6 +212,7 @@ const discoveryReconciliationBackoff = createDiscoveryReconciliationBackoff({
 })
 const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
 const rankingRetentionSchedule = rankingRetentionScheduleDefinition(workerConfig.rankingRetention)
+const deepCrawlSchedules = leaderboardDeepCrawlScheduleDefinitions(workerConfig.deepCrawl)
 const nameVerificationConfig = readPlayerNameVerificationConfig(process.env)
 // The same rolling-window usage request admission enforces and source_quota_used reports.
 async function readV0SourceUsage() {
@@ -333,6 +335,16 @@ try {
         retentionHours: workerConfig.rankingRetention.retentionHours,
         maxGenerations: workerConfig.rankingRetention.maxGenerations,
       })
+      for (const definition of deepCrawlSchedules) {
+        const crawl = workerConfig.deepCrawl.enabled
+          ? await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
+          : await operations.disableLeaderboardDeepCrawlSchedule(definition.scheduleKey)
+        if (crawl.outcome !== 'already-exists' && crawl.outcome !== 'already-disabled') reconciledSchedules++
+      }
+      telemetry.logger.info('leaderboard.deep_crawl.scheduled', {
+        enabled: workerConfig.deepCrawl.enabled,
+        intervalMs: workerConfig.deepCrawl.intervalMs,
+      })
       leaderboardSchedulesReconciled = true
       return (
         interactiveAdmissions +
@@ -375,6 +387,10 @@ try {
         rankingRetentionEnabled: workerConfig.rankingRetention.enabled,
         leaderboardPlayerNames,
         leaderboardRanked,
+        leaderboardDeepCrawlProgress: {
+          read: operations.readLeaderboardDeepCrawlProgress,
+          save: operations.saveLeaderboardDeepCrawlProgress,
+        },
         leaderboardSource: {
           fetchPage: (input) =>
             fetchLeaderboardPage(input, {

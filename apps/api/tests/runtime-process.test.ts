@@ -5,7 +5,11 @@ import {
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
 import postgres from 'postgres'
-import { leaderboardScheduleDefinitions, readOperationsWorkerConfig } from '../src/operations-worker-config'
+import {
+  leaderboardDeepCrawlScheduleDefinitions,
+  leaderboardScheduleDefinitions,
+  readOperationsWorkerConfig,
+} from '../src/operations-worker-config'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `brawltome_lifecycle_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -119,6 +123,10 @@ async function deferLeaderboardSchedules(): Promise<void> {
   try {
     for (const definition of leaderboardScheduleDefinitions(readOperationsWorkerConfig({}).leaderboard)) {
       await operations.reconcileLeaderboardSchedule(definition)
+    }
+    // The worker reconciles these at startup; deferring them keeps it from crawling the real V1 leaderboard.
+    for (const definition of leaderboardDeepCrawlScheduleDefinitions(readOperationsWorkerConfig({}).deepCrawl)) {
+      await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
     }
     await control`UPDATE refresh_operations.schedules SET next_due_at = '2100-01-01T00:00:00Z'`
   } finally {

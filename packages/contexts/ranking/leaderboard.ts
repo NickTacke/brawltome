@@ -237,6 +237,37 @@ function collectionCanPublish(mode: LeaderboardMode, pages: readonly SourceLeade
   return mode === '3v3' && lastPage.rankings.every(({ tier }) => tier !== null && !tier.startsWith('Valhallan'))
 }
 
+export type LeaderboardDeepCrawlStanding = {
+  brawlhallaId: number
+  name: string
+  region: string
+  rating: number
+  peakRating: number
+  tier: string
+  wins: number
+  games: number
+}
+
+// The deep crawl feeds Players directly rather than publishing a generation: one standing per 1v1 player row, with the
+// tier resolved the same way publication does.
+export function leaderboardDeepCrawlStandings(page: SourceLeaderboardPage): LeaderboardDeepCrawlStanding[] {
+  return page.rankings.flatMap((row) => {
+    if (row.identity.type !== 'one-vs-one-player') return []
+    return [
+      {
+        brawlhallaId: row.identity.player.id,
+        name: row.identity.player.username,
+        region: row.region,
+        rating: row.rating,
+        peakRating: row.best_rating,
+        tier: resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier,
+        wins: row.wins,
+        games: row.wins + row.losses,
+      },
+    ]
+  })
+}
+
 function publishedIdentity(identity: SourceLeaderboardIdentity): PublishedLeaderboardIdentity {
   if (identity.type === 'fixed-two-vs-two-team') {
     return {

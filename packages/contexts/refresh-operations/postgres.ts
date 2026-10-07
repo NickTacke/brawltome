@@ -4,6 +4,7 @@ import {
   type AcceptOperationResult,
   type AdmissionConfig,
   type BackgroundWorkClass,
+  type CreateLeaderboardDeepCrawlSchedule,
   type CreateLeaderboardSchedule,
   type CreateRankingRetentionSchedule,
   type CreateSchedule,
@@ -20,6 +21,7 @@ import {
   type FencedResult,
   type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
+  type LeaderboardDeepCrawlPayload,
   type LeaderboardOperationKind,
   type MaterializeSchedulesResult,
   type OperationFailure,
@@ -44,6 +46,7 @@ import {
   recentlyViewedCohort,
   statisticsCollectionKinds,
   validateAdmissionConfig,
+  validateLeaderboardDeepCrawlPayload,
   validateLeaderboardOperationPayload,
   validateRankingRetentionPayload,
   workClasses,
@@ -74,7 +77,12 @@ type OperationRow = {
 type ScheduleRow = {
   id: string
   schedule_key: string
-  kind: 'proof' | 'interactive-player-refresh' | LeaderboardOperationKind | 'ranking-retention'
+  kind:
+    | 'proof'
+    | 'interactive-player-refresh'
+    | LeaderboardOperationKind
+    | 'ranking-retention'
+    | 'leaderboard-deep-crawl'
   work_class: WorkClass
   interval_ms: string | number
   first_due_at: Date
@@ -86,6 +94,7 @@ type ScheduleRow = {
     | { value: string }
     | { pageDepth: number; intervalMs: number }
     | { retentionHours: number; maxGenerations: number }
+    | { region: string; intervalMs: number }
     | { assignmentId: string; brawlhallaId: number; staleSections: ['ranked', 'stats'] }
   provenance: { source: string; requestedBy?: string }
   max_attempts: number
@@ -217,6 +226,12 @@ function toLease(row: OperationRow): OperationLease {
     }
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+  if (row.kind === 'leaderboard-deep-crawl') {
+    if (row.work_class !== 'leaderboard' || !('region' in row.payload) || !('intervalMs' in row.payload)) {
+      throw new Error('invalid durable leaderboard deep crawl operation')
+    }
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
   if (isStatisticsCollectionKind(row.kind)) {
     if (row.work_class !== 'global-statistics' || !('cohortId' in row.payload) || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable statistics collection operation')
@@ -328,6 +343,13 @@ function validateSchedule(input: CreateSchedule): Date {
     if (input.workClass !== 'maintenance') throw new Error('ranking retention requires maintenance work class')
     validateRankingRetentionPayload(input.payload as { retentionHours: number; maxGenerations: number })
   }
+  if (kind === 'leaderboard-deep-crawl') {
+    if (input.workClass !== 'leaderboard') throw new Error('leaderboard deep crawl requires leaderboard work class')
+    const payload = validateLeaderboardDeepCrawlPayload(input.payload as LeaderboardDeepCrawlPayload)
+    if (payload.intervalMs !== input.intervalMs) {
+      throw new Error('leaderboard deep crawl payload intervalMs must match the schedule intervalMs')
+    }
+  }
   return firstDueAt
 }
 
@@ -417,8 +439,30 @@ export function createPostgresRefreshOperations(
 
   // Fixed schedules are owned by worker configuration: a changed definition retires the old schedule and starts
   // a new one under the same key instead of rewriting history.
+  async function disableFixedSchedule(
+    scheduleKey: string,
+    kind: 'ranking-retention' | 'leaderboard-deep-crawl',
+  ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
+    return client.begin(async (transaction) => {
+      const sql = transaction as unknown as typeof client
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${scheduleKey}))`
+      const [existing] = await sql<{ id: string; enabled: boolean }[]>`
+        SELECT id, enabled FROM refresh_operations.schedules
+        WHERE schedule_key = ${scheduleKey} AND kind = ${kind}
+        FOR UPDATE
+      `
+      if (!existing) return { outcome: 'absent' as const }
+      if (!existing.enabled) return { outcome: 'already-disabled' as const }
+      await sql`
+        UPDATE refresh_operations.schedules SET enabled = false, updated_at = clock_timestamp()
+        WHERE id = ${existing.id}
+      `
+      return { outcome: 'disabled' as const }
+    })
+  }
+
   async function reconcileFixedSchedule(
-    input: CreateLeaderboardSchedule | CreateRankingRetentionSchedule,
+    input: CreateLeaderboardSchedule | CreateRankingRetentionSchedule | CreateLeaderboardDeepCrawlSchedule,
     options: { reenable?: boolean } = {},
   ): Promise<CreateScheduleResult> {
     const firstDueAt = validateSchedule(input)
@@ -1320,25 +1364,47 @@ export function createPostgresRefreshOperations(
       return reconcileFixedSchedule(input, { reenable: true })
     },
 
+    async readLeaderboardDeepCrawlProgress(
+      region: string,
+    ): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null> {
+      const [row] = await client<{ window_at: Date; next_page: number; total_pages: number }[]>`
+        SELECT window_at, next_page, total_pages
+        FROM refresh_operations.leaderboard_deep_crawl_progress WHERE region = ${region}
+      `
+      return row ? { windowAt: row.window_at, nextPage: row.next_page, totalPages: row.total_pages } : null
+    },
+
+    async saveLeaderboardDeepCrawlProgress(input: {
+      region: string
+      windowAt: Date
+      nextPage: number
+      totalPages: number
+    }): Promise<void> {
+      await client`
+        INSERT INTO refresh_operations.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
+        VALUES (${input.region}, ${input.windowAt}, ${input.nextPage}, ${input.totalPages})
+        ON CONFLICT (region) DO UPDATE SET
+          window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
+          total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
+      `
+    },
+
+    async reconcileLeaderboardDeepCrawlSchedule(
+      input: CreateLeaderboardDeepCrawlSchedule,
+    ): Promise<CreateScheduleResult> {
+      return reconcileFixedSchedule(input, { reenable: true })
+    },
+
+    async disableLeaderboardDeepCrawlSchedule(
+      scheduleKey: string,
+    ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
+      return disableFixedSchedule(scheduleKey, 'leaderboard-deep-crawl')
+    },
+
     async disableRankingRetentionSchedule(
       scheduleKey: string,
     ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-        await sql`SELECT pg_advisory_xact_lock(hashtext(${scheduleKey}))`
-        const [existing] = await sql<{ id: string; enabled: boolean }[]>`
-          SELECT id, enabled FROM refresh_operations.schedules
-          WHERE schedule_key = ${scheduleKey} AND kind = 'ranking-retention'
-          FOR UPDATE
-        `
-        if (!existing) return { outcome: 'absent' as const }
-        if (!existing.enabled) return { outcome: 'already-disabled' as const }
-        await sql`
-          UPDATE refresh_operations.schedules SET enabled = false, updated_at = clock_timestamp()
-          WHERE id = ${existing.id}
-        `
-        return { outcome: 'disabled' as const }
-      })
+      return disableFixedSchedule(scheduleKey, 'ranking-retention')
     },
 
     async materializeDueSchedules(limit = 100): Promise<MaterializeSchedulesResult> {
@@ -1460,7 +1526,12 @@ export function createPostgresRefreshOperations(
                   (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
                    provenance, max_attempts, available_at)
                 VALUES
-                  (${operationId}, ${operationId}, ${schedule.kind}, ${`schedule:${windowIdentity}`},
+                  (${operationId}, ${operationId}, ${schedule.kind}, ${
+                    // One active crawl per region: a window arriving mid-crawl waits instead of stacking another.
+                    schedule.kind === 'leaderboard-deep-crawl'
+                      ? `schedule:${schedule.id}:deep-crawl`
+                      : `schedule:${windowIdentity}`
+                  },
                    ${`${schedule.operation_key_prefix}:${schedule.id}:${firstWindowNumber}`}, ${schedule.resource_key},
                    ${schedule.work_class}, ${sql.json(schedule.payload)}, ${sql.json(schedule.provenance)},
                    ${schedule.max_attempts}, ${materializedAt})
@@ -2316,6 +2387,7 @@ export function createPostgresRefreshOperations(
         'ranked-player-pulse',
         'player-name-verification',
         'ranking-retention',
+        'leaderboard-deep-crawl',
         ...leaderboardOperationKinds,
         ...statisticsCollectionKinds,
         'statistics-publication',
@@ -2352,6 +2424,7 @@ export function createPostgresRefreshOperations(
             'interactive-player-refresh',
             ...leaderboardOperationKinds,
             'ranking-retention',
+            'leaderboard-deep-crawl',
           ] as OperationLease['kind'][]
         ).map((kind) => ({
           kind,
