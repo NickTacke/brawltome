@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { loadPlayerWithReference } from '../../src/lib/player-reference'
+import { keepLastStanding, loadPlayerWithReference } from '../../src/lib/player-reference'
 
 function client(reference: { brawlhallaId: number; name: string; aliases: string[] } | null) {
   return {
@@ -88,6 +88,25 @@ describe('loadPlayerWithReference', () => {
       },
       42,
     )
-    expect(result.player?.leaderboardStanding).toBeNull()
+    expect(result.player).not.toBeNull()
+    expect(result.player?.leaderboardStanding).toBeUndefined()
+  })
+
+  test('keeps the last loaded standing only when the new lookup failed', () => {
+    const standing = {
+      region: 'AUS',
+      rating: 1973,
+      peakRating: 2039,
+      tier: 'Diamond',
+      wins: 39,
+      games: 69,
+      observedAt: 'x',
+    }
+    const newer = { ...standing, rating: 2000 }
+    expect(keepLastStanding(standing, { id: 1 })).toEqual({ id: 1, leaderboardStanding: standing })
+    expect(keepLastStanding(standing, { id: 1, leaderboardStanding: newer })?.leaderboardStanding).toBe(newer)
+    expect(keepLastStanding(standing, { id: 1, leaderboardStanding: null })?.leaderboardStanding).toBeNull()
+    expect(keepLastStanding(undefined, { id: 1 })).toEqual({ id: 1 })
+    expect(keepLastStanding(standing, null)).toBeNull()
   })
 })

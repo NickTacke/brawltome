@@ -75,4 +75,23 @@ describe('RankedCard', () => {
     expect(html).not.toContain('Elo Reset')
     expect(html).not.toContain('Updated')
   })
+
+  test('does not present a 1v1-only Glory figure as the total for leaderboard data', () => {
+    const v0 = renderToStaticMarkup(<RankedCard player={availablePlayer} rankedTeams={[]} />)
+    const html = renderToStaticMarkup(
+      <RankedCard player={{ ...availablePlayer, rankedSource: 'leaderboard' }} rankedTeams={[]} />,
+    )
+
+    expect(v0).toMatch(/Total Glory<\/div><div[^>]*>(?!—)/)
+    expect(html).toMatch(/Total Glory<\/div><div[^>]*>—</)
+  })
+
+  test('labels the leaderboard source on small screens too', () => {
+    const html = renderToStaticMarkup(
+      <RankedCard player={{ ...availablePlayer, rankedSource: 'leaderboard' }} rankedTeams={[]} />,
+    )
+
+    expect(html).toContain('sm:hidden">Leaderboard ')
+    expect(html).toContain('From leaderboard')
+  })
 })

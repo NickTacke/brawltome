@@ -22,7 +22,8 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
     (rating): rating is number => typeof rating === 'number' && rating > 0,
   )
   const bestRating = knownPeaks.length > 0 ? Math.max(...knownPeaks) : null
-  const totalRankedWins = hasOutcomes ? rankedWins + teamsTotalWins : null
+  // The leaderboard fallback only covers 1v1, so a total across modes would understate Glory.
+  const totalRankedWins = hasOutcomes && player.rankedSource !== 'leaderboard' ? rankedWins + teamsTotalWins : null
 
   return (
     <Card className="bg-linear-to-br from-card to-background border-border">
@@ -32,9 +33,14 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
           {player.rankedLastUpdated && (
             <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
               <Clock className="w-3 h-3" aria-hidden="true" />
-              <span className="hidden sm:inline">
-                {player.rankedSource === 'leaderboard' ? 'From leaderboard ' : 'Updated '}
-              </span>
+              {player.rankedSource === 'leaderboard' ? (
+                <>
+                  <span className="sm:hidden">Leaderboard </span>
+                  <span className="hidden sm:inline">From leaderboard </span>
+                </>
+              ) : (
+                <span className="hidden sm:inline">Updated </span>
+              )}
               {timeAgo(player.rankedLastUpdated)}
             </Badge>
           )}
