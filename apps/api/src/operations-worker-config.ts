@@ -2,11 +2,15 @@ import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@braw
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
+  type CreateLeaderboardDeepCrawlSchedule,
   type CreateRankingRetentionSchedule,
   type WorkClass,
+  leaderboardDeepCrawlRegions,
+  maxLeaderboardDeepCrawlIntervalMs,
   maxLeaderboardIntervalMs,
   maxRankingRetentionBatch,
   maxRankingRetentionHours,
+  minLeaderboardDeepCrawlIntervalMs,
   minLeaderboardIntervalMs,
   minRankingRetentionHours,
   validateAdmissionConfig,
@@ -131,6 +135,31 @@ export function rankingRetentionScheduleDefinition(config: RankingRetentionConfi
     payload: { retentionHours: config.retentionHours, maxGenerations: config.maxGenerations },
     provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
   }
+}
+
+export type LeaderboardDeepCrawlConfig = {
+  // false disables the region schedules; runs already materialized still complete.
+  enabled: boolean
+  intervalMs: number
+  firstDueAt: string
+}
+
+// One crawl per region per interval, spread evenly so the regions never compete for V1 admission at once.
+export function leaderboardDeepCrawlScheduleDefinitions(
+  config: LeaderboardDeepCrawlConfig,
+): CreateLeaderboardDeepCrawlSchedule[] {
+  const baseDueAt = new Date(config.firstDueAt).getTime()
+  const staggerMs = Math.floor(config.intervalMs / leaderboardDeepCrawlRegions.length)
+  return leaderboardDeepCrawlRegions.map((region, index) => ({
+    kind: 'leaderboard-deep-crawl' as const,
+    scheduleKey: `rankings:1v1:deep:${region}`,
+    operationKeyPrefix: `rankings:1v1:deep:${region}`,
+    workClass: 'leaderboard' as const,
+    intervalMs: config.intervalMs,
+    firstDueAt: new Date(baseDueAt + index * staggerMs).toISOString(),
+    payload: { region, intervalMs: config.intervalMs },
+    provenance: { source: 'leaderboard-deep-crawl-schedule', requestedBy: 'proactive-freshness' },
+  }))
 }
 
 export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
@@ -317,6 +346,17 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       intervalMs: 15 * 60 * 1000,
       firstDueAt: '2020-01-01T00:05:00.000Z',
     } satisfies RankingRetentionConfig,
+    deepCrawl: {
+      enabled: strictBoolean(env.DEEP_CRAWL_ENABLED, true, 'DEEP_CRAWL_ENABLED'),
+      intervalMs: boundedInteger(
+        env.DEEP_CRAWL_INTERVAL_MS,
+        3 * 60 * 60 * 1000,
+        'DEEP_CRAWL_INTERVAL_MS',
+        minLeaderboardDeepCrawlIntervalMs,
+        maxLeaderboardDeepCrawlIntervalMs,
+      ),
+      firstDueAt: '2020-01-01T00:07:00.000Z',
+    } satisfies LeaderboardDeepCrawlConfig,
     admission: validateAdmissionConfig(admission),
   }
 }

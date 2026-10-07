@@ -19,6 +19,8 @@ import { addRankingRetention } from './migrations/0018-add-ranking-retention'
 import { validateRankingRetentionChecks } from './migrations/0019-validate-ranking-retention-checks'
 import { allowRecentlyViewedRefresh } from './migrations/0020-allow-recently-viewed-refresh'
 import { validateRecentlyViewedRefresh } from './migrations/0021-validate-recently-viewed-refresh'
+import { addLeaderboardDeepCrawl } from './migrations/0022-add-leaderboard-deep-crawl'
+import { validateLeaderboardDeepCrawl } from './migrations/0023-validate-leaderboard-deep-crawl'
 
 export {
   createPostgresDeadLetterOperations,
@@ -48,4 +50,6 @@ export const refreshOperationsMigrationInventory = [
   validateRankingRetentionChecks,
   allowRecentlyViewedRefresh,
   validateRecentlyViewedRefresh,
+  addLeaderboardDeepCrawl,
+  validateLeaderboardDeepCrawl,
 ] as const

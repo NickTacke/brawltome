@@ -1,4 +1,5 @@
 import {
+  type LeaderboardDeepCrawlStanding,
   type LeaderboardGenerationCandidate,
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
@@ -6,6 +7,7 @@ import {
   type RankingPublicationStore,
   type RankingRetentionStore,
   collectAndPublishLeaderboardGeneration,
+  leaderboardDeepCrawlStandings,
   leaderboardModeFromOperationKind,
 } from '@brawltome/ranking/composition'
 import type {
@@ -24,7 +26,8 @@ type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 type RankingRetentionLease = Extract<OperationLease, { kind: 'ranking-retention' }>
-type LeaderboardLease = Extract<OperationLease, { workClass: 'leaderboard' }>
+type LeaderboardDeepCrawlLease = Extract<OperationLease, { kind: 'leaderboard-deep-crawl' }>
+type LeaderboardLease = Exclude<Extract<OperationLease, { workClass: 'leaderboard' }>, LeaderboardDeepCrawlLease>
 type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
 type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
 type StatisticsLease = Extract<OperationLease, { workClass: 'global-statistics' }>
@@ -878,6 +881,143 @@ function withLeaderboardNamePropagation(
   }
 }
 
+// Fetches one V1 leaderboard page with background source admission, renewing the lease around each wait and retrying
+// transient page failures in place.
+function admittedLeaderboardPageFetch(
+  operations: RefreshOperationWorker,
+  lease: LeaderboardLease | LeaderboardDeepCrawlLease,
+  options: RunOneRefreshOperationOptions,
+  sourceAdmission: SourceAdmission,
+  leaderboardSource: LeaderboardPageSource,
+  authorityLost: AbortSignal,
+): LeaderboardPageSource['fetchPage'] {
+  const renewLeaderboardLease = async () => {
+    if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') throw new LeaderboardLeaseLostError()
+  }
+  return async (input) => {
+    const pageKey = `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`
+    for (let retry = 0; ; retry += 1) {
+      await renewLeaderboardLease()
+      for (;;) {
+        const admission = await sourceAdmission.admitSource({
+          domain: 'brawlhalla-v1',
+          // Each retry is a real source call, so it needs its own reservation.
+          reservationKey: retry === 0 ? pageKey : `${pageKey}:retry-${retry}`,
+          units: 1,
+          caller: 'background',
+        })
+        if (admission.outcome === 'admitted') break
+        await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
+        if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+        await renewLeaderboardLease()
+      }
+      await renewLeaderboardLease()
+      try {
+        return await (options.telemetry
+          ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
+          : leaderboardSource.fetchPage(input))
+      } catch (error) {
+        const delayMs = leaderboardPageRetryDelaysMs[retry]
+        if (delayMs === undefined || !isTransientLeaderboardPageFailure(error)) throw error
+        await (options.waitForSourceRetry ?? waitForRenewal)(delayMs, authorityLost)
+        if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+      }
+    }
+  }
+}
+
+const deepCrawlChunkPages = 20
+
+// Reads every V1 1v1 page of one region and writes each chunk of pages straight to Players, without publishing a
+// ranking generation. Chunks already written survive a failed attempt; a retry simply reads the pages again.
+async function executeLeaderboardDeepCrawl(
+  operations: RefreshOperationWorker,
+  lease: LeaderboardDeepCrawlLease,
+  options: RunOneRefreshOperationOptions,
+  authorityLost: AbortSignal,
+): Promise<AttemptExecutionOutcome> {
+  const { leaderboardSource, sourceAdmission, leaderboardPlayerNames, leaderboardRanked } = options
+  if (!leaderboardSource || !sourceAdmission || !leaderboardPlayerNames || !leaderboardRanked) {
+    const transition = await operations.fail(
+      lease,
+      {
+        code: 'leaderboard_executor_unavailable',
+        message: 'Leaderboard deep crawl executor is not configured',
+        retryable: false,
+      },
+      0,
+    )
+    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
+  }
+  const { region } = lease.payload
+  const fetchPage = admittedLeaderboardPageFetch(
+    operations,
+    lease,
+    options,
+    sourceAdmission,
+    leaderboardSource,
+    authorityLost,
+  )
+  const record = (write: (active: Telemetry) => void) => {
+    if (!options.telemetry) return
+    try {
+      write(options.telemetry)
+    } catch {
+      return
+    }
+  }
+  const started = performance.now()
+  let chunk: LeaderboardDeepCrawlStanding[] = []
+  let chunkObservedAt = new Date()
+  let changedNames = 0
+  let changedStandings = 0
+  const flush = async () => {
+    if (chunk.length === 0) return
+    const names = await leaderboardPlayerNames.applyLeaderboardNames({
+      observedAt: chunkObservedAt,
+      players: chunk.map(({ brawlhallaId, name }) => ({ brawlhallaId, name })),
+    })
+    const standings = await leaderboardRanked.applyLeaderboardRanked({
+      observedAt: chunkObservedAt,
+      players: chunk.map(({ name: _name, ...standing }) => standing),
+    })
+    changedNames += names.changed
+    changedStandings += standings.changed
+    record((active) => {
+      active.metrics.add('leaderboard_deep_crawl_changed_total', names.changed, { region, change: 'name' })
+      active.metrics.add('leaderboard_deep_crawl_changed_total', standings.changed, { region, change: 'standing' })
+    })
+    chunk = []
+  }
+
+  let totalPages = 1
+  let pagesRead = 0
+  for (let page = 1; page <= totalPages; page += 1) {
+    if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+    if (chunk.length === 0) chunkObservedAt = new Date()
+    const result = await fetchPage({ mode: '1v1', region, page })
+    // Ranks shift while the crawl runs, so the page count read first bounds the crawl and an empty page ends it.
+    if (page === 1) totalPages = result.totalPages
+    if (result.rankings.length === 0) break
+    pagesRead += 1
+    record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region }))
+    chunk.push(...leaderboardDeepCrawlStandings(result))
+    if (pagesRead % deepCrawlChunkPages === 0) await flush()
+  }
+  await flush()
+  record((active) =>
+    active.logger.info('leaderboard.deep_crawl.completed', {
+      region,
+      pages: pagesRead,
+      totalPages,
+      changedNames,
+      changedStandings,
+      durationMs: Math.round(performance.now() - started),
+    }),
+  )
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
 async function executeLeaderboard(
   operations: RefreshOperationWorker,
   lease: LeaderboardLease,
@@ -893,9 +1033,6 @@ async function executeLeaderboard(
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
   const { leaderboardSource, ranking, sourceAdmission } = options
-  const renewLeaderboardLease = async () => {
-    if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') throw new LeaderboardLeaseLostError()
-  }
   const mode = leaderboardModeFromOperationKind(lease.kind)
   await collectAndPublishLeaderboardGeneration({
     mode,
@@ -909,36 +1046,14 @@ async function executeLeaderboard(
       scheduleWindowAt: lease.scheduleWindowAt,
     },
     source: {
-      async fetchPage(input) {
-        const pageKey = `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`
-        for (let retry = 0; ; retry += 1) {
-          await renewLeaderboardLease()
-          for (;;) {
-            const admission = await sourceAdmission.admitSource({
-              domain: 'brawlhalla-v1',
-              // Each retry is a real source call, so it needs its own reservation.
-              reservationKey: retry === 0 ? pageKey : `${pageKey}:retry-${retry}`,
-              units: 1,
-              caller: 'background',
-            })
-            if (admission.outcome === 'admitted') break
-            await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
-            if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
-            await renewLeaderboardLease()
-          }
-          await renewLeaderboardLease()
-          try {
-            return await (options.telemetry
-              ? observeSourceCall(options.telemetry, 'brawlhalla-v1', () => leaderboardSource.fetchPage(input))
-              : leaderboardSource.fetchPage(input))
-          } catch (error) {
-            const delayMs = leaderboardPageRetryDelaysMs[retry]
-            if (delayMs === undefined || !isTransientLeaderboardPageFailure(error)) throw error
-            await (options.waitForSourceRetry ?? waitForRenewal)(delayMs, authorityLost)
-            if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
-          }
-        }
-      },
+      fetchPage: admittedLeaderboardPageFetch(
+        operations,
+        lease,
+        options,
+        sourceAdmission,
+        leaderboardSource,
+        authorityLost,
+      ),
     },
     publication: withLeaderboardNamePropagation(
       ranking,
@@ -1025,6 +1140,8 @@ export async function runOneRefreshOperation(
         attemptOutcome = await executeStatisticsLegendMetaPublication(operations, lease, options)
       } else if (lease.workClass === 'global-statistics') {
         attemptOutcome = await executeStatisticsCollection(operations, lease, options)
+      } else if (lease.kind === 'leaderboard-deep-crawl') {
+        attemptOutcome = await executeLeaderboardDeepCrawl(operations, lease, options, authorityLost.signal)
       } else {
         attemptOutcome = await executeLeaderboard(operations, lease, options, authorityLost.signal)
       }
@@ -1125,14 +1242,16 @@ export async function runOneRefreshOperation(
                           ? 'player_name_verification_failed'
                           : lease.kind === 'ranking-retention'
                             ? 'ranking_retention_failed'
-                            : lease.kind === 'statistics-ranked-collection' ||
-                                lease.kind === 'statistics-lifetime-collection'
-                              ? 'statistics_collection_failed'
-                              : lease.kind === 'statistics-publication'
-                                ? 'statistics_publication_failed'
-                                : lease.kind === 'statistics-legend-meta-publication'
-                                  ? 'statistics_legend_meta_publication_failed'
-                                  : 'leaderboard_collection_failed'
+                            : lease.kind === 'leaderboard-deep-crawl'
+                              ? 'leaderboard_deep_crawl_failed'
+                              : lease.kind === 'statistics-ranked-collection' ||
+                                  lease.kind === 'statistics-lifetime-collection'
+                                ? 'statistics_collection_failed'
+                                : lease.kind === 'statistics-publication'
+                                  ? 'statistics_publication_failed'
+                                  : lease.kind === 'statistics-legend-meta-publication'
+                                    ? 'statistics_legend_meta_publication_failed'
+                                    : 'leaderboard_collection_failed'
       const failure = failureDetails(error, fallbackCode)
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'

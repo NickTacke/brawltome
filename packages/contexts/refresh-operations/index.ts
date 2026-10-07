@@ -105,6 +105,32 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
   return payload
 }
 
+// Reads every page of one region's V1 1v1 leaderboard to keep every ranked player's standing current in Players.
+export const leaderboardDeepCrawlKind = 'leaderboard-deep-crawl'
+export const leaderboardDeepCrawlRegions = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+export const minLeaderboardDeepCrawlIntervalMs = 60 * 60 * 1000
+export const maxLeaderboardDeepCrawlIntervalMs = 24 * 60 * 60 * 1000
+
+export type LeaderboardDeepCrawlRegion = (typeof leaderboardDeepCrawlRegions)[number]
+export type LeaderboardDeepCrawlPayload = { region: LeaderboardDeepCrawlRegion; intervalMs: number }
+
+export function validateLeaderboardDeepCrawlPayload(payload: LeaderboardDeepCrawlPayload): LeaderboardDeepCrawlPayload {
+  if (!(leaderboardDeepCrawlRegions as readonly string[]).includes(payload.region)) {
+    throw new Error('leaderboard deep crawl region is not a regional leaderboard scope')
+  }
+  if (
+    !Number.isSafeInteger(payload.intervalMs) ||
+    payload.intervalMs < minLeaderboardDeepCrawlIntervalMs ||
+    payload.intervalMs > maxLeaderboardDeepCrawlIntervalMs
+  ) {
+    throw new Error(
+      `leaderboard deep crawl intervalMs must be an integer between ${minLeaderboardDeepCrawlIntervalMs} and ${maxLeaderboardDeepCrawlIntervalMs}`,
+    )
+  }
+  if (Object.keys(payload).length !== 2) throw new Error('leaderboard deep crawl payload has unexpected fields')
+  return payload
+}
+
 export const rankingRetentionKind = 'ranking-retention'
 export const minRankingRetentionHours = 24
 export const maxRankingRetentionHours = 365 * 24
@@ -277,7 +303,23 @@ export type CreateRankingRetentionSchedule = {
   maxAttempts?: number
 }
 
-export type CreateSchedule = CreateProofSchedule | CreateLeaderboardSchedule | CreateRankingRetentionSchedule
+export type CreateLeaderboardDeepCrawlSchedule = {
+  kind: typeof leaderboardDeepCrawlKind
+  scheduleKey: string
+  operationKeyPrefix: string
+  workClass: 'leaderboard'
+  intervalMs: number
+  firstDueAt: string
+  payload: LeaderboardDeepCrawlPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type CreateSchedule =
+  | CreateProofSchedule
+  | CreateLeaderboardSchedule
+  | CreateRankingRetentionSchedule
+  | CreateLeaderboardDeepCrawlSchedule
 
 export type PrimaryMonitoringTarget = {
   assignmentId: string
@@ -468,6 +510,11 @@ export type OperationLease =
       kind: typeof rankingRetentionKind
       workClass: 'maintenance'
       payload: RankingRetentionPayload
+    })
+  | (LeaseFields & {
+      kind: typeof leaderboardDeepCrawlKind
+      workClass: 'leaderboard'
+      payload: LeaderboardDeepCrawlPayload
     })
   | (LeaseFields & {
       kind: StatisticsCollectionKind

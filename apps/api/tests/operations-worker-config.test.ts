@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
@@ -10,6 +11,35 @@ import {
 import { readHealthPort, readRuntimeConfig, readShutdownAnnounceMs } from '../src/runtime-config'
 
 describe('operations worker configuration', () => {
+  test('schedules one staggered deep crawl per region and bounds its interval', () => {
+    const config = readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: String(2 * 60 * 60 * 1000) }).deepCrawl
+    const schedules = leaderboardDeepCrawlScheduleDefinitions(config)
+    expect(schedules.map(({ payload }) => payload.region)).toEqual([
+      'US-E',
+      'US-W',
+      'EU',
+      'SEA',
+      'AUS',
+      'BRZ',
+      'JPN',
+      'ME',
+      'SA',
+    ])
+    expect(schedules[0]).toMatchObject({
+      kind: 'leaderboard-deep-crawl',
+      scheduleKey: 'rankings:1v1:deep:US-E',
+      workClass: 'leaderboard',
+      intervalMs: 2 * 60 * 60 * 1000,
+      firstDueAt: '2020-01-01T00:07:00.000Z',
+      payload: { region: 'US-E', intervalMs: 2 * 60 * 60 * 1000 },
+    })
+    expect(Date.parse(schedules[1].firstDueAt) - Date.parse(schedules[0].firstDueAt)).toBe(
+      Math.floor((2 * 60 * 60 * 1000) / 9),
+    )
+    expect(readOperationsWorkerConfig({ DEEP_CRAWL_ENABLED: 'false' }).deepCrawl.enabled).toBe(false)
+    expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: '60000' })).toThrow('DEEP_CRAWL_INTERVAL_MS')
+  })
+
   test('uses conservative runtime defaults and rejects unsafe values', () => {
     expect(readOperationsWorkerConfig({})).toEqual({
       leaseMs: 30_000,
@@ -42,6 +72,11 @@ describe('operations worker configuration', () => {
         maxGenerations: 20,
         intervalMs: 15 * 60 * 1000,
         firstDueAt: '2020-01-01T00:05:00.000Z',
+      },
+      deepCrawl: {
+        enabled: true,
+        intervalMs: 3 * 60 * 60 * 1000,
+        firstDueAt: '2020-01-01T00:07:00.000Z',
       },
       admission: {
         totalConcurrency: 8,
