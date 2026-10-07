@@ -28,4 +28,19 @@ describe('verified client IP', () => {
     expect(verified('::ffff:127.0.0.1', { 'cf-connecting-ip': '203.0.113.8' })).toBe('203.0.113.8')
     expect(verified('::ffff:203.0.113.10', { 'x-forwarded-for': '198.51.100.3' })).toBe('::ffff:203.0.113.10')
   })
+
+  test('through Traefik, trusts the visitor address only when Cloudflare connected', () => {
+    expect(verified('10.0.1.5', { 'x-real-ip': '188.114.97.3', 'cf-connecting-ip': '203.0.113.9' })).toBe('203.0.113.9')
+    expect(verified('10.0.1.5', { 'x-real-ip': '2606:4700::6810:1', 'cf-connecting-ip': '203.0.113.9' })).toBe(
+      '203.0.113.9',
+    )
+    expect(
+      verified('10.0.1.5', {
+        'x-real-ip': '198.51.100.20',
+        'cf-connecting-ip': '203.0.113.9',
+        'x-forwarded-for': '203.0.113.10',
+      }),
+    ).toBe('198.51.100.20')
+    expect(verified('10.0.1.5', { 'x-real-ip': '188.114.97.3' })).toBe('188.114.97.3')
+  })
 })

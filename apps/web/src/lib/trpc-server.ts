@@ -13,7 +13,6 @@ const refreshTrustCookie = 'brawltome_refresh_trust'
 
 async function createServerTrpc(propagateRefreshTrust: boolean) {
   const h = await headers()
-  const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0].trim()
   const ua = h.get('user-agent') ?? ''
   const incomingCookie = h.get('cookie')
   const cookieStore = propagateRefreshTrust ? await cookies() : null
@@ -26,8 +25,12 @@ async function createServerTrpc(propagateRefreshTrust: boolean) {
   )
 
   const outHeaders: Record<string, string> = {}
-  // The API derives the client IP itself and only trusts forwarding headers from private peers such as this server.
-  if (ip) outHeaders['x-forwarded-for'] = ip
+  // Pass the ingress evidence through untouched; the API decides which visitor address to trust
+  // (apps/api/src/client-ip.ts). X-Real-Ip is set by Traefik, so a client reaching the origin directly can't forge it.
+  for (const name of ['x-real-ip', 'cf-connecting-ip', 'x-forwarded-for']) {
+    const value = h.get(name)
+    if (value) outHeaders[name] = value
+  }
   if (ua) outHeaders['x-original-ua'] = ua
   if (incomingCookie) outHeaders.cookie = incomingCookie
   if (internalSecret) outHeaders['x-internal-secret'] = internalSecret
