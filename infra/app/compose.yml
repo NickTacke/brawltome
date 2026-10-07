@@ -283,6 +283,10 @@ services:
       # Discovery reconciliation is a safety net (the outbox delivers changes in seconds) and holds the projection lock
       # for its ~3 minute run, delaying search updates; every 6 hours instead of hourly.
       DISCOVERY_RECONCILIATION_INTERVAL_MS: "21600000"
+      # One background refresh at a time, every 10 s: Brawlhalla rate-limits short V0 bursts (Retry-After 5 s) well
+      # below the 180-per-15-minute budget, and four at once triggered 429s. The usage gate still sets the overall pace.
+      FRESHNESS_BATCH: "1"
+      FRESHNESS_INTERVAL_MS: "10000"
       HEALTH_PORT: "3001"
       LEADERBOARD_INTERVAL_MS: "900000"
       LEADERBOARD_PAGE_DEPTH: "20"
