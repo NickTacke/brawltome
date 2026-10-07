@@ -9,6 +9,7 @@ import { dropRedundantSnapshotRowIndexes } from './migrations/0008-drop-redundan
 import { expireV1RankingGenerations } from './migrations/0009-expire-v1-generations'
 import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete'
 import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delete-without-seqscan'
+import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
 
 export {
   LeaderboardCandidateError,
@@ -53,4 +54,5 @@ export const rankingMigrationInventory = [
   expireV1RankingGenerations,
   bitmapRetentionDelete,
   retentionDeleteWithoutSeqScan,
+  statementLevelRowImmutability,
 ] as const
