@@ -109,7 +109,6 @@ describe('V1 ranked leaderboard source', () => {
       { rankings: [{ ...valid, players: [{ id: 42 }] }], total_pages: 1 },
       { rankings: [{ ...valid, players: undefined, id: 42, username: 'Ada' }], total_pages: 1 },
       { rankings: [{ ...valid, rating: Number.NaN }], total_pages: 1 },
-      { rankings: [{ ...valid, best_rating: 2099 }], total_pages: 1 },
       { rankings: [{ ...valid, rank: 1.5 }], total_pages: 1 },
       { rankings: [{ ...valid, wins: -1 }], total_pages: 1 },
       { rankings: [{ ...valid, wins: 2_147_483_647, losses: 1 }], total_pages: 1 },
@@ -118,6 +117,11 @@ describe('V1 ranked leaderboard source', () => {
     ]) {
       expect(() => decodeLeaderboardPage(body, { mode: '1v1', region: 'EU', page: 1 })).toThrow(LeaderboardSourceError)
     }
+  })
+
+  test('raises a season peak reported below the current rating instead of rejecting the page', () => {
+    const row = { ...(realShapedRows['1v1'] as Record<string, unknown>), rating: 2100, best_rating: 2099 }
+    expect(decode('1v1', row).rankings[0]).toMatchObject({ rating: 2100, best_rating: 2100 })
   })
 
   test('decodes an empty region as zero total pages', () => {
