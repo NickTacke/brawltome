@@ -60,7 +60,7 @@ afterAll(async () => {
   for (const name of databases) await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
   if (createdRuntimeRole) await admin.unsafe(`DROP ROLE IF EXISTS ${runtimeRole}`)
   await admin.end()
-})
+}, 60_000)
 
 async function migratedDatabase() {
   const name = `bt_retention_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -154,6 +154,40 @@ async function insertGeneration(
     await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
   }
   return { generationId, snapshots }
+}
+
+const bulkScopes = ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+
+// A V1 generation with one snapshot per scope and `rowsPerSnapshot` rows each, inserted set-based.
+async function insertBulkGeneration(sql: Sql, windowAt: Date, rowsPerSnapshot: number): Promise<string> {
+  const generationId = randomUUID()
+  await sql`
+    INSERT INTO rankings.generations
+      (id, operation_id, operation_key, mode, observed_at, schedule_window_at, published_at,
+       expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+    VALUES
+      (${generationId}, ${randomUUID()}, ${`retention-bulk:${generationId}`}, '1v1',
+       ${new Date(windowAt.getTime() + 1_000)}, ${windowAt}, ${new Date(windowAt.getTime() + 2_000)},
+       ${new Date(windowAt.getTime() + 15 * minute)}, 1, ${v1Source}, 2, false,
+       ${sql.json({ source: v1Source, contractVersion: 2, pageDepth: 1 })})
+  `
+  for (const scope of bulkScopes) {
+    const snapshotId = randomUUID()
+    await sql`
+      INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
+      VALUES (${snapshotId}, ${generationId}, '1v1', ${scope}, ${rowsPerSnapshot})
+    `
+    await sql`
+      INSERT INTO rankings.snapshot_rows
+        (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name, region,
+         rating, peak_rating, wins, losses, tier)
+      SELECT ${snapshotId}, '1v1', n, n, n, 'one-vs-one-player', 1000 + n, 'Player ' || (1000 + n), 'EU',
+             5000 - n, 5100 - n, 10, 5, 'Diamond'
+      FROM generate_series(1, ${rowsPerSnapshot}::int) AS n
+    `
+  }
+  await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+  return generationId
 }
 
 async function referenceFromLegacyImportSet(
@@ -514,6 +548,75 @@ describe('Ranking snapshot retention', () => {
       await sql.end()
     }
   }, 30_000)
+
+  test('pins the bitmap-scan setting on the definer function', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const [definition] = await sql<{ config: string[] | null }[]>`
+        SELECT proconfig AS config
+        FROM pg_proc
+        WHERE oid = 'rankings.expire_v1_generations(timestamptz, integer)'::regprocedure
+      `
+      expect(definition?.config).toContain('enable_indexscan=off')
+      expect(definition?.config).toContain('search_path=pg_catalog, pg_temp')
+      expect(definition?.config).toContain('lock_timeout=5s')
+      // The setting is function-scoped: the session keeps its own planner configuration.
+      expect((await sql`SHOW enable_indexscan`)[0]?.enable_indexscan).toBe('on')
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('deletes exactly the expired rows of a large batch and nothing else', async () => {
+    const { sql } = await migratedDatabase()
+    try {
+      const now = await databaseNow(sql)
+      const at = (offsetMs: number) => new Date(now.getTime() - offsetMs)
+      const rowsPerSnapshot = 2_000
+      const expired = [
+        await insertBulkGeneration(sql, at(50 * hour), rowsPerSnapshot),
+        await insertBulkGeneration(sql, at(49 * hour), rowsPerSnapshot),
+        await insertBulkGeneration(sql, at(48 * hour), rowsPerSnapshot),
+      ]
+      const kept = [
+        await insertBulkGeneration(sql, at(2 * hour), rowsPerSnapshot),
+        await insertBulkGeneration(sql, at(1 * hour), rowsPerSnapshot),
+      ]
+      // A generation that never got snapshots must expire without touching the null snapshot array.
+      const emptyGenerationId = randomUUID()
+      await sql`
+        INSERT INTO rankings.generations
+          (id, operation_id, operation_key, mode, observed_at, schedule_window_at, published_at,
+           expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+        VALUES
+          (${emptyGenerationId}, ${randomUUID()}, ${`retention-empty:${emptyGenerationId}`}, '2v2',
+           ${at(60 * hour)}, ${at(61 * hour)}, ${at(60 * hour)}, ${at(59 * hour)}, 1, ${v1Source}, 2, true,
+           ${sql.json({ source: v1Source, contractVersion: 2, pageDepth: 1 })})
+      `
+      const keepers = [
+        await insertGeneration(sql, { mode: '2v2', windowAt: at(40 * hour) }),
+        await insertGeneration(sql, { mode: '2v2', windowAt: at(39 * hour) }),
+      ]
+      const [before] = await sql<{ rows: number }[]>`SELECT count(*)::int AS rows FROM rankings.snapshot_rows`
+      expect(before?.rows).toBe(5 * bulkScopes.length * rowsPerSnapshot + keepers.length * 4)
+
+      expect(await expireWithBacklog(sql, at(24 * hour), 10)).toEqual({ deleted: 4, expirable: 0 })
+
+      const doomed = [...expired, emptyGenerationId]
+      expect(await orphanCounts(sql, doomed)).toEqual({ snapshots: 0, rows: 0 })
+      expect(await orphanCounts(sql, kept)).toEqual({
+        snapshots: kept.length * bulkScopes.length,
+        rows: kept.length * bulkScopes.length * rowsPerSnapshot,
+      })
+      const [after] = await sql<{ rows: number }[]>`SELECT count(*)::int AS rows FROM rankings.snapshot_rows`
+      expect(after?.rows).toBe(2 * bulkScopes.length * rowsPerSnapshot + keepers.length * 4)
+      expect((await storedGenerationIds(sql)).sort()).toEqual(
+        [...kept, ...keepers.map(({ generationId }) => generationId)].sort(),
+      )
+    } finally {
+      await sql.end()
+    }
+  }, 60_000)
 
   test('lets the runtime role expire generations only through the definer function', async () => {
     const { sql } = await migratedDatabase()
