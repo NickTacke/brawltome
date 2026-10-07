@@ -206,7 +206,7 @@ describe('Discovery player search', () => {
           facts.slice(0, 1_000).map((player) => ({
             eventId: randomUUID(),
             brawlhallaId: player.brawlhallaId,
-            sourceVersion: 6,
+            sourceVersion: 5,
             fact: { ...player, name: `Covered Event ${player.brawlhallaId}` },
           })),
         ),
@@ -248,6 +248,30 @@ describe('Discovery player search', () => {
         discovery.rebuildPlayers({ sourceVersion: 9, facts: [fact(500, 'Stale Rebuild', 1700, 0)] }),
       ).rejects.toThrow()
       await expect(playerResults(discovery, 'newest')).resolves.toHaveLength(1)
+    } finally {
+      await discovery.close()
+    }
+  })
+
+  test('applies every batch of a bulk write enqueued under one source version', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({ sourceVersion: 20, facts: [fact(600, 'Burst One', 1500, 0)] })
+      const burst = [600, 601, 602].map((brawlhallaId) => ({
+        eventId: randomUUID(),
+        brawlhallaId,
+        sourceVersion: 21,
+        fact: fact(brawlhallaId, `Burst ${brawlhallaId}`, 1973, 0),
+      }))
+
+      await expect(discovery.applyPlayerEvents(burst.slice(0, 1))).resolves.toEqual({ appliedEvents: 1 })
+      await expect(discovery.applyPlayerEvents(burst.slice(1))).resolves.toEqual({ appliedEvents: 2 })
+
+      for (const brawlhallaId of [600, 601, 602]) {
+        await expect(playerResults(discovery, `burst ${brawlhallaId}`)).resolves.toEqual([
+          expect.objectContaining({ brawlhallaId, rating: 1973 }),
+        ])
+      }
     } finally {
       await discovery.close()
     }
