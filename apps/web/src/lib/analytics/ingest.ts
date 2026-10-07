@@ -60,10 +60,14 @@ function record(event: AnalyticsEvent, visitorKey: () => string, { telemetry }: 
       if (event.statsAge) {
         metrics.add('analytics_profile_section_age_total', 1, { section: 'stats', data_age: event.statsAge })
       }
+      if (event.rankedSource) {
+        metrics.add('analytics_profile_ranked_source_total', 1, { source: event.rankedSource })
+      }
       log({
         dataAge: event.dataAge,
         ...(event.rankedAge ? { rankedAge: event.rankedAge } : {}),
         ...(event.statsAge ? { statsAge: event.statsAge } : {}),
+        ...(event.rankedSource ? { rankedSource: event.rankedSource } : {}),
       })
       return
     case 'refresh.state':

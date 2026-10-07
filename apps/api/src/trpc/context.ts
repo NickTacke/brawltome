@@ -2,6 +2,7 @@ import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanQueries } from '@brawltome/clan'
 import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { CareerPlayerQueries, PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
+import type { PostgresLeaderboardRanked } from '@brawltome/player/composition'
 import type { PlayerValhallanQueries, RankingQueries } from '@brawltome/ranking'
 import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
@@ -29,4 +30,6 @@ export interface Context {
   account: Account | null
   // Optional so router tests need not provide it; production wires the Players view counter.
   profileViews?: { recordView(brawlhallaId: number): Promise<void> }
+  // Optional so router tests need not provide it; production wires the Players leaderboard observations.
+  leaderboardStandings?: Pick<PostgresLeaderboardRanked, 'standingById'>
 }

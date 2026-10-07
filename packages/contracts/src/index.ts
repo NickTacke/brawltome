@@ -115,6 +115,9 @@ export {
   playerRankedProfileSchema,
   playerRankedSnapshotSchema,
   type PlayerRankedProfileContract,
+  leaderboardStandingSchema,
+  nullableLeaderboardStandingSchema,
+  type LeaderboardStandingContract,
 } from './player-ranked'
 export {
   brawlhallaIdSchema,

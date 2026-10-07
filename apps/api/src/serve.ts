@@ -8,6 +8,7 @@ import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
   createPostgresProfileViews,
+  createPostgresLeaderboardRanked,
   createPostgresRankedPlayers,
 } from '@brawltome/player/composition'
 import { createPostgresRanking } from '@brawltome/ranking/composition'
@@ -71,6 +72,7 @@ const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
 })
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databaseUrl)
 const profileViews = createPostgresProfileViews(databaseUrl)
+const leaderboardStandings = createPostgresLeaderboardRanked(databaseUrl)
 const discovery = createPostgresDiscovery(databaseUrl)
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(
   db,
@@ -110,6 +112,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'players-career-postgres', close: careerPlayerQueries.close },
     { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
     { name: 'players-profile-views-postgres', close: profileViews.close },
+    { name: 'players-leaderboard-standings-postgres', close: leaderboardStandings.close },
     { name: 'request-admission-postgres', close: requestAdmission.close },
     { name: 'accounts-postgres', close: accountsRuntime.close },
     { name: 'ranking-postgres', close: ranking.close },
@@ -136,6 +139,7 @@ const sharedCtx = {
   clanRepo,
   accounts,
   profileViews,
+  leaderboardStandings,
 }
 
 const app = new Hono()

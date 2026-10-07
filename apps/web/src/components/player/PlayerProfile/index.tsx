@@ -64,6 +64,11 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
       dataAge: dataAgeBucket(getPlayerDataUpdatedAt(firstRenderDataRef.current), viewedAt),
       rankedAge: sectionAge(firstRenderDataRef.current?.currentSeason?.lastSuccessAt),
       statsAge: sectionAge(firstRenderDataRef.current?.career?.lastSuccessAt),
+      rankedSource: firstRenderDataRef.current?.currentSeason?.snapshot
+        ? 'v0'
+        : firstRenderDataRef.current?.leaderboardStanding
+          ? 'leaderboard'
+          : 'none',
     })
   }, [id])
   const brawlhallaId = Number(id)

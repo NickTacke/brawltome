@@ -8,11 +8,22 @@ type PlayerReference = {
 
 type ClanMembership = { clanId: number; clanName: string } | null
 
+export type LeaderboardStanding = {
+  region: string
+  rating: number
+  peakRating: number
+  tier: string | null
+  wins: number
+  games: number
+  observedAt: string
+}
+
 type PlayerReferenceClient<TRanked, TCareer> = {
   player: {
     referenceById: { query(input: { id: number }): Promise<PlayerReference | null> }
     rankedById: { query(input: { id: number }): Promise<TRanked> }
     careerById: { query(input: { id: number }): Promise<TCareer> }
+    leaderboardStandingById: { query(input: { id: number }): Promise<LeaderboardStanding | null> }
   }
   clan: {
     membershipByPlayerId: { query(input: { id: number }): Promise<ClanMembership> }
@@ -23,11 +34,15 @@ export async function loadPlayerWithReference<TRanked, TCareer>(
   client: PlayerReferenceClient<TRanked, TCareer>,
   id: number,
 ) {
-  const [reference, ranked, career, clan] = await Promise.all([
+  const [reference, ranked, career, clan, leaderboardStanding] = await Promise.all([
     client.player.referenceById.query({ id }),
     client.player.rankedById.query({ id }),
     client.player.careerById.query({ id }),
     client.clan.membershipByPlayerId.query({ id }),
+    // Best effort: the profile renders without it.
+    client.player.leaderboardStandingById
+      .query({ id })
+      .catch(() => null),
   ])
 
   if (!reference) return { reference: null, player: null }
@@ -43,6 +58,7 @@ export async function loadPlayerWithReference<TRanked, TCareer>(
       ...(reference.legacyRating !== undefined ? { legacyRating: reference.legacyRating } : {}),
       currentSeason: ranked,
       career,
+      leaderboardStanding,
     },
   }
 }
