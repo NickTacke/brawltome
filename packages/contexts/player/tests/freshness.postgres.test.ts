@@ -74,6 +74,13 @@ describe('Player freshness', () => {
         ]),
       )
       expect(await freshness.lastRefreshedById([])).toEqual(new Map())
+      await control`
+        INSERT INTO players.leaderboard_ranked_observations
+          (brawlhalla_id, region, rating, peak_rating, tier, wins, games, observed_at)
+        VALUES (1, 'EU', 2000, 2100, 'Diamond', 1, 2, '2026-10-07T12:00:00Z')
+      `
+      expect(await freshness.lastPlayedById([1, 2])).toEqual(new Map([[1, new Date('2026-10-07T12:00:00Z')]]))
+      expect(await freshness.lastPlayedById([])).toEqual(new Map())
     } finally {
       await Promise.all([control.end(), freshness.close()])
     }
