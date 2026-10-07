@@ -30,7 +30,7 @@ describe('operations worker configuration', () => {
       scheduleKey: 'rankings:1v1:deep:US-E',
       workClass: 'leaderboard',
       intervalMs: 2 * 60 * 60 * 1000,
-      firstDueAt: '2026-10-07T16:00:00.000Z',
+      firstDueAt: '2026-10-07T19:30:00.000Z',
       payload: { region: 'US-E', intervalMs: 2 * 60 * 60 * 1000 },
     })
     expect(Date.parse(schedules[1].firstDueAt) - Date.parse(schedules[0].firstDueAt)).toBe(
@@ -38,6 +38,8 @@ describe('operations worker configuration', () => {
     )
     expect(readOperationsWorkerConfig({ DEEP_CRAWL_ENABLED: 'false' }).deepCrawl.enabled).toBe(false)
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: '60000' })).toThrow('DEEP_CRAWL_INTERVAL_MS')
+    expect(readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '0' }).deepCrawl.pageDelayMs).toBe(0)
+    expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '5001' })).toThrow('DEEP_CRAWL_PAGE_DELAY_MS')
   })
 
   test('uses conservative runtime defaults and rejects unsafe values', () => {
@@ -75,8 +77,9 @@ describe('operations worker configuration', () => {
       },
       deepCrawl: {
         enabled: true,
-        intervalMs: 3 * 60 * 60 * 1000,
-        firstDueAt: '2026-10-07T16:00:00.000Z',
+        intervalMs: 60 * 60 * 1000,
+        firstDueAt: '2026-10-07T19:30:00.000Z',
+        pageDelayMs: 150,
       },
       admission: {
         totalConcurrency: 8,

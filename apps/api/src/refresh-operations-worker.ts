@@ -108,6 +108,7 @@ type RunOneRefreshOperationOptions = {
     save(input: { region: string; windowAt: Date; nextPage: number; totalPages: number }): Promise<void>
   }
   deepCrawlSlicePages?: number
+  deepCrawlPageDelayMs?: number
   statistics?: Pick<
     StatisticsTracer,
     | 'preflightCollection'
@@ -1052,6 +1053,9 @@ async function executeLeaderboardDeepCrawl(
     record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { region, outcome: 'read' }))
     chunk.push(...leaderboardDeepCrawlStandings(result))
     page += 1
+    if (options.deepCrawlPageDelayMs && page <= totalPages) {
+      await (options.waitForSourceRetry ?? waitForRenewal)(options.deepCrawlPageDelayMs, authorityLost)
+    }
     if (pagesRead % deepCrawlChunkPages === 0) {
       await flush()
       if (pagesRead >= slicePages && page <= totalPages) {

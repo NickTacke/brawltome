@@ -1540,8 +1540,15 @@ describe('refresh operations worker source retry', () => {
     type Progress = { windowAt: Date; nextPage: number; totalPages: number }
     const run = async (
       totalPages: number,
-      input: { failOnPage?: number; failure?: LeaderboardSourceError; slicePages?: number; saved?: Progress } = {},
+      input: {
+        failOnPage?: number
+        failure?: LeaderboardSourceError
+        slicePages?: number
+        saved?: Progress
+        pageDelayMs?: number
+      } = {},
     ) => {
+      const waits: number[] = []
       const fetched: number[] = []
       const nameWrites: number[] = []
       const standingWrites: Array<Array<{ brawlhallaId: number; games: number }>> = []
@@ -1570,6 +1577,10 @@ describe('refresh operations worker source retry', () => {
           retryDelayMs: 10,
           admission,
           deepCrawlSlicePages: input.slicePages,
+          deepCrawlPageDelayMs: input.pageDelayMs,
+          waitForSourceRetry: async (delayMs: number) => {
+            waits.push(delayMs)
+          },
           leaderboardDeepCrawlProgress: {
             read: async () => progress,
             save: async (saved) => {
@@ -1624,7 +1635,7 @@ describe('refresh operations worker source retry', () => {
           },
         },
       )
-      return { fetched, nameWrites, standingWrites, transitions, progress }
+      return { fetched, nameWrites, standingWrites, transitions, progress, waits }
     }
 
     const crawl = await run(45)
@@ -1674,6 +1685,11 @@ describe('refresh operations worker source retry', () => {
       failure: new LeaderboardSourceError('source_contract_invalid', 'bad page', false),
     })
     expect(badFirst.transitions).toEqual(['fail:source_contract_invalid'])
+
+    // The page delay paces the crawl between pages, not after the last one.
+    const paced = await run(5, { pageDelayMs: 400 })
+    expect(paced.waits).toEqual([400, 400, 400, 400])
+    expect(paced.transitions).toEqual(['complete'])
 
     // Slices yield the leaderboard slot and the next attempt resumes where the last chunk stopped.
     const firstSlice = await run(100, { slicePages: 40 })
