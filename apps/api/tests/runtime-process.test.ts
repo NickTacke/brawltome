@@ -65,20 +65,24 @@ async function waitForRuntimeReady(
 ): Promise<void> {
   let lastHealth = 'unreachable'
   try {
-    await waitFor(async () => {
-      if (runtime.process.exitCode !== null) {
-        const [stdout, stderr] = await Promise.all([runtime.stdout, runtime.stderr])
-        throw new Error(`${message} exited during startup\nstdout:\n${stdout}\nstderr:\n${stderr}`)
-      }
-      try {
-        const response = await fetch(`http://127.0.0.1:${port}/health/ready`)
-        lastHealth = `${response.status} ${await response.text()}`
-        return response.status === 200
-      } catch {
-        lastHealth = 'unreachable'
-        return false
-      }
-    }, message, 30_000)
+    await waitFor(
+      async () => {
+        if (runtime.process.exitCode !== null) {
+          const [stdout, stderr] = await Promise.all([runtime.stdout, runtime.stderr])
+          throw new Error(`${message} exited during startup\nstdout:\n${stdout}\nstderr:\n${stderr}`)
+        }
+        try {
+          const response = await fetch(`http://127.0.0.1:${port}/health/ready`)
+          lastHealth = `${response.status} ${await response.text()}`
+          return response.status === 200
+        } catch {
+          lastHealth = 'unreachable'
+          return false
+        }
+      },
+      message,
+      30_000,
+    )
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : String(error)}; last health: ${lastHealth}`)
   }
