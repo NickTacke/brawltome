@@ -1,0 +1,38 @@
+name: Uptime
+# External probe (#340): Prometheus and Alertmanager run on the host they monitor, so a full host outage would alert
+# nobody. GitHub runs this from outside and emails the workflow's last editor when a scheduled run fails.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+permissions: {}
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe public endpoints
+        shell: bash
+        run: |
+          set -u
+          # Three tries 20 s apart so a single deploy swap or network blip doesn't fail the run.
+          probe() {
+            local url=$1 status=000
+            for attempt in 1 2 3; do
+              status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "$url" || true)
+              [ "$status" = 200 ] && { echo "ok   $status $url"; return 0; }
+              echo "try $attempt: $status $url"
+              [ "$attempt" -lt 3 ] && sleep 20
+            done
+            echo "::error::$url answered $status after 3 tries"
+            return 1
+          }
+          failed=0
+          probe https://brawltome.app/ || failed=1
+          probe https://api.brawltome.app/health/ready || failed=1
+          probe https://brawltome.app/player/5806297 || failed=1
+          exit "$failed"
