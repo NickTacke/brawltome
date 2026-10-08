@@ -23,7 +23,9 @@ jobs:
           probe() {
             local url=$1 status=000
             for attempt in 1 2 3; do
-              status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "$url" || true)
+              status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 \
+                --user-agent 'Mozilla/5.0 (compatible; BrawlTome-Uptime/1.0; +https://github.com/NickTacke/brawltome)' \
+                "$url" || true)
               [ "$status" = 200 ] && { echo "ok   $status $url"; return 0; }
               echo "try $attempt: $status $url"
               [ "$attempt" -lt 3 ] && sleep 20
