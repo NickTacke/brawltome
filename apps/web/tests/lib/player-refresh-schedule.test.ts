@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { resolvePollDelay } from '../../src/hooks/useStaleRefresh'
-import { PLAYER_REFRESH_MAX_WAIT_MS, playerRefreshPollDelayMs } from '../../src/lib/player-refresh'
+import {
+  PLAYER_REFRESH_FALLBACK_POLL_MS,
+  PLAYER_REFRESH_MAX_WAIT_MS,
+  PLAYER_REFRESH_PUSHED_POLL_MS,
+} from '../../src/lib/player-refresh'
 
 describe('player refresh polling schedule', () => {
-  test('polls every two seconds for the first twenty seconds', () => {
-    expect(playerRefreshPollDelayMs(0)).toBe(2_000)
-    expect(playerRefreshPollDelayMs(19_999)).toBe(2_000)
+  test('polls every five seconds when the completion stream is unavailable', () => {
+    expect(PLAYER_REFRESH_FALLBACK_POLL_MS).toBe(5_000)
   })
 
-  test('backs off to five seconds once the worker is retrying', () => {
-    expect(playerRefreshPollDelayMs(20_000)).toBe(5_000)
-    expect(playerRefreshPollDelayMs(85_000)).toBe(5_000)
+  test('keeps only a slow safety net while the completion stream is live', () => {
+    expect(PLAYER_REFRESH_PUSHED_POLL_MS).toBe(15_000)
   })
 
   test('waits up to ninety seconds before giving up', () => {

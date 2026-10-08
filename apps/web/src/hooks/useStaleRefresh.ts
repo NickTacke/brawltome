@@ -1,4 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  type PollDelay,
+  type RefreshPush,
+  type StaleRefreshSettlement,
+  resolvePollDelay,
+  startRefreshRun,
+} from '../lib/refresh-run'
 import { isStale } from '../lib/staleness'
 
 export interface RefreshStateInput {
@@ -22,20 +29,13 @@ export function computeRefreshState(input: RefreshStateInput): RefreshState {
   return { isRefreshing: true }
 }
 
-export type PollDelay = number | ((elapsedMs: number) => number)
-
-export function resolvePollDelay(pollMs: PollDelay, elapsedMs: number): number {
-  return typeof pollMs === 'function' ? pollMs(elapsedMs) : pollMs
-}
-
-export class RefreshTimeoutError extends Error {
-  constructor() {
-    super('Refresh timed out')
-    this.name = 'RefreshTimeoutError'
-  }
-}
-
-export type StaleRefreshSettlement = 'done' | 'timeout' | 'error'
+export {
+  type PollDelay,
+  type RefreshPush,
+  RefreshTimeoutError,
+  type StaleRefreshSettlement,
+  resolvePollDelay,
+} from '../lib/refresh-run'
 
 interface UseStaleRefreshOptions<T> {
   initialData: T
@@ -47,6 +47,10 @@ interface UseStaleRefreshOptions<T> {
   runKey?: number
   /** Fixed delay, or a schedule computed from the elapsed time of the current run. */
   pollMs?: PollDelay
+  /** Push channel opened for each run: it wakes the run for an immediate refetch. */
+  push?: RefreshPush
+  /** Polling schedule while the push channel is live; defaults to `pollMs`. */
+  pushedPollMs?: PollDelay
   maxRefreshMs?: number
   onSettled?: (settlement: StaleRefreshSettlement) => void
 }
@@ -67,72 +71,52 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
   const shouldStartRef = useRef(opts.shouldStart)
   const isDoneRef = useRef(opts.isDone)
   const onSettledRef = useRef(opts.onSettled)
+  const pushRef = useRef(opts.push)
   const dataRef = useRef<T>(opts.initialData)
-  const prevDataRef = useRef<T>(opts.initialData)
   const pollMsRef = useRef<PollDelay>(opts.pollMs ?? 2_000)
+  const pushedPollMsRef = useRef<PollDelay | undefined>(opts.pushedPollMs)
   const maxRefreshMsRef = useRef<number>(opts.maxRefreshMs ?? 30_000)
 
   queryFnRef.current = opts.queryFn
   shouldStartRef.current = opts.shouldStart
   isDoneRef.current = opts.isDone
   onSettledRef.current = opts.onSettled
+  pushRef.current = opts.push
   pollMsRef.current = opts.pollMs ?? 2_000
+  pushedPollMsRef.current = opts.pushedPollMs
   maxRefreshMsRef.current = opts.maxRefreshMs ?? 30_000
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: runKey intentionally restarts polling.
   useEffect(() => {
     if (opts.startSignal === false || !shouldStartRef.current(dataRef.current)) return
     const start = Date.now()
-    prevDataRef.current = dataRef.current
     setError(null)
     setStartedAt(start)
     setNow(start)
 
-    let cancelled = false
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-
-    const tick = async () => {
-      if (cancelled) return
-      const elapsed = Date.now() - start
-      if (elapsed > maxRefreshMsRef.current) {
-        setError(new RefreshTimeoutError())
-        setNow(Date.now())
-        onSettledRef.current?.('timeout')
-        return
-      }
-      try {
-        const next = await queryFnRef.current()
-        if (cancelled) return
+    return startRefreshRun<T>({
+      initial: dataRef.current,
+      queryFn: () => queryFnRef.current(),
+      isDone: (previous, next) => isDoneRef.current(previous, next),
+      pollMs: (elapsedMs) => resolvePollDelay(pollMsRef.current, elapsedMs),
+      pushedPollMs:
+        pushedPollMsRef.current === undefined
+          ? undefined
+          : (elapsedMs) => resolvePollDelay(pushedPollMsRef.current ?? pollMsRef.current, elapsedMs),
+      maxRefreshMs: maxRefreshMsRef.current,
+      push: pushRef.current,
+      onData: (next) => {
         dataRef.current = next
         setData(next)
         setNow(Date.now())
-        if (isDoneRef.current(prevDataRef.current, next)) {
-          setStartedAt(null)
-          onSettledRef.current?.('done')
-          return
-        }
-        prevDataRef.current = next
-      } catch (err) {
-        if (cancelled) return
-        setError(err instanceof Error ? err : new Error(String(err)))
+      },
+      onSettled: (settlement: StaleRefreshSettlement, settledError?: Error) => {
+        if (settledError) setError(settledError)
         setNow(Date.now())
-        setStartedAt(null)
-        onSettledRef.current?.('error')
-        return
-      }
-      schedule()
-    }
-
-    const schedule = () => {
-      timeoutId = setTimeout(tick, resolvePollDelay(pollMsRef.current, Date.now() - start))
-    }
-
-    schedule()
-
-    return () => {
-      cancelled = true
-      if (timeoutId) clearTimeout(timeoutId)
-    }
+        if (settlement !== 'timeout') setStartedAt(null)
+        onSettledRef.current?.(settlement)
+      },
+    })
   }, [opts.startSignal, opts.runKey])
 
   const { isRefreshing } = computeRefreshState({
