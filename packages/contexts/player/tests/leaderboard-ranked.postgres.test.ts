@@ -324,3 +324,130 @@ describe('Ranked standings observed on leaderboards', () => {
     }
   })
 })
+
+describe('Solo queue and fixed teams only the deep crawl has seen', () => {
+  const team = (brawlhallaIdOne: number, brawlhallaIdTwo: number, rating: number, tier: string | null = 'Gold 2') => ({
+    brawlhallaIdOne,
+    brawlhallaIdTwo,
+    region: 'EU',
+    rating,
+    peakRating: rating + 10,
+    tier,
+    wins: 4,
+    games: 7,
+  })
+
+  test('appends newer crawl-only entries after the V0 ones, named the way V0 names teams', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const standings = createPostgresLeaderboardRanked(connectionString)
+    const ranked = createPostgresRankedPlayers(connectionString)
+    try {
+      await insertRanked(control, 600, '2026-10-07T10:00:00Z')
+      await control`
+        INSERT INTO players.ranked_fixed_teams
+          (brawlhalla_id, ordinal, brawlhalla_id_one, brawlhalla_id_two, team_name, rating, peak_rating, tier, wins,
+           games, region, global_rank)
+        VALUES (600, 0, 601, 600, 'Old Partner+V0 Name', 1700, 1750, 'Platinum 2', 7, 12, 'EU', 300)
+      `
+      // The live V0 name beats a newer leaderboard name, as in the player reference.
+      await control`
+        INSERT INTO players.leaderboard_name_observations (brawlhalla_id, player_name, observed_at)
+        VALUES (599, 'Lower Partner', '2026-10-07T09:00:00Z'),
+               (600, 'Cached Name', '2026-10-07T11:00:00Z'),
+               (602, 'Crawl Partner', '2026-10-07T09:00:00Z'),
+               (605, 'Tierless Partner', '2026-10-07T09:00:00Z'),
+               (606, 'Former Partner', '2026-10-07T09:00:00Z')
+      `
+      await standings.applyLeaderboardTeams({
+        observedAt: new Date('2026-10-07T09:30:00Z'),
+        teams: [team(600, 606, 1950)],
+      })
+      await standings.applyLeaderboardTeams({
+        observedAt: new Date('2026-10-07T12:00:00Z'),
+        teams: [
+          team(600, 601, 1810),
+          team(602, 600, 1600),
+          team(600, 599, 1900),
+          team(600, 604, 2000),
+          team(600, 605, 1650, null),
+        ],
+      })
+      await standings.applyLeaderboardSoloQueue({
+        observedAt: new Date('2026-10-07T12:00:00Z'),
+        players: [{ ...standing(600, 1620), region: 'EU', peakRating: 1640, tier: 'Gold 5', wins: 9, games: 16 }],
+      })
+
+      const snapshot = (await ranked.byId(600))?.snapshot
+      expect(snapshot?.fixedTeams).toEqual([
+        // The V0 team keeps its name and rank and takes the newer numbers.
+        expect.objectContaining({
+          brawlhallaIdOne: 601,
+          teamName: 'Old Partner+V0 Name',
+          globalRank: 300,
+          rating: 1810,
+        }),
+        // Unknown partner (604), no tier (605), and a team last seen before the V0 refresh (606) are left out.
+        {
+          brawlhallaIdOne: 599,
+          brawlhallaIdTwo: 600,
+          teamName: 'Lower Partner+V0 Name',
+          region: 'EU',
+          globalRank: null,
+          rating: 1900,
+          peakRating: 1910,
+          tier: 'Gold 2',
+          wins: 4,
+          games: 7,
+        },
+        expect.objectContaining({ brawlhallaIdOne: 600, brawlhallaIdTwo: 602, teamName: 'V0 Name+Crawl Partner' }),
+      ])
+      expect(snapshot?.soloQueue).toEqual([
+        {
+          secondPlayerId: 0,
+          teamName: 'V0 Name',
+          region: 'EU',
+          globalRank: null,
+          rating: 1620,
+          peakRating: 1640,
+          tier: 'Gold 5',
+          wins: 9,
+          games: 16,
+        },
+      ])
+
+      // A V0 refresh newer than the crawl drops the entries it did not list.
+      await control`UPDATE players.ranked_profiles SET last_success_at = '2026-10-07T13:00:00Z' WHERE brawlhalla_id = 600`
+      const refreshed = (await ranked.byId(600))?.snapshot
+      expect(refreshed?.fixedTeams).toEqual([
+        expect.objectContaining({ teamName: 'Old Partner+V0 Name', rating: 1700, globalRank: 300 }),
+      ])
+      expect(refreshed?.soloQueue).toEqual([])
+    } finally {
+      await Promise.all([control.end(), standings.close(), ranked.close()])
+    }
+  })
+
+  test('adds no crawl-only solo queue entry beside the V0 ones', async () => {
+    const control = postgres(connectionString, { max: 1 })
+    const standings = createPostgresLeaderboardRanked(connectionString)
+    const ranked = createPostgresRankedPlayers(connectionString)
+    try {
+      await insertRanked(control, 610, '2026-10-07T10:00:00Z')
+      await control`
+        INSERT INTO players.ranked_solo_queue
+          (brawlhalla_id, ordinal, team_name, rating, peak_rating, tier, wins, games, region, global_rank)
+        VALUES (610, 0, 'Solo Queue', 1500, 1600, 'Gold 3', 5, 10, 'SEA', 900)
+      `
+      await standings.applyLeaderboardSoloQueue({
+        observedAt: new Date('2026-10-07T12:00:00Z'),
+        players: [{ ...standing(610, 1620), region: 'EU', tier: 'Gold 5' }],
+      })
+
+      expect((await ranked.byId(610))?.snapshot?.soloQueue).toEqual([
+        expect.objectContaining({ teamName: 'Solo Queue', region: 'SEA', globalRank: 900, rating: 1620 }),
+      ])
+    } finally {
+      await Promise.all([control.end(), standings.close(), ranked.close()])
+    }
+  })
+})

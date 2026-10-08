@@ -620,20 +620,22 @@ describe('PostgreSQL interactive refresh admission', () => {
       sectionStarted = resolve
     })
     const executing = runOneRefreshOperation(operations, 'renew-interactive-worker', {
-      leaseMs: 200,
-      renewEveryMs: 40,
+      // Wide margins: a 40 ms renewal cadence on a 200 ms lease missed renewals on loaded CI runners, so the lease
+      // expired mid-section and completion was rejected. The section still outlives the initial lease.
+      leaseMs: 1_000,
+      renewEveryMs: 100,
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
       executeSection: async () => {
         sectionStarted?.()
-        await Bun.sleep(350)
+        await Bun.sleep(1_750)
       },
     })
     await started
-    await Bun.sleep(240)
+    await Bun.sleep(1_200)
     expect(
-      await competing.claim('competing-interactive-worker', 200, testAdmission, 'interactive-player-refresh'),
+      await competing.claim('competing-interactive-worker', 1_000, testAdmission, 'interactive-player-refresh'),
     ).toBeNull()
     expect(await executing).toBe(true)
     expect((await operations.inspect(reserved.operationId)).operation.status).toBe('succeeded')
