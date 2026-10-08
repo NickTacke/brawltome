@@ -1,8 +1,8 @@
 'use client'
 
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
-import { formatNum, timeAgo } from '@/lib/utils'
-import { Clock } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { formatNum } from '@/lib/utils'
+import { FreshnessBadge } from './FreshnessBadge'
 import { type PlayerData, WinLossBar, calculateEloReset, calculateGlory, getRankBanner } from './shared'
 
 interface RankedCardProps {
@@ -31,18 +31,16 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
         <div className="flex justify-between items-center gap-3">
           <CardTitle className="text-lg font-bold flex items-center gap-2">&#127942; Ranked Performance</CardTitle>
           {player.rankedLastUpdated && (
-            <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
-              <Clock className="w-3 h-3" aria-hidden="true" />
-              {player.rankedSource === 'leaderboard' ? (
-                <>
-                  <span className="sm:hidden">Leaderboard </span>
-                  <span className="hidden sm:inline">From leaderboard </span>
-                </>
-              ) : (
-                <span className="hidden sm:inline">Updated </span>
-              )}
-              {timeAgo(player.rankedLastUpdated)}
-            </Badge>
+            <FreshnessBadge
+              freshness={{
+                at: player.rankedLastUpdated,
+                // The 1v1 numbers can come from the leaderboard crawl even when the rest of the card is a V0 refresh.
+                source:
+                  player.rankedSource === 'leaderboard' || player.rankedFreshnessSource === 'leaderboard'
+                    ? 'leaderboard'
+                    : 'refresh',
+              }}
+            />
           )}
         </div>
       </CardHeader>

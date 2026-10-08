@@ -43,6 +43,55 @@ const career = {
   },
 }
 
+const redRaptorLegend = {
+  legendId: 17,
+  legendNameKey: 'redraptor',
+  xp: 100,
+  level: 2,
+  xpPercentage: 0.5,
+  games: 10,
+  wins: 4,
+  matchTime: 600,
+  kos: 20,
+  falls: 15,
+  suicides: 0,
+  teamKos: 1,
+  damageDealt: '100',
+  damageTaken: '80',
+  unarmed: { damage: '10', kos: 2 },
+  thrownItem: { damage: '1', kos: 1 },
+  gadgets: { damage: '2', kos: 0 },
+  weaponOne: { damage: '60', kos: 12, heldTime: 500 },
+  weaponTwo: { damage: '27', kos: 5, heldTime: 100 },
+}
+
+const availableRanked: PlayerRankedProfileContract = {
+  brawlhallaId: 42,
+  checkedAt: '2026-08-10T10:00:00Z',
+  lastSuccessAt: '2026-08-10T10:00:00Z',
+  freshness: 'fresh',
+  freshForSeconds: 3_600,
+  sparsePulse: null,
+  snapshot: {
+    oneVsOne: {
+      rating: 1_600,
+      peakRating: 1_650,
+      tier: 'Gold 4',
+      wins: 5,
+      games: 10,
+      region: 'US-E',
+      globalRank: null,
+      regionRank: null,
+    },
+    rankedLegends: [],
+    mainLegend: null,
+    fixedTeams: [],
+    soloQueue: [],
+    ratingHistory: [],
+    observedRatingDirection: null,
+  },
+}
+
 describe('PlayerProfileHierarchy', () => {
   test('renders contextual states when profile sections have no data', () => {
     const html = renderToStaticMarkup(
@@ -138,29 +187,7 @@ describe('PlayerProfileHierarchy', () => {
       ...career,
       snapshot: {
         ...career.snapshot,
-        legends: [
-          {
-            legendId: 17,
-            legendNameKey: 'redraptor',
-            xp: 100,
-            level: 2,
-            xpPercentage: 0.5,
-            games: 10,
-            wins: 4,
-            matchTime: 600,
-            kos: 20,
-            falls: 15,
-            suicides: 0,
-            teamKos: 1,
-            damageDealt: '100',
-            damageTaken: '80',
-            unarmed: { damage: '10', kos: 2 },
-            thrownItem: { damage: '1', kos: 1 },
-            gadgets: { damage: '2', kos: 0 },
-            weaponOne: { damage: '60', kos: 12, heldTime: 500 },
-            weaponTwo: { damage: '27', kos: 5, heldTime: 100 },
-          },
-        ],
+        legends: [redRaptorLegend],
       },
     }
     const html = renderToStaticMarkup(
@@ -210,5 +237,54 @@ describe('PlayerProfileHierarchy', () => {
     expect(html).toContain('0 Wins')
     expect(html).toContain('0 Losses')
     expect(html).not.toContain('Legend Statistics')
+  })
+
+  test('labels each section with the age and source of its data', () => {
+    const render = (standingRating: number) =>
+      renderToStaticMarkup(
+        <PlayerProfileHierarchy
+          player={{
+            brawlhallaId: 42,
+            name: 'Canonical Player',
+            aliases: [],
+            clan: null,
+            currentSeason: availableRanked,
+            career: {
+              ...career,
+              lastSuccessAt: '2026-08-09T22:00:00Z',
+              snapshot: { ...career.snapshot, legends: [redRaptorLegend] },
+            },
+            leaderboardStanding: {
+              region: 'US-E',
+              rating: standingRating,
+              peakRating: 1_650,
+              tier: 'Gold 4',
+              wins: 5,
+              games: 10,
+              observedAt: '2026-08-10T11:30:00Z',
+            },
+          }}
+          refreshing={false}
+          careerRefreshing={false}
+        />,
+      )
+
+    // The API overlaid the newer leaderboard observation onto the 1v1 numbers.
+    const overlaid = render(1_600)
+    const ranked = overlaid.slice(overlaid.indexOf('Ranked Performance'), overlaid.indexOf('Combat Record'))
+    expect(ranked).toContain('From leaderboard')
+    expect(ranked).toContain('dateTime="2026-08-10T11:30:00.000Z"')
+    const legends = overlaid.slice(overlaid.indexOf('Legend Statistics'))
+    expect(legends).toContain('Updated')
+    expect(legends).toContain('dateTime="2026-08-09T22:00:00.000Z"')
+
+    // The standing does not match the shown numbers, so they still date from the V0 refresh.
+    const refreshed = render(1_590)
+    const refreshedRanked = refreshed.slice(refreshed.indexOf('Ranked Performance'), refreshed.indexOf('Combat Record'))
+    expect(refreshedRanked).not.toContain('leaderboard')
+    expect(refreshedRanked).toContain('dateTime="2026-08-10T10:00:00.000Z"')
+    // Glory still counts the V0 teams: the overlay does not make the card leaderboard-only.
+    expect(refreshedRanked).not.toMatch(/Total Glory<\/div><div[^>]*>—</)
+    expect(ranked).not.toMatch(/Total Glory<\/div><div[^>]*>—</)
   })
 })
