@@ -116,7 +116,11 @@ log 'building images while the current release keeps serving'
 compose build
 
 log 'ensuring PostgreSQL is up'
-compose up -d --no-deps --wait postgres
+# Never recreate the database during a rolling deploy. `compose build` rebuilds the postgres image, and when the build
+# cache was pruned the rebuilt image gets a new ID, so a plain `up` restarted PostgreSQL mid-deploy and the serving
+# release failed requests with CONNECT_TIMEOUT (2026-10-08 16:46 UTC). Image or config changes for postgres are
+# applied in a maintenance window instead (see the warning at the end).
+compose up -d --no-deps --no-recreate --wait postgres
 
 log 'running migrations against the live database'
 compose up --no-deps --no-log-prefix --exit-code-from migration migration
@@ -129,6 +133,13 @@ log 'converging the remaining services'
 # The migration already ran above; naming every other service keeps compose from running it a second time.
 # shellcheck disable=SC2046
 compose up -d --remove-orphans --no-deps --wait --wait-timeout "$health_timeout_seconds" \
-  $(compose config --services | grep -vx migration)
+  $(compose config --services | grep -vx -e migration -e postgres)
+
+running_postgres_image=$(docker inspect -f '{{.Image}}' "$(compose ps -q postgres)" 2>/dev/null || true)
+built_postgres_image=$(docker image inspect -f '{{.Id}}' "$project-postgres" 2>/dev/null || true)
+if [ -n "$built_postgres_image" ] && [ "$running_postgres_image" != "$built_postgres_image" ]; then
+  log "WARNING: PostgreSQL runs an older image than this release built; it was left running. Recreate it in a" \
+    "maintenance window: docker compose -p $project -f $file up -d --no-deps postgres"
+fi
 
 log 'done'
