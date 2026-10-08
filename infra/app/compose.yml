@@ -145,6 +145,11 @@ services:
       DISCORD_REDIRECT_URI: https://api.brawltome.app/auth/discord/callback
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # postgres.js keeps idle pool connections forever by default. With ~28 pools per process the API held ~48 idle
+      # connections and the worker ~36, so a rolling deploy (two APIs at once) passed max_connections=100 and requests
+      # failed with CONNECT_TIMEOUT. Close idle connections after 60 s; PGAPPNAME labels them in pg_stat_activity.
+      PGAPPNAME: brawltome-api
+      PGIDLE_TIMEOUT: "60"
       PORT: "3000"
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
       RUNTIME_SHUTDOWN_ANNOUNCE_MS: "5000"
@@ -299,6 +304,9 @@ services:
       OPERATIONS_LEADERBOARD_CONCURRENCY: "2"
       OPERATIONS_TOTAL_CONCURRENCY: "4"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # Idle pool connections close after 60 s (see api), keeping deploy overlap under max_connections.
+      PGAPPNAME: brawltome-operations-worker
+      PGIDLE_TIMEOUT: "60"
       RANKING_RETENTION_BATCH: "200"
       # Set RANKING_RETENTION_ENABLED=false in the deployment environment to pause retention without a code change.
       RANKING_RETENTION_ENABLED: ${RANKING_RETENTION_ENABLED:-true}
