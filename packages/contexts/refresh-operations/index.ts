@@ -401,6 +401,30 @@ export type InteractiveClanRefreshReservation = {
   reservationTtlSeconds: number
 }
 
+// Published by refresh-operations/0026 whenever a player refresh reaches a terminal status.
+export const playerRefreshSettledChannel = 'refresh_operations_player_refresh_settled'
+
+export type PlayerRefreshSettled = {
+  operationId: string
+  brawlhallaId: number
+  status: 'succeeded' | 'dead_letter'
+}
+
+export function parsePlayerRefreshSettled(payload: string): PlayerRefreshSettled | null {
+  let value: unknown
+  try {
+    value = JSON.parse(payload)
+  } catch {
+    return null
+  }
+  if (!value || typeof value !== 'object') return null
+  const { operationId, brawlhallaId, status } = value as Record<string, unknown>
+  if (typeof operationId !== 'string' || operationId.length === 0 || operationId.length > 64) return null
+  if (typeof brawlhallaId !== 'number' || !Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1) return null
+  if (status !== 'succeeded' && status !== 'dead_letter') return null
+  return { operationId, brawlhallaId, status }
+}
+
 export type ReserveInteractiveRefreshResult =
   | { outcome: 'reserved'; operationId: string; reservationToken: string }
   | { outcome: 'already-active'; operationId: string }
