@@ -23,6 +23,7 @@ import { addLeaderboardDeepCrawl } from './migrations/0022-add-leaderboard-deep-
 import { validateLeaderboardDeepCrawl } from './migrations/0023-validate-leaderboard-deep-crawl'
 import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
+import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 
 export {
   createPostgresDeadLetterOperations,
@@ -56,4 +57,5 @@ export const refreshOperationsMigrationInventory = [
   validateLeaderboardDeepCrawl,
   addDeepCrawlModes,
   validateDeepCrawlModes,
+  notifyPlayerRefreshSettled,
 ] as const
