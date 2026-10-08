@@ -1,9 +1,9 @@
 'use client'
 
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
-import { formatNum, timeAgo } from '@/lib/utils'
-import { Clock } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { formatNum } from '@/lib/utils'
 import { useState } from 'react'
+import { FreshnessBadge } from './FreshnessBadge'
 import { type PlayerData, WinLossBar, getVirtualLevel, getXpForLevel, parseNum } from './shared'
 
 interface CombatCardProps {
@@ -26,16 +26,7 @@ export function CombatCard({ player, title = 'Combat Record' }: CombatCardProps)
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
           <CardTitle className="text-xl font-bold text-chart-3 flex items-center gap-2">&#128202; {title}</CardTitle>
-          {player.statsLastUpdated && (
-            <Badge
-              variant="outline"
-              className="text-xs font-mono text-muted-foreground gap-1.5 hover:bg-muted/50 transition-colors"
-            >
-              <Clock className="w-3 h-3" />
-              <span className="hidden sm:inline">Updated </span>
-              {timeAgo(player.statsLastUpdated)}
-            </Badge>
-          )}
+          {player.statsLastUpdated && <FreshnessBadge freshness={{ at: player.statsLastUpdated, source: 'refresh' }} />}
         </div>
       </CardHeader>
       <CardContent>

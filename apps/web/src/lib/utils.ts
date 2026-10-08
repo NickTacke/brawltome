@@ -14,9 +14,8 @@ export function fixEncoding(str: string | null | undefined): string {
   }
 }
 
-export function timeAgo(date: string | Date | number): string {
+export function timeAgo(date: string | Date | number, now: Date = new Date()): string {
   const d = new Date(date)
-  const now = new Date()
   const seconds = Math.floor((now.getTime() - d.getTime()) / 1000)
 
   if (seconds < 60) return 'just now'

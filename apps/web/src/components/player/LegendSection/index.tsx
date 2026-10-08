@@ -3,6 +3,7 @@
 import { Button, Card } from '@/components/ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
+import { FreshnessBadge } from '../FreshnessBadge'
 import { type PlayerData, parseNum } from '../shared'
 import { LegendCard } from './LegendCard'
 import { SortControls } from './SortControls'
@@ -12,9 +13,11 @@ interface LegendSectionProps {
   allLegends: PlayerData[]
   rankedLegends: PlayerData[]
   rankedAvailable: boolean
+  /** When the career snapshot the legend statistics come from was fetched. */
+  updatedAt?: string | null
 }
 
-export function LegendSection({ allLegends, rankedLegends, rankedAvailable }: LegendSectionProps) {
+export function LegendSection({ allLegends, rankedLegends, rankedAvailable, updatedAt }: LegendSectionProps) {
   const [showAllLegends, setShowAllLegends] = useState(false)
   const [expandedLegendId, setExpandedLegendId] = useState<number | null>(null)
   const [openedLegendIds, setOpenedLegendIds] = useState<Set<number>>(new Set())
@@ -69,9 +72,10 @@ export function LegendSection({ allLegends, rankedLegends, rankedAvailable }: Le
 
   return (
     <div id="legends-section" ref={legendsRef} className="space-y-4">
-      <div className="flex justify-between items-center gap-3">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <h3 className="text-2xl font-bold text-foreground">Legend Statistics</h3>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {updatedAt && <FreshnessBadge freshness={{ at: updatedAt, source: 'refresh' }} />}
           <span className="text-sm text-muted-foreground font-mono">Played: {allLegends.length}</span>
           <SortControls sortKey={sortKey} onChange={setSortKey} />
         </div>

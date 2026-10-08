@@ -1,4 +1,5 @@
 import type { LeaderboardStanding } from '@/lib/player-reference'
+import { oneVsOneFreshness } from '@/lib/section-freshness'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
 import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
@@ -69,6 +70,7 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
   // Until the first V0 refresh lands, the 1v1 leaderboard standing stands in for the ranked snapshot.
   const standing = ranked ? null : (player.leaderboardStanding ?? null)
   const oneVsOne = ranked?.oneVsOne ?? standing
+  const oneVsOneUpdated = oneVsOneFreshness(player.currentSeason, player.leaderboardStanding)
   return {
     brawlhallaId: player.brawlhallaId,
     name: player.name,
@@ -81,8 +83,9 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
     tier: oneVsOne?.tier ?? null,
     rankedGames: oneVsOne?.games,
     rankedWins: oneVsOne?.wins,
-    rankedLastUpdated: standing ? standing.observedAt : (player.currentSeason?.lastSuccessAt ?? null),
+    rankedLastUpdated: oneVsOneUpdated?.at ?? null,
     rankedSource: standing ? 'leaderboard' : ranked ? 'v0' : null,
+    rankedFreshnessSource: oneVsOneUpdated?.source ?? null,
     ratingHistory: ranked?.ratingHistory ?? [],
     rankedLegends: ranked?.rankedLegends ?? [],
     xp: career?.account.xp ?? null,
@@ -150,6 +153,7 @@ export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHier
             allLegends={allLegends}
             rankedLegends={rankedLegends}
             rankedAvailable={Boolean(player.currentSeason?.snapshot)}
+            updatedAt={player.career?.lastSuccessAt ?? null}
           />
         ) : (
           <p className="text-sm text-muted-foreground">No legend statistics are available yet.</p>
