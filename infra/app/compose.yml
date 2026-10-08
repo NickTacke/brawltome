@@ -293,8 +293,11 @@ services:
       NODE_ENV: production
       OPERATIONS_INTERACTIVE_CONCURRENCY: "2"
       OPERATIONS_INTERACTIVE_RESERVATION: "1"
-      OPERATIONS_LEADERBOARD_CONCURRENCY: "1"
-      OPERATIONS_TOTAL_CONCURRENCY: "3"
+      # Two leaderboard slots: the hourly deep crawl and the 15-minute top-page collections each need most of an hour
+      # on one slot, so they run side by side. BRAWLHALLA_V1_REQUEST_LIMIT admission still caps V1 calls (peak ~900 of
+      # 1800 per five minutes on one slot). The extra total slot keeps projection and statistics work from starving.
+      OPERATIONS_LEADERBOARD_CONCURRENCY: "2"
+      OPERATIONS_TOTAL_CONCURRENCY: "4"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       RANKING_RETENTION_BATCH: "200"
       # Set RANKING_RETENTION_ENABLED=false in the deployment environment to pause retention without a code change.
