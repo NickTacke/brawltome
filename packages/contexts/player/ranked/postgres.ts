@@ -1,6 +1,7 @@
 import { legendSlug } from '@brawltome/game-data'
 import { getLegendById } from '@brawltome/game-data/legends'
 import postgres from 'postgres'
+import { selectCanonicalPlayerName } from '../reference'
 import {
   type MainLegend,
   RANKED_FRESHNESS_SECONDS,
@@ -221,6 +222,45 @@ function withLeaderboardObservation(
   }
 }
 
+type CrawlOnlyNames = {
+  ranked_name: string | null
+  ranked_at: string | null
+  legacy_name: string | null
+  career_name: string | null
+  career_at: string | null
+  career_legacy: boolean | null
+  leaderboard_name: string | null
+  leaderboard_at: string | null
+}
+
+type CrawlOnlyRow = {
+  brawlhalla_id_one: number
+  brawlhalla_id_two: number
+  region: string
+  rating: number
+  peak_rating: number
+  tier: string
+  wins: number
+  games: number
+  one_names: CrawlOnlyNames | null
+  two_names: CrawlOnlyNames | null
+}
+
+// The name the player reference would show: the same evidence, picked the same way.
+function crawlOnlyName(brawlhallaId: number, names: CrawlOnlyNames | null): string | null {
+  if (!names) return null
+  const evidence = (name: string | null, at: string | null, legacy = false) =>
+    name ? { name, observedAt: at ? new Date(at) : null, legacy } : null
+  return (
+    selectCanonicalPlayerName({
+      brawlhallaId,
+      ranked: evidence(names.ranked_name, names.ranked_at) ?? evidence(names.legacy_name, null),
+      career: evidence(names.career_name, names.career_at, names.career_legacy === true),
+      leaderboard: evidence(names.leaderboard_name, names.leaderboard_at),
+    })?.name ?? null
+  )
+}
+
 export function createPostgresRankedPlayers(
   connectionString: string,
   options: {
@@ -337,7 +377,7 @@ export function createPostgresRankedPlayers(
           }
         }
 
-        const [legendRows, fixedTeamRows, soloRows, historyRows] = await Promise.all([
+        const [legendRows, fixedTeamRows, soloRows, historyRows, crawlOnlyRows] = await Promise.all([
           sql<
             Array<
               ValuesRow & {
@@ -414,6 +454,58 @@ export function createPostgresRankedPlayers(
           ORDER BY recorded_at DESC, source_order DESC NULLS LAST, id DESC
           LIMIT 365
         `,
+          // Solo queue and fixed team standings the deep crawl saw after the V0 refresh that has no entry for them,
+          // with the name evidence for both players. An older observation without a V0 entry is a left team.
+          sql<CrawlOnlyRow[]>`
+          WITH entries AS (
+            SELECT observation.brawlhalla_id_one, observation.brawlhalla_id_two, observation.region,
+                   observation.rating, observation.peak_rating, observation.tier, observation.wins, observation.games
+            FROM players.leaderboard_team_observations observation
+            WHERE (observation.brawlhalla_id_one = ${brawlhallaId} OR observation.brawlhalla_id_two = ${brawlhallaId})
+              AND observation.observed_at > ${profile.last_success_at} AND observation.tier IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM players.ranked_fixed_teams team
+                WHERE team.brawlhalla_id = ${brawlhallaId}
+                  AND LEAST(team.brawlhalla_id_one, team.brawlhalla_id_two) = observation.brawlhalla_id_one
+                  AND GREATEST(team.brawlhalla_id_one, team.brawlhalla_id_two) = observation.brawlhalla_id_two
+              )
+            UNION ALL
+            SELECT observation.brawlhalla_id, 0, observation.region, observation.rating, observation.peak_rating,
+                   observation.tier, observation.wins, observation.games
+            FROM players.leaderboard_solo_queue_observations observation
+            WHERE observation.brawlhalla_id = ${brawlhallaId}
+              AND observation.observed_at > ${profile.last_success_at} AND observation.tier IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM players.ranked_solo_queue WHERE brawlhalla_id = ${brawlhallaId})
+          ),
+          names AS (
+            SELECT ids.brawlhalla_id, ranked.player_name AS ranked_name, ranked.last_success_at AS ranked_at,
+                   COALESCE(legacy.player_name, legacy_profile.player_name) AS legacy_name,
+                   career.player_name AS career_name, career.last_success_at AS career_at,
+                   career.snapshot_source = 'legacy-v2' AS career_legacy,
+                   leaderboard.player_name AS leaderboard_name, leaderboard.observed_at AS leaderboard_at
+            FROM (
+              SELECT brawlhalla_id_one AS brawlhalla_id FROM entries
+              UNION
+              SELECT brawlhalla_id_two FROM entries WHERE brawlhalla_id_two > 0
+            ) ids
+            LEFT JOIN players.ranked_profiles ranked
+              ON ranked.brawlhalla_id = ids.brawlhalla_id
+              AND ranked.last_success_at IS NOT NULL AND ranked.player_name IS NOT NULL
+            LEFT JOIN players.legacy_discovery_profiles legacy ON legacy.brawlhalla_id = ids.brawlhalla_id
+            LEFT JOIN players.legacy_profile_discovery legacy_profile
+              ON legacy_profile.brawlhalla_id = ids.brawlhalla_id
+            LEFT JOIN players.career_profiles career
+              ON career.brawlhalla_id = ids.brawlhalla_id
+              AND career.last_success_at IS NOT NULL AND career.player_name IS NOT NULL
+            LEFT JOIN players.leaderboard_name_observations leaderboard
+              ON leaderboard.brawlhalla_id = ids.brawlhalla_id
+          )
+          SELECT entries.*, to_jsonb(one) AS one_names, to_jsonb(two) AS two_names
+          FROM entries
+          LEFT JOIN names one ON one.brawlhalla_id = entries.brawlhalla_id_one
+          LEFT JOIN names two ON two.brawlhalla_id = entries.brawlhalla_id_two
+          ORDER BY entries.rating DESC, entries.brawlhalla_id_one, entries.brawlhalla_id_two
+        `,
         ])
 
         const canonicalOrder = {
@@ -443,6 +535,34 @@ export function createPostgresRankedPlayers(
         const careerMainLegend = rankedMainLegend ? null : await options.resolveCareerMainLegend?.(brawlhallaId)
         const mainLegend =
           rankedMainLegend ?? (careerMainLegend ? { ...careerMainLegend, source: 'career' as const } : null)
+        // Crawl-only entries carry no rank and are named like V0 names a team ("One+Two", lower id first, as the pair
+        // is stored); a team whose partner has no known name is left out rather than shown nameless.
+        const crawlOnlyFixedTeams: V0RankedSnapshot['fixedTeams'] = []
+        const crawlOnlySoloQueue: V0RankedSnapshot['soloQueue'] = []
+        for (const row of crawlOnlyRows) {
+          const nameOne = crawlOnlyName(row.brawlhalla_id_one, row.one_names)
+          const entryValues = {
+            region: row.region,
+            globalRank: null,
+            rating: row.rating,
+            peakRating: row.peak_rating,
+            tier: row.tier,
+            wins: row.wins,
+            games: row.games,
+          }
+          if (row.brawlhalla_id_two === 0) {
+            if (nameOne) crawlOnlySoloQueue.push({ secondPlayerId: 0, teamName: nameOne, ...entryValues })
+            continue
+          }
+          const nameTwo = crawlOnlyName(row.brawlhalla_id_two, row.two_names)
+          if (!nameOne || !nameTwo) continue
+          crawlOnlyFixedTeams.push({
+            brawlhallaIdOne: row.brawlhalla_id_one,
+            brawlhallaIdTwo: row.brawlhalla_id_two,
+            teamName: `${nameOne}+${nameTwo}`,
+            ...entryValues,
+          })
+        }
         const ratingHistory = historyRows.map((row) => ({
           rating: row.rating,
           peakRating: row.peak_rating,
@@ -472,25 +592,31 @@ export function createPostgresRankedPlayers(
               ...values(row),
             })),
             mainLegend,
-            fixedTeams: fixedTeamRows.map((row) => ({
-              brawlhallaIdOne: row.brawlhalla_id_one,
-              brawlhallaIdTwo: row.brawlhalla_id_two,
-              teamName: row.team_name,
-              region: row.region,
-              globalRank: row.global_rank,
-              ...withNewerObservation(
-                effectiveValues(row, canonicalOrder),
-                row,
-                effectiveValuesAt(row, canonicalOrder, v0RefreshedAt, row.pulse_observed_at),
-              ),
-            })),
-            soloQueue: soloRows.map((row) => ({
-              secondPlayerId: row.second_player_id,
-              teamName: row.team_name,
-              region: row.region,
-              globalRank: row.global_rank,
-              ...withNewerObservation(values(row), row, v0RefreshedAt),
-            })),
+            fixedTeams: [
+              ...fixedTeamRows.map((row) => ({
+                brawlhallaIdOne: row.brawlhalla_id_one,
+                brawlhallaIdTwo: row.brawlhalla_id_two,
+                teamName: row.team_name,
+                region: row.region,
+                globalRank: row.global_rank,
+                ...withNewerObservation(
+                  effectiveValues(row, canonicalOrder),
+                  row,
+                  effectiveValuesAt(row, canonicalOrder, v0RefreshedAt, row.pulse_observed_at),
+                ),
+              })),
+              ...crawlOnlyFixedTeams,
+            ],
+            soloQueue: [
+              ...soloRows.map((row) => ({
+                secondPlayerId: row.second_player_id,
+                teamName: row.team_name,
+                region: row.region,
+                globalRank: row.global_rank,
+                ...withNewerObservation(values(row), row, v0RefreshedAt),
+              })),
+              ...crawlOnlySoloQueue,
+            ],
             ratingHistory,
             observedRatingDirection: deriveObservedRatingDirection(ratingHistory),
           },

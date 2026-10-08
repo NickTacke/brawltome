@@ -17,6 +17,7 @@ import { addCareerLegendsBestOrderIndex } from './migrations/0016-add-career-leg
 import { addLeaderboardRankedObservations } from './migrations/0017-add-leaderboard-ranked-observations'
 import { addProfileViewDays } from './migrations/0018-add-profile-view-days'
 import { addLeaderboardTeamModeObservations } from './migrations/0019-add-leaderboard-team-mode-observations'
+import { addLeaderboardTeamObservationsSecondPlayerIndex } from './migrations/0020-add-leaderboard-team-observations-second-player-index'
 
 export {
   createPostgresCareerPlayers,
@@ -111,4 +112,5 @@ export const playerMigrationInventory = [
   addLeaderboardRankedObservations,
   addProfileViewDays,
   addLeaderboardTeamModeObservations,
+  addLeaderboardTeamObservationsSecondPlayerIndex,
 ] as const
