@@ -191,9 +191,11 @@ export type LeaderboardPageSource = {
 
 export class LeaderboardCandidateError extends Error {
   readonly code = 'leaderboard_candidate_invalid'
-  readonly retryable = false
 
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly retryable = false,
+  ) {
     super(message)
     this.name = 'LeaderboardCandidateError'
   }
@@ -345,7 +347,8 @@ function validateRegionRows(
   let priorRank = 0
   for (const [pageIndex, page] of pages.entries()) {
     if (page.totalPages !== totalPages) {
-      throw new LeaderboardCandidateError(`${mode}/${region} total_pages changed during collection`)
+      // The live leaderboard grew or shrank between page reads; a fresh collection will see one consistent size.
+      throw new LeaderboardCandidateError(`${mode}/${region} total_pages changed during collection`, true)
     }
     const isSourceTerminal = pageIndex + 1 === totalPages
     if (!isSourceTerminal && page.rankings.length !== 50) {

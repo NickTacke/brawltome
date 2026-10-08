@@ -436,7 +436,11 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         },
         publication: recorder.publication,
       }),
-    ).rejects.toBeInstanceOf(LeaderboardCandidateError)
+    ).rejects.toMatchObject({
+      name: 'LeaderboardCandidateError',
+      // The source resized mid-collection (total_pages 3 then 4): a retry re-collects a consistent leaderboard.
+      retryable: true,
+    })
     expect(recorder.published).toHaveLength(0)
     expect(recorder.failures).toEqual([
       expect.objectContaining({ mode: 'solo2v2', scope: 'US-E', code: 'leaderboard_candidate_invalid' }),

@@ -132,8 +132,8 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'LEADERBOARD_INTERVAL_MS') !== '900000') {
       violations.push('operations-worker must retain 15-minute leaderboard cadence')
     }
-    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '3') {
-      violations.push('operations-worker must retain three total operation slots')
+    if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '4') {
+      violations.push('operations-worker must retain four total operation slots')
     }
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_RESERVATION') !== '1') {
       violations.push('operations-worker must retain one reserved interactive slot')
@@ -141,8 +141,8 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two interactive operation slots')
     }
-    if (readPath(worker, 'environment', 'OPERATIONS_LEADERBOARD_CONCURRENCY') !== '1') {
-      violations.push('operations-worker must retain one leaderboard operation slot')
+    if (readPath(worker, 'environment', 'OPERATIONS_LEADERBOARD_CONCURRENCY') !== '2') {
+      violations.push('operations-worker must retain two leaderboard operation slots')
     }
     if (readPath(worker, 'environment', 'SOURCE_BACKGROUND_HEADROOM') !== '30') {
       violations.push('operations-worker must retain 30 source units of on-demand headroom')
