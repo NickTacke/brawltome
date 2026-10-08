@@ -65,6 +65,20 @@ export function parseLeaderboardSearchParams(
   }
 }
 
+// Saved preferences only fill in a bracket or region the URL leaves out, so while they load the leaderboard only
+// has to wait when the URL does not already name both.
+export function shouldWaitForPreferences(params: URLSearchParams, preferencesLoading: boolean): boolean {
+  if (!preferencesLoading) return false
+  const bracket = params.get('bracket')
+  const region = params.get('region')
+  const urlPinsScope =
+    bracket !== null &&
+    region !== null &&
+    (BRACKET_IDS as readonly string[]).includes(bracket) &&
+    (REGION_IDS as readonly string[]).includes(region)
+  return !urlPinsScope
+}
+
 export function preferencesForLeaderboardUpdate(
   current: LeaderboardFilters,
   next: Partial<LeaderboardFilters>,

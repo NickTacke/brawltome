@@ -5,6 +5,7 @@ import {
   parseLeaderboardSearchParams,
   playerHref,
   preferencesForLeaderboardUpdate,
+  shouldWaitForPreferences,
   snapshotNotice,
 } from '../../../src/components/Leaderboard/utils'
 
@@ -89,6 +90,30 @@ describe('preferencesForLeaderboardUpdate', () => {
   it('does not persist pagination or anonymous interaction', () => {
     expect(preferencesForLeaderboardUpdate(filters, { page: 4 }, true)).toBeNull()
     expect(preferencesForLeaderboardUpdate(filters, { bracket: '2v2' }, false)).toBeNull()
+  })
+})
+
+describe('shouldWaitForPreferences', () => {
+  it('never waits once preferences are settled, or for anonymous and still-resolving accounts', () => {
+    expect(shouldWaitForPreferences(new URLSearchParams(), false)).toBe(false)
+    expect(shouldWaitForPreferences(new URLSearchParams('page=3'), false)).toBe(false)
+  })
+
+  it('waits while loading preferences could still pick the bracket or region', () => {
+    expect(shouldWaitForPreferences(new URLSearchParams(), true)).toBe(true)
+    expect(shouldWaitForPreferences(new URLSearchParams('page=4'), true)).toBe(true)
+    expect(shouldWaitForPreferences(new URLSearchParams('bracket=2v2'), true)).toBe(true)
+    expect(shouldWaitForPreferences(new URLSearchParams('region=EU'), true)).toBe(true)
+  })
+
+  it('treats invalid URL filters as absent because preferences replace them', () => {
+    expect(shouldWaitForPreferences(new URLSearchParams('bracket=99v99&region=EU'), true)).toBe(true)
+    expect(shouldWaitForPreferences(new URLSearchParams('bracket=2v2&region=mars'), true)).toBe(true)
+  })
+
+  it('starts immediately when the URL names a valid bracket and region', () => {
+    expect(shouldWaitForPreferences(new URLSearchParams('bracket=2v2&region=EU'), true)).toBe(false)
+    expect(shouldWaitForPreferences(new URLSearchParams('bracket=1v1&region=all&page=7'), true)).toBe(false)
   })
 })
 

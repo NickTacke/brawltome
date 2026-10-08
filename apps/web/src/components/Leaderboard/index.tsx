@@ -39,6 +39,7 @@ import {
   leaderboardPageFeatures,
   parseLeaderboardSearchParams,
   preferencesForLeaderboardUpdate,
+  shouldWaitForPreferences,
   snapshotNotice,
 } from './utils'
 
@@ -53,10 +54,12 @@ export function Leaderboard() {
   const preferenceAccountId = accountLoading ? undefined : (account?.id ?? null)
   const { preferences, isLoading: preferencesLoading } = useAccountPreferences(preferenceAccountId)
   const effectivePreferences = preferences ?? DEFAULT_LEADERBOARD_PREFERENCES
+  const urlParams = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams])
+  const waitForPreferences = shouldWaitForPreferences(urlParams, preferencesLoading)
 
   const filters = useMemo<LeaderboardFilters>(
-    () => parseLeaderboardSearchParams(new URLSearchParams(searchParams.toString()), effectivePreferences),
-    [searchParams, effectivePreferences],
+    () => parseLeaderboardSearchParams(urlParams, effectivePreferences),
+    [urlParams, effectivePreferences],
   )
   const { bracket, region, page } = filters
 
@@ -96,7 +99,7 @@ export function Leaderboard() {
   )
 
   useEffect(() => {
-    if (preferencesLoading) return
+    if (waitForPreferences) return
 
     let cancelled = false
     const scopeKey = `${bracket}:${region}`
@@ -144,7 +147,7 @@ export function Leaderboard() {
     return () => {
       cancelled = true
     }
-  }, [bracket, region, page, preferencesLoading, requestVersion])
+  }, [bracket, region, page, waitForPreferences, requestVersion])
 
   const currentKey = `${bracket}:${region}:${page}`
   const showLoading = isLoading || fetchedKey !== currentKey
