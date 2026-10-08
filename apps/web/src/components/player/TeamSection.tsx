@@ -1,10 +1,10 @@
 'use client'
 
-import { Badge, Card, CardContent } from '@/components/ui'
-import { fixEncoding, formatNum, timeAgo } from '@/lib/utils'
+import { Card, CardContent } from '@/components/ui'
+import { fixEncoding, formatNum } from '@/lib/utils'
 import type { PlayerRankedProfileContract } from '@brawltome/contracts'
-import { Clock } from 'lucide-react'
 import Link from 'next/link'
+import { FreshnessBadge } from './FreshnessBadge'
 import { WinLossBar, getRankBanner } from './shared'
 
 type RankedSnapshot = NonNullable<PlayerRankedProfileContract['snapshot']>
@@ -49,14 +49,7 @@ export function TeamSection({ player, rankedTeams, brawlhallaId }: TeamSectionPr
         <h3 className="text-xl font-bold text-foreground">Ranked 2v2</h3>
         <div className="flex items-center gap-3">
           {player.rankedLastUpdated && (
-            <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5">
-              <Clock className="w-3 h-3" aria-hidden="true" />
-              <span className="sr-only">Updated </span>
-              <span className="hidden sm:inline" aria-hidden="true">
-                Updated{' '}
-              </span>
-              {timeAgo(player.rankedLastUpdated)}
-            </Badge>
+            <FreshnessBadge freshness={{ at: player.rankedLastUpdated, source: 'refresh' }} />
           )}
           <span className="text-sm text-muted-foreground font-mono">Fixed teams: {pairedTeams.length}</span>
         </div>
