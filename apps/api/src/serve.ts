@@ -34,9 +34,11 @@ import { verifyTurnstileResult } from './auth/turnstile'
 import { requestWithVerifiedClientIp } from './client-ip'
 import { createHealthRoutes } from './health-routes'
 import { createPostgresReadiness } from './postgres-readiness'
+import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
 import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
+import { createRefreshEventRoutes } from './routes/refresh-events.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
 import { readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
@@ -81,6 +83,7 @@ const playerReferenceQueries = createDatabasePlayerReferenceQueries(
   (brawlhallaId) => leaderboardPlayerNames.referenceById(brawlhallaId),
 )
 const refreshOperations = createPostgresRefreshOperations(databaseUrl)
+const refreshEvents = createRefreshEventStreams({ source: refreshOperations, telemetry })
 const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
   authenticatedIpLimit: authenticatedRefreshIpLimit,
   sourceLimits: { 'brawlhalla-v0': 180 },
@@ -105,6 +108,7 @@ const lifecycle = createRuntimeLifecycle({
         await server.current?.stop(true)
       },
     },
+    { name: 'refresh-events', close: refreshEvents.close },
     { name: 'operations-postgres', close: refreshOperations.close },
     { name: 'clans-postgres', close: clanRepo.close },
     { name: 'discovery-postgres', close: discovery.close },
@@ -205,6 +209,7 @@ app.route(
   '/internal/operations',
   createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
 )
+app.route('/events', createRefreshEventRoutes(refreshEvents))
 app.route('/api', createReplayAnalysisRoutes({ accounts, jobs: replayAnalysisJobs, webOrigin: authConfig.webOrigin }))
 app.route('/internal/replays', createReplayBridgeRoutes({ jobs: replayAnalysisJobs, secret: replayBridgeSecret }))
 
@@ -309,6 +314,8 @@ const instrumentedFetch = instrumentHttpHandler(
       return Response.json({ error: 'invalid_request_url' }, { status: 400 })
     }
     if (pathname.startsWith('/health/')) return app.fetch(verifiedRequest)
+    // Event streams outlive Bun's 10 s idle timeout between keep-alives; each stream bounds its own lifetime.
+    if (pathname.startsWith('/events/')) server.current?.timeout(request, 0)
 
     const finishWork = lifecycle.startWork()
     if (!finishWork) {
@@ -334,6 +341,9 @@ function requestShutdown(): void {
   shutdownRequested = true
   // Keep serving while /health/serving reports draining, so Traefik stops routing here before admission stops.
   lifecycle.announceShutdown()
+  // End open event streams now: browsers reconnect after the stream's retry delay and land on the replacement once
+  // Traefik's serving check drops this container; until then this process answers them with another retry hint.
+  refreshEvents.drain()
   setTimeout(() => {
     lifecycle.beginShutdown()
     void lifecycle.shutdown().then(({ drained, cleanupCompleted, errors }) => {

@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { globalMigrationInventory } from '@brawltome/database/migrations'
-import type { OperationLease } from '@brawltome/refresh-operations'
+import type { OperationLease, PlayerRefreshSettled } from '@brawltome/refresh-operations'
 import {
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
 } from '@brawltome/refresh-operations/composition'
+import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { createPostgresReadiness } from '../src/postgres-readiness'
+import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
@@ -195,6 +197,7 @@ describe('durable Refresh Operations', () => {
       'refresh-operations/0025',
       'players/0019',
       'players/0020',
+      'refresh-operations/0026',
     ])
   })
 
@@ -567,6 +570,83 @@ describe('durable Refresh Operations', () => {
     expect(await operations.commitInteractiveSection(retry, 'stats')).toBe('transitioned')
     expect(await operations.complete(retry)).toBe('transitioned')
     await operations.close()
+  })
+
+  test('notifies when a player refresh settles and pushes it to open event streams', async () => {
+    const operations = createPostgresRefreshOperations(connectionString)
+    const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
+    const settled: PlayerRefreshSettled[] = []
+    const listener = await operations.listenPlayerRefreshSettled((event) => settled.push(event))
+    const streams = createRefreshEventStreams({ source: operations, telemetry })
+    const brawlhallaId = 7_000_000 + Math.floor(Math.random() * 1_000_000)
+    const reserve = (id: number) =>
+      operations.reserveInteractivePlayerRefresh({
+        dedupeKey: `interactive:${randomUUID()}`,
+        operationKey: `interactive:${randomUUID()}`,
+        brawlhallaId: id,
+        staleSections: ['ranked'],
+        provenance: { source: 'integration-test' },
+        reservationTtlSeconds: 30,
+      })
+    try {
+      const response = await streams.open({ brawlhallaId, clientIp: '203.0.113.9' })
+      if (!response.body) throw new Error('Expected an event stream')
+      const body = response.body.getReader()
+      const decoder = new TextDecoder()
+      let text = ''
+      const readUntilEnd = async () => {
+        for (;;) {
+          const chunk = await body.read()
+          if (chunk.done) return text
+          text += decoder.decode(chunk.value, { stream: true })
+        }
+      }
+      const streamed = readUntilEnd()
+
+      const reserved = await reserve(brawlhallaId)
+      if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+      await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+      const lease = requireLease(
+        await operations.claim('settled-notify', 10_000, testAdmission, 'interactive-player-refresh'),
+        'interactive-player-refresh',
+      )
+      // Leasing and checkpoints are not terminal: nothing is announced yet.
+      expect(await operations.commitInteractiveSection(lease, 'ranked')).toBe('transitioned')
+      expect(await operations.complete(lease)).toBe('transitioned')
+
+      expect(await settleWithin('settled stream', streamed)).toContain(
+        `event: settled\ndata: {"status":"succeeded","operationId":"${reserved.operationId}"}`,
+      )
+      expect(settled).toEqual([{ operationId: reserved.operationId, brawlhallaId, status: 'succeeded' }])
+
+      const rejected = await reserve(brawlhallaId + 1)
+      if (rejected.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+      await operations.rejectInteractiveRefresh(rejected.operationId, rejected.reservationToken, 'actor_rate_limited')
+      const clan = await operations.reserveInteractiveClanRefresh({
+        dedupeKey: `clan:${randomUUID()}`,
+        operationKey: `clan:${randomUUID()}`,
+        clanId: 77,
+        staleSections: ['profile'],
+        provenance: { source: 'integration-test' },
+        reservationTtlSeconds: 30,
+      })
+      if (clan.outcome !== 'reserved') throw new Error('Expected clan reservation')
+      await operations.rejectInteractiveRefresh(clan.operationId, clan.reservationToken, 'actor_rate_limited')
+      await settleWithin(
+        'dead-letter notification',
+        (async () => {
+          while (settled.length < 2) await Bun.sleep(10)
+        })(),
+      )
+      await Bun.sleep(50)
+      expect(settled.slice(1)).toEqual([
+        { operationId: rejected.operationId, brawlhallaId: brawlhallaId + 1, status: 'dead_letter' },
+      ])
+    } finally {
+      await listener.unlisten()
+      await streams.close()
+      await operations.close()
+    }
   })
 
   test('deduplicates concurrent clan refreshes and fences profile and roster checkpoints', async () => {
