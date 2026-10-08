@@ -237,6 +237,27 @@ tests:
         alertname: RefreshFailuresElevated
         exp_alerts: []
 
+  - name: deep crawl waiting out a source outage does not page
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="leaderboard-deep-crawl",failure_category="source_unavailable"}'
+        values: "0 2 4 6 8x15"
+      - series: 'refresh_failures_total{kind="leaderboard-deep-crawl",failure_category="execution"}'
+        values: "0 1 2 3x17"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RefreshFailuresElevated
+        exp_alerts:
+          - exp_labels:
+              kind: leaderboard-deep-crawl
+              failure_category: execution
+              severity: warning
+              service: brawltome
+              signal: refresh-failures
+            exp_annotations:
+              summary: "leaderboard-deep-crawl refresh failures detected"
+              description: "More than two refresh attempts failed in the last 15 minutes."
+
   - name: real refresh failures fire by bounded category and recover
     interval: 1m
     input_series:
