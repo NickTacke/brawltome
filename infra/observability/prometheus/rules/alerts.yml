@@ -85,7 +85,14 @@ groups:
           description: "Distributed source admission is close to its fixed window limit."
 
       - alert: RefreshFailuresElevated
-        expr: sum by (kind, failure_category) (increase(refresh_failures_total{failure_category!="admission_deferred"}[15m])) > 2
+        # A deep crawl waits out a Brawlhalla outage and resumes the same page, so its source_unavailable attempts are
+        # deferrals, not lost work. Outages still alert through the regular leaderboard collections and refreshes.
+        expr: |
+          (
+            sum by (kind, failure_category) (increase(refresh_failures_total{failure_category!="admission_deferred"}[15m]))
+            unless on (kind, failure_category)
+            refresh_failures_total{kind="leaderboard-deep-crawl", failure_category="source_unavailable"}
+          ) > 2
         for: 1m
         labels:
           severity: warning
