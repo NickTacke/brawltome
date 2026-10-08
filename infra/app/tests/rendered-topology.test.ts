@@ -1,10 +1,19 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { verifyAppRenderedTopology } from '../verify-rendered-topology'
 
 const root = resolve(import.meta.dir, '../../..')
 
+// `docker compose config` cold-starts in ~6 s on CI runners, past bun's 5 s test timeout. Render once (warmed in
+// beforeAll with a generous deadline) and hand every test its own parsed copy to mutate.
+let renderedJson: string | undefined
+
 function renderedTopology(): Record<string, unknown> {
+  renderedJson ??= renderTopologyJson()
+  return JSON.parse(renderedJson)
+}
+
+function renderTopologyJson(): string {
   const result = Bun.spawnSync({
     cmd: ['docker', 'compose', '-f', 'infra/app/compose.yml', 'config', '--format', 'json'],
     cwd: root,
@@ -18,7 +27,7 @@ function renderedTopology(): Record<string, unknown> {
     stderr: 'pipe',
   })
   expect(result.exitCode, result.stderr.toString()).toBe(0)
-  return JSON.parse(result.stdout.toString())
+  return result.stdout.toString()
 }
 
 function services(topology: Record<string, unknown>): Record<string, Record<string, unknown>> {
@@ -26,6 +35,10 @@ function services(topology: Record<string, unknown>): Record<string, Record<stri
 }
 
 describe('rendered application topology', () => {
+  beforeAll(() => {
+    renderedTopology()
+  }, 60_000)
+
   test('accepts the exact internal-only four-unit rollout', () => {
     expect(verifyAppRenderedTopology(renderedTopology())).toEqual([])
   })
