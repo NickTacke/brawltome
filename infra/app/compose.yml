@@ -267,6 +267,10 @@ services:
     security_opt: [no-new-privileges:true]
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=64m
+      # next/image writes optimized images here. On the read-only root filesystem the directory couldn't be created,
+      # so every request re-optimized and concurrent requests for the same image (the header logo) hung until the
+      # browser gave up (up to 125 s, 2026-10-18).
+      - /app/apps/web/.next/cache:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=256m
     deploy:
       replicas: 1
       resources:
