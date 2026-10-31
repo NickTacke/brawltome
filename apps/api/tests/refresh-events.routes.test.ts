@@ -11,10 +11,13 @@ function fakeSource() {
     listens: 0,
     unlistens: 0,
     fail: false,
+    /** While set, LISTEN stays pending until the promise resolves, as when Postgres is slow to accept it. */
+    gate: undefined as Promise<void> | undefined,
     onSettled: undefined as ((event: PlayerRefreshSettled) => void) | undefined,
     onListen: undefined as (() => void) | undefined,
     async listenPlayerRefreshSettled(onSettled: (event: PlayerRefreshSettled) => void, onListen?: () => void) {
       source.listens++
+      await source.gate
       if (source.fail) throw new Error('listen failed')
       source.onSettled = onSettled
       source.onListen = onListen
@@ -220,6 +223,40 @@ describe('refresh event streams', () => {
     expect(streams.openStreams).toBe(1)
     controller.abort()
     expect(streams.openStreams).toBe(0)
+  })
+
+  test('releases the LISTEN when the request that opened it is cancelled during setup', async () => {
+    const { source, streams, open } = setup({ idleReleaseMs: 20 })
+    let openListen!: () => void
+    source.gate = new Promise((resolve) => {
+      openListen = resolve
+    })
+    const controller = new AbortController()
+    const pending = open(42, '203.0.113.7', { signal: controller.signal })
+    controller.abort()
+    openListen()
+    expect((await pending).status).toBe(204)
+    expect(streams.openStreams).toBe(0)
+    expect(source.listens).toBe(1)
+    await Bun.sleep(60)
+    expect(source.unlistens).toBe(1)
+  })
+
+  test('labels a client limit reached while LISTEN is being established as a client rejection', async () => {
+    const { source, streams, open, metrics } = setup({ maxStreams: 10, maxStreamsPerClient: 1 })
+    let openListen!: () => void
+    source.gate = new Promise((resolve) => {
+      openListen = resolve
+    })
+    const first = open(42, '203.0.113.7')
+    const second = open(43, '203.0.113.7')
+    openListen()
+    const statuses = [(await first).status, (await second).status].sort()
+    expect(statuses).toEqual([200, 429])
+    expect(streams.openStreams).toBe(1)
+    expect(metrics()).toContain('refresh_event_streams_total{outcome="rejected_client"} 1')
+    expect(metrics()).not.toContain('outcome="rejected_capacity"')
+    streams.drain()
   })
 
   test('ends open streams on drain and answers new ones with a reconnect hint', async () => {

@@ -151,16 +151,19 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
     return new Response(`retry: ${retryMs}\n\n`, { status: 200, headers: streamHeaders })
   }
 
+  function rejectOverLimit(clientIp: string): Response | undefined {
+    let outcome: 'rejected_capacity' | 'rejected_client' | undefined
+    if (openStreams >= maxStreams) outcome = 'rejected_capacity'
+    else if ((streamsByClient.get(clientIp) ?? 0) >= maxStreamsPerClient) outcome = 'rejected_client'
+    if (!outcome) return undefined
+    metrics.add('refresh_event_streams_total', 1, { outcome })
+    return Response.json({ error: 'too_many_event_streams' }, { status: 429, headers: { 'retry-after': '30' } })
+  }
+
   async function open(input: OpenRefreshEventStream): Promise<Response> {
     if (draining) return reconnectLater()
-    if (openStreams >= maxStreams) {
-      metrics.add('refresh_event_streams_total', 1, { outcome: 'rejected_capacity' })
-      return Response.json({ error: 'too_many_event_streams' }, { status: 429, headers: { 'retry-after': '30' } })
-    }
-    if ((streamsByClient.get(input.clientIp) ?? 0) >= maxStreamsPerClient) {
-      metrics.add('refresh_event_streams_total', 1, { outcome: 'rejected_client' })
-      return Response.json({ error: 'too_many_event_streams' }, { status: 429, headers: { 'retry-after': '30' } })
-    }
+    const overLimit = rejectOverLimit(input.clientIp)
+    if (overLimit) return overLimit
     try {
       await ensureListening()
     } catch {
@@ -169,11 +172,11 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
     }
     // Shutdown may have been announced or capacity taken while LISTEN was being established.
     if (draining) return reconnectLater()
-    if (openStreams >= maxStreams || (streamsByClient.get(input.clientIp) ?? 0) >= maxStreamsPerClient) {
-      metrics.add('refresh_event_streams_total', 1, { outcome: 'rejected_capacity' })
-      return Response.json({ error: 'too_many_event_streams' }, { status: 429, headers: { 'retry-after': '30' } })
-    }
+    const overLimitAfterListen = rejectOverLimit(input.clientIp)
+    if (overLimitAfterListen) return overLimitAfterListen
     if (input.signal?.aborted) {
+      // The request that opened the LISTEN may have gone away; let the idle release reclaim it.
+      releaseWhenIdle()
       return new Response(null, { status: 204 })
     }
 
