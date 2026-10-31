@@ -72,21 +72,6 @@ export {
 } from './discovery-postgres'
 export { createSteamPlayerEvidenceResolver } from './verification'
 export {
-  importLegacyCareerSnapshots,
-  type LegacyCareerImportOptions,
-  type LegacyCareerImportResult,
-} from './legacy-career-import'
-export {
-  importLegacyReferenceHistory,
-  type LegacyReferenceImportOptions,
-  type LegacyReferenceImportResult,
-} from './legacy-reference-import'
-export {
-  importLegacyPlayerProfiles,
-  type LegacyPlayerProfileImportOptions,
-  type LegacyPlayerProfileImportResult,
-} from './legacy-profile-import'
-export {
   importLegacyPlayers,
   type LegacyPlayerImportOptions,
   type LegacyPlayerImportResult,

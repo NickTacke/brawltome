@@ -9,13 +9,6 @@ import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-p
 import { addAccountTheme } from './migrations/0009-add-account-theme'
 import { createAccounts } from './src/accounts'
 
-export {
-  importLegacyAccounts,
-  type LegacyAccountsImportOptions,
-  type LegacyAccountsImportResult,
-  type LegacyAccountsReconciliation,
-} from './src/legacy-import'
-
 export { AccountsMaintenanceError, InvalidPinnedPlayerError, MAX_PINNED_PLAYERS } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
