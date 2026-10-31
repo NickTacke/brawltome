@@ -1,8 +1,10 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dir, '../../..')
+// The first `docker compose config` on a cold CI runner has taken over 8 s, past bun's 5 s default.
+setDefaultTimeout(30_000)
 
 function renderCompose(profile: 'discord' | 'operator') {
   const result = Bun.spawnSync({
