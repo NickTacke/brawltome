@@ -1,5 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "organizeImports": {
     "enabled": true
   },
@@ -27,12 +32,12 @@
       "dist",
       "target",
       ".next",
-      ".pi-subagents",
       "drizzle",
       "research",
       "packages/game-data/src/generated",
       "packages/contracts/openapi",
-      "apps/web/next-env.d.ts"
+      "apps/web/next-env.d.ts",
+      "apps/desktop/app/gen"
     ]
   }
 }
