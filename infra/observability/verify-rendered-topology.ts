@@ -202,6 +202,15 @@ function checkAlertRelay(violations: string[], relay: Record<string, unknown>): 
   if (volumes.length !== 2 || code.length !== 1 || state.length !== 1) {
     violations.push('alert-relay volumes must be exactly its read-only code and the state directory')
   }
+
+  // Docker cannot start a container whose primary network is the endpoint-less notifications overlay, so the
+  // always-attached observability network must win the primary slot.
+  const networks = isRecord(relay.networks) ? relay.networks : {}
+  const priority = (network: unknown) =>
+    isRecord(network) && typeof network.priority === 'number' ? network.priority : 0
+  if (!(priority(networks.observability) > priority(networks.notifications))) {
+    violations.push('alert-relay must give the observability network a higher priority than notifications')
+  }
 }
 
 function checkGrafana(violations: string[], grafana: Record<string, unknown>): void {

@@ -11,7 +11,7 @@ type FixtureService = {
   environment?: Record<string, string>
   image: string
   labels?: Record<string, string>
-  networks: Record<string, null>
+  networks: Record<string, null | { priority?: number }>
   ports?: unknown[]
   secrets?: Array<{ source: string; target: string }>
   tmpfs?: string[]
@@ -108,6 +108,7 @@ function validTopology(): TopologyFixture {
           ['notifications', 'observability'],
           [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
         ),
+        networks: { notifications: null, observability: { priority: 100 } },
         volumes: [
           {
             type: 'bind',
@@ -323,6 +324,18 @@ describe('rendered Dokploy observability topology', () => {
     expect(verifyRenderedTopology(writableCode)).toContain(
       'alert-relay volumes must be exactly its read-only code and the state directory',
     )
+  })
+
+  test('rejects an alert relay whose primary network could be the notifications overlay', () => {
+    const message = 'alert-relay must give the observability network a higher priority than notifications'
+    const unprioritized = validTopology()
+    unprioritized.services['alert-relay'].networks = { notifications: null, observability: null }
+    expect(verifyRenderedTopology(unprioritized)).toContain(message)
+
+    const inverted = validTopology()
+    inverted.services['alert-relay'].networks = { notifications: { priority: 200 }, observability: { priority: 100 } }
+    expect(verifyRenderedTopology(inverted)).toContain(message)
+    expect(verifyRenderedTopology(validTopology())).not.toContain(message)
   })
 
   test('rejects widened and case-variant Traefik routes', () => {
