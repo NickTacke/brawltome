@@ -34,8 +34,11 @@ bun test                # Postgres-backed tests need Docker
 bun run architecture:check
 bun run infra:app:check
 bun run infra:observability:check   # slow; run when touching infra/observability or packages/telemetry
-bun run operations:dead-letters     # inspect dead-lettered work (needs DATABASE_URL)
 ```
+
+Dead-lettered work is inspected and replayed with `bun run operations:dead-letters <list|inspect|replay|discard>`. It
+needs `DEAD_LETTER_DATABASE_URL` plus `DEAD_LETTER_OPERATOR_TOKEN` and `DEAD_LETTER_OPERATOR_TOKENS` (see
+`packages/contexts/refresh-operations/operator-auth.ts`), e.g. `bun run operations:dead-letters list`.
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, migrations, tests, contracts, architecture and infra checks.
 `observability-ci.yml` runs when `infra/observability/**`, `packages/telemetry/**` or root dependency/TS config change;
