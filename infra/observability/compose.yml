@@ -105,9 +105,13 @@ services:
       - /tmp:size=16m,noexec,nosuid,nodev,uid=65534,gid=65534,mode=0700
     secrets:
       - discord_webhook_url
+    # brawltome-notifications is an attachable swarm overlay with no other local container. As a container's primary
+    # network Docker cannot resolve it while it has no endpoints on this host ("could not find a network matching
+    # network mode"), which failed the 2026-10-31 deploy. The always-attached observability network goes first.
     networks:
-      - observability
-      - notifications
+      observability:
+        priority: 100
+      notifications: {}
     expose:
       - "8080"
     depends_on:
