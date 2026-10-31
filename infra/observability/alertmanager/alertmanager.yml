@@ -1,22 +1,29 @@
 global:
   resolve_timeout: 5m
 
+# Every notification goes to the alert relay, which owns all Discord output: critical alerts page with their own
+# message (edited in place when they resolve) and every alert shows on a single status board message. Warnings never
+# post a message of their own, so the relay decides what pings rather than this route tree.
 route:
-  receiver: discord-operations
-  group_by: [severity, alertname]
+  receiver: alert-relay
+  # Group per incident, so one runtime or one operation kind going bad is its own notification.
+  group_by: [alertname, severity, runtime, kind, work_class, mountpoint]
   group_wait: 30s
   group_interval: 5m
-  repeat_interval: 4h
+  # The status board already shows what is still firing, so re-notifying is only a safety net for a lost page.
+  repeat_interval: 12h
+  routes:
+    # Always firing by design; the relay reads it from the API as a pipeline heartbeat.
+    - receiver: blackhole
+      matchers: ['alertname="Watchdog"']
 
 receivers:
-  - name: discord-operations
-    discord_configs:
-      - webhook_url_file: /run/secrets/discord_webhook_url
+  - name: alert-relay
+    webhook_configs:
+      - url: http://alert-relay:8080/alertmanager
         send_resolved: true
-        title: "{{ .Status | toUpper }}: BrawlTome {{ .CommonLabels.severity }} alerts"
-        message: >-
-          {{ range .Alerts }}{{ .Labels.alertname }}: {{ .Annotations.summary }}
-          Severity: {{ .Labels.severity }} | Signal: {{ .Labels.signal }}{{ with .Labels.failure_category }} | Category: {{ . }}{{ end }}{{ "\n" }}{{ end }}
+        max_alerts: 0
+  - name: blackhole
 
 inhibit_rules:
   - source_matchers: ['severity="critical"']

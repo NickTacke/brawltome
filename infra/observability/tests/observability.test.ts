@@ -8,14 +8,15 @@ const deploy = (...parts: string[]) => resolve(root, 'infra/observability', ...p
 const read = (...parts: string[]) => readFileSync(deploy(...parts), 'utf8')
 
 const requiredAlerts = [
+  'Watchdog',
   'RuntimeMetricsTargetDown',
   'RuntimeNotReady',
   'WorkerHeartbeatStale',
   'OldestRunnableJobDelayed',
   'ScheduleMaterializationLate',
   'NewDeadLetters',
-  'SourceQuotaNearLimit',
   'RefreshFailuresElevated',
+  'BrawlhallaSourceUnavailable',
   'HttpLatencyHigh',
   'HttpErrorRateHigh',
   'PostgresBackupIntegrityFailed',
@@ -118,6 +119,7 @@ describe('observability deployment contract', () => {
       >
     }
     const expected = [
+      'alert-relay',
       'alertmanager',
       'blackbox-exporter',
       'grafana',
@@ -128,7 +130,8 @@ describe('observability deployment contract', () => {
       'tempo',
     ]
     const expectedNetworks: Record<string, string[]> = {
-      alertmanager: ['notifications', 'observability'],
+      'alert-relay': ['notifications', 'observability'],
+      alertmanager: ['observability'],
       'blackbox-exporter': ['application'],
       grafana: ['dokploy-network', 'observability'],
       loki: ['observability'],
@@ -245,17 +248,43 @@ describe('observability deployment contract', () => {
       expect(rules).toContain(aggregation)
     }
     const alertmanager = read('alertmanager', 'alertmanager.yml')
-    expect(alertmanager).toContain('webhook_url_file: /run/secrets/discord_webhook_url')
+    expect(alertmanager).toContain('url: http://alert-relay:8080/alertmanager')
+    expect(alertmanager).not.toContain('discord_configs')
     expect(alertmanager).toContain('send_resolved: true')
-    expect(alertmanager).toContain('group_by: [severity, alertname]')
+    expect(alertmanager).toContain('group_by: [alertname, severity, runtime, kind, work_class, mountpoint]')
     expect(alertmanager).toContain('group_wait: 30s')
     expect(alertmanager).toContain('group_interval: 5m')
+    expect(alertmanager).toContain('repeat_interval: 12h')
     expect(alertmanager).not.toContain(`Labels.${legacyDimension}`)
-    expect(alertmanager).toContain('{{ with .Labels.failure_category }} | Category: {{ . }}{{ end }}')
-    expect(rules).toContain('refresh_failures_total{failure_category!="admission_deferred"}')
+    expect(rules).toContain('refresh_failures_total{failure_category!~"admission_deferred|source_unavailable"}')
+    expect(rules).toContain('schedule_lateness_ms{kind!="leaderboard-deep-crawl"}')
     expect(read('prometheus', 'prometheus.yml')).toContain('/run/secrets/metrics_scrape_secret')
     expect(read('prometheus', 'prometheus.yml')).not.toContain('internal_api_secret')
     expect(read('otel-collector', 'config.yml')).toContain('filename: /run/secrets/otel_ingest_token')
+  })
+
+  test('keeps the paging contract: critical pages, warning only shows on the board, every alert has a runbook', () => {
+    const rules = parse(read('prometheus', 'rules', 'alerts.yml')) as {
+      groups: Array<{
+        rules: Array<{ alert: string; labels: { severity: string }; annotations: Record<string, string> }>
+      }>
+    }
+    const runbook = readFileSync(resolve(root, 'docs/operations/alerts.md'), 'utf8')
+    const anchors = new Set(Array.from(runbook.matchAll(/^### (\S+)$/gm), ([, heading]) => heading?.toLowerCase()))
+    const severities = new Map<string, string[]>()
+    for (const rule of rules.groups.flatMap((group) => group.rules)) {
+      expect(['critical', 'warning', 'none'], `${rule.alert} severity`).toContain(rule.labels.severity)
+      severities.set(rule.alert, [...(severities.get(rule.alert) ?? []), rule.labels.severity])
+      const anchor = rule.alert.toLowerCase()
+      expect(rule.annotations.runbook_url).toBe(
+        `https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#${anchor}`,
+      )
+      expect(anchors.has(anchor), `docs/operations/alerts.md documents ${rule.alert}`).toBe(true)
+    }
+    expect(severities.get('NewDeadLetters')).toEqual(['warning'])
+    expect(severities.get('BrawlhallaSourceUnavailable')).toEqual(['warning'])
+    expect(severities.get('Watchdog')).toEqual(['none'])
+    expect(severities.has('SourceQuotaNearLimit')).toBe(false)
   })
 
   test('provisions dashboards for every issue-219 operational view', () => {
@@ -334,6 +363,8 @@ describe('observability deployment contract', () => {
     const files = [
       read('compose.yml'),
       read('alertmanager', 'alertmanager.yml'),
+      read('alert-relay', 'main.ts'),
+      read('alert-relay', 'discord.ts'),
       read('otel-collector', 'config.yml'),
       read('loki', 'loki.yml'),
       read('prometheus', 'prometheus.yml'),

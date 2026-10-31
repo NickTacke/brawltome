@@ -27,6 +27,10 @@ type TopologyFixture = {
 
 function validTopology(): TopologyFixture {
   const identities: Record<string, { image: string; user: string }> = {
+    'alert-relay': {
+      image: 'oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0',
+      user: '65534:65534',
+    },
     alertmanager: {
       image: 'prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba',
       user: '65534:65534',
@@ -98,11 +102,23 @@ function validTopology(): TopologyFixture {
       },
     },
     services: {
-      alertmanager: service(
-        'alertmanager',
-        ['notifications', 'observability'],
-        [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
-      ),
+      'alert-relay': {
+        ...service(
+          'alert-relay',
+          ['notifications', 'observability'],
+          [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
+        ),
+        volumes: [
+          {
+            type: 'bind',
+            source: '/etc/dokploy/compose/project/code/infra/observability/alert-relay',
+            target: '/app',
+            read_only: true,
+          },
+          { type: 'bind', source: '/srv/brawltome-observability/alert-relay', target: '/state' },
+        ],
+      },
+      alertmanager: service('alertmanager', ['observability']),
       'blackbox-exporter': service('blackbox-exporter', ['application']),
       grafana: {
         ...service('grafana', ['dokploy-network', 'observability']),
@@ -281,7 +297,7 @@ describe('rendered Dokploy observability topology', () => {
     topology.services.grafana.user = '0:0'
     topology.services.grafana.volumes = [{ target: '/tmp/../run' }]
     topology.services.prometheus.configs = [{ target: '/run/secrets/../secrets' }]
-    topology.services.alertmanager.tmpfs = ['/run/./secrets:rw']
+    topology.services['alert-relay'].tmpfs = ['/run/./secrets:rw']
 
     expect(verifyRenderedTopology(topology)).toEqual(
       expect.arrayContaining([
@@ -289,8 +305,23 @@ describe('rendered Dokploy observability topology', () => {
         'grafana must use the approved unprivileged user',
         'grafana mounts must not shadow approved secret targets',
         'prometheus mounts must not shadow approved secret targets',
-        'alertmanager mounts must not shadow approved secret targets',
+        'alert-relay mounts must not shadow approved secret targets',
       ]),
+    )
+  })
+
+  test('rejects alert relay mounts beyond its read-only code and state directory', () => {
+    const topology = validTopology()
+    topology.services['alert-relay'].volumes?.push({ type: 'bind', source: '/', target: '/host' })
+    expect(verifyRenderedTopology(topology)).toContain(
+      'alert-relay volumes must be exactly its read-only code and the state directory',
+    )
+
+    const writableCode = validTopology()
+    const code = writableCode.services['alert-relay'].volumes?.[0]
+    if (code) code.read_only = false
+    expect(verifyRenderedTopology(writableCode)).toContain(
+      'alert-relay volumes must be exactly its read-only code and the state directory',
     )
   })
 
