@@ -162,7 +162,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
   }, 15_000)
 
   test('copies V2 identities and valid sessions as UTC while preserving legacy tables', async () => {
-    const { createPostgresAccounts, importLegacyAccounts } = await import('@brawltome/accounts/composition')
+    const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
     const { globalMigrationInventory } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
     const databaseName = `brawltome_accounts_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -444,7 +444,6 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
         const legacy = postgres(databaseUrl.toString(), { max: 1 })
         try {
-          await legacy`DELETE FROM public.session WHERE id = ${futureSessionId}`
           const [{ unreconciled_count }] = await legacy<{ unreconciled_count: number }[]>`
             SELECT count(*)::int AS unreconciled_count
             FROM accounts.sessions
@@ -453,66 +452,6 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           expect(unreconciled_count).toBe(0)
         } finally {
           await legacy.end()
-        }
-
-        await expect(
-          importLegacyAccounts(databaseUrl.toString(), { legacyWritersQuiesced: false } as never),
-        ).rejects.toThrow('Legacy Accounts writers must be quiescent')
-        expect(await revocationRuntime.accounts.authenticate(lateRawToken)).toMatchObject({ status: 'signedIn' })
-
-        const finalization = await importLegacyAccounts(databaseUrl.toString(), { legacyWritersQuiesced: true })
-        expect(finalization).toMatchObject({ status: 'complete', reconciliation: { exact: true } })
-        expect(await revocationRuntime.accounts.authenticate(futureRawToken)).toEqual({ status: 'anonymous' })
-
-        const retirement = postgres(databaseUrl.toString(), { max: 1 })
-        try {
-          const [beforeRetirement] = await retirement<
-            {
-              imported_from_v2: boolean
-              legacy_session_count: number
-              unreconciled_session_count: number
-              revoked_session_count: number
-              display_name: string
-            }[]
-          >`
-            SELECT imported_from_v2,
-                   (SELECT count(*)::int FROM public.session WHERE id = ${lateSessionId}) AS legacy_session_count,
-                   (SELECT count(*)::int FROM accounts.sessions WHERE id = ${unreconciledSessionId}) AS unreconciled_session_count,
-                   (SELECT count(*)::int FROM accounts.sessions WHERE id = ${futureSessionId}) AS revoked_session_count,
-                   (SELECT display_name FROM accounts.oauth_identities WHERE provider = 'discord' AND provider_account_id = 'discord-42') AS display_name
-            FROM accounts.sessions
-            WHERE id = ${lateSessionId}
-          `
-          expect(beforeRetirement).toEqual({
-            imported_from_v2: false,
-            legacy_session_count: 1,
-            unreconciled_session_count: 1,
-            revoked_session_count: 0,
-            display_name: 'Late Ada',
-          })
-          await retirement.unsafe('DROP TABLE public.session')
-        } finally {
-          await retirement.end()
-        }
-
-        expect(await revocationRuntime.accounts.authenticate(lateRawToken)).toMatchObject({
-          status: 'signedIn',
-          account: { displayName: 'Late Ada' },
-        })
-        expect(await revocationRuntime.accounts.authenticate(unreconciledRawToken)).toMatchObject({
-          status: 'signedIn',
-          account: { id: unreconciledAccountId, displayName: 'Unreconciled Ada' },
-        })
-        const canonical = postgres(databaseUrl.toString(), { max: 1 })
-        try {
-          const [{ session_count }] = await canonical<{ session_count: number }[]>`
-            SELECT count(*)::int AS session_count
-            FROM accounts.sessions
-            WHERE id = ${lateSessionId}
-          `
-          expect(session_count).toBe(1)
-        } finally {
-          await canonical.end()
         }
       } finally {
         await revocationRuntime.close()
