@@ -5,6 +5,10 @@ RCLONE_BIN=${RCLONE_BIN:-rclone}
 LOCK_FILE=${LOCK_FILE:-/run/brawltome-backup-integrity/verifier.lock}
 MIN_BACKUP_AGE_SECONDS=${MIN_BACKUP_AGE_SECONDS:-300}
 MAX_BACKUP_AGE_SECONDS=${MAX_BACKUP_AGE_SECONDS:-28800}
+# R2 occasionally cuts a multi-gigabyte stream short (rclone: "unexpected EOF"). One cut used to fail the run and
+# leave the integrity alert firing until the next timer run six hours later, so reads are retried first.
+READ_ATTEMPTS=${READ_ATTEMPTS:-3}
+READ_RETRY_DELAY_SECONDS=${READ_RETRY_DELAY_SECONDS:-60}
 BACKUP_INTEGRITY_METRICS_FILE=${BACKUP_INTEGRITY_METRICS_FILE:-/srv/brawltome-observability/backup-integrity/brawltome-backup-integrity.prom}
 metrics_dir=${BACKUP_INTEGRITY_METRICS_FILE%/*}
 last_verified=0
@@ -65,8 +69,8 @@ fi
   printf '%s\n' 'Invalid BACKUP_PREFIX' >&2
   exit 1
 }
-[[ $MIN_BACKUP_AGE_SECONDS =~ ^[0-9]+$ && $MAX_BACKUP_AGE_SECONDS =~ ^[0-9]+$ ]] || {
-  printf '%s\n' 'Backup age bounds must be non-negative integers' >&2
+[[ $MIN_BACKUP_AGE_SECONDS =~ ^[0-9]+$ && $MAX_BACKUP_AGE_SECONDS =~ ^[0-9]+$ && $READ_ATTEMPTS =~ ^[1-9][0-9]*$ && $READ_RETRY_DELAY_SECONDS =~ ^[0-9]+$ ]] || {
+  printf '%s\n' 'Backup age bounds and read retry settings must be non-negative integers' >&2
   exit 1
 }
 command -v "$RCLONE_BIN" >/dev/null
@@ -113,20 +117,34 @@ failure_reason=unknown
 work_dir=$(mktemp -d)
 hash_file=$work_dir/hash
 hash_pipe=$work_dir/stream
-mkfifo "$hash_pipe"
 trap 'status=$?; rm -rf "$work_dir"; on_exit "$status"' EXIT
-sha256sum <"$hash_pipe" | awk '{ print $1 }' >"$hash_file" &
-hash_pid=$!
 failure_reason=hash_invalid
-if ! "$RCLONE_BIN" cat "$remote/$latest" | tee "$hash_pipe" | gzip -t; then
-  wait "$hash_pid" || true
-  printf '%s\n' 'Latest backup could not be read and validated' >&2
-  exit 1
-fi
-if ! wait "$hash_pid"; then
-  printf '%s\n' 'Latest backup hash could not be computed' >&2
-  exit 1
-fi
+
+# Streams the backup once, validating the gzip framing while hashing the same bytes.
+read_backup() {
+  local hash_pid
+  rm -f "$hash_pipe" "$hash_file"
+  mkfifo "$hash_pipe"
+  sha256sum <"$hash_pipe" | awk '{ print $1 }' >"$hash_file" &
+  hash_pid=$!
+  if ! "$RCLONE_BIN" cat "$remote/$latest" | tee "$hash_pipe" | gzip -t; then
+    wait "$hash_pid" || true
+    printf '%s\n' 'Latest backup could not be read and validated' >&2
+    return 1
+  fi
+  if ! wait "$hash_pid"; then
+    printf '%s\n' 'Latest backup hash could not be computed' >&2
+    return 1
+  fi
+}
+
+attempt=1
+until read_backup; do
+  (( attempt < READ_ATTEMPTS )) || exit 1
+  printf 'Retrying backup read in %ss (attempt %s of %s)\n' "$READ_RETRY_DELAY_SECONDS" "$((attempt + 1))" "$READ_ATTEMPTS" >&2
+  sleep "$READ_RETRY_DELAY_SECONDS"
+  attempt=$((attempt + 1))
+done
 computed=$(<"$hash_file")
 [[ $computed =~ ^[a-f0-9]{64}$ ]] || { printf '%s\n' 'Latest backup hash is invalid' >&2; exit 1; }
 

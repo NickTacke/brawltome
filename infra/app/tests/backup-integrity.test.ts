@@ -44,6 +44,15 @@ case "$command" in
     ;;
   cat)
     path=\${1##*/}
+    if [[ $path == *.sql.gz && -n \${FAKE_CAT_FAILURES:-} ]]; then
+      failures=$(/bin/cat "$FAKE_REMOTE/.cat-failures" 2>/dev/null || printf 0)
+      if (( failures < FAKE_CAT_FAILURES )); then
+        printf '%s\\n' "$((failures + 1))" >"$FAKE_REMOTE/.cat-failures"
+        head -c 8 "$FAKE_REMOTE/$path"
+        printf '%s\\n' 'Failed to cat: unexpected EOF' >&2
+        exit 1
+      fi
+    fi
     [[ -e "$FAKE_REMOTE/$path" ]] && /bin/cat "$FAKE_REMOTE/$path"
     ;;
   rcat)
@@ -78,6 +87,7 @@ esac
     FAKE_REMOTE: remote,
     FAKE_SHA256_DELAY: '0.2',
     LOCK_FILE: join(root, 'verifier.lock'),
+    READ_RETRY_DELAY_SECONDS: '0',
     PATH: `${bin}:${process.env.PATH}`,
     RCLONE_BIN: rclone,
     RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: 'must-not-appear',
@@ -155,6 +165,24 @@ describe('recurring backup integrity verifier', () => {
     expect(result.stderr.toString()).toContain('Latest backup is stale')
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
     expect(failureReason(metrics)).toEqual(['stale'])
+  })
+
+  test('retries a backup stream that the remote cuts short', () => {
+    const { env, metrics } = fixture()
+
+    const recovered = run({ ...env, FAKE_CAT_FAILURES: '2' })
+    expect(recovered.exitCode, recovered.stderr.toString()).toBe(0)
+    expect(recovered.stderr.toString()).toContain('attempt 3 of 3')
+    expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 1')
+  })
+
+  test('fails once every backup read attempt is cut short', () => {
+    const { env, metrics } = fixture()
+
+    const result = run({ ...env, FAKE_CAT_FAILURES: '3' })
+    expect(result.exitCode).not.toBe(0)
+    expect(result.stderr.toString()).toContain('could not be read and validated')
+    expect(failureReason(metrics)).toEqual(['hash_invalid'])
   })
 
   test('labels in-progress uploads, missing backups, and corrupt archives', () => {
