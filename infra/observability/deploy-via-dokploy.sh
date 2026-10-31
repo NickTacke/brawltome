@@ -112,7 +112,7 @@ rendered=$(
       OTEL_INGEST_TOKEN_FILE=/var/lib/brawltome-observability-secrets/otel-ingest-token \
       POSTGRES_DATA_ROOT=/srv/brawltome/postgres \
       PROMETHEUS_RETENTION_SIZE=9GB \
-      docker compose --file - config --format json
+      docker compose --project-directory infra/observability --file - config --format json
 )
 printf '%s' "$rendered" | BRAWLTOME_NETWORK_NAME=brawltome bun infra/observability/verify-rendered-topology.ts
 
