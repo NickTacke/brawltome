@@ -33,12 +33,14 @@ bun run typecheck
 bun test                # Postgres-backed tests need Docker
 bun run architecture:check
 bun run infra:app:check
-bun run infra:observability:check   # slow; only when touching infra/observability
+bun run infra:observability:check   # slow; run when touching infra/observability or packages/telemetry
 bun run operations:dead-letters     # inspect dead-lettered work (needs DATABASE_URL)
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, migrations, tests, contracts, architecture and infra checks.
-`observability-ci.yml` runs only for `infra/observability/**`; `desktop-ci.yml` only for desktop paths.
+`observability-ci.yml` runs when `infra/observability/**`, `packages/telemetry/**` or root dependency/TS config change;
+`desktop-ci.yml` (Windows) when `apps/desktop/**`, `packages/contracts/**`, `.gitmodules` or root dependency/TS config
+change. Check each workflow's `paths` before assuming a change is covered.
 
 ## Production
 
