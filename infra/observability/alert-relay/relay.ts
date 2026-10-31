@@ -196,7 +196,8 @@ export class AlertRelay {
 
   private async page(alert: Alert): Promise<void> {
     const existing = this.state.pages[alert.fingerprint]
-    if (existing?.alert.startsAt === alert.startsAt) return
+    // The same episode, or a retried webhook for an earlier one: the current page already covers it.
+    if (existing && Date.parse(existing.alert.startsAt) >= Date.parse(alert.startsAt)) return
     // The same series fired again after a resolution we never saw: close the old page, then page the new episode.
     if (existing) await this.resolve(alert.fingerprint, existing.alert, Date.parse(alert.startsAt))
     const messageId = await this.deps.discord.post(

@@ -307,9 +307,15 @@ describe('edit versus post', () => {
     const secondPage = relay.snapshot().pages['fp-critical']
     expect(secondPage?.alert.startsAt).toBe(second.startsAt)
 
-    // The first episode's resolution arriving late must not close the second page.
+    // The first episode's resolution or a retried firing webhook arriving late must not touch the second page.
+    const before = discord.calls.length
     await relay.handleWebhook({ alerts: [alert({ status: 'resolved' })] })
+    await relay.handleWebhook({ alerts: [alert()] })
     expect(relay.snapshot().pages['fp-critical']?.messageId).toBe(secondPage?.messageId)
+    expect(
+      discord.calls.slice(before).filter((call) => call.op === 'post' || call.id === secondPage?.messageId),
+    ).toEqual([])
+    expect(discord.pages()).toHaveLength(2)
   })
 
   test('a resolution for an unknown page posts a short notice that does not notify', async () => {
