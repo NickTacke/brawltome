@@ -5,7 +5,8 @@ import { posix } from 'node:path'
 const approvedHost = 'observability.brawltome.app'
 
 const expectedServiceNetworks: Record<string, string[]> = {
-  alertmanager: ['notifications', 'observability'],
+  'alert-relay': ['notifications', 'observability'],
+  alertmanager: ['observability'],
   'blackbox-exporter': ['application'],
   grafana: ['dokploy-network', 'observability'],
   loki: ['observability'],
@@ -16,6 +17,7 @@ const expectedServiceNetworks: Record<string, string[]> = {
 }
 
 const expectedImages: Record<string, string> = {
+  'alert-relay': 'oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0',
   alertmanager: 'prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba',
   'blackbox-exporter':
     'prom/blackbox-exporter:v0.27.0@sha256:a50c4c0eda297baa1678cd4dc4712a67fdea713b832d43ce7fcc5f9bea05094d',
@@ -29,6 +31,7 @@ const expectedImages: Record<string, string> = {
 }
 
 const expectedUsers: Record<string, string> = {
+  'alert-relay': '65534:65534',
   alertmanager: '65534:65534',
   'blackbox-exporter': '65534:65534',
   grafana: '472:472',
@@ -40,7 +43,8 @@ const expectedUsers: Record<string, string> = {
 }
 
 const expectedServiceSecrets: Record<string, Array<{ source: string; target: string }>> = {
-  alertmanager: [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
+  'alert-relay': [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
+  alertmanager: [],
   'blackbox-exporter': [],
   grafana: [{ source: 'grafana_admin_password', target: '/run/secrets/grafana_admin_password' }],
   loki: [],
@@ -133,6 +137,8 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
   if (isRecord(grafana)) checkGrafana(violations, grafana)
   const nodeExporter = services['node-exporter']
   if (isRecord(nodeExporter)) checkNodeExporter(violations, nodeExporter)
+  const alertRelay = services['alert-relay']
+  if (isRecord(alertRelay)) checkAlertRelay(violations, alertRelay)
 
   return violations
 }
@@ -174,6 +180,27 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
     )
   if (!volumesMatch) {
     violations.push('node-exporter volumes must match the approved read-only host paths exactly')
+  }
+}
+
+// The relay holds the Discord webhook and egress, so it may only see its own code (read-only) and its state directory.
+function checkAlertRelay(violations: string[], relay: Record<string, unknown>): void {
+  const volumes = Array.isArray(relay.volumes) ? relay.volumes : []
+  const bind = (volume: unknown): volume is Record<string, unknown> => isRecord(volume) && volume.type === 'bind'
+  const code = volumes.filter(
+    (volume) =>
+      bind(volume) &&
+      volume.target === '/app' &&
+      volume.read_only === true &&
+      typeof volume.source === 'string' &&
+      volume.source.endsWith('/infra/observability/alert-relay'),
+  )
+  const state = volumes.filter(
+    (volume) =>
+      bind(volume) && volume.target === '/state' && volume.source === '/srv/brawltome-observability/alert-relay',
+  )
+  if (volumes.length !== 2 || code.length !== 1 || state.length !== 1) {
+    violations.push('alert-relay volumes must be exactly its read-only code and the state directory')
   }
 }
 

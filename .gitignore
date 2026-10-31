@@ -27,7 +27,7 @@ Thumbs.db
 coverage/
 tmp/
 artifacts/
-docs/
+docs/superpowers/
 .worktrees/
 
 # Python (testing scripts for overlay)
