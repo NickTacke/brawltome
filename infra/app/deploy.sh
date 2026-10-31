@@ -161,13 +161,16 @@ for service in "$@"; do
   roll "$service"
 done
 
+# <service...>: recreates the named services whose image or configuration changed. Never name a rolling service when its
+# image tag may differ from what it runs: compose would stop the serving container before the replacement is healthy.
+converge() {
+  compose up -d --remove-orphans --no-deps --wait --wait-timeout "$health_timeout_seconds" "$@"
+}
+
 log 'converging the remaining services'
 # The migration already ran above; naming every other service keeps compose from running it a second time.
-converge() {
-  # shellcheck disable=SC2086
-  compose up -d --remove-orphans --no-deps --wait --wait-timeout "$health_timeout_seconds" $app_services
-}
-converge
+# shellcheck disable=SC2086
+converge $app_services
 
 running_postgres_image=$(docker inspect -f '{{.Image}}' "$(compose ps -q postgres)" 2>/dev/null || true)
 built_postgres_image=$(docker image inspect -f '{{.Id}}' "$project-postgres" 2>/dev/null || true)
@@ -232,9 +235,21 @@ smoke() {
   return "$smoke_failed"
 }
 
+# <rolling service...>: the app services not named.
+services_except() {
+  for candidate in $app_services; do
+    case " $* " in
+      *" $candidate "*) ;;
+      *) printf '%s\n' "$candidate" ;;
+    esac
+  done
+}
+
 # <rolling service...>: points each service's image tag back at its :previous image, rolls the public services back
 # the same way they rolled forward and recreates the rest. Fails without changing anything when a public service has
-# no previous image (first deploy), and fails after restoring what it could when a step fails.
+# no previous image (first deploy), and fails after restoring what it could when a step fails. A public service whose
+# previous image does not come up healthy keeps its current containers serving, and its tag is pointed back at the
+# image they run so no later `compose up` replaces them with the image that just failed.
 rollback() {
   for service in "$@"; do
     docker image inspect "$project-$service:previous" >/dev/null 2>&1 || {
@@ -254,10 +269,21 @@ rollback() {
     roll "$service" || {
       log "rollback: $service could not be restored; it keeps running this release"
       rollback_failed=1
+      serving=$(running_containers "$service" | head -n 1)
+      if [ -n "$serving" ]; then
+        docker tag "$(docker inspect -f '{{.Image}}' "$serving")" "$project-$service:latest" ||
+          log "rollback: could not point $project-$service:latest back at the image $serving runs"
+      fi
     }
   done
-  log 'rollback: recreating the remaining services on their previous images'
-  converge || rollback_failed=1
+  # The public services are left out: they were rolled above, and naming one whose rollback failed would make compose
+  # stop its serving container to recreate it on the image that just failed its health check.
+  remaining=$(services_except "$@")
+  if [ -n "$remaining" ]; then
+    log 'rollback: recreating the remaining services on their previous images'
+    # shellcheck disable=SC2086
+    converge $remaining || rollback_failed=1
+  fi
   return "$rollback_failed"
 }
 

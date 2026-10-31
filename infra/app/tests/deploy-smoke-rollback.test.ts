@@ -54,7 +54,10 @@ function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?
   const state = JSON.parse(readFileSync(join(directory, 'state.json'), 'utf8')) as {
     containers: Container[]
     tags: Record<string, string>
+    outages?: string[]
   }
+  // Whatever fails, api and web must keep a healthy container serving from the moment they first have one.
+  expect(state.outages ?? []).toEqual([])
   const calls = readFileSync(join(directory, 'calls.log'), 'utf8').trim().split('\n')
   const imageOf = (service: string) => state.containers.filter((item) => item.service === service).map((c) => c.image)
   return { result, state, calls, imageOf }
@@ -131,6 +134,51 @@ describe('deploy smoke checks and rollback', () => {
 
     expect(result.status).toBe(1)
     expect(result.stdout).toContain('ROLLED BACK, but the previous release fails the smoke checks too')
+    expect(imageOf('web')).toEqual(['sha256:old-web'])
+  })
+
+  test('a public service whose previous image fails its health check keeps serving the current release', () => {
+    const { result, state, calls, imageOf } = deploy({
+      env: { DOCKER_STUB_FAIL_IMAGE: 'new', DOCKER_STUB_UNHEALTHY_IMAGE: 'old-api' },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('api: the new container never became healthy; keeping the old one')
+    expect(result.stdout).toContain('rollback: api could not be restored; it keeps running this release')
+    expect(result.stdout).toContain('ROLLBACK INCOMPLETE')
+    expect(imageOf('api')).toEqual(['sha256:new-api'])
+    expect(imageOf('web')).toEqual(['sha256:old-web'])
+    expect(imageOf('operations-worker')).toEqual(['sha256:old-operations-worker'])
+    // The tag follows what api runs, so a later `compose up` does not swap in the image that just failed.
+    expect(state.tags[`${project}-api:latest`]).toBe('sha256:new-api')
+    // Rollback convergence never names a public service, which compose would recreate in place.
+    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`))
+    const converges = rollbackCalls.filter((call) => call.includes(' up -d --remove-orphans '))
+    expect(converges).toHaveLength(1)
+    expect(converges[0]).toEndWith(' operations-worker')
+  })
+
+  test('when no public service can be restored both keep serving and the rest still roll back', () => {
+    const { result, state, imageOf } = deploy({
+      env: { DOCKER_STUB_FAIL_IMAGE: 'new', DOCKER_STUB_UNHEALTHY_IMAGE: 'old-api,old-web,old-operations-worker' },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('rollback: api could not be restored')
+    expect(result.stdout).toContain('rollback: web could not be restored')
+    expect(imageOf('api')).toEqual(['sha256:new-api'])
+    expect(imageOf('web')).toEqual(['sha256:new-web'])
+    expect(state.tags[`${project}-web:latest`]).toBe('sha256:new-web')
+    // The worker is not public: it is recreated on its previous image, which here fails its health check too.
+    expect(imageOf('operations-worker')).toEqual(['sha256:old-operations-worker'])
+  })
+
+  test('a forward roll whose new container fails its health check stops the deploy and keeps the old one', () => {
+    const { result, imageOf } = deploy({ env: { DOCKER_STUB_UNHEALTHY_IMAGE: 'new-api' } })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stdout).toContain('api: the new container never became healthy; keeping the old one')
+    expect(imageOf('api')).toEqual(['sha256:old-api'])
     expect(imageOf('web')).toEqual(['sha256:old-web'])
   })
 

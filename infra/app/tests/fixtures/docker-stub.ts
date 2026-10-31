@@ -11,7 +11,13 @@ type State = {
   tags: Record<string, string>
   counter: number
   execCalls: number
+  /** Public services that have had a healthy container; once one has, it must never be left without. */
+  served?: string[]
+  /** Calls after which a served public service had no healthy container. */
+  outages?: string[]
 }
+
+const publicServices = ['api', 'web']
 
 const directory = process.env.DOCKER_STUB_DIR
 if (!directory) throw new Error('DOCKER_STUB_DIR is not set')
@@ -29,7 +35,8 @@ function tagKey(name: string) {
 }
 
 function resolveImage(reference: string) {
-  return state.tags[tagKey(reference)] ?? (Object.values(state.tags).includes(reference) ? reference : undefined)
+  // Image IDs resolve to themselves, as with docker, even once no tag points at them.
+  return reference.startsWith('sha256:') ? reference : state.tags[tagKey(reference)]
 }
 
 function start(service: string) {
@@ -37,6 +44,12 @@ function start(service: string) {
   if (!image) throw new Error(`no image for ${service}`)
   state.counter += 1
   state.containers.push({ id: `${service}-${state.counter}`, service, image })
+}
+
+// Containers whose image matches one of the comma-separated DOCKER_STUB_UNHEALTHY_IMAGE never pass their health check.
+function health(container: Container) {
+  const unhealthy = (process.env.DOCKER_STUB_UNHEALTHY_IMAGE ?? '').split(',').filter(Boolean)
+  return unhealthy.some((image) => container.image.includes(image)) ? 'unhealthy' : 'healthy'
 }
 
 function remove(id: string) {
@@ -71,6 +84,7 @@ function compose(rest: string[]) {
     while (state.containers.filter((container) => container.service === service).length < Number(count)) start(service)
     return 0
   }
+  if (services.length === 0) throw new Error('compose up without services would start the whole project')
   for (const service of services) {
     if (service === 'migration' || service === 'postgres') continue
     const image = resolveImage(`${state.project}-${service}`)
@@ -83,6 +97,8 @@ function compose(rest: string[]) {
           start(service)
         }
   }
+  const named = state.containers.filter((container) => services.includes(container.service))
+  if (options.includes('--wait') && named.some((container) => health(container) === 'unhealthy')) return 1
   return 0
 }
 
@@ -101,8 +117,8 @@ function main(): number {
     const container = state.containers.find((item) => item.id === id)
     if (!container) return 1
     if (format.includes('.Image')) process.stdout.write(`${container.image}\n`)
-    else if (format.includes('.Restarting')) process.stdout.write('running false healthy\n')
-    else process.stdout.write('running healthy\n')
+    else if (format.includes('.Restarting')) process.stdout.write(`running false ${health(container)}\n`)
+    else process.stdout.write(`running ${health(container)}\n`)
     return 0
   }
   if (command === 'image') {
@@ -148,6 +164,17 @@ function main(): number {
   throw new Error(`unsupported docker ${command}`)
 }
 
+function recordOutages() {
+  state.served ??= []
+  state.outages ??= []
+  for (const service of publicServices) {
+    const healthy = state.containers.some((item) => item.service === service && health(item) === 'healthy')
+    if (healthy && !state.served.includes(service)) state.served.push(service)
+    else if (!healthy && state.served.includes(service)) state.outages.push(`${service} after: ${args.join(' ')}`)
+  }
+}
+
 const status = main()
+recordOutages()
 save()
 process.exit(status)
