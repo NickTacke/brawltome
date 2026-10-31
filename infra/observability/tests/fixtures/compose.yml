@@ -10,13 +10,53 @@ services:
     command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
     volumes:
       - ../../alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    secrets:
-      - discord_webhook_url
     ports:
       - 127.0.0.1:19093:9093
     depends_on:
+      alert-relay:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+          pids: 64
+
+  alert-relay:
+    image: oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0
+    user: "65534:65534"
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    working_dir: /app
+    command: ["bun", "run", "/app/main.ts"]
+    environment:
+      DISCORD_PAGE_MENTION: "<@&111111111111111111>"
+      ALERTMANAGER_URL: http://alertmanager:9093
+      GRAFANA_URL: https://observability.brawltome.app
+      RELAY_STATE_FILE: /state/state.json
+      # Fast polling so recovery shows up in seconds. A long page grace forces the firing page through the
+      # Alertmanager webhook; a short resolve grace lets the poll resolve it once Alertmanager drops the alert.
+      RELAY_POLL_INTERVAL_MS: "2000"
+      RELAY_UNNOTIFIED_PAGE_GRACE_MS: "600000"
+      RELAY_MISSING_RESOLVE_GRACE_MS: "1000"
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0"
+      HOME: /tmp
+    volumes:
+      - ../../alert-relay:/app:ro
+    tmpfs:
+      - /state:rw,noexec,nosuid,nodev,uid=65534,gid=65534,mode=0700,size=1m
+      - /tmp:rw,noexec,nosuid,nodev,uid=65534,gid=65534,mode=0700,size=16m
+    secrets:
+      - discord_webhook_url
+    depends_on:
       discord-receiver:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
     deploy:
       resources:
         limits:

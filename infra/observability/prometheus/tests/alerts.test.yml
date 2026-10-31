@@ -23,6 +23,7 @@ tests:
             exp_annotations:
               summary: "api metrics target is unreachable"
               description: "The dedicated metrics scrape has failed for at least two minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#runtimemetricstargetdown"
       - eval_time: 3m
         alertname: RuntimeMetricsTargetDown
         exp_alerts: []
@@ -46,6 +47,7 @@ tests:
             exp_annotations:
               summary: "api is not ready"
               description: "The dependency-aware readiness probe has failed for at least two minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#runtimenotready"
       - eval_time: 3m
         alertname: RuntimeNotReady
         exp_alerts: []
@@ -67,6 +69,7 @@ tests:
             exp_annotations:
               summary: "operations-worker heartbeat is stale"
               description: "No successful worker loop heartbeat has been observed for more than one minute."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#workerheartbeatstale"
       - eval_time: 5m
         alertname: WorkerHeartbeatStale
         exp_alerts: []
@@ -88,6 +91,7 @@ tests:
             exp_annotations:
               summary: "interactive runnable work is delayed"
               description: "The oldest runnable operation has exceeded the initial 15-minute operator threshold."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#oldestrunnablejobdelayed"
       - eval_time: 6m
         alertname: OldestRunnableJobDelayed
         exp_alerts: []
@@ -97,6 +101,8 @@ tests:
     input_series:
       - series: 'schedule_lateness_ms{kind="leaderboard-1v1"}'
         values: "400000 400000 400000 400000 400000 400000 0 0"
+      - series: 'schedule_lateness_ms{kind="leaderboard-deep-crawl"}'
+        values: "9000000x8"
     alert_rule_test:
       - eval_time: 5m
         alertname: ScheduleMaterializationLate
@@ -109,6 +115,7 @@ tests:
             exp_annotations:
               summary: "leaderboard-1v1 schedule is late"
               description: "An enabled schedule has remained more than five minutes late."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#schedulematerializationlate"
       - eval_time: 6m
         alertname: ScheduleMaterializationLate
         exp_alerts: []
@@ -130,12 +137,13 @@ tests:
           - exp_labels:
               work_class: leaderboard
               kind: leaderboard-1v1
-              severity: critical
+              severity: warning
               service: brawltome
               signal: dead-letters
             exp_annotations:
               summary: "leaderboard-1v1 produced new dead letters"
               description: "At least one leaderboard operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#newdeadletters"
       - eval_time: 40m
         alertname: NewDeadLetters
         exp_alerts: []
@@ -152,12 +160,13 @@ tests:
           - exp_labels:
               work_class: projection
               kind: player-discovery-projection
-              severity: critical
+              severity: warning
               service: brawltome
               signal: dead-letters
             exp_annotations:
               summary: "player-discovery-projection produced new dead letters"
               description: "At least one projection operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#newdeadletters"
       - eval_time: 40m
         alertname: NewDeadLetters
         exp_alerts: []
@@ -177,29 +186,6 @@ tests:
         exp_alerts: []
       - eval_time: 45m
         alertname: NewDeadLetters
-        exp_alerts: []
-
-  - name: source quota firing and recovery
-    interval: 1m
-    input_series:
-      - series: 'source_quota_used{domain="brawlhalla-v0"}'
-        values: "95 95 95 20 20"
-      - series: 'source_quota_limit{domain="brawlhalla-v0"}'
-        values: "100 100 100 100 100"
-    alert_rule_test:
-      - eval_time: 2m
-        alertname: SourceQuotaNearLimit
-        exp_alerts:
-          - exp_labels:
-              domain: brawlhalla-v0
-              severity: warning
-              service: brawltome
-              signal: source-quota
-            exp_annotations:
-              summary: "brawlhalla-v0 source quota is at least 90 percent used"
-              description: "Distributed source admission is close to its fixed window limit."
-      - eval_time: 3m
-        alertname: SourceQuotaNearLimit
         exp_alerts: []
 
   - name: refresh failures firing and recovery
@@ -223,6 +209,7 @@ tests:
             exp_annotations:
               summary: "interactive-player-refresh refresh failures detected"
               description: "More than two refresh attempts failed in the last 15 minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
       - eval_time: 19m
         alertname: RefreshFailuresElevated
         exp_alerts: []
@@ -257,6 +244,7 @@ tests:
             exp_annotations:
               summary: "leaderboard-deep-crawl refresh failures detected"
               description: "More than two refresh attempts failed in the last 15 minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
 
   - name: real refresh failures fire by bounded category and recover
     interval: 1m
@@ -285,15 +273,7 @@ tests:
             exp_annotations:
               summary: "leaderboard-1v1 refresh failures detected"
               description: "More than two refresh attempts failed in the last 15 minutes."
-          - exp_labels:
-              kind: leaderboard-2v2
-              failure_category: source_unavailable
-              severity: warning
-              service: brawltome
-              signal: refresh-failures
-            exp_annotations:
-              summary: "leaderboard-2v2 refresh failures detected"
-              description: "More than two refresh attempts failed in the last 15 minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
           - exp_labels:
               kind: statistics-ranked-collection
               failure_category: execution
@@ -303,6 +283,7 @@ tests:
             exp_annotations:
               summary: "statistics-ranked-collection refresh failures detected"
               description: "More than two refresh attempts failed in the last 15 minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
           - exp_labels:
               kind: statistics-publication
               failure_category: lease_lost
@@ -312,9 +293,76 @@ tests:
             exp_annotations:
               summary: "statistics-publication refresh failures detected"
               description: "More than two refresh attempts failed in the last 15 minutes."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
       - eval_time: 19m
         alertname: RefreshFailuresElevated
         exp_alerts: []
+
+  - name: Brawlhalla outage is one aggregated warning across kinds and recovers
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="leaderboard-1v1",failure_category="source_unavailable"}'
+        values: "0+1x40 40x30"
+      - series: 'refresh_failures_total{kind="leaderboard-2v2",failure_category="source_unavailable"}'
+        values: "0+1x40 40x30"
+      - series: 'refresh_failures_total{kind="interactive-player-refresh",failure_category="source_unavailable"}'
+        values: "0+1x40 40x30"
+      - series: 'refresh_failures_total{kind="leaderboard-deep-crawl",failure_category="source_unavailable"}'
+        values: "0+5x70"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: brawltome
+              signal: source-availability
+            exp_annotations:
+              summary: "Brawlhalla API is unavailable"
+              description: "15 refresh attempts failed with source_unavailable in the last 5 minutes. Brawlhalla is down or in maintenance; refreshes resume on their own."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#brawlhallasourceunavailable"
+      - eval_time: 60m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts: []
+
+  - name: a short Brawlhalla blip and deep-crawl deferrals alone do not alert
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="leaderboard-1v1",failure_category="source_unavailable"}'
+        values: "0 3 6 9 12x60"
+      - series: 'refresh_failures_total{kind="leaderboard-deep-crawl",failure_category="source_unavailable"}'
+        values: "0+5x60"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts: []
+      - eval_time: 50m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts: []
+
+  - name: watchdog always fires
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+              service: brawltome
+              signal: watchdog
+            exp_annotations:
+              summary: "Alerting pipeline heartbeat"
+              description: "Always firing while Prometheus evaluates rules and delivers them to Alertmanager."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#watchdog"
 
   - name: HTTP latency firing and recovery
     interval: 1m
@@ -337,6 +385,7 @@ tests:
             exp_annotations:
               summary: "api HTTP p95 exceeds 250 ms"
               description: "The five-minute HTTP p95 has exceeded the launch threshold."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#httplatencyhigh"
       - eval_time: 13m
         alertname: HttpLatencyHigh
         exp_alerts: []
@@ -360,6 +409,7 @@ tests:
             exp_annotations:
               summary: "api HTTP 5xx rate exceeds one percent"
               description: "The fixed launch error boundary is breached over the five-minute window."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#httperrorratehigh"
       - eval_time: 13m
         alertname: HttpErrorRateHigh
         exp_alerts: []
@@ -406,6 +456,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL backup integrity verification failed (reason: stale)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresbackupintegrityfailed"
       - eval_time: 6m
         alertname: PostgresBackupIntegrityFailed
         exp_alerts: []
@@ -428,6 +479,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresbackupintegrityfailed"
 
   - name: missing backup last-run metric fires
     interval: 1m
@@ -447,6 +499,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresbackupintegrityfailed"
 
   - name: missing latest verified backup metric fires
     interval: 1m
@@ -466,6 +519,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresbackupintegrityfailed"
 
   - name: stale backup verification fires
     interval: 1h
@@ -487,6 +541,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL backup integrity verification failed (reason: not reported)"
               description: "The recurring backup checksum is missing, mismatched, stale, or has not been verified within eight hours."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresbackupintegrityfailed"
 
   - name: telemetry storage firing and recovery
     interval: 1m
@@ -507,6 +562,7 @@ tests:
             exp_annotations:
               summary: "Telemetry storage is at least 80 percent used"
               description: "A dedicated quota-backed telemetry filesystem is nearing capacity."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#telemetrystoragenearquota"
       - eval_time: 6m
         alertname: TelemetryStorageNearQuota
         exp_alerts: []
@@ -536,6 +592,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL data filesystem has less than 20 percent free"
               description: "Only 15% of the PostgreSQL data filesystem is available. Grow the loop image or reclaim space before writes fail."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresdiskspacelow"
       - eval_time: 24m
         alertname: PostgresDiskSpaceLow
         exp_alerts:
@@ -550,6 +607,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL data filesystem has less than 20 percent free"
               description: "Only 5% of the PostgreSQL data filesystem is available. Grow the loop image or reclaim space before writes fail."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresdiskspacelow"
           - exp_labels:
               job: node
               device: /dev/loop3
@@ -561,6 +619,7 @@ tests:
             exp_annotations:
               summary: "PostgreSQL data filesystem has less than 10 percent free"
               description: "Only 5% of the PostgreSQL data filesystem is available. PostgreSQL stops when it cannot extend files or WAL."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#postgresdiskspacelow"
       - eval_time: 24m
         alertname: FilesystemSpaceCritical
         exp_alerts: []
@@ -597,6 +656,7 @@ tests:
             exp_annotations:
               summary: "/storage/loki has less than 10 percent free"
               description: "Only 5% of the ext4 filesystem mounted at /storage/loki is available."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#filesystemspacecritical"
       - eval_time: 18m
         alertname: FilesystemSpaceCritical
         exp_alerts: []
