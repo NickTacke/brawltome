@@ -67,7 +67,11 @@ Bun.serve({
   },
 })
 
-const poll = () => relay.sync().catch((error) => log('error', 'alertmanager sync failed', { error: String(error) }))
-setInterval(poll, pollIntervalMs)
+// The next poll is scheduled only after the current one finishes, so a slow Discord never stacks polls in the queue
+// ahead of incoming webhooks.
+const poll = async () => {
+  await relay.sync().catch((error) => log('error', 'alertmanager sync failed', { error: String(error) }))
+  setTimeout(poll, pollIntervalMs)
+}
 void poll()
 log('info', 'alert relay started', { pollIntervalMs, paging: mention ? 'mention' : 'no mention' })

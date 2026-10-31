@@ -119,7 +119,7 @@ export class AlertRelay {
         if (!isCritical(alert) || !alert.fingerprint) continue
         try {
           if (alert.status === 'firing') await this.page(alert)
-          else await this.resolve(alert.fingerprint, alert, this.resolvedAt(alert))
+          else if (!this.isNewerEpisodeThan(alert)) await this.resolve(alert.fingerprint, alert, this.resolvedAt(alert))
         } catch (error) {
           failures.push(error)
           this.log('error', 'critical notification failed', {
@@ -143,7 +143,8 @@ export class AlertRelay {
       const known = new Set(alerts.map((alert) => alert.fingerprint))
 
       for (const alert of alerts) {
-        if (!isCritical(alert) || alert.status.state !== 'active' || this.state.pages[alert.fingerprint]) continue
+        if (!isCritical(alert) || alert.status.state !== 'active') continue
+        if (this.state.pages[alert.fingerprint]?.alert.startsAt === alert.startsAt) continue
         if (now - Date.parse(alert.startsAt) < this.deps.config.unnotifiedPageGraceMs) continue
         this.log('warn', 'paging a critical alert that arrived without a webhook', {
           alertname: alert.labels.alertname,
@@ -187,8 +188,17 @@ export class AlertRelay {
     return Number.isFinite(endsAt) && endsAt > 0 && endsAt <= this.now() ? endsAt : this.now()
   }
 
+  // A late resolved webhook for an earlier episode must not close the page of the episode that followed it.
+  private isNewerEpisodeThan(alert: Alert): boolean {
+    const record = this.state.pages[alert.fingerprint]
+    return record !== undefined && Date.parse(record.alert.startsAt) > Date.parse(alert.startsAt)
+  }
+
   private async page(alert: Alert): Promise<void> {
-    if (this.state.pages[alert.fingerprint]) return
+    const existing = this.state.pages[alert.fingerprint]
+    if (existing?.alert.startsAt === alert.startsAt) return
+    // The same series fired again after a resolution we never saw: close the old page, then page the new episode.
+    if (existing) await this.resolve(alert.fingerprint, existing.alert, Date.parse(alert.startsAt))
     const messageId = await this.deps.discord.post(
       pageMessage(alert, this.deps.config.mention, this.deps.config.grafanaUrl),
     )

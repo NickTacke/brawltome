@@ -147,13 +147,27 @@ export type BoardInput = {
   now: number
 }
 
-function boardLines(alerts: Alert[]): string[] {
+// Discord allows 4,096 characters in an embed description; the rest is headroom for the "Updated" line.
+const boardLimit = 3_900
+// Room kept for an "…and N more" line, so the omitted count is never cut off.
+const omittedReserve = 24
+// Room kept for the warning section's header when critical alerts already fill the board.
+const sectionReserve = 64
+
+// Fits as many alert lines as the budget allows, oldest first, and counts the rest accurately.
+function section(title: string, alerts: Alert[], budget: number): string {
   const sorted = [...alerts].sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt))
-  const lines = sorted
-    .slice(0, boardSectionLimit)
-    .map((alert) => truncate(`• **${name(alert)}** — ${summary(alert)} · since ${relative(alert.startsAt)}`, 300))
-  if (sorted.length > boardSectionLimit) lines.push(`…and ${sorted.length - boardSectionLimit} more`)
-  return lines
+  const lines = [title]
+  let used = title.length
+  for (const alert of sorted.slice(0, boardSectionLimit)) {
+    const line = truncate(`• **${name(alert)}** — ${summary(alert)} · since ${relative(alert.startsAt)}`, 300)
+    if (used + 1 + line.length + 1 + omittedReserve > budget) break
+    lines.push(line)
+    used += 1 + line.length
+  }
+  const omitted = sorted.length - (lines.length - 1)
+  if (omitted > 0) lines.push(`…and ${omitted} more`)
+  return lines.join('\n')
 }
 
 // Renders the status board. The "Updated" line is kept separate so callers can detect content changes without it.
@@ -161,19 +175,28 @@ export function renderBoard(input: BoardInput): { body: MessageBody; fingerprint
   const critical = input.alerts.filter((alert) => alert.labels.severity === 'critical')
   const warning = input.alerts.filter((alert) => alert.labels.severity === 'warning')
 
+  // The heartbeat line is placed first in the budget so a busy board can never push it out.
+  const heartbeat = input.watchdogFiring
+    ? '📡 Prometheus → Alertmanager heartbeat OK'
+    : '⚠️ No Prometheus heartbeat (Watchdog): rules may not be evaluated, so this board may be missing alerts'
+  let budget = boardLimit - heartbeat.length - 2
   const sections: string[] = []
-  if (critical.length > 0) sections.push([`**🔴 Critical (${critical.length})**`, ...boardLines(critical)].join('\n'))
-  if (warning.length > 0) sections.push([`**🟠 Warning (${warning.length})**`, ...boardLines(warning)].join('\n'))
+  if (critical.length > 0) {
+    const text = section(
+      `**🔴 Critical (${critical.length})**`,
+      critical,
+      budget - (warning.length > 0 ? sectionReserve : 0),
+    )
+    sections.push(text)
+    budget -= text.length + 2
+  }
+  if (warning.length > 0) sections.push(section(`**🟠 Warning (${warning.length})**`, warning, budget))
   if (sections.length === 0) {
     sections.push(input.clearSince ? `✅ All clear since ${relative(input.clearSince)}` : '✅ All clear')
   }
-  sections.push(
-    input.watchdogFiring
-      ? '📡 Prometheus → Alertmanager heartbeat OK'
-      : '⚠️ No Prometheus heartbeat (Watchdog): rules may not be evaluated, so this board may be missing alerts',
-  )
+  sections.push(heartbeat)
 
-  const content = truncate(sections.join('\n\n'), 3_900)
+  const content = sections.join('\n\n')
   const color = critical.length > 0 ? RED : warning.length > 0 || !input.watchdogFiring ? ORANGE : GREEN
   const embed: Embed = { title: 'BrawlTome status', description: content, color }
   const fingerprint = JSON.stringify(embed)

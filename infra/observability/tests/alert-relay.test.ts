@@ -174,6 +174,27 @@ describe('status board rendering', () => {
     expect(body.embeds?.[0]?.color).toBe(0xf5a524)
   })
 
+  test('a board too busy for Discord keeps the heartbeat and an accurate omitted count', () => {
+    const long = (prefix: string, severity: string, count: number) =>
+      Array.from({ length: count }, (_, index) =>
+        alert({
+          fingerprint: `${prefix}-${index}`,
+          labels: { alertname: `${prefix}${index}`, severity },
+          annotations: { summary: 'x'.repeat(280) },
+        }),
+      )
+    const alerts = [...long('Crit', 'critical', 18), ...long('Warn', 'warning', 18)]
+    const { body } = renderBoard({ alerts, watchdogFiring: true, clearSince: undefined, now: t0 })
+    const description = body.embeds?.[0]?.description ?? ''
+    expect(description.length).toBeLessThanOrEqual(4_096)
+    expect(description).toContain('heartbeat OK')
+    expect(description).toContain('Warning (18)')
+    const shown = (description.match(/^• /gm) ?? []).length
+    const omitted = [...description.matchAll(/…and (\d+) more/g)].reduce((sum, match) => sum + Number(match[1]), 0)
+    expect(shown).toBeGreaterThan(0)
+    expect(shown + omitted).toBe(36)
+  })
+
   test('the change fingerprint ignores the updated stamp', () => {
     const first = renderBoard({ alerts: [], watchdogFiring: true, clearSince: t0, now: t0 })
     const later = renderBoard({ alerts: [], watchdogFiring: true, clearSince: t0, now: t0 + 60_000 })
@@ -266,6 +287,29 @@ describe('edit versus post', () => {
     expect(second.discord.calls.filter((call) => call.op === 'edit').map((call) => call.id)).toContain(
       persisted.pages['fp-critical']?.messageId,
     )
+  })
+
+  test('a new episode of a paged alert pages again even when its resolution was missed', async () => {
+    const { relay, discord, clock, am } = setup()
+    am.alerts = [watchdog, apiAlert(alert())]
+    await relay.handleWebhook({ alerts: [alert()] })
+    const firstPage = relay.snapshot().pages['fp-critical']?.messageId
+
+    clock.now = t0 + 10 * 60_000
+    const second = alert({ startsAt: new Date(t0 + 9 * 60_000).toISOString() })
+    am.alerts = [watchdog, apiAlert(second)]
+    await relay.sync()
+    clock.now += 180_000
+    await relay.sync()
+
+    expect(discord.pages()).toHaveLength(2)
+    expect(discord.calls.find((call) => call.op === 'edit' && call.id === firstPage)?.body.content).toStartWith('✅')
+    const secondPage = relay.snapshot().pages['fp-critical']
+    expect(secondPage?.alert.startsAt).toBe(second.startsAt)
+
+    // The first episode's resolution arriving late must not close the second page.
+    await relay.handleWebhook({ alerts: [alert({ status: 'resolved' })] })
+    expect(relay.snapshot().pages['fp-critical']?.messageId).toBe(secondPage?.messageId)
   })
 
   test('a resolution for an unknown page posts a short notice that does not notify', async () => {
