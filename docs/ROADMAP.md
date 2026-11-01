@@ -12,15 +12,14 @@ replay analysis). Don't chase parity with other stat sites unless it serves one 
   disk alerts in place.
 - The hourly deep crawl covers about 280k 1v1 players plus the solo and 2v2 boards. Profiles show how old each section's
   data is.
-- Alerting was noisy (about 66 Discord messages a day, mostly the deep crawl) and is being reworked into a status
-  board plus pings for critical alerts only. See [operations/alerts.md](operations/alerts.md).
+- Alerting was reworked from about 66 Discord messages a day into a status board plus pings for critical alerts only.
+  See [operations/alerts.md](operations/alerts.md).
 
 ## Now
 
 | Issue | Why now |
 | --- | --- |
-| Alerting rework (PR) | Alerts get ignored while they are noisy. Fixing them first makes every later change safer |
-| #364 External uptime / dead man's switch | If the host goes down nobody hears about it today. Needs the owner's healthchecks.io / UptimeRobot accounts |
+| #364 External uptime / dead man's switch | If the host goes down nobody hears about it today. Needs a healthchecks.io or UptimeRobot account |
 | #337 Deploy smoke test and rollback (PR #359) | Every push to `master` deploys, and a bad release should undo itself |
 | #336 Push refresh results (PR #360) | Refreshed data shows up the moment it is ready, with fewer polling requests |
 | #335 Search misses | About 11% of searches find nothing. "Can't find myself" is the first impression for new users |
@@ -30,10 +29,10 @@ replay analysis). Don't chase parity with other stat sites unless it serves one 
 
 | Issue | Notes |
 | --- | --- |
-| #332 Overlay rework | The main differentiator. Needs Windows, so the owner drives it. Includes the old #101 retry gap |
+| #332 Overlay rework | The main differentiator. Needs a Windows machine. Includes the old #101 retry gap |
 | #116 Matches and replays | The backend foundation exists (replay ingestion, R2 storage, bridge). Next is the user-facing match history |
 | #244 Statistics activation | Decide whether `/stats` goes public, based on data-confidence evidence |
-| #365 Drop the V2 `public` tables | 1.5 GB of dead tables. Needs an owner decision on archiving |
+| #365 Drop the V2 `public` tables | 1.5 GB of dead tables. Decide whether to archive them first |
 | #366 Postgres maintenance window | Reclaim bloat after retention (rankings 42 GB, statistics 20 GB); align the image |
 
 ## Later
