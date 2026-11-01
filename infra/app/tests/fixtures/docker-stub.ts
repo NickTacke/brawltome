@@ -128,6 +128,12 @@ function main(): number {
     return 0
   }
   if (command === 'tag') {
+    // Tagging from a source listed in the comma-separated DOCKER_STUB_FAIL_TAG fails, as when the daemon errors.
+    const failing = (process.env.DOCKER_STUB_FAIL_TAG ?? '').split(',').filter(Boolean)
+    if (failing.includes(rest[0])) {
+      process.stderr.write(`Error response from daemon: could not tag ${rest[0]}\n`)
+      return 1
+    }
     const image = resolveImage(rest[0])
     if (!image) return 1
     state.tags[tagKey(rest[1])] = image

@@ -247,7 +247,8 @@ services_except() {
 
 # <rolling service...>: points each service's image tag back at its :previous image, rolls the public services back
 # the same way they rolled forward and recreates the rest. Fails without changing anything when a public service has
-# no previous image (first deploy), and fails after restoring what it could when a step fails. A public service whose
+# no previous image (first deploy), and fails after restoring what it could when a step fails. A service whose tag
+# cannot be pointed back keeps running this release untouched. A public service whose
 # previous image does not come up healthy keeps its current containers serving, and its tag is pointed back at the
 # image they run so no later `compose up` replaces them with the image that just failed.
 rollback() {
@@ -258,14 +259,24 @@ rollback() {
     }
   done
   rollback_failed=0
+  # Services whose tag still points at this release. They are neither rolled nor converged: both would use the tag,
+  # and `set -e` does not stop a failed command here because the caller runs rollback under `if !`.
+  untagged=
   for service in $app_services; do
-    if docker image inspect "$project-$service:previous" >/dev/null 2>&1; then
-      docker tag "$project-$service:previous" "$project-$service:latest"
-    else
+    if ! docker image inspect "$project-$service:previous" >/dev/null 2>&1; then
       log "rollback: no previous $service image; it keeps running this release"
+      continue
     fi
+    docker tag "$project-$service:previous" "$project-$service:latest" || {
+      log "rollback: could not point $project-$service:latest at the previous image; $service keeps running this release"
+      rollback_failed=1
+      untagged="$untagged $service"
+    }
   done
   for service in "$@"; do
+    case " $untagged " in
+      *" $service "*) continue ;;
+    esac
     roll "$service" || {
       log "rollback: $service could not be restored; it keeps running this release"
       rollback_failed=1
@@ -278,7 +289,8 @@ rollback() {
   done
   # The public services are left out: they were rolled above, and naming one whose rollback failed would make compose
   # stop its serving container to recreate it on the image that just failed its health check.
-  remaining=$(services_except "$@")
+  # shellcheck disable=SC2086
+  remaining=$(services_except "$@" $untagged)
   if [ -n "$remaining" ]; then
     log 'rollback: recreating the remaining services on their previous images'
     # shellcheck disable=SC2086

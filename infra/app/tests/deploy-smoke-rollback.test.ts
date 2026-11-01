@@ -173,6 +173,39 @@ describe('deploy smoke checks and rollback', () => {
     expect(imageOf('operations-worker')).toEqual(['sha256:old-operations-worker'])
   })
 
+  test('a public service whose tag cannot be pointed back is not rolled onto the rejected image', () => {
+    const { result, state, calls, imageOf } = deploy({
+      env: { DOCKER_STUB_FAIL_IMAGE: 'new', DOCKER_STUB_FAIL_TAG: `${project}-api:previous` },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain(`rollback: could not point ${project}-api:latest at the previous image`)
+    expect(result.stdout).toContain('ROLLBACK INCOMPLETE')
+    expect(result.stdout).not.toContain('ROLLED BACK:')
+    // api keeps its one serving container; the rollback never started a second api on the rejected image.
+    expect(imageOf('api')).toEqual(['sha256:new-api'])
+    expect(state.tags[`${project}-api:latest`]).toBe('sha256:new-api')
+    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`))
+    expect(rollbackCalls.some((call) => call.includes('--scale api='))).toBe(false)
+    // The rest still roll back.
+    expect(imageOf('web')).toEqual(['sha256:old-web'])
+    expect(imageOf('operations-worker')).toEqual(['sha256:old-operations-worker'])
+  })
+
+  test('a background service whose tag cannot be pointed back is left out of the rollback convergence', () => {
+    const { result, calls, imageOf } = deploy({
+      env: { DOCKER_STUB_FAIL_IMAGE: 'new', DOCKER_STUB_FAIL_TAG: `${project}-operations-worker:previous` },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('ROLLBACK INCOMPLETE')
+    expect(imageOf('api')).toEqual(['sha256:old-api'])
+    expect(imageOf('web')).toEqual(['sha256:old-web'])
+    expect(imageOf('operations-worker')).toEqual(['sha256:new-operations-worker'])
+    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`))
+    expect(rollbackCalls.some((call) => call.includes(' up -d --remove-orphans '))).toBe(false)
+  })
+
   test('a forward roll whose new container fails its health check stops the deploy and keeps the old one', () => {
     const { result, imageOf } = deploy({ env: { DOCKER_STUB_UNHEALTHY_IMAGE: 'new-api' } })
 
