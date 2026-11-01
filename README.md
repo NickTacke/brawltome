@@ -135,8 +135,7 @@ bun run dev:desktop
 
 ## Contributor checks
 
-Start with [`AGENTS.md`](AGENTS.md) for how the repo, deploys and production fit together, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's next.
-
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) for how the repo, deploys and production fit together, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's next.
 
 ```bash
 bun run lint

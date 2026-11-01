@@ -20,14 +20,11 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-.claude
-.superpowers/
 
 # Misc
 coverage/
 tmp/
 artifacts/
-docs/superpowers/
 .worktrees/
 
 # Brawlhalla replay samples used for local reverse-engineering

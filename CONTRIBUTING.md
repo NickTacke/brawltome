@@ -1,7 +1,7 @@
-# BrawlTome: guide for contributors and coding agents
+# Contributing to BrawlTome
 
 BrawlTome tracks Brawlhalla players: profiles, rankings, clans, rating history, a Discord bot, and a Windows overlay.
-The live site is https://brawltome.app. Read `README.md` for setup, then this file for how the repo works in practice.
+The live site is https://brawltome.app. Read `README.md` for setup, then this guide for how the repo works in practice.
 What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Layout
@@ -72,5 +72,4 @@ change. Check each workflow's `paths` before assuming a change is covered.
 ## Working conventions
 
 - Branch from `master`, one PR per change, conventional commit titles (`fix(worker): …`, `feat(web): …`).
-- Read Greptile's review and confidence on every PR before merging.
 - Prefer differentiators (overlay, replays, freshness) over copying competitor features.
