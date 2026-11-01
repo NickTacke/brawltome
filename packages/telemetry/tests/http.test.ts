@@ -37,6 +37,10 @@ describe('HTTP telemetry adapters', () => {
     expect(normalizeHttpRoute('/health/ready')).toBe('health_ready')
   })
 
+  test('keeps long-lived refresh event streams apart from request/response routes', () => {
+    expect(normalizeHttpRoute('/events/player/42/refresh')).toBe('events')
+  })
+
   test('accepts explicitly trusted internal propagation', async () => {
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
     const fetch = instrumentHttpHandler(telemetry, 'api', async () => new Response('ok'), {

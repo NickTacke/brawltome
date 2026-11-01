@@ -11,13 +11,15 @@ import {
   isPageExit,
   refreshStateEvent,
 } from '@/lib/analytics/refresh-events'
+import { publicApiUrl } from '@/lib/api-url'
 import { keepLastStanding } from '@/lib/player-reference'
 import {
+  PLAYER_REFRESH_FALLBACK_POLL_MS,
   PLAYER_REFRESH_MAX_WAIT_MS,
+  PLAYER_REFRESH_PUSHED_POLL_MS,
   type PendingPlayerSections,
   getPendingPlayerSections,
   hasCompletedPlayerRefresh,
-  playerRefreshPollDelayMs,
 } from '@/lib/player-refresh'
 import {
   createLatestRequestTracker,
@@ -26,7 +28,8 @@ import {
   secondsUntil,
   shouldRecheckOnVisible,
 } from '@/lib/player-refresh-status'
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { createRefreshEventPush, playerRefreshEventsUrl } from '@/lib/refresh-events'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useStaleRefresh } from './useStaleRefresh'
 
 interface RefreshBaseline {
@@ -40,8 +43,9 @@ function baselineFor(data: PlayerData | null): RefreshBaseline {
 
 /**
  * Drives a player profile refresh cycle: requests a refresh when data is stale, automatically retries
- * rate-limited/unavailable responses with a countdown, polls until fresh data lands, and re-checks
- * staleness when the tab becomes visible again.
+ * rate-limited/unavailable responses with a countdown, waits for fresh data, and re-checks staleness when the tab
+ * becomes visible again. While a refresh is in progress the API's completion stream wakes the page to refetch the
+ * moment the refresh settles; polling remains as a slow safety net, and as the fallback when the stream is unavailable.
  */
 export function usePlayerRefresh({ id, initialData }: { id: string; initialData: PlayerData | null }) {
   const [state, dispatch] = useReducer(playerRefreshReducer, initialPlayerRefreshState)
@@ -65,6 +69,7 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
     if (next && next.leaderboardStanding !== undefined) lastStandingRef.current = next.leaderboardStanding
     return next
   }, [id])
+  const push = useMemo(() => createRefreshEventPush(playerRefreshEventsUrl(publicApiUrl, Number(id))), [id])
   const { data, error } = useStaleRefresh<PlayerData | null>({
     initialData,
     queryFn,
@@ -72,7 +77,9 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
     isDone: (_previous, next) => hasCompletedPlayerRefresh(baselineRef.current.data, next, baselineRef.current.pending),
     startSignal: state.pollRun > 0,
     runKey: state.pollRun,
-    pollMs: playerRefreshPollDelayMs,
+    pollMs: PLAYER_REFRESH_FALLBACK_POLL_MS,
+    push,
+    pushedPollMs: PLAYER_REFRESH_PUSHED_POLL_MS,
     maxRefreshMs: PLAYER_REFRESH_MAX_WAIT_MS,
     onSettled: (settlement) => {
       if (settlement === 'done') {

@@ -27,6 +27,7 @@ import {
   type MaterializeSchedulesResult,
   type OperationFailure,
   type OperationLease,
+  type PlayerRefreshSettled,
   type PrimaryMonitoringSnapshot,
   type ReconcilePrimaryMonitoringResult,
   type RefreshRequestDemand,
@@ -43,6 +44,8 @@ import {
   freshnessPlannerSource,
   interactiveRefreshMaxAttempts,
   leaderboardOperationKinds,
+  parsePlayerRefreshSettled,
+  playerRefreshSettledChannel,
   primaryMonitoringIntervalMs,
   recentlyViewedCohort,
   statisticsCollectionKinds,
@@ -2485,6 +2488,19 @@ export function createPostgresRefreshOperations(
 
     listen(onWakeup: (operationId: string) => void) {
       return client.listen(wakeupChannel, onWakeup)
+    },
+
+    // Shares the client's single LISTEN connection. onListen runs on the first LISTEN and after every reconnect, when
+    // notifications sent while the connection was down are lost.
+    listenPlayerRefreshSettled(onSettled: (event: PlayerRefreshSettled) => void, onListen?: () => void) {
+      return client.listen(
+        playerRefreshSettledChannel,
+        (payload) => {
+          const event = parsePlayerRefreshSettled(payload)
+          if (event) onSettled(event)
+        },
+        onListen,
+      )
     },
 
     async close() {

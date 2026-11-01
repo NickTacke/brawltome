@@ -76,6 +76,9 @@ export type MetricName =
   | 'source_quota_limit'
   | 'refresh_failures_total'
   | 'refresh_requests_total'
+  | 'refresh_event_streams_total'
+  | 'refresh_event_streams_closed_total'
+  | 'refresh_events_delivered_total'
   | 'discord_interactions_total'
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
@@ -141,6 +144,7 @@ const route = [
   'auth',
   'operations',
   'overlay',
+  'events',
   'web',
   'api',
   'other',
@@ -282,6 +286,21 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
       ],
       source: ['interactive-api', 'discord'],
     },
+  },
+  refresh_event_streams_total: {
+    kind: 'counter',
+    help: 'Refresh completion event stream requests by outcome',
+    labels: { outcome: ['opened', 'rejected_capacity', 'rejected_client', 'draining', 'unavailable'] },
+  },
+  refresh_event_streams_closed_total: {
+    kind: 'counter',
+    help: 'Refresh completion event streams closed, by reason',
+    labels: { reason: ['settled', 'expired', 'client', 'draining'] },
+  },
+  refresh_events_delivered_total: {
+    kind: 'counter',
+    help: 'Refresh completion events written to open streams',
+    labels: { event: ['succeeded', 'dead_letter', 'resync'] },
   },
   discord_interactions_total: {
     kind: 'counter',
@@ -1086,6 +1105,7 @@ export function normalizeHttpRoute(pathname: string): (typeof route)[number] {
   if (pathname.startsWith('/auth')) return 'auth'
   if (pathname.startsWith('/internal/operations')) return 'operations'
   if (pathname.startsWith('/api/overlay')) return 'overlay'
+  if (pathname.startsWith('/events/')) return 'events'
   return 'other'
 }
 
