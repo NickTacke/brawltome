@@ -26,7 +26,7 @@ import {
 } from './index'
 
 type Sql = ReturnType<typeof postgres>
-type PlayerTerm = { kind: 'canonical' | 'segment' | 'alias'; display: string; normalized: string }
+type PlayerTerm = { kind: 'canonical' | 'segment' | 'alias' | 'word'; display: string; normalized: string }
 type TermRow = {
   entity_kind: ProjectionOwner
   generation_id: string
@@ -65,7 +65,34 @@ function playerTermsFor(fact: PlayerDiscoveryFact): PlayerTerm[] {
     if (normalizeDiscoveryTerm(segment) !== normalizeDiscoveryTerm(fact.name)) add('segment', segment.trim())
   }
   for (const alias of fact.aliases) add('alias', alias)
+
+  // A word start only needs its own term when no name term starts with it; "Ahmed PickleBall" already matches "ahmed".
+  const nameTerms = terms.filter((term) => term.kind !== 'alias').map((term) => term.normalized)
+  for (const wordStart of nameFromEachWord(fact.name)) {
+    const normalized = normalizeDiscoveryTerm(wordStart)
+    if (!nameTerms.some((nameTerm) => nameTerm.startsWith(normalized))) add('word', wordStart)
+  }
+
   return terms
+}
+
+// The rest of each name segment from every word on, without the decoration in front: "THE BEST UNARMED" gives
+// "BEST UNARMED" and "UNARMED", and "ó ¡pefura" gives "pefura". Keeping the rest of the name lets a search span words.
+// Starts under two characters are skipped, since a search needs at least two.
+function nameFromEachWord(name: string): string[] {
+  const wordStarts: string[] = []
+  for (const segment of name.split('|')) {
+    const words = segment.trim().split(/\s+/)
+    for (let index = 0; index < words.length; index++) {
+      const wordStart = words
+        .slice(index)
+        .join(' ')
+        .replace(/^[^\p{L}\p{N}]+/u, '')
+      if ([...normalizeDiscoveryTerm(wordStart)].length >= 2) wordStarts.push(wordStart)
+    }
+  }
+
+  return wordStarts
 }
 
 function playerTermRows(generationId: string, fact: PlayerDiscoveryFact): TermRow[] {
@@ -418,9 +445,11 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     >`
       WITH candidates AS (
         SELECT term.*,
-               term.normalized_term = ${query} COLLATE "C" AS exact_match,
+               term.normalized_term = ${query} COLLATE "C" AND term.term_kind <> 'word' AS exact_match,
+               CASE WHEN term.term_kind = 'word' THEN 1 ELSE 0 END AS word_rank,
                CASE WHEN term.term_kind = 'alias' THEN 1 ELSE 0 END AS alias_rank,
-               CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 ELSE 2 END AS stable_term_rank
+               CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 WHEN 'alias' THEN 2 ELSE 3 END
+                 AS stable_term_rank
         FROM discovery.terms term
         JOIN discovery.generations generation
           ON generation.entity_kind = term.entity_kind
@@ -431,13 +460,14 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       ), winners AS (
         SELECT DISTINCT ON (entity_id) *
         FROM candidates
-        ORDER BY entity_id, exact_match DESC, alias_rank, stable_term_rank,
+        ORDER BY entity_id, exact_match DESC, word_rank, alias_rank, stable_term_rank,
                  normalized_term, display_term
       )
       SELECT entity_id, canonical_name, region, rating, view_count,
              best_legend_name_key, term_kind, display_term
       FROM winners
-      ORDER BY exact_match DESC, alias_rank, (rating IS NULL),
+      -- A word inside a name ranks below every name and alias match, so "alpha" lists "Alpha" before "Alpha Two".
+      ORDER BY exact_match DESC, word_rank, alias_rank, (rating IS NULL),
                (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
       LIMIT 40
     `
