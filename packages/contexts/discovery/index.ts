@@ -171,8 +171,13 @@ export type MigrationEvidenceResult = {
   mismatches: SemanticMigrationMismatch[]
 }
 
+// Folds what people don't type when searching: accents ("La Fée" -> "la fee") and styled letters like full-width or
+// mathematical alphabets ("𝓐𝓵𝓹𝓱𝓪" -> "alpha"). Only marks on Latin letters go, so Japanese voicing marks stay.
 export function normalizeDiscoveryTerm(value: string): string {
   return value
+    .normalize('NFKD')
+    .replace(/(?<=\p{Script=Latin})\p{M}+/gu, '')
+    .normalize('NFC')
     .replace(/[%\\_]/g, '')
     .trim()
     .replace(/\s*\|\s*/g, ' | ')

@@ -276,4 +276,24 @@ describe('Discovery player search', () => {
       await discovery.close()
     }
   })
+
+  test('ignores accents and styled letters on both the name and the query', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({
+        sourceVersion: 31,
+        facts: [fact(710, 'La Fée', 1500, 0), fact(711, '𝓐𝓵𝓽𝓪𝓲𝓻', 1500, 0), fact(712, 'Ｚｅｎｉｔｈ', 1500, 0)],
+      })
+      const ids = async (query: string) =>
+        (await playerResults(discovery, query)).map(({ brawlhallaId }) => brawlhallaId)
+
+      expect(await ids('la fee')).toEqual([710])
+      expect(await ids('La Fée')).toEqual([710])
+      expect(await ids('altair')).toEqual([711])
+      expect(await ids('zenith')).toEqual([712])
+      await expect(playerResults(discovery, 'altair')).resolves.toEqual([expect.objectContaining({ name: '𝓐𝓵𝓽𝓪𝓲𝓻' })])
+    } finally {
+      await discovery.close()
+    }
+  })
 })
