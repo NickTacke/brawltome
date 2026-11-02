@@ -85,6 +85,7 @@ async function createFixtureDatabase(): Promise<{ connectionString: string; drop
         (12, 'Charlie', 'EU', 0, 0, NULL, 0, 0, NULL, 0, 0, NULL, 0, 0, NULL),
         (13, 'Delta', 'EU', 0, 0, NULL, 0, 0, NULL, 0, 0, NULL, 0, 0, NULL),
         (14, 'Echo', 'EU', 0, 0, NULL, 0, 0, NULL, 0, 0, NULL, 0, 0, NULL),
+        (15, 'Team Alpha', 'EU', 0, 0, NULL, 0, 0, NULL, 0, 0, NULL, 0, 0, NULL),
         (20, 'Invalid Peak', 'US-E', 1900, 1800, 'Platinum', 20, 10, '2026-08-01 10:00:00',
          0, 0, NULL, 0, 0, NULL),
         (21, 'Foxtrot', 'US-E', 0, 0, NULL, 0, 0, NULL, 0, 0, NULL, 0, 0, NULL),
@@ -96,7 +97,7 @@ async function createFixtureDatabase(): Promise<{ connectionString: string; drop
          0, 0, NULL, 0, 0, NULL);
       UPDATE public.player
       SET last_updated = '2026-08-01 12:00:00', last_viewed_at = '2026-08-01 12:00:00'
-      WHERE brawlhalla_id IN (10, 11, 12, 13, 14, 20, 21, 22, 30, 40, 41);
+      WHERE brawlhalla_id IN (10, 11, 12, 13, 14, 15, 20, 21, 22, 30, 40, 41);
 
       INSERT INTO public.clan VALUES
         (1, 'Archive Keepers', '2020-01-01', 1000, 5000, '2026-08-01 10:00:00'),
@@ -176,12 +177,12 @@ describe('migrated Discovery rebuild', () => {
       })
       expect(first.intentionalDifferenceCount).toBeGreaterThan(0)
       expect(first.semanticCounts).toEqual({
-        'canonical-identity': 15,
+        'canonical-identity': 16,
         'exact-prefix': 15,
         'normalized-exact-name': 1,
         'local-name': 1,
         'negative-legacy-only': 1,
-        'preserved-route': 15,
+        'preserved-route': 16,
         'ranking-accepted': 3,
         'ranking-rejected': 33,
       })
@@ -204,6 +205,20 @@ describe('migrated Discovery rebuild', () => {
         SELECT run_id, fixture_manifest FROM discovery.semantic_migration_runs
       `
       expect(evidence.fixture_manifest).toHaveLength(first.fixtureCount)
+      // "Team Alpha" matches "ALPHA" from its second word, which legacy search could not, and that is explained
+      expect(
+        evidence.fixture_manifest.find((fixture) => (fixture as { kind?: string }).kind === 'normalized-exact-name'),
+      ).toMatchObject({
+        explanationCode: 'word-start-match',
+        legacy: { players: [{ entityId: 10, matchedAlias: null }], clans: [] },
+        actual: {
+          players: [
+            { entityId: 10, matchedAlias: null },
+            { entityId: 15, matchedAlias: null },
+          ],
+          clans: [],
+        },
+      })
       expect(
         evidence.fixture_manifest.some((fixture) => {
           const item = fixture as { legacy?: unknown; actual?: unknown }

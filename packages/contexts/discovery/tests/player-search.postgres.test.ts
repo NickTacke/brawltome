@@ -106,9 +106,11 @@ describe('Discovery player search', () => {
           EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
           WITH candidates AS (
             SELECT term.*,
-                   term.normalized_term = 'alpha' COLLATE "C" AS exact_match,
+                   term.normalized_term = 'alpha' COLLATE "C" AND term.term_kind <> 'word' AS exact_match,
+                   CASE WHEN term.term_kind = 'word' THEN 1 ELSE 0 END AS word_rank,
                    CASE WHEN term.term_kind = 'alias' THEN 1 ELSE 0 END AS alias_rank,
-                   CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 ELSE 2 END AS stable_term_rank
+                   CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 WHEN 'alias' THEN 2 ELSE 3 END
+                     AS stable_term_rank
             FROM discovery.terms term
             JOIN discovery.generations generation
               ON generation.entity_kind = term.entity_kind
@@ -119,13 +121,13 @@ describe('Discovery player search', () => {
           ), winners AS (
             SELECT DISTINCT ON (entity_id) *
             FROM candidates
-            ORDER BY entity_id, exact_match DESC, alias_rank, stable_term_rank,
+            ORDER BY entity_id, exact_match DESC, word_rank, alias_rank, stable_term_rank,
                      normalized_term, display_term
           )
           SELECT entity_id, canonical_name, region, rating, view_count,
                  best_legend_name_key, term_kind, display_term
           FROM winners
-          ORDER BY exact_match DESC, alias_rank, (rating IS NULL),
+          ORDER BY exact_match DESC, word_rank, alias_rank, (rating IS NULL),
                    (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
           LIMIT 40
         `
@@ -272,6 +274,79 @@ describe('Discovery player search', () => {
           expect.objectContaining({ brawlhallaId, rating: 1973 }),
         ])
       }
+    } finally {
+      await discovery.close()
+    }
+  })
+
+  test('finds a player from any word of their name on, below every name and alias match', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({
+        sourceVersion: 30,
+        facts: [
+          fact(700, 'ó ¡pefura', 1500, 0),
+          fact(701, 'Ahmed PickleBall', 1940, 0),
+          fact(702, 'Pickle', 1200, 0),
+          fact(703, '~Mira~', 1300, 0),
+          fact(704, 'Gamma Ray', 2900, 0),
+          fact(705, 'Raymond', 1100, 0),
+          fact(706, 'THE BEST UNARMED', 1600, 0),
+        ],
+      })
+      const ids = async (query: string) =>
+        (await playerResults(discovery, query)).map(({ brawlhallaId }) => brawlhallaId)
+
+      // decoration around a word no longer hides the player
+      expect(await ids('pefura')).toEqual([700])
+      expect(await ids('mira')).toEqual([703])
+      // an exact name comes first, then a word match, however their ratings compare
+      expect(await ids('pickle')).toEqual([702, 701])
+      // a name prefix beats a word match with a higher rating
+      expect(await ids('ray')).toEqual([705, 704])
+      // a search can run across the words that follow
+      expect(await ids('best unarmed')).toEqual([706])
+      expect(await ids('unarm')).toEqual([706])
+      // a word the name starts with adds no second hit
+      expect(await ids('ahmed')).toEqual([701])
+      await expect(playerResults(discovery, 'pickleb')).resolves.toEqual([
+        expect.objectContaining({ brawlhallaId: 701, name: 'Ahmed PickleBall', matchedAlias: null }),
+      ])
+    } finally {
+      await discovery.close()
+    }
+  })
+
+  test('ignores accents and styled letters on both the name and the query', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({
+        sourceVersion: 31,
+        facts: [fact(710, 'La Fée', 1500, 0), fact(711, '𝓐𝓵𝓽𝓪𝓲𝓻', 1500, 0), fact(712, 'Ｚｅｎｉｔｈ', 1500, 0)],
+      })
+      const ids = async (query: string) =>
+        (await playerResults(discovery, query)).map(({ brawlhallaId }) => brawlhallaId)
+
+      expect(await ids('la fee')).toEqual([710])
+      expect(await ids('La Fée')).toEqual([710])
+      expect(await ids('altair')).toEqual([711])
+      expect(await ids('zenith')).toEqual([712])
+      await expect(playerResults(discovery, 'altair')).resolves.toEqual([expect.objectContaining({ name: '𝓐𝓵𝓽𝓪𝓲𝓻' })])
+    } finally {
+      await discovery.close()
+    }
+  })
+
+  test('indexes the words of a name that arrives through a projection event', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      await discovery.rebuildPlayers({ sourceVersion: 32, facts: [fact(720, 'Old Name', 1500, 0)] })
+      await discovery.applyPlayerEvents([
+        { eventId: randomUUID(), brawlhallaId: 720, sourceVersion: 33, fact: fact(720, '[x] Sparrow', 1500, 0) },
+      ])
+
+      expect((await playerResults(discovery, 'sparrow')).map(({ brawlhallaId }) => brawlhallaId)).toEqual([720])
+      await expect(playerResults(discovery, 'name')).resolves.toEqual([])
     } finally {
       await discovery.close()
     }

@@ -4,10 +4,12 @@ import {
   type ClanDiscoveryFact,
   type DiscoverySearchResult,
   type PlayerDiscoveryFact,
+  type PlayerSearchTerm,
   type SemanticMigrationExplanationCode,
   type SemanticMigrationFixture,
   type SemanticMigrationFixtureKind,
   normalizeDiscoveryTerm,
+  playerSearchTerms,
 } from '@brawltome/discovery'
 import { createPostgresDiscovery } from '@brawltome/discovery/composition'
 import { createPostgresPlayerDiscoverySource, createPostgresRankedPlayers } from '@brawltome/player/composition'
@@ -21,6 +23,8 @@ const expectedRankingSetCount = 36
 
 const explanationByKind: Partial<Record<SemanticMigrationFixtureKind, SemanticMigrationExplanationCode>> = {
   'exact-prefix': 'exact-first-ranking',
+  'normalized-exact-name': 'word-start-match',
+  'local-name': 'word-start-match',
   'negative-legacy-only': 'legacy-only-not-owner-fact',
   'ranking-rejected': 'ranking-set-rejected',
 }
@@ -99,49 +103,40 @@ function expectedSearchObservation(
 
   type PlayerCandidate = {
     entityId: number
-    kind: 'canonical' | 'segment' | 'alias'
+    kind: PlayerSearchTerm['kind']
     display: string
     normalized: string
     exact: boolean
     rating: number | null
     viewCount: number
   }
-  const termRank = (kind: PlayerCandidate['kind']) => (kind === 'canonical' ? 0 : kind === 'segment' ? 1 : 2)
-  const comparePlayerTerms = (left: PlayerCandidate, right: PlayerCandidate) =>
+  // mirrors the ranking in the discovery search query
+  const termRank = { canonical: 0, segment: 1, alias: 2, word: 3 } as const
+  const compareByMatch = (left: PlayerCandidate, right: PlayerCandidate) =>
     Number(right.exact) - Number(left.exact) ||
-    Number(left.kind === 'alias') - Number(right.kind === 'alias') ||
-    termRank(left.kind) - termRank(right.kind) ||
+    Number(left.kind === 'word') - Number(right.kind === 'word') ||
+    Number(left.kind === 'alias') - Number(right.kind === 'alias')
+  const comparePlayerTerms = (left: PlayerCandidate, right: PlayerCandidate) =>
+    compareByMatch(left, right) ||
+    termRank[left.kind] - termRank[right.kind] ||
     compareText(left.normalized, right.normalized) ||
     compareText(left.display, right.display)
   const comparePlayerCandidates = (left: PlayerCandidate, right: PlayerCandidate) =>
-    Number(right.exact) - Number(left.exact) ||
-    Number(left.kind === 'alias') - Number(right.kind === 'alias') ||
+    compareByMatch(left, right) ||
     compareNullableNumberDesc(left.rating, right.rating) ||
     right.viewCount - left.viewCount ||
     left.entityId - right.entityId
   const expectedPlayers: PlayerCandidate[] = []
   for (const player of players) {
-    const terms: Array<{ kind: PlayerCandidate['kind']; display: string }> = [
-      { kind: 'canonical', display: player.name },
-      ...player.name
-        .split('|')
-        .filter((segment) => normalizeDiscoveryTerm(segment) !== normalizeDiscoveryTerm(player.name))
-        .map((segment) => ({ kind: 'segment' as const, display: segment.trim() })),
-      ...player.aliases.map((alias) => ({ kind: 'alias' as const, display: alias })),
-    ]
-    const seen = new Set<string>()
     let winner: PlayerCandidate | null = null
-    for (const term of terms) {
-      const normalized = normalizeDiscoveryTerm(term.display)
-      const termIdentity = `${term.kind}:${normalized}`
-      if (!normalized || seen.has(termIdentity) || !normalized.startsWith(query)) continue
-      seen.add(termIdentity)
+    for (const term of playerSearchTerms(player)) {
+      if (!term.normalized.startsWith(query)) continue
       const candidate = {
         entityId: player.brawlhallaId,
         kind: term.kind,
         display: term.display,
-        normalized,
-        exact: normalized === query,
+        normalized: term.normalized,
+        exact: term.normalized === query && term.kind !== 'word',
         rating: player.rating,
         viewCount: player.viewCount,
       }

@@ -14,6 +14,7 @@ import {
   type PlayerProjectionSnapshot,
   type PlayerProjectionSource,
   type PlayerSearchHit,
+  type PlayerSearchTerm,
   type ProjectionOwner,
   type ProjectionSnapshotStream,
   type ReconciliationDifference,
@@ -23,10 +24,10 @@ import {
   type SemanticMigrationFixtureKind,
   type SemanticMigrationMismatch,
   normalizeDiscoveryTerm,
+  playerSearchTerms,
 } from './index'
 
 type Sql = ReturnType<typeof postgres>
-type PlayerTerm = { kind: 'canonical' | 'segment' | 'alias'; display: string; normalized: string }
 type TermRow = {
   entity_kind: ProjectionOwner
   generation_id: string
@@ -49,27 +50,8 @@ type ReconciliationSnapshot = ProjectionSnapshotStream<PlayerDiscoveryFact | Cla
 
 class StaleProjectionSnapshotError extends Error {}
 
-function playerTermsFor(fact: PlayerDiscoveryFact): PlayerTerm[] {
-  const terms: PlayerTerm[] = []
-  const seen = new Set<string>()
-  const add = (kind: PlayerTerm['kind'], display: string) => {
-    const normalized = normalizeDiscoveryTerm(display)
-    const identity = `${kind}:${normalized}`
-    if (!normalized || seen.has(identity)) return
-    seen.add(identity)
-    terms.push({ kind, display, normalized })
-  }
-
-  add('canonical', fact.name)
-  for (const segment of fact.name.split('|')) {
-    if (normalizeDiscoveryTerm(segment) !== normalizeDiscoveryTerm(fact.name)) add('segment', segment.trim())
-  }
-  for (const alias of fact.aliases) add('alias', alias)
-  return terms
-}
-
 function playerTermRows(generationId: string, fact: PlayerDiscoveryFact): TermRow[] {
-  return playerTermsFor(fact).map((term) => ({
+  return playerSearchTerms(fact).map((term) => ({
     entity_kind: 'player',
     generation_id: generationId,
     entity_id: fact.brawlhallaId,
@@ -119,6 +101,8 @@ const requiredSemanticMigrationFixtureKinds = semanticMigrationFixtureKinds.filt
 
 const allowedExplanationByKind: Partial<Record<SemanticMigrationFixtureKind, SemanticMigrationExplanationCode>> = {
   'exact-prefix': 'exact-first-ranking',
+  'normalized-exact-name': 'word-start-match',
+  'local-name': 'word-start-match',
   'negative-legacy-only': 'legacy-only-not-owner-fact',
   'ranking-rejected': 'ranking-set-rejected',
 }
@@ -253,8 +237,19 @@ function classifySemanticFixtures(fixtures: SemanticMigrationFixture[]): {
       (fixture.kind === 'negative-legacy-only' || fixture.kind === 'ranking-rejected') &&
       semanticEqual(fixture.expected, fixture.actual) &&
       !semanticEqual(fixture.legacy, fixture.actual)
+    // Legacy search only matched name starts, so word-start matching (#335) finds every legacy hit and may add more.
+    const legacyPlayersAreKept = (() => {
+      const legacy = fixture.legacy as { players?: Array<{ entityId?: unknown }>; clans?: unknown } | null
+      const actual = fixture.actual as { players?: Array<{ entityId?: unknown }>; clans?: unknown } | null
+      if (!legacy?.players || !actual?.players || !semanticEqual(legacy.clans, actual.clans)) return false
+      const actualIds = new Set(actual.players.map(({ entityId }) => entityId))
+      return legacy.players.every(({ entityId }) => actualIds.has(entityId))
+    })()
+    const explainedWordStartMatch =
+      (fixture.kind === 'normalized-exact-name' || fixture.kind === 'local-name') && legacyPlayersAreKept
     const explanationIsMechanical =
-      fixture.explanationCode === expectedExplanation && (exactFirstDifferenceIsOnlyOrdering || explainedOwnerRejection)
+      fixture.explanationCode === expectedExplanation &&
+      (exactFirstDifferenceIsOnlyOrdering || explainedOwnerRejection || explainedWordStartMatch)
     if (!explanationIsMechanical) {
       mismatches.push({
         fixtureKey: fixture.key,
@@ -412,15 +407,17 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
         rating: number | null
         view_count: number
         best_legend_name_key: string | null
-        term_kind: PlayerTerm['kind']
+        term_kind: PlayerSearchTerm['kind']
         display_term: string
       }>
     >`
       WITH candidates AS (
         SELECT term.*,
-               term.normalized_term = ${query} COLLATE "C" AS exact_match,
+               term.normalized_term = ${query} COLLATE "C" AND term.term_kind <> 'word' AS exact_match,
+               CASE WHEN term.term_kind = 'word' THEN 1 ELSE 0 END AS word_rank,
                CASE WHEN term.term_kind = 'alias' THEN 1 ELSE 0 END AS alias_rank,
-               CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 ELSE 2 END AS stable_term_rank
+               CASE term.term_kind WHEN 'canonical' THEN 0 WHEN 'segment' THEN 1 WHEN 'alias' THEN 2 ELSE 3 END
+                 AS stable_term_rank
         FROM discovery.terms term
         JOIN discovery.generations generation
           ON generation.entity_kind = term.entity_kind
@@ -431,13 +428,14 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
       ), winners AS (
         SELECT DISTINCT ON (entity_id) *
         FROM candidates
-        ORDER BY entity_id, exact_match DESC, alias_rank, stable_term_rank,
+        ORDER BY entity_id, exact_match DESC, word_rank, alias_rank, stable_term_rank,
                  normalized_term, display_term
       )
       SELECT entity_id, canonical_name, region, rating, view_count,
              best_legend_name_key, term_kind, display_term
       FROM winners
-      ORDER BY exact_match DESC, alias_rank, (rating IS NULL),
+      -- A word inside a name ranks below every name and alias match, so "alpha" lists "Alpha" before "Alpha Two".
+      ORDER BY exact_match DESC, word_rank, alias_rank, (rating IS NULL),
                (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
       LIMIT 40
     `
@@ -640,7 +638,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
         const fact = value as PlayerDiscoveryFact
         if (fact.brawlhallaId <= priorEntityId) throw new Error('Player reconciliation stream must be strictly ordered')
         priorEntityId = fact.brawlhallaId
-        const terms = playerTermsFor(fact)
+        const terms = playerSearchTerms(fact)
           .map((term) => ({
             entityId: fact.brawlhallaId,
             termKind: term.kind,
