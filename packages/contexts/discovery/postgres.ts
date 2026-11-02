@@ -14,6 +14,7 @@ import {
   type PlayerProjectionSnapshot,
   type PlayerProjectionSource,
   type PlayerSearchHit,
+  type PlayerSearchTerm,
   type ProjectionOwner,
   type ProjectionSnapshotStream,
   type ReconciliationDifference,
@@ -23,10 +24,10 @@ import {
   type SemanticMigrationFixtureKind,
   type SemanticMigrationMismatch,
   normalizeDiscoveryTerm,
+  playerSearchTerms,
 } from './index'
 
 type Sql = ReturnType<typeof postgres>
-type PlayerTerm = { kind: 'canonical' | 'segment' | 'alias' | 'word'; display: string; normalized: string }
 type TermRow = {
   entity_kind: ProjectionOwner
   generation_id: string
@@ -49,54 +50,8 @@ type ReconciliationSnapshot = ProjectionSnapshotStream<PlayerDiscoveryFact | Cla
 
 class StaleProjectionSnapshotError extends Error {}
 
-function playerTermsFor(fact: PlayerDiscoveryFact): PlayerTerm[] {
-  const terms: PlayerTerm[] = []
-  const seen = new Set<string>()
-  const add = (kind: PlayerTerm['kind'], display: string) => {
-    const normalized = normalizeDiscoveryTerm(display)
-    const identity = `${kind}:${normalized}`
-    if (!normalized || seen.has(identity)) return
-    seen.add(identity)
-    terms.push({ kind, display, normalized })
-  }
-
-  add('canonical', fact.name)
-  for (const segment of fact.name.split('|')) {
-    if (normalizeDiscoveryTerm(segment) !== normalizeDiscoveryTerm(fact.name)) add('segment', segment.trim())
-  }
-  for (const alias of fact.aliases) add('alias', alias)
-
-  // A word start only needs its own term when no name term starts with it; "Ahmed PickleBall" already matches "ahmed".
-  const nameTerms = terms.filter((term) => term.kind !== 'alias').map((term) => term.normalized)
-  for (const wordStart of nameFromEachWord(fact.name)) {
-    const normalized = normalizeDiscoveryTerm(wordStart)
-    if (!nameTerms.some((nameTerm) => nameTerm.startsWith(normalized))) add('word', wordStart)
-  }
-
-  return terms
-}
-
-// The rest of each name segment from every word on, without the decoration in front: "THE BEST UNARMED" gives
-// "BEST UNARMED" and "UNARMED", and "ó ¡pefura" gives "pefura". Keeping the rest of the name lets a search span words.
-// Starts under two characters are skipped, since a search needs at least two.
-function nameFromEachWord(name: string): string[] {
-  const wordStarts: string[] = []
-  for (const segment of name.split('|')) {
-    const words = segment.trim().split(/\s+/)
-    for (let index = 0; index < words.length; index++) {
-      const wordStart = words
-        .slice(index)
-        .join(' ')
-        .replace(/^[^\p{L}\p{N}]+/u, '')
-      if ([...normalizeDiscoveryTerm(wordStart)].length >= 2) wordStarts.push(wordStart)
-    }
-  }
-
-  return wordStarts
-}
-
 function playerTermRows(generationId: string, fact: PlayerDiscoveryFact): TermRow[] {
-  return playerTermsFor(fact).map((term) => ({
+  return playerSearchTerms(fact).map((term) => ({
     entity_kind: 'player',
     generation_id: generationId,
     entity_id: fact.brawlhallaId,
@@ -146,6 +101,8 @@ const requiredSemanticMigrationFixtureKinds = semanticMigrationFixtureKinds.filt
 
 const allowedExplanationByKind: Partial<Record<SemanticMigrationFixtureKind, SemanticMigrationExplanationCode>> = {
   'exact-prefix': 'exact-first-ranking',
+  'normalized-exact-name': 'word-start-match',
+  'local-name': 'word-start-match',
   'negative-legacy-only': 'legacy-only-not-owner-fact',
   'ranking-rejected': 'ranking-set-rejected',
 }
@@ -280,8 +237,19 @@ function classifySemanticFixtures(fixtures: SemanticMigrationFixture[]): {
       (fixture.kind === 'negative-legacy-only' || fixture.kind === 'ranking-rejected') &&
       semanticEqual(fixture.expected, fixture.actual) &&
       !semanticEqual(fixture.legacy, fixture.actual)
+    // Legacy search only matched name starts, so word-start matching (#335) finds every legacy hit and may add more.
+    const legacyPlayersAreKept = (() => {
+      const legacy = fixture.legacy as { players?: Array<{ entityId?: unknown }>; clans?: unknown } | null
+      const actual = fixture.actual as { players?: Array<{ entityId?: unknown }>; clans?: unknown } | null
+      if (!legacy?.players || !actual?.players || !semanticEqual(legacy.clans, actual.clans)) return false
+      const actualIds = new Set(actual.players.map(({ entityId }) => entityId))
+      return legacy.players.every(({ entityId }) => actualIds.has(entityId))
+    })()
+    const explainedWordStartMatch =
+      (fixture.kind === 'normalized-exact-name' || fixture.kind === 'local-name') && legacyPlayersAreKept
     const explanationIsMechanical =
-      fixture.explanationCode === expectedExplanation && (exactFirstDifferenceIsOnlyOrdering || explainedOwnerRejection)
+      fixture.explanationCode === expectedExplanation &&
+      (exactFirstDifferenceIsOnlyOrdering || explainedOwnerRejection || explainedWordStartMatch)
     if (!explanationIsMechanical) {
       mismatches.push({
         fixtureKey: fixture.key,
@@ -439,7 +407,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
         rating: number | null
         view_count: number
         best_legend_name_key: string | null
-        term_kind: PlayerTerm['kind']
+        term_kind: PlayerSearchTerm['kind']
         display_term: string
       }>
     >`
@@ -670,7 +638,7 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
         const fact = value as PlayerDiscoveryFact
         if (fact.brawlhallaId <= priorEntityId) throw new Error('Player reconciliation stream must be strictly ordered')
         priorEntityId = fact.brawlhallaId
-        const terms = playerTermsFor(fact)
+        const terms = playerSearchTerms(fact)
           .map((term) => ({
             entityId: fact.brawlhallaId,
             termKind: term.kind,

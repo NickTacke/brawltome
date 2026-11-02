@@ -217,6 +217,45 @@ describe('Discovery semantic migration evidence', () => {
     }
   })
 
+  test('explains word-start matches only when every legacy hit is kept', async () => {
+    const discovery = createPostgresDiscovery(connectionString)
+    try {
+      const reconciliations = await exactReconciliations(discovery)
+      const withNormalized = (key: string, actualPlayers: number[]) => {
+        const input = passingInput(reconciliations)
+        input.operationKey = key
+        const players = (ids: number[]) => ids.map((entityId) => ({ entityId, matchedAlias: null }))
+        input.fixtures = input.fixtures.map((fixture) =>
+          fixture.kind === 'normalized-exact-name'
+            ? {
+                ...fixture,
+                expected: { players: players(actualPlayers), clans: [] },
+                legacy: { players: players([42]), clans: [] },
+                actual: { players: players(actualPlayers), clans: [] },
+                explanationCode: 'word-start-match' as const,
+              }
+            : fixture,
+        )
+        return input
+      }
+
+      await expect(
+        discovery.commitMigrationEvidence(withNormalized('issue-335-word-start', [42, 43])),
+      ).resolves.toMatchObject({
+        status: 'passed',
+        intentionalDifferenceCount: 3,
+      })
+      await expect(
+        discovery.commitMigrationEvidence(withNormalized('issue-335-lost-hit', [43])),
+      ).resolves.toMatchObject({
+        status: 'blocked',
+        unexplainedMismatchCount: 1,
+      })
+    } finally {
+      await discovery.close()
+    }
+  })
+
   test('rejects invalid explanation codes and residual projection or lag failures', async () => {
     const discovery = createPostgresDiscovery(connectionString)
     try {
