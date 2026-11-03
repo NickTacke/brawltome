@@ -9,9 +9,12 @@ const startMs = Date.parse('2026-11-03T12:00:00.000Z')
 const skewedCreatedAt = '2026-11-03T10:00:00.000Z'
 const oldDeployment: Deployment = { deploymentId: 'old', status: 'done', createdAt: skewedCreatedAt }
 
-function deployment(deploymentId: string, status: string): Deployment {
-  return { deploymentId, status, createdAt: skewedCreatedAt }
+function deployment(deploymentId: string, status: string, createdAt = skewedCreatedAt): Deployment {
+  return { deploymentId, status, createdAt }
 }
+
+const olderCreatedAt = '2026-11-03T10:01:00.000Z'
+const newerCreatedAt = '2026-11-03T10:02:00.000Z'
 
 // the first compose.one result is the read before the trigger; the fake clock moves only when the code sleeps
 function createFakeDokploy(options: { deployStatus?: number; hang?: boolean; composeResults: Deployment[][] }) {
@@ -87,6 +90,32 @@ describe('triggerDeploy', () => {
     await expect(triggerDeploy(deployOptions(fake))).rejects.toThrow(
       'dokploy deployment broken for compose compose-1 failed',
     )
+  })
+
+  test('keeps waiting for a newer deployment and fails when it errors', async () => {
+    const fake = createFakeDokploy({
+      composeResults: [
+        [],
+        [deployment('older', 'done', olderCreatedAt), deployment('newer', 'running', newerCreatedAt)],
+        [deployment('older', 'done', olderCreatedAt), deployment('newer', 'error', newerCreatedAt)],
+      ],
+    })
+
+    await expect(triggerDeploy(deployOptions(fake))).rejects.toThrow(
+      'dokploy deployment newer for compose compose-1 failed',
+    )
+  })
+
+  test('resolves when the newer deployment is done and the older one errored', async () => {
+    const fake = createFakeDokploy({
+      composeResults: [
+        [],
+        [deployment('older', 'error', olderCreatedAt), deployment('newer', 'running', newerCreatedAt)],
+        [deployment('older', 'error', olderCreatedAt), deployment('newer', 'done', newerCreatedAt)],
+      ],
+    })
+
+    expect(await triggerDeploy(deployOptions(fake))).toBe('done')
   })
 
   test('gives up after the timeout', async () => {

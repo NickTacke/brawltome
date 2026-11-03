@@ -68,10 +68,10 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
     const deployments = await readDeployments()
     const newDeployments = deployments.filter((deployment) => !existingDeploymentIds.has(deployment.deploymentId))
 
-    const failed = newDeployments.find((deployment) => deployment.status === 'error')
-    if (failed) throw new Error(`dokploy deployment ${failed.deploymentId} for compose ${options.composeId} failed`)
-
-    if (newDeployments.some((deployment) => deployment.status === 'done')) return 'done'
+    const outcome = readOutcome(newDeployments)
+    if (outcome?.status === 'error')
+      throw new Error(`dokploy deployment ${outcome.deploymentId} for compose ${options.composeId} failed`)
+    if (outcome) return 'done'
 
     if (now() >= deadlineMs) {
       const timeoutMinutes = Math.round(timeoutMs / 60_000)
@@ -80,6 +80,18 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
 
     await sleep(pollIntervalMs)
   }
+}
+
+// compose.deploy returns no deployment id, so a manual deployment started in the same moment is indistinguishable
+// from ours: wait for all of them and judge by the newest one, which is the state production ends up in
+function readOutcome(newDeployments: Deployment[]): Deployment | undefined {
+  if (newDeployments.length === 0) return undefined
+  if (newDeployments.some((deployment) => deployment.status !== 'done' && deployment.status !== 'error'))
+    return undefined
+
+  return newDeployments.reduce((newest, deployment) =>
+    Date.parse(deployment.createdAt) > Date.parse(newest.createdAt) ? deployment : newest,
+  )
 }
 
 function requireEnvironment(name: string): string {
