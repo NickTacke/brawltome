@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -74,8 +74,11 @@ function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?
   }
   // Whatever fails, api and web must keep a healthy container serving from the moment they first have one.
   expect(state.outages ?? []).toEqual([])
-  const calls = readFileSync(join(directory, 'calls.log'), 'utf8').trim().split('\n')
-  const releaseTags = readFileSync(join(directory, 'release-tags.log'), 'utf8').trim().split('\n')
+  // a run rejected before any docker call leaves no logs
+  const readLines = (name: string) =>
+    existsSync(join(directory, name)) ? readFileSync(join(directory, name), 'utf8').trim().split('\n') : []
+  const calls = readLines('calls.log')
+  const releaseTags = readLines('release-tags.log')
   const imageOf = (service: string) => state.containers.filter((item) => item.service === service).map((c) => c.image)
   return { result, state, calls, imageOf, releaseTags }
 }
@@ -145,6 +148,14 @@ describe('deploy smoke checks and rollback', () => {
     expect(result.status).toBe(0)
     expect(new Set(releaseTags)).toEqual(new Set([override]))
     expect(imageOf('api')).toEqual(['sha256:new-api'])
+  })
+
+  test('a release commit that is not a 40-character sha is rejected before any compose call', () => {
+    const { result, calls } = deploy({ env: { BRAWLTOME_IMAGE_TAG: 'abc' } })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain("release commit 'abc' is not a 40-character sha")
+    expect(calls).toEqual([])
   })
 
   test('smoke checks retry before they give up', () => {

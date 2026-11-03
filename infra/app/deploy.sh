@@ -13,13 +13,18 @@
 # binary, unless BRAWLTOME_IMAGE_TAG is set. A commit whose images are not pushed yet fails at the pull, before any
 # container is touched.
 #
-# Dokploy rejects shell operators in a custom compose command and prefixes it with `docker`, so the compose's
-# Command setting runs this script in a throwaway CLI container (one line; <app> is the Dokploy app name):
-#   run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /etc/dokploy/compose/<app>/code:/etc/dokploy/compose/<app>/code
-#   -w /etc/dokploy/compose/<app>/code docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c
+# Dokploy rejects shell operators in a custom compose command and prefixes it with `docker`, so the compose's Command
+# setting runs this script in a throwaway CLI container (one line; <app> is the Dokploy app name):
+#   run --rm -v /var/run/docker.sock:/var/run/docker.sock
+#   -v /etc/dokploy/compose/<app>/code:/etc/dokploy/compose/<app>/code -w /etc/dokploy/compose/<app>/code
+#   docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c
 #   sh infra/app/deploy.sh <app> infra/app/compose.yml api web
-# Rollback: clear the Command setting and set BRAWLTOME_IMAGE_TAG=<sha> in the Dokploy environment; Dokploy then falls
-# back to `compose up -d --remove-orphans`, which pulls the images CI pushed for that commit.
+#
+# Emergency rollback by hand: never clear the Command setting. Without it Dokploy runs
+# `compose up -d --build --remove-orphans`, which builds postgres and could recreate it. Instead, from the checkout on
+# the server, name only the app services so postgres is never touched:
+#   BRAWLTOME_IMAGE_TAG=<sha> docker compose -p <app> -f infra/app/compose.yml up -d --no-deps api web operations-worker
+# <sha> must be a commit whose images CI pushed. This restarts those services instead of rolling them.
 #
 # Migrations run while the previous release still serves, so they must stay compatible with it: add before use,
 # remove only after a release that no longer reads it.
@@ -63,21 +68,21 @@ release_commit() {
     return 0
   fi
 
-  head=$(cat .git/HEAD) || return 1
-  case "$head" in
-    'ref: '*) ref=${head#ref: } ;;
+  release_head=$(cat .git/HEAD) || return 1
+  case "$release_head" in
+    'ref: '*) release_ref=${release_head#ref: } ;;
     *)
-      printf '%s\n' "$head"
+      printf '%s\n' "$release_head"
       return 0
       ;;
   esac
 
-  if [ -f ".git/$ref" ]; then
-    cat ".git/$ref"
+  if [ -f ".git/$release_ref" ]; then
+    cat ".git/$release_ref"
     return 0
   fi
 
-  awk -v ref="$ref" '$2 == ref { print $1; found = 1; exit } END { exit !found }' .git/packed-refs
+  awk -v ref="$release_ref" '$2 == ref { print $1; found = 1; exit } END { exit !found }' .git/packed-refs
 }
 
 service_containers() {
@@ -163,6 +168,17 @@ if ! BRAWLTOME_IMAGE_TAG=$(release_commit) || [ -z "$BRAWLTOME_IMAGE_TAG" ]; the
   log 'cannot read the release commit from .git/HEAD; set BRAWLTOME_IMAGE_TAG to deploy a specific commit'
   exit 1
 fi
+
+# the tag names a pushed image, so anything but a full lowercase sha (a branch name, a short sha) is a mistake
+case "$BRAWLTOME_IMAGE_TAG" in
+  *[!0-9a-f]*) release_commit_is_valid=0 ;;
+  *) release_commit_is_valid=1 ;;
+esac
+if [ "$release_commit_is_valid" = 0 ] || [ "${#BRAWLTOME_IMAGE_TAG}" -ne 40 ]; then
+  log "release commit '$BRAWLTOME_IMAGE_TAG' is not a 40-character sha"
+  exit 1
+fi
+
 export BRAWLTOME_IMAGE_TAG
 log "deploying release $BRAWLTOME_IMAGE_TAG"
 
