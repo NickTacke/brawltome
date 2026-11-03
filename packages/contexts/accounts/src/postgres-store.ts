@@ -14,19 +14,11 @@ import {
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
 } from './accounts'
-import { v2AuthCutoverIsFinalized } from './finalize-v2-auth-cutover'
 import {
   ACCOUNTS_MAINTENANCE_RETRY_AFTER_SECONDS,
   ACCOUNTS_WRITER_FENCE_WAIT,
   ACCOUNTS_WRITER_MAINTENANCE_FENCE,
 } from './maintenance-fence'
-import {
-  ensureV2UserIdentity,
-  extendV2Session,
-  importValidV2Session,
-  revokeV2Session,
-  validV2SessionExists,
-} from './v2-compatibility'
 
 interface AccountRow {
   id: string
@@ -39,7 +31,6 @@ interface AccountRow {
 
 interface SessionAccountRow extends AccountRow {
   expires_at: Date
-  imported_from_v2: boolean
 }
 
 interface PreferencesRow {
@@ -84,8 +75,7 @@ const sessionAccountQuery = `SELECT
   identities.avatar_hash,
   identities.provider_account_id,
   users.created_at,
-  sessions.expires_at,
-  sessions.imported_from_v2
+  sessions.expires_at
 FROM accounts.sessions sessions
 JOIN accounts.users users ON users.id = sessions.account_id
 JOIN LATERAL (
@@ -197,14 +187,10 @@ function postgresAccountsStore(client: Sql): AccountsStore {
           return mapAccount(updated[0])
         }
 
-        const [createdUser] = await transaction.unsafe<{ id: string; created_at: Date; updated_at: Date }[]>(
-          'INSERT INTO accounts.users DEFAULT VALUES RETURNING id, created_at, updated_at',
+        const [createdUser] = await transaction.unsafe<{ id: string; created_at: Date }[]>(
+          'INSERT INTO accounts.users DEFAULT VALUES RETURNING id, created_at',
         )
-        await ensureV2UserIdentity(transaction, {
-          id: createdUser.id,
-          createdAt: createdUser.created_at,
-          updatedAt: createdUser.updated_at,
-        })
+
         const [createdIdentity] = await transaction.unsafe<AccountRow[]>(
           `INSERT INTO accounts.oauth_identities (
              provider,
@@ -238,41 +224,20 @@ function postgresAccountsStore(client: Sql): AccountsStore {
 
     async findSessionAccount(id) {
       return withAccountsWriterFence(client, async (transaction) => {
-        const rows = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
-        const current = rows[0]
-        const cutoverFinalized = await v2AuthCutoverIsFinalized(transaction)
-        if (current) {
-          if (current.imported_from_v2 && !cutoverFinalized && !(await validV2SessionExists(transaction, id))) {
-            await transaction.unsafe('DELETE FROM accounts.sessions WHERE id = $1', [id])
-            return null
-          }
-          return mapSessionAccount(current)
-        }
-
-        if (cutoverFinalized || !(await importValidV2Session(transaction, id))) return null
-
-        const importedRows = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
-        return importedRows[0] ? mapSessionAccount(importedRows[0]) : null
+        const [current] = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
+        return current ? mapSessionAccount(current) : null
       })
     },
 
     async extendSession(id, expiresAt) {
       await withAccountsWriterFence(client, async (transaction) => {
-        const [session] = await transaction.unsafe<{ imported_from_v2: boolean }[]>(
-          `UPDATE accounts.sessions
-           SET expires_at = $2
-           WHERE id = $1
-           RETURNING imported_from_v2`,
-          [id, expiresAt],
-        )
-        if (session?.imported_from_v2) await extendV2Session(transaction, id, expiresAt)
+        await transaction.unsafe('UPDATE accounts.sessions SET expires_at = $2 WHERE id = $1', [id, expiresAt])
       })
     },
 
     async deleteSession(id) {
       await withAccountsWriterFence(client, async (transaction) => {
         await transaction.unsafe('DELETE FROM accounts.sessions WHERE id = $1', [id])
-        await revokeV2Session(transaction, id)
       })
     },
 

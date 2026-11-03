@@ -5,7 +5,7 @@ import postgres from 'postgres'
 const connectionString = process.env.DATABASE_URL
 
 describe.skipIf(!connectionString)('Accounts migration', () => {
-  test('creates one account without orphans and supports a legacy player link after fresh Discord sign-in', async () => {
+  test('creates one account without orphans and ignores V2 sessions created after the migration', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
     const { globalMigrationInventory } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
@@ -99,40 +99,21 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
-        await client`INSERT INTO public.player_link (user_id, steam_id) VALUES (${accountId}, 'steam-fresh')`
-        const [{ user_count, identity_count, session_count, legacy_user_count, player_link_count, cutover_count }] =
-          await client<
-            {
-              user_count: number
-              identity_count: number
-              session_count: number
-              legacy_user_count: number
-              player_link_count: number
-              cutover_count: number
-            }[]
-          >`
-            SELECT
-              (SELECT count(*)::int FROM accounts.users) AS user_count,
-              (SELECT count(*)::int FROM accounts.oauth_identities) AS identity_count,
-              (SELECT count(*)::int FROM accounts.sessions) AS session_count,
-              (SELECT count(*)::int FROM public."user" WHERE id = ${accountId}) AS legacy_user_count,
-              (SELECT count(*)::int FROM public.player_link WHERE user_id = ${accountId}) AS player_link_count,
-              (SELECT count(*)::int FROM accounts.v2_auth_cutover) AS cutover_count
-          `
-        expect({
-          user_count,
-          identity_count,
-          session_count,
-          legacy_user_count,
-          player_link_count,
-          cutover_count,
-        }).toEqual({
+        const [{ user_count, identity_count, session_count, legacy_user_count }] = await client<
+          { user_count: number; identity_count: number; session_count: number; legacy_user_count: number }[]
+        >`
+          SELECT
+            (SELECT count(*)::int FROM accounts.users) AS user_count,
+            (SELECT count(*)::int FROM accounts.oauth_identities) AS identity_count,
+            (SELECT count(*)::int FROM accounts.sessions) AS session_count,
+            (SELECT count(*)::int FROM public."user" WHERE id = ${accountId}) AS legacy_user_count
+        `
+        // new accounts no longer get a V2 user row
+        expect({ user_count, identity_count, session_count, legacy_user_count }).toEqual({
           user_count: 1,
           identity_count: 1,
           session_count: 8,
-          legacy_user_count: 1,
-          player_link_count: 1,
-          cutover_count: 0,
+          legacy_user_count: 0,
         })
         await client`DELETE FROM public.session WHERE user_id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
         await client`DELETE FROM public.oauth_account WHERE user_id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
@@ -343,98 +324,10 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           avatarUrl: null,
         })
 
-        const lateAuthenticated = await runtime.accounts.authenticate(lateRawToken)
-        expect(lateAuthenticated.status).toBe('signedIn')
-        if (lateAuthenticated.status !== 'signedIn') throw new Error('Expected post-migration V2 session')
-        expect(lateAuthenticated.account).toMatchObject({
-          id: accountId,
-          displayName: 'Late Ada',
-          avatarUrl: 'https://cdn.discordapp.com/avatars/discord-42/late-avatar.png',
-        })
-        expect((await runtime.accounts.authenticate(lateRawToken)).status).toBe('signedIn')
+        // V2 sessions created after the migration are no longer imported
+        expect(await runtime.accounts.authenticate(lateRawToken)).toEqual({ status: 'anonymous' })
       } finally {
         await runtime.close()
-      }
-
-      const imported = postgres(databaseUrl.toString(), { max: 1 })
-      try {
-        const [user] = await imported`
-          SELECT id, created_at, updated_at FROM accounts.users WHERE id = ${accountId}
-        `
-        const identities = await imported<
-          {
-            provider: string
-            provider_account_id: string
-            account_id: string
-            display_name: string
-            avatar_hash: string | null
-            refresh_token: string | null
-            created_at: Date
-            updated_at: Date
-          }[]
-        >`
-          SELECT provider, provider_account_id, account_id, display_name, avatar_hash, refresh_token,
-                 created_at, updated_at
-          FROM accounts.oauth_identities
-          WHERE account_id = ${accountId}
-          ORDER BY provider
-        `
-        const [session] = await imported`
-          SELECT id, account_id, expires_at, created_at
-          FROM accounts.sessions
-          WHERE id = ${lateSessionId}
-        `
-
-        expect({
-          id: user.id,
-          createdAt: user.created_at.toISOString(),
-          updatedAt: user.updated_at.toISOString(),
-        }).toEqual({
-          id: accountId,
-          createdAt: '2026-08-09T18:42:01.000Z',
-          updatedAt: '2026-08-10T03:04:06.456Z',
-        })
-        expect(
-          identities.map((identity) => ({
-            ...identity,
-            created_at: identity.created_at.toISOString(),
-            updated_at: identity.updated_at.toISOString(),
-          })),
-        ).toEqual([
-          {
-            provider: 'discord',
-            provider_account_id: 'discord-42',
-            account_id: accountId,
-            display_name: 'Late Ada',
-            avatar_hash: 'late-avatar',
-            refresh_token: 'late-discord-refresh',
-            created_at: '2026-08-10T03:04:07.123Z',
-            updated_at: '2026-08-10T03:04:08.456Z',
-          },
-          {
-            provider: 'future-provider',
-            provider_account_id: 'future-42',
-            account_id: accountId,
-            display_name: 'Late elsewhere',
-            avatar_hash: 'future-avatar',
-            refresh_token: 'late-future-refresh',
-            created_at: '2026-08-10T03:04:09.123Z',
-            updated_at: '2026-08-10T03:04:10.456Z',
-          },
-        ])
-        expect({
-          id: session.id,
-          accountId: session.account_id,
-          expiresAt: session.expires_at.toISOString(),
-          createdAt: session.created_at.toISOString(),
-        }).toEqual({
-          id: lateSessionId,
-          accountId: accountId,
-          expiresAt: '2099-10-11T12:13:14.789Z',
-          createdAt: '2026-08-10T03:04:11.789Z',
-        })
-      } finally {
-        await imported.end()
       }
 
       const revocationRuntime = createPostgresAccounts(databaseUrl.toString())
