@@ -153,6 +153,16 @@ describe('rendered application topology', () => {
     )
   })
 
+  test('rejects an image from a lookalike registry', () => {
+    const topology = renderedTopology()
+    const current = services(topology)
+    current.web.image = `ghcrXio/nicktacke/brawltome-web:${'a'.repeat(40)}`
+
+    expect(verifyAppRenderedTopology(topology)).toContain(
+      'web must use image ghcr.io/nicktacke/brawltome-web tagged with the release commit',
+    )
+  })
+
   test('rejects hardening, raw-secret, and secret-shadowing drift', () => {
     const topology = renderedTopology()
     const current = services(topology)

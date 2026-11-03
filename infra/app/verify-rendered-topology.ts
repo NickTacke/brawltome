@@ -3,7 +3,7 @@
 import { posix } from 'node:path'
 
 const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web'] as const
-const releaseCommitPattern = '[0-9a-f]{40}'
+const releaseCommitPattern = /^[0-9a-f]{40}$/
 const observabilityServices = new Set(['api', 'operations-worker', 'web'])
 
 const expectedDependencies: Record<string, [service: string, condition: string]> = {
@@ -208,8 +208,10 @@ function checkImageSource(violations: string[], name: string, service: Record<st
 
   if (service.build !== undefined) violations.push(`${name} must not be built on the server`)
 
-  const expectedImage = `ghcr.io/nicktacke/brawltome-${name}:${releaseCommitPattern}`
-  if (typeof service.image !== 'string' || !new RegExp(`^${expectedImage}$`).test(service.image)) {
+  const imagePrefix = `ghcr.io/nicktacke/brawltome-${name}:`
+  const image = typeof service.image === 'string' ? service.image : ''
+  const tag = image.slice(imagePrefix.length)
+  if (!image.startsWith(imagePrefix) || !releaseCommitPattern.test(tag)) {
     violations.push(`${name} must use image ghcr.io/nicktacke/brawltome-${name} tagged with the release commit`)
   }
 }
