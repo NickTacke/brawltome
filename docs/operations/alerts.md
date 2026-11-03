@@ -144,13 +144,23 @@ and Loki logs for every runtime.
 **Meaning:** Prometheus is evaluating rules and delivering them to Alertmanager. The status board shows
 `📡 Prometheus → Alertmanager heartbeat OK` while it arrives.
 
+**Dead man's switch:** after every poll that sees the Watchdog and updates the board, the relay pings a
+healthchecks.io check (`BrawlTome`, 5 minute period, 5 minute grace). If the pings stop, healthchecks.io alerts on
+Discord by itself, so a dead VM, Docker daemon, monitoring stack, relay or outbound network still gets noticed. The ping
+URL is the `healthchecks_ping_url` secret, read from
+`/var/lib/brawltome-observability-secrets/healthchecks-ping-url` (owned by 65534, mode 0400).
+
 **If the board says the heartbeat is missing:** Prometheus is down, failing to evaluate rules, or cannot reach
 Alertmanager, so no other alert can fire either.
+
+**If healthchecks.io says the check is down:** the board may not update at all. Check that the VM is up, then the
+stack and the relay logs.
 
 ```sh
 ssh dokploy
 docker ps --filter name=brawltome-observability-bc1eng
 docker logs --since 30m brawltome-observability-bc1eng-prometheus-1 | tail -50
+docker logs --since 30m brawltome-observability-bc1eng-alert-relay-1 | grep -i heartbeat
 ```
 
 ### RuntimeMetricsTargetDown

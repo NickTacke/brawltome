@@ -18,6 +18,12 @@ const log: Logger = (level, msg, fields) => {
 const webhookUrl = readFileSync(env('DISCORD_WEBHOOK_URL_FILE', '/run/secrets/discord_webhook_url'), 'utf8').trim()
 if (!/^https?:\/\//.test(webhookUrl)) throw new Error('Discord webhook URL file does not contain a URL')
 
+// optional, so the synthetic test stack can run the relay without a healthchecks.io check
+const heartbeatUrlFile = process.env.HEARTBEAT_URL_FILE
+const heartbeatUrl = heartbeatUrlFile ? readFileSync(heartbeatUrlFile, 'utf8').trim() : undefined
+if (heartbeatUrl !== undefined && !/^https:\/\//.test(heartbeatUrl))
+  throw new Error('heartbeat URL file does not contain an https URL')
+
 const alertmanagerUrl = env('ALERTMANAGER_URL', 'http://alertmanager:9093').replace(/\/$/, '')
 const pollIntervalMs = duration('RELAY_POLL_INTERVAL_MS', 60_000)
 const mention = env('DISCORD_PAGE_MENTION', '@everyone').trim()
@@ -31,6 +37,12 @@ const relay = new AlertRelay({
     if (!response.ok) throw new Error(`Alertmanager API answered ${response.status}`)
     return (await response.json()) as ApiAlert[]
   },
+  heartbeat: heartbeatUrl
+    ? async () => {
+        const response = await fetch(heartbeatUrl, { method: 'POST', signal: AbortSignal.timeout(10_000) })
+        if (!response.ok) throw new Error(`heartbeat endpoint answered ${response.status}`)
+      }
+    : undefined,
   store: new FileStateStore(env('RELAY_STATE_FILE', '/state/state.json'), log),
   config: {
     mention: mention === 'none' ? '' : mention,
@@ -74,4 +86,8 @@ const poll = async () => {
   setTimeout(poll, pollIntervalMs)
 }
 void poll()
-log('info', 'alert relay started', { pollIntervalMs, paging: mention ? 'mention' : 'no mention' })
+log('info', 'alert relay started', {
+  pollIntervalMs,
+  paging: mention ? 'mention' : 'no mention',
+  heartbeat: heartbeatUrl ? 'on' : 'off',
+})
