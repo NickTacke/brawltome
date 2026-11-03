@@ -85,6 +85,8 @@ export type RelayDeps = {
   discord: Pick<DiscordClient, 'post' | 'edit'>
   alertmanager: () => Promise<ApiAlert[]>
   store: StateStore
+  // Pings the external dead man's switch; a missing ping is how a dead VM, stack or network still gets noticed.
+  heartbeat?: () => Promise<void>
   config: RelayConfig
   now?: () => number
   log?: Logger
@@ -174,6 +176,10 @@ export class AlertRelay {
       }
 
       await this.drawBoard(alerts)
+
+      // only a full pass with the Watchdog present proves Prometheus, Alertmanager and the relay all work
+      if (!this.deps.heartbeat || !alerts.some(isWatchdog)) return
+      await this.deps.heartbeat().catch((error) => this.log('warn', 'heartbeat ping failed', { error: String(error) }))
     })
   }
 

@@ -78,6 +78,7 @@ describe('observability deployment contract', () => {
         PROMETHEUS_RETENTION_SIZE: '800MB',
         BRAWLTOME_NETWORK_NAME: 'brawltome',
         DISCORD_WEBHOOK_URL_FILE: '/run/owner-secrets/discord-webhook-url',
+        HEALTHCHECKS_PING_URL_FILE: '/run/owner-secrets/healthchecks-ping-url',
         METRICS_SCRAPE_SECRET_FILE: '/run/owner-secrets/metrics-scrape-secret',
         OTEL_INGEST_TOKEN_FILE: '/run/owner-secrets/otel-ingest-token',
         GRAFANA_ADMIN_PASSWORD_FILE: '/run/owner-secrets/grafana-admin-password',

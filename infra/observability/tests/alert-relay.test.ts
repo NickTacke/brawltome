@@ -71,7 +71,7 @@ class MemoryStore {
   }
 }
 
-function setup(options: { initial?: RelayState; alerts?: ApiAlert[] } = {}) {
+function setup(options: { initial?: RelayState; alerts?: ApiAlert[]; heartbeat?: () => Promise<void> } = {}) {
   const discord = new FakeDiscord()
   const store = new MemoryStore(options.initial)
   const clock = { now: t0 + 60_000 }
@@ -79,6 +79,7 @@ function setup(options: { initial?: RelayState; alerts?: ApiAlert[] } = {}) {
   const relay = new AlertRelay({
     discord,
     alertmanager: async () => am.alerts,
+    heartbeat: options.heartbeat,
     store,
     config: {
       mention: '<@123456789012345678>',
@@ -365,6 +366,53 @@ describe('edit versus post', () => {
     await relay.sync()
     expect(discord.pages()).toHaveLength(0)
     expect(discord.messages.get('1')?.embeds?.[0]?.description).toContain('All clear')
+  })
+})
+
+describe('heartbeat', () => {
+  test('pings after a full sync while the Watchdog is firing', async () => {
+    let pings = 0
+    const { relay } = setup({ heartbeat: async () => void pings++ })
+    await relay.sync()
+    await relay.sync()
+    expect(pings).toBe(2)
+  })
+
+  test('stays silent when the Watchdog is missing, so healthchecks.io alerts', async () => {
+    let pings = 0
+    const { relay } = setup({ alerts: [], heartbeat: async () => void pings++ })
+    await relay.sync()
+    expect(pings).toBe(0)
+  })
+
+  test('stays silent when Alertmanager cannot be read', async () => {
+    let pings = 0
+    const { relay, am } = setup({ heartbeat: async () => void pings++ })
+    Object.defineProperty(am, 'alerts', {
+      get() {
+        throw new Error('Alertmanager API answered 503')
+      },
+    })
+    await expect(relay.sync()).rejects.toThrow('503')
+    expect(pings).toBe(0)
+  })
+
+  test('stays silent when the board cannot reach Discord', async () => {
+    let pings = 0
+    const { relay, discord } = setup({ heartbeat: async () => void pings++ })
+    discord.failPosts = 10
+    await expect(relay.sync()).rejects.toThrow('502')
+    expect(pings).toBe(0)
+  })
+
+  test('a failed ping does not fail the sync', async () => {
+    const { relay, discord } = setup({
+      heartbeat: async () => {
+        throw new Error('heartbeat endpoint answered 500')
+      },
+    })
+    await relay.sync()
+    expect(discord.calls).toHaveLength(1)
   })
 })
 

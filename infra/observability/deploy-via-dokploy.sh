@@ -104,6 +104,7 @@ rendered=$(
       BRAWLTOME_NETWORK_NAME=brawltome \
       DISCORD_WEBHOOK_URL_FILE=/var/lib/brawltome-observability-secrets/discord-webhook-url \
       GRAFANA_ADMIN_PASSWORD_FILE=/var/lib/brawltome-observability-secrets/grafana-admin-password \
+      HEALTHCHECKS_PING_URL_FILE=/var/lib/brawltome-observability-secrets/healthchecks-ping-url \
       METRICS_SCRAPE_SECRET_FILE=/var/lib/brawltome-observability-secrets/metrics-scrape-secret \
       OBSERVABILITY_DATA_ROOT=/srv/brawltome-observability \
       OBSERVABILITY_LOGS_QUOTA_BYTES=25769803776 \

@@ -94,6 +94,7 @@ services:
       ALERTMANAGER_URL: http://alertmanager:9093
       GRAFANA_URL: https://observability.brawltome.app
       RELAY_STATE_FILE: /state/state.json
+      HEARTBEAT_URL_FILE: /run/secrets/healthchecks_ping_url
       BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0"
       HOME: /tmp
     volumes:
@@ -105,6 +106,7 @@ services:
       - /tmp:size=16m,noexec,nosuid,nodev,uid=65534,gid=65534,mode=0700
     secrets:
       - discord_webhook_url
+      - healthchecks_ping_url
     # brawltome-notifications is an attachable swarm overlay with no other local container. As a container's primary
     # network Docker cannot resolve it while it has no endpoints on this host ("could not find a network matching
     # network mode"), which failed the 2026-10-31 deploy. The always-attached observability network goes first.
@@ -345,6 +347,8 @@ networks:
 secrets:
   discord_webhook_url:
     file: ${DISCORD_WEBHOOK_URL_FILE:?Owner must supply at deployment}
+  healthchecks_ping_url:
+    file: ${HEALTHCHECKS_PING_URL_FILE:?Owner must supply at deployment}
   grafana_admin_password:
     file: ${GRAFANA_ADMIN_PASSWORD_FILE:?Owner must supply at deployment}
   metrics_scrape_secret:

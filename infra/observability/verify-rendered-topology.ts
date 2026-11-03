@@ -43,7 +43,10 @@ const expectedUsers: Record<string, string> = {
 }
 
 const expectedServiceSecrets: Record<string, Array<{ source: string; target: string }>> = {
-  'alert-relay': [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
+  'alert-relay': [
+    { source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' },
+    { source: 'healthchecks_ping_url', target: '/run/secrets/healthchecks_ping_url' },
+  ],
   alertmanager: [],
   'blackbox-exporter': [],
   grafana: [{ source: 'grafana_admin_password', target: '/run/secrets/grafana_admin_password' }],
@@ -57,6 +60,7 @@ const expectedServiceSecrets: Record<string, Array<{ source: string; target: str
 const expectedSecretFiles: Record<string, string> = {
   discord_webhook_url: '/var/lib/brawltome-observability-secrets/discord-webhook-url',
   grafana_admin_password: '/var/lib/brawltome-observability-secrets/grafana-admin-password',
+  healthchecks_ping_url: '/var/lib/brawltome-observability-secrets/healthchecks-ping-url',
   metrics_scrape_secret: '/var/lib/brawltome-observability-secrets/metrics-scrape-secret',
   otel_ingest_token: '/var/lib/brawltome-observability-secrets/otel-ingest-token',
 }

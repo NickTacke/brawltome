@@ -92,6 +92,10 @@ function validTopology(): TopologyFixture {
         file: '/var/lib/brawltome-observability-secrets/grafana-admin-password',
         name: 'brawltome-observability_grafana_admin_password',
       },
+      healthchecks_ping_url: {
+        file: '/var/lib/brawltome-observability-secrets/healthchecks-ping-url',
+        name: 'brawltome-observability_healthchecks_ping_url',
+      },
       metrics_scrape_secret: {
         file: '/var/lib/brawltome-observability-secrets/metrics-scrape-secret',
         name: 'brawltome-observability_metrics_scrape_secret',
@@ -106,7 +110,10 @@ function validTopology(): TopologyFixture {
         ...service(
           'alert-relay',
           ['notifications', 'observability'],
-          [{ source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' }],
+          [
+            { source: 'discord_webhook_url', target: '/run/secrets/discord_webhook_url' },
+            { source: 'healthchecks_ping_url', target: '/run/secrets/healthchecks_ping_url' },
+          ],
         ),
         networks: { notifications: null, observability: { priority: 100 } },
         volumes: [
