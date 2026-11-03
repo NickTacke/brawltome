@@ -47,10 +47,7 @@ services:
           memory: 512M
 
   migration:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: migration
+    image: ghcr.io/nicktacke/brawltome-migration:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     secrets:
       - migration_database_url
     networks:
@@ -74,10 +71,7 @@ services:
 
   dead-letter-role:
     profiles: [operator]
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: dead-letter-role
+    image: ghcr.io/nicktacke/brawltome-dead-letter-role:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     user: "70:70"
     environment:
       PGDATABASE: brawltome
@@ -107,10 +101,7 @@ services:
 
   dead-letter-cli:
     profiles: [operator]
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: dead-letter-cli
+    image: ghcr.io/nicktacke/brawltome-dead-letter-cli:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     secrets:
       - dead_letter_database_url
       - dead_letter_operator_tokens
@@ -134,10 +125,7 @@ services:
           pids: 64
 
   api:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: api
+    image: ghcr.io/nicktacke/brawltome-api:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
       CORS_ORIGIN: https://brawltome.app
@@ -210,14 +198,7 @@ services:
           memory: 256M
 
   web:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: web
-      args:
-        NEXT_PUBLIC_API_URL: https://api.brawltome.app
-        NEXT_PUBLIC_ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-false}
-        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set the public Turnstile site key}
+    image: ghcr.io/nicktacke/brawltome-web:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     environment:
       HOSTNAME: 0.0.0.0
       INTERNAL_API_URL: http://api:3000
@@ -282,10 +263,7 @@ services:
           memory: 192M
 
   operations-worker:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: operations-worker
+    image: ghcr.io/nicktacke/brawltome-operations-worker:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
       BRAWLHALLA_V1_REQUEST_LIMIT: "1800"
@@ -361,10 +339,7 @@ services:
 
   discord-bot:
     profiles: [discord]
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      target: discord-bot
+    image: ghcr.io/nicktacke/brawltome-discord-bot:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     environment:
       API_URL: http://api:3000
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-deferred}

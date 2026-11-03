@@ -39,8 +39,13 @@ function resolveImage(reference: string) {
   return reference.startsWith('sha256:') ? reference : state.tags[tagKey(reference)]
 }
 
+// The image reference compose resolves for a service, which deploy.sh builds from the release commit it exports.
+function configuredImage(service: string) {
+  return `ghcr.io/nicktacke/brawltome-${service}:${process.env.BRAWLTOME_IMAGE_TAG}`
+}
+
 function start(service: string) {
-  const image = resolveImage(`${state.project}-${service}`)
+  const image = resolveImage(configuredImage(service))
   if (!image) throw new Error(`no image for ${service}`)
   state.counter += 1
   state.containers.push({ id: `${service}-${state.counter}`, service, image })
@@ -60,8 +65,21 @@ function compose(rest: string[]) {
   // Skip `--parallel 1 -p <project> -f <file>`.
   const command = rest.slice(6)
   const [verb, ...options] = command
-  if (verb === 'build') {
-    for (const service of state.services) state.tags[`${state.project}-${service}:latest`] = `sha256:new-${service}`
+  appendFileSync(`${directory}/release-tags.log`, `${process.env.BRAWLTOME_IMAGE_TAG}\n`)
+  if (verb === 'build') throw new Error('deploy.sh must pull the release images, not build them')
+  if (verb === 'pull') {
+    // DOCKER_STUB_FAIL_PULL=1 behaves like a release whose images were never pushed.
+    const pulled = options.filter((option) => !option.startsWith('-'))
+    if (process.env.DOCKER_STUB_FAIL_PULL === '1') {
+      process.stderr.write(`manifest for ${configuredImage(pulled[0])} not found: manifest unknown\n`)
+      return 1
+    }
+    for (const service of pulled) state.tags[configuredImage(service)] = `sha256:new-${service}`
+    return 0
+  }
+  if (verb === 'config' && options.includes('--format')) {
+    const rendered = Object.fromEntries(state.services.map((service) => [service, { image: configuredImage(service) }]))
+    process.stdout.write(`${JSON.stringify({ name: state.project, services: rendered }, null, 2)}\n`)
     return 0
   }
   if (verb === 'config') {
@@ -87,7 +105,7 @@ function compose(rest: string[]) {
   if (services.length === 0) throw new Error('compose up without services would start the whole project')
   for (const service of services) {
     if (service === 'migration' || service === 'postgres') continue
-    const image = resolveImage(`${state.project}-${service}`)
+    const image = resolveImage(configuredImage(service))
     const running = state.containers.filter((container) => container.service === service)
     if (running.length === 0) start(service)
     else if (!options.includes('--no-recreate'))

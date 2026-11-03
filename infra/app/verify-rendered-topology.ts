@@ -3,6 +3,7 @@
 import { posix } from 'node:path'
 
 const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web'] as const
+const releaseCommitPattern = '[0-9a-f]{40}'
 const observabilityServices = new Set(['api', 'operations-worker', 'web'])
 
 const expectedDependencies: Record<string, [service: string, condition: string]> = {
@@ -107,9 +108,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (name !== 'migration' && readPath(service, 'deploy', 'replicas') !== 1) {
       violations.push(`${name} must have exactly one replica`)
     }
-    if (readPath(service, 'build', 'target') !== name) {
-      violations.push(`${name} must use build target ${name}`)
-    }
+    checkImageSource(violations, name, service)
     checkRuntimeContract(violations, name, service)
     checkRuntimeHardening(violations, name, service)
     checkSecretEnvironment(violations, name, service.environment)
@@ -174,12 +173,6 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
       violations.push('web must use the internal API origin for server calls')
     }
-    if (readPath(web, 'build', 'args', 'NEXT_PUBLIC_API_URL') !== 'https://api.brawltome.app') {
-      violations.push('web must use the canonical public API origin')
-    }
-    if (!readPath(web, 'build', 'args', 'NEXT_PUBLIC_TURNSTILE_SITE_KEY')) {
-      violations.push('web must receive the public Turnstile site key at build time')
-    }
   }
 
   for (const [key, file] of Object.entries(expectedSecretFiles)) {
@@ -204,6 +197,21 @@ function checkExactKeys(
 ): void {
   if (!sameValues(Object.keys(value), expected))
     violations.push(`${subject} must be exactly: ${[...expected].sort().join(', ')}`)
+}
+
+// Postgres is built from the repository; every other service runs the image CI pushed for the release commit.
+function checkImageSource(violations: string[], name: string, service: Record<string, unknown>): void {
+  if (name === 'postgres') {
+    if (readPath(service, 'build', 'target') !== 'postgres') violations.push('postgres must use build target postgres')
+    return
+  }
+
+  if (service.build !== undefined) violations.push(`${name} must not be built on the server`)
+
+  const expectedImage = `ghcr.io/nicktacke/brawltome-${name}:${releaseCommitPattern}`
+  if (typeof service.image !== 'string' || !new RegExp(`^${expectedImage}$`).test(service.image)) {
+    violations.push(`${name} must use image ghcr.io/nicktacke/brawltome-${name} tagged with the release commit`)
+  }
 }
 
 function checkRuntimeContract(violations: string[], name: string, service: Record<string, unknown>): void {

@@ -19,9 +19,9 @@ function renderTopologyJson(): string {
     cwd: root,
     env: {
       ...process.env,
+      BRAWLTOME_IMAGE_TAG: '0000000000000000000000000000000000000000',
       DISCORD_CLIENT_ID: '123456789012345678',
       POSTGRES_DATA_ROOT: '/srv/brawltome/postgres',
-      TURNSTILE_SITE_KEY: 'test-site-key',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -135,6 +135,8 @@ describe('rendered application topology', () => {
     ;(current.postgres.build as Record<string, string>).target = 'api'
     current.postgres.volumes = [{ source: '/', target: '/var/lib/postgresql/data', type: 'bind' }]
     current.api.secrets = []
+    current.web.image = 'ghcr.io/nicktacke/brawltome-web:latest'
+    current.api.build = { target: 'api' }
     ;(topology.secrets as Record<string, unknown>).extra = { file: '/tmp/extra' }
 
     expect(verifyAppRenderedTopology(topology)).toEqual(
@@ -144,6 +146,8 @@ describe('rendered application topology', () => {
         'operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes',
         'operations-worker must retain four total operation slots',
         'postgres must use build target postgres',
+        'web must use image ghcr.io/nicktacke/brawltome-web tagged with the release commit',
+        'api must not be built on the server',
         'postgres must bind only the approved data filesystem',
       ]),
     )

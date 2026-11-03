@@ -18,7 +18,7 @@
     "format": "biome format --write .",
     "analytics:review": "bun run --filter @brawltome/analytics-review review --",
     "architecture:check": "bun run --filter @brawltome/architecture check",
-    "infra:app:check": "DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres TURNSTILE_SITE_KEY=test-site-key docker compose -f infra/app/compose.yml config --format json | bun infra/app/verify-rendered-topology.ts",
+    "infra:app:check": "BRAWLTOME_IMAGE_TAG=0000000000000000000000000000000000000000 DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres docker compose -f infra/app/compose.yml config --format json | bun infra/app/verify-rendered-topology.ts",
     "infra:app:storage-preflight": "sh infra/app/storage/verify-postgres-mount.sh",
     "infra:observability:check": "sh infra/observability/validate.sh && bun test infra/observability/tests && sh infra/observability/tests/synthetic-discord-alerts.sh && sh infra/observability/tests/synthetic-pipeline.sh",
     "infra:observability:deploy": "bash infra/observability/deploy-via-dokploy.sh",
