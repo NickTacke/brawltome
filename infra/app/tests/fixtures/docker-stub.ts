@@ -77,11 +77,6 @@ function compose(rest: string[]) {
     for (const service of pulled) state.tags[configuredImage(service)] = `sha256:new-${service}`
     return 0
   }
-  if (verb === 'config' && options.includes('--format')) {
-    const rendered = Object.fromEntries(state.services.map((service) => [service, { image: configuredImage(service) }]))
-    process.stdout.write(`${JSON.stringify({ name: state.project, services: rendered }, null, 2)}\n`)
-    return 0
-  }
   if (verb === 'config') {
     process.stdout.write(`${state.services.join('\n')}\n`)
     return 0

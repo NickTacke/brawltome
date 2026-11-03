@@ -3,11 +3,10 @@
 #
 # Plain `compose up` stops every changed service before it runs the migration and starts the new containers, so the
 # site was unreachable for ~40 s per deploy. This pulls the release images and migrates while the old containers keep
-# serving, then
-# replaces each public service by starting the new container beside the old one and stopping the old one only once
-# the new one is healthy. Traefik routes only to healthy containers; on SIGTERM the old container reports draining on
-# its /serving health check while it keeps answering, so Traefik moves traffic before it stops (api: serve.ts,
-# web: web-server.cjs). The retry middleware replays requests that still race a closing connection.
+# serving, then replaces each public service by starting the new container beside the old one and stopping the old one
+# only once the new one is healthy. Traefik routes only to healthy containers; on SIGTERM the old container reports
+# draining on its /serving health check while it keeps answering, so Traefik moves traffic before it stops (api:
+# serve.ts, web: web-server.cjs). The retry middleware replays requests that still race a closing connection.
 #
 # CI builds the images and pushes them to GHCR tagged with the commit (ghcr.io/nicktacke/brawltome-<service>:<sha>);
 # nothing is built here. The tag is the checked-out commit, read from .git because the deploy container has no git
@@ -19,7 +18,8 @@
 #   run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /etc/dokploy/compose/<app>/code:/etc/dokploy/compose/<app>/code
 #   -w /etc/dokploy/compose/<app>/code docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c
 #   sh infra/app/deploy.sh <app> infra/app/compose.yml api web
-# Rollback: clear the Command setting; Dokploy falls back to `compose up -d --build --remove-orphans`.
+# Rollback: clear the Command setting and set BRAWLTOME_IMAGE_TAG=<sha> in the Dokploy environment; Dokploy then falls
+# back to `compose up -d --remove-orphans`, which pulls the images CI pushed for that commit.
 #
 # Migrations run while the previous release still serves, so they must stay compatible with it: add before use,
 # remove only after a release that no longer reads it.
@@ -166,15 +166,10 @@ fi
 export BRAWLTOME_IMAGE_TAG
 log "deploying release $BRAWLTOME_IMAGE_TAG"
 
-rendered_config=$(compose config --format json)
-
-# <service>: prints the image reference compose runs the service from, read from the rendered config.
+# <service>: prints the image reference compose runs the service from. Service names equal the Dockerfile targets, and
+# the rendered-topology check fails CI when compose.yml uses any other reference, so the two cannot drift.
 service_image() {
-  printf '%s\n' "$rendered_config" | awk -v service="$1" '
-    $0 ~ "^    \"" service "\": \\{" { inside = 1; next }
-    inside && /^    "/ { exit }
-    inside && /^      "image": / { gsub(/^      "image": "|",?$/, ""); print; exit }
-  '
+  printf 'ghcr.io/nicktacke/brawltome-%s:%s\n' "$1" "$BRAWLTOME_IMAGE_TAG"
 }
 
 # Every service the deploy may replace: the migration runs once below and postgres is never recreated here.
