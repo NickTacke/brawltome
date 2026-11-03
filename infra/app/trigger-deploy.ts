@@ -2,6 +2,7 @@
 
 const defaultTimeoutMs = 20 * 60_000
 const defaultPollIntervalMs = 10_000
+const defaultRequestTimeoutMs = 30_000
 
 type Deployment = { deploymentId: string; status: string; createdAt: string }
 
@@ -14,6 +15,7 @@ export type TriggerDeployOptions = {
   sleep?: (ms: number) => Promise<void>
   timeoutMs?: number
   pollIntervalMs?: number
+  requestTimeoutMs?: number
 }
 
 /** Starts a Dokploy compose deployment and waits until it is done, failed, or out of time. */
@@ -23,15 +25,38 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const timeoutMs = options.timeoutMs ?? defaultTimeoutMs
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs
+  const requestTimeoutMs = options.requestTimeoutMs ?? defaultRequestTimeoutMs
   const headers = { 'x-api-key': options.token, 'content-type': 'application/json' }
   const baseUrl = options.dokployUrl.replace(/\/+$/, '')
+  const composeUrl = `${baseUrl}/api/compose.one?composeId=${encodeURIComponent(options.composeId)}`
 
-  const triggeredAtMs = now()
-  const deadlineMs = triggeredAtMs + timeoutMs
+  // a hung connection must not outlive the overall timeout, so every request gets its own deadline
+  async function request(url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetchFromNetwork(url, { ...init, headers, signal: AbortSignal.timeout(requestTimeoutMs) })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'TimeoutError')
+        throw new Error(`dokploy request for compose ${options.composeId} timed out after ${requestTimeoutMs / 1000} s`)
+      throw error
+    }
+  }
 
-  const deployResponse = await fetchFromNetwork(`${baseUrl}/api/compose.deploy`, {
+  async function readDeployments(): Promise<Deployment[]> {
+    const response = await request(composeUrl, {})
+    if (!response.ok)
+      throw new Error(`dokploy status request for compose ${options.composeId} failed: HTTP ${response.status}`)
+
+    const compose = (await response.json()) as { deployments?: Deployment[] }
+
+    return compose.deployments ?? []
+  }
+
+  // the runner and Dokploy clocks may differ, so new deployments are told apart by id, not by time
+  const existingDeploymentIds = new Set((await readDeployments()).map((deployment) => deployment.deploymentId))
+  const deadlineMs = now() + timeoutMs
+
+  const deployResponse = await request(`${baseUrl}/api/compose.deploy`, {
     method: 'POST',
-    headers,
     body: JSON.stringify({ composeId: options.composeId }),
   })
   if (!deployResponse.ok)
@@ -39,17 +64,9 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
       `dokploy rejected the deploy request for compose ${options.composeId}: HTTP ${deployResponse.status}`,
     )
 
-  const composeUrl = `${baseUrl}/api/compose.one?composeId=${encodeURIComponent(options.composeId)}`
-
   while (true) {
-    const composeResponse = await fetchFromNetwork(composeUrl, { headers })
-    if (!composeResponse.ok)
-      throw new Error(`dokploy status request for compose ${options.composeId} failed: HTTP ${composeResponse.status}`)
-
-    const compose = (await composeResponse.json()) as { deployments?: Deployment[] }
-    const newDeployments = (compose.deployments ?? []).filter(
-      (deployment) => Date.parse(deployment.createdAt) >= triggeredAtMs,
-    )
+    const deployments = await readDeployments()
+    const newDeployments = deployments.filter((deployment) => !existingDeploymentIds.has(deployment.deploymentId))
 
     const failed = newDeployments.find((deployment) => deployment.status === 'error')
     if (failed) throw new Error(`dokploy deployment ${failed.deploymentId} for compose ${options.composeId} failed`)

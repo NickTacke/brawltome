@@ -106,6 +106,7 @@ jobs:
   images:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -155,6 +156,7 @@ jobs:
   deploy:
     needs: [images, architecture, infrastructure, contracts, check]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: production
     concurrency:
       group: production-deploy
