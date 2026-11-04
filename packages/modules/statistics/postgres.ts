@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Database } from '@brawltome/foundation'
+import type { Database, JsonValue } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
-import type postgres from 'postgres'
 import {
   type CohortCandidateSnapshot,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
@@ -277,11 +276,11 @@ function summarizeProgress(
   }
 }
 
-function jsonValue(value: unknown): postgres.JSONValue {
+function jsonValue(value: unknown): JsonValue {
   const serialized = JSON.stringify(value)
   if (serialized === undefined) throw new Error('Statistics audit evidence must be JSON serializable')
   try {
-    return JSON.parse(serialized) as postgres.JSONValue
+    return JSON.parse(serialized) as JsonValue
   } catch (error) {
     throw new Error('Statistics audit evidence must be valid JSON', { cause: error })
   }

@@ -1,6 +1,6 @@
 export { json, jsonb } from './columns'
 export { createDatabase } from './database'
-export type { CreateDatabaseOptions, Database, Sql, TransactionSql } from './database'
+export type { CreateDatabaseOptions, Database, JsonValue, Sql, TransactionSql } from './database'
 export type { Migration } from './migration'
 export { deployedOrder } from './migrations/deployed-order'
 export { checkDeployedMigrationsPresent, orderMigrations } from './migrations/order'

@@ -4,6 +4,7 @@ import postgres from 'postgres'
 
 export type Sql = postgres.Sql
 export type TransactionSql = postgres.TransactionSql
+export type JsonValue = postgres.JSONValue
 
 export type Database = {
   sql: Sql
