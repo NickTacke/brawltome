@@ -288,6 +288,7 @@
     "tooling/architecture": {
       "name": "@brawltome/architecture",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "typescript": "^5.7.0",
       },
       "devDependencies": {

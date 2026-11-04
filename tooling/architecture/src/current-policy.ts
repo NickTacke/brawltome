@@ -1,3 +1,4 @@
+import { deployedOrder } from '@brawltome/foundation'
 import type { ArchitecturePolicy } from './types'
 
 export const currentArchitecturePolicy: ArchitecturePolicy = {
@@ -82,6 +83,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
   workspaceRoleDependencies: {
     '@brawltome/database-migrations': ['adapter', 'capability', 'foundation'],
   },
+  deployedMigrations: deployedOrder,
   exceptions: [
     {
       id: 'player-reads-refresh-operations',

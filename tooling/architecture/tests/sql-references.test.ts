@@ -5,6 +5,7 @@ import type { TemporaryArchitectureException } from '../src/types'
 import { policy, validFixture } from './fixtures'
 
 const schemas = ['accounts', 'players', 'rankings', 'refresh_operations']
+const reachingIntoPlayers = 'export const query = "SELECT * FROM players.profiles"'
 
 describe('findSchemaReferences', () => {
   it('finds schema-qualified names in strings and template literals with source line numbers', () => {
@@ -192,8 +193,6 @@ describe('cross-module-sql rule', () => {
     return fixture
   }
 
-  const reachingIntoPlayers = 'export const query = "SELECT * FROM players.profiles"'
-
   it('flags a module that references another module schema once per file and schema', () => {
     const source = 'const a = "players.profiles"\nconst b = "players.names"'
     const fixture = withRankingsFile('packages/rankings/src/leaderboard.ts', source)
@@ -218,11 +217,9 @@ describe('cross-module-sql rule', () => {
     expect(checkArchitecture(fixture, policy).violations).toEqual([])
   })
 
-  it('skips migrations and test files', () => {
-    const migration = withRankingsFile('packages/rankings/migrations/0001.ts', reachingIntoPlayers)
+  it('skips test files', () => {
     const testFile = withRankingsFile('packages/rankings/tests/leaderboard.test.ts', reachingIntoPlayers)
 
-    expect(checkArchitecture(migration, policy).violations).toEqual([])
     expect(checkArchitecture(testFile, policy).violations).toEqual([])
   })
 
@@ -270,5 +267,88 @@ describe('cross-module-sql rule', () => {
     const result = checkArchitecture(fixture, { ...policy, exceptions: [sqlException] })
 
     expect(result.staleExceptions.map(({ id }) => id)).toEqual([sqlException.id])
+  })
+})
+
+describe('cross-module-sql rule in migrations', () => {
+  function migrationSource(identity: string, requires: string[] = []): string {
+    const requiresLine = requires.length > 0 ? `\n  requires: [${requires.map((id) => `'${id}'`).join(', ')}],` : ''
+
+    return [
+      "const sql = 'ALTER TABLE rankings.entries ADD FOREIGN KEY (player_id) REFERENCES players.profiles (id)'",
+      `export const migration = {\n  identity: '${identity}',\n  predecessor: null,\n  checksum: 'x',\n  sql,${requiresLine}\n}`,
+    ].join('\n')
+  }
+
+  // players owns players/0001, so a rankings migration can require it
+  function fixtureWithMigrations(rankingsMigration: string) {
+    const fixture = structuredClone(validFixture)
+    const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
+    const rankings = fixture.workspaces.find(({ name }) => name === '@fixture/rankings')
+    if (!players || !rankings) throw new Error('Missing Players or Rankings fixture')
+
+    const playersMigration = migrationSource('players/0001').replace(/rankings\.entries/, 'players.names')
+    players.sourceFiles.push({ path: 'packages/players/migrations/0001.ts', imports: [], source: playersMigration })
+    rankings.sourceFiles.push({ path: 'packages/rankings/migrations/0002.ts', imports: [], source: rankingsMigration })
+    return fixture
+  }
+
+  it('flags a new migration that references another module schema without requiring its migration', () => {
+    const fixture = fixtureWithMigrations(migrationSource('rankings/0002'))
+
+    const { violations } = checkArchitecture(fixture, policy)
+
+    expect(violations).toEqual([
+      expect.objectContaining({
+        rule: 'cross-module-sql',
+        importer: '@fixture/rankings',
+        dependency: '@fixture/players',
+        file: 'packages/rankings/migrations/0002.ts',
+        importPath: 'players',
+      }),
+    ])
+    expect(violations[0]?.message).toContain('rankings/0002')
+    expect(violations[0]?.message).toContain('requires')
+  })
+
+  it('allows a new migration that requires a migration of the owning module', () => {
+    const fixture = fixtureWithMigrations(migrationSource('rankings/0002', ['players/0001']))
+
+    expect(checkArchitecture(fixture, policy).violations).toEqual([])
+  })
+
+  it('reads requires written as const', () => {
+    const source = migrationSource('rankings/0002', ['players/0001']).replace(
+      "'players/0001'],",
+      "'players/0001'] as const,",
+    )
+    const fixture = fixtureWithMigrations(source)
+
+    expect(source).toContain('as const')
+    expect(checkArchitecture(fixture, policy).violations).toEqual([])
+  })
+
+  it('does not count a required migration of a different module', () => {
+    const fixture = fixtureWithMigrations(migrationSource('rankings/0002', ['rankings/0001']))
+
+    expect(checkArchitecture(fixture, policy).violations).toEqual([
+      expect.objectContaining({ rule: 'cross-module-sql', importPath: 'players' }),
+    ])
+  })
+
+  it('ignores a deployed migration', () => {
+    const fixture = fixtureWithMigrations(migrationSource('rankings/0002'))
+
+    const result = checkArchitecture(fixture, { ...policy, deployedMigrations: ['rankings/0002'] })
+
+    expect(result.violations).toEqual([])
+  })
+
+  it('checks a migrations file without a readable identity as new', () => {
+    const fixture = fixtureWithMigrations(reachingIntoPlayers)
+
+    expect(checkArchitecture(fixture, policy).violations).toEqual([
+      expect.objectContaining({ rule: 'cross-module-sql', file: 'packages/rankings/migrations/0002.ts' }),
+    ])
   })
 })
