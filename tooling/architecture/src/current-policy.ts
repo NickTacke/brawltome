@@ -91,7 +91,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       files: ['packages/modules/player/career/postgres.ts', 'packages/modules/player/ranked/postgres.ts'],
       importPath: 'refresh_operations',
       reason: 'Career and ranked refreshes call its lease and commit functions.',
-      issue: '#ISSUE',
+      issue: '#388',
       expiresWhen: 'the module is ported (Phase 3)',
     },
     {
@@ -102,7 +102,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       files: ['packages/modules/ranking/postgres.ts'],
       importPath: 'refresh_operations',
       reason: 'Leaderboard and retention writes call its lease functions.',
-      issue: '#ISSUE',
+      issue: '#388',
       expiresWhen: 'the module is ported (Phase 3)',
     },
     {
@@ -113,7 +113,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       files: ['packages/modules/statistics/postgres.ts'],
       importPath: 'refresh_operations',
       reason: 'Collection and publication read operations and call its lease and effect functions.',
-      issue: '#ISSUE',
+      issue: '#388',
       expiresWhen: 'the module is ported (Phase 3)',
     },
   ],
