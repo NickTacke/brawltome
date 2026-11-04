@@ -105,7 +105,7 @@ function operatorEnv(rawToken: string) {
 }
 
 async function runCli(args: string[], env: Record<string, string>) {
-  const process = Bun.spawn(['bun', 'packages/contexts/refresh-operations/cli.ts', ...args], {
+  const process = Bun.spawn(['bun', 'packages/modules/refresh-operations/cli.ts', ...args], {
     cwd: new URL('../../../..', import.meta.url).pathname,
     env: { ...globalThis.process.env, ...env },
     stdout: 'pipe',

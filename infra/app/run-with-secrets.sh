@@ -61,7 +61,7 @@ case "$role" in
   dead-letter-cli)
     read_secret DEAD_LETTER_DATABASE_URL "$secrets_root/dead_letter_database_url"
     read_secret DEAD_LETTER_OPERATOR_TOKENS "$secrets_root/dead_letter_operator_tokens"
-    exec bun run packages/contexts/refresh-operations/cli.ts "$@"
+    exec bun run packages/modules/refresh-operations/cli.ts "$@"
     ;;
   *)
     printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|web|discord-bot|dead-letter-cli' >&2
