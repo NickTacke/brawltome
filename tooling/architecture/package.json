@@ -12,6 +12,16 @@
     "typescript": "^5.7.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@brawltome/accounts": "workspace:*",
+    "@brawltome/clan": "workspace:*",
+    "@brawltome/discovery": "workspace:*",
+    "@brawltome/player": "workspace:*",
+    "@brawltome/ranking": "workspace:*",
+    "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/replay-analysis": "workspace:*",
+    "@brawltome/request-admission": "workspace:*",
+    "@brawltome/statistics": "workspace:*",
+    "@types/bun": "latest",
+    "drizzle-orm": "0.45.4"
   }
 }
