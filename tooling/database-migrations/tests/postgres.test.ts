@@ -14,6 +14,7 @@ import postgres from 'postgres'
 import { globalMigrationInventory } from '../src/inventories'
 import { checksumSql } from '../src/plan'
 import { migratePostgres } from '../src/postgres'
+import { deployedHistory } from './fixtures/deployed-history'
 
 const connectionString = process.env.DATABASE_URL
 
@@ -741,6 +742,45 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       await admin.end()
     }
   }, 60_000)
+
+  test('applies nothing to a database whose history matches production, whatever the input order', async () => {
+    const databaseName = `brawltome_deployed_history_${process.pid}_${randomUUID().replaceAll('-', '')}`
+    const adminUrl = new URL(connectionString as string)
+    adminUrl.pathname = '/postgres'
+    const databaseUrl = new URL(connectionString as string)
+    databaseUrl.pathname = `/${databaseName}`
+    const admin = postgres(adminUrl.toString(), { max: 1 })
+
+    await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
+    try {
+      const client = postgres(databaseUrl.toString(), { max: 1 })
+      try {
+        await client`CREATE SCHEMA brawltome_migrations`
+        await client`
+          CREATE TABLE brawltome_migrations.history (
+            ordinal integer PRIMARY KEY,
+            identity text NOT NULL UNIQUE,
+            predecessor text,
+            checksum char(64) NOT NULL,
+            applied_at timestamptz NOT NULL DEFAULT now()
+          )
+        `
+        for (const [index, row] of deployedHistory.entries()) {
+          await client`
+            INSERT INTO brawltome_migrations.history (ordinal, identity, predecessor, checksum)
+            VALUES (${index + 1}, ${row.identity}, ${row.predecessor}, ${row.checksum})
+          `
+        }
+      } finally {
+        await client.end()
+      }
+
+      expect(await migratePostgres(databaseUrl.toString(), [...globalMigrationInventory].reverse())).toBe(0)
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
+      await admin.end()
+    }
+  })
 
   test('serializes fresh runners, applies once, reruns as a no-op, and rolls back failures', async () => {
     const databaseName = `brawltome_migrations_${process.pid}_${randomUUID().replaceAll('-', '')}`

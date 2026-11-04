@@ -3,8 +3,9 @@ import type { Migration } from '@brawltome/foundation'
 import { type AppliedMigration, buildMigrationPlan, checksumSql } from '../src/plan'
 import { runMigrations } from '../src/run'
 
-function migration(identity: string, predecessor: string | null, sql = `SELECT '${identity}';`): Migration {
-  return { identity, predecessor, sql, checksum: checksumSql(sql) }
+function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
+  const sql = `SELECT '${identity}';`
+  return { identity, predecessor, sql, checksum: checksumSql(sql), requires }
 }
 
 const first = migration('players/0001', null)
@@ -15,12 +16,33 @@ function applied(item: Migration): AppliedMigration {
 }
 
 describe('buildMigrationPlan', () => {
-  test('uses tooling order without leaking cross-capability predecessors into owner inventories', () => {
+  test('plans pending migrations in deployed order whatever order the input has', () => {
     const accounts = migration('accounts/0001', null)
 
-    expect(buildMigrationPlan([first, accounts, second], [applied(first)])).toEqual({
-      pending: [accounts, second],
+    expect(buildMigrationPlan([accounts, second, first], [applied(first)])).toEqual({
+      pending: [second, accounts],
     })
+  })
+
+  test('applies a new migration tail recorded in a different dependency-consistent order', () => {
+    const alpha = migration('alpha/0001', null)
+    const zeta = migration('zeta/0001', null)
+    const zetaFollowUp = migration('zeta/0002', zeta.identity, [alpha.identity])
+
+    expect(buildMigrationPlan([first, alpha, zeta, zetaFollowUp], [applied(first), applied(zeta)])).toEqual({
+      pending: [alpha, zetaFollowUp],
+    })
+  })
+
+  test('rejects a module-subset history once added modules put deployed migrations between its rows', () => {
+    const third = migration('players/0003', second.identity)
+    const fourth = migration('players/0004', third.identity)
+    const refreshOperations = migration('refresh-operations/0001', null)
+    const playersOnlyHistory = [first, second, third, fourth].map(applied)
+
+    expect(() => buildMigrationPlan([first, second, third, fourth, refreshOperations], playersOnlyHistory)).toThrow(
+      'applied migration players/0004 breaks the deployed order, expected refresh-operations/0001',
+    )
   })
 
   test('rejects malformed or duplicate identities', () => {
@@ -45,12 +67,29 @@ describe('buildMigrationPlan', () => {
     )
   })
 
-  test('rejects partial or divergent applied plans', () => {
-    expect(() => buildMigrationPlan([first, second], [applied(second)])).toThrow(
-      'applied migration players/0002 does not match expected prefix players/0001',
-    )
+  test('rejects applied migrations the modules do not know', () => {
     expect(() => buildMigrationPlan([first], [{ identity: 'unknown/0001', checksum: 'unknown' }])).toThrow(
-      'applied migration unknown/0001 does not match expected prefix players/0001',
+      'applied migration unknown/0001 is not in the modules',
+    )
+  })
+
+  test('rejects applied migrations recorded before what they depend on', () => {
+    const alpha = migration('alpha/0001', null)
+    const zeta = migration('zeta/0001', null, [alpha.identity])
+
+    expect(() => buildMigrationPlan([first, second], [applied(second)])).toThrow(
+      'applied migration players/0002 depends on players/0001, which was not applied before it',
+    )
+    expect(() => buildMigrationPlan([alpha, zeta], [applied(zeta), applied(alpha)])).toThrow(
+      'applied migration zeta/0001 depends on alpha/0001, which was not applied before it',
+    )
+  })
+
+  test('rejects deployed migrations applied out of their deployed order', () => {
+    const accounts = migration('accounts/0001', null)
+
+    expect(() => buildMigrationPlan([first, accounts], [applied(accounts), applied(first)])).toThrow(
+      'applied migration accounts/0001 breaks the deployed order, expected players/0001',
     )
   })
 
