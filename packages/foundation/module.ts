@@ -24,6 +24,35 @@ export function checkModuleList(modules: readonly BrawltomeModule[]): void {
   }
 
   checkNoCycle(modules)
+  checkMigrationOwners(modules)
+}
+
+// the migration plan chains predecessors per owner prefix, so a module's migrations need one prefix of their own
+function checkMigrationOwners(modules: readonly BrawltomeModule[]): void {
+  const moduleNameByOwner = new Map<string, string>()
+
+  for (const module of modules) {
+    const owner = singleMigrationOwner(module)
+    if (owner === undefined) continue
+
+    const otherModuleName = moduleNameByOwner.get(owner)
+    if (otherModuleName !== undefined) {
+      throw new Error(`modules ${otherModuleName} and ${module.name} both own migrations under ${owner}`)
+    }
+
+    moduleNameByOwner.set(owner, module.name)
+  }
+}
+
+// undefined for a module without migrations
+function singleMigrationOwner(module: BrawltomeModule): string | undefined {
+  const owners = [...new Set(module.migrations.map(({ identity }) => identity.split('/')[0]))]
+
+  if (owners.length > 1) {
+    throw new Error(`module ${module.name} has migrations under more than one owner: ${owners.join(', ')}`)
+  }
+
+  return owners[0]
 }
 
 function checkNoCycle(modules: readonly BrawltomeModule[]): void {
