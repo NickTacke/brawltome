@@ -8,7 +8,11 @@ import {
   listenerConnections,
   workerPoolSizes,
 } from '../src/database-pools'
-import { maxOperationsTotalConcurrency, readOperationsWorkerConfig } from '../src/operations-worker-config'
+import {
+  maxOperationsTotalConcurrency,
+  maxProjectionConcurrency,
+  readOperationsWorkerConfig,
+} from '../src/operations-worker-config'
 
 const postgresMaxConnections = 100
 // Postgres keeps superuser_reserved_connections (default 3) for superusers; brawltome_runtime is not one
@@ -93,11 +97,26 @@ describe('database pool sizes', () => {
     }
     expect(section).toContain(`| migration runner | ${migrationRunnerConnections} |`)
     expect(section).toContain(`at most ${maxOperationsTotalConcurrency}`)
+    expect(section).toContain(`\`OPERATIONS_PROJECTION_CONCURRENCY\` is at most ${maxProjectionConcurrency}`)
     expect(section).toContain(`2 × ${apiConnections()}`)
     expect(section).toContain(`= ${intercept} + ${slope}c`)
     expect(section).toContain(`${worstCase} at c = ${maxOperationsTotalConcurrency}`)
     expect(section).toContain(`the runtime role gets ${runtimeRoleBudget}`)
     expect(section).toContain(`the total is ${worstCase + migrationRunnerConnections}`)
+  })
+
+  // a reconciliation may hold one discovery connection while it waits for another, so the pool needs one more
+  // connection than the projection operations that can run at once, or they can all end up waiting on each other
+  test('the discovery pool has a connection more than the projection operations allowed at once', () => {
+    const atBound = readOperationsWorkerConfig({ OPERATIONS_PROJECTION_CONCURRENCY: String(maxProjectionConcurrency) })
+
+    expect(atBound.admission.classConcurrency.projection).toBe(maxProjectionConcurrency)
+    expect(() =>
+      readOperationsWorkerConfig({ OPERATIONS_PROJECTION_CONCURRENCY: String(maxProjectionConcurrency + 1) }),
+    ).toThrow('OPERATIONS_PROJECTION_CONCURRENCY')
+    for (let totalConcurrency = 1; totalConcurrency <= maxOperationsTotalConcurrency; totalConcurrency++) {
+      expect(workerPoolSizes(totalConcurrency).discovery).toBeGreaterThanOrEqual(maxProjectionConcurrency + 1)
+    }
   })
 
   test('the worker refuses a total concurrency above the bound the budget is computed for', () => {

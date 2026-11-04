@@ -75,6 +75,9 @@ change. Check each workflow's `paths` before assuming a change is covered.
   | worker discovery (`brawltome-operations-worker-discovery`) | 3 |
   | migration runner | 1 |
 
+  The discovery pool keeps one connection more than the projection operations that use it, because a reconciliation
+  can hold one connection while it waits for another; so `OPERATIONS_PROJECTION_CONCURRENCY` is at most 2.
+
   A deploy runs two APIs beside one worker (the worker is replaced, never overlapped), so the runtime role needs at
   most `2 × 21 + (c + 5) + c + 3 = 50 + 2c`: 96 at c = 23. Postgres allows 100 connections but keeps 3 for
   superusers, and `brawltome_runtime` isn't one, so the runtime role gets 97.

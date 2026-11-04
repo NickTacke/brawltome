@@ -1,5 +1,9 @@
 import { type Database, createDatabase } from '@brawltome/foundation'
-import { type readOperationsWorkerConfig, workerDatabaseUrl } from './operations-worker-config'
+import {
+  maxProjectionConcurrency,
+  type readOperationsWorkerConfig,
+  workerDatabaseUrl,
+} from './operations-worker-config'
 
 // Connection budget: every number here feeds the deploy worst case in CONTRIBUTING.md (Production) and
 // tests/database-pools.test.ts, which fails when the sum no longer fits Postgres max_connections.
@@ -13,9 +17,12 @@ export const listenerConnections = 1
 // discovery effect inside its transaction (claims queue on an advisory lock, so only one nests at a time).
 const workerMainExtraConnections = 4
 
-// A reconciliation holds a source snapshot and a projection transaction at once, and the player and clan ones can run
-// together: three connections let one of them always finish.
-const workerDiscoveryMaxConnections = 3
+// Only projection operations use this pool, at most maxProjectionConcurrency at once. A reconciliation can hold one
+// connection while it asks for a second (player: its source snapshot, then the write; clan: the write, then a repair
+// snapshot), and a delivery holding one can wait on a reconciliation's discovery lock. With one connection more than
+// there are operations, some operation can always get the connection it waits for and finish. With fewer they can
+// all wait on each other until the idle-in-transaction timeout ends them.
+const workerDiscoveryMaxConnections = maxProjectionConcurrency + 1
 
 // the one list of worker clients: WorkerDatabases has exactly these keys, so a new client needs a size here and the
 // connection budget test counts it

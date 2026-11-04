@@ -44,6 +44,9 @@ export function readSourceBackgroundHeadroom(value: string | undefined, minimumS
 // the deploy connection budget (database-pools.ts, CONTRIBUTING.md) is computed for this many job slots
 export const maxOperationsTotalConcurrency = 23
 
+// the worker's discovery pool is sized for this many projection operations at once (see database-pools.ts)
+export const maxProjectionConcurrency = 2
+
 export type WorkerDatabaseSessionConfig = {
   connectTimeoutSeconds: number
   statementTimeoutMs: number
@@ -192,6 +195,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     projection: 2,
     maintenance: 1,
   }
+  const classMaximums: Partial<Record<WorkClass, number>> = { projection: maxProjectionConcurrency }
   const weightDefaults: Record<BackgroundWorkClass, number> = {
     'primary-monitoring': 8,
     leaderboard: 4,
@@ -213,7 +217,11 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     classConcurrency: Object.fromEntries(
       Object.entries(classEnvironment).map(([workClass, name]) => [
         workClass,
-        parsePositiveInteger(env[name], { name, fallback: classDefaults[workClass as WorkClass], maximum: 10_000 }),
+        parsePositiveInteger(env[name], {
+          name,
+          fallback: classDefaults[workClass as WorkClass],
+          maximum: classMaximums[workClass as WorkClass] ?? 10_000,
+        }),
       ]),
     ) as Record<WorkClass, number>,
     backgroundWeights: Object.fromEntries(
