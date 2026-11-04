@@ -35,15 +35,6 @@ export {
   type RankingRetentionResult,
   type RankingRetentionStore,
 } from './retention'
-export {
-  importLegacyRankings,
-  type LegacyRankingImportOptions,
-  type LegacyRankingImportResult,
-  type LegacyRankingMigrationEntryEvidence,
-  type LegacyRankingMigrationEvidence,
-  type LegacyRankingMigrationSetEvidence,
-  readLegacyRankingMigrationEvidence,
-} from './legacy-import'
 export { LeaderboardSourceError, fetchLeaderboardPage } from './v1-leaderboard-source'
 
 export const rankingMigrationInventory = [

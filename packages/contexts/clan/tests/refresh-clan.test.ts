@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
 import { processRefreshClan, processRefreshClanSection } from '../commands/refresh-clan'
 import { clanMigrationInventory } from '../composition'
-import { importLegacyClans } from '../legacy-import'
 import { createPostgresClans } from '../postgres'
 
 const baseUrl = process.env.DATABASE_URL
@@ -462,40 +461,5 @@ describe('Clans PostgreSQL capability', () => {
       990070,
     )
     expect((await clans.getById(990070))?.members).toHaveLength(0)
-  })
-
-  test('legacy import is idempotent and quarantines disagreement without precedence', async () => {
-    const setup = postgres(connectionString, { max: 1 })
-    await setup.unsafe(`
-      CREATE TABLE public.clan (clan_id integer PRIMARY KEY, clan_name text NOT NULL, clan_create_date timestamp NOT NULL,
-        clan_xp bigint NOT NULL, clan_lifetime_xp bigint NOT NULL, last_updated timestamp NOT NULL);
-      CREATE TABLE public.clan_member (clan_id integer NOT NULL, brawlhalla_id integer NOT NULL, name text NOT NULL,
-        rank text NOT NULL, join_date timestamp NOT NULL, xp integer NOT NULL, legend_name_key text,
-        PRIMARY KEY (clan_id, brawlhalla_id));
-      CREATE TABLE public.player_clan (brawlhalla_id integer PRIMARY KEY, clan_name text NOT NULL, clan_id integer NOT NULL,
-        clan_xp bigint NOT NULL, clan_lifetime_xp bigint NOT NULL, personal_xp integer NOT NULL);
-      INSERT INTO public.clan VALUES (77, 'Legacy', now(), 10, 20, now()), (78, 'Other', now(), 30, 40, now());
-      INSERT INTO public.clan_member VALUES
-        (77, 55, 'Member', 'Member', now(), 9, NULL),
-        (999, 56, 'Orphan', 'Member', now(), 1, NULL);
-      INSERT INTO public.player_clan VALUES (55, 'Other', 78, 30, 40, 9);
-    `)
-    await setup.end()
-    const completed = await importLegacyClans(connectionString)
-    expect(completed.status).toBe('complete')
-    expect(completed.reconciliation.rejectedRows).toBe(3)
-    expect(await importLegacyClans(connectionString)).toEqual(completed)
-    const inspect = postgres(connectionString)
-    const [{ member_count }] =
-      await inspect`SELECT count(*)::integer AS member_count FROM clans.members WHERE brawlhalla_id = 55`
-    const [{ rejected_count }] =
-      await inspect`SELECT count(*)::integer AS rejected_count FROM clans.legacy_import_rejections`
-    const [{ archive_count }] = await inspect`SELECT count(*)::integer AS archive_count FROM clans.legacy_archive`
-    expect({ member_count, rejected_count, archive_count }).toEqual({
-      member_count: 0,
-      rejected_count: 3,
-      archive_count: 5,
-    })
-    await inspect.end()
   })
 })
