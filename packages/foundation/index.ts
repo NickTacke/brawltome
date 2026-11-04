@@ -1,4 +1,5 @@
 export { createDatabase } from './database'
 export type { CreateDatabaseOptions, Database, Sql, TransactionSql } from './database'
+export type { Migration } from './migration'
 export { parsePositiveInteger, requirePositiveInteger } from './validation'
 export type { ParsePositiveIntegerOptions } from './validation'
