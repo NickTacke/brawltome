@@ -171,6 +171,7 @@
         "postgres": "^3.4.7",
       },
       "devDependencies": {
+        "@brawltome/refresh-operations": "workspace:*",
         "typescript": "^5.7.0",
       },
     },
@@ -201,6 +202,7 @@
         "postgres": "^3.4.0",
       },
       "devDependencies": {
+        "@brawltome/accounts": "workspace:*",
         "@types/bun": "latest",
         "typescript": "^5.7.0",
       },
