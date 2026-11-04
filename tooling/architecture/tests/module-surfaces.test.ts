@@ -12,6 +12,7 @@ import * as statistics from '@brawltome/statistics'
 import { Column, Table, View, is } from 'drizzle-orm'
 import { PgSchema, integer, pgSchema, pgTable, pgView } from 'drizzle-orm/pg-core'
 import { currentArchitecturePolicy } from '../src/current-policy'
+import * as namespaceFixture from './drizzle-namespace-fixture'
 
 type ModulePackage = {
   exports: Record<string, unknown>
@@ -43,10 +44,16 @@ function isPlainContainer(value: unknown): value is Record<string, unknown> | un
   return prototype === Object.prototype || prototype === null
 }
 
-// export paths of drizzle objects, looking inside plain objects and arrays too (e.g. `schema.profiles`)
+// `import * as` and `export * as` give a module namespace object, whose prototype is neither of the above
+function isModuleNamespace(value: unknown): value is Record<string, unknown> {
+  return Object.prototype.toString.call(value) === '[object Module]'
+}
+
+// export paths of drizzle objects, looking inside plain objects, arrays and namespaces too (e.g. `schema.profiles`);
+// seen stops the walk at a namespace or object it has already visited, so import cycles end
 function findDrizzleExports(value: unknown, path: string, seen = new Set<unknown>()): string[] {
   if (isQueryableDrizzleObject(value)) return [path]
-  if (!isPlainContainer(value) || seen.has(value)) return []
+  if (!(isPlainContainer(value) || isModuleNamespace(value)) || seen.has(value)) return []
 
   seen.add(value)
 
@@ -70,17 +77,16 @@ describe('module package surfaces', () => {
     expect(found).toEqual(['example.schema', 'example.nested.table', 'example.list.0', 'example.column'])
   })
 
+  test('the check looks inside a namespace re-export such as export * as schema', () => {
+    expect(findDrizzleExports(namespaceFixture, 'fixture')).toEqual(['fixture.schema.profiles'])
+  })
+
   // drizzle queries name no `schema.table` text, so the cross-module sql rule can't see them; a module that
   // exported its tables would let other modules query them unflagged
   test.each(Object.keys(modulePackages))('%s exports no drizzle table, view, schema or column', (packageName) => {
     const { exports } = modulePackages[packageName] as ModulePackage
 
-    // a module namespace is not a plain object, so its exports are walked one by one
-    const found = Object.entries(exports).flatMap(([name, value]) =>
-      findDrizzleExports(value, `${packageName}.${name}`),
-    )
-
-    expect(found).toEqual([])
+    expect(findDrizzleExports(exports, packageName)).toEqual([])
   })
 
   // an import is only safe when the imported module is loaded wherever the importer is
