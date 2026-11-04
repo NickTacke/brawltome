@@ -15,7 +15,10 @@ export const policy: ArchitecturePolicy = {
     '@fixture/players': ['.'],
     '@fixture/rankings': ['.'],
     '@fixture/contracts': ['.'],
-    '@fixture/game-data': ['.'],
+    '@fixture/game-data': ['.', './testing'],
+  },
+  testOnlyExports: {
+    '@fixture/game-data': ['./testing'],
   },
   capabilityDependencies: {
     '@fixture/players': [],

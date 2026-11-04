@@ -9,6 +9,7 @@ export type ArchitectureRule =
   | 'missing-workspace-role'
   | 'package-export'
   | 'role-dependency'
+  | 'test-only-import'
   | 'undeclared-dependency'
   | 'unresolved-alias'
 
@@ -44,6 +45,8 @@ export interface TemporaryArchitectureException {
 export interface ArchitecturePolicy {
   roles: Record<string, WorkspaceRole>
   allowedExports: Record<string, string[]>
+  // exports that only files under a tests directory or named *.test.* may import
+  testOnlyExports: Record<string, string[]>
   capabilityDependencies: Record<string, string[]>
   contractsDependencies: string[]
   localImportAliases: Record<string, string[]>

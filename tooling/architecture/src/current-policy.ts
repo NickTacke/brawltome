@@ -49,6 +49,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/replay-analysis': ['.'],
     '@brawltome/statistics': ['.'],
   },
+  testOnlyExports: {},
   capabilityDependencies: {
     '@brawltome/accounts': [],
     '@brawltome/clan': [],

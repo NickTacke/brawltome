@@ -89,6 +89,25 @@ describe('dependency architecture', () => {
     expect(rulesFor(fixture)).toContain('package-export')
   })
 
+  it('allows test-only exports in test files and rejects them elsewhere', () => {
+    const fixture = structuredClone(validFixture)
+    const gameData = fixture.workspaces.find(({ name }) => name === '@fixture/game-data')
+    if (!gameData) throw new Error('Missing Game Data fixture')
+    gameData.exports.push('./testing')
+    const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
+    if (!players) throw new Error('Missing Players fixture')
+    players.sourceFiles.push({ path: 'packages/players/tests/store.test.ts', imports: ['@fixture/game-data/testing'] })
+    const sourceImport = structuredClone(fixture)
+    sourceImport.workspaces
+      .find(({ name }) => name === '@fixture/players')
+      ?.sourceFiles.push({ path: 'packages/players/src/store.ts', imports: ['@fixture/game-data/testing'] })
+
+    expect(rulesFor(fixture)).toEqual([])
+    expect(checkArchitecture(sourceImport, policy).violations).toEqual([
+      expect.objectContaining({ rule: 'test-only-import', file: 'packages/players/src/store.ts' }),
+    ])
+  })
+
   it('rejects unresolved and escaping aliases while allowing confined local aliases', () => {
     const unresolved = withImport('@fixture/web', '#players')
     const escaping = withImport('@fixture/web', '@/../../api/src/router')
