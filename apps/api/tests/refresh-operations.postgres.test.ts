@@ -118,8 +118,12 @@ describe('durable Refresh Operations', () => {
   test('loads every migration that the loaded migrations build on', () => {
     const migrations = apiModules.flatMap((module) => module.migrations)
     const identities = new Set(migrations.map(({ identity }): string => identity))
-    const dependencies = migrations.flatMap(({ predecessor, requires }) => [predecessor, ...(requires ?? [])])
-    const missing = dependencies.filter((identity) => identity !== null && !identities.has(identity))
+    const dependencies = migrations.flatMap(({ predecessor, requires }) => {
+      const predecessors = predecessor === null ? [] : [predecessor]
+
+      return [...predecessors, ...(requires ?? [])]
+    })
+    const missing = dependencies.filter((identity) => !identities.has(identity))
 
     expect(missing).toEqual([])
   })

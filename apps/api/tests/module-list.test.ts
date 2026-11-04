@@ -16,6 +16,37 @@ function fakeModule(name: string, dependsOn: readonly string[]): BrawltomeModule
 }
 
 describe('module lists', () => {
+  test('the API loads exactly these modules', () => {
+    const names = apiModules.map((module) => module.name)
+
+    expect(names).toEqual([
+      'accounts',
+      'refresh-operations',
+      'request-admission',
+      'player',
+      'clan',
+      'discovery',
+      'ranking',
+      'statistics',
+      'replay-analysis',
+    ])
+  })
+
+  test('the operations worker loads exactly these modules', () => {
+    const names = workerModules.map((module) => module.name)
+
+    expect(names).toEqual([
+      'accounts',
+      'refresh-operations',
+      'request-admission',
+      'player',
+      'clan',
+      'discovery',
+      'ranking',
+      'statistics',
+    ])
+  })
+
   test('the API loads every module its modules depend on', () => {
     expect(() => checkModuleList(apiModules)).not.toThrow()
   })
