@@ -39,6 +39,7 @@ function sizeFormula(size: (totalConcurrency: number) => number): string {
   const intercept = size(0)
   const slope = size(1) - intercept
   if (slope === 0) return String(intercept)
+
   if (slope !== 1) throw new Error(`pool size grows by ${slope} per job slot; extend sizeFormula to write it`)
 
   return intercept === 0 ? 'c' : `c + ${intercept}`

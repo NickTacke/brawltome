@@ -59,11 +59,16 @@ export function createPostgresReadiness(
   }
 }
 
-// the query stays queued after a timeout and settles on its own; it's a single small read
-async function withinTimeout<T>(query: Promise<T>, timeoutMs: number): Promise<T> {
+// a postgres.js query: a promise that can be cancelled
+type CancellableQuery<T> = Promise<T> & { cancel(): unknown }
+
+// a timed-out probe is cancelled: postgres.js drops it from the queue if it hasn't started, so probes made while the
+// pool is saturated don't pile up behind each other
+async function withinTimeout<T>(query: CancellableQuery<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timedOut = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
+      cancelQuietly(query)
       reject(
         new Error(
           `postgres readiness: the database did not answer within ${timeoutMs} ms (pool busy or database unreachable)`,
@@ -77,6 +82,12 @@ async function withinTimeout<T>(query: Promise<T>, timeoutMs: number): Promise<T
   } finally {
     clearTimeout(timer)
   }
+}
+
+// postgres.js types cancel() as void but returns a promise that rejects if the cancel request itself fails; the probe
+// has already failed by then, so that error has nothing left to report to
+function cancelQuietly(query: CancellableQuery<unknown>): void {
+  Promise.resolve(query.cancel()).catch(() => undefined)
 }
 
 export type PostgresReadiness = ReturnType<typeof createPostgresReadiness>

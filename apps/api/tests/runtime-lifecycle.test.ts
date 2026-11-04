@@ -320,7 +320,8 @@ describe('runtime lifecycle', () => {
 
   test('worker loops wait out a readiness check that times out and resume once the database answers', async () => {
     let isAnswering = false
-    const sql = (() => (isAnswering ? Promise.resolve([]) : new Promise(() => {}))) as unknown as Sql
+    const query = () => (isAnswering ? Promise.resolve([]) : new Promise(() => {}))
+    const sql = (() => Object.assign(query(), { cancel: () => undefined })) as unknown as Sql
     const readiness = createPostgresReadiness(sql, [], { timeoutMs: 5 })
     const lifecycle = createRuntimeLifecycle({
       shutdownDeadlineMs: 100,
