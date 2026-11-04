@@ -112,9 +112,7 @@ The API listens on <http://localhost:3000> and the web app on <http://localhost:
 
 | Command | Purpose |
 | --- | --- |
-| `bun run db:generate` | Generate migration files while authoring schema changes |
 | `bun run db:migrate` | Apply committed database migrations |
-| `bun run db:push` | Push schema changes directly during local development |
 
 ## Discord Bot
 

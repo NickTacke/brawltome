@@ -32,7 +32,6 @@
       "dist",
       "target",
       ".next",
-      "drizzle",
       "research",
       "packages/game-data/src/generated",
       "packages/contracts/openapi",

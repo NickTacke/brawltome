@@ -1,1 +1,0 @@
-ALTER TABLE "player" DROP COLUMN "valhallan_confirmed_at";
