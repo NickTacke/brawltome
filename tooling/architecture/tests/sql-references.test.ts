@@ -49,6 +49,42 @@ describe('findSchemaReferences', () => {
     expect(findSchemaReferences(source, schemas)).toEqual([])
   })
 
+  it('keeps a reference after a -- inside a string value', () => {
+    const source = 'const query = "SELECT \'--\' AS marker FROM players.profiles"'
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'players', line: 1 }])
+  })
+
+  it('keeps a reference after a string that holds an escaped quote and a --', () => {
+    const source = "const query = \"SELECT 'it''s -- here' FROM rankings.entries\""
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'rankings', line: 1 }])
+  })
+
+  it('treats a block comment holding -- as one comment', () => {
+    const source = ['const query = `', '  /* -- players.x', '  rankings.y */ SELECT 1', '`'].join('\n')
+
+    expect(findSchemaReferences(source, schemas)).toEqual([])
+  })
+
+  it('ignores a -- comment that follows a string', () => {
+    const source = 'const query = "SELECT \'a\' -- players.x"'
+
+    expect(findSchemaReferences(source, schemas)).toEqual([])
+  })
+
+  it('keeps a reference after a block comment on the same line', () => {
+    const source = 'const query = "/* note */ SELECT 1 FROM players.profiles"'
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'players', line: 1 }])
+  })
+
+  it('keeps line numbers true after a multi-line comment', () => {
+    const source = ['const query = `', '  /* one', '     two */', '  SELECT * FROM rankings.entries', '`'].join('\n')
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'rankings', line: 4 }])
+  })
+
   it('ignores module specifiers in every import form', () => {
     const source = [
       "import { router } from './players.router'",

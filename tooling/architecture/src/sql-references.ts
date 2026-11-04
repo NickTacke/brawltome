@@ -16,8 +16,8 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
 
   function visit(node: ts.Node) {
     if (isLiteralPart(node) && !isModuleSpecifier(node)) {
-      const start = node.getStart(sourceFile)
-      const sql = blankSqlComments(source.slice(start, node.end))
+      const start = node.getStart(sourceFile) + 1
+      const sql = blankSqlComments(source.slice(start, node.end - closingDelimiterLength(node)))
 
       for (const match of sql.matchAll(pattern)) {
         const position = start + (match.index ?? 0)
@@ -33,6 +33,11 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
   visit(sourceFile)
 
   return references
+}
+
+// the text between the delimiters is what sql sees: quotes or backticks, and `${` or `}` around substitutions
+function closingDelimiterLength(node: ts.Node): number {
+  return ts.isTemplateHead(node) || ts.isTemplateMiddle(node) ? 2 : 1
 }
 
 function isLiteralPart(node: ts.Node): boolean {
@@ -65,9 +70,59 @@ function referencePattern(schemas: readonly string[]): RegExp {
   return new RegExp(`(?<![\\w.])(${schemas.join('|')})\\.(?=[A-Za-z_])`, 'g')
 }
 
-// keeps offsets and line breaks intact so reported lines stay true to the source
-function blankSqlComments(text: string): string {
-  const blank = (comment: string) => comment.replace(/[^\n]/g, ' ')
+interface SqlToken {
+  text: string
+  isComment: boolean
+}
 
-  return text.replace(/--[^\n]*/g, blank).replace(/\/\*[\s\S]*?\*\//g, blank)
+// blanks comments only; keeps offsets and line breaks so reported lines stay true to the source
+function blankSqlComments(sql: string): string {
+  let result = ''
+  let index = 0
+
+  while (index < sql.length) {
+    const token = readSqlToken(sql, index)
+    result += token.isComment ? token.text.replace(/[^\n]/g, ' ') : token.text
+    index += token.text.length
+  }
+
+  return result
+}
+
+// strings and quoted identifiers are read whole, so a `--` inside them does not start a comment
+function readSqlToken(sql: string, start: number): SqlToken {
+  const character = sql[start]
+
+  if (sql.startsWith('--', start)) {
+    const lineEnd = sql.indexOf('\n', start)
+    return { text: sql.slice(start, lineEnd === -1 ? sql.length : lineEnd), isComment: true }
+  }
+
+  if (sql.startsWith('/*', start)) {
+    const commentEnd = sql.indexOf('*/', start + 2)
+    return { text: sql.slice(start, commentEnd === -1 ? sql.length : commentEnd + 2), isComment: true }
+  }
+
+  if (character === "'" || character === '"') {
+    return { text: sql.slice(start, quotedEnd(sql, start, character)), isComment: false }
+  }
+
+  return { text: character, isComment: false }
+}
+
+// a doubled quote inside the quotes is an escaped quote; an unterminated quote runs to the end
+function quotedEnd(sql: string, start: number, quote: string): number {
+  let index = start + 1
+
+  while (index < sql.length) {
+    if (sql[index] !== quote) {
+      index += 1
+      continue
+    }
+    if (sql[index + 1] !== quote) return index + 1
+
+    index += 2
+  }
+
+  return sql.length
 }
