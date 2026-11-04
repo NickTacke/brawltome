@@ -1,3 +1,4 @@
+import type { Sql } from '@brawltome/foundation'
 import postgres from 'postgres'
 import {
   CAREER_FRESHNESS_SECONDS,
@@ -17,7 +18,6 @@ export type CanonicalCareerEffect = {
 }
 
 type FencedResult = 'applied' | 'already-applied' | 'lease-lost'
-type Sql = ReturnType<typeof postgres>
 
 type ProfileRow = {
   brawlhalla_id: number

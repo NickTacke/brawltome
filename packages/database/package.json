@@ -19,7 +19,7 @@
     "@brawltome/refresh-operations": "workspace:*",
     "@brawltome/replay-analysis": "workspace:*",
     "@brawltome/statistics": "workspace:*",
-    "drizzle-orm": "^0.39.0",
+    "drizzle-orm": "0.45.4",
     "postgres": "^3.4.0"
   },
   "devDependencies": {

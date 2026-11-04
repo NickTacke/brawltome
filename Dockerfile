@@ -51,6 +51,7 @@ COPY packages/modules/replay-analysis/package.json packages/modules/replay-analy
 COPY packages/modules/statistics/package.json packages/modules/statistics/
 COPY packages/modules/discovery/package.json packages/modules/discovery/
 COPY packages/game-data/package.json packages/game-data/
+COPY packages/foundation/package.json packages/foundation/
 COPY packages/contracts/package.json packages/contracts/
 COPY tooling/analytics-review/package.json tooling/analytics-review/
 COPY tooling/architecture/package.json tooling/architecture/

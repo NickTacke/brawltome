@@ -17,6 +17,7 @@
         "@brawltome/contracts": "workspace:*",
         "@brawltome/database": "workspace:*",
         "@brawltome/discovery": "workspace:*",
+        "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/ranking": "workspace:*",
@@ -27,7 +28,7 @@
         "@brawltome/telemetry": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
         "@trpc/server": "^11.0.0",
-        "drizzle-orm": "^0.39.0",
+        "drizzle-orm": "0.45.4",
         "hono": "^4.7.0",
         "postgres": "^3.4.0",
         "superjson": "^2.2.6",
@@ -144,6 +145,7 @@
     "packages/modules/clan": {
       "name": "@brawltome/clan",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.8",
       },
       "devDependencies": {
@@ -153,6 +155,7 @@
     "packages/modules/discovery": {
       "name": "@brawltome/discovery",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -163,6 +166,7 @@
     "packages/modules/player": {
       "name": "@brawltome/player",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "postgres": "^3.4.7",
       },
@@ -201,6 +205,7 @@
     "packages/modules/request-admission": {
       "name": "@brawltome/request-admission",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -210,6 +215,7 @@
     "packages/modules/statistics": {
       "name": "@brawltome/statistics",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "postgres": "^3.4.0",
       },
@@ -242,8 +248,18 @@
         "@brawltome/replay-analysis": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/statistics": "workspace:*",
-        "drizzle-orm": "^0.39.0",
+        "drizzle-orm": "0.45.4",
         "postgres": "^3.4.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/foundation": {
+      "name": "@brawltome/foundation",
+      "dependencies": {
+        "drizzle-orm": "0.45.4",
+        "postgres": "3.4.9",
       },
       "devDependencies": {
         "typescript": "^5.7.0",
@@ -394,6 +410,8 @@
     "@brawltome/discord-bot": ["@brawltome/discord-bot@workspace:apps/discord-bot"],
 
     "@brawltome/discovery": ["@brawltome/discovery@workspace:packages/modules/discovery"],
+
+    "@brawltome/foundation": ["@brawltome/foundation@workspace:packages/foundation"],
 
     "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
 
@@ -903,7 +921,7 @@
 
     "discord.js": ["discord.js@14.25.1", "", { "dependencies": { "@discordjs/builders": "^1.13.0", "@discordjs/collection": "1.5.3", "@discordjs/formatters": "^0.6.2", "@discordjs/rest": "^2.6.0", "@discordjs/util": "^1.2.0", "@discordjs/ws": "^1.2.3", "@sapphire/snowflake": "3.5.3", "discord-api-types": "^0.38.33", "fast-deep-equal": "3.1.3", "lodash.snakecase": "4.1.1", "magic-bytes.js": "^1.10.0", "tslib": "^2.6.3", "undici": "6.21.3" } }, "sha512-2l0gsPOLPs5t6GFZfQZKnL1OJNYFcuC/ETWsW4VtKVD/tg4ICa9x+jb9bkPffkMdRpRpuUaO/fKkHCBeiCKh8g=="],
 
-    "drizzle-orm": ["drizzle-orm@0.39.3", "", { "peerDependencies": { "@aws-sdk/client-rds-data": ">=3", "@cloudflare/workers-types": ">=4", "@electric-sql/pglite": ">=0.2.0", "@libsql/client": ">=0.10.0", "@libsql/client-wasm": ">=0.10.0", "@neondatabase/serverless": ">=0.10.0", "@op-engineering/op-sqlite": ">=2", "@opentelemetry/api": "^1.4.1", "@planetscale/database": ">=1", "@prisma/client": "*", "@tidbcloud/serverless": "*", "@types/better-sqlite3": "*", "@types/pg": "*", "@types/sql.js": "*", "@vercel/postgres": ">=0.8.0", "@xata.io/client": "*", "better-sqlite3": ">=7", "bun-types": "*", "expo-sqlite": ">=14.0.0", "knex": "*", "kysely": "*", "mysql2": ">=2", "pg": ">=8", "postgres": ">=3", "sql.js": ">=1", "sqlite3": ">=5" }, "optionalPeers": ["@aws-sdk/client-rds-data", "@cloudflare/workers-types", "@electric-sql/pglite", "@libsql/client", "@libsql/client-wasm", "@neondatabase/serverless", "@op-engineering/op-sqlite", "@opentelemetry/api", "@planetscale/database", "@prisma/client", "@tidbcloud/serverless", "@types/better-sqlite3", "@types/pg", "@types/sql.js", "@vercel/postgres", "@xata.io/client", "better-sqlite3", "bun-types", "expo-sqlite", "knex", "kysely", "mysql2", "pg", "postgres", "sql.js", "sqlite3"] }, "sha512-EZ8ZpYvDIvKU9C56JYLOmUskazhad+uXZCTCRN4OnRMsL+xAJ05dv1eCpAG5xzhsm1hqiuC5kAZUCS924u2DTw=="],
+    "drizzle-orm": ["drizzle-orm@0.45.4", "", { "peerDependencies": { "@aws-sdk/client-rds-data": ">=3", "@cloudflare/workers-types": ">=4", "@electric-sql/pglite": ">=0.2.0", "@libsql/client": ">=0.10.0", "@libsql/client-wasm": ">=0.10.0", "@neondatabase/serverless": ">=0.10.0", "@netlify/db": ">=0.4.0", "@op-engineering/op-sqlite": ">=2", "@opentelemetry/api": "^1.4.1", "@planetscale/database": ">=1.13", "@prisma/client": "*", "@tidbcloud/serverless": "*", "@types/better-sqlite3": "*", "@types/pg": "*", "@types/sql.js": "*", "@upstash/redis": ">=1.34.7", "@vercel/postgres": ">=0.8.0", "@xata.io/client": "*", "better-sqlite3": ">=7", "bun-types": "*", "expo-sqlite": ">=14.0.0", "gel": ">=2", "knex": "*", "kysely": "*", "mysql2": ">=2", "pg": ">=8", "postgres": ">=3", "prisma": "*", "sql.js": ">=1", "sqlite3": ">=5" }, "optionalPeers": ["@aws-sdk/client-rds-data", "@cloudflare/workers-types", "@electric-sql/pglite", "@libsql/client", "@libsql/client-wasm", "@neondatabase/serverless", "@netlify/db", "@op-engineering/op-sqlite", "@opentelemetry/api", "@planetscale/database", "@prisma/client", "@tidbcloud/serverless", "@types/better-sqlite3", "@types/pg", "@types/sql.js", "@upstash/redis", "@vercel/postgres", "@xata.io/client", "better-sqlite3", "bun-types", "expo-sqlite", "gel", "knex", "kysely", "mysql2", "pg", "postgres", "prisma", "sql.js", "sqlite3"] }, "sha512-NiM1YZpJ2UxyeE67DpDDZ+Tsw4YLX3trSlkNT7Tm9eKoUNb1LvaAaQzXgYQsWs+AQ9TUmmwMmBOCXuqqxUWKKQ=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.328", "", {}, "sha512-QNQ5l45DzYytThO21403XN3FvK0hOkWDG8viNf6jqS42msJ8I4tGDSpBCgvDRRPnkffafiwAym2X2eHeGD2V0w=="],
 
@@ -997,7 +1015,7 @@
 
     "postcss": ["postcss@8.5.8", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg=="],
 
-    "postgres": ["postgres@3.4.8", "", {}, "sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg=="],
+    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
 
     "react": ["react@19.2.4", "", {}, "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ=="],
 

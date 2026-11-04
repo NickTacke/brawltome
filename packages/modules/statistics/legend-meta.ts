@@ -1,3 +1,4 @@
+import { requirePositiveInteger } from '@brawltome/foundation'
 import { type LaunchCohortBracket, type LaunchCohortRegion, launchCohortBrackets, launchCohortRegions } from './cohort'
 
 export const LEGEND_META_METHODOLOGY_VERSION = 'current-season-legend-meta-v1'
@@ -155,12 +156,6 @@ function nonnegativeInteger(value: number, name: string): number {
   return value
 }
 
-function positiveInteger(value: number, name: string): number {
-  const result = nonnegativeInteger(value, name)
-  if (result === 0) throw new Error(`${name} must be positive`)
-  return result
-}
-
 function checkedAdd(left: number, right: number, name: string): number {
   const result = left + right
   if (!Number.isSafeInteger(result)) throw new Error(`${name} exceeds safe integer precision`)
@@ -219,7 +214,7 @@ export function aggregateLegendMetaSlice(input: {
 
   const legendById = new Map<number, LegendMetaLegend>()
   for (const legend of input.legends) {
-    positiveInteger(legend.legendId, 'legendId')
+    requirePositiveInteger(legend.legendId, 'legendId')
     if (!legend.name || !legend.slug) throw new Error('legend reference requires a name and slug')
     if (legendById.has(legend.legendId)) throw new Error(`duplicate legend reference ${legend.legendId}`)
     legendById.set(legend.legendId, legend)
@@ -232,7 +227,7 @@ export function aggregateLegendMetaSlice(input: {
   let observedLegendGames = 0
 
   for (const observation of input.observations) {
-    positiveInteger(observation.brawlhallaId, 'brawlhallaId')
+    requirePositiveInteger(observation.brawlhallaId, 'brawlhallaId')
     nonnegativeInteger(observation.rating, 'rating')
     if (observedPlayerIds.has(observation.brawlhallaId)) {
       throw new Error(`duplicate observed player ${observation.brawlhallaId}`)
@@ -240,7 +235,7 @@ export function aggregateLegendMetaSlice(input: {
     observedPlayerIds.add(observation.brawlhallaId)
     const observedLegendIds = new Set<number>()
     for (const observedLegend of observation.legends) {
-      positiveInteger(observedLegend.legendId, 'observed legend ID')
+      requirePositiveInteger(observedLegend.legendId, 'observed legend ID')
       const aggregate = aggregates.get(observedLegend.legendId)
       if (!aggregate || !legendById.has(observedLegend.legendId)) {
         throw new LegendMetaBuildError('unknown-legend', observedLegend.legendId)

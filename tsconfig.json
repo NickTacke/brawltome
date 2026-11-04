@@ -9,6 +9,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@brawltome/accounts": ["./packages/modules/accounts/index.ts"],
+      "@brawltome/foundation": ["./packages/foundation/index.ts"],
       "@brawltome/database": ["./packages/database/src/index.ts"],
       "@brawltome/bhapi": ["./packages/bhapi/src/index.ts"],
       "@brawltome/telemetry": ["./packages/telemetry/src/index.ts"],
