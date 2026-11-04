@@ -37,6 +37,13 @@ describe('HTTP telemetry adapters', () => {
     expect(normalizeHttpRoute('/health/ready')).toBe('health_ready')
   })
 
+  test('labels oRPC calls and the OpenAPI document apart from tRPC', () => {
+    expect(normalizeHttpRoute('/rpc/status')).toBe('orpc')
+    expect(normalizeHttpRoute('/v1/status')).toBe('orpc')
+    expect(normalizeHttpRoute('/openapi.json')).toBe('orpc')
+    expect(normalizeHttpRoute('/trpc/status.discordReady')).toBe('trpc')
+  })
+
   test('keeps long-lived refresh event streams apart from request/response routes', () => {
     expect(normalizeHttpRoute('/events/player/42/refresh')).toBe('events')
   })
