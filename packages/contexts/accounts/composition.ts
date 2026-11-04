@@ -9,7 +9,7 @@ import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-p
 import { addAccountTheme } from './migrations/0009-add-account-theme'
 import { createAccounts } from './src/accounts'
 
-export { AccountsMaintenanceError, InvalidPinnedPlayerError, MAX_PINNED_PLAYERS } from './src/accounts'
+export { InvalidPinnedPlayerError, MAX_PINNED_PLAYERS } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
 export function createPostgresAccounts(connectionString: string) {

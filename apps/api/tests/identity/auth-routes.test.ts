@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import {
   type Account,
   type Accounts,
-  AccountsMaintenanceError,
   DEFAULT_ACCOUNT_PREFERENCES,
   type DiscordSignInProfile,
 } from '@brawltome/accounts'
@@ -406,25 +405,6 @@ describe('POST /auth/signout', () => {
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toContain('brawltome_session=')
     expect(setCookie).toContain('Max-Age=0')
-  })
-
-  it('returns retryable maintenance without clearing the session cookie', async () => {
-    const fakes = makeFakes()
-    fakes.sessions.add('raw-token')
-    fakes.accounts.signOut = async () => {
-      throw new AccountsMaintenanceError(5)
-    }
-    const app = buildApp(fakes)
-
-    const res = await app.request('/auth/signout', {
-      method: 'POST',
-      headers: { cookie: 'brawltome_session=raw-token', origin: 'http://localhost:3001' },
-    })
-
-    expect(res.status).toBe(503)
-    expect(res.headers.get('retry-after')).toBe('5')
-    expect(res.headers.get('set-cookie')).toBeNull()
-    expect(fakes.sessions.has('raw-token')).toBe(true)
   })
 
   it('returns failure and preserves the cookie when revocation fails', async () => {

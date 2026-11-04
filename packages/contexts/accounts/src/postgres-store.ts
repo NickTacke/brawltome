@@ -4,7 +4,6 @@ import {
   type Account,
   type AccountPreferences,
   type AccountPreferencesUpdate,
-  AccountsMaintenanceError,
   type AccountsStore,
   InvalidPinnedPlayerError,
   LEADERBOARD_BRACKETS,
@@ -14,11 +13,6 @@ import {
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
 } from './accounts'
-import {
-  ACCOUNTS_MAINTENANCE_RETRY_AFTER_SECONDS,
-  ACCOUNTS_WRITER_FENCE_WAIT,
-  ACCOUNTS_WRITER_MAINTENANCE_FENCE,
-} from './maintenance-fence'
 
 interface AccountRow {
   id: string
@@ -120,33 +114,15 @@ export function createPostgresAccountsStore(connectionString: string): {
   }
 }
 
-async function acquireAccountsWriterFence(transaction: TransactionSql): Promise<void> {
-  await transaction.unsafe("SELECT set_config('lock_timeout', $1, true)", [ACCOUNTS_WRITER_FENCE_WAIT])
-  try {
-    await transaction.unsafe('SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 0))', [
-      ACCOUNTS_WRITER_MAINTENANCE_FENCE,
-    ])
-  } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '55P03') {
-      throw new AccountsMaintenanceError(ACCOUNTS_MAINTENANCE_RETRY_AFTER_SECONDS)
-    }
-    throw error
-  }
-  await transaction.unsafe("SELECT set_config('lock_timeout', '0', true)")
-}
-
-async function withAccountsWriterFence<T>(client: Sql, run: (transaction: TransactionSql) => Promise<T>): Promise<T> {
-  const result = await client.begin(async (transaction) => {
-    await acquireAccountsWriterFence(transaction)
-    return run(transaction)
-  })
+async function inTransaction<T>(client: Sql, run: (transaction: TransactionSql) => Promise<T>): Promise<T> {
+  const result = await client.begin(run)
   return result as T
 }
 
 function postgresAccountsStore(client: Sql): AccountsStore {
   return {
     async upsertDiscordIdentity(profile) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         const lockKey = `discord:${profile.providerAccountId}`
         await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey])
 
@@ -213,7 +189,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async createSession(session) {
-      await withAccountsWriterFence(client, async (transaction) => {
+      await inTransaction(client, async (transaction) => {
         await transaction.unsafe('INSERT INTO accounts.sessions (id, account_id, expires_at) VALUES ($1, $2, $3)', [
           session.id,
           session.accountId,
@@ -223,20 +199,20 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async findSessionAccount(id) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         const [current] = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
         return current ? mapSessionAccount(current) : null
       })
     },
 
     async extendSession(id, expiresAt) {
-      await withAccountsWriterFence(client, async (transaction) => {
+      await inTransaction(client, async (transaction) => {
         await transaction.unsafe('UPDATE accounts.sessions SET expires_at = $2 WHERE id = $1', [id, expiresAt])
       })
     },
 
     async deleteSession(id) {
-      await withAccountsWriterFence(client, async (transaction) => {
+      await inTransaction(client, async (transaction) => {
         await transaction.unsafe('DELETE FROM accounts.sessions WHERE id = $1', [id])
       })
     },
@@ -252,7 +228,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async upsertPreferences(accountId, preferences) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         const values = [
           accountId,
           preferences.leaderboardBracket ?? null,
@@ -292,7 +268,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async beginPrimaryPlayerVerification(input) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         await transaction.unsafe(
           `INSERT INTO accounts.primary_player_verification_attempts (
              id, account_id, proof_provider, proof_subject, idempotency_key, started_at
@@ -316,7 +292,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async completePrimaryPlayerVerification(input) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         const [owner] = await transaction.unsafe<VerificationAttemptOwnerRow[]>(
           `SELECT account_id
            FROM accounts.primary_player_verification_attempts
@@ -437,7 +413,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async pinPlayer(accountId, brawlhallaId) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         await lockPinnedPlayers(transaction, accountId)
         const [primaryPlayer] = await transaction.unsafe<{ brawlhalla_id: number }[]>(
           `SELECT brawlhalla_id::int
@@ -467,7 +443,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async unpinPlayer(accountId, brawlhallaId) {
-      await withAccountsWriterFence(client, async (transaction) => {
+      await inTransaction(client, async (transaction) => {
         await lockPinnedPlayers(transaction, accountId)
         const [removed] = await transaction.unsafe<{ position: number }[]>(
           `DELETE FROM accounts.pinned_players
@@ -486,7 +462,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     },
 
     async reorderPinnedPlayers(accountId, orderedBrawlhallaIds) {
-      return withAccountsWriterFence(client, async (transaction) => {
+      return inTransaction(client, async (transaction) => {
         await lockPinnedPlayers(transaction, accountId)
         const current = await readPinnedPlayers(transaction, accountId)
         const currentIds = current.map(({ brawlhallaId }) => brawlhallaId).sort((left, right) => left - right)
