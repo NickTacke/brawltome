@@ -49,8 +49,13 @@ change. Check each workflow's `paths` before assuming a change is covered.
 
 - Hosting: one Dokploy VM (`ssh dokploy`), panel at panel.aidey.app. Cloudflare in front of `brawltome.app`,
   `api.brawltome.app` and `observability.brawltome.app` (Grafana).
-- **Every push to `master` deploys the app** (Dokploy autodeploy, all paths). `infra/app/deploy.sh` builds, migrates
-  while the old release still serves, then swaps api/web when healthy.
+- **Every push to `master` deploys the app once CI passes.** CI builds each image as `<sha>-candidate` while the
+  checks run, promotes them to `ghcr.io/nicktacke/brawltome-<target>:<sha>` when every check is green, then asks
+  Dokploy to deploy (autodeploy is off). `infra/app/deploy.sh` pulls those images, migrates while the old release
+  still serves, then swaps api/web when healthy. A failed check means no deploy.
+- Dokploy always deploys the current `master` head. To retry a failed deploy, rerun the `deploy` job of the latest
+  `master` run; rerunning an older run still deploys the head. To go back to an older commit, revert on `master`.
+  Never deploy from the Dokploy panel while a CI deploy is running.
 - The observability stack deploys separately from an immutable `observability-<sha>` tag:
   `bun run infra:observability:deploy` (see `infra/observability/deploy-via-dokploy.sh` for the required env).
 - Backup verifier and storage helpers are host installs (`infra/app/backups/install.sh`), not part of a deploy.
