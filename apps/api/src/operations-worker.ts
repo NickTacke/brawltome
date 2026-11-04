@@ -80,7 +80,7 @@ checkModuleList(workerModules)
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
-// one client per job, sized in database-pools.ts to fit the Postgres connection budget
+// three clients by role (main, lease renewals, discovery), sized in database-pools.ts to fit the connection budget
 const databases = createWorkerDatabases(configuredConnectionString, workerConfig)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
