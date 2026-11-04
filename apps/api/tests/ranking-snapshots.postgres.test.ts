@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   type LeaderboardGenerationCandidate,
   type LeaderboardMode,
@@ -11,6 +12,7 @@ import {
   createPostgresRanking,
   leaderboardModes,
   rankingMigrationInventory,
+  rankingModule,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
 import {
@@ -18,14 +20,15 @@ import {
   type OperationLease,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
+  refreshOperationsModule,
 } from '@brawltome/refresh-operations'
-import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneDurableOperation } from '../src/refresh-operations-worker'
 
 const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_rankings_${process.pid}_${randomUUID().replaceAll('-', '')}`
 let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 const intervalMs = 15 * 60 * 1000
@@ -51,32 +54,19 @@ const admission = {
 } as const
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Ranking PostgreSQL tests')
-  const adminUrl = new URL(baseUrl)
+  database = await createTestDatabase({
+    label: 'ranking_snapshots',
+    modules: [refreshOperationsModule, requestAdmissionModule, rankingModule],
+  })
+  connectionString = database.connectionString
+  const adminUrl = new URL(baseUrl as string)
   adminUrl.pathname = '/postgres'
   admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of [
-      ...refreshOperationsMigrationInventory,
-      ...requestAdmissionMigrationInventory,
-      ...rankingMigrationInventory,
-    ]) {
-      await setup.unsafe(migration.sql)
-    }
-  } finally {
-    await setup.end()
-  }
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
+  await admin?.end()
 })
 
 function operationKind(mode: LeaderboardMode): LeaderboardOperationKind {
@@ -272,7 +262,8 @@ function identityName(entry: { identity: PublishedLeaderboardRow['identity'] }):
   return entry.identity.type === 'fixed-two-vs-two-team' ? entry.identity.players[0].name : entry.identity.player.name
 }
 
-async function createTestDatabase(prefix: string) {
+// the upgrade test applies only the first migrations, so it builds its database by hand
+async function createUpgradeDatabase(prefix: string) {
   const name = `${prefix}_${process.pid}_${randomUUID().replaceAll('-', '')}`
   await admin.unsafe(`CREATE DATABASE "${name}"`)
   const url = new URL(baseUrl as string)
@@ -282,7 +273,7 @@ async function createTestDatabase(prefix: string) {
 
 describe('Ranking mode migrations', () => {
   test('backfills applied #201 snapshots, effects, and unknowable failure scopes without mutating immutable rows', async () => {
-    const database = await createTestDatabase('brawltome_ranking_backfill')
+    const database = await createUpgradeDatabase('brawltome_ranking_backfill')
     const client = postgres(database.url, { max: 1 })
     try {
       for (const migration of refreshOperationsMigrationInventory.slice(0, 8)) await client.unsafe(migration.sql)

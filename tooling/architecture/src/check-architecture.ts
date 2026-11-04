@@ -170,6 +170,14 @@ function checkImports(
           importPath,
         }
 
+        if (isTestOnlyExport(importPath, dependency, policy) && !isTestFile(sourceFile.path)) {
+          violations.push({
+            rule: 'test-only-import',
+            ...common,
+            message: `${importPath} is for tests only, but ${sourceFile.path} is not a test file`,
+          })
+        }
+
         if (dependency.name === importer.name) {
           if (!isExported(importPath, dependency)) {
             violations.push({
@@ -331,6 +339,19 @@ function isExported(specifier: string, dependency: Workspace): boolean {
     const [prefix, suffix] = exportPath.split('*')
     return subpath.startsWith(prefix) && subpath.endsWith(suffix)
   })
+}
+
+function isTestOnlyExport(specifier: string, dependency: Workspace, policy: ArchitecturePolicy): boolean {
+  const subpath = specifier === dependency.name ? '.' : `.${specifier.slice(dependency.name.length)}`
+
+  return policy.testOnlyExports[dependency.name]?.includes(subpath) ?? false
+}
+
+function isTestFile(path: string): boolean {
+  const segments = path.split('/')
+  const fileName = segments.at(-1) ?? ''
+
+  return segments.includes('tests') || fileName.includes('.test.')
 }
 
 function findRelativeTarget(

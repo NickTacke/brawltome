@@ -1,22 +1,22 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
-  playerMigrationInventory,
+  playerModule,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
-import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
-const databaseName = `bt_primary_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 const admission = {
@@ -43,32 +43,15 @@ beforeAll(async () => {
   if (!configuredServer?.startsWith(dedicatedServer)) {
     throw new Error('Primary monitoring PostgreSQL tests require dedicated 127.0.0.1:55436')
   }
-  const adminUrl = new URL(configuredServer)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(configuredServer)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of [
-      ...accountsMigrationInventory,
-      ...playerMigrationInventory,
-      ...refreshOperationsMigrationInventory,
-      ...requestAdmissionMigrationInventory,
-    ]) {
-      await setup.unsafe(migration.sql)
-    }
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({
+    label: 'primary_monitoring',
+    modules: [accountsModule, refreshOperationsModule, requestAdmissionModule, playerModule],
+  })
+  connectionString = database.connectionString
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 const rankedSnapshot = (brawlhallaId: number) => ({

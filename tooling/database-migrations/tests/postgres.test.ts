@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { accountsMigrationInventory } from '@brawltome/accounts'
 import { clanMigrationInventory } from '@brawltome/clan'
 import { discoveryMigrationInventory } from '@brawltome/discovery'
-import type { Migration } from '@brawltome/foundation'
+import { type Migration, checksumSql, deployedOrder, migratePostgres } from '@brawltome/foundation'
 import { playerMigrationInventory } from '@brawltome/player'
 import { rankingMigrationInventory } from '@brawltome/ranking'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
@@ -11,10 +11,7 @@ import { replayAnalysisMigrationInventory } from '@brawltome/replay-analysis'
 import { requestAdmissionMigrationInventory } from '@brawltome/request-admission'
 import { statisticsMigrationInventory } from '@brawltome/statistics'
 import postgres from 'postgres'
-import { deployedOrder } from '../src/deployed-order'
 import { orderedMigrations } from '../src/inventories'
-import { checksumSql } from '../src/plan'
-import { migratePostgres } from '../src/postgres'
 import { deployedHistory } from './fixtures/deployed-history'
 
 const connectionString = process.env.DATABASE_URL
@@ -74,6 +71,7 @@ const deployedPrePlayersImportGlobalHistory = [
   ['accounts/0005', '979f9c419e6d6ec189ad92c7cf1385002fd30584285aab2220fd42560ef8c8c5'],
 ] as const
 
+// each test builds its own database: they check what migratePostgres applies, often to a partial history
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   test('every module keeps its deployed migrations first and in their deployed order', () => {
     const inventories = [

@@ -1,40 +1,29 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import {
   createPostgresLeaderboardPlayerNames,
   createPostgresLeaderboardRanked,
   createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
-  playerMigrationInventory,
+  playerModule,
 } from '../index'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `bt_player_lb_ranked_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Player PostgreSQL tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of playerMigrationInventory) await setup.unsafe(migration.sql)
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({
+    label: 'player_leaderboard_ranked',
+    modules: [refreshOperationsModule, playerModule],
+  })
+  connectionString = database.connectionString
 }, 20_000)
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 async function insertRanked(sql: ReturnType<typeof postgres>, brawlhallaId: number, refreshedAt: string) {

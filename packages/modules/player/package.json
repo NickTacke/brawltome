@@ -14,6 +14,7 @@
     "postgres": "^3.4.7"
   },
   "devDependencies": {
+    "@brawltome/refresh-operations": "workspace:*",
     "typescript": "^5.7.0"
   }
 }

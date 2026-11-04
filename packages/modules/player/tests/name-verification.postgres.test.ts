@@ -1,15 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
-import {
-  createPostgresLeaderboardPlayerNames,
-  createPostgresPlayerNameVerifications,
-  playerMigrationInventory,
-} from '../index'
+import { createPostgresLeaderboardPlayerNames, createPostgresPlayerNameVerifications, playerModule } from '../index'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `bt_player_verify_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let control: ReturnType<typeof postgres>
 let connectionString = ''
 let verifications: ReturnType<typeof createPostgresPlayerNameVerifications>
@@ -23,25 +18,19 @@ const ids = async (input: Partial<typeof policy> & { demandIds?: number[] } = {}
   (await verifications.candidates({ ...policy, ...input })).candidates.map(({ brawlhallaId }) => brawlhallaId)
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Player PostgreSQL tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
+  database = await createTestDatabase({
+    label: 'player_name_verification',
+    modules: [refreshOperationsModule, playerModule],
+  })
+  connectionString = database.connectionString
   control = postgres(connectionString, { max: 1, onnotice: () => {} })
-  for (const migration of playerMigrationInventory) await control.unsafe(migration.sql)
   verifications = createPostgresPlayerNameVerifications(connectionString)
 }, 20_000)
 
 afterAll(async () => {
   await verifications?.close()
   await control?.end()
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 beforeEach(async () => {

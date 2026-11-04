@@ -1,5 +1,5 @@
-import type { Migration } from '@brawltome/foundation'
 import postgres from 'postgres'
+import type { Migration } from '../migration'
 import { type AppliedMigration, buildMigrationPlan } from './plan'
 import { runMigrations } from './run'
 

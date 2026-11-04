@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresRankedPlayers,
-  playerMigrationInventory,
+  playerModule,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
@@ -10,14 +11,12 @@ import {
   type OperationLease,
   type PostgresRefreshOperations,
   createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
+  refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_ranked_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 const snapshot = {
@@ -49,28 +48,12 @@ const snapshot = {
 }
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Players ranked integration tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of [...playerMigrationInventory, ...refreshOperationsMigrationInventory]) {
-      await setup.unsafe(migration.sql)
-    }
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({ label: 'player_ranked', modules: [refreshOperationsModule, playerModule] })
+  connectionString = database.connectionString
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 const admission = {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { deployedOrder } from '../src/deployed-order'
+import { deployedOrder } from '@brawltome/foundation'
 import { orderedMigrations } from '../src/inventories'
 import { deployedHistory } from './fixtures/deployed-history'
 

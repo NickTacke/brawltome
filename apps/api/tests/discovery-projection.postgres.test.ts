@@ -16,6 +16,8 @@ const databaseName = `bt_projection_${process.pid}_${randomUUID().replaceAll('-'
 let admin: ReturnType<typeof postgres>
 let connectionString = ''
 
+// builds its database by hand: player migration 0005 adds its triggers only when the legacy
+// public.player tables exist before it runs, so they are created first
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)

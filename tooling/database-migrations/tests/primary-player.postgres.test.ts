@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { migratePostgres } from '@brawltome/foundation'
 import postgres from 'postgres'
-import { migratePostgres } from '../src/postgres'
 
 const connectionString = process.env.DATABASE_URL
 
+// the first test seeds legacy V2 tables before the accounts migrations run; the second reuses this setup
 async function withDatabase(run: (databaseUrl: string) => Promise<void>) {
   const databaseName = `brawltome_primary_${process.pid}_${randomUUID().replaceAll('-', '')}`
   const adminUrl = new URL(connectionString as string)

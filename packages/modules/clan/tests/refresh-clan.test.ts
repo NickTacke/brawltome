@@ -1,13 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import postgres from 'postgres'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import { processRefreshClan, processRefreshClanSection } from '../commands/refresh-clan'
-import { clanMigrationInventory } from '../index'
+import { clanModule } from '../index'
 import { createPostgresClans } from '../postgres'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_clans_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 let clans: ReturnType<typeof createPostgresClans>
 
@@ -34,24 +32,14 @@ const alpha = {
 }
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Clans integration tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const url = new URL(baseUrl)
-  url.pathname = `/${databaseName}`
-  connectionString = url.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  for (const migration of clanMigrationInventory) await setup.unsafe(migration.sql)
-  await setup.end()
+  database = await createTestDatabase({ label: 'clan_refresh', modules: [clanModule] })
+  connectionString = database.connectionString
   clans = createPostgresClans(connectionString)
 })
 
 afterAll(async () => {
   await clans?.close()
-  await admin?.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin?.end()
+  await database?.drop()
 })
 
 describe('Clans PostgreSQL capability', () => {

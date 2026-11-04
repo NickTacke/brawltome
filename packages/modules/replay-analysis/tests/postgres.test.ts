@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { accountsModule } from '@brawltome/accounts'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
-import { ActiveReplayJobError, type ReplayAnalysisJobs } from '../index'
-import { createReplayJobs } from '../migrations/0001-create-replay-jobs'
+import { ActiveReplayJobError, type ReplayAnalysisJobs, replayAnalysisModule } from '../index'
 import { createPostgresReplayAnalysisJobs } from '../postgres'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
-const databaseName = `brawltome_replay_analysis_${process.pid}_${randomUUID().replaceAll('-', '')}`
 const accountId = randomUUID()
 const replayDigest = `sha256:${'a'.repeat(64)}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let control: ReturnType<typeof postgres>
 let jobs: ReplayAnalysisJobs
 
@@ -27,25 +27,17 @@ beforeAll(async () => {
   ) {
     throw new Error(`Replay analysis tests require the dedicated server ${dedicatedServer}`)
   }
-  const adminUrl = new URL(dedicatedServer)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(dedicatedServer)
-  databaseUrl.pathname = `/${databaseName}`
-  control = postgres(databaseUrl.toString(), { max: 1 })
-  await control.unsafe('CREATE SCHEMA accounts; CREATE TABLE accounts.users (id uuid PRIMARY KEY);')
-  await control.unsafe(createReplayJobs.sql)
+  database = await createTestDatabase({ label: 'replay_analysis', modules: [accountsModule, replayAnalysisModule] })
+  control = postgres(database.connectionString, { max: 1 })
   await control`INSERT INTO accounts.users (id) VALUES (${accountId})`
-  jobs = createPostgresReplayAnalysisJobs(databaseUrl.toString())
+  jobs = createPostgresReplayAnalysisJobs(database.connectionString)
 }, 20_000)
 
 afterAll(async () => {
   if (!configuredServer) return
   await jobs.close()
   await control.end()
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 }, 20_000)
 
 describe.skipIf(!configuredServer)('PostgreSQL replay analysis jobs', () => {

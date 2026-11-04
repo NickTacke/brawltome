@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   type OperationLease,
   type PlayerRefreshSettled,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
+  refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
@@ -14,9 +16,7 @@ import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_operations_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 const testAdmission = {
@@ -65,40 +65,12 @@ async function settleWithin<T>(label: string, promise: Promise<T>, timeoutMs = 1
 }
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Refresh Operations integration tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of refreshOperationsMigrationInventory) await setup.unsafe(migration.sql)
-    await setup.unsafe(`
-      CREATE SCHEMA brawltome_migrations;
-      CREATE TABLE brawltome_migrations.history (
-        ordinal integer PRIMARY KEY,
-        identity text NOT NULL UNIQUE,
-        checksum char(64) NOT NULL
-      );
-    `)
-    for (const [ordinal, migration] of refreshOperationsMigrationInventory.entries()) {
-      await setup`
-        INSERT INTO brawltome_migrations.history (ordinal, identity, checksum)
-        VALUES (${ordinal}, ${migration.identity}, ${migration.checksum})
-      `
-    }
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({ label: 'refresh_operations', modules: [refreshOperationsModule] })
+  connectionString = database.connectionString
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 async function expire(operationId: string) {

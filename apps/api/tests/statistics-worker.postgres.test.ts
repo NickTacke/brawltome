@@ -1,21 +1,19 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
+  refreshOperationsModule,
 } from '@brawltome/refresh-operations'
-import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
-import { createPostgresStatistics, statisticsMigrationInventory } from '@brawltome/statistics'
+import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
+import { createPostgresStatistics, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from '../src/statistics-collection-source'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `bt_statistics_worker_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 const admission: AdmissionConfig = {
@@ -39,35 +37,19 @@ const admission: AdmissionConfig = {
 }
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required')
-  const adminUrl = new URL(baseUrl)
-  if (adminUrl.hostname !== '127.0.0.1' || adminUrl.port !== '55436') {
+  const configuredUrl = new URL(process.env.DATABASE_URL ?? 'postgres://unset')
+  if (configuredUrl.hostname !== '127.0.0.1' || configuredUrl.port !== '55436') {
     throw new Error('Statistics tests require dedicated PostgreSQL 127.0.0.1:55436')
   }
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of [
-      ...refreshOperationsMigrationInventory,
-      ...requestAdmissionMigrationInventory,
-      ...statisticsMigrationInventory,
-    ]) {
-      await setup.unsafe(migration.sql)
-    }
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({
+    label: 'statistics_worker',
+    modules: [refreshOperationsModule, requestAdmissionModule, statisticsModule],
+  })
+  connectionString = database.connectionString
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 const rankedEvidence = (id: number) => ({

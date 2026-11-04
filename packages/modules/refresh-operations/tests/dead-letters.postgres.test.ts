@@ -3,16 +3,15 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   type OperationLease,
   createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
+  refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_dead_letters_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 const admission = {
@@ -41,26 +40,12 @@ function requireLease(lease: OperationLease | null): OperationLease {
 }
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for dead-letter integration tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of refreshOperationsMigrationInventory) await setup.unsafe(migration.sql)
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({ label: 'refresh_operations_dead_letters', modules: [refreshOperationsModule] })
+  connectionString = database.connectionString
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
@@ -568,7 +553,7 @@ describe('dead-letter operations', () => {
         env: {
           ...process.env,
           BRAWLTOME_SECRETS_ROOT: secretRoot,
-          PGDATABASE: databaseName,
+          PGDATABASE: databaseUrl.pathname.slice(1),
           PGHOST: databaseUrl.hostname,
           PGPASSWORD: decodeURIComponent(databaseUrl.password),
           PGPORT: databaseUrl.port,
@@ -615,8 +600,8 @@ describe('dead-letter operations', () => {
     } finally {
       const owner = postgres(connectionString, { max: 1 })
       await owner.unsafe(`DROP OWNED BY ${role}`)
+      await owner.unsafe(`DROP ROLE IF EXISTS ${role}`)
       await owner.end()
-      await admin.unsafe(`DROP ROLE IF EXISTS ${role}`)
       rmSync(secretRoot, { force: true, recursive: true })
     }
   }, 15_000)

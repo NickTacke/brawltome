@@ -89,6 +89,40 @@ describe('dependency architecture', () => {
     expect(rulesFor(fixture)).toContain('package-export')
   })
 
+  it('allows test-only exports in test files and rejects them elsewhere', () => {
+    const fixture = structuredClone(validFixture)
+    const gameData = fixture.workspaces.find(({ name }) => name === '@fixture/game-data')
+    if (!gameData) throw new Error('Missing Game Data fixture')
+    gameData.exports.push('./testing')
+    const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
+    if (!players) throw new Error('Missing Players fixture')
+    players.sourceFiles.push({ path: 'packages/players/tests/store.test.ts', imports: ['@fixture/game-data/testing'] })
+    const sourceImport = structuredClone(fixture)
+    sourceImport.workspaces
+      .find(({ name }) => name === '@fixture/players')
+      ?.sourceFiles.push({ path: 'packages/players/src/store.ts', imports: ['@fixture/game-data/testing'] })
+
+    expect(rulesFor(fixture)).toEqual([])
+    expect(checkArchitecture(sourceImport, policy).violations).toEqual([
+      expect.objectContaining({ rule: 'test-only-import', file: 'packages/players/src/store.ts' }),
+    ])
+  })
+
+  it('applies the test-only rule to imports inside the same package', () => {
+    const sourceImport = withImport('@fixture/game-data', '@fixture/game-data/testing')
+    const testImport = withImport('@fixture/game-data', '@fixture/game-data/testing', {
+      file: 'packages/game-data/tests/seed.test.ts',
+    })
+    for (const fixture of [sourceImport, testImport]) {
+      fixture.workspaces.find(({ name }) => name === '@fixture/game-data')?.exports.push('./testing')
+    }
+
+    expect(checkArchitecture(sourceImport, policy).violations).toEqual([
+      expect.objectContaining({ rule: 'test-only-import', file: 'packages/game-data/src/violation.ts' }),
+    ])
+    expect(rulesFor(testImport)).toEqual([])
+  })
+
   it('rejects unresolved and escaping aliases while allowing confined local aliases', () => {
     const unresolved = withImport('@fixture/web', '#players')
     const escaping = withImport('@fixture/web', '@/../../api/src/router')

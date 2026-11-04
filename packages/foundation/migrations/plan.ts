@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Migration } from '@brawltome/foundation'
+import type { Migration } from '../migration'
 import { dependenciesOf, isDeployed, orderMigrations } from './order'
 
 export type AppliedMigration = {

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type LeaderboardMode, type LeaderboardScope, createPostgresRanking, rankingModule } from '@brawltome/ranking'
 import {
-  type LeaderboardMode,
-  type LeaderboardScope,
-  createPostgresRanking,
-  rankingMigrationInventory,
-} from '@brawltome/ranking'
-import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
-import { requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+  createPostgresRefreshOperations,
+  refreshOperationsMigrationInventory,
+  refreshOperationsModule,
+} from '@brawltome/refresh-operations'
+import { requestAdmissionModule } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { rankingRetentionScheduleDefinition, readOperationsWorkerConfig } from '../src/operations-worker-config'
@@ -40,6 +40,7 @@ const admission = {
 let admin: ReturnType<typeof postgres>
 let createdRuntimeRole = false
 const databases: string[] = []
+const testDatabases: TestDatabase[] = []
 
 beforeAll(async () => {
   if (!baseUrl) throw new Error('DATABASE_URL is required for Ranking retention PostgreSQL tests')
@@ -57,6 +58,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await Promise.all(testDatabases.map((database) => database.drop()))
   if (!admin) return
   for (const name of databases) await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
   if (createdRuntimeRole) await admin.unsafe(`DROP ROLE IF EXISTS ${runtimeRole}`)
@@ -64,20 +66,13 @@ afterAll(async () => {
 }, 60_000)
 
 async function migratedDatabase() {
-  const name = `bt_retention_${process.pid}_${randomUUID().replaceAll('-', '')}`
-  await admin.unsafe(`CREATE DATABASE "${name}"`)
-  databases.push(name)
-  const url = new URL(baseUrl as string)
-  url.pathname = `/${name}`
-  const sql = postgres(url.toString(), { max: 4, onnotice: () => undefined })
-  for (const migration of [
-    ...refreshOperationsMigrationInventory,
-    ...requestAdmissionMigrationInventory,
-    ...rankingMigrationInventory,
-  ]) {
-    await sql.unsafe(migration.sql)
-  }
-  return { url: url.toString(), sql }
+  const database = await createTestDatabase({
+    label: 'ranking_retention',
+    modules: [refreshOperationsModule, requestAdmissionModule, rankingModule],
+  })
+  testDatabases.push(database)
+  const sql = postgres(database.connectionString, { max: 4, onnotice: () => undefined })
+  return { url: database.connectionString, sql }
 }
 
 type Sql = ReturnType<typeof postgres>
@@ -1155,6 +1150,7 @@ describe('Ranking snapshot retention', () => {
   }, 30_000)
 
   test('adds the widened kind and payload checks unvalidated and validates them without blocking writers', async () => {
+    // applies the migrations before refresh-operations/0019 by hand to test that upgrade, so no shared helper
     const name = `bt_retention_${process.pid}_${randomUUID().replaceAll('-', '')}`
     await admin.unsafe(`CREATE DATABASE "${name}"`)
     databases.push(name)
