@@ -64,9 +64,9 @@ change. Check each workflow's `paths` before assuming a change is covered.
   `bun run infra:observability:deploy` (see `infra/observability/deploy-via-dokploy.sh` for the required env).
 - Backup verifier and storage helpers are host installs (`infra/app/backups/install.sh`), not part of a deploy.
 - Alerting: see [`docs/operations/alerts.md`](docs/operations/alerts.md).
-- Database connections: the API shares one client between its modules and the worker opens one per job, sized in
-  `apps/api/src/database-pools.ts`. postgres.js adds one LISTEN connection beside the API's and the worker's main
-  client. With `c` = `OPERATIONS_TOTAL_CONCURRENCY` (default 8, at most 23):
+- Database connections: the API shares one client between its modules and the worker opens three by role (main, lease
+  renewals, discovery), sized in `apps/api/src/database-pools.ts`. postgres.js adds one LISTEN connection beside the
+  API's and the worker's main client. With `c` = `OPERATIONS_TOTAL_CONCURRENCY` (default 8, at most 23):
 
   | client | connections |
   |---|---|

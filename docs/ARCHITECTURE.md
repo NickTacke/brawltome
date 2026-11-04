@@ -70,8 +70,9 @@ The worker leaves out `replay-analysis`; the other two lists have all nine. At s
 dependency cycle. They then build the module factories by hand from one shared database client and pass the modules'
 migrations to the readiness check, so a process reports unready until the schema has what it expects.
 
-The API shares one database client between all its modules. The worker opens one client per job. Pool sizes and the
-connection budget are under Production in [`CONTRIBUTING.md`](../CONTRIBUTING.md#production).
+The API shares one database client between all its modules. The worker opens three clients by role: main, lease
+renewals and discovery. Pool sizes and the connection budget are under Production in
+[`CONTRIBUTING.md`](../CONTRIBUTING.md#production).
 
 ## Migrations
 
