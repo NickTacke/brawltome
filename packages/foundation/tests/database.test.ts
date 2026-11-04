@@ -126,19 +126,28 @@ describeWithDatabase('drizzle columns on the shared client', () => {
     expect(row?.document).toEqual(document)
   })
 
-  test('jsonb keeps arrays and strings at the top level', async () => {
-    const database = await openScratch('document jsonb not null')
-    const scratch = pgTable('scratch', { id: integer('id').primaryKey(), document: jsonb<unknown>('document') })
+  // postgres.js infers a parameter type for booleans, Dates, bytes and bigints, so these are the values to watch
+  const topLevelValues: [string, unknown][] = [
+    ['boolean', false],
+    ['array', [true, 1]],
+    ['string', 'text'],
+    ['number', 3],
+    ['object', { name: 'scratch' }],
+    ['array', [1, 2]],
+  ]
 
-    await database.db.insert(scratch).values([
-      { id: 1, document: [1, 2] },
-      { id: 2, document: 'text' },
-    ])
-    const stored = await database.sql`select jsonb_typeof(document) as type from scratch order by id`
+  test.each(['jsonb', 'json'])('%s keeps every kind of json value at the top level', async (columnType) => {
+    const database = await openScratch(`document ${columnType} not null`)
+    const column = columnType === 'jsonb' ? jsonb<unknown>('document') : json<unknown>('document')
+    const scratch = pgTable('scratch', { id: integer('id').primaryKey(), document: column })
+    const values = topLevelValues.map(([, document], index) => ({ id: index + 1, document }))
+
+    await database.db.insert(scratch).values(values)
+    const stored = await database.sql.unsafe(`select ${columnType}_typeof(document) as type from scratch order by id`)
     const rows = await database.db.select().from(scratch).orderBy(scratch.id)
 
-    expect(stored.map((row) => row.type)).toEqual(['array', 'string'])
-    expect(rows.map((row) => row.document)).toEqual([[1, 2], 'text'])
+    expect(stored.map((row) => row.type)).toEqual(topLevelValues.map(([type]) => type))
+    expect(rows.map((row) => row.document)).toEqual(topLevelValues.map(([, document]) => document))
   })
 
   test('json stores the value as json, not as a json string', async () => {
