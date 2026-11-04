@@ -22,7 +22,7 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
       for (const match of sql.matchAll(pattern)) {
         const position = start + (match.index ?? 0)
         const line = sourceFile.getLineAndCharacterOfPosition(position).line + 1
-        references.push({ schema: match[1], line })
+        references.push({ schema: match[1] ?? match[2], line })
       }
       return
     }
@@ -66,8 +66,11 @@ function isModuleSpecifier(node: ts.Node): boolean {
 }
 
 function referencePattern(schemas: readonly string[]): RegExp {
+  const names = schemas.join('|')
+
+  // the schema is matched as written, bare or double-quoted
   // not preceded by a word character or a dot, so `all_players.x` and `public.players.x` do not match
-  return new RegExp(`(?<![\\w.])(${schemas.join('|')})\\.(?=[A-Za-z_])`, 'g')
+  return new RegExp(`(?<![\\w.])(?:"(${names})"|(${names}))\\.(?=["A-Za-z_])`, 'g')
 }
 
 interface SqlToken {

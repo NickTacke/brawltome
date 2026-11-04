@@ -85,6 +85,32 @@ describe('findSchemaReferences', () => {
     expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'rankings', line: 4 }])
   })
 
+  it('finds quoted schemas and names', () => {
+    const source = [
+      'const a = \'SELECT * FROM "players"."profiles"\'',
+      'const b = \'SELECT * FROM players."profiles"\'',
+      'const c = \'SELECT * FROM "rankings".entries\'',
+    ].join('\n')
+
+    expect(findSchemaReferences(source, schemas)).toEqual([
+      { schema: 'players', line: 1 },
+      { schema: 'players', line: 2 },
+      { schema: 'rankings', line: 3 },
+    ])
+  })
+
+  it('matches the schema case-sensitively as written', () => {
+    const source = 'const query = \'SELECT * FROM "Players"."profiles", PLAYERS.profiles\''
+
+    expect(findSchemaReferences(source, schemas)).toEqual([])
+  })
+
+  it('ignores a quoted schema that follows another dot', () => {
+    const source = 'const query = \'SELECT * FROM public."players"."profiles"\''
+
+    expect(findSchemaReferences(source, schemas)).toEqual([])
+  })
+
   it('ignores module specifiers in every import form', () => {
     const source = [
       "import { router } from './players.router'",
