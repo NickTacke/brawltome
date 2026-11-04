@@ -2,24 +2,35 @@
 # Zero-downtime deploy of the application stack.
 #
 # Plain `compose up` stops every changed service before it runs the migration and starts the new containers, so the
-# site was unreachable for ~40 s per deploy. This builds and migrates while the old containers keep serving, then
-# replaces each public service by starting the new container beside the old one and stopping the old one only once
-# the new one is healthy. Traefik routes only to healthy containers; on SIGTERM the old container reports draining on
-# its /serving health check while it keeps answering, so Traefik moves traffic before it stops (api: serve.ts,
-# web: web-server.cjs). The retry middleware replays requests that still race a closing connection.
+# site was unreachable for ~40 s per deploy. This pulls the release images and migrates while the old containers keep
+# serving, then replaces each public service by starting the new container beside the old one and stopping the old one
+# only once the new one is healthy. Traefik routes only to healthy containers; on SIGTERM the old container reports
+# draining on its /serving health check while it keeps answering, so Traefik moves traffic before it stops (api:
+# serve.ts, web: web-server.cjs). The retry middleware replays requests that still race a closing connection.
 #
-# Dokploy rejects shell operators in a custom compose command and prefixes it with `docker`, so the compose's
-# Command setting runs this script in a throwaway CLI container (one line; <app> is the Dokploy app name):
-#   run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /etc/dokploy/compose/<app>/code:/etc/dokploy/compose/<app>/code
-#   -w /etc/dokploy/compose/<app>/code docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c
+# CI builds the images and pushes them to GHCR tagged with the commit (ghcr.io/nicktacke/brawltome-<service>:<sha>);
+# nothing is built here. The tag is the checked-out commit, read from .git because the deploy container has no git
+# binary, unless BRAWLTOME_IMAGE_TAG is set. A commit whose images are not pushed yet fails at the pull, before any
+# container is touched.
+#
+# Dokploy rejects shell operators in a custom compose command and prefixes it with `docker`, so the compose's Command
+# setting runs this script in a throwaway CLI container (one line; <app> is the Dokploy app name):
+#   run --rm -v /var/run/docker.sock:/var/run/docker.sock
+#   -v /etc/dokploy/compose/<app>/code:/etc/dokploy/compose/<app>/code -w /etc/dokploy/compose/<app>/code
+#   docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c
 #   sh infra/app/deploy.sh <app> infra/app/compose.yml api web
-# Rollback: clear the Command setting; Dokploy falls back to `compose up -d --build --remove-orphans`.
+#
+# Emergency rollback by hand: never clear the Command setting. Without it Dokploy runs
+# `compose up -d --build --remove-orphans`, which builds postgres and could recreate it. Instead, from the checkout on
+# the server, name only the app services so postgres is never touched:
+#   BRAWLTOME_IMAGE_TAG=<sha> docker compose -p <app> -f infra/app/compose.yml up -d --no-deps api web operations-worker
+# <sha> must be a commit whose images CI pushed. This restarts those services instead of rolling them.
 #
 # Migrations run while the previous release still serves, so they must stay compatible with it: add before use,
 # remove only after a release that no longer reads it.
 #
 # After converging, smoke checks request the new release from inside its own containers. When they fail, the images
-# that ran before the deploy (tagged <project>-<service>:previous before the build) are rolled back in the same
+# that ran before the deploy (tagged <project>-<service>:previous before the pull) are rolled back in the same
 # zero-downtime way and the script exits non-zero so Dokploy marks the deploy failed. The database is never rolled
 # back: the compatibility rule above is what makes running the previous images against the migrated schema safe.
 # DEPLOY_SMOKE=0 skips the checks; DEPLOY_SMOKE_FORCE_FAILURE=1 fails them on purpose to exercise the rollback.
@@ -47,6 +58,31 @@ compose() {
 
 log() {
   printf '[deploy] %s\n' "$*"
+}
+
+# Prints the commit this checkout is on: BRAWLTOME_IMAGE_TAG when set, otherwise .git/HEAD followed through a loose ref
+# or packed-refs.
+release_commit() {
+  if [ -n "${BRAWLTOME_IMAGE_TAG:-}" ]; then
+    printf '%s\n' "$BRAWLTOME_IMAGE_TAG"
+    return 0
+  fi
+
+  release_head=$(cat .git/HEAD) || return 1
+  case "$release_head" in
+    'ref: '*) release_ref=${release_head#ref: } ;;
+    *)
+      printf '%s\n' "$release_head"
+      return 0
+      ;;
+  esac
+
+  if [ -f ".git/$release_ref" ]; then
+    cat ".git/$release_ref"
+    return 0
+  fi
+
+  awk -v ref="$release_ref" '$2 == ref { print $1; found = 1; exit } END { exit !found }' .git/packed-refs
 }
 
 service_containers() {
@@ -128,12 +164,36 @@ roll() {
   log "$service: replaced"
 }
 
+if ! BRAWLTOME_IMAGE_TAG=$(release_commit) || [ -z "$BRAWLTOME_IMAGE_TAG" ]; then
+  log 'cannot read the release commit from .git/HEAD; set BRAWLTOME_IMAGE_TAG to deploy a specific commit'
+  exit 1
+fi
+
+# the tag names a pushed image, so anything but a full lowercase sha (a branch name, a short sha) is a mistake
+case "$BRAWLTOME_IMAGE_TAG" in
+  *[!0-9a-f]*) release_commit_is_valid=0 ;;
+  *) release_commit_is_valid=1 ;;
+esac
+if [ "$release_commit_is_valid" = 0 ] || [ "${#BRAWLTOME_IMAGE_TAG}" -ne 40 ]; then
+  log "release commit '$BRAWLTOME_IMAGE_TAG' is not a 40-character sha"
+  exit 1
+fi
+
+export BRAWLTOME_IMAGE_TAG
+log "deploying release $BRAWLTOME_IMAGE_TAG"
+
+# <service>: prints the image reference compose runs the service from. Service names equal the Dockerfile targets, and
+# the rendered-topology check fails CI when compose.yml uses any other reference, so the two cannot drift.
+service_image() {
+  printf 'ghcr.io/nicktacke/brawltome-%s:%s\n' "$1" "$BRAWLTOME_IMAGE_TAG"
+}
+
 # Every service the deploy may replace: the migration runs once below and postgres is never recreated here.
 app_services=$(compose config --services | grep -vx -e migration -e postgres)
 
 log 'remembering the running images in case the release has to be rolled back'
-# compose names built images <project>-<service> and moves that tag on build, after which the running release's image
-# is untagged and a prune could delete it once its container is replaced. The :previous tag keeps it.
+# Once the release images are pulled, the running release's image may be untagged (a locally built one always is) and a
+# prune could delete it after its container is replaced. The :previous tag keeps it, whichever way it was made.
 for service in $app_services; do
   current=$(running_containers "$service" | head -n 1)
   if [ -n "$current" ]; then
@@ -144,14 +204,17 @@ for service in $app_services; do
   fi
 done
 
-log 'building images while the current release keeps serving'
-compose build
+log 'pulling the release images while the current release keeps serving'
+# shellcheck disable=SC2086
+if ! compose pull --quiet $app_services migration; then
+  log "pull failed for release $BRAWLTOME_IMAGE_TAG: its images may not be pushed yet, or GHCR needs the packages public"
+  exit 1
+fi
 
 log 'ensuring PostgreSQL is up'
-# Never recreate the database during a rolling deploy. `compose build` rebuilds the postgres image, and when the build
-# cache was pruned the rebuilt image gets a new ID, so a plain `up` restarted PostgreSQL mid-deploy and the serving
-# release failed requests with CONNECT_TIMEOUT (2026-10-08 16:46 UTC). Image or config changes for postgres are
-# applied in a maintenance window instead (see the warning at the end).
+# Never recreate the database during a rolling deploy. A rebuilt postgres image gets a new ID, and a plain `up`
+# restarted PostgreSQL mid-deploy so the serving release failed requests with CONNECT_TIMEOUT (2026-10-08 16:46 UTC).
+# Image or config changes for postgres are applied in a maintenance window instead.
 compose up -d --no-deps --no-recreate --wait postgres
 
 log 'running migrations against the live database'
@@ -171,13 +234,6 @@ log 'converging the remaining services'
 # The migration already ran above; naming every other service keeps compose from running it a second time.
 # shellcheck disable=SC2086
 converge $app_services
-
-running_postgres_image=$(docker inspect -f '{{.Image}}' "$(compose ps -q postgres)" 2>/dev/null || true)
-built_postgres_image=$(docker image inspect -f '{{.Id}}' "$project-postgres" 2>/dev/null || true)
-if [ -n "$built_postgres_image" ] && [ "$running_postgres_image" != "$built_postgres_image" ]; then
-  log "WARNING: PostgreSQL runs an older image than this release built; it was left running. Recreate it in a" \
-    "maintenance window: docker compose -p $project -f $file up -d --no-deps postgres"
-fi
 
 # Requests a URL from inside a container with the runtime its image ships (the images have neither curl nor wget) and
 # succeeds only on HTTP 200. The deploy container cannot rely on public DNS, and bypassing Traefik makes each check
@@ -245,7 +301,7 @@ services_except() {
   done
 }
 
-# <rolling service...>: points each service's image tag back at its :previous image, rolls the public services back
+# <rolling service...>: points each service's release image tag back at its :previous image, rolls the public services back
 # the same way they rolled forward and recreates the rest. Fails without changing anything when a public service has
 # no previous image (first deploy), and fails after restoring what it could when a step fails. A service whose tag
 # cannot be pointed back keeps running this release untouched. A public service whose
@@ -267,8 +323,9 @@ rollback() {
       log "rollback: no previous $service image; it keeps running this release"
       continue
     fi
-    docker tag "$project-$service:previous" "$project-$service:latest" || {
-      log "rollback: could not point $project-$service:latest at the previous image; $service keeps running this release"
+    release_image=$(service_image "$service")
+    docker tag "$project-$service:previous" "$release_image" || {
+      log "rollback: could not point $release_image at the previous image; $service keeps running this release"
       rollback_failed=1
       untagged="$untagged $service"
     }
@@ -282,8 +339,9 @@ rollback() {
       rollback_failed=1
       serving=$(running_containers "$service" | head -n 1)
       if [ -n "$serving" ]; then
-        docker tag "$(docker inspect -f '{{.Image}}' "$serving")" "$project-$service:latest" ||
-          log "rollback: could not point $project-$service:latest back at the image $serving runs"
+        release_image=$(service_image "$service")
+        docker tag "$(docker inspect -f '{{.Image}}' "$serving")" "$release_image" ||
+          log "rollback: could not point $release_image back at the image $serving runs"
       fi
     }
   done

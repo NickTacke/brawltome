@@ -47,8 +47,17 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
       - run: bun run infra:app:check
-      - run: DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord --profile operator -f infra/app/compose.yml config --quiet
-      - run: DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres TURNSTILE_SITE_KEY=test-site-key docker compose --profile discord --profile operator -f infra/app/compose.yml build
+      - run: BRAWLTOME_IMAGE_TAG=0000000000000000000000000000000000000000 DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres docker compose --profile discord --profile operator -f infra/app/compose.yml config --quiet
+      # on master the images job builds the app targets, so only pull requests build here
+      - name: Build every image target
+        if: github.event_name == 'pull_request'
+        run: |
+          for target in postgres migration dead-letter-role dead-letter-cli api web operations-worker discord-bot; do
+            docker build --target "$target" \
+              --build-arg NEXT_PUBLIC_API_URL=https://api.brawltome.app \
+              --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY=test-site-key \
+              .
+          done
 
   contracts:
     runs-on: ubuntu-latest
@@ -94,3 +103,90 @@ jobs:
       - run: bun run typecheck
       - run: bun run db:migrate
       - run: bun test
+
+  images:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [migration, dead-letter-role, dead-letter-cli, api, web, operations-worker, discord-bot]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # the web image bakes this key into the browser bundle, and the Dockerfile only checks the API URL
+      - name: Require the public Turnstile site key
+        if: matrix.target == 'web'
+        env:
+          TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+        run: |
+          if [ -z "$TURNSTILE_SITE_KEY" ]; then
+            echo "repository variable TURNSTILE_SITE_KEY is empty, the web image would ship without it" >&2
+            exit 1
+          fi
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: true
+          tags: ghcr.io/nicktacke/brawltome-${{ matrix.target }}:${{ github.sha }}-candidate
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/NickTacke/brawltome
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.brawltome.app
+            NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.TURNSTILE_SITE_KEY }}
+            NEXT_PUBLIC_ANALYTICS_ENABLED=${{ vars.ANALYTICS_ENABLED }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,scope=${{ matrix.target }},mode=max
+
+  # Images are pushed as <sha>-candidate while the checks run. Only this job, which needs every check, promotes the
+  # candidates to <sha>, the tag deploy.sh and compose pull. Dokploy deploys the current head of master, so when a newer
+  # commit's checks are still running its images are not promoted yet: the pull fails before any container is touched,
+  # and that commit's own run deploys it once it passes.
+  deploy:
+    needs: [images, architecture, infrastructure, contracts, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote the checked images
+        run: |
+          for target in migration dead-letter-role dead-letter-cli api web operations-worker discord-bot; do
+            image=ghcr.io/nicktacke/brawltome-$target
+            docker buildx imagetools create --tag "$image:$GITHUB_SHA" "$image:$GITHUB_SHA-candidate"
+          done
+      - run: bun infra/app/trigger-deploy.ts
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_COMPOSE_ID: ${{ vars.DOKPLOY_COMPOSE_ID }}
+          DOKPLOY_TOKEN: ${{ secrets.DOKPLOY_TOKEN }}

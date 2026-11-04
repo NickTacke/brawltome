@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dir, '../../..')
+const releaseCommit = '0000000000000000000000000000000000000000'
 // The first `docker compose config` on a cold CI runner has taken over 8 s, past bun's 5 s default.
 setDefaultTimeout(30_000)
 
@@ -12,9 +13,9 @@ function renderCompose(profile: 'discord' | 'operator') {
     cwd: root,
     env: {
       ...process.env,
+      BRAWLTOME_IMAGE_TAG: releaseCommit,
       DISCORD_CLIENT_ID: '123456789012345678',
       POSTGRES_DATA_ROOT: '/srv/brawltome/postgres',
-      TURNSTILE_SITE_KEY: 'test-site-key',
     },
     stdout: 'pipe',
     stderr: 'pipe',
@@ -24,7 +25,7 @@ function renderCompose(profile: 'discord' | 'operator') {
     services: Record<
       string,
       {
-        build?: { target?: string }
+        image?: string
         cap_drop?: string[]
         depends_on?: Record<string, { condition?: string }>
         deploy?: { replicas?: number; resources?: { limits?: { memory?: string; pids?: number } } }
@@ -52,7 +53,7 @@ describe('application profile topology', () => {
     const discord = rendered.services['discord-bot']
 
     expect(discord).toMatchObject({
-      build: { target: 'discord-bot' },
+      image: `ghcr.io/nicktacke/brawltome-discord-bot:${releaseCommit}`,
       profiles: ['discord'],
       read_only: true,
       init: true,
@@ -92,7 +93,7 @@ describe('application profile topology', () => {
     const cli = services['dead-letter-cli']
 
     expect(role).toMatchObject({
-      build: { target: 'dead-letter-role' },
+      image: `ghcr.io/nicktacke/brawltome-dead-letter-role:${releaseCommit}`,
       profiles: ['operator'],
       user: '70:70',
       restart: 'no',
@@ -113,7 +114,7 @@ describe('application profile topology', () => {
     ])
 
     expect(cli).toMatchObject({
-      build: { target: 'dead-letter-cli' },
+      image: `ghcr.io/nicktacke/brawltome-dead-letter-cli:${releaseCommit}`,
       profiles: ['operator'],
       restart: 'no',
       read_only: true,

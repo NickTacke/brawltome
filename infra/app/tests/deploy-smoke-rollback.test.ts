@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -10,6 +10,7 @@ const dockerStub = resolve(import.meta.dir, 'fixtures/docker-stub.ts')
 const project = 'brawltome-test'
 const services = ['postgres', 'migration', 'api', 'web', 'operations-worker']
 const appServices = ['api', 'web', 'operations-worker']
+const releaseSha = 'a'.repeat(40)
 const temporaryDirectories: string[] = []
 
 // Failing runs spend the smoke budget (2 s here) once per smoke pass, and every docker call starts a bun process.
@@ -17,11 +18,24 @@ setDefaultTimeout(30_000)
 
 type Container = { id: string; service: string; image: string }
 
+function releaseImage(service: string, sha = releaseSha) {
+  return `ghcr.io/nicktacke/brawltome-${service}:${sha}`
+}
+
+// Dokploy's checkout, as the deploy container sees it: HEAD names a branch whose commit only packed-refs holds.
+function writeCheckout(directory: string, sha: string) {
+  mkdirSync(join(directory, '.git'), { recursive: true })
+  writeFileSync(join(directory, '.git', 'HEAD'), 'ref: refs/heads/master\n')
+  writeFileSync(join(directory, '.git', 'packed-refs'), `# pack-refs\n${sha} refs/heads/master\n`)
+}
+
 function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?: Record<string, string> } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-deploy-'))
   temporaryDirectories.push(directory)
   const bin = join(directory, 'bin')
   mkdirSync(bin)
+  const checkout = join(directory, 'checkout')
+  writeCheckout(checkout, releaseSha)
   writeFileSync(join(bin, 'docker'), `#!/bin/sh\nexec '${process.execPath}' '${dockerStub}' "$@"\n`)
   chmodSync(join(bin, 'docker'), 0o755)
 
@@ -39,15 +53,17 @@ function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?
     JSON.stringify({ project, services, containers, tags, counter: 0, execCalls: 0 }),
   )
 
+  const { BRAWLTOME_IMAGE_TAG: _inherited, ...inheritedEnv } = process.env
   const result = spawnSync('sh', [deployScript, project, 'infra/app/compose.yml', 'api', 'web'], {
+    cwd: checkout,
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...inheritedEnv,
       DEPLOY_ROUTING_SETTLE_SECONDS: '0',
       DEPLOY_SMOKE_RETRY_SECONDS: '0',
       DEPLOY_SMOKE_TIMEOUT_SECONDS: '2',
       DOCKER_STUB_DIR: directory,
-      PATH: `${bin}:${process.env.PATH}`,
+      PATH: `${bin}:${inheritedEnv.PATH}`,
       ...env,
     },
   })
@@ -58,9 +74,13 @@ function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?
   }
   // Whatever fails, api and web must keep a healthy container serving from the moment they first have one.
   expect(state.outages ?? []).toEqual([])
-  const calls = readFileSync(join(directory, 'calls.log'), 'utf8').trim().split('\n')
+  // a run rejected before any docker call leaves no logs
+  const readLines = (name: string) =>
+    existsSync(join(directory, name)) ? readFileSync(join(directory, name), 'utf8').trim().split('\n') : []
+  const calls = readLines('calls.log')
+  const releaseTags = readLines('release-tags.log')
   const imageOf = (service: string) => state.containers.filter((item) => item.service === service).map((c) => c.image)
-  return { result, state, calls, imageOf }
+  return { result, state, calls, imageOf, releaseTags }
 }
 
 afterEach(() => {
@@ -80,10 +100,10 @@ describe('deploy smoke checks and rollback', () => {
       expect(imageOf(service)).toEqual([`sha256:new-${service}`])
       expect(state.tags[`${project}-${service}:previous`]).toBe(`sha256:old-${service}`)
     }
-    expect(calls.some((call) => call.endsWith(':latest') && call.startsWith('tag '))).toBe(false)
-    // The previous images are recorded before anything is built.
+    expect(calls.some((call) => call.startsWith('tag ') && !call.endsWith(':previous'))).toBe(false)
+    // The previous images are recorded before the release images are pulled.
     expect(calls.findIndex((call) => call.startsWith(`tag sha256:old-api ${project}-api:previous`))).toBeLessThan(
-      calls.findIndex((call) => call.endsWith(' build')),
+      calls.findIndex((call) => call.includes(' pull ')),
     )
     // Probes run inside the containers with the runtime each image ships.
     expect(calls).toContainEqual(
@@ -91,6 +111,51 @@ describe('deploy smoke checks and rollback', () => {
     )
     expect(calls).toContainEqual(expect.stringMatching(/^exec web-\d+ node -e .*http:\/\/127\.0\.0\.1:3000\/'/))
     expect(calls).toContainEqual(expect.stringMatching(/^exec api-\d+ bun -e .*\/trpc\/leaderboard\.get\?input=/))
+  })
+
+  test('a deploy pulls the release images instead of building them', () => {
+    const { result, calls } = deploy()
+
+    expect(result.status).toBe(0)
+    const pulls = calls.filter((call) => call.includes(' pull '))
+    expect(pulls).toHaveLength(1)
+    expect(pulls[0]).toEndWith(' pull --quiet api web operations-worker migration')
+    expect(calls.some((call) => call.includes(' build'))).toBe(false)
+  })
+
+  test('a missing release image fails the deploy before any container changes', () => {
+    const { result, calls, imageOf } = deploy({ env: { DOCKER_STUB_FAIL_PULL: '1' } })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stdout).toContain(`pull failed for release ${releaseSha}: its images may not be pushed yet`)
+    expect(result.stderr).toContain(releaseImage('api'))
+    const afterPull = calls.slice(calls.findIndex((call) => call.includes(' pull ')) + 1)
+    expect(afterPull.filter((call) => /^(stop|rm|up) /.test(call) || call.includes(' up '))).toEqual([])
+    for (const service of appServices) expect(imageOf(service)).toEqual([`sha256:old-${service}`])
+  })
+
+  test('the release tag comes from the checked-out commit', () => {
+    const { result, releaseTags } = deploy()
+
+    expect(result.status).toBe(0)
+    expect(new Set(releaseTags)).toEqual(new Set([releaseSha]))
+  })
+
+  test('BRAWLTOME_IMAGE_TAG from the environment wins over the checkout', () => {
+    const override = 'b'.repeat(40)
+    const { result, releaseTags, imageOf } = deploy({ env: { BRAWLTOME_IMAGE_TAG: override } })
+
+    expect(result.status).toBe(0)
+    expect(new Set(releaseTags)).toEqual(new Set([override]))
+    expect(imageOf('api')).toEqual(['sha256:new-api'])
+  })
+
+  test('a release commit that is not a 40-character sha is rejected before any compose call', () => {
+    const { result, calls } = deploy({ env: { BRAWLTOME_IMAGE_TAG: 'abc' } })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain("release commit 'abc' is not a 40-character sha")
+    expect(calls).toEqual([])
   })
 
   test('smoke checks retry before they give up', () => {
@@ -109,15 +174,23 @@ describe('deploy smoke checks and rollback', () => {
     expect(result.stdout).toContain('SMOKE CHECKS FAILED: rolling back to the previous release')
     expect(result.stdout).toContain('ROLLED BACK: the previous release is serving again')
     for (const service of appServices) {
-      expect(calls).toContain(`tag ${project}-${service}:previous ${project}-${service}:latest`)
+      expect(calls).toContain(`tag ${project}-${service}:previous ${releaseImage(service)}`)
       expect(imageOf(service)).toEqual([`sha256:old-${service}`])
     }
     // The public services roll back beside the failed release, never by stopping it first.
-    const rollbackStart = calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`)
+    const rollbackStart = calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`)
     const rollbackCalls = calls.slice(rollbackStart)
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale api=2 api'))
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale web=2 web'))
     expect(imageOf('postgres')).toEqual(['sha256:old-postgres'])
+  })
+
+  test('a rollback points the configured release image back at the previous image', () => {
+    const { result, state, calls } = deploy({ env: { DEPLOY_SMOKE_FORCE_FAILURE: '1' } })
+
+    expect(result.status).toBe(1)
+    expect(calls).toContain(`tag ${project}-api:previous ${releaseImage('api')}`)
+    expect(state.tags[releaseImage('api')]).toBe('sha256:old-api')
   })
 
   test('a forced smoke failure exercises the rollback of a healthy release', () => {
@@ -150,9 +223,9 @@ describe('deploy smoke checks and rollback', () => {
     expect(imageOf('web')).toEqual(['sha256:old-web'])
     expect(imageOf('operations-worker')).toEqual(['sha256:old-operations-worker'])
     // The tag follows what api runs, so a later `compose up` does not swap in the image that just failed.
-    expect(state.tags[`${project}-api:latest`]).toBe('sha256:new-api')
+    expect(state.tags[releaseImage('api')]).toBe('sha256:new-api')
     // Rollback convergence never names a public service, which compose would recreate in place.
-    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`))
+    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
     const converges = rollbackCalls.filter((call) => call.includes(' up -d --remove-orphans '))
     expect(converges).toHaveLength(1)
     expect(converges[0]).toEndWith(' operations-worker')
@@ -168,7 +241,7 @@ describe('deploy smoke checks and rollback', () => {
     expect(result.stdout).toContain('rollback: web could not be restored')
     expect(imageOf('api')).toEqual(['sha256:new-api'])
     expect(imageOf('web')).toEqual(['sha256:new-web'])
-    expect(state.tags[`${project}-web:latest`]).toBe('sha256:new-web')
+    expect(state.tags[releaseImage('web')]).toBe('sha256:new-web')
     // The worker is not public: it is recreated on its previous image, which here fails its health check too.
     expect(imageOf('operations-worker')).toEqual(['sha256:old-operations-worker'])
   })
@@ -179,13 +252,13 @@ describe('deploy smoke checks and rollback', () => {
     })
 
     expect(result.status).toBe(1)
-    expect(result.stdout).toContain(`rollback: could not point ${project}-api:latest at the previous image`)
+    expect(result.stdout).toContain(`rollback: could not point ${releaseImage('api')} at the previous image`)
     expect(result.stdout).toContain('ROLLBACK INCOMPLETE')
     expect(result.stdout).not.toContain('ROLLED BACK:')
     // api keeps its one serving container; the rollback never started a second api on the rejected image.
     expect(imageOf('api')).toEqual(['sha256:new-api'])
-    expect(state.tags[`${project}-api:latest`]).toBe('sha256:new-api')
-    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`))
+    expect(state.tags[releaseImage('api')]).toBe('sha256:new-api')
+    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
     expect(rollbackCalls.some((call) => call.includes('--scale api='))).toBe(false)
     // The rest still roll back.
     expect(imageOf('web')).toEqual(['sha256:old-web'])
@@ -202,7 +275,7 @@ describe('deploy smoke checks and rollback', () => {
     expect(imageOf('api')).toEqual(['sha256:old-api'])
     expect(imageOf('web')).toEqual(['sha256:old-web'])
     expect(imageOf('operations-worker')).toEqual(['sha256:new-operations-worker'])
-    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${project}-api:latest`))
+    const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
     expect(rollbackCalls.some((call) => call.includes(' up -d --remove-orphans '))).toBe(false)
   })
 
@@ -222,7 +295,7 @@ describe('deploy smoke checks and rollback', () => {
     expect(result.stdout).toContain('rollback: no previous api image (first deploy?)')
     expect(result.stdout).not.toContain('ROLLED BACK')
     expect(state.tags[`${project}-api:previous`]).toBeUndefined()
-    expect(calls.some((call) => call.startsWith('tag ') && call.endsWith(':latest'))).toBe(false)
+    expect(calls.some((call) => call.startsWith('tag ') && call.endsWith(releaseImage('api')))).toBe(false)
     expect(imageOf('api')).toEqual(['sha256:new-api'])
   })
 
