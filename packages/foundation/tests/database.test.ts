@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { sql as rawSql } from 'drizzle-orm'
+import postgres from 'postgres'
 import { type Database, createDatabase } from '../database'
 
 const connectionString = process.env.DATABASE_URL
@@ -11,6 +12,19 @@ function open(options: Parameters<typeof createDatabase>[1]): Database {
   openDatabases.push(database)
 
   return database
+}
+
+// what a plain client gets from the role, database and URL, whatever the test server is configured with
+async function readDefaultStatementTimeout(): Promise<string | undefined> {
+  const plain = postgres(connectionString ?? '', { max: 1 })
+
+  try {
+    const [row] = await plain`select current_setting('statement_timeout') as timeout`
+
+    return row?.timeout
+  } finally {
+    await plain.end({ timeout: 5 })
+  }
 }
 
 afterAll(async () => {
@@ -46,10 +60,11 @@ describeWithDatabase('createDatabase', () => {
 
   test('leaves the statement timeout alone when not given', async () => {
     const database = open({ maxConnections: 1, applicationName: 'foundation-test' })
+    const serverDefault = await readDefaultStatementTimeout()
 
     const [row] = await database.sql`select current_setting('statement_timeout') as timeout`
 
-    expect(row?.timeout).toBe('0')
+    expect(row?.timeout).toBe(serverDefault)
   })
 
   test('close resolves', async () => {
