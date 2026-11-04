@@ -47,10 +47,15 @@ Modules are rebuilt one at a time. Until then a module keeps its old layout; see
 `@brawltome/foundation` (`packages/foundation`) is what every module builds on:
 
 - `createDatabase` and the `Database` and `Sql` types, a thin wrapper over postgres.js
-- `parsePositiveInteger` and `requirePositiveInteger` for reading config
+- `jsonb()` and `json()`, the column builders for json in drizzle tables
+- `parsePositiveInteger`, `parseBoundedInteger` and `requirePositiveInteger` for reading config
 - the `Migration` type and the migration runner
 - `BrawltomeModule` and `checkModuleList`
 - `@brawltome/foundation/testing`, which has `createTestDatabase`. Only test files may import it.
+
+Tables use `timestamptz`, never `timestamp`: postgres.js reads a `timestamp` in the process's local time zone. A
+`jsonb` or `json` column in a drizzle table uses foundation's `jsonb()` or `json()`. drizzle's own builders encode the
+value and the shared client encodes it again, so the database would store a JSON string.
 
 `@brawltome/bhapi` is the Brawlhalla API client. `@brawltome/game-data`, `@brawltome/telemetry` and
 `@brawltome/contracts` hold static data, metrics helpers and the generated contracts.
@@ -66,9 +71,10 @@ Each process has a list of the modules it needs:
 | `bun run db:migrate` | `tooling/database-migrations/src/modules.ts` (`migrationModules`) |
 
 The worker leaves out `replay-analysis`; the other two lists have all nine. At start-up `serve.ts` and
-`operations-worker.ts` call `checkModuleList` on their list, which fails on a duplicate name, a missing dependency or a
-dependency cycle. They then build the module factories by hand from one shared database client and pass the modules'
-migrations to the readiness check, so a process reports unready until the schema has what it expects.
+`operations-worker.ts` call `checkModuleList` on their list, which fails on a duplicate name, a missing dependency, a
+dependency cycle, or migrations that don't sit under one owner name per module. They then build the module factories by
+hand from one shared database client and pass the modules' migrations to the readiness check, so a process reports
+unready until the schema has what it expects.
 
 The API shares one database client between all its modules. The worker opens three clients by role: main, lease
 renewals and discovery. Pool sizes and the connection budget are under Production in
@@ -92,8 +98,9 @@ The order is:
 2. Every later migration comes after its `predecessor` and its `requires`. When several are ready, the one with the
    lowest identity goes first.
 
-So a new migration only needs its own declaration. It doesn't go into any central list. The runner refuses a changed
-checksum on an applied migration, a missing predecessor, an unknown `requires` and cycles.
+So a new migration only needs its own declaration. It doesn't go into any central list. A new migration that names
+another module's schema must list one of that module's migrations in `requires`, so that module's tables exist first.
+The runner refuses a changed checksum on an applied migration, a missing predecessor, an unknown `requires` and cycles.
 
 Migrations still have to be backward compatible with the release that serves during a deploy; see
 [`CONTRIBUTING.md`](../CONTRIBUTING.md#rules-that-are-easy-to-break).
@@ -106,10 +113,15 @@ Migrations still have to be backward compatible with the release that serves dur
 - `@brawltome/foundation/testing` is test-only.
 - A module may import only the modules the policy lists for it (`capabilityDependencies` in
   `tooling/architecture/src/current-policy.ts`).
-- A module's non-test, non-migration source can't hold SQL that names another module's schema. Three exceptions exist
-  today, all reaching into `refresh_operations`, and are tracked in issue #388.
+- A module's non-test source can't hold SQL that names another module's schema. Three exceptions exist today, all
+  reaching into `refresh_operations`, and are tracked in issue #388. Deployed migrations are skipped; a new migration
+  may name another module's schema only when its `requires` lists a migration of that module.
+- A module's `index.ts` exports no drizzle tables, views or schemas. drizzle queries hold no `schema.table` text, so the
+  SQL check above couldn't see another module querying them.
+- Every module a module may import is in its `dependsOn`, so an import never points at a module that isn't loaded.
 
-The policy file is where a new module is registered for these checks, along with the three module lists above.
+The last two are tests in `tooling/architecture/tests/module-surfaces.test.ts`. The policy file is where a new module
+is registered for these checks, along with that test and the three module lists above.
 
 ## API
 
