@@ -6,6 +6,7 @@ import postgres from 'postgres'
 
 const connectionString = process.env.DATABASE_URL
 
+// the first test seeds legacy V2 tables before the accounts migrations run; the second reuses this setup
 async function withDatabase(run: (databaseUrl: string) => Promise<void>) {
   const databaseName = `brawltome_primary_${process.pid}_${randomUUID().replaceAll('-', '')}`
   const adminUrl = new URL(connectionString as string)

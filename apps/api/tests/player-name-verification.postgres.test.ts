@@ -1,14 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresPlayerDiscoverySource,
   createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
-  playerMigrationInventory,
+  playerModule,
 } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
-import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import {
@@ -18,9 +19,7 @@ import {
 } from '../src/player-name-verification'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `bt_name_verify_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let control: ReturnType<typeof postgres>
 let connectionString = ''
 
@@ -45,30 +44,17 @@ const admission = {
 } as const
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for name verification PostgreSQL tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
+  database = await createTestDatabase({
+    label: 'player_name_verification',
+    modules: [accountsModule, refreshOperationsModule, requestAdmissionModule, playerModule],
+  })
+  connectionString = database.connectionString
   control = postgres(connectionString, { max: 1, onnotice: () => {} })
-  for (const migration of [
-    ...accountsMigrationInventory,
-    ...playerMigrationInventory,
-    ...refreshOperationsMigrationInventory,
-    ...requestAdmissionMigrationInventory,
-  ]) {
-    await control.unsafe(migration.sql)
-  }
 }, 30_000)
 
 afterAll(async () => {
   await control?.end()
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 async function seed(brawlhallaId: number, v0Name: string, boardName: string) {

@@ -72,6 +72,7 @@ const deployedPrePlayersImportGlobalHistory = [
   ['accounts/0005', '979f9c419e6d6ec189ad92c7cf1385002fd30584285aab2220fd42560ef8c8c5'],
 ] as const
 
+// each test builds its own database: they check what migratePostgres applies, often to a partial history
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   test('every module keeps its deployed migrations first and in their deployed order', () => {
     const inventories = [

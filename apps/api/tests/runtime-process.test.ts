@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import {
@@ -8,9 +9,7 @@ import {
   readOperationsWorkerConfig,
 } from '../src/operations-worker-config'
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_lifecycle_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 async function allocatePort(): Promise<number> {
@@ -182,22 +181,15 @@ function workerEnvironment(port: number, deadlineMs: number): Record<string, str
 }
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for runtime process tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
+  // no modules: the real migrate command fills the database, as it does in production
+  database = await createTestDatabase({ label: 'runtime_process', modules: [] })
+  connectionString = database.connectionString
   await migrateDatabase()
   await deferLeaderboardSchedules()
 }, 30_000)
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 describe('real production runtime lifecycle', () => {

@@ -36,6 +36,9 @@ bun run infra:app:check
 bun run infra:observability:check   # slow; run when touching infra/observability or packages/telemetry
 ```
 
+A Postgres test gets its own migrated database from `createTestDatabase` in `@brawltome/foundation/testing`, which only
+test files may import.
+
 Dead-lettered work is inspected and replayed with `bun run operations:dead-letters <list|inspect|replay|discard>`. It
 needs `DEAD_LETTER_DATABASE_URL` plus `DEAD_LETTER_OPERATOR_TOKEN` and `DEAD_LETTER_OPERATOR_TOKENS` (see
 `packages/modules/refresh-operations/operator-auth.ts`), e.g. `bun run operations:dead-letters list`.

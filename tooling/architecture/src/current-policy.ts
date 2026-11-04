@@ -33,7 +33,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/web': [],
     '@brawltome/bhapi': ['.'],
     '@brawltome/database-migrations': [],
-    '@brawltome/foundation': ['.'],
+    '@brawltome/foundation': ['.', './testing'],
     '@brawltome/game-data': ['.', './legends', './reference-data'],
     '@brawltome/telemetry': ['.', './analytics-labels', './node', './propagation'],
     '@brawltome/architecture': [],
@@ -49,7 +49,9 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/replay-analysis': ['.'],
     '@brawltome/statistics': ['.'],
   },
-  testOnlyExports: {},
+  testOnlyExports: {
+    '@brawltome/foundation': ['./testing'],
+  },
   capabilityDependencies: {
     '@brawltome/accounts': [],
     '@brawltome/clan': [],

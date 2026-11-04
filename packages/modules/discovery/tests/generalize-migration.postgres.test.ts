@@ -11,6 +11,7 @@ const databaseName = `brawltome_discovery_upgrade_${process.pid}_${randomUUID().
 let admin: ReturnType<typeof postgres>
 let connectionString = ''
 
+// an empty database by hand: the test applies discovery 0001, seeds it, then upgrades to 0002
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)

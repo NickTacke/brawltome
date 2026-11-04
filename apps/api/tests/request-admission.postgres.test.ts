@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
-import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
-import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
 
@@ -26,34 +27,19 @@ const testAdmission = {
   },
 } as const
 
-const baseUrl = process.env.DATABASE_URL
-const databaseName = `brawltome_admission_${process.pid}_${randomUUID().replaceAll('-', '')}`
-let admin: ReturnType<typeof postgres>
+let database: TestDatabase | undefined
 let connectionString = ''
 
 beforeAll(async () => {
-  if (!baseUrl) throw new Error('DATABASE_URL is required for Request Admission integration tests')
-  const adminUrl = new URL(baseUrl)
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(baseUrl)
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  const setup = postgres(connectionString, { max: 1 })
-  try {
-    for (const migration of [...refreshOperationsMigrationInventory, ...requestAdmissionMigrationInventory]) {
-      await setup.unsafe(migration.sql)
-    }
-  } finally {
-    await setup.end()
-  }
+  database = await createTestDatabase({
+    label: 'request_admission',
+    modules: [refreshOperationsModule, requestAdmissionModule],
+  })
+  connectionString = database.connectionString
 })
 
 afterAll(async () => {
-  if (!admin) return
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 })
 
 beforeEach(async () => {

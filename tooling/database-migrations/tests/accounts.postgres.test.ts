@@ -4,6 +4,7 @@ import postgres from 'postgres'
 
 const connectionString = process.env.DATABASE_URL
 
+// databases are built by hand: legacy V2 tables and database settings come before the migrations
 describe.skipIf(!connectionString)('Accounts migration', () => {
   test('creates one account without orphans and ignores V2 sessions created after the migration', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts')
