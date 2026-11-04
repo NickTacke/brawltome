@@ -82,4 +82,18 @@ describe('module package surfaces', () => {
 
     expect(found).toEqual([])
   })
+
+  // an import is only safe when the imported module is loaded wherever the importer is
+  test.each(Object.keys(modulePackages))('%s lists every capability it imports in dependsOn', (packageName) => {
+    const { module } = modulePackages[packageName] as ModulePackage
+    const importedPackages = currentArchitecturePolicy.capabilityDependencies[packageName] ?? []
+
+    const missingPackages = importedPackages.filter((importedPackage) => {
+      const importedModuleName = modulePackages[importedPackage]?.module.name
+
+      return importedModuleName === undefined || !module.dependsOn.includes(importedModuleName)
+    })
+
+    expect(missingPackages).toEqual([])
+  })
 })
