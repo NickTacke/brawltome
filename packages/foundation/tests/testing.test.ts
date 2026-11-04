@@ -120,6 +120,19 @@ describeWithDatabase('createTestDatabase', () => {
     )
   })
 
+  test('leaves no database behind when the migrations cannot be ordered', async () => {
+    const orphanModule: BrawltomeModule = {
+      name: 'orphan',
+      dependsOn: [],
+      migrations: [migration('testing-orphan/0002', 'testing-orphan/0001', 'SELECT 1;')],
+    }
+
+    await expect(createTestDatabase({ label: 'unordered', modules: [orphanModule] })).rejects.toThrow(
+      'missing predecessor testing-orphan/0001 for testing-orphan/0002',
+    )
+    expect(await existingDatabaseNames(`bt_unordered_${process.pid}_%`)).toEqual([])
+  })
+
   test('drops the database again when a migration fails', async () => {
     const brokenModule: BrawltomeModule = {
       name: 'broken',

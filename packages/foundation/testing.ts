@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import postgres from 'postgres'
 import type { Sql } from './database'
+import type { Migration } from './migration'
 import { orderMigrations } from './migrations/order'
 import { migratePostgres } from './migrations/postgres'
 import { type BrawltomeModule, checkModuleList } from './module'
@@ -30,12 +31,13 @@ export async function createTestDatabase({ label, modules }: CreateTestDatabaseO
   }
 
   checkModuleList(modules)
+  const migrations = orderMigrations(modules.flatMap((module) => module.migrations))
 
   // the name is checked against [a-z0-9_] above, so quoting it is enough
   await runAsAdmin(serverUrl, `CREATE DATABASE "${databaseName}"`)
   const dropDatabase = () => runAsAdmin(serverUrl, `DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   const connectionString = withDatabaseName(serverUrl, databaseName)
-  await migrateOrDrop(connectionString, modules, dropDatabase)
+  await migrateOrDrop(connectionString, migrations, dropDatabase)
 
   const sql = postgres(connectionString, { max: clientConnections })
 
@@ -110,11 +112,9 @@ async function runAsAdmin(serverUrl: string, statement: string): Promise<void> {
 // a half-migrated database is useless to the test, so it goes rather than leaking
 async function migrateOrDrop(
   connectionString: string,
-  modules: readonly BrawltomeModule[],
+  migrations: readonly Migration[],
   dropDatabase: () => Promise<void>,
 ): Promise<void> {
-  const migrations = orderMigrations(modules.flatMap((module) => module.migrations))
-
   try {
     await migratePostgres(connectionString, migrations)
   } catch (error) {
