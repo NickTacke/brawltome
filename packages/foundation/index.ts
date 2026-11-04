@@ -1,3 +1,4 @@
+export { json, jsonb } from './columns'
 export { createDatabase } from './database'
 export type { CreateDatabaseOptions, Database, Sql, TransactionSql } from './database'
 export type { Migration } from './migration'
