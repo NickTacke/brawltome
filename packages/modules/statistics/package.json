@@ -10,8 +10,7 @@
   },
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
-    "@brawltome/game-data": "workspace:*",
-    "postgres": "^3.4.0"
+    "@brawltome/game-data": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",

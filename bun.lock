@@ -138,7 +138,6 @@
       "name": "@brawltome/accounts",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
-        "postgres": "^3.4.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -183,7 +182,6 @@
       "name": "@brawltome/ranking",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
-        "postgres": "^3.4.0",
       },
       "devDependencies": {
         "typescript": "^5.7.0",
@@ -215,7 +213,6 @@
       "name": "@brawltome/request-admission",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
-        "postgres": "^3.4.0",
       },
       "devDependencies": {
         "typescript": "^5.7.0",
@@ -226,7 +223,6 @@
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
-        "postgres": "^3.4.0",
       },
       "devDependencies": {
         "@types/bun": "latest",

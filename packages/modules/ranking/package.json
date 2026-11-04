@@ -9,8 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@brawltome/foundation": "workspace:*",
-    "postgres": "^3.4.0"
+    "@brawltome/foundation": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
