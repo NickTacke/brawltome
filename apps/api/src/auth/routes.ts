@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { type Accounts, AccountsMaintenanceError, type PrimaryPlayerVerificationAttempt } from '@brawltome/accounts'
+import type { Accounts, PrimaryPlayerVerificationAttempt } from '@brawltome/accounts'
 import type { AcceptOperationResult, AcceptProofOperation } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
@@ -117,10 +117,6 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       })
       c.header('Set-Cookie', buildSessionCookie(sessionToken, SESSION_COOKIE_TTL_SEC), { append: true })
     } catch (err) {
-      if (err instanceof AccountsMaintenanceError) {
-        c.header('Retry-After', String(err.retryAfterSeconds))
-        return c.redirect(`${config.webOrigin}/account?error=maintenance`)
-      }
       logger.error('auth.discord_sign_in.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=server`)
     }
@@ -141,11 +137,6 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       try {
         await accounts.signOut(raw)
       } catch (err) {
-        if (err instanceof AccountsMaintenanceError) {
-          return c.json({ error: 'accounts_maintenance' }, 503, {
-            'Retry-After': String(err.retryAfterSeconds),
-          })
-        }
         logger.error('auth.signout.failed', err)
         return c.json({ error: 'signout_failed' }, 500)
       }
@@ -210,16 +201,8 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       return c.redirect(`${config.webOrigin}/account?error=steam`)
     }
 
-    let authentication: Awaited<ReturnType<Accounts['authenticate']>>
-    try {
-      authentication = await accounts.authenticate(rawToken)
-    } catch (err) {
-      if (err instanceof AccountsMaintenanceError) {
-        c.header('Retry-After', String(err.retryAfterSeconds))
-        return c.redirect(`${config.webOrigin}/account?error=maintenance`)
-      }
-      throw err
-    }
+    const authentication = await accounts.authenticate(rawToken)
+
     if (authentication.status === 'anonymous') {
       return c.redirect(`${config.webOrigin}/account?error=auth`)
     }
@@ -250,10 +233,6 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
         idempotencyKey,
       })
     } catch (err) {
-      if (err instanceof AccountsMaintenanceError) {
-        c.header('Retry-After', String(err.retryAfterSeconds))
-        return c.redirect(`${config.webOrigin}/account?error=maintenance`)
-      }
       logger.error('auth.primary_player_verification.failed', err)
       return c.redirect(`${config.webOrigin}/account?error=server`)
     }

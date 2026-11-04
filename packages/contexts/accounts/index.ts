@@ -1,6 +1,5 @@
 export {
   ACCOUNT_THEMES,
-  AccountsMaintenanceError,
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
   InvalidPinnedPlayerError,

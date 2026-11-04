@@ -36,13 +36,6 @@ export const DEFAULT_ACCOUNT_PREFERENCES: AccountPreferences = {
   theme: 'neutral',
 }
 
-export class AccountsMaintenanceError extends Error {
-  constructor(readonly retryAfterSeconds: number) {
-    super('Accounts is temporarily unavailable during maintenance')
-    this.name = 'AccountsMaintenanceError'
-  }
-}
-
 export class InvalidAccountPreferencesError extends Error {
   constructor() {
     super('Invalid account preferences')
