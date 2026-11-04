@@ -1,3 +1,4 @@
+import { parseBoundedInteger } from '@brawltome/foundation'
 import type { FreshnessAttempt, RefreshRequestDemand } from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
 import { type SourceUsage, sourceBudgetOpen } from './player-name-verification'
@@ -20,14 +21,6 @@ export type FreshnessPlannerConfig = {
   refreshIntervalMs: number
 }
 
-function boundedInteger(value: string | undefined, fallback: number, name: string, minimum: number, maximum: number) {
-  const parsed = value === undefined ? fallback : Number(value)
-  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
-  }
-  return parsed
-}
-
 export function readFreshnessPlannerConfig(env: NodeJS.ProcessEnv): FreshnessPlannerConfig {
   const enabled = env.FRESHNESS_PLANNER_ENABLED ?? 'true'
   if (enabled !== 'true' && enabled !== 'false') throw new Error('FRESHNESS_PLANNER_ENABLED must be true or false')
@@ -38,10 +31,26 @@ export function readFreshnessPlannerConfig(env: NodeJS.ProcessEnv): FreshnessPla
   return {
     enabled: enabled === 'true',
     maxUsageRatio,
-    batch: boundedInteger(env.FRESHNESS_BATCH, 4, 'FRESHNESS_BATCH', 1, 20),
-    intervalMs: boundedInteger(env.FRESHNESS_INTERVAL_MS, 30_000, 'FRESHNESS_INTERVAL_MS', 5_000, 15 * 60 * 1000),
-    windowDays: boundedInteger(env.FRESHNESS_WINDOW_DAYS, 14, 'FRESHNESS_WINDOW_DAYS', 1, viewRetentionDays),
-    refreshIntervalMs: boundedInteger(env.FRESHNESS_REFRESH_HOURS, 12, 'FRESHNESS_REFRESH_HOURS', 1, 7 * 24) * hourMs,
+    batch: parseBoundedInteger(env.FRESHNESS_BATCH, { name: 'FRESHNESS_BATCH', fallback: 4, minimum: 1, maximum: 20 }),
+    intervalMs: parseBoundedInteger(env.FRESHNESS_INTERVAL_MS, {
+      name: 'FRESHNESS_INTERVAL_MS',
+      fallback: 30_000,
+      minimum: 5_000,
+      maximum: 15 * 60 * 1000,
+    }),
+    windowDays: parseBoundedInteger(env.FRESHNESS_WINDOW_DAYS, {
+      name: 'FRESHNESS_WINDOW_DAYS',
+      fallback: 14,
+      minimum: 1,
+      maximum: viewRetentionDays,
+    }),
+    refreshIntervalMs:
+      parseBoundedInteger(env.FRESHNESS_REFRESH_HOURS, {
+        name: 'FRESHNESS_REFRESH_HOURS',
+        fallback: 12,
+        minimum: 1,
+        maximum: 7 * 24,
+      }) * hourMs,
   }
 }
 

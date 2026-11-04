@@ -34,6 +34,7 @@ export const policy: ArchitecturePolicy = {
     '@fixture/web': ['@/'],
   },
   workspaceRoleDependencies: {},
+  deployedMigrations: [],
   exceptions: [],
 }
 

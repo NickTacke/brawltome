@@ -77,3 +77,13 @@ export function requestWithVerifiedClientIp(request: Request, peerAddress: strin
   headers.set('x-client-ip', clientIp)
   return new Request(request, { headers })
 }
+
+// serve.ts puts the verified address in x-client-ip before any route runs; the others are fallbacks
+export function readClientIp(headers: Headers): string {
+  return (
+    headers.get('x-client-ip') ??
+    headers.get('cf-connecting-ip') ??
+    headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+    '0.0.0.0'
+  )
+}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { requestWithVerifiedClientIp } from '../src/client-ip'
+import { readClientIp, requestWithVerifiedClientIp } from '../src/client-ip'
 
 function verified(peerAddress: string, headers: Record<string, string>): string | null {
   const request = new Request('http://localhost/api/overlay/opponent/42', { headers })
@@ -42,5 +42,15 @@ describe('verified client IP', () => {
       }),
     ).toBe('198.51.100.20')
     expect(verified('10.0.1.5', { 'x-real-ip': '188.114.97.3' })).toBe('188.114.97.3')
+  })
+})
+
+describe('readClientIp', () => {
+  test('reads the client address from the verified header first', () => {
+    const headers = new Headers({ 'x-client-ip': '203.0.113.7', 'cf-connecting-ip': '198.51.100.1' })
+
+    expect(readClientIp(headers)).toBe('203.0.113.7')
+    expect(readClientIp(new Headers({ 'x-forwarded-for': '198.51.100.2, 10.0.0.1' }))).toBe('198.51.100.2')
+    expect(readClientIp(new Headers())).toBe('0.0.0.0')
   })
 })

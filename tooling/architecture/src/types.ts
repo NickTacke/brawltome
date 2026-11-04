@@ -56,6 +56,8 @@ export interface ArchitecturePolicy {
   contractsDependencies: string[]
   localImportAliases: Record<string, string[]>
   workspaceRoleDependencies: Record<string, WorkspaceRole[]>
+  // migration identities production has applied; their sql can't change, so the cross-module sql rule skips them
+  deployedMigrations: readonly string[]
   exceptions: TemporaryArchitectureException[]
 }
 

@@ -1,5 +1,4 @@
-import type { Database } from '@brawltome/foundation'
-import type { Sql, TransactionSql } from 'postgres'
+import type { Database, Sql, TransactionSql } from '@brawltome/foundation'
 import {
   ACCOUNT_THEMES,
   type Account,
