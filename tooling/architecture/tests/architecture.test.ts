@@ -96,11 +96,15 @@ describe('dependency architecture', () => {
     gameData.exports.push('./testing')
     const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
     if (!players) throw new Error('Missing Players fixture')
-    players.sourceFiles.push({ path: 'packages/players/tests/store.test.ts', imports: ['@fixture/game-data/testing'] })
+    players.sourceFiles.push({
+      path: 'packages/players/tests/store.test.ts',
+      imports: ['@fixture/game-data/testing'],
+      source: '',
+    })
     const sourceImport = structuredClone(fixture)
     sourceImport.workspaces
       .find(({ name }) => name === '@fixture/players')
-      ?.sourceFiles.push({ path: 'packages/players/src/store.ts', imports: ['@fixture/game-data/testing'] })
+      ?.sourceFiles.push({ path: 'packages/players/src/store.ts', imports: ['@fixture/game-data/testing'], source: '' })
 
     expect(rulesFor(fixture)).toEqual([])
     expect(checkArchitecture(sourceImport, policy).violations).toEqual([
@@ -198,13 +202,14 @@ describe('dependency architecture', () => {
     expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
   })
 
-  it('passes the current repository without temporary architecture exceptions', () => {
+  it('passes the current repository with only cross-module-sql exceptions', () => {
     const repository = readArchitectureRepository(resolve(import.meta.dir, '../../..'))
     const result = checkArchitecture(repository, currentArchitecturePolicy)
 
     expect(result.violations).toEqual([])
     expect(result.staleExceptions).toEqual([])
-    expect(result.appliedExceptions).toEqual([])
+    expect(result.appliedExceptions.length).toBeGreaterThan(0)
+    expect(result.appliedExceptions.every((exception) => exception.rule === 'cross-module-sql')).toBe(true)
   })
 
   it('reports named temporary exceptions without allowing new import locations', () => {

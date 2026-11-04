@@ -25,7 +25,7 @@ const exceptionSummary = result.appliedExceptions
   .map(({ id }) => id)
   .sort()
   .join(', ')
-console.log(`Architecture check passed with ${result.appliedExceptions.length} temporary V2 exceptions.`)
+console.log(`Architecture check passed with ${result.appliedExceptions.length} temporary exceptions.`)
 console.log(exceptionSummary)
 
 function byDiagnostic(left: (typeof result.violations)[number], right: (typeof result.violations)[number]): number {

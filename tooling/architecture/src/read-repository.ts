@@ -47,6 +47,7 @@ function readWorkspace(root: string, manifestPath: string): Workspace {
     sourceFiles: sourceFiles.map(({ repositoryPath, source }) => ({
       path: repositoryPath,
       imports: scanImports(source),
+      source,
     })),
   }
 }
