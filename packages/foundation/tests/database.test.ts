@@ -42,6 +42,18 @@ describeWithDatabase('createDatabase', () => {
     expect(fromDrizzle[0]?.value).toBe(1)
   })
 
+  test('keeps postgres.js parsing on the sql client that modules share with drizzle', async () => {
+    const database = open({ maxConnections: 1, applicationName: 'foundation-test' })
+    const at = new Date('2026-11-04T12:00:00.000Z')
+
+    const [row] = await database.sql<{ at: Date; document: { value: number } }[]>`
+      select ${at}::timestamptz as at, ${database.sql.json({ value: 1 })}::jsonb as document
+    `
+
+    expect(row?.at).toEqual(at)
+    expect(row?.document).toEqual({ value: 1 })
+  })
+
   test('sets the application name', async () => {
     const database = open({ maxConnections: 1, applicationName: 'foundation-test-name' })
 
