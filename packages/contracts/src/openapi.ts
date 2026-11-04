@@ -4,7 +4,6 @@ import { desktopRankedLookupInputSchema, desktopRankedLookupSchema } from './des
 import { playerCareerProfileSchema } from './player-career'
 import { playerRankedProfileSchema } from './player-ranked'
 import { playerRefreshResponseSchema, refreshOutcomeSchema } from './refresh-outcome'
-import { z } from './zod'
 
 export function generateContractOpenApi() {
   const registry = new OpenAPIRegistry()
