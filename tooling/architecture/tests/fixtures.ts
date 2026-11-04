@@ -44,42 +44,42 @@ const base: ArchitectureRepository = {
       path: 'apps/api',
       dependencies: ['@fixture/players'],
       exports: ['.'],
-      sourceFiles: [{ path: 'apps/api/src/index.ts', imports: ['@fixture/players'] }],
+      sourceFiles: [{ path: 'apps/api/src/index.ts', imports: ['@fixture/players'], source: '' }],
     },
     {
       name: '@fixture/web',
       path: 'apps/web',
       dependencies: ['@fixture/contracts'],
       exports: [],
-      sourceFiles: [{ path: 'apps/web/src/index.ts', imports: ['@fixture/contracts'] }],
+      sourceFiles: [{ path: 'apps/web/src/index.ts', imports: ['@fixture/contracts'], source: '' }],
     },
     {
       name: '@fixture/players',
       path: 'packages/players',
       dependencies: ['@fixture/game-data'],
       exports: ['.'],
-      sourceFiles: [{ path: 'packages/players/src/index.ts', imports: ['@fixture/game-data'] }],
+      sourceFiles: [{ path: 'packages/players/src/index.ts', imports: ['@fixture/game-data'], source: '' }],
     },
     {
       name: '@fixture/rankings',
       path: 'packages/rankings',
       dependencies: ['@fixture/players'],
       exports: ['.'],
-      sourceFiles: [{ path: 'packages/rankings/src/index.ts', imports: ['@fixture/players'] }],
+      sourceFiles: [{ path: 'packages/rankings/src/index.ts', imports: ['@fixture/players'], source: '' }],
     },
     {
       name: '@fixture/contracts',
       path: 'packages/contracts',
       dependencies: ['@fixture/game-data'],
       exports: ['.'],
-      sourceFiles: [{ path: 'packages/contracts/src/index.ts', imports: ['@fixture/game-data'] }],
+      sourceFiles: [{ path: 'packages/contracts/src/index.ts', imports: ['@fixture/game-data'], source: '' }],
     },
     {
       name: '@fixture/game-data',
       path: 'packages/game-data',
       dependencies: [],
       exports: ['.'],
-      sourceFiles: [{ path: 'packages/game-data/src/index.ts', imports: [] }],
+      sourceFiles: [{ path: 'packages/game-data/src/index.ts', imports: [], source: '' }],
     },
   ],
 }
@@ -98,6 +98,7 @@ export function withImport(
   workspace.sourceFiles.push({
     path: options.file ?? `${workspace.path}/src/violation.ts`,
     imports: [specifier],
+    source: '',
   })
   if (options.dependency && !workspace.dependencies.includes(options.dependency)) {
     workspace.dependencies.push(options.dependency)
@@ -111,6 +112,6 @@ export function cycleFixture(): ArchitectureRepository {
   if (!players) throw new Error('Missing Players fixture')
 
   players.dependencies.push('@fixture/rankings')
-  players.sourceFiles.push({ path: 'packages/players/src/cycle.ts', imports: ['@fixture/rankings'] })
+  players.sourceFiles.push({ path: 'packages/players/src/cycle.ts', imports: ['@fixture/rankings'], source: '' })
   return fixture
 }

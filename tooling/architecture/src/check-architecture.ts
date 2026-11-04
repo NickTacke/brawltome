@@ -245,7 +245,7 @@ function checkFileSql(
   policy: ArchitecturePolicy,
 ): ArchitectureViolation[] {
   const linesBySchema = new Map<string, number[]>()
-  for (const { schema, line } of findSchemaReferences(sourceFile.source ?? '', foreignSchemas)) {
+  for (const { schema, line } of findSchemaReferences(sourceFile.source, foreignSchemas)) {
     const lines = linesBySchema.get(schema) ?? []
     lines.push(line)
     linesBySchema.set(schema, lines)

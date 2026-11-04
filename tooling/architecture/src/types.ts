@@ -18,7 +18,7 @@ export interface SourceFile {
   path: string
   imports: string[]
   // file text, read for rules that look at content rather than imports
-  source?: string
+  source: string
 }
 
 export interface Workspace {
