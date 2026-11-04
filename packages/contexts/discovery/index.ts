@@ -110,68 +110,6 @@ export interface DiscoveryQueries {
   search(rawQuery: string): Promise<DiscoverySearchResult>
 }
 
-export type SemanticMigrationFixtureKind =
-  | 'canonical-identity'
-  | 'exact-prefix'
-  | 'normalized-exact-name'
-  | 'local-name'
-  | 'negative-legacy-only'
-  | 'preserved-route'
-  | 'ranking-accepted'
-  | 'ranking-rejected'
-
-export type SemanticMigrationExplanationCode =
-  | 'exact-first-ranking'
-  | 'word-start-match'
-  | 'legacy-only-not-owner-fact'
-  | 'ranking-set-rejected'
-
-export type SemanticMigrationFixture = {
-  key: string
-  kind: SemanticMigrationFixtureKind
-  expected: unknown
-  legacy: unknown
-  actual: unknown
-  explanationCode: SemanticMigrationExplanationCode | null
-}
-
-export type MigrationEvidenceInput = {
-  operationKey: string
-  sourceEvidenceHash: string
-  playerReconciliation: ReconciliationResult
-  clanReconciliation: ReconciliationResult
-  pendingPlayerEvents: number
-  pendingClanEvents: number
-  fixtures: SemanticMigrationFixture[]
-}
-
-export type SemanticMigrationMismatch = {
-  fixtureKey: string
-  fixtureKind: SemanticMigrationFixtureKind
-  explanationCode: SemanticMigrationExplanationCode | null
-  expected: unknown
-  legacy: unknown
-  actual: unknown
-  reason: string
-}
-
-export type MigrationEvidenceResult = {
-  runId: string
-  operationKey: string
-  inputHash: string
-  sourceEvidenceHash: string
-  status: 'passed' | 'blocked'
-  playerProjectionHash: string
-  clanProjectionHash: string
-  fixtureHash: string
-  fixtureCount: number
-  intentionalDifferenceCount: number
-  unexplainedMismatchCount: number
-  mismatchDetailCount: number
-  mismatchDetailsTruncated: boolean
-  mismatches: SemanticMigrationMismatch[]
-}
-
 // Folds what people don't type when searching: accents ("La Fée" -> "la fee") and styled letters like full-width or
 // mathematical alphabets ("𝓐𝓵𝓹𝓱𝓪" -> "alpha"). Only marks on Latin letters go, so Japanese voicing marks stay.
 export function normalizeDiscoveryTerm(value: string): string {
@@ -192,7 +130,7 @@ export type PlayerSearchTerm = {
   normalized: string
 }
 
-// Every term a player is indexed under. Search, reconciliation and the migration evidence all use this one list.
+// Every term a player is indexed under. Search and reconciliation both use this one list.
 export function playerSearchTerms(fact: PlayerDiscoveryFact): PlayerSearchTerm[] {
   const terms: PlayerSearchTerm[] = []
   const seen = new Set<string>()
