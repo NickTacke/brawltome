@@ -41,16 +41,18 @@ export async function createTestDatabase({ label, modules }: CreateTestDatabaseO
   const connectionString = withDatabaseName(serverUrl, databaseName)
   await migrateOrDrop(connectionString, migrations, dropDatabase)
 
-  const database = createDatabase(connectionString, {
-    maxConnections: clientConnections,
-    applicationName: testApplicationName,
-  })
+  const database = openTestClient(connectionString)
 
   return {
     ...database,
     connectionString,
     drop: () => closeAndDrop(database, dropDatabase, databaseName),
   }
+}
+
+// another client on a test database, like the one a separate or restarted process opens; the caller closes it
+export function openTestClient(connectionString: string): Database {
+  return createDatabase(connectionString, { maxConnections: clientConnections, applicationName: testApplicationName })
 }
 
 // the database goes even when closing the client fails, and neither failure is lost

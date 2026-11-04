@@ -5,7 +5,7 @@ import type { Database } from '../database'
 import type { Migration } from '../migration'
 import { checksumSql } from '../migrations/plan'
 import type { BrawltomeModule } from '../module'
-import { type TestDatabase, createTestDatabase } from '../testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '../testing'
 
 const connectionString = process.env.DATABASE_URL
 const describeWithDatabase = connectionString ? describe : describe.skip
@@ -113,6 +113,19 @@ describeWithDatabase('createTestDatabase', () => {
     )
 
     expect([...result]).toEqual([{ application_name: 'brawltome-test' }])
+  })
+
+  test('opens another client on the same database that closes on its own', async () => {
+    const database = await create('another_client', [playersModule])
+    const client = openTestClient(database.connectionString)
+
+    const [row] = await client.sql<{ name: string; database: string }[]>`
+      SELECT current_setting('application_name') AS name, current_database() AS database
+    `
+    await client.close()
+
+    expect(row).toEqual({ name: 'brawltome-test', database: databaseNameOf(database) })
+    expect(await database.sql`SELECT 1`).toHaveLength(1)
   })
 
   test('removes the database on drop', async () => {
