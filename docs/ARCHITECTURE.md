@@ -36,8 +36,9 @@ export const rankingModule = {
 } satisfies BrawltomeModule
 ```
 
-`dependsOn` lists the modules that must be loaded beside it. Nothing else about a module is registered anywhere: the
-rest of `index.ts` is plain exports, mostly `createPostgres<Thing>(database)` factories.
+`dependsOn` lists the modules that must be loaded beside it. At run time that is all a module registers: the rest of
+`index.ts` is plain exports, mostly `createPostgres<Thing>(database)` factories. Adding a module to the build checks is
+a separate step, listed under Checks.
 
 Modules are rebuilt one at a time. Until then a module keeps its old layout; see
 [`packages/modules/README.md`](../packages/modules/README.md) for the target one.
@@ -72,7 +73,8 @@ Each process has a list of the modules it needs:
 
 The worker leaves out `replay-analysis`; the other two lists have all nine. At start-up `serve.ts` and
 `operations-worker.ts` call `checkModuleList` on their list, which fails on a duplicate name, a missing dependency, a
-dependency cycle, or migrations that don't sit under one owner name per module. They then build the module factories by
+dependency cycle, migrations under more than one owner name in a module, or one owner name shared by two modules.
+They then build the module factories by
 hand from one shared database client and pass the modules' migrations to the readiness check, so a process reports
 unready until the schema has what it expects.
 
@@ -98,7 +100,10 @@ The order is:
 2. Every later migration comes after its `predecessor` and its `requires`. When several are ready, the one with the
    lowest identity goes first.
 
-So a new migration only needs its own declaration. It doesn't go into any central list. A new migration that names
+There is no central list of migrations any more, but each module still keeps its own. A new migration is a file in
+the module's `migrations/` folder that is imported in the module's `index.ts` and added to its
+`<name>MigrationInventory` array, which the `<name>Module` object passes on as `migrations`. The runner only reads that
+array, so a file that isn't in it never runs. A new migration that names
 another module's schema must list one of that module's migrations in `requires`, so that module's tables exist first.
 The runner refuses a changed checksum on an applied migration, a missing predecessor, an unknown `requires` and cycles.
 

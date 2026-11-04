@@ -107,7 +107,9 @@ change. Check each workflow's `paths` before assuming a change is covered.
 - A module's `index.ts` is its only public surface. Import `@brawltome/<name>`, never a path inside it.
 - Don't read or write another module's tables. Call what that module exports.
 - Migrations live in the module that owns the table. When one needs another module's table first, list its identity in
-  `requires`; a new migration needs nothing else, since the order comes from `predecessor` and `requires`.
+  `requires`. A new migration is a file in the module's `migrations/` folder, imported in the module's `index.ts` and
+  added to its `<name>MigrationInventory` array: the runner only reads that array. There is no central list; the order
+  comes from `predecessor` and `requires`.
   `architecture:check` fails on a new migration that names another module's schema without such a `requires`.
 - A new module is added to the three module lists, to `tooling/architecture/src/current-policy.ts` and to
   `tooling/architecture/tests/module-surfaces.test.ts`, with a dev dependency on it in
