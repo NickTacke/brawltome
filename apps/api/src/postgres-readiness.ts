@@ -11,8 +11,9 @@ type AppliedMigration = {
 }
 
 /**
- * Later rows are compatible only during an expand-first rollout. Contract or destructive
- * migrations require a coordinated compatibility fence before old replicas may overlap.
+ * Every migration this process loads must be applied with the same checksum. History rows it doesn't know, such
+ * as a newer release's migrations or those of modules it doesn't load, are ignored. That is safe only while
+ * migrations expand first: a contract or destructive migration needs the old replicas gone before it runs.
  */
 export function assertKnownMigrationsApplied(
   expected: readonly ExpectedMigration[],
@@ -59,7 +60,6 @@ export function createPostgresReadiness(
   }
 }
 
-// a postgres.js query: a promise that can be cancelled
 type CancellableQuery<T> = Promise<T> & { cancel(): unknown }
 
 // a timed-out probe is cancelled: postgres.js drops it from the queue if it hasn't started, so probes made while the
