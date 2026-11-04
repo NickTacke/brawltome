@@ -1,5 +1,9 @@
 import { discordBotProcedure, router } from '../trpc/trpc'
 
-export const statusRouter = router({
-  discordReady: discordBotProcedure.query(() => ({ status: 'ready' as const })),
-})
+export function createStatusRouter(procedure = discordBotProcedure) {
+  return router({
+    discordReady: procedure.query(() => ({ status: 'ready' as const })),
+  })
+}
+
+export const statusRouter = createStatusRouter()

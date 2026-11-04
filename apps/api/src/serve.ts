@@ -33,6 +33,8 @@ import { requestWithVerifiedClientIp } from './client-ip'
 import { createApiDatabase } from './database-pools'
 import { createHealthRoutes } from './health-routes'
 import { apiModules } from './modules'
+import { readClientIp } from './orpc/context'
+import { createOrpcRoutes } from './orpc/mount'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
@@ -197,11 +199,7 @@ app.use(
   trpcServer({
     router: appRouter,
     createContext: async (_opts, c) => {
-      const clientIp =
-        c.req.header('x-client-ip') ??
-        c.req.header('cf-connecting-ip') ??
-        c.req.header('x-forwarded-for')?.split(',')[0].trim() ??
-        '0.0.0.0'
+      const clientIp = readClientIp(c.req.raw.headers)
       const ua = c.req.header('x-original-ua') ?? c.req.header('user-agent') ?? ''
       const isBot =
         /bot|crawl|spider|slurp|facebookexternalhit|meta-webindexer|bingpreview|yandex|baidu|duckduckbot|twitterbot|linkedinbot|embedly|quora|pinterest|redditbot|applebot|semrush|ahrefs|mj12bot|dotbot|petalbot|bytespider/i.test(
@@ -239,6 +237,9 @@ app.use(
     },
   }),
 )
+
+// oRPC is served next to tRPC while the modules move over one by one: /rpc/* and /openapi.json
+app.route('/', createOrpcRoutes({ telemetry }))
 
 app.route('/health', createHealthRoutes(lifecycle))
 
