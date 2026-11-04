@@ -31,6 +31,7 @@ export {
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   type PostgresRefreshOperations,
+  type RefreshOperationsDatabases,
 } from './postgres'
 
 export const refreshOperationsMigrationInventory = [

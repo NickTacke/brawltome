@@ -6,7 +6,7 @@ import postgres from 'postgres'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -48,41 +48,37 @@ const clan = (clanId: number, clanName: string, clanXp: string, memberCount = 0)
 
 describe('Discovery cross-kind search', () => {
   test('returns type-distinct overlapping identities and ranks clans by exactness, numeric XP, then stable identity', async () => {
-    const discovery = createPostgresDiscovery(connectionString)
-    try {
-      await discovery.rebuildPlayers({ sourceVersion: 1, facts: [player(42, 'Shared Prefix')] })
-      await discovery.rebuildClans({
-        sourceVersion: 1,
-        pendingEventCount: 0,
-        oldestPendingAt: null,
-        facts: [
-          clan(42, 'Shared', '10', 2),
-          clan(9, 'Shared', '900719925474099312345', 3),
-          clan(7, 'Shared Prefix', '999999999999999999999', 4),
-          clan(5, 'Shared', '900719925474099312345', 5),
-          clan(11, 'Shared Two', '999999999999999999999', 6),
-          clan(13, 'Shared Three', '999999999999999999999', 7),
-          clan(15, 'Shared Four', '999999999999999999999', 8),
-        ],
-      })
+    const discovery = createPostgresDiscovery(database)
+    await discovery.rebuildPlayers({ sourceVersion: 1, facts: [player(42, 'Shared Prefix')] })
+    await discovery.rebuildClans({
+      sourceVersion: 1,
+      pendingEventCount: 0,
+      oldestPendingAt: null,
+      facts: [
+        clan(42, 'Shared', '10', 2),
+        clan(9, 'Shared', '900719925474099312345', 3),
+        clan(7, 'Shared Prefix', '999999999999999999999', 4),
+        clan(5, 'Shared', '900719925474099312345', 5),
+        clan(11, 'Shared Two', '999999999999999999999', 6),
+        clan(13, 'Shared Three', '999999999999999999999', 7),
+        clan(15, 'Shared Four', '999999999999999999999', 8),
+      ],
+    })
 
-      const result = await discovery.search('  SHARED  ')
-      expect(result.players).toEqual([expect.objectContaining({ brawlhallaId: 42, name: 'Shared Prefix' })])
-      expect(result.clans).toEqual([
-        { clanId: 5, clanName: 'Shared', clanXp: '900719925474099312345', memberCount: 5 },
-        { clanId: 9, clanName: 'Shared', clanXp: '900719925474099312345', memberCount: 3 },
-        { clanId: 42, clanName: 'Shared', clanXp: '10', memberCount: 2 },
-        { clanId: 7, clanName: 'Shared Prefix', clanXp: '999999999999999999999', memberCount: 4 },
-        { clanId: 11, clanName: 'Shared Two', clanXp: '999999999999999999999', memberCount: 6 },
-      ])
-      expect(result.clans).toHaveLength(5)
-    } finally {
-      await discovery.close()
-    }
+    const result = await discovery.search('  SHARED  ')
+    expect(result.players).toEqual([expect.objectContaining({ brawlhallaId: 42, name: 'Shared Prefix' })])
+    expect(result.clans).toEqual([
+      { clanId: 5, clanName: 'Shared', clanXp: '900719925474099312345', memberCount: 5 },
+      { clanId: 9, clanName: 'Shared', clanXp: '900719925474099312345', memberCount: 3 },
+      { clanId: 42, clanName: 'Shared', clanXp: '10', memberCount: 2 },
+      { clanId: 7, clanName: 'Shared Prefix', clanXp: '999999999999999999999', memberCount: 4 },
+      { clanId: 11, clanName: 'Shared Two', clanXp: '999999999999999999999', memberCount: 6 },
+    ])
+    expect(result.clans).toHaveLength(5)
   })
 
   test('concurrent Clan rebuild and delivery converge on the same current owner fact', async () => {
-    const discovery = createPostgresDiscovery(connectionString)
+    const discovery = createPostgresDiscovery(database)
     const currentFact = clan(42, 'Concurrent Current', '12345678901234567890', 9)
     const eventId = randomUUID()
     const acknowledged: string[] = []
@@ -99,15 +95,11 @@ describe('Discovery cross-kind search', () => {
       }),
       lag: async () => 1,
     }
-    try {
-      await Promise.all([discovery.deliverPendingClans(source, 100), discovery.rebuildClansFrom(source)])
-      expect(acknowledged).toEqual([eventId])
-      expect((await discovery.search('concurrent')).clans).toEqual([
-        { clanId: 42, clanName: 'Concurrent Current', clanXp: '12345678901234567890', memberCount: 9 },
-      ])
-    } finally {
-      await discovery.close()
-    }
+    await Promise.all([discovery.deliverPendingClans(source, 100), discovery.rebuildClansFrom(source)])
+    expect(acknowledged).toEqual([eventId])
+    expect((await discovery.search('concurrent')).clans).toEqual([
+      { clanId: 42, clanName: 'Concurrent Current', clanXp: '12345678901234567890', memberCount: 9 },
+    ])
   })
 
   test('uses the cross-kind prefix index for the production Clan query under normal planner settings', async () => {

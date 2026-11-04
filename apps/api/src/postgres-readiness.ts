@@ -1,4 +1,4 @@
-import postgres from 'postgres'
+import type { Sql } from '@brawltome/foundation'
 
 type ExpectedMigration = {
   identity: string
@@ -31,19 +31,15 @@ export function assertKnownMigrationsApplied(
   }
 }
 
-export function createPostgresReadiness(connectionString: string, expectedMigrations: readonly ExpectedMigration[]) {
-  const client = postgres(connectionString, { max: 1, connect_timeout: 5 })
-
+// runs on the process's own client: a pool too busy to answer is a dependency that isn't ready
+export function createPostgresReadiness(sql: Sql, expectedMigrations: readonly ExpectedMigration[]) {
   return {
     async check(): Promise<void> {
-      const rows = await client<AppliedMigration[]>`
+      const rows = await sql<AppliedMigration[]>`
         SELECT identity, checksum
         FROM brawltome_migrations.history
       `
       assertKnownMigrationsApplied(expectedMigrations, rows)
-    },
-    async close(): Promise<void> {
-      await client.end({ timeout: 5 })
     },
   }
 }

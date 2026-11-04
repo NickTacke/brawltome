@@ -63,6 +63,23 @@ change. Check each workflow's `paths` before assuming a change is covered.
   `bun run infra:observability:deploy` (see `infra/observability/deploy-via-dokploy.sh` for the required env).
 - Backup verifier and storage helpers are host installs (`infra/app/backups/install.sh`), not part of a deploy.
 - Alerting: see [`docs/operations/alerts.md`](docs/operations/alerts.md).
+- Database connections: each process opens one client per job, sized in `apps/api/src/database-pools.ts`, and
+  postgres.js adds one LISTEN connection beside the API's and the worker's main client. With `c` =
+  `OPERATIONS_TOTAL_CONCURRENCY` (default 8, at most 23):
+
+  | client | connections |
+  |---|---|
+  | API (`brawltome-api`) | 20 + 1 listener |
+  | worker main (`brawltome-operations-worker`) | c + 4, + 1 listener |
+  | worker lease renewals (`brawltome-operations-worker-renewals`) | c |
+  | worker discovery (`brawltome-operations-worker-discovery`) | 3 |
+  | migration runner | 1 |
+
+  A deploy runs two APIs beside one worker (the worker is replaced, never overlapped), so the runtime role needs at
+  most `2 × 21 + (c + 5) + c + 3 = 50 + 2c`: 96 at c = 23. Postgres allows 100 connections but keeps 3 for
+  superusers, and `brawltome_runtime` isn't one, so the runtime role gets 97. With the migration runner the total is
+  97, under 100. `apps/api/tests/database-pools.test.ts` checks both numbers; change it, this table and the pool
+  sizes together.
 
 ## Rules that are easy to break
 
@@ -72,7 +89,10 @@ change. Check each workflow's `paths` before assuming a change is covered.
   deliberate maintenance-window restart.
 - Traefik labels in `infra/app/compose.yml` hard-code Dokploy's generated router names. Recreating a domain in
   Dokploy means updating those labels.
-- Postgres `max_connections` is 100 and a deploy briefly runs two APIs; watch pool sizes.
+- Postgres `max_connections` is 100 and a deploy briefly runs two APIs; see the connection budget under Production
+  before adding a client or changing a pool size.
+- Modules share their process's client. Never hold a transaction open while calling another module or another query
+  on the same client: each such call needs a second connection, and enough of them at once exhaust the pool.
 - Postgres data is on its own loop-mounted ext4 image (`/srv/brawltome/postgres`); host `df` does not show it.
 - Brawlhalla V0 rate-limits short bursts well below its 180/15 min budget: smooth new V0 traffic, don't just budget it.
   V0 returns 503 during maintenance; the worker pauses the source.

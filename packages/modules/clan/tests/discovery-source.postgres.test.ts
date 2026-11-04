@@ -5,7 +5,7 @@ import postgres from 'postgres'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -54,8 +54,8 @@ const provenance = { source: 'v1-guild-stats' as const, outcome: 'success' as co
 
 describe('Clans discovery fact source', () => {
   test('hydrates current facts for renames, XP, membership transfer, replay, and removals', async () => {
-    const clans = createPostgresClans(connectionString)
-    const source = createPostgresClanDiscoverySource(connectionString)
+    const clans = createPostgresClans(database)
+    const source = createPostgresClanDiscoverySource(database)
     const control = postgres(connectionString)
     try {
       await clans.publishProfile(profile(42, 'Old Name', '10'), new Date('2024-01-01T00:00:00.000Z'), provenance)
@@ -101,13 +101,13 @@ describe('Clans discovery fact source', () => {
       const removal = await source.pendingEvents(100)
       expect(removal.find(({ clanId }) => clanId === 42)?.fact).toBeNull()
     } finally {
-      await Promise.all([clans.close(), source.close(), control.end()])
+      await control.end()
     }
   })
 
   test('trims day-old delivered events on acknowledgement and keeps recent and pending ones', async () => {
-    const clans = createPostgresClans(connectionString)
-    const source = createPostgresClanDiscoverySource(connectionString)
+    const clans = createPostgresClans(database)
+    const source = createPostgresClanDiscoverySource(database)
     const control = postgres(connectionString)
     try {
       await control`DELETE FROM clans.discovery_outbox`
@@ -128,7 +128,7 @@ describe('Clans discovery fact source', () => {
       expect(new Set(remaining.map(({ event_id }) => event_id))).toEqual(new Set([recent.eventId, pending.eventId]))
       expect(await source.lag()).toBe(1)
     } finally {
-      await Promise.all([clans.close(), source.close(), control.end()])
+      await control.end()
     }
   })
 })

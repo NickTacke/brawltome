@@ -46,5 +46,4 @@ export interface ReplayAnalysisJobs {
   fail(id: string, leaseToken: string, failure: ReplayJobFailure): Promise<boolean>
   renew(id: string, leaseToken: string, leaseSeconds: number): Promise<boolean>
   release(id: string, leaseToken: string): Promise<boolean>
-  close(): Promise<void>
 }

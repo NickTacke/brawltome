@@ -72,7 +72,7 @@ async function migratedDatabase() {
   })
   testDatabases.push(database)
   const sql = postgres(database.connectionString, { max: 4, onnotice: () => undefined })
-  return { url: database.connectionString, sql }
+  return { database, sql }
 }
 
 type Sql = ReturnType<typeof postgres>
@@ -760,8 +760,8 @@ describe('Ranking snapshot retention', () => {
   }, 30_000)
 
   test('serves snapshot_not_found for expired pins while current leaderboard and activity keep working', async () => {
-    const { sql, url } = await migratedDatabase()
-    const ranking = createPostgresRanking(url)
+    const { sql, database } = await migratedDatabase()
+    const ranking = createPostgresRanking(database)
     try {
       const now = await databaseNow(sql)
       const expiredGeneration = await insertGeneration(sql, {
@@ -808,15 +808,14 @@ describe('Ranking snapshot retention', () => {
       expect(activity.entries.map(({ gamesDelta }) => gamesDelta)).toEqual([3, 3])
       expect(partner.generationId).toBeDefined()
     } finally {
-      await ranking.close()
       await sql.end()
     }
   }, 30_000)
 
   test('reads a pinned snapshot consistently when retention deletes it between metadata and rows', async () => {
-    const { sql, url } = await migratedDatabase()
+    const { sql, database } = await migratedDatabase()
     let deleteOnce: (() => Promise<void>) | undefined
-    const ranking = createPostgresRanking(url, {
+    const ranking = createPostgresRanking(database, {
       afterMetadataRead: async () => {
         const run = deleteOnce
         deleteOnce = undefined
@@ -864,15 +863,14 @@ describe('Ranking snapshot retention', () => {
         }),
       ).toMatchObject({ status: 'unavailable', reason: 'snapshot_not_found' })
     } finally {
-      await ranking.close()
       await sql.end()
     }
   }, 30_000)
 
   test('reads recent activity consistently when retention deletes the compared snapshots mid-request', async () => {
-    const { sql, url } = await migratedDatabase()
+    const { sql, database } = await migratedDatabase()
     let deleteOnce: (() => Promise<void>) | undefined
-    const ranking = createPostgresRanking(url, {
+    const ranking = createPostgresRanking(database, {
       afterMetadataRead: async () => {
         const run = deleteOnce
         deleteOnce = undefined
@@ -908,15 +906,14 @@ describe('Ranking snapshot retention', () => {
       expect(activity.entries.map(({ gamesDelta }) => gamesDelta)).toEqual([3, 3])
       expect(await storedGenerationIds(sql)).not.toContain(previous.generationId)
     } finally {
-      await ranking.close()
       await sql.end()
     }
   }, 30_000)
 
   test('runs the scheduled maintenance operation lease-fenced and records what it expired', async () => {
-    const { sql, url } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations(url)
-    const ranking = createPostgresRanking(url)
+    const { sql, database } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
     try {
@@ -1009,15 +1006,13 @@ describe('Ranking snapshot retention', () => {
       })
     } finally {
       await telemetry.shutdown(50)
-      await ranking.close()
-      await operations.close()
       await sql.end()
     }
   }, 30_000)
 
   test('pauses the schedule and completes leftover runs as no-ops when retention is disabled', async () => {
-    const { sql, url } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations(url)
+    const { sql, database } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations({ database })
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
     try {
@@ -1079,15 +1074,14 @@ describe('Ranking snapshot retention', () => {
       expect((await operations.materializeDueSchedules()).occurrences).toHaveLength(1)
     } finally {
       await telemetry.shutdown(50)
-      await operations.close()
       await sql.end()
     }
   }, 30_000)
 
   test('completes a retention batch that outlives its lease together with the delete', async () => {
-    const { sql, url } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations(url)
-    const ranking = createPostgresRanking(url)
+    const { sql, database } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     try {
       const now = await databaseNow(sql)
       const old = [
@@ -1143,8 +1137,6 @@ describe('Ranking snapshot retention', () => {
       expect(remaining).not.toContain(old[1]?.generationId)
       expect(remaining).toContain(old[2]?.generationId)
     } finally {
-      await ranking.close()
-      await operations.close()
       await sql.end()
     }
   }, 30_000)
@@ -1211,8 +1203,8 @@ describe('Ranking snapshot retention', () => {
   }, 30_000)
 
   test('rejects ranking retention payloads outside the safe bounds before and inside the database', async () => {
-    const { sql, url } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations(url)
+    const { sql, database } = await migratedDatabase()
+    const operations = createPostgresRefreshOperations({ database })
     try {
       const definition = rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)
       await expect(
@@ -1260,7 +1252,6 @@ describe('Ranking snapshot retention', () => {
         ).toContain('operations_payload_by_kind')
       }
     } finally {
-      await operations.close()
       await sql.end()
     }
   }, 30_000)

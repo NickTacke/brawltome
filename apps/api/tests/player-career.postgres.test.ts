@@ -16,7 +16,7 @@ import {
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 const emptySnapshot = {
@@ -156,49 +156,45 @@ async function expireLease(operationId: string) {
 
 describe('Players-owned canonical career state', () => {
   test('persists measured zero and authoritative empty collections through a fenced stats operation', async () => {
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
-    try {
-      const lease = await claimCareerOperation(operations, 91913839)
-      expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('execute')
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
+    const lease = await claimCareerOperation(operations, 91913839)
+    expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('execute')
 
-      await refreshCanonicalCareerPlayer(
-        players,
-        source({ ...emptySnapshot, clan: null }),
-        91913839,
-        { caller: 'on-demand' },
-        effectFor(lease),
-        resolveLegend,
-      )
-      expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('already-applied')
-      expect(await operations.complete(lease)).toBe('transitioned')
+    await refreshCanonicalCareerPlayer(
+      players,
+      source({ ...emptySnapshot, clan: null }),
+      91913839,
+      { caller: 'on-demand' },
+      effectFor(lease),
+      resolveLegend,
+    )
+    expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('already-applied')
+    expect(await operations.complete(lease)).toBe('transitioned')
 
-      expect(await players.referenceById(91913839)).toEqual({
-        brawlhallaId: 91913839,
-        name: 'Measured Zero',
-        observedAt: expect.any(Date),
-        legacy: false,
-        bestLegendNameKey: null,
-      })
-      const profile = await players.byId(91913839)
-      expect(profile?.snapshot).toMatchObject({
-        guild: null,
-        account: { xp: 0, level: 0, xpPercentage: 0 },
-        combat: { games: 0, wins: 0, matchTime: 0, damageBomb: '9007199254740993' },
-        legends: [],
-        weapons: [],
-      })
-      expect(profile?.checkedAt).toBeInstanceOf(Date)
-      expect(profile?.lastSuccessAt).toEqual(profile?.checkedAt)
-    } finally {
-      await Promise.all([players.close(), operations.close()])
-    }
+    expect(await players.referenceById(91913839)).toEqual({
+      brawlhallaId: 91913839,
+      name: 'Measured Zero',
+      observedAt: expect.any(Date),
+      legacy: false,
+      bestLegendNameKey: null,
+    })
+    const profile = await players.byId(91913839)
+    expect(profile?.snapshot).toMatchObject({
+      guild: null,
+      account: { xp: 0, level: 0, xpPercentage: 0 },
+      combat: { games: 0, wins: 0, matchTime: 0, damageBomb: '9007199254740993' },
+      legends: [],
+      weapons: [],
+    })
+    expect(profile?.checkedAt).toBeInstanceOf(Date)
+    expect(profile?.lastSuccessAt).toEqual(profile?.checkedAt)
   })
 
   test('records the prior career name as a searchable alias', async () => {
     const brawlhallaId = 91913850
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     try {
       for (const name of ['Former Career Name', 'Current Career Name']) {
@@ -222,14 +218,14 @@ describe('Players-owned canonical career state', () => {
         `),
       ]).toEqual([{ normalized_alias: 'former career name', display_alias: 'Former Career Name' }])
     } finally {
-      await Promise.all([players.close(), operations.close(), control.end()])
+      await control.end()
     }
   }, 15_000)
 
   test('repairs source mojibake without preserving the corrupted prior name as an alias', async () => {
     const brawlhallaId = 91913851
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     try {
       const initialLease = await claimCareerOperation(operations, brawlhallaId)
@@ -333,100 +329,96 @@ describe('Players-owned canonical career state', () => {
       `
       expect(corroboratedAmbiguousProfile.player_name).toBe('é')
     } finally {
-      await Promise.all([players.close(), operations.close(), control.end()])
+      await control.end()
     }
   }, 15_000)
 
   test('retains the last success after a malformed attempt and authoritatively clears children on retry', async () => {
     const brawlhallaId = 91913840
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
     const populated = {
       ...emptySnapshot,
       brawlhalla_id: brawlhallaId,
       clan: { clan_id: 2_616_365, clan_name: 'Son of God' },
       legends: [populatedLegend],
     }
+    const firstLease = await claimCareerOperation(operations, brawlhallaId)
+    await refreshCanonicalCareerPlayer(
+      players,
+      source(populated),
+      brawlhallaId,
+      { caller: 'on-demand' },
+      effectFor(firstLease),
+      resolveLegend,
+    )
+    await operations.complete(firstLease)
+    const first = await players.byId(brawlhallaId)
+    if (!first?.lastSuccessAt) throw new Error('Expected an initial career success')
+    expect(first.snapshot?.guild).toEqual({ guildId: 2_616_365, guildName: 'Son of God' })
+    expect(first.snapshot?.legends).toEqual([
+      expect.objectContaining({
+        legendId: 3,
+        damageDealt: '9007199254740993',
+        weaponOne: { damage: '9007199254740993', kos: 12, heldTime: 500 },
+        weaponTwo: { damage: '7', kos: 5, heldTime: 100 },
+      }),
+    ])
+    expect(first.snapshot?.weapons).toEqual([
+      { weapon: 'Hammer', heldTime: 500, damage: '9007199254740993', kos: 12 },
+      { weapon: 'Sword', heldTime: 100, damage: '7', kos: 5 },
+    ])
+    const outbox = postgres(connectionString, { max: 1 })
     try {
-      const firstLease = await claimCareerOperation(operations, brawlhallaId)
-      await refreshCanonicalCareerPlayer(
+      const [events] = await outbox<{ count: number }[]>`
+        SELECT count(*)::integer AS count
+        FROM players.discovery_outbox
+        WHERE brawlhalla_id = ${brawlhallaId}
+      `
+      expect(events.count).toBe(1)
+    } finally {
+      await outbox.end()
+    }
+
+    await Bun.sleep(5)
+    const retryLease = await claimCareerOperation(operations, brawlhallaId)
+    await expect(
+      refreshCanonicalCareerPlayer(
         players,
-        source(populated),
-        brawlhallaId,
-        { caller: 'on-demand' },
-        effectFor(firstLease),
-        resolveLegend,
-      )
-      await operations.complete(firstLease)
-      const first = await players.byId(brawlhallaId)
-      if (!first?.lastSuccessAt) throw new Error('Expected an initial career success')
-      expect(first.snapshot?.guild).toEqual({ guildId: 2_616_365, guildName: 'Son of God' })
-      expect(first.snapshot?.legends).toEqual([
-        expect.objectContaining({
-          legendId: 3,
-          damageDealt: '9007199254740993',
-          weaponOne: { damage: '9007199254740993', kos: 12, heldTime: 500 },
-          weaponTwo: { damage: '7', kos: 5, heldTime: 100 },
-        }),
-      ])
-      expect(first.snapshot?.weapons).toEqual([
-        { weapon: 'Hammer', heldTime: 500, damage: '9007199254740993', kos: 12 },
-        { weapon: 'Sword', heldTime: 100, damage: '7', kos: 5 },
-      ])
-      const outbox = postgres(connectionString, { max: 1 })
-      try {
-        const [events] = await outbox<{ count: number }[]>`
-          SELECT count(*)::integer AS count
-          FROM players.discovery_outbox
-          WHERE brawlhalla_id = ${brawlhallaId}
-        `
-        expect(events.count).toBe(1)
-      } finally {
-        await outbox.end()
-      }
-
-      await Bun.sleep(5)
-      const retryLease = await claimCareerOperation(operations, brawlhallaId)
-      await expect(
-        refreshCanonicalCareerPlayer(
-          players,
-          source({ ...populated, legends: undefined }),
-          brawlhallaId,
-          { caller: 'on-demand' },
-          effectFor(retryLease),
-          resolveLegend,
-        ),
-      ).rejects.toThrow('career.legends must be an array')
-
-      const retained = await players.byId(brawlhallaId)
-      expect(retained?.lastSuccessAt).toEqual(first.lastSuccessAt)
-      expect(retained?.checkedAt.getTime()).toBeGreaterThan(first.checkedAt.getTime())
-      expect(retained?.snapshot?.legends).toHaveLength(1)
-      expect(retained?.snapshot?.weapons).toHaveLength(2)
-
-      await refreshCanonicalCareerPlayer(
-        players,
-        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
+        source({ ...populated, legends: undefined }),
         brawlhallaId,
         { caller: 'on-demand' },
         effectFor(retryLease),
         resolveLegend,
-      )
-      await operations.complete(retryLease)
-      const cleared = await players.byId(brawlhallaId)
-      expect(cleared?.snapshot?.guild).toBeNull()
-      expect(cleared?.snapshot?.legends).toEqual([])
-      expect(cleared?.snapshot?.weapons).toEqual([])
-    } finally {
-      await Promise.all([players.close(), operations.close()])
-    }
+      ),
+    ).rejects.toThrow('career.legends must be an array')
+
+    const retained = await players.byId(brawlhallaId)
+    expect(retained?.lastSuccessAt).toEqual(first.lastSuccessAt)
+    expect(retained?.checkedAt.getTime()).toBeGreaterThan(first.checkedAt.getTime())
+    expect(retained?.snapshot?.legends).toHaveLength(1)
+    expect(retained?.snapshot?.weapons).toHaveLength(2)
+
+    await refreshCanonicalCareerPlayer(
+      players,
+      source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
+      brawlhallaId,
+      { caller: 'on-demand' },
+      effectFor(retryLease),
+      resolveLegend,
+    )
+    await operations.complete(retryLease)
+    const cleared = await players.byId(brawlhallaId)
+    expect(cleared?.snapshot?.guild).toBeNull()
+    expect(cleared?.snapshot?.legends).toEqual([])
+    expect(cleared?.snapshot?.weapons).toEqual([])
   })
 
   test('skips a committed ranked section when career retries after failure', async () => {
     const brawlhallaId = 91913843
-    const careerPlayers = createPostgresCareerPlayers(connectionString)
-    const rankedPlayers = createPostgresRankedPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
+    const careerPlayers = createPostgresCareerPlayers(database)
+    const rankedPlayers = createPostgresRankedPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
     const rankedPayload = {
       name: 'Independent Sections',
       brawlhalla_id: brawlhallaId,
@@ -441,60 +433,56 @@ describe('Players-owned canonical career state', () => {
       legends: [],
       '2v2': [],
     }
-    try {
-      const firstLease = await claimCareerOperation(operations, brawlhallaId, ['ranked', 'stats'])
-      await refreshCanonicalRankedPlayer(
-        rankedPlayers,
-        {
-          getRanked: async (_id, options) => {
-            options.onAttempt()
-            return rankedPayload
-          },
+    const firstLease = await claimCareerOperation(operations, brawlhallaId, ['ranked', 'stats'])
+    await refreshCanonicalRankedPlayer(
+      rankedPlayers,
+      {
+        getRanked: async (_id, options) => {
+          options.onAttempt()
+          return rankedPayload
         },
-        brawlhallaId,
-        { caller: 'on-demand' },
-        { ...effectFor(firstLease), section: 'ranked' },
-      )
-      const rankedSuccess = await rankedPlayers.byId(brawlhallaId)
-      await expect(
-        refreshCanonicalCareerPlayer(
-          careerPlayers,
-          source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, legends: undefined }),
-          brawlhallaId,
-          { caller: 'on-demand' },
-          effectFor(firstLease),
-          resolveLegend,
-        ),
-      ).rejects.toThrow('career.legends must be an array')
-      expect((await rankedPlayers.byId(brawlhallaId))?.lastSuccessAt).toEqual(rankedSuccess?.lastSuccessAt)
-      expect((await careerPlayers.byId(brawlhallaId))?.lastSuccessAt).toBeNull()
-      await operations.fail(firstLease, { code: 'career_failed', message: 'career failed', retryable: true }, 0)
-
-      const retry = await operations.claim('career-section-retry', 10_000, admission)
-      if (!retry || retry.kind !== 'interactive-player-refresh') throw new Error('Expected a player retry lease')
-      expect(await operations.beginInteractiveSection(retry, 'ranked')).toBe('already-applied')
-      expect(await operations.beginInteractiveSection(retry, 'stats')).toBe('execute')
-      await refreshCanonicalCareerPlayer(
+      },
+      brawlhallaId,
+      { caller: 'on-demand' },
+      { ...effectFor(firstLease), section: 'ranked' },
+    )
+    const rankedSuccess = await rankedPlayers.byId(brawlhallaId)
+    await expect(
+      refreshCanonicalCareerPlayer(
         careerPlayers,
-        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
+        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, legends: undefined }),
         brawlhallaId,
         { caller: 'on-demand' },
-        effectFor(retry),
+        effectFor(firstLease),
         resolveLegend,
-      )
-      await operations.complete(retry)
+      ),
+    ).rejects.toThrow('career.legends must be an array')
+    expect((await rankedPlayers.byId(brawlhallaId))?.lastSuccessAt).toEqual(rankedSuccess?.lastSuccessAt)
+    expect((await careerPlayers.byId(brawlhallaId))?.lastSuccessAt).toBeNull()
+    await operations.fail(firstLease, { code: 'career_failed', message: 'career failed', retryable: true }, 0)
 
-      expect((await rankedPlayers.byId(brawlhallaId))?.lastSuccessAt).toEqual(rankedSuccess?.lastSuccessAt)
-      expect((await careerPlayers.byId(brawlhallaId))?.snapshot?.legends).toEqual([])
-    } finally {
-      await Promise.all([careerPlayers.close(), rankedPlayers.close(), operations.close()])
-    }
+    const retry = await operations.claim('career-section-retry', 10_000, admission)
+    if (!retry || retry.kind !== 'interactive-player-refresh') throw new Error('Expected a player retry lease')
+    expect(await operations.beginInteractiveSection(retry, 'ranked')).toBe('already-applied')
+    expect(await operations.beginInteractiveSection(retry, 'stats')).toBe('execute')
+    await refreshCanonicalCareerPlayer(
+      careerPlayers,
+      source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
+      brawlhallaId,
+      { caller: 'on-demand' },
+      effectFor(retry),
+      resolveLegend,
+    )
+    await operations.complete(retry)
+
+    expect((await rankedPlayers.byId(brawlhallaId))?.lastSuccessAt).toEqual(rankedSuccess?.lastSuccessAt)
+    expect((await careerPlayers.byId(brawlhallaId))?.snapshot?.legends).toEqual([])
   })
 
   test('upgrades a legacy stats marker and still writes the complete canonical snapshot', async () => {
     const brawlhallaId = 91913844
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     try {
       const lease = await claimCareerOperation(operations, brawlhallaId)
@@ -522,14 +510,14 @@ describe('Players-owned canonical career state', () => {
       expect(effect.effect_version).toBe(1)
       expect(await operations.complete(lease)).toBe('transitioned')
     } finally {
-      await Promise.all([players.close(), operations.close(), control.end()])
+      await control.end()
     }
   })
 
   test('lets only the reclaimed lease publish when old and new writers overlap', async () => {
     const brawlhallaId = 91913845
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     try {
       const oldLease = await claimCareerOperation(operations, brawlhallaId)
@@ -564,99 +552,87 @@ describe('Players-owned canonical career state', () => {
       `
       expect(profile.player_name).toBe('New writer')
     } finally {
-      await Promise.all([players.close(), operations.close(), control.end()])
+      await control.end()
     }
   })
 
   test('preserves a successful career section when ranked decoding fails', async () => {
     const brawlhallaId = 91913846
-    const careerPlayers = createPostgresCareerPlayers(connectionString)
-    const rankedPlayers = createPostgresRankedPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
-    try {
-      const lease = await claimCareerOperation(operations, brawlhallaId, ['stats', 'ranked'])
-      await refreshCanonicalCareerPlayer(
-        careerPlayers,
-        source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, legends: [populatedLegend] }),
+    const careerPlayers = createPostgresCareerPlayers(database)
+    const rankedPlayers = createPostgresRankedPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
+    const lease = await claimCareerOperation(operations, brawlhallaId, ['stats', 'ranked'])
+    await refreshCanonicalCareerPlayer(
+      careerPlayers,
+      source({ ...emptySnapshot, brawlhalla_id: brawlhallaId, legends: [populatedLegend] }),
+      brawlhallaId,
+      { caller: 'on-demand' },
+      effectFor(lease),
+      resolveLegend,
+    )
+    const careerSuccess = await careerPlayers.byId(brawlhallaId)
+
+    await expect(
+      refreshCanonicalRankedPlayer(
+        rankedPlayers,
+        {
+          getRanked: async (_id, options) => {
+            options.onAttempt()
+            return { brawlhalla_id: brawlhallaId }
+          },
+        },
         brawlhallaId,
         { caller: 'on-demand' },
-        effectFor(lease),
-        resolveLegend,
-      )
-      const careerSuccess = await careerPlayers.byId(brawlhallaId)
+        { ...effectFor(lease), section: 'ranked' },
+      ),
+    ).rejects.toThrow()
 
-      await expect(
-        refreshCanonicalRankedPlayer(
-          rankedPlayers,
-          {
-            getRanked: async (_id, options) => {
-              options.onAttempt()
-              return { brawlhalla_id: brawlhallaId }
-            },
-          },
-          brawlhallaId,
-          { caller: 'on-demand' },
-          { ...effectFor(lease), section: 'ranked' },
-        ),
-      ).rejects.toThrow()
-
-      expect((await careerPlayers.byId(brawlhallaId))?.lastSuccessAt).toEqual(careerSuccess?.lastSuccessAt)
-      expect((await careerPlayers.byId(brawlhallaId))?.snapshot?.weapons).toEqual(careerSuccess?.snapshot?.weapons)
-      expect((await rankedPlayers.byId(brawlhallaId))?.lastSuccessAt).toBeNull()
-      await operations.fail(lease, { code: 'ranked_failed', message: 'ranked failed', retryable: false }, 0)
-    } finally {
-      await Promise.all([careerPlayers.close(), rankedPlayers.close(), operations.close()])
-    }
+    expect((await careerPlayers.byId(brawlhallaId))?.lastSuccessAt).toEqual(careerSuccess?.lastSuccessAt)
+    expect((await careerPlayers.byId(brawlhallaId))?.snapshot?.weapons).toEqual(careerSuccess?.snapshot?.weapons)
+    expect((await rankedPlayers.byId(brawlhallaId))?.lastSuccessAt).toBeNull()
+    await operations.fail(lease, { code: 'ranked_failed', message: 'ranked failed', retryable: false }, 0)
   })
 
   test('rejects writes after lease expiry', async () => {
     const brawlhallaId = 91913841
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
-    try {
-      const lease = await claimCareerOperation(operations, brawlhallaId)
-      await expireLease(lease.operationId)
-      await expect(
-        refreshCanonicalCareerPlayer(
-          players,
-          source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
-          brawlhallaId,
-          { caller: 'on-demand' },
-          effectFor(lease),
-          resolveLegend,
-        ),
-      ).rejects.toThrow('lease lost')
-      expect(await players.byId(brawlhallaId)).toBeNull()
-      const recoveryLease = await operations.claim('expired-career-cleanup', 10_000, admission)
-      if (!recoveryLease) throw new Error('Expected the expired operation to be reclaimed')
-      await operations.fail(recoveryLease, { code: 'test-cleanup', message: 'test cleanup', retryable: false }, 0)
-    } finally {
-      await Promise.all([players.close(), operations.close()])
-    }
-  })
-
-  test('reconciles a crash after the atomic career checkpoint without replaying the effect', async () => {
-    const brawlhallaId = 91913842
-    const players = createPostgresCareerPlayers(connectionString)
-    const operations = createPostgresRefreshOperations(connectionString)
-    try {
-      const lease = await claimCareerOperation(operations, brawlhallaId)
-      await refreshCanonicalCareerPlayer(
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
+    const lease = await claimCareerOperation(operations, brawlhallaId)
+    await expireLease(lease.operationId)
+    await expect(
+      refreshCanonicalCareerPlayer(
         players,
         source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
         brawlhallaId,
         { caller: 'on-demand' },
         effectFor(lease),
         resolveLegend,
-      )
-      expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('already-applied')
+      ),
+    ).rejects.toThrow('lease lost')
+    expect(await players.byId(brawlhallaId)).toBeNull()
+    const recoveryLease = await operations.claim('expired-career-cleanup', 10_000, admission)
+    if (!recoveryLease) throw new Error('Expected the expired operation to be reclaimed')
+    await operations.fail(recoveryLease, { code: 'test-cleanup', message: 'test cleanup', retryable: false }, 0)
+  })
 
-      await expireLease(lease.operationId)
-      expect(await operations.claim('career-recovery-worker', 10_000, admission)).toBeNull()
-      expect((await operations.inspect(lease.operationId)).operation.status).toBe('succeeded')
-      expect((await players.byId(brawlhallaId))?.snapshot?.legends).toEqual([])
-    } finally {
-      await Promise.all([players.close(), operations.close()])
-    }
+  test('reconciles a crash after the atomic career checkpoint without replaying the effect', async () => {
+    const brawlhallaId = 91913842
+    const players = createPostgresCareerPlayers(database)
+    const operations = createPostgresRefreshOperations({ database })
+    const lease = await claimCareerOperation(operations, brawlhallaId)
+    await refreshCanonicalCareerPlayer(
+      players,
+      source({ ...emptySnapshot, brawlhalla_id: brawlhallaId }),
+      brawlhallaId,
+      { caller: 'on-demand' },
+      effectFor(lease),
+      resolveLegend,
+    )
+    expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('already-applied')
+
+    await expireLease(lease.operationId)
+    expect(await operations.claim('career-recovery-worker', 10_000, admission)).toBeNull()
+    expect((await operations.inspect(lease.operationId)).operation.status).toBe('succeeded')
+    expect((await players.byId(brawlhallaId))?.snapshot?.legends).toEqual([])
   })
 })

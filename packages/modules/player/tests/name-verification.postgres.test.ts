@@ -4,7 +4,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { createPostgresLeaderboardPlayerNames, createPostgresPlayerNameVerifications, playerModule } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let control: ReturnType<typeof postgres>
 let connectionString = ''
 let verifications: ReturnType<typeof createPostgresPlayerNameVerifications>
@@ -24,11 +24,10 @@ beforeAll(async () => {
   })
   connectionString = database.connectionString
   control = postgres(connectionString, { max: 1, onnotice: () => {} })
-  verifications = createPostgresPlayerNameVerifications(connectionString)
+  verifications = createPostgresPlayerNameVerifications(database)
 }, 20_000)
 
 afterAll(async () => {
-  await verifications?.close()
   await control?.end()
   await database?.drop()
 })
@@ -319,16 +318,12 @@ describe('Player name verification claims', () => {
   })
 
   test('leaderboard scans remember the name a player was seen with before a change', async () => {
-    const names = createPostgresLeaderboardPlayerNames(connectionString)
-    try {
-      await names.applyLeaderboardNames({ observedAt: ago(hourMs), players: [{ brawlhallaId: 1, name: 'First' }] })
-      await names.applyLeaderboardNames({ observedAt: now, players: [{ brawlhallaId: 1, name: 'Second' }] })
-      const [row] = await control<{ player_name: string; previous_player_name: string | null }[]>`
-        SELECT player_name, previous_player_name FROM players.leaderboard_name_observations
-      `
-      expect(row).toEqual({ player_name: 'Second', previous_player_name: 'First' })
-    } finally {
-      await names.close()
-    }
+    const names = createPostgresLeaderboardPlayerNames(database)
+    await names.applyLeaderboardNames({ observedAt: ago(hourMs), players: [{ brawlhallaId: 1, name: 'First' }] })
+    await names.applyLeaderboardNames({ observedAt: now, players: [{ brawlhallaId: 1, name: 'Second' }] })
+    const [row] = await control<{ player_name: string; previous_player_name: string | null }[]>`
+      SELECT player_name, previous_player_name FROM players.leaderboard_name_observations
+    `
+    expect(row).toEqual({ player_name: 'Second', previous_player_name: 'First' })
   })
 })

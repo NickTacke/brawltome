@@ -4,7 +4,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { createPostgresProfileViews, playerModule } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -22,7 +22,7 @@ afterAll(async () => {
 describe('Profile view demand', () => {
   test('counts views per player and day, reports distinct days in the window, and trims old days', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const views = createPostgresProfileViews(connectionString)
+    const views = createPostgresProfileViews(database)
     try {
       await control`
         INSERT INTO players.leaderboard_name_observations (brawlhalla_id, player_name, observed_at)
@@ -61,13 +61,13 @@ describe('Profile view demand', () => {
         ),
       ).not.toContain(4)
     } finally {
-      await Promise.all([control.end(), views.close()])
+      await control.end()
     }
   })
 
   test('counts views only for players the Players context already knows', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const views = createPostgresProfileViews(connectionString)
+    const views = createPostgresProfileViews(database)
     const checksum = 'a'.repeat(64)
     try {
       await control`
@@ -96,7 +96,7 @@ describe('Profile view demand', () => {
       `
       expect(recorded.map(({ brawlhalla_id }) => brawlhalla_id)).toEqual([101, 103, 104])
     } finally {
-      await Promise.all([control.end(), views.close()])
+      await control.end()
     }
   })
 })

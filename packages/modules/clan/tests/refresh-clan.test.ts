@@ -5,8 +5,7 @@ import { processRefreshClan, processRefreshClanSection } from '../commands/refre
 import { clanModule } from '../index'
 import { createPostgresClans } from '../postgres'
 
-let database: TestDatabase | undefined
-let connectionString = ''
+let database: TestDatabase
 let clans: ReturnType<typeof createPostgresClans>
 
 const stats = (name = 'Canonical') => ({
@@ -33,12 +32,10 @@ const alpha = {
 
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'clan_refresh', modules: [clanModule] })
-  connectionString = database.connectionString
-  clans = createPostgresClans(connectionString)
+  clans = createPostgresClans(database)
 })
 
 afterAll(async () => {
-  await clans?.close()
   await database?.drop()
 })
 

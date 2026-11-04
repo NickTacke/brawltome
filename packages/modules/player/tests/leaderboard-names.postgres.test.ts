@@ -4,7 +4,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { createPostgresLeaderboardPlayerNames, createPostgresPlayerDiscoverySource, playerModule } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -48,8 +48,8 @@ async function insertRanked(sql: ReturnType<typeof postgres>, brawlhallaId: numb
 describe('Player names observed on leaderboards', () => {
   test('propagates renamed known players and makes unseen players searchable idempotently', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const source = createPostgresPlayerDiscoverySource(connectionString)
-    const names = createPostgresLeaderboardPlayerNames(connectionString)
+    const source = createPostgresPlayerDiscoverySource(database)
+    const names = createPostgresLeaderboardPlayerNames(database)
     const outboxCount = async () =>
       Number((await control<{ count: string }[]>`SELECT count(*) AS count FROM players.discovery_outbox`)[0].count)
     const factsById = async () => new Map((await source.snapshot()).facts.map((fact) => [fact.brawlhallaId, fact]))
@@ -120,14 +120,14 @@ describe('Player names observed on leaderboards', () => {
       expect(await names.referenceById(100)).toMatchObject({ name: 'Newest Name' })
       expect(await names.referenceById(104)).toBeNull()
     } finally {
-      await Promise.all([control.end(), source.close(), names.close()])
+      await control.end()
     }
   })
 
   test('keeps the previous leaderboard name searchable when a live V0 name stays canonical', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const source = createPostgresPlayerDiscoverySource(connectionString)
-    const names = createPostgresLeaderboardPlayerNames(connectionString)
+    const source = createPostgresPlayerDiscoverySource(database)
+    const names = createPostgresLeaderboardPlayerNames(database)
     try {
       await insertRanked(control, 110, 'Current V0', '2026-09-01T00:00:00Z')
       await names.applyLeaderboardNames({
@@ -147,14 +147,14 @@ describe('Player names observed on leaderboards', () => {
       `
       expect(recorded.map((row) => row.display_alias)).toEqual(['Old Board'])
     } finally {
-      await Promise.all([control.end(), source.close(), names.close()])
+      await control.end()
     }
   })
 
   // Legacy-imported careers are not live V0 names, so a full board legitimately renames all of them.
   test('applies a full leaderboard generation of renamed players in bounded statements', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const names = createPostgresLeaderboardPlayerNames(connectionString)
+    const names = createPostgresLeaderboardPlayerNames(database)
     try {
       await control`
         INSERT INTO players.career_profiles
@@ -182,7 +182,7 @@ describe('Player names observed on leaderboards', () => {
       `
       expect(counts).toEqual({ aliases: 20_000, events: 20_000 })
     } finally {
-      await Promise.all([control.end(), names.close()])
+      await control.end()
     }
   }, 30_000)
 })

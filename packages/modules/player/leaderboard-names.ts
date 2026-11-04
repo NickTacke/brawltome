@@ -1,5 +1,4 @@
-import type { Sql } from '@brawltome/foundation'
-import postgres from 'postgres'
+import type { Database, Sql } from '@brawltome/foundation'
 import { decodeV0CareerNameCandidate } from './career/source'
 import { isUsablePlayerName } from './reference'
 
@@ -20,8 +19,8 @@ function leaderboardNamesById(players: readonly LeaderboardPlayerName[]): Map<nu
   return names
 }
 
-export function createPostgresLeaderboardPlayerNames(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresLeaderboardPlayerNames(database: Database) {
+  const client = database.sql
 
   return {
     // Records the names a published leaderboard observed. Only identities whose leaderboard name changed (or that
@@ -189,8 +188,6 @@ export function createPostgresLeaderboardPlayerNames(connectionString: string) {
           }
         : null
     },
-
-    close: () => client.end(),
   }
 }
 

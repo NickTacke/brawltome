@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Sql } from '@brawltome/foundation'
-import postgres from 'postgres'
+import type { Database, Sql } from '@brawltome/foundation'
 import {
   type ClanDiscoveryFact,
   type ClanProjectionEvent,
@@ -153,7 +152,7 @@ async function replaceGeneration(
   await replaceGenerationFromStream(sql, owner, eagerSnapshot(owner, snapshot))
 }
 
-export function createPostgresDiscovery(connectionString: string): DiscoveryQueries & {
+export function createPostgresDiscovery(database: Database): DiscoveryQueries & {
   applyPlayerEvents(
     events: PlayerProjectionEvent[],
     operationId?: string,
@@ -194,9 +193,8 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
   reconciliationEffectApplied(operationId: string): Promise<boolean>
   playerProjectionEffectState(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   clanProjectionEffectState(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
-  close(): Promise<void>
 } {
-  const client = postgres(connectionString)
+  const client = database.sql
 
   async function searchPlayers(rawQuery: string): Promise<PlayerSearchHit[]> {
     const query = normalizeDiscoveryTerm(rawQuery)
@@ -831,7 +829,6 @@ export function createPostgresDiscovery(connectionString: string): DiscoveryQuer
     reconciliationEffectApplied,
     playerProjectionEffectState: (operationId) => projectionEffectState('player', operationId),
     clanProjectionEffectState: (operationId) => projectionEffectState('clan', operationId),
-    close: () => client.end(),
   }
 }
 

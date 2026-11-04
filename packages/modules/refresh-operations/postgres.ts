@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import postgres from 'postgres'
+import type { Database } from '@brawltome/foundation'
 import {
   type AcceptOperation,
   type AcceptOperationResult,
@@ -418,10 +418,15 @@ function chooseBackgroundClass(
   return { selected, nextCredits }
 }
 
+export type RefreshOperationsDatabases = {
+  database: Database
+  // lease renewals run here so a busy main pool can never let a running lease expire; defaults to database
+  renewals?: Database
+}
+
 export function createPostgresRefreshOperations(
-  connectionString: string,
+  { database, renewals = database }: RefreshOperationsDatabases,
   options: {
-    executionConcurrency?: number
     projectionEffectState?: (
       kind: DiscoveryProjectionKind,
       effectOperationId: string,
@@ -430,16 +435,8 @@ export function createPostgresRefreshOperations(
     reconciliationEffectApplied?: (effectOperationId: string) => Promise<boolean>
   } = {},
 ) {
-  const executionConcurrency = options.executionConcurrency
-  if (executionConcurrency !== undefined && (!Number.isInteger(executionConcurrency) || executionConcurrency <= 0)) {
-    throw new Error('executionConcurrency must be a positive integer')
-  }
-  const client =
-    executionConcurrency === undefined
-      ? postgres(connectionString)
-      : postgres(connectionString, { max: executionConcurrency + 2 })
-  const renewalClient =
-    executionConcurrency === undefined ? client : postgres(connectionString, { max: executionConcurrency })
+  const client = database.sql
+  const renewalClient = renewals.sql
 
   // Fixed schedules are owned by worker configuration: a changed definition retires the old schedule and starts
   // a new one under the same key instead of rewriting history.
@@ -2502,25 +2499,17 @@ export function createPostgresRefreshOperations(
         onListen,
       )
     },
-
-    async close() {
-      if (renewalClient === client) return client.end()
-      await Promise.all([client.end(), renewalClient.end()])
-    },
   }
 }
 
 export type PostgresRefreshOperations = ReturnType<typeof createPostgresRefreshOperations>
 
-export function createPostgresDeadLetterOperations(
-  connectionString: string,
-): DeadLetterOperations & { close(): Promise<void> } {
-  const operations = createPostgresRefreshOperations(connectionString)
+export function createPostgresDeadLetterOperations(database: Database): DeadLetterOperations {
+  const operations = createPostgresRefreshOperations({ database })
   return {
     listDeadLetters: operations.listDeadLetters,
     inspectDeadLetter: operations.inspectDeadLetter,
     replayDeadLetter: operations.replayDeadLetter,
     discardDeadLetter: operations.discardDeadLetter,
-    close: operations.close,
   }
 }

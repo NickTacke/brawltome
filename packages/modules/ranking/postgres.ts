@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import postgres from 'postgres'
+import type { Database } from '@brawltome/foundation'
 import type {
   LeaderboardGenerationCandidate,
   LeaderboardScope,
@@ -182,11 +182,11 @@ function publishedProvenance(
 }
 
 export function createPostgresRanking(
-  connectionString: string,
+  database: Database,
   // Test seam: runs inside the read transaction after the snapshot metadata is selected.
   options: { afterMetadataRead?: () => Promise<void> } = {},
 ) {
-  const client = postgres(connectionString)
+  const client = database.sql
 
   async function lockAuthorizedOperation(
     sql: typeof client,
@@ -687,10 +687,6 @@ export function createPostgresRanking(
         `
         return 'recorded' as const
       })
-    },
-
-    async close() {
-      await client.end()
     },
   }
 }

@@ -41,6 +41,9 @@ export function readSourceBackgroundHeadroom(value: string | undefined, minimumS
   return boundedInteger(value, 30, 'SOURCE_BACKGROUND_HEADROOM', 0, minimumSourceLimit - 1)
 }
 
+// the deploy connection budget (database-pools.ts, CONTRIBUTING.md) is computed for this many job slots
+export const maxOperationsTotalConcurrency = 23
+
 export type WorkerDatabaseSessionConfig = {
   connectTimeoutSeconds: number
   statementTimeoutMs: number
@@ -200,7 +203,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     totalConcurrency: parsePositiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, {
       name: 'OPERATIONS_TOTAL_CONCURRENCY',
       fallback: 8,
-      maximum: 32,
+      maximum: maxOperationsTotalConcurrency,
     }),
     interactiveReservation: parsePositiveInteger(env.OPERATIONS_INTERACTIVE_RESERVATION, {
       name: 'OPERATIONS_INTERACTIVE_RESERVATION',

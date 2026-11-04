@@ -1,7 +1,6 @@
-import type { Sql } from '@brawltome/foundation'
+import type { Database, Sql } from '@brawltome/foundation'
 import { getLegendById } from '@brawltome/game-data/legends'
 import { legendSlug } from '@brawltome/game-data/reference-data'
-import postgres from 'postgres'
 import { decodeV0CareerNameCandidate } from './career/source'
 import type { PlayerDiscoveryFact, PlayerDiscoverySnapshotStream, PlayerDiscoverySource } from './discovery-facts'
 import { isUsablePlayerName, selectCanonicalPlayerName } from './reference'
@@ -198,10 +197,8 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     })
 }
 
-export function createPostgresPlayerDiscoverySource(connectionString: string): PlayerDiscoverySource & {
-  close(): Promise<void>
-} {
-  const client = postgres(connectionString)
+export function createPostgresPlayerDiscoverySource(database: Database): PlayerDiscoverySource {
+  const client = database.sql
   return {
     async pendingEvents(limit) {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) {
@@ -325,8 +322,6 @@ export function createPostgresPlayerDiscoverySource(connectionString: string): P
       `
       return row.count
     },
-
-    close: () => client.end(),
   }
 }
 

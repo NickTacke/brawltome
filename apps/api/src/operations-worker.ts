@@ -28,6 +28,7 @@ import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
 import { internalSecretValid } from './auth/internal-secret'
+import { createWorkerDatabases } from './database-pools'
 import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation-backoff'
 import { createFreshnessPlanner, readFreshnessPlannerConfig } from './freshness-planner'
 import { createHealthRoutes } from './health-routes'
@@ -38,7 +39,6 @@ import {
   readBrawlhallaV1RequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
-  workerDatabaseUrl,
 } from './operations-worker-config'
 import { runOperationsWorker } from './operations-worker-runtime'
 import {
@@ -80,23 +80,23 @@ checkModuleList(workerModules)
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
-const connectionString = workerDatabaseUrl(configuredConnectionString, workerConfig.database)
-const discoveryConnectionString = workerDatabaseUrl(configuredConnectionString, {
-  ...workerConfig.database,
-  statementTimeoutMs: workerConfig.discovery.statementTimeoutMs,
-})
+// one client per job, sized in database-pools.ts to fit the Postgres connection budget
+const databases = createWorkerDatabases(configuredConnectionString, workerConfig)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
   Math.min(180, brawlhallaV1RequestLimit),
 )
-const accounts = createPostgresAccounts(connectionString)
-const discovery = createPostgresDiscovery(discoveryConnectionString)
-const operations = createPostgresRefreshOperations(connectionString, {
-  executionConcurrency: workerConfig.admission.totalConcurrency,
-  playerProjectionEffectState: discovery.playerProjectionEffectState,
-})
-const requestAdmission = createPostgresRequestAdmission(connectionString, {
+const accounts = createPostgresAccounts(databases.main)
+// projection and reconciliation work runs on the discovery client; the quick checks the scheduler and claims make
+// use the main one, so they never queue behind a reconciliation that holds the discovery connections for minutes
+const discovery = createPostgresDiscovery(databases.discovery)
+const discoveryChecks = createPostgresDiscovery(databases.main)
+const operations = createPostgresRefreshOperations(
+  { database: databases.main, renewals: databases.renewals },
+  { playerProjectionEffectState: discoveryChecks.playerProjectionEffectState },
+)
+const requestAdmission = createPostgresRequestAdmission(databases.main, {
   authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
   sourceLimits: {
     'brawlhalla-v0': 180,
@@ -117,22 +117,24 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
       requestAdmission.pauseSource(domain, Math.max(1, Math.ceil(retryAfterMs / 1_000))),
   })
 }
-const ranking = createPostgresRanking(connectionString)
-const statistics = createPostgresStatistics(connectionString)
-const careerPlayers = createPostgresCareerPlayers(connectionString)
-const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(connectionString)
-const leaderboardRanked = createPostgresLeaderboardRanked(connectionString)
-const playerFreshness = createPostgresPlayerFreshness(connectionString)
-const profileViews = createPostgresProfileViews(connectionString)
-const playerNameVerifications = createPostgresPlayerNameVerifications(connectionString)
-const rankedPlayers = createPostgresRankedPlayers(connectionString, {
+const ranking = createPostgresRanking(databases.main)
+const statistics = createPostgresStatistics(databases.main)
+const careerPlayers = createPostgresCareerPlayers(databases.main)
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
+const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
+const playerFreshness = createPostgresPlayerFreshness(databases.main)
+const profileViews = createPostgresProfileViews(databases.main)
+const playerNameVerifications = createPostgresPlayerNameVerifications(databases.main)
+const rankedPlayers = createPostgresRankedPlayers(databases.main, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
-const clans = createPostgresClans(connectionString)
-const playerDiscoverySource = createPostgresPlayerDiscoverySource(discoveryConnectionString)
-const clanDiscoverySource = createPostgresClanDiscoverySource(discoveryConnectionString)
+const clans = createPostgresClans(databases.main)
+const playerDiscoverySource = createPostgresPlayerDiscoverySource(databases.discovery)
+const clanDiscoverySource = createPostgresClanDiscoverySource(databases.discovery)
+const playerDiscoveryChecks = createPostgresPlayerDiscoverySource(databases.main)
+const clanDiscoveryChecks = createPostgresClanDiscoverySource(databases.main)
 const postgresReadiness = createPostgresReadiness(
-  connectionString,
+  databases.main.sql,
   workerModules.flatMap((module) => module.migrations),
 )
 const workerId = `${hostname()}:${process.pid}`
@@ -156,23 +158,10 @@ const lifecycle = createRuntimeLifecycle({
         await listener?.unlisten()
       },
     },
-    { name: 'request-admission-postgres', close: requestAdmission.close },
-    { name: 'accounts-postgres', close: accounts.close },
-    { name: 'players-ranked-postgres', close: rankedPlayers.close },
-    { name: 'players-career-postgres', close: careerPlayers.close },
-    { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
-    { name: 'players-leaderboard-ranked-postgres', close: leaderboardRanked.close },
-    { name: 'players-freshness-postgres', close: playerFreshness.close },
-    { name: 'players-profile-views-postgres', close: profileViews.close },
-    { name: 'players-name-verifications-postgres', close: playerNameVerifications.close },
-    { name: 'operations-postgres', close: operations.close },
-    { name: 'ranking-postgres', close: ranking.close },
-    { name: 'statistics-postgres', close: statistics.close },
-    { name: 'clans-postgres', close: clans.close },
-    { name: 'discovery-postgres', close: discovery.close },
-    { name: 'players-discovery-source-postgres', close: playerDiscoverySource.close },
-    { name: 'clans-discovery-source-postgres', close: clanDiscoverySource.close },
-    { name: 'readiness-postgres', close: postgresReadiness.close },
+    // after the job loops have drained and the listener is gone: nothing uses the databases any more
+    { name: 'database-main', close: databases.main.close },
+    { name: 'database-renewals', close: databases.renewals.close },
+    { name: 'database-discovery', close: databases.discovery.close },
     { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],
 })
@@ -281,12 +270,12 @@ try {
         {
           owner: 'player' as const,
           kind: 'player-discovery-projection' as const,
-          source: playerDiscoverySource,
+          source: playerDiscoveryChecks,
         },
         {
           owner: 'clan' as const,
           kind: 'clan-discovery-projection' as const,
-          source: clanDiscoverySource,
+          source: clanDiscoveryChecks,
         },
       ]) {
         if ((await definition.source.lag()) > 0) {
@@ -301,7 +290,10 @@ try {
           if (projection.outcome === 'accepted') reconciledDiscovery++
         }
         if (
-          (await discovery.reconciliationDue(definition.owner, workerConfig.discovery.reconciliationIntervalMs)) &&
+          (await discoveryChecks.reconciliationDue(
+            definition.owner,
+            workerConfig.discovery.reconciliationIntervalMs,
+          )) &&
           (await discoveryReconciliationBackoff.shouldEnqueue(definition.owner))
         ) {
           const reconciliation = await operations.accept({
@@ -439,8 +431,8 @@ try {
         },
         projectionEffectState: (kind, effectOperationId) =>
           kind === 'player-discovery-projection'
-            ? discovery.playerProjectionEffectState(effectOperationId)
-            : discovery.clanProjectionEffectState(effectOperationId),
+            ? discoveryChecks.playerProjectionEffectState(effectOperationId)
+            : discoveryChecks.clanProjectionEffectState(effectOperationId),
         isPrimaryMonitoringTarget: async (lease) => {
           const snapshot = await accounts.primaryMonitoring.readSnapshot()
           return snapshot.targets.some(

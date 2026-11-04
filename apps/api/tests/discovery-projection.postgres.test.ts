@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
+import { type Database, createDatabase } from '@brawltome/foundation'
 import { createPostgresPlayerDiscoverySource, playerMigrationInventory } from '@brawltome/player'
 import {
   type AdmissionConfig,
@@ -15,6 +16,7 @@ const configuredServer = process.env.DATABASE_URL
 const databaseName = `bt_projection_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`
 let admin: ReturnType<typeof postgres>
 let connectionString = ''
+let database: Database
 
 // builds its database by hand: player migration 0005 adds its triggers only when the legacy
 // public.player tables exist before it runs, so they are created first
@@ -37,6 +39,7 @@ beforeAll(async () => {
   const databaseUrl = new URL(dedicatedServer)
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
+  database = createDatabase(connectionString, { maxConnections: 5, applicationName: 'brawltome-test' })
   const setup = postgres(connectionString, { max: 1 })
   try {
     await setup.unsafe(`
@@ -68,6 +71,7 @@ beforeAll(async () => {
 }, 20_000)
 
 afterAll(async () => {
+  await database?.close()
   if (!admin) return
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
@@ -110,11 +114,14 @@ const admission: AdmissionConfig = {
 describe('Players to Discovery projection delivery', () => {
   test('shows durable lag, replays idempotently, and rebuilds from an owner snapshot', async () => {
     const control = postgres(connectionString)
-    const source = createPostgresPlayerDiscoverySource(connectionString)
-    const discovery = createPostgresDiscovery(connectionString)
-    let operations = createPostgresRefreshOperations(connectionString, {
-      playerProjectionEffectState: discovery.playerProjectionEffectState,
-    })
+    const source = createPostgresPlayerDiscoverySource(database)
+    const discovery = createPostgresDiscovery(database)
+    let operations = createPostgresRefreshOperations(
+      { database },
+      {
+        playerProjectionEffectState: discovery.playerProjectionEffectState,
+      },
+    )
     try {
       const archiveChecksum = 'a'.repeat(64)
       await control`
@@ -316,10 +323,12 @@ describe('Players to Discovery projection delivery', () => {
       expect((await operations.inspect(failedAcknowledgment.operationId)).operation.status).toBe('pending')
       expect(await source.lag()).toBe(1)
 
-      await operations.close()
-      operations = createPostgresRefreshOperations(connectionString, {
-        playerProjectionEffectState: discovery.playerProjectionEffectState,
-      })
+      operations = createPostgresRefreshOperations(
+        { database },
+        {
+          playerProjectionEffectState: discovery.playerProjectionEffectState,
+        },
+      )
       expect(
         await runOneRefreshOperation(operations, 'restarted-projection-worker', {
           leaseMs: 10_000,
@@ -334,7 +343,7 @@ describe('Players to Discovery projection delivery', () => {
       expect((await operations.inspect(failedAcknowledgment.operationId)).operation.status).toBe('succeeded')
       expect(await source.lag()).toBe(0)
     } finally {
-      await Promise.all([control.end(), source.close(), discovery.close(), operations.close()])
+      await control.end()
     }
   })
 })

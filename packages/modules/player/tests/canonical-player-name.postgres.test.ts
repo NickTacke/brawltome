@@ -9,7 +9,7 @@ import {
   playerModule,
 } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -53,9 +53,9 @@ async function insertRanked(sql: ReturnType<typeof postgres>, brawlhallaId: numb
 describe('canonical Player names', () => {
   test('canonical discovery names follow the most recent profile observation', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const source = createPostgresPlayerDiscoverySource(connectionString)
-    const ranked = createPostgresRankedPlayers(connectionString)
-    const career = createPostgresCareerPlayers(connectionString)
+    const source = createPostgresPlayerDiscoverySource(database)
+    const ranked = createPostgresRankedPlayers(database)
+    const career = createPostgresCareerPlayers(database)
     try {
       await insertCareer(control, 201, 'Imported Legacy', '2024-01-01T00:00:00Z', 'legacy-v2')
       await insertRanked(control, 201, 'Fresh Ranked', '2026-10-05T12:00:00Z')
@@ -75,7 +75,7 @@ describe('canonical Player names', () => {
         observedAt: new Date('2024-01-01T00:00:00Z'),
       })
     } finally {
-      await Promise.all([control.end(), source.close(), ranked.close(), career.close()])
+      await control.end()
     }
   })
 })

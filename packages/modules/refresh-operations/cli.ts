@@ -1,3 +1,4 @@
+import { createDatabase } from '@brawltome/foundation'
 import { OperatorAuthenticationError, authenticateDeadLetterOperator } from './operator-auth'
 import { createPostgresDeadLetterOperations } from './postgres'
 
@@ -88,7 +89,9 @@ async function main() {
 
   const connectionString = process.env.DEAD_LETTER_DATABASE_URL
   if (!connectionString) throw new CliError('configuration_error', 'DEAD_LETTER_DATABASE_URL is required')
-  const operations = createPostgresDeadLetterOperations(connectionString)
+  // one command at a time, so one connection is enough
+  const database = createDatabase(connectionString, { maxConnections: 1, applicationName: 'brawltome-dead-letter-cli' })
+  const operations = createPostgresDeadLetterOperations(database)
   try {
     if (parsed.command === 'list') {
       writeJson(process.stdout, { ok: true, data: await operations.listDeadLetters(parsed.input) })
@@ -110,7 +113,7 @@ async function main() {
     }
     writeJson(process.stdout, { ok: true, data: result })
   } finally {
-    await operations.close()
+    await database.close()
   }
 }
 

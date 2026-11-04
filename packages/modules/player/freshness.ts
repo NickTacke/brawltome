@@ -1,7 +1,7 @@
-import postgres from 'postgres'
+import type { Database } from '@brawltome/foundation'
 
-export function createPostgresPlayerFreshness(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresPlayerFreshness(database: Database) {
+  const client = database.sql
 
   return {
     // When each player's full V0 profile was last refreshed: the older of the ranked and career refreshes, or null if
@@ -37,8 +37,6 @@ export function createPostgresPlayerFreshness(connectionString: string) {
       `
       return new Map(rows.map((row) => [row.brawlhalla_id, row.observed_at]))
     },
-
-    close: () => client.end(),
   }
 }
 

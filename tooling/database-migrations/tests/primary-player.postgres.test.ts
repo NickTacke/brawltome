@@ -1,8 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { type Database, createDatabase } from '@brawltome/foundation'
 import { migratePostgres } from '@brawltome/foundation'
 import postgres from 'postgres'
+
+// each runtime gets its own client, as a separate process would
+function openRuntimeDatabase(connectionString: string): Database {
+  return createDatabase(connectionString, { maxConnections: 5, applicationName: 'brawltome-test' })
+}
 
 const connectionString = process.env.DATABASE_URL
 
@@ -86,7 +92,8 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
   test('atomically allows only one account to own a player and keeps both attempts', async () => {
     await withDatabase(async (databaseUrl) => {
       await migratePostgres(databaseUrl, accountsMigrationInventory)
-      const runtime = createPostgresAccounts(databaseUrl)
+      const runtimeDatabase = openRuntimeDatabase(databaseUrl)
+      const runtime = createPostgresAccounts(runtimeDatabase)
       const sql = postgres(databaseUrl, { max: 2 })
       try {
         const [firstAccount, secondAccount] = await Promise.all([
@@ -209,7 +216,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
         expect(immutableError).toBeInstanceOf(Error)
         expect((immutableError as Error).message).toContain('immutable')
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
         await sql.end()
       }
     })

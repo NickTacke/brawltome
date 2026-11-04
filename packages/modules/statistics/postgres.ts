@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import type { Database } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
-import postgres from 'postgres'
+import type postgres from 'postgres'
 import {
   type CohortCandidateSnapshot,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
@@ -304,13 +305,13 @@ function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
 }
 
 export function createPostgresStatistics(
-  connectionString: string,
+  database: Database,
   options: {
     now?: () => Date
     legendReferences?: readonly LegendReference[]
   } = {},
 ) {
-  const client = postgres(connectionString)
+  const client = database.sql
   const now = options.now ?? (() => new Date())
   const legendReferences =
     options.legendReferences ??
@@ -1776,5 +1777,5 @@ export function createPostgresStatistics(
     },
   }
 
-  return { ...tracer, close: () => client.end() }
+  return tracer
 }

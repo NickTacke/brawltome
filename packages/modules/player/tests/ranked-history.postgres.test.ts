@@ -4,7 +4,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { createPostgresRankedPlayers, playerModule } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -22,7 +22,7 @@ afterAll(async () => {
 describe('ranked rating history', () => {
   test('returns imported V2 history after newer V0 points with the right source labels', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const ranked = createPostgresRankedPlayers(connectionString)
+    const ranked = createPostgresRankedPlayers(database)
     try {
       await control`
         INSERT INTO players.ranked_profiles
@@ -54,7 +54,7 @@ describe('ranked rating history', () => {
         { rating: 1500, source: 'legacy-v2' },
       ])
     } finally {
-      await Promise.all([control.end(), ranked.close()])
+      await control.end()
     }
   })
 })

@@ -4,7 +4,7 @@ import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/tes
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 const admission = {
   totalConcurrency: 8,
@@ -70,7 +70,7 @@ async function insertVisitorRefresh(
 describe('Recently viewed freshness operations', () => {
   test('counts request days per player and the planner attempts within the window', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     try {
       for (let index = 0; index < 3; index++) await insertVisitorRefresh(control, 10, 1, true)
       await insertVisitorRefresh(control, 10, 3, true)
@@ -96,13 +96,13 @@ describe('Recently viewed freshness operations', () => {
         { brawlhallaId: 11, lastPlannedAt: expect.any(Date), lastFailedAt: expect.any(Date) },
       ])
     } finally {
-      await Promise.all([control.end(), operations.close()])
+      await control.end()
     }
   })
 
   test('enqueues background refreshes once per player and skips players with an active refresh', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     try {
       await insertVisitorRefresh(control, 30, 0, false)
 
@@ -132,7 +132,7 @@ describe('Recently viewed freshness operations', () => {
         payload: { cohort: 'recently-viewed', staleSections: ['ranked', 'stats'] },
       })
     } finally {
-      await Promise.all([control.end(), operations.close()])
+      await control.end()
     }
   })
 
@@ -158,7 +158,7 @@ describe('Recently viewed freshness operations', () => {
 
   test('promotes a queued background refresh when a visitor asks for the same player', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     try {
       const activeBefore = await operations.activeRecentlyViewedRefreshes()
       expect(await operations.enqueueRecentlyViewedRefreshes([50])).toEqual([50])
@@ -179,7 +179,7 @@ describe('Recently viewed freshness operations', () => {
       // The promoted refresh no longer occupies a background slot.
       expect(await operations.activeRecentlyViewedRefreshes()).toBe(activeBefore)
     } finally {
-      await Promise.all([control.end(), operations.close()])
+      await control.end()
     }
   })
 })
