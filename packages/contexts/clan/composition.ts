@@ -3,13 +3,8 @@ import { addClanDiscoveryFacts } from './migrations/0002-add-discovery-facts'
 import { addV2ClanImportEvidence } from './migrations/0003-add-v2-import-evidence'
 import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
 
-export {
-  createPostgresClans,
-  type LegacyClanMigrationEvidence,
-  type PostgresClans,
-} from './postgres'
+export { createPostgresClans, type PostgresClans } from './postgres'
 export { createPostgresClanDiscoverySource, type PostgresClanDiscoverySource } from './discovery-postgres'
-export { importLegacyClans } from './legacy-import'
 
 export const clanMigrationInventory = [
   initializeClans,

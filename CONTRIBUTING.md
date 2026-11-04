@@ -19,7 +19,7 @@ What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 | `packages/contracts` | Generated OpenAPI + Rust contracts (CI checks they are up to date) |
 | `packages/game-data`, `packages/telemetry` | Static game data; OpenTelemetry + metrics helpers |
 | `tooling/architecture` | Dependency rules between packages (`bun run architecture:check`) |
-| `tooling/database-migrations` | `migrate` and `rebuild:discovery` commands |
+| `tooling/database-migrations` | `migrate` command |
 | `tooling/analytics-review` | Weekly product analytics review from Loki |
 | `infra/app` | Production compose, zero-downtime `deploy.sh`, Postgres storage, backup verifier |
 | `infra/observability` | Prometheus, Alertmanager, Loki, Tempo, Grafana, OTel collector |
