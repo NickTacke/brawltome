@@ -52,7 +52,7 @@ function createRpcClient(app: Hono): RouterClient<typeof orpcRouter> {
 }
 
 describe('oRPC next to tRPC', () => {
-  test('the rpc status procedure returns what the tRPC status procedure returns', async () => {
+  test('the rpc status procedure answers with the payload that tRPC status.discordReady also returns', async () => {
     const app = createApp()
     const trpcCaller = trpcStatusRouter.createCaller(trpcContext)
     const trpcStatus = await trpcCaller.status.discordReady()
@@ -92,6 +92,42 @@ describe('oRPC next to tRPC', () => {
     expect(Object.keys(document.paths)).toEqual(['/status'])
     expect(document.paths['/status'].get.operationId).toBe('status')
     expect(document.paths['/status'].get.responses['200']).toBeDefined()
+  })
+
+  test('serves the documented status path over plain HTTP with the same payload as the rpc call', async () => {
+    const app = createApp()
+    const rpcStatus = await createRpcClient(app).status()
+
+    const response = await app.fetch(new Request('http://api.test/v1/status'))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(rpcStatus)
+  })
+
+  test('every path in the document resolves under the documented server', async () => {
+    const app = createApp()
+    const document = (await (await app.fetch(new Request('http://api.test/openapi.json'))).json()) as {
+      servers: Array<{ url: string }>
+      paths: Record<string, Record<string, unknown>>
+    }
+
+    expect(document.servers).toEqual([{ url: '/v1' }])
+
+    for (const [path, operations] of Object.entries(document.paths)) {
+      for (const method of Object.keys(operations)) {
+        const response = await app.fetch(new Request(`http://api.test${document.servers[0].url}${path}`, { method }))
+
+        expect(response.status, `${method} ${path}`).not.toBe(404)
+      }
+    }
+  })
+
+  test('answers an unknown path under the documented server with 404', async () => {
+    const app = createApp()
+
+    const response = await app.fetch(new Request('http://api.test/v1/nothing'))
+
+    expect(response.status).toBe(404)
   })
 
   test('keeps the descriptions that contracts attach to their schemas', async () => {

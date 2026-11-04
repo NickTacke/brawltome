@@ -39,6 +39,7 @@ describe('HTTP telemetry adapters', () => {
 
   test('labels oRPC calls and the OpenAPI document apart from tRPC', () => {
     expect(normalizeHttpRoute('/rpc/status')).toBe('orpc')
+    expect(normalizeHttpRoute('/v1/status')).toBe('orpc')
     expect(normalizeHttpRoute('/openapi.json')).toBe('orpc')
     expect(normalizeHttpRoute('/trpc/status.discordReady')).toBe('trpc')
   })
