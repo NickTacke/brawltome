@@ -1,10 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import {
-  clanMigrationInventory,
-  createPostgresClanDiscoverySource,
-  createPostgresClans,
-} from '@brawltome/clan/composition'
+import { clanMigrationInventory, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import postgres from 'postgres'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'

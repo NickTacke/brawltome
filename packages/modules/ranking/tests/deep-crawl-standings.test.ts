@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { leaderboardDeepCrawlStandings, leaderboardDeepCrawlTeams } from '../composition'
+import { leaderboardDeepCrawlStandings, leaderboardDeepCrawlTeams } from '../index'
 
 describe('deep crawl standings', () => {
   test('maps 1v1 player rows with resolved tiers and skips team rows', () => {

@@ -1,3 +1,22 @@
+import type { BrawltomeModule } from '@brawltome/foundation'
+import { initializeRequestAdmission } from './migrations/0001-initialize-admission'
+import { addActorReservations } from './migrations/0002-add-actor-reservations'
+import { addSourceBackoffs } from './migrations/0003-add-source-backoffs'
+
+export { createPostgresRequestAdmission, type PostgresRequestAdmission } from './postgres'
+
+export const requestAdmissionMigrationInventory = [
+  initializeRequestAdmission,
+  addActorReservations,
+  addSourceBackoffs,
+] as const
+
+export const requestAdmissionModule = {
+  name: 'request-admission',
+  dependsOn: [],
+  migrations: requestAdmissionMigrationInventory,
+} satisfies BrawltomeModule
+
 export type AdmissionActor =
   | { kind: 'verified-anonymous'; ip: string }
   | { kind: 'authenticated'; accountId: string; ip: string }

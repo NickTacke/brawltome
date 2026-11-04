@@ -3,11 +3,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { OperationLease } from '@brawltome/refresh-operations'
 import {
+  type OperationLease,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
+} from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
 const baseUrl = process.env.DATABASE_URL

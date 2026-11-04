@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
-import { createPostgresRankedPlayers, playerMigrationInventory } from '../composition'
+import { createPostgresRankedPlayers, playerMigrationInventory } from '../index'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `bt_player_ranked_history_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`

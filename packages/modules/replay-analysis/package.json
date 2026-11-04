@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts",
-    "./composition": "./composition.ts"
+    ".": "./index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/foundation": "workspace:*",
     "postgres": "^3.4.0"
   },
   "devDependencies": {

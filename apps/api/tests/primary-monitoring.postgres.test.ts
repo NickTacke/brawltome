@@ -1,21 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts/composition'
+import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
 import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
   playerMigrationInventory,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
-} from '@brawltome/player/composition'
-import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import {
-  createPostgresRequestAdmission,
-  requestAdmissionMigrationInventory,
-} from '@brawltome/request-admission/composition'
+} from '@brawltome/player'
+import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 

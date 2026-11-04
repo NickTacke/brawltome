@@ -1,14 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { LeaderboardPageSource } from '@brawltome/ranking/composition'
-import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import {
-  createPostgresRequestAdmission,
-  requestAdmissionMigrationInventory,
-} from '@brawltome/request-admission/composition'
+import type { LeaderboardPageSource } from '@brawltome/ranking'
+import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
 

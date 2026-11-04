@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
 import { processRefreshClan, processRefreshClanSection } from '../commands/refresh-clan'
-import { clanMigrationInventory } from '../composition'
+import { clanMigrationInventory } from '../index'
 import { createPostgresClans } from '../postgres'
 
 const baseUrl = process.env.DATABASE_URL

@@ -5,13 +5,13 @@ import {
   playerMigrationInventory,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
-} from '@brawltome/player/composition'
-import type { OperationLease } from '@brawltome/refresh-operations'
+} from '@brawltome/player'
 import {
+  type OperationLease,
   type PostgresRefreshOperations,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
+} from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 

@@ -5,7 +5,7 @@ import {
   createPostgresLeaderboardPlayerNames,
   createPostgresPlayerNameVerifications,
   playerMigrationInventory,
-} from '../composition'
+} from '../index'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `bt_player_verify_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`

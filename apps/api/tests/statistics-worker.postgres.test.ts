@@ -1,16 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { AdmissionConfig } from '@brawltome/refresh-operations'
 import {
+  type AdmissionConfig,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import {
-  createPostgresRequestAdmission,
-  requestAdmissionMigrationInventory,
-} from '@brawltome/request-admission/composition'
-import { createPostgresStatistics, statisticsMigrationInventory } from '@brawltome/statistics/composition'
+} from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+import { createPostgresStatistics, statisticsMigrationInventory } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'

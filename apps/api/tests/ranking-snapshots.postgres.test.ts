@@ -1,29 +1,25 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import {
+  type LeaderboardGenerationCandidate,
   type LeaderboardMode,
   type LeaderboardScope,
   type PublishedLeaderboardRow,
+  type RankingPublicationAuthorization,
   type RegionalLeaderboardScope,
+  collectAndPublishLeaderboardGeneration,
+  createPostgresRanking,
   leaderboardModes,
+  rankingMigrationInventory,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
 import {
-  type LeaderboardGenerationCandidate,
-  type RankingPublicationAuthorization,
-  collectAndPublishLeaderboardGeneration,
-  createPostgresRanking,
-  rankingMigrationInventory,
-} from '@brawltome/ranking/composition'
-import type { LeaderboardOperationKind, OperationLease } from '@brawltome/refresh-operations'
-import {
+  type LeaderboardOperationKind,
+  type OperationLease,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import {
-  createPostgresRequestAdmission,
-  requestAdmissionMigrationInventory,
-} from '@brawltome/request-admission/composition'
+} from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission, requestAdmissionMigrationInventory } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneDurableOperation } from '../src/refresh-operations-worker'
 

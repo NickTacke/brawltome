@@ -1,5 +1,5 @@
 import type { OperationLease } from '@brawltome/refresh-operations'
-import { decodeLifetimeEvidence, decodeRankedEvidence } from '@brawltome/statistics/composition'
+import { decodeLifetimeEvidence, decodeRankedEvidence } from '@brawltome/statistics'
 
 type StatisticsLease = Extract<
   OperationLease,

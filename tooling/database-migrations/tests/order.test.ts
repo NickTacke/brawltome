@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Migration } from '@brawltome/foundation'
 import { deployedOrder } from '../src/deployed-order'
-import { globalMigrationInventory } from '../src/inventories'
+import { migrationModules } from '../src/modules'
 import { checkDeployedMigrationsPresent, orderMigrations } from '../src/order'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
@@ -27,25 +27,26 @@ function shuffle<T>(items: readonly T[]): T[] {
   return shuffled
 }
 
-const deployedMigrations = [...globalMigrationInventory]
+const moduleMigrations = migrationModules.flatMap((module) => module.migrations)
 const playersAddition = migration('players/0021', 'players/0020')
 
 describe('orderMigrations', () => {
   test('keeps deployed migrations in their frozen order when the input is shuffled', () => {
-    const shuffled = shuffle(deployedMigrations)
+    const shuffled = shuffle(moduleMigrations)
 
-    expect(identities(shuffled)).not.toEqual(identities(deployedMigrations))
+    expect(identities(shuffled)).not.toEqual(identities(moduleMigrations))
     expect(identities(orderMigrations(shuffled))).toEqual([...deployedOrder])
   })
 
-  test('orders a shuffled global inventory exactly like the old index list', () => {
-    const ordered = orderMigrations(shuffle(globalMigrationInventory))
+  test("starts the modules' migrations with the deployed order and holds only deployed ones today", () => {
+    const ordered = identities(orderMigrations(shuffle(moduleMigrations)))
 
-    expect(identities(ordered)).toEqual(identities(globalMigrationInventory))
+    expect(ordered.slice(0, deployedOrder.length)).toEqual([...deployedOrder])
+    expect([...ordered].sort()).toEqual([...deployedOrder].sort())
   })
 
   test('puts a new migration without requirements after every deployed migration', () => {
-    const ordered = orderMigrations(shuffle([playersAddition, ...deployedMigrations]))
+    const ordered = orderMigrations(shuffle([playersAddition, ...moduleMigrations]))
 
     expect(identities(ordered)).toEqual([...deployedOrder, 'players/0021'])
   })
@@ -53,7 +54,7 @@ describe('orderMigrations', () => {
   test('puts a migration after the migrations it requires', () => {
     const statisticsAddition = migration('statistics/0005', 'statistics/0004', ['players/0021'])
 
-    const ordered = orderMigrations([statisticsAddition, playersAddition, ...deployedMigrations])
+    const ordered = orderMigrations([statisticsAddition, playersAddition, ...moduleMigrations])
 
     expect(identities(ordered).slice(-2)).toEqual(['players/0021', 'statistics/0005'])
   })
@@ -62,7 +63,7 @@ describe('orderMigrations', () => {
     const statisticsAddition = migration('statistics/0005', 'statistics/0004')
     const accountsAddition = migration('accounts/0010', 'accounts/0009', ['statistics/0005'])
 
-    const ordered = orderMigrations([accountsAddition, statisticsAddition, ...deployedMigrations])
+    const ordered = orderMigrations([accountsAddition, statisticsAddition, ...moduleMigrations])
 
     expect(identities(ordered).slice(-2)).toEqual(['statistics/0005', 'accounts/0010'])
   })
@@ -71,13 +72,13 @@ describe('orderMigrations', () => {
     const rankingsAddition = migration('rankings/0013', 'rankings/0012')
     const accountsAddition = migration('accounts/0010', 'accounts/0009')
 
-    const ordered = orderMigrations([rankingsAddition, playersAddition, accountsAddition, ...deployedMigrations])
+    const ordered = orderMigrations([rankingsAddition, playersAddition, accountsAddition, ...moduleMigrations])
 
     expect(identities(ordered).slice(-3)).toEqual(['accounts/0010', 'players/0021', 'rankings/0013'])
   })
 
   test('orders the deployed migrations that are present when modules are missing', () => {
-    const ordered = orderMigrations(shuffle([...globalMigrationInventory.filter(isPlayersOrRankings)]))
+    const ordered = orderMigrations(shuffle(moduleMigrations.filter(isPlayersOrRankings)))
 
     expect(identities(ordered)).toEqual(deployedOrder.filter((identity) => isPlayersOrRankings({ identity })))
   })
@@ -86,7 +87,7 @@ describe('orderMigrations', () => {
     const statisticsAddition = migration('statistics/0005', 'statistics/0004', ['accounts/0010'])
     const accountsAddition = migration('accounts/0010', 'accounts/0009', ['statistics/0005'])
 
-    expect(() => orderMigrations([statisticsAddition, accountsAddition, ...deployedMigrations])).toThrow(
+    expect(() => orderMigrations([statisticsAddition, accountsAddition, ...moduleMigrations])).toThrow(
       'migrations depend on each other in a cycle: accounts/0010 -> statistics/0005 -> accounts/0010',
     )
   })
@@ -94,7 +95,7 @@ describe('orderMigrations', () => {
   test('rejects an unknown requirement and names both migrations', () => {
     const statisticsAddition = migration('statistics/0005', 'statistics/0004', ['players/0099'])
 
-    expect(() => orderMigrations([statisticsAddition, ...deployedMigrations])).toThrow(
+    expect(() => orderMigrations([statisticsAddition, ...moduleMigrations])).toThrow(
       'unknown requirement players/0099 for statistics/0005',
     )
   })
@@ -102,27 +103,34 @@ describe('orderMigrations', () => {
   test('rejects a missing predecessor for a new migration', () => {
     const playersGap = migration('players/0022', 'players/0021')
 
-    expect(() => orderMigrations([playersGap, ...deployedMigrations])).toThrow(
+    expect(() => orderMigrations([playersGap, ...moduleMigrations])).toThrow(
       'missing predecessor players/0021 for players/0022',
     )
   })
 
   test('rejects a deployed migration that requires a later one', () => {
-    const requiringFirst = { ...deployedMigrations[0], requires: ['discovery/0005'] }
+    const isFirstDeployed = ({ identity }: Migration) => identity === 'players/0001'
+    const firstDeployed = moduleMigrations.find(isFirstDeployed)
+    if (!firstDeployed) {
+      throw new Error('players/0001 is missing from the module migrations')
+    }
 
-    expect(() => orderMigrations([requiringFirst, ...deployedMigrations.slice(1)])).toThrow(
+    const requiringFirst = { ...firstDeployed, requires: ['discovery/0005'] }
+    const others = moduleMigrations.filter((migration) => !isFirstDeployed(migration))
+
+    expect(() => orderMigrations([requiringFirst, ...others])).toThrow(
       'deployed migration players/0001 cannot depend on discovery/0005, which does not come before it in the deployed order',
     )
   })
 })
 
 describe('checkDeployedMigrationsPresent', () => {
-  test('accepts the full deployed set', () => {
-    expect(() => checkDeployedMigrationsPresent(shuffle(deployedMigrations))).not.toThrow()
+  test('accepts the migrations of every module the runner loads, in any order', () => {
+    expect(() => checkDeployedMigrationsPresent(shuffle(moduleMigrations))).not.toThrow()
   })
 
   test('rejects a missing deployed migration', () => {
-    const withoutRankings = deployedMigrations.filter(({ identity }) => identity !== 'rankings/0004')
+    const withoutRankings = moduleMigrations.filter(({ identity }) => identity !== 'rankings/0004')
 
     expect(() => checkDeployedMigrationsPresent(withoutRankings)).toThrow(
       'deployed migration rankings/0004 is missing from the modules',

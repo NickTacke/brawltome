@@ -1,9 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
+import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { leaderboardDeepCrawlScheduleDefinitions } from '../src/operations-worker-config'
 

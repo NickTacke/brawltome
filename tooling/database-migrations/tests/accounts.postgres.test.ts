@@ -6,8 +6,8 @@ const connectionString = process.env.DATABASE_URL
 
 describe.skipIf(!connectionString)('Accounts migration', () => {
   test('creates one account without orphans and ignores V2 sessions created after the migration', async () => {
-    const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
-    const { globalMigrationInventory } = await import('../src/inventories')
+    const { createPostgresAccounts } = await import('@brawltome/accounts')
+    const { orderedMigrations } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
     const databaseName = `brawltome_accounts_race_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
@@ -52,7 +52,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await legacy.end()
       }
 
-      await migratePostgres(databaseUrl.toString(), globalMigrationInventory)
+      await migratePostgres(databaseUrl.toString(), orderedMigrations)
       const runtime = createPostgresAccounts(databaseUrl.toString())
       let accountId = ''
       try {
@@ -143,8 +143,8 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
   }, 15_000)
 
   test('copies V2 identities and valid sessions as UTC while preserving legacy tables', async () => {
-    const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
-    const { globalMigrationInventory } = await import('../src/inventories')
+    const { createPostgresAccounts } = await import('@brawltome/accounts')
+    const { orderedMigrations } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
     const databaseName = `brawltome_accounts_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
@@ -232,10 +232,8 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await legacy.end()
       }
 
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
-        globalMigrationInventory.length,
-      )
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(0)
+      expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(orderedMigrations.length)
+      expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(0)
 
       const lateLegacy = postgres(databaseUrl.toString(), { max: 1 })
       try {
@@ -356,14 +354,14 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
   }, 15_000)
 
   test('round-trips launch preferences across sessions and runtimes without anonymous persistence', async () => {
-    const { createPostgresAccounts } = await import('@brawltome/accounts/composition')
+    const { createPostgresAccounts } = await import('@brawltome/accounts')
     const defaultPreferences = {
       version: 2,
       leaderboardBracket: '1v1',
       leaderboardRegion: 'all',
       theme: 'neutral',
     } as const
-    const { globalMigrationInventory } = await import('../src/inventories')
+    const { orderedMigrations } = await import('../src/inventories')
     const { migratePostgres } = await import('../src/postgres')
     const databaseName = `brawltome_preferences_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
@@ -374,7 +372,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      await migratePostgres(databaseUrl.toString(), globalMigrationInventory)
+      await migratePostgres(databaseUrl.toString(), orderedMigrations)
       const firstRuntime = createPostgresAccounts(databaseUrl.toString())
       let accountId = ''
       let secondDeviceToken = ''

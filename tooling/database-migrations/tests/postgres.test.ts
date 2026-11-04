@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory } from '@brawltome/accounts/composition'
-import { clanMigrationInventory } from '@brawltome/clan/composition'
-import { discoveryMigrationInventory } from '@brawltome/discovery/composition'
+import { accountsMigrationInventory } from '@brawltome/accounts'
+import { clanMigrationInventory } from '@brawltome/clan'
+import { discoveryMigrationInventory } from '@brawltome/discovery'
 import type { Migration } from '@brawltome/foundation'
-import { playerMigrationInventory } from '@brawltome/player/composition'
-import { rankingMigrationInventory } from '@brawltome/ranking/composition'
-import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
-import { replayAnalysisMigrationInventory } from '@brawltome/replay-analysis/composition'
-import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
-import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
+import { playerMigrationInventory } from '@brawltome/player'
+import { rankingMigrationInventory } from '@brawltome/ranking'
+import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
+import { replayAnalysisMigrationInventory } from '@brawltome/replay-analysis'
+import { requestAdmissionMigrationInventory } from '@brawltome/request-admission'
+import { statisticsMigrationInventory } from '@brawltome/statistics'
 import postgres from 'postgres'
-import { globalMigrationInventory } from '../src/inventories'
+import { orderedMigrations } from '../src/inventories'
 import { checksumSql } from '../src/plan'
 import { migratePostgres } from '../src/postgres'
 import { deployedHistory } from './fixtures/deployed-history'
@@ -128,7 +128,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       'rankings/0011',
       'rankings/0012',
     ])
-    expect(globalMigrationInventory.slice(-30).map(({ identity }): string => identity)).toEqual([
+    expect(orderedMigrations.slice(-30).map(({ identity }): string => identity)).toEqual([
       'players/0012',
       'players/0013',
       'replay-analysis/0001',
@@ -211,8 +211,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       ...accountsMigrationInventory.slice(0, 2),
       rankingMigrationInventory[0],
     ]
-    expect(globalMigrationInventory.slice(0, oldGlobalInventory.length)).toEqual(oldGlobalInventory)
-    expect(globalMigrationInventory.slice(oldGlobalInventory.length)).toEqual([
+    expect(orderedMigrations.slice(0, oldGlobalInventory.length)).toEqual(oldGlobalInventory)
+    expect(orderedMigrations.slice(oldGlobalInventory.length)).toEqual([
       clanMigrationInventory[0],
       refreshOperationsMigrationInventory[6],
       refreshOperationsMigrationInventory[7],
@@ -295,8 +295,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
-        globalMigrationInventory.length - oldGlobalInventory.length,
+      expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(
+        orderedMigrations.length - oldGlobalInventory.length,
       )
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
@@ -306,17 +306,17 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
   test('preserves the fixed 34-row pre-Players-import history and appends later migrations', async () => {
     expect(
-      globalMigrationInventory
+      orderedMigrations
         .slice(0, deployedPrePlayersImportGlobalHistory.length)
         .map(({ identity, checksum }) => [identity, checksum]),
     ).toEqual(deployedPrePlayersImportGlobalHistory.map((entry) => [...entry]))
-    const oldGlobalInventory = globalMigrationInventory.slice(0, deployedPrePlayersImportGlobalHistory.length)
+    const oldGlobalInventory = orderedMigrations.slice(0, deployedPrePlayersImportGlobalHistory.length)
     expect(deployedGlobalHistory).toHaveLength(25)
     expect(deployedPulseGlobalHistory).toHaveLength(27)
     expect(deployedMonitoringGlobalHistory).toHaveLength(28)
     expect(deployedPrePlayersImportGlobalHistory).toHaveLength(34)
-    expect(globalMigrationInventory).toHaveLength(84)
-    expect(globalMigrationInventory.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
+    expect(orderedMigrations).toHaveLength(84)
+    expect(orderedMigrations.slice(deployedPrePlayersImportGlobalHistory.length)).toEqual([
       playerMigrationInventory[6],
       statisticsMigrationInventory[1],
       refreshOperationsMigrationInventory[14],
@@ -379,7 +379,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       expect(await migratePostgres(databaseUrl.toString(), oldGlobalInventory)).toBe(oldGlobalInventory.length)
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(50)
+      expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(50)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -684,9 +684,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(
-        globalMigrationInventory.length,
-      )
+      expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(orderedMigrations.length)
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
         const [index] = await client<{ indexdef: string }[]>`
@@ -775,7 +773,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         await client.end()
       }
 
-      expect(await migratePostgres(databaseUrl.toString(), [...globalMigrationInventory].reverse())).toBe(0)
+      expect(await migratePostgres(databaseUrl.toString(), [...orderedMigrations].reverse())).toBe(0)
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
       await admin.end()
@@ -793,11 +791,11 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       const applications = await Promise.all([
-        migratePostgres(databaseUrl.toString(), globalMigrationInventory),
-        migratePostgres(databaseUrl.toString(), globalMigrationInventory),
+        migratePostgres(databaseUrl.toString(), orderedMigrations),
+        migratePostgres(databaseUrl.toString(), orderedMigrations),
       ])
-      expect(applications.sort()).toEqual([0, globalMigrationInventory.length])
-      expect(await migratePostgres(databaseUrl.toString(), globalMigrationInventory)).toBe(0)
+      expect(applications.sort()).toEqual([0, orderedMigrations.length])
+      expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(0)
 
       const failingSql = 'CREATE TABLE players.rollback_probe (id integer); SELECT * FROM players.missing_table;'
       const failingMigration: Migration = {
@@ -806,9 +804,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         checksum: checksumSql(failingSql),
         sql: failingSql,
       }
-      await expect(
-        migratePostgres(databaseUrl.toString(), [...globalMigrationInventory, failingMigration]),
-      ).rejects.toThrow()
+      await expect(migratePostgres(databaseUrl.toString(), [...orderedMigrations, failingMigration])).rejects.toThrow()
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
       try {
@@ -864,7 +860,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         `
 
         expect(history.map(({ identity, checksum }) => ({ identity, checksum: checksum.trim() }))).toEqual(
-          globalMigrationInventory.map(({ identity, checksum }) => ({ identity, checksum })),
+          orderedMigrations.map(({ identity, checksum }) => ({ identity, checksum })),
         )
         expect(schema.exists).toBe(true)
         expect(refreshOperationsSchema.exists).toBe(true)

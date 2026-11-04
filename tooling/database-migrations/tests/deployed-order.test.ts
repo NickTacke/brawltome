@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { deployedOrder } from '../src/deployed-order'
-import { globalMigrationInventory } from '../src/inventories'
+import { orderedMigrations } from '../src/inventories'
 import { deployedHistory } from './fixtures/deployed-history'
 
 describe('deployedOrder', () => {
@@ -8,8 +8,8 @@ describe('deployedOrder', () => {
     expect([...deployedOrder]).toEqual(deployedHistory.map(({ identity }) => identity))
   })
 
-  test('matches the global inventory identities, predecessors and checksums', () => {
-    const inventory = globalMigrationInventory.map(({ identity, predecessor, checksum }) => ({
+  test('matches the identities, predecessors and checksums of the ordered module migrations', () => {
+    const inventory = orderedMigrations.map(({ identity, predecessor, checksum }) => ({
       identity,
       predecessor,
       checksum,

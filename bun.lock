@@ -15,7 +15,6 @@
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/clan": "workspace:*",
         "@brawltome/contracts": "workspace:*",
-        "@brawltome/database": "workspace:*",
         "@brawltome/discovery": "workspace:*",
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
@@ -134,6 +133,7 @@
     "packages/modules/accounts": {
       "name": "@brawltome/accounts",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -177,6 +177,7 @@
     "packages/modules/ranking": {
       "name": "@brawltome/ranking",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -186,6 +187,7 @@
     "packages/modules/refresh-operations": {
       "name": "@brawltome/refresh-operations",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -195,6 +197,7 @@
     "packages/modules/replay-analysis": {
       "name": "@brawltome/replay-analysis",
       "dependencies": {
+        "@brawltome/foundation": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -233,25 +236,6 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
-        "typescript": "^5.7.0",
-      },
-    },
-    "packages/database": {
-      "name": "@brawltome/database",
-      "dependencies": {
-        "@brawltome/accounts": "workspace:*",
-        "@brawltome/clan": "workspace:*",
-        "@brawltome/discovery": "workspace:*",
-        "@brawltome/player": "workspace:*",
-        "@brawltome/ranking": "workspace:*",
-        "@brawltome/refresh-operations": "workspace:*",
-        "@brawltome/replay-analysis": "workspace:*",
-        "@brawltome/request-admission": "workspace:*",
-        "@brawltome/statistics": "workspace:*",
-        "drizzle-orm": "0.45.4",
-        "postgres": "^3.4.0",
-      },
-      "devDependencies": {
         "typescript": "^5.7.0",
       },
     },
@@ -309,7 +293,6 @@
       "dependencies": {
         "@brawltome/accounts": "workspace:*",
         "@brawltome/clan": "workspace:*",
-        "@brawltome/database": "workspace:*",
         "@brawltome/discovery": "workspace:*",
         "@brawltome/foundation": "workspace:*",
         "@brawltome/player": "workspace:*",
@@ -402,7 +385,6 @@
 
     "@brawltome/contracts": ["@brawltome/contracts@workspace:packages/contracts"],
 
-    "@brawltome/database": ["@brawltome/database@workspace:packages/database"],
 
     "@brawltome/database-migrations": ["@brawltome/database-migrations@workspace:tooling/database-migrations"],
 
