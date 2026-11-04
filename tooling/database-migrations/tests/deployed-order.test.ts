@@ -8,8 +8,10 @@ describe('deployedOrder', () => {
     expect([...deployedOrder]).toEqual(deployedHistory.map(({ identity }) => identity))
   })
 
-  test('matches the identities, predecessors and checksums of the ordered module migrations', () => {
-    const inventory = orderedMigrations.map(({ identity, predecessor, checksum }) => ({
+  test('starts with the deployed migrations, unchanged', () => {
+    const deployedMigrations = orderedMigrations.slice(0, deployedHistory.length)
+
+    const inventory = deployedMigrations.map(({ identity, predecessor, checksum }) => ({
       identity,
       predecessor,
       checksum,
