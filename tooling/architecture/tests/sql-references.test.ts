@@ -49,10 +49,25 @@ describe('findSchemaReferences', () => {
     expect(findSchemaReferences(source, schemas)).toEqual([])
   })
 
-  it('ignores import paths that end in a schema name', () => {
-    const source = "import { router } from './players.router'\nexport * from '../mappers/rankings.mapper'"
+  it('ignores module specifiers in every import form', () => {
+    const source = [
+      "import { router } from './players.router'",
+      "import type { Mapper } from '../mappers/rankings.mapper'",
+      "export * from './accounts.shared'",
+      "export { entries } from './rankings.entries'",
+      "import legacy = require('./players.legacy')",
+      "const lazy = await import('./players.lazy')",
+      "const loaded = require('./rankings.loaded')",
+      "type Router = import('./accounts.router').Router",
+    ].join('\n')
 
     expect(findSchemaReferences(source, schemas)).toEqual([])
+  })
+
+  it('still reads a string that is only an argument of another call', () => {
+    const source = "load('players.profiles')"
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'players', line: 1 }])
   })
 
   it('ignores names that only end in a schema name or follow another dot', () => {
