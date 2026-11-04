@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "uq_player_link_steam" ON "player_link" USING btree ("steam_id");
