@@ -165,8 +165,8 @@ describe('dependency architecture', () => {
       }
       return files.join('\n')
     }
-    const clans = await readTree('packages/contexts/clan')
-    const players = await readTree('packages/contexts/player')
+    const clans = await readTree('packages/modules/clan')
+    const players = await readTree('packages/modules/player')
     expect(clans).not.toMatch(/@brawltome\/(?:database|player)/)
     expect(players).not.toMatch(/playerClan|getPlayerGuildV1|getGuildStatsV1/)
   })
@@ -176,7 +176,7 @@ describe('dependency architecture', () => {
     const repository = readArchitectureRepository(repositoryRoot)
     const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/refresh-operations')
     const packageDocument = JSON.parse(
-      readFileSync(resolve(repositoryRoot, 'packages/contexts/refresh-operations/package.json'), 'utf8'),
+      readFileSync(resolve(repositoryRoot, 'packages/modules/refresh-operations/package.json'), 'utf8'),
     ) as { scripts?: Record<string, string> }
 
     expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(true)

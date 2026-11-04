@@ -2,7 +2,7 @@
   "name": "brawltome",
   "private": true,
   "packageManager": "bun@1.3.14",
-  "workspaces": ["apps/*", "packages/*", "packages/contexts/*", "tooling/*"],
+  "workspaces": ["apps/*", "packages/*", "packages/modules/*", "tooling/*"],
   "scripts": {
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",

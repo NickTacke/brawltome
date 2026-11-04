@@ -13,7 +13,7 @@ What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 | `apps/discord-bot` | discord.js slash-command bot (`/player`, `/clan`, `/status`) |
 | `apps/desktop` | Tauri Windows overlay; `detection/` is a private submodule, Windows only |
 | `apps/replay-bridge` | Bridge to the replay processor (host install in `infra/replay-bridge`) |
-| `packages/contexts/*` | Domain modules (`@brawltome/<name>`): accounts, clan, discovery, player, ranking, refresh-operations, replay-analysis, request-admission, statistics. Each owns its schema, migrations and `composition.ts` entry point |
+| `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, clan, discovery, player, ranking, refresh-operations, replay-analysis, request-admission, statistics. Each owns its schema, migrations and `composition.ts` entry point |
 | `packages/database` | Drizzle client for the API; the migration runner is `tooling/database-migrations` |
 | `packages/bhapi` | Brawlhalla API client (V0 keyed, V1 keyless) |
 | `packages/contracts` | Generated OpenAPI + Rust contracts (CI checks they are up to date) |
@@ -38,7 +38,7 @@ bun run infra:observability:check   # slow; run when touching infra/observabilit
 
 Dead-lettered work is inspected and replayed with `bun run operations:dead-letters <list|inspect|replay|discard>`. It
 needs `DEAD_LETTER_DATABASE_URL` plus `DEAD_LETTER_OPERATOR_TOKEN` and `DEAD_LETTER_OPERATOR_TOKENS` (see
-`packages/contexts/refresh-operations/operator-auth.ts`), e.g. `bun run operations:dead-letters list`.
+`packages/modules/refresh-operations/operator-auth.ts`), e.g. `bun run operations:dead-letters list`.
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, migrations, tests, contracts, architecture and infra checks.
 `observability-ci.yml` runs when `infra/observability/**`, `packages/telemetry/**` or root dependency/TS config change;

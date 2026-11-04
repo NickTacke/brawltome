@@ -130,7 +130,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/accounts": {
+    "packages/modules/accounts": {
       "name": "@brawltome/accounts",
       "dependencies": {
         "postgres": "^3.4.0",
@@ -141,7 +141,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/clan": {
+    "packages/modules/clan": {
       "name": "@brawltome/clan",
       "dependencies": {
         "postgres": "^3.4.8",
@@ -150,7 +150,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/discovery": {
+    "packages/modules/discovery": {
       "name": "@brawltome/discovery",
       "dependencies": {
         "postgres": "^3.4.0",
@@ -160,7 +160,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/player": {
+    "packages/modules/player": {
       "name": "@brawltome/player",
       "dependencies": {
         "@brawltome/game-data": "workspace:*",
@@ -170,7 +170,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/ranking": {
+    "packages/modules/ranking": {
       "name": "@brawltome/ranking",
       "dependencies": {
         "postgres": "^3.4.0",
@@ -179,7 +179,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/refresh-operations": {
+    "packages/modules/refresh-operations": {
       "name": "@brawltome/refresh-operations",
       "dependencies": {
         "postgres": "^3.4.0",
@@ -188,7 +188,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/replay-analysis": {
+    "packages/modules/replay-analysis": {
       "name": "@brawltome/replay-analysis",
       "dependencies": {
         "postgres": "^3.4.0",
@@ -198,7 +198,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/request-admission": {
+    "packages/modules/request-admission": {
       "name": "@brawltome/request-admission",
       "dependencies": {
         "postgres": "^3.4.0",
@@ -207,7 +207,7 @@
         "typescript": "^5.7.0",
       },
     },
-    "packages/contexts/statistics": {
+    "packages/modules/statistics": {
       "name": "@brawltome/statistics",
       "dependencies": {
         "@brawltome/game-data": "workspace:*",
@@ -371,7 +371,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@1.9.4", "", { "os": "win32", "cpu": "x64" }, "sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA=="],
 
-    "@brawltome/accounts": ["@brawltome/accounts@workspace:packages/contexts/accounts"],
+    "@brawltome/accounts": ["@brawltome/accounts@workspace:packages/modules/accounts"],
 
     "@brawltome/analytics-review": ["@brawltome/analytics-review@workspace:tooling/analytics-review"],
 
@@ -381,7 +381,7 @@
 
     "@brawltome/bhapi": ["@brawltome/bhapi@workspace:packages/bhapi"],
 
-    "@brawltome/clan": ["@brawltome/clan@workspace:packages/contexts/clan"],
+    "@brawltome/clan": ["@brawltome/clan@workspace:packages/modules/clan"],
 
     "@brawltome/contracts": ["@brawltome/contracts@workspace:packages/contracts"],
 
@@ -393,23 +393,23 @@
 
     "@brawltome/discord-bot": ["@brawltome/discord-bot@workspace:apps/discord-bot"],
 
-    "@brawltome/discovery": ["@brawltome/discovery@workspace:packages/contexts/discovery"],
+    "@brawltome/discovery": ["@brawltome/discovery@workspace:packages/modules/discovery"],
 
     "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
 
-    "@brawltome/player": ["@brawltome/player@workspace:packages/contexts/player"],
+    "@brawltome/player": ["@brawltome/player@workspace:packages/modules/player"],
 
-    "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/contexts/ranking"],
+    "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/modules/ranking"],
 
-    "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/contexts/refresh-operations"],
+    "@brawltome/refresh-operations": ["@brawltome/refresh-operations@workspace:packages/modules/refresh-operations"],
 
-    "@brawltome/replay-analysis": ["@brawltome/replay-analysis@workspace:packages/contexts/replay-analysis"],
+    "@brawltome/replay-analysis": ["@brawltome/replay-analysis@workspace:packages/modules/replay-analysis"],
 
     "@brawltome/replay-bridge": ["@brawltome/replay-bridge@workspace:apps/replay-bridge"],
 
-    "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/contexts/request-admission"],
+    "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/modules/request-admission"],
 
-    "@brawltome/statistics": ["@brawltome/statistics@workspace:packages/contexts/statistics"],
+    "@brawltome/statistics": ["@brawltome/statistics@workspace:packages/modules/statistics"],
 
     "@brawltome/telemetry": ["@brawltome/telemetry@workspace:packages/telemetry"],
 
