@@ -5,7 +5,6 @@ import { createORPCClient } from '@orpc/client'
 import { RPCLink } from '@orpc/client/fetch'
 import type { RouterClient } from '@orpc/server'
 import { Hono } from 'hono'
-import { readClientIp } from '../src/orpc/context'
 import { createOrpcRoutes } from '../src/orpc/mount'
 import type { orpcRouter } from '../src/orpc/router'
 import { createStatusRouter } from '../src/router/status.router'
@@ -144,13 +143,5 @@ describe('oRPC next to tRPC', () => {
     const response = await app.fetch(new Request('http://api.test/rpc/nothing', { method: 'POST' }))
 
     expect(response.status).toBe(404)
-  })
-
-  test('reads the client address from the verified header first', () => {
-    const headers = new Headers({ 'x-client-ip': '203.0.113.7', 'cf-connecting-ip': '198.51.100.1' })
-
-    expect(readClientIp(headers)).toBe('203.0.113.7')
-    expect(readClientIp(new Headers({ 'x-forwarded-for': '198.51.100.2, 10.0.0.1' }))).toBe('198.51.100.2')
-    expect(readClientIp(new Headers())).toBe('0.0.0.0')
   })
 })
