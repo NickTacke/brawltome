@@ -137,6 +137,7 @@ const runtime = ['api', 'operations-worker', 'web', 'discord'] as const
 const method = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const
 const route = [
   'trpc',
+  'orpc',
   'health_live',
   'health_ready',
   'health_serving',
@@ -1102,6 +1103,7 @@ export function normalizeHttpRoute(pathname: string): (typeof route)[number] {
   if (pathname === '/health/serving' || pathname === '/api/health/serving') return 'health_serving'
   if (pathname === '/metrics' || pathname === '/internal/metrics' || pathname === '/api/metrics') return 'metrics'
   if (pathname.startsWith('/trpc')) return 'trpc'
+  if (pathname.startsWith('/rpc') || pathname === '/openapi.json') return 'orpc'
   if (pathname.startsWith('/auth')) return 'auth'
   if (pathname.startsWith('/internal/operations')) return 'operations'
   if (pathname.startsWith('/api/overlay')) return 'overlay'
