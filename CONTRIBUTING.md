@@ -2,23 +2,24 @@
 
 BrawlTome tracks Brawlhalla players: profiles, rankings, clans, rating history, a Discord bot, and a Windows overlay.
 The live site is https://brawltome.app. Read `README.md` for setup, then this guide for how the repo works in practice.
-What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md). How the modules fit together is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Layout
+## Repository map
 
 | Path | What lives there |
 | --- | --- |
-| `apps/api` | Hono + tRPC API **and** the operations worker (`dev:operations-worker`); composes every context |
+| `apps/api` | Hono + tRPC API **and** the operations worker (`dev:operations-worker`); loads the modules listed in `src/modules.ts` and `src/worker-modules.ts` |
 | `apps/web` | Next.js 16 site |
 | `apps/discord-bot` | discord.js slash-command bot (`/player`, `/clan`, `/status`) |
 | `apps/desktop` | Tauri Windows overlay; `detection/` is a private submodule, Windows only |
 | `apps/replay-bridge` | Bridge to the replay processor (host install in `infra/replay-bridge`) |
-| `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, clan, discovery, player, ranking, refresh-operations, replay-analysis, request-admission, statistics. Each owns its schema and migrations, and exposes one `index.ts` with a `<name>Module` object |
+| `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, clan, discovery, player, ranking, refresh-operations, replay-analysis, request-admission, statistics. Each owns its schema and migrations, and exposes one `index.ts` with a `<name>Module` object; layout in [`packages/modules/README.md`](packages/modules/README.md) |
 | `packages/foundation` | Shared database client, the migration and module types, and the migration runner |
 | `packages/bhapi` | Brawlhalla API client (V0 keyed, V1 keyless) |
 | `packages/contracts` | Generated OpenAPI + Rust contracts (CI checks they are up to date) |
 | `packages/game-data`, `packages/telemetry` | Static game data; OpenTelemetry + metrics helpers |
-| `tooling/architecture` | Dependency rules between packages (`bun run architecture:check`) |
+| `tooling/architecture` | Dependency and module-boundary rules (`bun run architecture:check`) |
 | `tooling/database-migrations` | `migrate` command and the list of modules it migrates |
 | `tooling/analytics-review` | Weekly product analytics review from Loki |
 | `infra/app` | Production compose, zero-downtime `deploy.sh`, Postgres storage, backup verifier |
@@ -63,9 +64,9 @@ change. Check each workflow's `paths` before assuming a change is covered.
   `bun run infra:observability:deploy` (see `infra/observability/deploy-via-dokploy.sh` for the required env).
 - Backup verifier and storage helpers are host installs (`infra/app/backups/install.sh`), not part of a deploy.
 - Alerting: see [`docs/operations/alerts.md`](docs/operations/alerts.md).
-- Database connections: each process opens one client per job, sized in `apps/api/src/database-pools.ts`, and
-  postgres.js adds one LISTEN connection beside the API's and the worker's main client. With `c` =
-  `OPERATIONS_TOTAL_CONCURRENCY` (default 8, at most 23):
+- Database connections: the API shares one client between its modules and the worker opens three by role (main, lease
+  renewals, discovery), sized in `apps/api/src/database-pools.ts`. postgres.js adds one LISTEN connection beside the
+  API's and the worker's main client. With `c` = `OPERATIONS_TOTAL_CONCURRENCY` (default 8, at most 23):
 
   | client | connections |
   |---|---|
@@ -100,6 +101,20 @@ change. Check each workflow's `paths` before assuming a change is covered.
 - Postgres data is on its own loop-mounted ext4 image (`/srv/brawltome/postgres`); host `df` does not show it.
 - Brawlhalla V0 rate-limits short bursts well below its 180/15 min budget: smooth new V0 traffic, don't just budget it.
   V0 returns 503 during maintenance; the worker pauses the source.
+
+## Modules
+
+- A module's `index.ts` is its only public surface. Import `@brawltome/<name>`, never a path inside it.
+- Don't read or write another module's tables. Call what that module exports.
+- Migrations live in the module that owns the table. When one needs another module's table first, list its identity in
+  `requires`. A new migration is a file in the module's `migrations/` folder, imported in the module's `index.ts` and
+  added to its `<name>MigrationInventory` array: the runner only reads that array. There is no central list; the order
+  comes from `predecessor` and `requires`.
+  `architecture:check` fails on a new migration that names another module's schema without such a `requires`.
+- A new module is added to the three module lists, to `tooling/architecture/src/current-policy.ts` and to
+  `tooling/architecture/tests/module-surfaces.test.ts`, with a dev dependency on it in
+  `tooling/architecture/package.json`. The `Dockerfile` also needs a `COPY packages/modules/<name>/package.json` line,
+  or the image's frozen install breaks.
 
 ## Working conventions
 
