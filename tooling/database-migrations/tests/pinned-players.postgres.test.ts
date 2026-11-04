@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { MAX_PINNED_PLAYERS, accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { migratePostgres } from '@brawltome/foundation'
 import postgres from 'postgres'
-import { migratePostgres } from '../src/postgres'
 
 const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL

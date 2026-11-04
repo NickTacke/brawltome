@@ -1,4 +1,4 @@
-import type { Migration } from '@brawltome/foundation'
+import type { Migration } from '../migration'
 import { type AppliedMigration, buildMigrationPlan } from './plan'
 
 export type MigrationRunner = {

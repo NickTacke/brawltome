@@ -1,8 +1,6 @@
-import { checkModuleList } from '@brawltome/foundation'
+import { checkDeployedMigrationsPresent, checkModuleList, migratePostgres } from '@brawltome/foundation'
 import { orderedMigrations } from './inventories'
 import { migrationModules } from './modules'
-import { checkDeployedMigrationsPresent } from './order'
-import { migratePostgres } from './postgres'
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) {

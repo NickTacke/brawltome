@@ -1,4 +1,4 @@
-import type { Migration } from '@brawltome/foundation'
+import type { Migration } from '../migration'
 import { deployedOrder } from './deployed-order'
 
 const deployedIdentities = new Set(deployedOrder)

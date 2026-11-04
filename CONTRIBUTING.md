@@ -14,12 +14,12 @@ What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 | `apps/desktop` | Tauri Windows overlay; `detection/` is a private submodule, Windows only |
 | `apps/replay-bridge` | Bridge to the replay processor (host install in `infra/replay-bridge`) |
 | `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, clan, discovery, player, ranking, refresh-operations, replay-analysis, request-admission, statistics. Each owns its schema and migrations, and exposes one `index.ts` with a `<name>Module` object |
-| `packages/foundation` | Shared database client and the migration and module types; the migration runner is `tooling/database-migrations` |
+| `packages/foundation` | Shared database client, the migration and module types, and the migration runner |
 | `packages/bhapi` | Brawlhalla API client (V0 keyed, V1 keyless) |
 | `packages/contracts` | Generated OpenAPI + Rust contracts (CI checks they are up to date) |
 | `packages/game-data`, `packages/telemetry` | Static game data; OpenTelemetry + metrics helpers |
 | `tooling/architecture` | Dependency rules between packages (`bun run architecture:check`) |
-| `tooling/database-migrations` | `migrate` command |
+| `tooling/database-migrations` | `migrate` command and the list of modules it migrates |
 | `tooling/analytics-review` | Weekly product analytics review from Loki |
 | `infra/app` | Production compose, zero-downtime `deploy.sh`, Postgres storage, backup verifier |
 | `infra/observability` | Prometheus, Alertmanager, Loki, Tempo, Grafana, OTel collector |

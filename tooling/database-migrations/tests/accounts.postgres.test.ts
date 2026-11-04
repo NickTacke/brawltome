@@ -8,7 +8,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
   test('creates one account without orphans and ignores V2 sessions created after the migration', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts')
     const { orderedMigrations } = await import('../src/inventories')
-    const { migratePostgres } = await import('../src/postgres')
+    const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_accounts_race_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -145,7 +145,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
   test('copies V2 identities and valid sessions as UTC while preserving legacy tables', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts')
     const { orderedMigrations } = await import('../src/inventories')
-    const { migratePostgres } = await import('../src/postgres')
+    const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_accounts_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'
@@ -362,7 +362,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       theme: 'neutral',
     } as const
     const { orderedMigrations } = await import('../src/inventories')
-    const { migratePostgres } = await import('../src/postgres')
+    const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_preferences_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
     adminUrl.pathname = '/postgres'

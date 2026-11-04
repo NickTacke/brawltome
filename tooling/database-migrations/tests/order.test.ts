@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Migration } from '@brawltome/foundation'
-import { deployedOrder } from '../src/deployed-order'
+import { type Migration, checkDeployedMigrationsPresent, deployedOrder, orderMigrations } from '@brawltome/foundation'
 import { migrationModules } from '../src/modules'
-import { checkDeployedMigrationsPresent, orderMigrations } from '../src/order'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
   const sql = `SELECT '${identity}';`

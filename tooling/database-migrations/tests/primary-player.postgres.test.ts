@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { migratePostgres } from '@brawltome/foundation'
 import postgres from 'postgres'
-import { migratePostgres } from '../src/postgres'
 
 const connectionString = process.env.DATABASE_URL
 

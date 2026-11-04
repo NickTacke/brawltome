@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
-import type { Migration } from '@brawltome/foundation'
-import { type AppliedMigration, buildMigrationPlan, checksumSql } from '../src/plan'
-import { runMigrations } from '../src/run'
+import type { Migration } from '../migration'
+import { type AppliedMigration, buildMigrationPlan, checksumSql } from '../migrations/plan'
+import { runMigrations } from '../migrations/run'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
   const sql = `SELECT '${identity}';`
