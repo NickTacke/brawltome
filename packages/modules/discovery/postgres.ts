@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { Sql } from '@brawltome/foundation'
 import postgres from 'postgres'
 import {
   type ClanDiscoveryFact,
@@ -21,7 +22,6 @@ import {
   playerSearchTerms,
 } from './index'
 
-type Sql = ReturnType<typeof postgres>
 type TermRow = {
   entity_kind: ProjectionOwner
   generation_id: string

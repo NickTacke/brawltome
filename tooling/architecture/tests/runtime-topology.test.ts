@@ -26,6 +26,8 @@ describe('PostgreSQL-only runtime topology', () => {
         `:(exclude)${thisFile}`,
         ':(exclude)infra/app/tests/**',
         ':(exclude)LICENSE',
+        // drizzle-orm lists an optional redis client among its peer dependencies; package.json files are still scanned
+        ':(exclude)bun.lock',
       ],
       cwd: root,
       stdout: 'pipe',

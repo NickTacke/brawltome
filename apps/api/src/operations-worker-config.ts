@@ -1,3 +1,4 @@
+import { parsePositiveInteger } from '@brawltome/foundation'
 import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
@@ -16,14 +17,6 @@ import {
   minRankingRetentionHours,
   validateAdmissionConfig,
 } from '@brawltome/refresh-operations'
-
-function positiveInteger(value: string | undefined, fallback: number, name: string, maximum: number): number {
-  const parsed = value === undefined ? fallback : Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > maximum) {
-    throw new Error(`${name} must be a positive integer no greater than ${maximum}`)
-  }
-  return parsed
-}
 
 function boundedInteger(value: string | undefined, fallback: number, name: string, minimum: number, maximum: number) {
   const parsed = value === undefined ? fallback : Number(value)
@@ -204,23 +197,30 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     maintenance: 1,
   }
   const admission: AdmissionConfig = {
-    totalConcurrency: positiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, 8, 'OPERATIONS_TOTAL_CONCURRENCY', 32),
-    interactiveReservation: positiveInteger(
-      env.OPERATIONS_INTERACTIVE_RESERVATION,
-      2,
-      'OPERATIONS_INTERACTIVE_RESERVATION',
-      10_000,
-    ),
+    totalConcurrency: parsePositiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, {
+      name: 'OPERATIONS_TOTAL_CONCURRENCY',
+      fallback: 8,
+      maximum: 32,
+    }),
+    interactiveReservation: parsePositiveInteger(env.OPERATIONS_INTERACTIVE_RESERVATION, {
+      name: 'OPERATIONS_INTERACTIVE_RESERVATION',
+      fallback: 2,
+      maximum: 10_000,
+    }),
     classConcurrency: Object.fromEntries(
       Object.entries(classEnvironment).map(([workClass, name]) => [
         workClass,
-        positiveInteger(env[name], classDefaults[workClass as WorkClass], name, 10_000),
+        parsePositiveInteger(env[name], { name, fallback: classDefaults[workClass as WorkClass], maximum: 10_000 }),
       ]),
     ) as Record<WorkClass, number>,
     backgroundWeights: Object.fromEntries(
       Object.entries(weightEnvironment).map(([workClass, name]) => [
         workClass,
-        positiveInteger(env[name], weightDefaults[workClass as BackgroundWorkClass], name, 10_000),
+        parsePositiveInteger(env[name], {
+          name,
+          fallback: weightDefaults[workClass as BackgroundWorkClass],
+          maximum: 10_000,
+        }),
       ]),
     ) as Record<BackgroundWorkClass, number>,
   }
@@ -228,7 +228,11 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
   // Retryable failures back off exponentially (2s, 6s, then capped at 15s by default) with +/-20% jitter so a
   // brief upstream hiccup is ridden out across four interactive attempts while the whole retry window stays
   // inside the ~30s the profile page waits for a refresh. Rate-limited work keeps its Retry-After delay.
-  const retryDelayMs = positiveInteger(env.OPERATIONS_RETRY_DELAY_MS, 2_000, 'OPERATIONS_RETRY_DELAY_MS', 300_000)
+  const retryDelayMs = parsePositiveInteger(env.OPERATIONS_RETRY_DELAY_MS, {
+    name: 'OPERATIONS_RETRY_DELAY_MS',
+    fallback: 2_000,
+    maximum: 300_000,
+  })
   const retryBackoff = {
     multiplier: boundedInteger(
       env.OPERATIONS_RETRY_BACKOFF_MULTIPLIER,
@@ -258,8 +262,16 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
   )
 
   return {
-    leaseMs: positiveInteger(env.OPERATIONS_LEASE_MS, 30_000, 'OPERATIONS_LEASE_MS', 300_000),
-    pollMs: positiveInteger(env.OPERATIONS_POLL_MS, 1_000, 'OPERATIONS_POLL_MS', 60_000),
+    leaseMs: parsePositiveInteger(env.OPERATIONS_LEASE_MS, {
+      name: 'OPERATIONS_LEASE_MS',
+      fallback: 30_000,
+      maximum: 300_000,
+    }),
+    pollMs: parsePositiveInteger(env.OPERATIONS_POLL_MS, {
+      name: 'OPERATIONS_POLL_MS',
+      fallback: 1_000,
+      maximum: 60_000,
+    }),
     retryDelayMs,
     retryBackoff,
     sourceUnavailableRetryMs: boundedInteger(
@@ -269,12 +281,11 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       1_000,
       900_000,
     ),
-    scheduleBatchSize: positiveInteger(
-      env.OPERATIONS_SCHEDULE_BATCH_SIZE,
-      100,
-      'OPERATIONS_SCHEDULE_BATCH_SIZE',
-      1_000,
-    ),
+    scheduleBatchSize: parsePositiveInteger(env.OPERATIONS_SCHEDULE_BATCH_SIZE, {
+      name: 'OPERATIONS_SCHEDULE_BATCH_SIZE',
+      fallback: 100,
+      maximum: 1_000,
+    }),
     // Exit (and let Docker restart the worker) when no loop has iterated for 10 minutes: every call is hung.
     stallTimeoutMs: boundedInteger(
       env.OPERATIONS_STALL_TIMEOUT_MS,
@@ -342,7 +353,11 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       ),
     },
     leaderboard: {
-      pageDepth: positiveInteger(env.LEADERBOARD_PAGE_DEPTH, defaultLeaderboardPageDepth, 'LEADERBOARD_PAGE_DEPTH', 20),
+      pageDepth: parsePositiveInteger(env.LEADERBOARD_PAGE_DEPTH, {
+        name: 'LEADERBOARD_PAGE_DEPTH',
+        fallback: defaultLeaderboardPageDepth,
+        maximum: 20,
+      }),
       intervalMs: boundedInteger(
         env.LEADERBOARD_INTERVAL_MS,
         defaultLeaderboardIntervalMs,

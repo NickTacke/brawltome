@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { requirePositiveInteger } from '@brawltome/foundation'
 import type {
   ActorAdmissionResult,
   AdmissionActor,
@@ -29,11 +30,6 @@ type DatabaseTime = { now: Date }
 type SourceReservation = { admitted_at: Date; units: number }
 type SourceState = { last_admitted_at: Date | null; paused_until: Date }
 
-function positiveInteger(name: string, value: number): number {
-  if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`)
-  return value
-}
-
 function actorDimensions(actor: AdmissionActor, authenticatedIpLimit: number) {
   const hash = (value: string) => createHash('sha256').update(value).digest('hex')
   switch (actor.kind) {
@@ -57,8 +53,8 @@ function actorDimensions(actor: AdmissionActor, authenticatedIpLimit: number) {
 }
 
 export function createPostgresRequestAdmission(connectionString: string, config: RequestAdmissionConfig) {
-  const authenticatedIpLimit = positiveInteger('authenticatedIpLimit', config.authenticatedIpLimit)
-  const windowSeconds = positiveInteger('windowSeconds', config.windowSeconds ?? defaultWindowSeconds)
+  const authenticatedIpLimit = requirePositiveInteger(config.authenticatedIpLimit, 'authenticatedIpLimit')
+  const windowSeconds = requirePositiveInteger(config.windowSeconds ?? defaultWindowSeconds, 'windowSeconds')
   const sourceBackgroundHeadroom = config.sourceBackgroundHeadroom ?? 0
   if (!Number.isInteger(sourceBackgroundHeadroom) || sourceBackgroundHeadroom < 0) {
     throw new Error('sourceBackgroundHeadroom must be a non-negative integer')
@@ -67,17 +63,20 @@ export function createPostgresRequestAdmission(connectionString: string, config:
   if (!Number.isFinite(minimumSourceSpacingMs) || minimumSourceSpacingMs < 0) {
     throw new Error('minimumSourceSpacingMs must be a finite number >= 0')
   }
-  const actorReservationRetentionSeconds = positiveInteger(
-    'actorReservationRetentionSeconds',
+  const actorReservationRetentionSeconds = requirePositiveInteger(
     config.actorReservationRetentionSeconds ?? defaultActorReservationRetentionSeconds,
+    'actorReservationRetentionSeconds',
   )
   const sourceLimits = Object.fromEntries(
-    Object.entries(config.sourceLimits).map(([domain, limit]) => [domain, positiveInteger(`${domain} limit`, limit)]),
+    Object.entries(config.sourceLimits).map(([domain, limit]) => [
+      domain,
+      requirePositiveInteger(limit, `${domain} limit`),
+    ]),
   ) as Record<string, number>
   const sourceWindowSeconds = Object.fromEntries(
     Object.entries(config.sourceWindowSeconds ?? {}).map(([domain, seconds]) => [
       domain,
-      positiveInteger(`${domain} window seconds`, seconds),
+      requirePositiveInteger(seconds, `${domain} window seconds`),
     ]),
   ) as Record<string, number>
   const client = postgres(connectionString)
@@ -247,7 +246,7 @@ export function createPostgresRequestAdmission(connectionString: string, config:
       const sourceWindow = sourceWindowSeconds[input.domain] ?? windowSeconds
       const limit =
         input.caller === 'on-demand' ? configuredLimit : Math.max(0, configuredLimit - sourceBackgroundHeadroom)
-      const units = positiveInteger('source units', input.units)
+      const units = requirePositiveInteger(input.units, 'source units')
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`source-domain:${input.domain}`}, 0))`
@@ -327,7 +326,7 @@ export function createPostgresRequestAdmission(connectionString: string, config:
 
     async pauseSource(domain: SourceDomain, retryAfterSeconds: number): Promise<void> {
       if (!sourceLimits[domain]) throw new Error(`Unknown source admission domain: ${domain}`)
-      const duration = positiveInteger('source retryAfterSeconds', retryAfterSeconds)
+      const duration = requirePositiveInteger(retryAfterSeconds, 'source retryAfterSeconds')
       await client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`source-domain:${domain}`}, 0))`

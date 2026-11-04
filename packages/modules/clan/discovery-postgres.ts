@@ -1,9 +1,8 @@
+import type { Sql } from '@brawltome/foundation'
 import postgres from 'postgres'
 import type { ClanDiscoveryFact, ClanDiscoverySource } from './discovery-facts'
 
 const deliveredTrimBatch = 1_000
-
-type Sql = ReturnType<typeof postgres>
 
 async function sourceVersion(sql: Sql): Promise<number> {
   const [state] = await sql<{ source_version: string | number }[]>`

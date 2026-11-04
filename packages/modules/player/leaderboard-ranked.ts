@@ -1,6 +1,5 @@
+import type { Sql } from '@brawltome/foundation'
 import postgres from 'postgres'
-
-type Sql = ReturnType<typeof postgres>
 
 export type LeaderboardRankedObservation = {
   brawlhallaId: number

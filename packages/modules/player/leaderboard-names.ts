@@ -1,8 +1,7 @@
+import type { Sql } from '@brawltome/foundation'
 import postgres from 'postgres'
 import { decodeV0CareerNameCandidate } from './career/source'
 import { isUsablePlayerName } from './reference'
-
-type Sql = ReturnType<typeof postgres>
 
 export type LeaderboardPlayerName = { brawlhallaId: number; name: string }
 

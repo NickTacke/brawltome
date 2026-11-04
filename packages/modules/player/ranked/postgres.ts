@@ -1,3 +1,4 @@
+import type { Sql } from '@brawltome/foundation'
 import { legendSlug } from '@brawltome/game-data'
 import { getLegendById } from '@brawltome/game-data/legends'
 import postgres from 'postgres'
@@ -26,7 +27,6 @@ export type RankedWriteResult = 'applied' | 'already-applied' | 'lease-lost' | '
 type FencedResult = 'applied' | 'already-applied' | 'lease-lost'
 type CanonicalWriteResult = FencedResult | 'stale'
 type CareerMainLegendResolver = (brawlhallaId: number) => Promise<Omit<MainLegend, 'source'> | null>
-type Sql = ReturnType<typeof postgres>
 
 type ProfileRow = {
   brawlhalla_id: number

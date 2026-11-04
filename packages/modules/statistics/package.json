@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/foundation": "workspace:*",
     "@brawltome/game-data": "workspace:*",
     "postgres": "^3.4.0"
   },

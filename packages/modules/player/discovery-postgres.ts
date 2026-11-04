@@ -1,3 +1,4 @@
+import type { Sql } from '@brawltome/foundation'
 import { getLegendById } from '@brawltome/game-data/legends'
 import { legendSlug } from '@brawltome/game-data/reference-data'
 import postgres from 'postgres'
@@ -7,7 +8,6 @@ import { isUsablePlayerName, selectCanonicalPlayerName } from './reference'
 
 const deliveredTrimBatch = 1_000
 
-type Sql = ReturnType<typeof postgres>
 type FactRow = {
   brawlhalla_id: number
   player_name: string | null
