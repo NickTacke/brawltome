@@ -1,12 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash, randomUUID } from 'node:crypto'
-import { type Database, createDatabase } from '@brawltome/foundation'
+import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
-
-// each runtime gets its own client, as a separate process would
-function openRuntimeDatabase(connectionString: string): Database {
-  return createDatabase(connectionString, { maxConnections: 5, applicationName: 'brawltome-test' })
-}
 
 const connectionString = process.env.DATABASE_URL
 
@@ -60,7 +55,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       }
 
       await migratePostgres(databaseUrl.toString(), orderedMigrations)
-      const runtimeDatabase = openRuntimeDatabase(databaseUrl.toString())
+      const runtimeDatabase = openTestClient(databaseUrl.toString())
       const runtime = createPostgresAccounts(runtimeDatabase)
       let accountId = ''
       try {
@@ -130,7 +125,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await client.end()
       }
 
-      const concurrentRuntimeDatabase = openRuntimeDatabase(databaseUrl.toString())
+      const concurrentRuntimeDatabase = openTestClient(databaseUrl.toString())
       const concurrentRuntime = createPostgresAccounts(concurrentRuntimeDatabase)
       try {
         const signIn = await concurrentRuntime.accounts.signInWithDiscord({
@@ -315,7 +310,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await client.end()
       }
 
-      const runtimeDatabase = openRuntimeDatabase(databaseUrl.toString())
+      const runtimeDatabase = openTestClient(databaseUrl.toString())
       const runtime = createPostgresAccounts(runtimeDatabase)
       try {
         const authenticated = await runtime.accounts.authenticate(rawToken)
@@ -338,7 +333,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await runtimeDatabase.close()
       }
 
-      const revocationRuntimeDatabase = openRuntimeDatabase(databaseUrl.toString())
+      const revocationRuntimeDatabase = openTestClient(databaseUrl.toString())
       const revocationRuntime = createPostgresAccounts(revocationRuntimeDatabase)
       try {
         await revocationRuntime.accounts.signOut(rawToken)
@@ -384,7 +379,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       await migratePostgres(databaseUrl.toString(), orderedMigrations)
-      const firstRuntimeDatabase = openRuntimeDatabase(databaseUrl.toString())
+      const firstRuntimeDatabase = openTestClient(databaseUrl.toString())
       const firstRuntime = createPostgresAccounts(firstRuntimeDatabase)
       let accountId = ''
       let secondDeviceToken = ''
@@ -422,7 +417,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await firstRuntimeDatabase.close()
       }
 
-      const secondRuntimeDatabase = openRuntimeDatabase(databaseUrl.toString())
+      const secondRuntimeDatabase = openTestClient(databaseUrl.toString())
       const secondRuntime = createPostgresAccounts(secondRuntimeDatabase)
       try {
         const authentication = await secondRuntime.accounts.authenticate(secondDeviceToken)
