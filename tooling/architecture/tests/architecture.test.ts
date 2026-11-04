@@ -108,6 +108,21 @@ describe('dependency architecture', () => {
     ])
   })
 
+  it('applies the test-only rule to imports inside the same package', () => {
+    const sourceImport = withImport('@fixture/game-data', '@fixture/game-data/testing')
+    const testImport = withImport('@fixture/game-data', '@fixture/game-data/testing', {
+      file: 'packages/game-data/tests/seed.test.ts',
+    })
+    for (const fixture of [sourceImport, testImport]) {
+      fixture.workspaces.find(({ name }) => name === '@fixture/game-data')?.exports.push('./testing')
+    }
+
+    expect(checkArchitecture(sourceImport, policy).violations).toEqual([
+      expect.objectContaining({ rule: 'test-only-import', file: 'packages/game-data/src/violation.ts' }),
+    ])
+    expect(rulesFor(testImport)).toEqual([])
+  })
+
   it('rejects unresolved and escaping aliases while allowing confined local aliases', () => {
     const unresolved = withImport('@fixture/web', '#players')
     const escaping = withImport('@fixture/web', '@/../../api/src/router')

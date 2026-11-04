@@ -170,6 +170,14 @@ function checkImports(
           importPath,
         }
 
+        if (isTestOnlyExport(importPath, dependency, policy) && !isTestFile(sourceFile.path)) {
+          violations.push({
+            rule: 'test-only-import',
+            ...common,
+            message: `${importPath} is for tests only, but ${sourceFile.path} is not a test file`,
+          })
+        }
+
         if (dependency.name === importer.name) {
           if (!isExported(importPath, dependency)) {
             violations.push({
@@ -194,14 +202,6 @@ function checkImports(
             rule: 'deep-import',
             ...common,
             message: `${importPath} is not exported by ${dependency.name}`,
-          })
-        }
-
-        if (isTestOnlyExport(importPath, dependency, policy) && !isTestFile(sourceFile.path)) {
-          violations.push({
-            rule: 'test-only-import',
-            ...common,
-            message: `${importPath} is for tests only, but ${sourceFile.path} is not a test file`,
           })
         }
 
