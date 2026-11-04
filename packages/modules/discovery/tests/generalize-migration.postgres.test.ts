@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type Database, createDatabase } from '@brawltome/foundation'
+import type { Database } from '@brawltome/foundation'
+import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 import { initializeDiscovery } from '../migrations/0001-initialize-discovery'
 import { generalizeDiscovery } from '../migrations/0002-generalize-discovery'
@@ -33,7 +34,7 @@ beforeAll(async () => {
   const databaseUrl = new URL(dedicatedServer)
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
-  database = createDatabase(connectionString, { maxConnections: 5, applicationName: 'brawltome-test' })
+  database = openTestClient(connectionString)
 }, 20_000)
 
 afterAll(async () => {
