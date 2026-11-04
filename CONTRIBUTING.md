@@ -110,8 +110,9 @@ change. Check each workflow's `paths` before assuming a change is covered.
   `requires`; a new migration needs nothing else, since the order comes from `predecessor` and `requires`.
   `architecture:check` fails on a new migration that names another module's schema without such a `requires`.
 - A new module is added to the three module lists, to `tooling/architecture/src/current-policy.ts` and to
-  `tooling/architecture/tests/module-surfaces.test.ts` (with a dev dependency in its `package.json`). The
-  `Dockerfile` also needs a `COPY packages/modules/<name>/package.json` line, or the image's frozen install breaks.
+  `tooling/architecture/tests/module-surfaces.test.ts`, with a dev dependency on it in
+  `tooling/architecture/package.json`. The `Dockerfile` also needs a `COPY packages/modules/<name>/package.json` line,
+  or the image's frozen install breaks.
 
 ## Working conventions
 
