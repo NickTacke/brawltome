@@ -77,9 +77,10 @@ change. Check each workflow's `paths` before assuming a change is covered.
 
   A deploy runs two APIs beside one worker (the worker is replaced, never overlapped), so the runtime role needs at
   most `2 × 21 + (c + 5) + c + 3 = 50 + 2c`: 96 at c = 23. Postgres allows 100 connections but keeps 3 for
-  superusers, and `brawltome_runtime` isn't one, so the runtime role gets 97. With the migration runner the total is
-  97, under 100. `apps/api/tests/database-pools.test.ts` checks both numbers; change it, this table and the pool
-  sizes together.
+  superusers, and `brawltome_runtime` isn't one, so the runtime role gets 97.
+  With the migration runner the total is 97, under 100.
+  `apps/api/tests/database-pools.test.ts` computes these numbers from the pool sizes and fails until this table and
+  text match them.
 
 ## Rules that are easy to break
 

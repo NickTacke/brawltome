@@ -1,22 +1,102 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { migrationRunnerConnections } from '@brawltome/foundation'
-import { apiMaxConnections, listenerConnections, workerPoolSizes } from '../src/database-pools'
+import {
+  type WorkerPoolSizes,
+  apiMaxConnections,
+  createWorkerDatabases,
+  listenerConnections,
+  workerPoolSizes,
+} from '../src/database-pools'
 import { maxOperationsTotalConcurrency, readOperationsWorkerConfig } from '../src/operations-worker-config'
 
-// keep in step with the Production section of CONTRIBUTING.md
 const postgresMaxConnections = 100
 // Postgres keeps superuser_reserved_connections (default 3) for superusers; brawltome_runtime is not one
 const superuserReservedConnections = 3
+const runtimeRoleBudget = postgresMaxConnections - superuserReservedConnections
+// the clients that also LISTEN, on one extra connection each
+const listeningWorkerClients: ReadonlySet<keyof WorkerPoolSizes> = new Set(['main'])
+
+function sum(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0)
+}
+
+function apiConnections(): number {
+  return apiMaxConnections + listenerConnections
+}
+
+function workerConnections(totalConcurrency: number): number {
+  return sum(Object.values(workerPoolSizes(totalConcurrency))) + listeningWorkerClients.size * listenerConnections
+}
+
+// a rolling deploy runs two APIs beside one worker; the worker is replaced, not overlapped
+function runtimeWorstCase(totalConcurrency: number): number {
+  return 2 * apiConnections() + workerConnections(totalConcurrency)
+}
+
+// a pool size as CONTRIBUTING.md writes it: "3", "c" or "c + 4"
+function sizeFormula(size: (totalConcurrency: number) => number): string {
+  const intercept = size(0)
+  const slope = size(1) - intercept
+  if (slope === 0) return String(intercept)
+  if (slope !== 1) throw new Error(`pool size grows by ${slope} per job slot; extend sizeFormula to write it`)
+
+  return intercept === 0 ? 'c' : `c + ${intercept}`
+}
+
+function productionSection(): string {
+  const contributing = readFileSync(new URL('../../../CONTRIBUTING.md', import.meta.url), 'utf8')
+  const start = contributing.indexOf('\n## Production')
+  const end = contributing.indexOf('\n## ', start + 1)
+  if (start === -1) throw new Error('CONTRIBUTING.md has no Production section')
+
+  return contributing.slice(start, end === -1 ? undefined : end)
+}
 
 describe('database pool sizes', () => {
   test('a deploy at the largest worker concurrency stays inside the Postgres connection limit', () => {
-    const api = apiMaxConnections + listenerConnections
-    const worker = workerPoolSizes(maxOperationsTotalConcurrency)
-    // a rolling deploy runs two APIs beside one worker; the worker is replaced, not overlapped
-    const runtimeConnections = 2 * api + worker.main + listenerConnections + worker.renewals + worker.discovery
+    const runtimeConnections = runtimeWorstCase(maxOperationsTotalConcurrency)
 
-    expect(runtimeConnections).toBeLessThanOrEqual(postgresMaxConnections - superuserReservedConnections)
+    expect(runtimeConnections).toBeLessThanOrEqual(runtimeRoleBudget)
     expect(runtimeConnections + migrationRunnerConnections).toBeLessThan(postgresMaxConnections)
+  })
+
+  test('the worker opens exactly the clients the budget counts, at their counted sizes', async () => {
+    const config = readOperationsWorkerConfig({})
+    const sizes = workerPoolSizes(config.admission.totalConcurrency)
+    // postgres.js connects on the first query, so this opens no connection
+    const databases = createWorkerDatabases('postgres://budget-check@127.0.0.1:1/budget_check', config)
+
+    try {
+      const openedSizes = Object.fromEntries(
+        Object.entries(databases).map(([client, database]) => [client, database.sql.options.max]),
+      )
+
+      expect(openedSizes).toEqual(sizes)
+    } finally {
+      await Promise.all(Object.values(databases).map((database) => database.close()))
+    }
+  })
+
+  test('CONTRIBUTING.md shows the sizes and the numbers this budget computes', () => {
+    const section = productionSection()
+    const worstCase = runtimeWorstCase(maxOperationsTotalConcurrency)
+    const intercept = runtimeWorstCase(0)
+    const slope = runtimeWorstCase(1) - intercept
+
+    expect(section).toContain(`| ${apiMaxConnections} + ${listenerConnections} listener |`)
+    for (const client of Object.keys(workerPoolSizes(0)) as (keyof WorkerPoolSizes)[]) {
+      const formula = sizeFormula((totalConcurrency) => workerPoolSizes(totalConcurrency)[client])
+      const cell = listeningWorkerClients.has(client) ? `${formula}, + ${listenerConnections} listener` : formula
+      expect(section).toContain(`| ${cell} |`)
+    }
+    expect(section).toContain(`| migration runner | ${migrationRunnerConnections} |`)
+    expect(section).toContain(`at most ${maxOperationsTotalConcurrency}`)
+    expect(section).toContain(`2 × ${apiConnections()}`)
+    expect(section).toContain(`= ${intercept} + ${slope}c`)
+    expect(section).toContain(`${worstCase} at c = ${maxOperationsTotalConcurrency}`)
+    expect(section).toContain(`the runtime role gets ${runtimeRoleBudget}`)
+    expect(section).toContain(`the total is ${worstCase + migrationRunnerConnections}`)
   })
 
   test('the worker refuses a total concurrency above the bound the budget is computed for', () => {
@@ -26,9 +106,5 @@ describe('database pool sizes', () => {
     expect(() =>
       readOperationsWorkerConfig({ OPERATIONS_TOTAL_CONCURRENCY: String(maxOperationsTotalConcurrency + 1) }),
     ).toThrow('OPERATIONS_TOTAL_CONCURRENCY')
-  })
-
-  test('the worker main pool leaves room for the scheduler and one nested lookup beside every job slot', () => {
-    expect(workerPoolSizes(8)).toEqual({ main: 12, renewals: 8, discovery: 3 })
   })
 })

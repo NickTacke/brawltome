@@ -17,19 +17,17 @@ const workerMainExtraConnections = 4
 // together: three connections let one of them always finish.
 const workerDiscoveryMaxConnections = 3
 
+// the one list of worker clients: WorkerDatabases has exactly these keys, so a new client needs a size here and the
+// connection budget test counts it
 export type WorkerPoolSizes = {
   main: number
+  // lease renewals get their own pool so a busy main pool can never let a running lease expire
   renewals: number
+  // discovery reconciliation runs statements far longer than the worker's statement timeout allows
   discovery: number
 }
 
-export type WorkerDatabases = {
-  main: Database
-  // lease renewals get their own pool so a busy main pool can never let a running lease expire
-  renewals: Database
-  // discovery reconciliation runs statements far longer than the worker's statement timeout allows
-  discovery: Database
-}
+export type WorkerDatabases = { [Client in keyof WorkerPoolSizes]: Database }
 
 type WorkerConfig = ReturnType<typeof readOperationsWorkerConfig>
 
