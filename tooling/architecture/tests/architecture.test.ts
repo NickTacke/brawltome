@@ -198,13 +198,15 @@ describe('dependency architecture', () => {
     expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
   })
 
-  it('passes the current repository without temporary architecture exceptions', () => {
+  it('passes the current repository with only cross-module-sql exceptions', () => {
     const repository = readArchitectureRepository(resolve(import.meta.dir, '../../..'))
     const result = checkArchitecture(repository, currentArchitecturePolicy)
 
     expect(result.violations).toEqual([])
     expect(result.staleExceptions).toEqual([])
-    expect(result.appliedExceptions).toEqual([])
+    expect(result.appliedExceptions.map(({ rule }) => rule)).toEqual(
+      result.appliedExceptions.map(() => 'cross-module-sql'),
+    )
   })
 
   it('reports named temporary exceptions without allowing new import locations', () => {

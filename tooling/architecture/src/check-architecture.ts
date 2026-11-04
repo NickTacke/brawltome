@@ -1,10 +1,12 @@
 import { builtinModules } from 'node:module'
 import { dirname, normalize, resolve } from 'node:path'
+import { findSchemaReferences } from './sql-references'
 import type {
   ArchitecturePolicy,
   ArchitectureRepository,
   ArchitectureResult,
   ArchitectureViolation,
+  SourceFile,
   TemporaryArchitectureException,
   Workspace,
   WorkspaceRole,
@@ -43,6 +45,7 @@ export function checkArchitecture(repository: ArchitectureRepository, policy: Ar
     ...checkDeclaredDependencies(repository.workspaces, workspaceByName, policy),
     ...checkImports(repository.workspaces, workspaceByName, policy),
     ...checkCycles(repository.workspaces, workspaceByName),
+    ...checkCrossModuleSql(repository.workspaces, policy),
   ]
   const matchedFiles = new Map<TemporaryArchitectureException, Set<string>>()
   const unexcepted = violations.filter((violation) => {
@@ -214,6 +217,50 @@ function checkImports(
   return violations
 }
 
+// applied migrations can't be edited, so their references are declared through
+// dependsOn and requires instead of exceptions
+function checkCrossModuleSql(workspaces: Workspace[], policy: ArchitecturePolicy): ArchitectureViolation[] {
+  const schemas = Object.keys(policy.moduleSchemas)
+  const violations: ArchitectureViolation[] = []
+
+  for (const workspace of workspaces) {
+    const ownSchema = schemas.find((schema) => policy.moduleSchemas[schema] === workspace.name)
+    if (!ownSchema) continue
+
+    const foreignSchemas = schemas.filter((schema) => schema !== ownSchema)
+    for (const sourceFile of workspace.sourceFiles) {
+      if (isTestFile(sourceFile.path) || isMigrationFile(sourceFile.path, workspace)) continue
+
+      violations.push(...checkFileSql(workspace, sourceFile, foreignSchemas, policy))
+    }
+  }
+
+  return violations
+}
+
+function checkFileSql(
+  workspace: Workspace,
+  sourceFile: SourceFile,
+  foreignSchemas: string[],
+  policy: ArchitecturePolicy,
+): ArchitectureViolation[] {
+  const linesBySchema = new Map<string, number[]>()
+  for (const { schema, line } of findSchemaReferences(sourceFile.source ?? '', foreignSchemas)) {
+    const lines = linesBySchema.get(schema) ?? []
+    lines.push(line)
+    linesBySchema.set(schema, lines)
+  }
+
+  return [...linesBySchema].map(([schema, lines]) => ({
+    rule: 'cross-module-sql' as const,
+    importer: workspace.name,
+    dependency: policy.moduleSchemas[schema],
+    file: sourceFile.path,
+    importPath: schema,
+    message: `${workspace.name} reads the ${schema} schema of ${policy.moduleSchemas[schema]} (lines ${[...new Set(lines)].join(', ')})`,
+  }))
+}
+
 function checkDependencyRule(
   importer: Workspace,
   dependency: Workspace,
@@ -352,6 +399,10 @@ function isTestFile(path: string): boolean {
   const fileName = segments.at(-1) ?? ''
 
   return segments.includes('tests') || fileName.includes('.test.')
+}
+
+function isMigrationFile(path: string, workspace: Workspace): boolean {
+  return path.startsWith(`${workspace.path}/migrations/`)
 }
 
 function findRelativeTarget(

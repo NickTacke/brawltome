@@ -3,6 +3,7 @@ export type WorkspaceRole = 'application' | 'capability' | 'foundation' | 'contr
 export type ArchitectureRule =
   | 'app-to-app'
   | 'capability-allow-list'
+  | 'cross-module-sql'
   | 'cross-package-relative-import'
   | 'cycle'
   | 'deep-import'
@@ -16,6 +17,8 @@ export type ArchitectureRule =
 export interface SourceFile {
   path: string
   imports: string[]
+  // file text, read for rules that look at content rather than imports
+  source?: string
 }
 
 export interface Workspace {
@@ -44,6 +47,8 @@ export interface TemporaryArchitectureException {
 
 export interface ArchitecturePolicy {
   roles: Record<string, WorkspaceRole>
+  // sql schema name -> the module package that owns it
+  moduleSchemas: Record<string, string>
   allowedExports: Record<string, string[]>
   // exports that only files under a tests directory or named *.test.* may import
   testOnlyExports: Record<string, string[]>

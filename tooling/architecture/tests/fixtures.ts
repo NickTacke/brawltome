@@ -9,6 +9,11 @@ export const policy: ArchitecturePolicy = {
     '@fixture/contracts': 'contracts',
     '@fixture/game-data': 'foundation',
   },
+  moduleSchemas: {
+    players: '@fixture/players',
+    rankings: '@fixture/rankings',
+    refresh_operations: '@fixture/refresh-operations',
+  },
   allowedExports: {
     '@fixture/api': ['.'],
     '@fixture/web': [],
