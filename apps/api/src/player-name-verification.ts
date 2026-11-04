@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { parseBoundedInteger } from '@brawltome/foundation'
 import {
   type NameVerificationOutcome,
   type PostgresPlayerNameVerifications,
@@ -36,14 +37,6 @@ type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verifi
 
 const dayMs = 24 * 60 * 60 * 1000
 
-function boundedInteger(value: string | undefined, fallback: number, name: string, minimum: number, maximum: number) {
-  const parsed = value === undefined ? fallback : Number(value)
-  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
-  }
-  return parsed
-}
-
 function ratio(value: string | undefined, fallback: number, name: string): number {
   const parsed = value === undefined ? fallback : Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) throw new Error(`${name} must be in (0, 1]`)
@@ -53,32 +46,33 @@ function ratio(value: string | undefined, fallback: number, name: string): numbe
 export function readPlayerNameVerificationConfig(env: NodeJS.ProcessEnv): PlayerNameVerificationConfig {
   return {
     // Background V0 admission tops out at 150 of 180 calls per window.
-    perWindow: boundedInteger(
-      env.PLAYER_NAME_VERIFICATION_PER_WINDOW,
-      24,
-      'PLAYER_NAME_VERIFICATION_PER_WINDOW',
-      0,
-      150,
-    ),
+    perWindow: parseBoundedInteger(env.PLAYER_NAME_VERIFICATION_PER_WINDOW, {
+      name: 'PLAYER_NAME_VERIFICATION_PER_WINDOW',
+      fallback: 24,
+      minimum: 0,
+      maximum: 150,
+    }),
     maxUsageRatio: ratio(env.PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO, 0.4, 'PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO'),
     dedupeMs:
-      boundedInteger(env.PLAYER_NAME_VERIFICATION_DEDUPE_DAYS, 14, 'PLAYER_NAME_VERIFICATION_DEDUPE_DAYS', 1, 365) *
-      dayMs,
+      parseBoundedInteger(env.PLAYER_NAME_VERIFICATION_DEDUPE_DAYS, {
+        name: 'PLAYER_NAME_VERIFICATION_DEDUPE_DAYS',
+        fallback: 14,
+        minimum: 1,
+        maximum: 365,
+      }) * dayMs,
     staleRecheckMs:
-      boundedInteger(
-        env.PLAYER_NAME_VERIFICATION_STALE_RECHECK_DAYS,
-        60,
-        'PLAYER_NAME_VERIFICATION_STALE_RECHECK_DAYS',
-        1,
-        365,
-      ) * dayMs,
-    intervalMs: boundedInteger(
-      env.PLAYER_NAME_VERIFICATION_INTERVAL_MS,
-      60_000,
-      'PLAYER_NAME_VERIFICATION_INTERVAL_MS',
-      5_000,
-      15 * 60 * 1000,
-    ),
+      parseBoundedInteger(env.PLAYER_NAME_VERIFICATION_STALE_RECHECK_DAYS, {
+        name: 'PLAYER_NAME_VERIFICATION_STALE_RECHECK_DAYS',
+        fallback: 60,
+        minimum: 1,
+        maximum: 365,
+      }) * dayMs,
+    intervalMs: parseBoundedInteger(env.PLAYER_NAME_VERIFICATION_INTERVAL_MS, {
+      name: 'PLAYER_NAME_VERIFICATION_INTERVAL_MS',
+      fallback: 60_000,
+      minimum: 5_000,
+      maximum: 15 * 60 * 1000,
+    }),
     windowMs: 15 * 60 * 1000,
   }
 }

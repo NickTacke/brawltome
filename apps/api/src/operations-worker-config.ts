@@ -1,4 +1,4 @@
-import { parsePositiveInteger } from '@brawltome/foundation'
+import { parseBoundedInteger, parsePositiveInteger } from '@brawltome/foundation'
 import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
@@ -18,14 +18,6 @@ import {
   validateAdmissionConfig,
 } from '@brawltome/refresh-operations'
 
-function boundedInteger(value: string | undefined, fallback: number, name: string, minimum: number, maximum: number) {
-  const parsed = value === undefined ? fallback : Number(value)
-  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
-  }
-  return parsed
-}
-
 function strictBoolean(value: string | undefined, fallback: boolean, name: string): boolean {
   if (value === undefined || value === '') return fallback
   if (value === 'true') return true
@@ -34,11 +26,21 @@ function strictBoolean(value: string | undefined, fallback: boolean, name: strin
 }
 
 export function readBrawlhallaV1RequestLimit(value: string | undefined): number {
-  return boundedInteger(value, 1_800, 'BRAWLHALLA_V1_REQUEST_LIMIT', 1, 1_800)
+  return parseBoundedInteger(value, {
+    name: 'BRAWLHALLA_V1_REQUEST_LIMIT',
+    fallback: 1_800,
+    minimum: 1,
+    maximum: 1_800,
+  })
 }
 
 export function readSourceBackgroundHeadroom(value: string | undefined, minimumSourceLimit: number): number {
-  return boundedInteger(value, 30, 'SOURCE_BACKGROUND_HEADROOM', 0, minimumSourceLimit - 1)
+  return parseBoundedInteger(value, {
+    name: 'SOURCE_BACKGROUND_HEADROOM',
+    fallback: 30,
+    minimum: 0,
+    maximum: minimumSourceLimit - 1,
+  })
 }
 
 // the deploy connection budget (database-pools.ts, CONTRIBUTING.md) is computed for this many job slots
@@ -245,32 +247,29 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     maximum: 300_000,
   })
   const retryBackoff = {
-    multiplier: boundedInteger(
-      env.OPERATIONS_RETRY_BACKOFF_MULTIPLIER,
-      3,
-      'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
-      1,
-      10,
-    ),
-    maxDelayMs: boundedInteger(
-      env.OPERATIONS_RETRY_MAX_DELAY_MS,
-      Math.max(15_000, retryDelayMs),
-      'OPERATIONS_RETRY_MAX_DELAY_MS',
-      retryDelayMs,
-      900_000,
-    ),
+    multiplier: parseBoundedInteger(env.OPERATIONS_RETRY_BACKOFF_MULTIPLIER, {
+      name: 'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
+      fallback: 3,
+      minimum: 1,
+      maximum: 10,
+    }),
+    maxDelayMs: parseBoundedInteger(env.OPERATIONS_RETRY_MAX_DELAY_MS, {
+      name: 'OPERATIONS_RETRY_MAX_DELAY_MS',
+      fallback: Math.max(15_000, retryDelayMs),
+      minimum: retryDelayMs,
+      maximum: 900_000,
+    }),
     jitterRatio: 0.2,
   }
 
   // After a dead-lettered discovery reconciliation, wait 5 minutes (doubling per consecutive failure, capped at
   // an hour) before enqueueing another one instead of re-enqueueing on every scheduler tick.
-  const reconciliationFailureBackoffMs = boundedInteger(
-    env.DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS,
-    5 * 60 * 1000,
-    'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
-    60_000,
-    24 * 60 * 60 * 1000,
-  )
+  const reconciliationFailureBackoffMs = parseBoundedInteger(env.DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS, {
+    name: 'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
+    fallback: 5 * 60 * 1000,
+    minimum: 60_000,
+    maximum: 24 * 60 * 60 * 1000,
+  })
 
   return {
     leaseMs: parsePositiveInteger(env.OPERATIONS_LEASE_MS, {
@@ -285,83 +284,74 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     }),
     retryDelayMs,
     retryBackoff,
-    sourceUnavailableRetryMs: boundedInteger(
-      env.SOURCE_UNAVAILABLE_RETRY_MS,
-      60_000,
-      'SOURCE_UNAVAILABLE_RETRY_MS',
-      1_000,
-      900_000,
-    ),
+    sourceUnavailableRetryMs: parseBoundedInteger(env.SOURCE_UNAVAILABLE_RETRY_MS, {
+      name: 'SOURCE_UNAVAILABLE_RETRY_MS',
+      fallback: 60_000,
+      minimum: 1_000,
+      maximum: 900_000,
+    }),
     scheduleBatchSize: parsePositiveInteger(env.OPERATIONS_SCHEDULE_BATCH_SIZE, {
       name: 'OPERATIONS_SCHEDULE_BATCH_SIZE',
       fallback: 100,
       maximum: 1_000,
     }),
     // Exit (and let Docker restart the worker) when no loop has iterated for 10 minutes: every call is hung.
-    stallTimeoutMs: boundedInteger(
-      env.OPERATIONS_STALL_TIMEOUT_MS,
-      10 * 60 * 1000,
-      'OPERATIONS_STALL_TIMEOUT_MS',
-      60_000,
-      60 * 60 * 1000,
-    ),
+    stallTimeoutMs: parseBoundedInteger(env.OPERATIONS_STALL_TIMEOUT_MS, {
+      name: 'OPERATIONS_STALL_TIMEOUT_MS',
+      fallback: 10 * 60 * 1000,
+      minimum: 60_000,
+      maximum: 60 * 60 * 1000,
+    }),
     // Worker statements are batched (discovery reconciliation streams ~188s as many short statements), so a
     // 5-minute per-statement and idle-in-transaction ceiling only ends sessions that are genuinely stuck.
     database: {
-      connectTimeoutSeconds: boundedInteger(
-        env.OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS,
-        10,
-        'OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS',
-        1,
-        120,
-      ),
-      statementTimeoutMs: boundedInteger(
-        env.OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS,
-        5 * 60 * 1000,
-        'OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS',
-        1_000,
-        60 * 60 * 1000,
-      ),
-      idleInTransactionSessionTimeoutMs: boundedInteger(
-        env.OPERATIONS_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS,
-        5 * 60 * 1000,
-        'OPERATIONS_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS',
-        1_000,
-        60 * 60 * 1000,
-      ),
+      connectTimeoutSeconds: parseBoundedInteger(env.OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS, {
+        name: 'OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS',
+        fallback: 10,
+        minimum: 1,
+        maximum: 120,
+      }),
+      statementTimeoutMs: parseBoundedInteger(env.OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS, {
+        name: 'OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS',
+        fallback: 5 * 60 * 1000,
+        minimum: 1_000,
+        maximum: 60 * 60 * 1000,
+      }),
+      idleInTransactionSessionTimeoutMs: parseBoundedInteger(env.OPERATIONS_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS, {
+        name: 'OPERATIONS_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS',
+        fallback: 5 * 60 * 1000,
+        minimum: 1_000,
+        maximum: 60 * 60 * 1000,
+      }),
     } satisfies WorkerDatabaseSessionConfig,
     discovery: {
       // Full-snapshot reconciliation reads every player in long single statements; the worker-wide 5 min limit
       // cancelled it (SQLSTATE 57014) and turned it into a retry loop, so discovery sessions get their own ceiling.
-      statementTimeoutMs: boundedInteger(
-        env.OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS,
-        30 * 60 * 1000,
-        'OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS',
-        60_000,
-        2 * 60 * 60 * 1000,
-      ),
-      projectionBatchSize: boundedInteger(
-        env.DISCOVERY_PROJECTION_BATCH_SIZE,
-        500,
-        'DISCOVERY_PROJECTION_BATCH_SIZE',
-        1,
-        1_000,
-      ),
-      reconciliationIntervalMs: boundedInteger(
-        env.DISCOVERY_RECONCILIATION_INTERVAL_MS,
-        60 * 60 * 1000,
-        'DISCOVERY_RECONCILIATION_INTERVAL_MS',
-        60_000,
-        24 * 60 * 60 * 1000,
-      ),
+      statementTimeoutMs: parseBoundedInteger(env.OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS, {
+        name: 'OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS',
+        fallback: 30 * 60 * 1000,
+        minimum: 60_000,
+        maximum: 2 * 60 * 60 * 1000,
+      }),
+      projectionBatchSize: parseBoundedInteger(env.DISCOVERY_PROJECTION_BATCH_SIZE, {
+        name: 'DISCOVERY_PROJECTION_BATCH_SIZE',
+        fallback: 500,
+        minimum: 1,
+        maximum: 1_000,
+      }),
+      reconciliationIntervalMs: parseBoundedInteger(env.DISCOVERY_RECONCILIATION_INTERVAL_MS, {
+        name: 'DISCOVERY_RECONCILIATION_INTERVAL_MS',
+        fallback: 60 * 60 * 1000,
+        minimum: 60_000,
+        maximum: 24 * 60 * 60 * 1000,
+      }),
       reconciliationFailureBackoffMs,
-      reconciliationMaxFailureBackoffMs: boundedInteger(
-        env.DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS,
-        Math.max(60 * 60 * 1000, reconciliationFailureBackoffMs),
-        'DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS',
-        reconciliationFailureBackoffMs,
-        24 * 60 * 60 * 1000,
-      ),
+      reconciliationMaxFailureBackoffMs: parseBoundedInteger(env.DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS, {
+        name: 'DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS',
+        fallback: Math.max(60 * 60 * 1000, reconciliationFailureBackoffMs),
+        minimum: reconciliationFailureBackoffMs,
+        maximum: 24 * 60 * 60 * 1000,
+      }),
     },
     leaderboard: {
       pageDepth: parsePositiveInteger(env.LEADERBOARD_PAGE_DEPTH, {
@@ -369,60 +359,59 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
         fallback: defaultLeaderboardPageDepth,
         maximum: 20,
       }),
-      intervalMs: boundedInteger(
-        env.LEADERBOARD_INTERVAL_MS,
-        defaultLeaderboardIntervalMs,
-        'LEADERBOARD_INTERVAL_MS',
-        minLeaderboardIntervalMs,
-        maxLeaderboardIntervalMs,
-      ),
+      intervalMs: parseBoundedInteger(env.LEADERBOARD_INTERVAL_MS, {
+        name: 'LEADERBOARD_INTERVAL_MS',
+        fallback: defaultLeaderboardIntervalMs,
+        minimum: minLeaderboardIntervalMs,
+        maximum: maxLeaderboardIntervalMs,
+      }),
       firstDueAt: '2020-01-01T00:00:00.000Z',
     },
     rankingRetention: {
       enabled: strictBoolean(env.RANKING_RETENTION_ENABLED, true, 'RANKING_RETENTION_ENABLED'),
-      retentionHours: boundedInteger(
-        env.RANKING_RETENTION_HOURS,
-        24,
-        'RANKING_RETENTION_HOURS',
-        minRankingRetentionHours,
-        maxRankingRetentionHours,
-      ),
-      maxGenerations: boundedInteger(
-        env.RANKING_RETENTION_BATCH,
-        20,
-        'RANKING_RETENTION_BATCH',
-        1,
-        maxRankingRetentionBatch,
-      ),
+      retentionHours: parseBoundedInteger(env.RANKING_RETENTION_HOURS, {
+        name: 'RANKING_RETENTION_HOURS',
+        fallback: 24,
+        minimum: minRankingRetentionHours,
+        maximum: maxRankingRetentionHours,
+      }),
+      maxGenerations: parseBoundedInteger(env.RANKING_RETENTION_BATCH, {
+        name: 'RANKING_RETENTION_BATCH',
+        fallback: 20,
+        minimum: 1,
+        maximum: maxRankingRetentionBatch,
+      }),
       intervalMs: 15 * 60 * 1000,
       firstDueAt: '2020-01-01T00:05:00.000Z',
     } satisfies RankingRetentionConfig,
     deepCrawl: {
       enabled: strictBoolean(env.DEEP_CRAWL_ENABLED, true, 'DEEP_CRAWL_ENABLED'),
-      intervalMs: boundedInteger(
-        env.DEEP_CRAWL_INTERVAL_MS,
-        60 * 60 * 1000,
-        'DEEP_CRAWL_INTERVAL_MS',
-        minLeaderboardDeepCrawlIntervalMs,
-        maxLeaderboardDeepCrawlIntervalMs,
-      ),
+      intervalMs: parseBoundedInteger(env.DEEP_CRAWL_INTERVAL_MS, {
+        name: 'DEEP_CRAWL_INTERVAL_MS',
+        fallback: 60 * 60 * 1000,
+        minimum: minLeaderboardDeepCrawlIntervalMs,
+        maximum: maxLeaderboardDeepCrawlIntervalMs,
+      }),
       // Hourly windows start after the first 3-hour pass; regions then stay staggered across the hour.
       firstDueAt: '2026-10-07T19:30:00.000Z',
-      pageDelayMs: boundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, 150, 'DEEP_CRAWL_PAGE_DELAY_MS', 0, 5_000),
-      soloIntervalMs: boundedInteger(
-        env.DEEP_CRAWL_SOLO_INTERVAL_MS,
-        3 * 60 * 60 * 1000,
-        'DEEP_CRAWL_SOLO_INTERVAL_MS',
-        minLeaderboardDeepCrawlIntervalMs,
-        maxLeaderboardDeepCrawlIntervalMs,
-      ),
-      teamsIntervalMs: boundedInteger(
-        env.DEEP_CRAWL_TEAMS_INTERVAL_MS,
-        6 * 60 * 60 * 1000,
-        'DEEP_CRAWL_TEAMS_INTERVAL_MS',
-        minLeaderboardDeepCrawlIntervalMs,
-        maxLeaderboardDeepCrawlIntervalMs,
-      ),
+      pageDelayMs: parseBoundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, {
+        name: 'DEEP_CRAWL_PAGE_DELAY_MS',
+        fallback: 150,
+        minimum: 0,
+        maximum: 5_000,
+      }),
+      soloIntervalMs: parseBoundedInteger(env.DEEP_CRAWL_SOLO_INTERVAL_MS, {
+        name: 'DEEP_CRAWL_SOLO_INTERVAL_MS',
+        fallback: 3 * 60 * 60 * 1000,
+        minimum: minLeaderboardDeepCrawlIntervalMs,
+        maximum: maxLeaderboardDeepCrawlIntervalMs,
+      }),
+      teamsIntervalMs: parseBoundedInteger(env.DEEP_CRAWL_TEAMS_INTERVAL_MS, {
+        name: 'DEEP_CRAWL_TEAMS_INTERVAL_MS',
+        fallback: 6 * 60 * 60 * 1000,
+        minimum: minLeaderboardDeepCrawlIntervalMs,
+        maximum: maxLeaderboardDeepCrawlIntervalMs,
+      }),
     } satisfies LeaderboardDeepCrawlConfig,
     admission: validateAdmissionConfig(admission),
   }
