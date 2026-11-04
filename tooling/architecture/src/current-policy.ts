@@ -92,7 +92,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       importPath: 'refresh_operations',
       reason: 'Career and ranked refreshes call its lease and commit functions.',
       issue: '#388',
-      expiresWhen: 'the module is ported (Phase 3)',
+      expiresWhen: 'the module is rebuilt',
     },
     {
       id: 'ranking-reads-refresh-operations',
@@ -103,7 +103,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       importPath: 'refresh_operations',
       reason: 'Leaderboard and retention writes call its lease functions.',
       issue: '#388',
-      expiresWhen: 'the module is ported (Phase 3)',
+      expiresWhen: 'the module is rebuilt',
     },
     {
       id: 'statistics-reads-refresh-operations',
@@ -114,7 +114,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
       importPath: 'refresh_operations',
       reason: 'Collection and publication read operations and call its lease and effect functions.',
       issue: '#388',
-      expiresWhen: 'the module is ported (Phase 3)',
+      expiresWhen: 'the module is rebuilt',
     },
   ],
 }
