@@ -1,11 +1,11 @@
-import postgres from 'postgres'
+import type { Database } from '@brawltome/foundation'
 
 export type ProfileViewDemand = { brawlhallaId: number; viewDays: number; lastViewedOn: string }
 
 // Per-player, per-day view counts: the demand signal for background refreshes. Only the player and the day are kept,
 // never who viewed.
-export function createPostgresProfileViews(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresProfileViews(database: Database) {
+  const client = database.sql
 
   return {
     // Counts only players with a name source behind their reference (the same sources the reference read uses), so
@@ -54,8 +54,6 @@ export function createPostgresProfileViews(connectionString: string) {
       `
       return deleted.count
     },
-
-    close: () => client.end(),
   }
 }
 

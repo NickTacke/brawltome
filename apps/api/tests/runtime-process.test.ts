@@ -4,135 +4,18 @@ import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/tes
 import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import {
-  leaderboardDeepCrawlScheduleDefinitions,
-  leaderboardScheduleDefinitions,
-  readOperationsWorkerConfig,
-} from '../src/operations-worker-config'
+  allocatePort,
+  deferLeaderboardSchedules,
+  healthStatus,
+  migrateDatabase,
+  spawnRuntime,
+  waitFor,
+  waitForExit,
+  waitForRuntimeReady,
+} from './fixtures/runtime-processes'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
-
-async function allocatePort(): Promise<number> {
-  const reservation = Bun.serve({ port: 0, fetch: () => new Response('reserved') })
-  const port = reservation.port
-  await reservation.stop(true)
-  if (port === undefined) throw new Error('Bun did not allocate a test port')
-  return port
-}
-
-function spawnRuntime(entrypoint: string, env: Record<string, string>) {
-  const process = Bun.spawn(['bun', 'run', entrypoint], {
-    cwd: import.meta.dir.replace('/apps/api/tests', ''),
-    env: { ...Bun.env, ...env },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new Response(process.stdout).text()
-  const stderr = new Response(process.stderr).text()
-  return { process, stdout, stderr }
-}
-
-async function waitFor(
-  check: () => Promise<boolean>,
-  message: string,
-  timeoutMs = 10_000,
-  intervalMs = 25,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (await check()) return
-    await Bun.sleep(intervalMs)
-  }
-  throw new Error(`Timed out waiting for ${message}`)
-}
-
-async function healthStatus(port: number, endpoint: 'live' | 'ready' | 'serving'): Promise<number | null> {
-  try {
-    return (await fetch(`http://127.0.0.1:${port}/health/${endpoint}`)).status
-  } catch {
-    return null
-  }
-}
-
-async function waitForRuntimeReady(
-  runtime: ReturnType<typeof spawnRuntime>,
-  port: number,
-  message: string,
-): Promise<void> {
-  let lastHealth = 'unreachable'
-  try {
-    await waitFor(
-      async () => {
-        if (runtime.process.exitCode !== null) {
-          const [stdout, stderr] = await Promise.all([runtime.stdout, runtime.stderr])
-          throw new Error(`${message} exited during startup\nstdout:\n${stdout}\nstderr:\n${stderr}`)
-        }
-        try {
-          const response = await fetch(`http://127.0.0.1:${port}/health/ready`)
-          lastHealth = `${response.status} ${await response.text()}`
-          return response.status === 200
-        } catch {
-          lastHealth = 'unreachable'
-          return false
-        }
-      },
-      message,
-      30_000,
-    )
-  } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}; last health: ${lastHealth}`)
-  }
-}
-
-async function waitForExit(
-  runtime: ReturnType<typeof spawnRuntime>,
-  timeoutMs: number,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const result = await Promise.race([
-    runtime.process.exited.then((exitCode) => ({ timedOut: false as const, exitCode })),
-    Bun.sleep(timeoutMs).then(() => ({ timedOut: true as const, exitCode: -1 })),
-  ])
-  if (result.timedOut) {
-    runtime.process.kill('SIGKILL')
-    await runtime.process.exited
-  }
-  const [stdout, stderr] = await Promise.all([runtime.stdout, runtime.stderr])
-  if (result.timedOut)
-    throw new Error(`Runtime did not exit within ${timeoutMs}ms\nstdout:\n${stdout}\nstderr:\n${stderr}`)
-  return { exitCode: result.exitCode, stdout, stderr }
-}
-
-async function migrateDatabase(): Promise<void> {
-  const migration = Bun.spawn(['bun', 'run', 'db:migrate'], {
-    cwd: import.meta.dir.replace('/apps/api/tests', ''),
-    env: { ...Bun.env, DATABASE_URL: connectionString },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const [exitCode, stdout, stderr] = await Promise.all([
-    migration.exited,
-    new Response(migration.stdout).text(),
-    new Response(migration.stderr).text(),
-  ])
-  if (exitCode !== 0) throw new Error(`Migration failed\nstdout:\n${stdout}\nstderr:\n${stderr}`)
-}
-
-async function deferLeaderboardSchedules(): Promise<void> {
-  const operations = createPostgresRefreshOperations(connectionString)
-  const control = postgres(connectionString, { max: 1 })
-  try {
-    for (const definition of leaderboardScheduleDefinitions(readOperationsWorkerConfig({}).leaderboard)) {
-      await operations.reconcileLeaderboardSchedule(definition)
-    }
-    // The worker reconciles these at startup; deferring them keeps it from crawling the real V1 leaderboard.
-    for (const definition of leaderboardDeepCrawlScheduleDefinitions(readOperationsWorkerConfig({}).deepCrawl)) {
-      await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
-    }
-    await control`UPDATE refresh_operations.schedules SET next_due_at = '2100-01-01T00:00:00Z'`
-  } finally {
-    await Promise.all([operations.close(), control.end()])
-  }
-}
 
 async function installEffectDelay(client: ReturnType<typeof postgres>, seconds: number): Promise<void> {
   await client.unsafe(`
@@ -184,8 +67,8 @@ beforeAll(async () => {
   // no modules: the real migrate command fills the database, as it does in production
   database = await createTestDatabase({ label: 'runtime_process', modules: [] })
   connectionString = database.connectionString
-  await migrateDatabase()
-  await deferLeaderboardSchedules()
+  await migrateDatabase(connectionString)
+  await deferLeaderboardSchedules(database)
 }, 30_000)
 
 afterAll(async () => {
@@ -271,7 +154,7 @@ describe('real production runtime lifecycle', () => {
   }, 20_000)
 
   test('overlapping API and worker replicas preserve background separation and one durable effect', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     const [apiPortOne, apiPortTwo, workerPortOne, workerPortTwo] = await Promise.all([
       allocatePort(),
@@ -342,14 +225,13 @@ describe('real production runtime lifecycle', () => {
         }),
       )
       await removeEffectDelay(control)
-      await operations.close()
       await control.end()
     }
   }, 90_000)
 
   test('operations worker SIGINT drains active durable work and commits one effect', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     await installEffectDelay(control, 1.2)
     const accepted = await operations.accept({
       dedupeKey: `process-drain:${randomUUID()}`,
@@ -400,14 +282,13 @@ describe('real production runtime lifecycle', () => {
           WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
         `
       await removeEffectDelay(control)
-      await operations.close()
       await control.end()
     }
   }, 20_000)
 
   test('operations worker SIGTERM bounds shutdown and interrupted work recovers without duplicate effects', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     await installEffectDelay(control, 3)
     const accepted = await operations.accept({
       dedupeKey: `process-recovery:${randomUUID()}`,
@@ -457,7 +338,6 @@ describe('real production runtime lifecycle', () => {
       if (interrupted.process.exitCode === null) interrupted.process.kill('SIGKILL')
       if (recovery?.process.exitCode === null) recovery.process.kill('SIGKILL')
       await removeEffectDelay(control)
-      await operations.close()
       await control.end()
     }
   }, 25_000)

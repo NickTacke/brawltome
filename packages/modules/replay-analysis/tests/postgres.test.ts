@@ -30,12 +30,11 @@ beforeAll(async () => {
   database = await createTestDatabase({ label: 'replay_analysis', modules: [accountsModule, replayAnalysisModule] })
   control = postgres(database.connectionString, { max: 1 })
   await control`INSERT INTO accounts.users (id) VALUES (${accountId})`
-  jobs = createPostgresReplayAnalysisJobs(database.connectionString)
+  jobs = createPostgresReplayAnalysisJobs(database)
 }, 20_000)
 
 afterAll(async () => {
   if (!configuredServer) return
-  await jobs.close()
   await control.end()
   await database?.drop()
 }, 20_000)

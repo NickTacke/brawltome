@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { Database } from '@brawltome/foundation'
+import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 import { initializeDiscovery } from '../migrations/0001-initialize-discovery'
 import { generalizeDiscovery } from '../migrations/0002-generalize-discovery'
@@ -10,6 +12,7 @@ const configuredServer = process.env.DATABASE_URL
 const databaseName = `brawltome_discovery_upgrade_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`
 let admin: ReturnType<typeof postgres>
 let connectionString = ''
+let database: Database
 
 // an empty database by hand: the test applies discovery 0001, seeds it, then upgrades to 0002
 beforeAll(async () => {
@@ -31,9 +34,11 @@ beforeAll(async () => {
   const databaseUrl = new URL(dedicatedServer)
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
+  database = openTestClient(connectionString)
 }, 20_000)
 
 afterAll(async () => {
+  await database?.close()
   if (!admin) return
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
@@ -70,51 +75,47 @@ describe('Discovery generalized migration', () => {
       await setup.end()
     }
 
-    const discovery = createPostgresDiscovery(connectionString)
-    try {
-      expect(await discovery.search('preserved')).toEqual({
-        players: [
-          {
+    const discovery = createPostgresDiscovery(database)
+    expect(await discovery.search('preserved')).toEqual({
+      players: [
+        {
+          brawlhallaId: 42,
+          name: 'Preserved Player',
+          region: 'EU',
+          rating: 2200,
+          viewCount: 9,
+          bestLegendNameKey: 'bodvar',
+          matchedAlias: null,
+        },
+      ],
+      clans: [],
+    })
+    expect(await discovery.playerProjectionEffectState(operationId)).toBe('applied')
+    expect(
+      await discovery.applyPlayerEvents([
+        {
+          eventId,
+          brawlhallaId: 42,
+          sourceVersion: 8,
+          fact: {
             brawlhallaId: 42,
-            name: 'Preserved Player',
-            region: 'EU',
-            rating: 2200,
-            viewCount: 9,
-            bestLegendNameKey: 'bodvar',
-            matchedAlias: null,
+            name: 'Should Not Reapply',
+            region: null,
+            rating: null,
+            viewCount: 0,
+            bestLegendNameKey: null,
+            aliases: [],
           },
-        ],
-        clans: [],
-      })
-      expect(await discovery.playerProjectionEffectState(operationId)).toBe('applied')
-      expect(
-        await discovery.applyPlayerEvents([
-          {
-            eventId,
-            brawlhallaId: 42,
-            sourceVersion: 8,
-            fact: {
-              brawlhallaId: 42,
-              name: 'Should Not Reapply',
-              region: null,
-              rating: null,
-              viewCount: 0,
-              bestLegendNameKey: null,
-              aliases: [],
-            },
-          },
-        ]),
-      ).toEqual({ appliedEvents: 0 })
+        },
+      ]),
+    ).toEqual({ appliedEvents: 0 })
 
-      await discovery.rebuildClans({
-        sourceVersion: 1,
-        facts: [{ clanId: 42, clanName: 'Preserved Clan', clanXp: '100', memberCount: 1 }],
-      })
-      const overlapping = await discovery.search('preserved')
-      expect(overlapping.players[0]?.brawlhallaId).toBe(42)
-      expect(overlapping.clans[0]?.clanId).toBe(42)
-    } finally {
-      await discovery.close()
-    }
+    await discovery.rebuildClans({
+      sourceVersion: 1,
+      facts: [{ clanId: 42, clanName: 'Preserved Clan', clanXp: '100', memberCount: 1 }],
+    })
+    const overlapping = await discovery.search('preserved')
+    expect(overlapping.players[0]?.brawlhallaId).toBe(42)
+    expect(overlapping.clans[0]?.clanId).toBe(42)
   })
 })

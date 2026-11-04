@@ -1,5 +1,4 @@
-import type { Sql } from '@brawltome/foundation'
-import postgres from 'postgres'
+import type { Database, Sql } from '@brawltome/foundation'
 
 export type LeaderboardRankedObservation = {
   brawlhallaId: number
@@ -112,8 +111,8 @@ function teamObservations(teams: readonly LeaderboardTeamObservation[]): Leaderb
   )
 }
 
-export function createPostgresLeaderboardRanked(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresLeaderboardRanked(database: Database) {
+  const client = database.sql
 
   return {
     // Records the 1v1 standings a published leaderboard observed, so players nobody visits still show current
@@ -238,8 +237,6 @@ export function createPostgresLeaderboardRanked(connectionString: string) {
       `
       return { changed: changed.length }
     },
-
-    close: () => client.end(),
   }
 }
 

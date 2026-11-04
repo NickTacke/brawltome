@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import type { Sql } from '@brawltome/foundation'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createHealthRoutes } from '../src/health-routes'
 import { runOperationsWorker } from '../src/operations-worker-runtime'
-import { assertKnownMigrationsApplied } from '../src/postgres-readiness'
+import { assertKnownMigrationsApplied, createPostgresReadiness } from '../src/postgres-readiness'
 import { createRuntimeLifecycle } from '../src/runtime-lifecycle'
 
 const testAdmission = {
@@ -314,6 +315,52 @@ describe('runtime lifecycle', () => {
     await Bun.sleep(120)
     await lifecycle.shutdown()
     await worker
+    expect(stalls).toEqual([])
+  })
+
+  test('worker loops wait out a readiness check that times out and resume once the database answers', async () => {
+    let isAnswering = false
+    const query = () => (isAnswering ? Promise.resolve([]) : new Promise(() => {}))
+    const sql = (() => Object.assign(query(), { cancel: () => undefined })) as unknown as Sql
+    const readiness = createPostgresReadiness(sql, [], { timeoutMs: 5 })
+    const lifecycle = createRuntimeLifecycle({
+      shutdownDeadlineMs: 100,
+      cleanupReserveMs: 20,
+      readinessProbes: [{ name: 'postgres-schema', check: readiness.check }],
+    })
+    lifecycle.markReady()
+    const stalls: number[] = []
+    let runs = 0
+    const worker = runOperationsWorker({
+      operations: {
+        configureAdmission: async () => undefined,
+        materializeDueSchedules: async () => ({ occurrencesCreated: 0 }),
+      } as never,
+      lifecycle,
+      workerId: 'busy-pool-worker',
+      config: {
+        leaseMs: 30,
+        pollMs: 1,
+        retryDelayMs: 1,
+        scheduleBatchSize: 1,
+        stallTimeoutMs: 60,
+        admission: testAdmission,
+      },
+      runOne: async () => {
+        runs++
+        return false
+      },
+      onStall: (stalledForMs) => stalls.push(stalledForMs),
+    })
+
+    await Bun.sleep(80)
+    expect(runs).toBe(0)
+    isAnswering = true
+    await Bun.sleep(40)
+    await lifecycle.shutdown()
+    await worker
+
+    expect(runs).toBeGreaterThan(0)
     expect(stalls).toEqual([])
   })
 

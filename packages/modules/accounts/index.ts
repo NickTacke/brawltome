@@ -1,4 +1,4 @@
-import type { BrawltomeModule } from '@brawltome/foundation'
+import type { BrawltomeModule, Database } from '@brawltome/foundation'
 import { initializeAndImportV2Accounts } from './migrations/0001-initialize-and-import-v2'
 import { addV2AuthCutoverState } from './migrations/0002-add-v2-auth-cutover-state'
 import { addAccountPreferences } from './migrations/0003-add-preferences'
@@ -36,13 +36,12 @@ export {
   type PrimaryPlayerVerificationStatus,
 } from './src/accounts'
 
-export function createPostgresAccounts(connectionString: string) {
-  const { store, readDemandedPlayerIds, close } = createPostgresAccountsStore(connectionString)
+export function createPostgresAccounts(database: Database) {
+  const { store, readDemandedPlayerIds } = createPostgresAccountsStore(database)
   return {
     accounts: createAccounts({ store }),
     primaryMonitoring: { readSnapshot: store.readPrimaryMonitoringSnapshot },
     demand: { readPlayerIds: readDemandedPlayerIds },
-    close,
   }
 }
 

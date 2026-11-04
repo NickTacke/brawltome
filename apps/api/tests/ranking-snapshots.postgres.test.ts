@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type LeaderboardGenerationCandidate,
   type LeaderboardMode,
@@ -28,7 +28,7 @@ import { runOneDurableOperation } from '../src/refresh-operations-worker'
 
 const baseUrl = process.env.DATABASE_URL
 let admin: ReturnType<typeof postgres>
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 const intervalMs = 15 * 60 * 1000
@@ -353,8 +353,8 @@ describe('Ranking mode migrations', () => {
 
 describe('recent ranked activity', () => {
   test('supports valid pinned history and rejects legacy, unfinalized, wrong-mode, or wrong-scope snapshots', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
     expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1 })).toEqual({
       status: 'unavailable',
@@ -508,13 +508,11 @@ describe('recent ranked activity', () => {
     ).toMatchObject({ status: 'fresh', totalRows: 1 })
 
     await control.end()
-    await ranking.close()
-    await operations.close()
   })
 
   test('returns not_enough_history when the newest official generation is missing the requested current scope', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
     const previousWindow = new Date('2000-02-01T00:00:00Z')
     await publishActivityGeneration(operations, ranking, {
@@ -562,13 +560,11 @@ describe('recent ranked activity', () => {
       reason: 'not_enough_history',
     })
     await control.end()
-    await ranking.close()
-    await operations.close()
   })
 
   test('returns positive game deltas for stable identities in all four modes and both Global and EU scopes', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     for (const [index, mode] of leaderboardModes.entries()) {
       const previousWindow = new Date(Date.UTC(2001, 0, index + 1))
       await publishActivityGeneration(operations, ranking, {
@@ -602,13 +598,11 @@ describe('recent ranked activity', () => {
         )
       }
     }
-    await ranking.close()
-    await operations.close()
   })
 
   test('aggregates activity from the 75-minute fallback baseline across skipped scans', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const baselineWindow = new Date('2001-06-01T00:00:00Z')
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
@@ -637,13 +631,11 @@ describe('recent ranked activity', () => {
     expect(view.previousObservedAt).toBe('2001-06-01T00:00:01.000Z')
     expect(view.totalRows).toBe(9)
     expect(view.entries[0]).toMatchObject({ winsDelta: 3, lossesDelta: 1, gamesDelta: 4 })
-    await ranking.close()
-    await operations.close()
   })
 
   test('stays fresh through one delayed refresh and becomes stale after two missed windows', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const baselineWindow = new Date('2001-07-01T00:00:00Z')
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
@@ -688,13 +680,11 @@ describe('recent ranked activity', () => {
         now: new Date(currentWindow.getTime() + 30 * 60 * 1000),
       }),
     ).resolves.toMatchObject({ status: 'stale' })
-    await ranking.close()
-    await operations.close()
   })
 
   test('sorts by current rating then games delta and pins pagination to the requested current snapshot', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2002-01-01T00:00:00Z')
     const ratings = [2300, 2400, 2300]
     const games = [2, 1, 4]
@@ -769,13 +759,11 @@ describe('recent ranked activity', () => {
         now: currentWindow,
       }),
     ).toMatchObject({ currentSnapshotId: current.snapshotId, totalRows: 3, entries: [], hasMore: false })
-    await ranking.close()
-    await operations.close()
   })
 
   test('excludes rating-only changes, regressed counters, reset rows, appearances, and disappearances', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2003-01-01T00:00:00Z')
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
@@ -808,13 +796,11 @@ describe('recent ranked activity', () => {
     if (view.status === 'unavailable') throw new Error('Expected exclusion view')
     expect(view.entries).toHaveLength(1)
     expect(view.entries[0]).toMatchObject({ winsDelta: 1, lossesDelta: 0, gamesDelta: 1 })
-    await ranking.close()
-    await operations.close()
   })
 
   test('does not use unrelated old history when no hour baseline exists', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2003-06-01T00:00:00Z')
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
@@ -840,13 +826,11 @@ describe('recent ranked activity', () => {
         pageSize: 20,
       },
     )
-    await ranking.close()
-    await operations.close()
   })
 
   test('keeps valid empty and stale activity states explicit', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2004-01-01T00:00:00Z')
     await publishActivityGeneration(operations, ranking, {
       mode: 'solo2v2',
@@ -891,15 +875,15 @@ describe('recent ranked activity', () => {
         now: new Date(currentWindow.getTime() + 2 * intervalMs),
       }),
     ).toMatchObject({ status: 'stale' })
-    await ranking.close()
-    await operations.close()
   })
 })
 
 describe('immutable Ranking snapshots for every mode', () => {
   test('publishes all modes independently with fixed-team identity and restart parity', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    let ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    // the ranking repository restarts below, so it gets a client of its own to close and reopen
+    let rankingClient = openTestClient(database.connectionString)
+    let ranking = createPostgresRanking(rankingClient)
     for (const [variant, mode] of leaderboardModes.entries()) {
       const lease = await leaseOperation(operations, mode, `publish-${mode}`)
       const publication = candidate(mode, lease.operationKey, undefined, 2, variant + 1)
@@ -971,20 +955,20 @@ describe('immutable Ranking snapshots for every mode', () => {
     expect(fixed.entries[0].identity.players[1].brawlhallaId).toBeGreaterThan(
       fixed.entries[0].identity.players[0].brawlhallaId,
     )
-    await ranking.close()
 
-    ranking = createPostgresRanking(connectionString)
+    await rankingClient.close()
+    rankingClient = openTestClient(database.connectionString)
+    ranking = createPostgresRanking(rankingClient)
     for (const mode of leaderboardModes) {
       const view = await ranking.queries.getLeaderboard({ mode, region: 'EU', page: 1 })
       expect(view).toMatchObject({ mode, status: 'fresh', totalRows: 2 })
     }
-    await ranking.close()
-    await operations.close()
+    await rankingClient.close()
   })
 
   test('replays a mode-specific dead letter with stable effect identity and fences cross-kind key reuse', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
 
     const original = await leaseOperation(operations, 'solo2v2', 'mode-replay', { maxAttempts: 1 })
     await operations.fail(original, { code: 'source_repaired', message: 'repairable', retryable: false }, 0)
@@ -1023,13 +1007,11 @@ describe('immutable Ranking snapshots for every mode', () => {
     `
     expect(published).toEqual({ operation_id: original.effectOperationId, mode: 'solo2v2' })
     await control.end()
-    await ranking.close()
-    await operations.close()
   })
 
   test('keeps failure and stale state isolated per mode', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const baselineWindow = new Date(Date.now() + 10 * intervalMs)
     for (const mode of ['1v1', 'solo2v2', '3v3'] as const) {
       const lease = await leaseOperation(operations, mode, `isolation-base-${mode}`)
@@ -1060,13 +1042,11 @@ describe('immutable Ranking snapshots for every mode', () => {
     expect((await ranking.queries.getLeaderboard({ mode: '1v1', region: 'all', page: 1 })).status).toBe('fresh')
     expect((await ranking.queries.getLeaderboard({ mode: '1v1', region: 'EU', page: 1 })).status).toBe('fresh')
     expect((await ranking.queries.getLeaderboard({ mode: 'solo2v2', region: 'all', page: 1 })).status).toBe('fresh')
-    await ranking.close()
-    await operations.close()
   })
 
   test('fences concurrent effects, rolls back invalid fixed identity, and enforces immutability', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const sharedKey = `shared:${randomUUID()}`
     const first = await leaseOperation(operations, '2v2', 'concurrent-first', { operationKey: sharedKey })
     const second = await leaseOperation(operations, '2v2', 'concurrent-second', { operationKey: sharedKey })
@@ -1139,12 +1119,10 @@ describe('immutable Ranking snapshots for every mode', () => {
     expect(insertSnapshotError).toBeInstanceOf(Error)
     expect((insertSnapshotError as Error).message).toContain('published ranking snapshots are immutable')
     await control.end()
-    await ranking.close()
-    await operations.close()
   }, 20_000)
 
   test('never exposes an unfinalized publication', async () => {
-    const ranking = createPostgresRanking(connectionString)
+    const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
     const generationId = randomUUID()
     const snapshotId = randomUUID()
@@ -1185,12 +1163,11 @@ describe('immutable Ranking snapshots for every mode', () => {
     `
     expect(stored).toEqual({ finalized: false, row_count: 1 })
     await control.end()
-    await ranking.close()
   })
 
   test('uses schedule windows for latest selection and pins pagination for every mode', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     for (const [modeIndex, mode] of leaderboardModes.entries()) {
       const baseWindow = new Date(Date.now() + (20 + modeIndex * 5) * intervalMs)
       const newer = await leaseOperation(operations, mode, `window-new-${mode}`)
@@ -1259,12 +1236,10 @@ describe('immutable Ranking snapshots for every mode', () => {
         mode,
       })
     }
-    await ranking.close()
-    await operations.close()
   })
   test('derives Player Valhallan evidence from each latest official generation', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const playerId = 77_777
     const teammateId = 88_888
     const publish = async (
@@ -1355,16 +1330,16 @@ describe('immutable Ranking snapshots for every mode', () => {
       fixedTwoVsTwoTeams: [{ brawlhallaIdOne: playerId, brawlhallaIdTwo: playerId }],
       soloTwoVsTwo: true,
     })
-
-    await ranking.close()
-    await operations.close()
   })
 })
 
 describe('durable multi-mode collection operations', () => {
   test('reconciles four independently staggered schedules concurrently and preserves them on restart', async () => {
-    const first = createPostgresRefreshOperations(connectionString)
-    const second = createPostgresRefreshOperations(connectionString)
+    // two replicas, then a restart: each process gets a client of its own
+    const firstClient = openTestClient(database.connectionString)
+    const secondClient = openTestClient(database.connectionString)
+    const first = createPostgresRefreshOperations({ database: firstClient })
+    const second = createPostgresRefreshOperations({ database: secondClient })
     const base = Date.now() - intervalMs
     const definitions = leaderboardModes.map((mode, index) => ({
       kind: operationKind(mode),
@@ -1391,19 +1366,19 @@ describe('durable multi-mode collection operations', () => {
     expect(new Set(rows.map(({ kind }) => kind))).toEqual(new Set(definitions.map(({ kind }) => kind)))
     expect(rows.every(({ work_class }) => work_class === 'leaderboard')).toBe(true)
     expect(new Set(rows.map(({ first_due_at }) => first_due_at.getTime())).size).toBe(4)
-    await Promise.all([first.close(), second.close()])
+    await Promise.all([firstClient.close(), secondClient.close()])
 
-    const restarted = createPostgresRefreshOperations(connectionString)
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     for (const definition of definitions) {
       expect((await restarted.reconcileLeaderboardSchedule(definition)).outcome).toBe('already-exists')
     }
-    await restarted.close()
-    await control.end()
+    await Promise.all([control.end(), restartedClient.close()])
   })
 
   test('publishes an empty region as a fresh empty snapshot instead of serving older rows', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
     const firstWindow = new Date('2200-01-01T00:00:00Z')
     const secondWindow = new Date(firstWindow.getTime() + intervalMs)
     for (const [label, window, emptyRegion] of [
@@ -1432,14 +1407,12 @@ describe('durable multi-mode collection operations', () => {
     expect(
       await ranking.queries.getLeaderboard({ mode: '3v3', region: 'all', page: 1, now: secondWindow }),
     ).toMatchObject({ status: 'fresh', totalRows: 8 })
-    await ranking.close()
-    await operations.close()
   })
 
   test('admits every V1 page with stable attempt/mode/region/page identity before source access', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
-    const sourceAdmission = createPostgresRequestAdmission(connectionString, {
+    const operations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
+    const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
@@ -1480,16 +1453,13 @@ describe('durable multi-mode collection operations', () => {
       [...regionalLeaderboardScopes].map((region) => `${accepted.operationId}:1:solo2v2:${region}:1`).sort(),
     )
     await control.end()
-    await sourceAdmission.close()
-    await ranking.close()
-    await operations.close()
   })
 
   test('stops admission, page calls, and publication when the lease is expired and replaced', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
-    const replacementOperations = createPostgresRefreshOperations(connectionString)
-    const ranking = createPostgresRanking(connectionString)
-    const sourceAdmission = createPostgresRequestAdmission(connectionString, {
+    const operations = createPostgresRefreshOperations({ database })
+    const replacementOperations = createPostgresRefreshOperations({ database })
+    const ranking = createPostgresRanking(database)
+    const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
@@ -1562,9 +1532,5 @@ describe('durable multi-mode collection operations', () => {
       0,
     )
     await control.end()
-    await sourceAdmission.close()
-    await ranking.close()
-    await replacementOperations.close()
-    await operations.close()
   })
 })

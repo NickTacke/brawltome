@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
@@ -16,7 +16,7 @@ import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
 const configuredServer = process.env.DATABASE_URL
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 const admission = {
@@ -92,7 +92,7 @@ const careerSnapshot = (brawlhallaId: number) => ({
 
 describe('Primary Player monitoring', () => {
   test('refreshes only verified ownership through one replica-safe full scheduled operation', async () => {
-    const accounts = createPostgresAccounts(connectionString)
+    const accounts = createPostgresAccounts(database)
     const signedIn = await accounts.accounts.signInWithDiscord({
       providerAccountId: `primary-monitoring-${randomUUID()}`,
       displayName: 'Ada',
@@ -113,8 +113,10 @@ describe('Primary Player monitoring', () => {
       }),
     })
 
-    const operationsA = createPostgresRefreshOperations(connectionString)
-    const operationsB = createPostgresRefreshOperations(connectionString)
+    // two replicas, then a restart: each process gets a client of its own
+    const replicaClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
+    const operationsA = createPostgresRefreshOperations({ database: replicaClients[0] })
+    const operationsB = createPostgresRefreshOperations({ database: replicaClients[1] })
     const snapshot = await accounts.primaryMonitoring.readSnapshot()
     const reconciled = await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
@@ -135,12 +137,12 @@ describe('Primary Player monitoring', () => {
     )
     expect(materialized.reduce((sum, result) => sum + result.occurrencesCreated, 0)).toBe(1)
 
-    const sourceAdmission = createPostgresRequestAdmission(connectionString, {
+    const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
-    const rankedPlayers = createPostgresRankedPlayers(connectionString)
-    const careerPlayers = createPostgresCareerPlayers(connectionString)
+    const rankedPlayers = createPostgresRankedPlayers(database)
+    const careerPlayers = createPostgresCareerPlayers(database)
     let rankedCalls = 0
     let careerCalls = 0
     const run = (operations: typeof operationsA, workerId: string) =>
@@ -235,17 +237,10 @@ describe('Primary Player monitoring', () => {
       retired: 1,
     })
 
-    await Promise.all([
-      control.end(),
-      careerPlayers.close(),
-      rankedPlayers.close(),
-      sourceAdmission.close(),
-      operationsA.close(),
-      operationsB.close(),
-      accounts.close(),
-    ])
+    await Promise.all([control.end(), ...replicaClients.map((client) => client.close())])
 
-    const restarted = createPostgresRefreshOperations(connectionString)
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const restartedControl = postgres(connectionString, { max: 1 })
     const [enabled] = await restartedControl`
       SELECT count(*)::int AS count
@@ -253,6 +248,6 @@ describe('Primary Player monitoring', () => {
       WHERE enabled AND provenance ->> 'source' = 'primary-player-monitoring'
     `
     expect(enabled.count).toBe(0)
-    await Promise.all([restartedControl.end(), restarted.close()])
+    await Promise.all([restartedControl.end(), restartedClient.close()])
   })
 })

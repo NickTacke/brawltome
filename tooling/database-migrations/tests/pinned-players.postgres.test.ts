@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { MAX_PINNED_PLAYERS, accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
 import { migratePostgres } from '@brawltome/foundation'
+import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 
 const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
@@ -72,7 +73,8 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
       }
 
       expect(await migratePostgres(databaseUrl, accountsMigrationInventory)).toBe(1)
-      const runtime = createPostgresAccounts(databaseUrl)
+      const runtimeDatabase = openTestClient(databaseUrl)
+      const runtime = createPostgresAccounts(runtimeDatabase)
       const inspect = postgres(databaseUrl, { max: 1 })
       try {
         const migratedPlayers = await runtime.accounts.getPinnedPlayers(accountId)
@@ -100,7 +102,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
         `
         expect(tables).toEqual({ pinned: 'accounts.pinned_players', saved: null, pins: null })
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
         await inspect.end()
       }
     })
@@ -109,7 +111,8 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
   test('does not count a retained Primary Player toward the managed pin cap', async () => {
     await withDatabase(async (databaseUrl) => {
       await migratePostgres(databaseUrl, accountsMigrationInventory)
-      const runtime = createPostgresAccounts(databaseUrl)
+      const runtimeDatabase = openTestClient(databaseUrl)
+      const runtime = createPostgresAccounts(runtimeDatabase)
       const inspect = postgres(databaseUrl, { max: 1 })
       try {
         const { account } = await signIn(runtime, 'pinned-player-cap')
@@ -159,7 +162,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
         ).rejects.toThrow('Primary Player position cannot be changed')
         expect(pinnedIds(await runtime.accounts.getPinnedPlayers(account.id))).toEqual(managedReorderedIds)
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
         await inspect.end()
       }
     })
@@ -168,7 +171,8 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
   test('allows idempotent existing pins and legacy-over-cap reorder while capping new additions', async () => {
     await withDatabase(async (databaseUrl) => {
       await migratePostgres(databaseUrl, accountsMigrationInventory)
-      const runtime = createPostgresAccounts(databaseUrl)
+      const runtimeDatabase = openTestClient(databaseUrl)
+      const runtime = createPostgresAccounts(runtimeDatabase)
       try {
         const { account } = await signIn(runtime, 'pinned-player-cap-without-primary')
         for (let id = 1; id <= MAX_PINNED_PLAYERS; id += 1) await runtime.accounts.pinPlayer(account.id, id)
@@ -186,7 +190,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
         )
         expect(pinnedIds(reordered)).toEqual(Array.from({ length: 20 }, (_, index) => 20 - index))
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
       }
     })
   }, 15_000)
@@ -194,7 +198,8 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
   test('compacts positions after idempotent unpinning and isolates accounts', async () => {
     await withDatabase(async (databaseUrl) => {
       await migratePostgres(databaseUrl, accountsMigrationInventory)
-      const runtime = createPostgresAccounts(databaseUrl)
+      const runtimeDatabase = openTestClient(databaseUrl)
+      const runtime = createPostgresAccounts(runtimeDatabase)
       try {
         const [{ account: first }, { account: second }] = await Promise.all([
           signIn(runtime, 'pinned-player-first'),
@@ -210,7 +215,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
           0, 1,
         ])
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
       }
     })
   }, 15_000)

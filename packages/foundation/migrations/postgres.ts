@@ -5,10 +5,13 @@ import { runMigrations } from './run'
 
 const advisoryLockKey = 1_113_282_925
 
+// the runner holds a session advisory lock, so it needs exactly one connection of its own
+export const migrationRunnerConnections = 1
+
 export async function migratePostgres(connectionString: string, migrations: readonly Migration[]): Promise<number> {
   buildMigrationPlan(migrations, [])
 
-  const client = postgres(connectionString, { max: 1 })
+  const client = postgres(connectionString, { max: migrationRunnerConnections })
   let lockAcquired = false
   let appliedCount = 0
   let primaryFailure: unknown

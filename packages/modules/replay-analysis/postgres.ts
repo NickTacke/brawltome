@@ -1,4 +1,4 @@
-import postgres from 'postgres'
+import type { Database } from '@brawltome/foundation'
 import {
   ActiveReplayJobError,
   type ClaimedReplayJob,
@@ -37,8 +37,8 @@ function summary(row: JobRow): ReplayJobSummary {
   }
 }
 
-export function createPostgresReplayAnalysisJobs(connectionString: string): ReplayAnalysisJobs {
-  const client = postgres(connectionString, { max: 5 })
+export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnalysisJobs {
+  const client = database.sql
 
   return {
     async create(input) {
@@ -165,10 +165,6 @@ export function createPostgresReplayAnalysisJobs(connectionString: string): Repl
         RETURNING id
       `
       return rows.length > 0
-    },
-
-    async close() {
-      await client.end()
     },
   }
 }

@@ -11,7 +11,7 @@ import {
   playerModule,
 } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -48,7 +48,7 @@ const standing = (brawlhallaId: number, rating: number) => ({
 describe('Ranked standings observed on leaderboards', () => {
   test('records changed standings only and republishes them to discovery', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const standings = createPostgresLeaderboardRanked(connectionString)
+    const standings = createPostgresLeaderboardRanked(database)
     const outboxFor = async (brawlhallaId: number) =>
       Number(
         (
@@ -99,16 +99,16 @@ describe('Ranked standings observed on leaderboards', () => {
       expect(await standings.standingById(999)).toBeNull()
       expect(await outboxFor(200)).toBe(2)
     } finally {
-      await Promise.all([control.end(), standings.close()])
+      await control.end()
     }
   })
 
   test('shows the newer of the V0 refresh and the leaderboard on profiles and in search', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const standings = createPostgresLeaderboardRanked(connectionString)
-    const names = createPostgresLeaderboardPlayerNames(connectionString)
-    const ranked = createPostgresRankedPlayers(connectionString)
-    const source = createPostgresPlayerDiscoverySource(connectionString)
+    const standings = createPostgresLeaderboardRanked(database)
+    const names = createPostgresLeaderboardPlayerNames(database)
+    const ranked = createPostgresRankedPlayers(database)
+    const source = createPostgresPlayerDiscoverySource(database)
     try {
       await insertRanked(control, 300, '2026-10-07T10:00:00Z')
       await insertRanked(control, 301, '2026-10-07T13:00:00Z')
@@ -148,14 +148,14 @@ describe('Ranked standings observed on leaderboards', () => {
       expect(facts.get(301)).toMatchObject({ rating: 2000, region: 'EU' })
       expect(facts.get(302)).toMatchObject({ name: 'Never Visited', rating: 1973, region: 'AUS' })
     } finally {
-      await Promise.all([control.end(), standings.close(), names.close(), ranked.close(), source.close()])
+      await control.end()
     }
   })
 
   test('overlays newer solo queue and fixed team standings and records them changed-only', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const standings = createPostgresLeaderboardRanked(connectionString)
-    const ranked = createPostgresRankedPlayers(connectionString)
+    const standings = createPostgresLeaderboardRanked(database)
+    const ranked = createPostgresRankedPlayers(database)
     try {
       await insertRanked(control, 400, '2026-10-07T10:00:00Z')
       await control`
@@ -249,14 +249,14 @@ describe('Ranked standings observed on leaderboards', () => {
       expect(refreshed?.snapshot?.soloQueue[0]?.rating).toBe(1500)
       expect(refreshed?.snapshot?.fixedTeams[0]?.rating).toBe(1700)
     } finally {
-      await Promise.all([control.end(), standings.close(), ranked.close()])
+      await control.end()
     }
   })
 
   test('shows whichever of the V0 refresh, a team pulse, and a team observation is newest', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const standings = createPostgresLeaderboardRanked(connectionString)
-    const ranked = createPostgresRankedPlayers(connectionString)
+    const standings = createPostgresLeaderboardRanked(database)
+    const ranked = createPostgresRankedPlayers(database)
     const team = (rating: number, wins: number, games: number) => ({
       brawlhallaIdOne: 500,
       brawlhallaIdTwo: 501,
@@ -309,7 +309,7 @@ describe('Ranked standings observed on leaderboards', () => {
         expect.objectContaining({ rating: 1820, wins: 13, games: 21 }),
       )
     } finally {
-      await Promise.all([control.end(), standings.close(), ranked.close()])
+      await control.end()
     }
   })
 })
@@ -328,8 +328,8 @@ describe('Solo queue and fixed teams only the deep crawl has seen', () => {
 
   test('appends newer crawl-only entries after the V0 ones, named the way V0 names teams', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const standings = createPostgresLeaderboardRanked(connectionString)
-    const ranked = createPostgresRankedPlayers(connectionString)
+    const standings = createPostgresLeaderboardRanked(database)
+    const ranked = createPostgresRankedPlayers(database)
     try {
       await insertRanked(control, 600, '2026-10-07T10:00:00Z')
       await control`
@@ -412,14 +412,14 @@ describe('Solo queue and fixed teams only the deep crawl has seen', () => {
       ])
       expect(refreshed?.soloQueue).toEqual([])
     } finally {
-      await Promise.all([control.end(), standings.close(), ranked.close()])
+      await control.end()
     }
   })
 
   test('adds no crawl-only solo queue entry beside the V0 ones', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const standings = createPostgresLeaderboardRanked(connectionString)
-    const ranked = createPostgresRankedPlayers(connectionString)
+    const standings = createPostgresLeaderboardRanked(database)
+    const ranked = createPostgresRankedPlayers(database)
     try {
       await insertRanked(control, 610, '2026-10-07T10:00:00Z')
       await control`
@@ -436,7 +436,7 @@ describe('Solo queue and fixed teams only the deep crawl has seen', () => {
         expect.objectContaining({ teamName: 'Solo Queue', region: 'SEA', globalRank: 900, rating: 1620 }),
       ])
     } finally {
-      await Promise.all([control.end(), standings.close(), ranked.close()])
+      await control.end()
     }
   })
 })

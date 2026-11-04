@@ -1,5 +1,4 @@
-import type { Sql } from '@brawltome/foundation'
-import postgres from 'postgres'
+import type { Database, Sql } from '@brawltome/foundation'
 
 export type NameVerificationCandidate = { brawlhallaId: number; playerName: string; v0Name: string }
 export type NameVerificationBacklog = { rename_signal: number; demand: number; other: number }
@@ -119,8 +118,8 @@ const toCandidate = (row: CandidateRow): NameVerificationCandidate => ({
   v0Name: row.v0_name,
 })
 
-export function createPostgresPlayerNameVerifications(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresPlayerNameVerifications(database: Database) {
+  const client = database.sql
 
   // Renamed when V0 moved off the name it had at claim time, confirmed stale when it kept it.
   async function settle(
@@ -256,8 +255,6 @@ export function createPostgresPlayerNameVerifications(connectionString: string) 
       `
       return 'failed'
     },
-
-    close: () => client.end(),
   }
 }
 

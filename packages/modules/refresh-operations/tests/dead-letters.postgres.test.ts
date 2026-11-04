@@ -11,7 +11,7 @@ import {
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 const admission = {
@@ -49,7 +49,7 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations(connectionString)
+  const operations = createPostgresRefreshOperations({ database })
   const accepted = await operations.accept({
     dedupeKey: `dead-letter:${randomUUID()}`,
     operationKey: `effect:${randomUUID()}`,
@@ -137,13 +137,11 @@ describe('dead-letter operations', () => {
       attempts: [{ attemptNumber: 1, outcome: 'dead_letter' }],
       auditActions: [],
     })
-    await second.operations.close()
-    await operations.close()
   })
 
   test('creates one linked immediate replay with fresh attempts under concurrent replay and discard', async () => {
     const { operations, operationId, lease: originalLease } = await createDeadLetter('replay-me')
-    const actors = Array.from({ length: 20 }, () => createPostgresRefreshOperations(connectionString))
+    const actors = Array.from({ length: 20 }, () => createPostgresRefreshOperations({ database }))
     const results = await Promise.all(
       actors.map((actor, index) =>
         index % 2 === 0
@@ -182,13 +180,10 @@ describe('dead-letter operations', () => {
       expect(await operations.commitProofEffect(replay)).toBe('applied')
       expect(await operations.complete(replay)).toBe('transitioned')
     }
-
-    await Promise.all(actors.map((actor) => actor.close()))
-    await operations.close()
   })
 
   test('replay preserves scheduled provenance and stable interactive section effects', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const firstDueAt = new Date(Date.now() - 1_000).toISOString()
     const schedule = await operations.createSchedule({
       scheduleKey: `dead-letter-schedule:${randomUUID()}`,
@@ -267,11 +262,10 @@ describe('dead-letter operations', () => {
     expect(successor.effectCreatedAt).toBe(original.effectCreatedAt)
     expect(await operations.beginInteractiveSection(successor, 'ranked')).toBe('already-applied')
     expect(await operations.beginInteractiveSection(successor, 'stats')).toBe('execute')
-    await operations.close()
   })
 
   test('preserves clan, leaderboard, and projection kinds, payloads, and effect identity on replay', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const leaderboard = await operations.accept({
       kind: 'leaderboard-1v1',
       dedupeKey: `leaderboard-dead-letter:${randomUUID()}`,
@@ -454,11 +448,10 @@ describe('dead-letter operations', () => {
     expect(await operations.beginInteractiveSection(monitoringSuccessor, 'ranked')).toBe('execute')
     expect(await operations.beginInteractiveSection(monitoringSuccessor, 'stats')).toBe('execute')
     await operations.complete(monitoringSuccessor)
-    await operations.close()
   })
 
   test('replays a reserved Statistics collection with stable effect identity', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const cohortId = randomUUID()
     const operationKey = `statistics:${cohortId}:42:ranked`
     const reserved = await operations.reserveStatisticsCollection({
@@ -506,7 +499,6 @@ describe('dead-letter operations', () => {
       payload: original.payload,
       attemptNumber: 1,
     })
-    await operations.close()
   })
 
   test('makes audit actions append-only in PostgreSQL', async () => {
@@ -533,7 +525,6 @@ describe('dead-letter operations', () => {
       expect(exitCode).not.toBe(0)
       expect(stderr).toContain('dead-letter audit actions are immutable')
     }
-    await operations.close()
   })
 
   test('runs every CLI command with only dedicated dead-letter privileges', async () => {
@@ -575,8 +566,6 @@ describe('dead-letter operations', () => {
     const env = { ...operatorEnv(rawToken), DEAD_LETTER_DATABASE_URL: operatorUrl.toString() }
     const replayTarget = await createDeadLetter('restricted-replay')
     const discardTarget = await createDeadLetter('restricted-discard')
-    await replayTarget.operations.close()
-    await discardTarget.operations.close()
 
     try {
       expect((await runCli(['list'], env)).exitCode).toBe(0)
@@ -618,7 +607,6 @@ describe('dead-letter operations', () => {
     expect(`${missingAuth.stdout}${missingAuth.stderr}`).not.toContain('ECONNREFUSED')
 
     const { operations, operationId } = await createDeadLetter('cli-sensitive-payload')
-    await operations.close()
     const listed = await runCli(['list', '--limit', '10'], operatorEnv(rawToken))
     expect(listed.exitCode).toBe(0)
     expect(listed.stderr).toBe('')
@@ -650,7 +638,6 @@ describe('dead-letter operations', () => {
     })
 
     const discardedTarget = await createDeadLetter('discard-through-cli')
-    await discardedTarget.operations.close()
     const discarded = await runCli(
       ['discard', discardedTarget.operationId, '--reason', 'invalid source request confirmed'],
       operatorEnv(rawToken),

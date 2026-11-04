@@ -25,13 +25,27 @@ export function createDatabase(connectionString: string, options: CreateDatabase
     max: options.maxConnections,
     connection: sessionSettings(options),
   })
-  const db = drizzle(sql)
+  const db = drizzle(withOwnParsers(sql))
 
   return {
     sql,
     db,
     close: () => sql.end({ timeout: closeTimeoutSeconds }),
   }
+}
+
+// drizzle swaps its client's date and json parsers and serializers for pass-throughs; on the shared client that would
+// hand every module date strings instead of Date objects and reject Date parameters. drizzle gets a view of the client
+// with its own copy of the tables, so it runs on the same connections while sql keeps the postgres.js defaults.
+// drizzle therefore reads the values postgres.js parses (Date objects, parsed json).
+function withOwnParsers(sql: Sql): Sql {
+  const options = {
+    ...sql.options,
+    parsers: { ...sql.options.parsers },
+    serializers: { ...sql.options.serializers },
+  }
+
+  return Object.assign(Object.create(sql), { options })
 }
 
 function sessionSettings(options: CreateDatabaseOptions): Record<string, string> {

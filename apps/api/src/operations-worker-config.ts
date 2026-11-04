@@ -41,6 +41,12 @@ export function readSourceBackgroundHeadroom(value: string | undefined, minimumS
   return boundedInteger(value, 30, 'SOURCE_BACKGROUND_HEADROOM', 0, minimumSourceLimit - 1)
 }
 
+// the deploy connection budget (database-pools.ts, CONTRIBUTING.md) is computed for this many job slots
+export const maxOperationsTotalConcurrency = 23
+
+// the worker's discovery pool is sized for this many projection operations at once (see database-pools.ts)
+export const maxProjectionConcurrency = 2
+
 export type WorkerDatabaseSessionConfig = {
   connectTimeoutSeconds: number
   statementTimeoutMs: number
@@ -189,6 +195,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     projection: 2,
     maintenance: 1,
   }
+  const classMaximums: Partial<Record<WorkClass, number>> = { projection: maxProjectionConcurrency }
   const weightDefaults: Record<BackgroundWorkClass, number> = {
     'primary-monitoring': 8,
     leaderboard: 4,
@@ -200,7 +207,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     totalConcurrency: parsePositiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, {
       name: 'OPERATIONS_TOTAL_CONCURRENCY',
       fallback: 8,
-      maximum: 32,
+      maximum: maxOperationsTotalConcurrency,
     }),
     interactiveReservation: parsePositiveInteger(env.OPERATIONS_INTERACTIVE_RESERVATION, {
       name: 'OPERATIONS_INTERACTIVE_RESERVATION',
@@ -210,7 +217,11 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     classConcurrency: Object.fromEntries(
       Object.entries(classEnvironment).map(([workClass, name]) => [
         workClass,
-        parsePositiveInteger(env[name], { name, fallback: classDefaults[workClass as WorkClass], maximum: 10_000 }),
+        parsePositiveInteger(env[name], {
+          name,
+          fallback: classDefaults[workClass as WorkClass],
+          maximum: classMaximums[workClass as WorkClass] ?? 10_000,
+        }),
       ]),
     ) as Record<WorkClass, number>,
     backgroundWeights: Object.fromEntries(

@@ -1,7 +1,7 @@
 import { createPostgresAccounts } from '@brawltome/accounts'
 import { createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
-import { checkModuleList, createDatabase } from '@brawltome/foundation'
+import { checkModuleList } from '@brawltome/foundation'
 import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
@@ -30,6 +30,7 @@ import {
 import { createAuthRoutes } from './auth/routes'
 import { verifyTurnstileResult } from './auth/turnstile'
 import { requestWithVerifiedClientIp } from './client-ip'
+import { createApiDatabase } from './database-pools'
 import { createHealthRoutes } from './health-routes'
 import { apiModules } from './modules'
 import { createPostgresReadiness } from './postgres-readiness'
@@ -66,36 +67,36 @@ checkModuleList(apiModules)
 const telemetry = createRuntimeTelemetry('api')
 const runtimeConfig = readRuntimeConfig(process.env)
 const shutdownAnnounceMs = readShutdownAnnounceMs(process.env.RUNTIME_SHUTDOWN_ANNOUNCE_MS)
-const accountsRuntime = createPostgresAccounts(databaseUrl)
+// one client for every module: see database-pools.ts for how its size fits the Postgres connection budget
+const database = createApiDatabase(databaseUrl)
+const accountsRuntime = createPostgresAccounts(database)
 const { accounts } = accountsRuntime
-const careerPlayerQueries = createPostgresCareerPlayers(databaseUrl)
-const rankedPlayerQueries = createPostgresRankedPlayers(databaseUrl, {
+const careerPlayerQueries = createPostgresCareerPlayers(database)
+const rankedPlayerQueries = createPostgresRankedPlayers(database, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
 })
-const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databaseUrl)
-const profileViews = createPostgresProfileViews(databaseUrl)
-const leaderboardStandings = createPostgresLeaderboardRanked(databaseUrl)
-const discovery = createPostgresDiscovery(databaseUrl)
-// 10 connections is the postgres.js default the old shared client used
-const database = createDatabase(databaseUrl, { maxConnections: 10, applicationName: 'brawltome-api' })
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(database)
+const profileViews = createPostgresProfileViews(database)
+const leaderboardStandings = createPostgresLeaderboardRanked(database)
+const discovery = createPostgresDiscovery(database)
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(
   database,
   (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => careerPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => leaderboardPlayerNames.referenceById(brawlhallaId),
 )
-const refreshOperations = createPostgresRefreshOperations(databaseUrl)
+const refreshOperations = createPostgresRefreshOperations({ database })
 const refreshEvents = createRefreshEventStreams({ source: refreshOperations, telemetry })
-const requestAdmission = createPostgresRequestAdmission(databaseUrl, {
+const requestAdmission = createPostgresRequestAdmission(database, {
   authenticatedIpLimit: authenticatedRefreshIpLimit,
   sourceLimits: { 'brawlhalla-v0': 180 },
 })
-const ranking = createPostgresRanking(databaseUrl)
-const statistics = createPostgresStatistics(databaseUrl)
-const replayAnalysisJobs = createPostgresReplayAnalysisJobs(databaseUrl)
-const clanRepo = createPostgresClans(databaseUrl)
+const ranking = createPostgresRanking(database)
+const statistics = createPostgresStatistics(database)
+const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
+const clanRepo = createPostgresClans(database)
 const postgresReadiness = createPostgresReadiness(
-  databaseUrl,
+  database.sql,
   apiModules.flatMap((module) => module.migrations),
 )
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -114,21 +115,8 @@ const lifecycle = createRuntimeLifecycle({
       },
     },
     { name: 'refresh-events', close: refreshEvents.close },
-    { name: 'operations-postgres', close: refreshOperations.close },
-    { name: 'clans-postgres', close: clanRepo.close },
-    { name: 'discovery-postgres', close: discovery.close },
-    { name: 'players-ranked-postgres', close: rankedPlayerQueries.close },
-    { name: 'players-career-postgres', close: careerPlayerQueries.close },
-    { name: 'players-leaderboard-names-postgres', close: leaderboardPlayerNames.close },
-    { name: 'players-profile-views-postgres', close: profileViews.close },
-    { name: 'players-leaderboard-standings-postgres', close: leaderboardStandings.close },
-    { name: 'request-admission-postgres', close: requestAdmission.close },
-    { name: 'accounts-postgres', close: accountsRuntime.close },
-    { name: 'ranking-postgres', close: ranking.close },
-    { name: 'statistics-postgres', close: statistics.close },
-    { name: 'replay-analysis-postgres', close: replayAnalysisJobs.close },
-    { name: 'database-postgres', close: database.close },
-    { name: 'readiness-postgres', close: postgresReadiness.close },
+    // after the server and the event streams: nothing uses the database once they have stopped
+    { name: 'database', close: database.close },
     { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],
 })

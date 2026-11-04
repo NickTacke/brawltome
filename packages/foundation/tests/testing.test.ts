@@ -1,9 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test'
+import { sql } from 'drizzle-orm'
 import postgres from 'postgres'
+import type { Database } from '../database'
 import type { Migration } from '../migration'
 import { checksumSql } from '../migrations/plan'
 import type { BrawltomeModule } from '../module'
-import { type TestDatabase, createTestDatabase } from '../testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '../testing'
 
 const connectionString = process.env.DATABASE_URL
 const describeWithDatabase = connectionString ? describe : describe.skip
@@ -101,6 +103,29 @@ describeWithDatabase('createTestDatabase', () => {
     const rows = await database.sql<{ identity: string }[]>`SELECT identity FROM brawltome_migrations.history`
 
     expect(rows.map(({ identity }) => identity)).toEqual(['testing-players/0001'])
+  })
+
+  test('is a Database that factories can take: drizzle runs over the same labelled client', async () => {
+    const database: Database = await create('as_database', [playersModule])
+
+    const result = await database.db.execute<{ application_name: string }>(
+      sql`SELECT current_setting('application_name') AS application_name`,
+    )
+
+    expect([...result]).toEqual([{ application_name: 'brawltome-test' }])
+  })
+
+  test('opens another client on the same database that closes on its own', async () => {
+    const database = await create('another_client', [playersModule])
+    const client = openTestClient(database.connectionString)
+
+    const [row] = await client.sql<{ name: string; database: string }[]>`
+      SELECT current_setting('application_name') AS name, current_database() AS database
+    `
+    await client.close()
+
+    expect(row).toEqual({ name: 'brawltome-test', database: databaseNameOf(database) })
+    expect(await database.sql`SELECT 1`).toHaveLength(1)
   })
 
   test('removes the database on drop', async () => {

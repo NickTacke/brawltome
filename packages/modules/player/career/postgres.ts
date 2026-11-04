@@ -1,5 +1,4 @@
-import type { Sql } from '@brawltome/foundation'
-import postgres from 'postgres'
+import type { Database, Sql } from '@brawltome/foundation'
 import {
   CAREER_FRESHNESS_SECONDS,
   type CareerPlayerProfile,
@@ -104,7 +103,7 @@ async function commitInteractiveSection(sql: Sql, effect: CanonicalCareerEffect)
 }
 
 export function createPostgresCareerPlayers(
-  connectionString: string,
+  database: Database,
   options: { now?: () => Date } = {},
 ): CareerPlayerQueries & {
   referenceById(brawlhallaId: number): Promise<{
@@ -117,9 +116,8 @@ export function createPostgresCareerPlayers(
   mainLegendById(brawlhallaId: number): Promise<{ legendId: number; legendNameKey: string } | null>
   recordChecked(brawlhallaId: number, effect: CanonicalCareerEffect): Promise<FencedResult>
   applySnapshot(snapshot: V0CareerSnapshot, effect: CanonicalCareerEffect): Promise<FencedResult>
-  close(): Promise<void>
 } {
-  const client = postgres(connectionString)
+  const client = database.sql
   const now = options.now ?? (() => new Date())
 
   return {
@@ -457,8 +455,6 @@ export function createPostgresCareerPlayers(
         return 'applied' as const
       })
     },
-
-    close: () => client.end(),
   }
 }
 

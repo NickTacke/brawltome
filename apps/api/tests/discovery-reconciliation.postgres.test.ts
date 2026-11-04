@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanMigrationInventory, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
+import type { Database } from '@brawltome/foundation'
+import { openTestClient } from '@brawltome/foundation/testing'
 import { playerMigrationInventory } from '@brawltome/player'
 import {
   type AdmissionConfig,
@@ -16,6 +18,7 @@ const configuredServer = process.env.DATABASE_URL
 const databaseName = `bt_discovery_reconcile_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 16)}`
 let admin: ReturnType<typeof postgres>
 let connectionString = ''
+let database: Database
 
 // builds its database by hand: player migration 0005 adds its triggers only when the legacy
 // public.player tables exist before it runs, so they are created first
@@ -38,6 +41,7 @@ beforeAll(async () => {
   const databaseUrl = new URL(dedicatedServer)
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
+  database = openTestClient(connectionString)
   const setup = postgres(connectionString, { max: 1 })
   try {
     await setup.unsafe(`
@@ -70,6 +74,7 @@ beforeAll(async () => {
 }, 30_000)
 
 afterAll(async () => {
+  await database?.close()
   if (!admin) return
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
@@ -112,17 +117,28 @@ const provenance = { source: 'v1-guild-stats' as const, outcome: 'success' as co
 
 describe('Clan Discovery delivery and reconciliation', () => {
   test('recovers acknowledgement crashes, replays dead letters against current facts, and repairs zero-lag drift', async () => {
-    const clans = createPostgresClans(connectionString)
-    const source = createPostgresClanDiscoverySource(connectionString)
-    const discovery = createPostgresDiscovery(connectionString)
+    const clans = createPostgresClans(database)
+    const source = createPostgresClanDiscoverySource(database)
+    const discovery = createPostgresDiscovery(database)
     const control = postgres(connectionString)
-    let operations = createPostgresRefreshOperations(connectionString, {
-      projectionEffectState: (kind, effectOperationId) =>
-        kind === 'player-discovery-projection'
-          ? discovery.playerProjectionEffectState(effectOperationId)
-          : discovery.clanProjectionEffectState(effectOperationId),
-      reconciliationEffectApplied: discovery.reconciliationEffectApplied,
-    })
+    // the operations worker restarts twice below, so it gets a client of its own to close and reopen
+    let operationsClient = openTestClient(connectionString)
+    async function restartOperationsClient(): Promise<Database> {
+      await operationsClient.close()
+      operationsClient = openTestClient(connectionString)
+
+      return operationsClient
+    }
+    let operations = createPostgresRefreshOperations(
+      { database: operationsClient },
+      {
+        projectionEffectState: (kind, effectOperationId) =>
+          kind === 'player-discovery-projection'
+            ? discovery.playerProjectionEffectState(effectOperationId)
+            : discovery.clanProjectionEffectState(effectOperationId),
+        reconciliationEffectApplied: discovery.reconciliationEffectApplied,
+      },
+    )
     const projectionOptions = {
       leaseMs: 10_000,
       retryDelayMs: 0,
@@ -166,14 +182,16 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('pending')
       expect(await source.lag()).toBeGreaterThan(0)
 
-      await operations.close()
-      operations = createPostgresRefreshOperations(connectionString, {
-        projectionEffectState: (kind, effectOperationId) =>
-          kind === 'player-discovery-projection'
-            ? discovery.playerProjectionEffectState(effectOperationId)
-            : discovery.clanProjectionEffectState(effectOperationId),
-        reconciliationEffectApplied: discovery.reconciliationEffectApplied,
-      })
+      operations = createPostgresRefreshOperations(
+        { database: await restartOperationsClient() },
+        {
+          projectionEffectState: (kind, effectOperationId) =>
+            kind === 'player-discovery-projection'
+              ? discovery.playerProjectionEffectState(effectOperationId)
+              : discovery.clanProjectionEffectState(effectOperationId),
+          reconciliationEffectApplied: discovery.reconciliationEffectApplied,
+        },
+      )
       await runOneRefreshOperation(operations, 'restarted-worker', projectionOptions)
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('succeeded')
       expect(await source.lag()).toBe(0)
@@ -243,7 +261,6 @@ describe('Clan Discovery delivery and reconciliation', () => {
         clans: [{ clanId: 42, clanName: 'Current Clan', clanXp: '900719925474099312345', memberCount: 0 }],
       })
 
-      await operations.close()
       let effectStateRead!: () => void
       const effectStateWasRead = new Promise<void>((resolve) => {
         effectStateRead = resolve
@@ -252,14 +269,17 @@ describe('Clan Discovery delivery and reconciliation', () => {
       const recoveryMayContinue = new Promise<void>((resolve) => {
         releaseRecovery = resolve
       })
-      operations = createPostgresRefreshOperations(connectionString, {
-        reconciliationEffectApplied: async (effectOperationId) => {
-          const applied = await discovery.reconciliationEffectApplied(effectOperationId)
-          effectStateRead()
-          await recoveryMayContinue
-          return applied
+      operations = createPostgresRefreshOperations(
+        { database: await restartOperationsClient() },
+        {
+          reconciliationEffectApplied: async (effectOperationId) => {
+            const applied = await discovery.reconciliationEffectApplied(effectOperationId)
+            effectStateRead()
+            await recoveryMayContinue
+            return applied
+          },
         },
-      })
+      )
       const rejectedLateEffect = await operations.accept({
         kind: 'discovery-reconciliation',
         dedupeKey: `late-reconciliation:${randomUUID()}`,
@@ -291,7 +311,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect(String(await lateEffectOutcome)).toContain('Discovery effect lease is no longer active')
       expect(await discovery.reconciliationEffectApplied(lateLease.effectOperationId)).toBe(false)
     } finally {
-      await Promise.all([clans.close(), source.close(), discovery.close(), control.end(), operations.close()])
+      await Promise.all([control.end(), operationsClient.close()])
     }
   }, 30_000)
 })

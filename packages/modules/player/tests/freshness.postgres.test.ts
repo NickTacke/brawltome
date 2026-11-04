@@ -4,7 +4,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { createPostgresPlayerFreshness, playerModule } from '../index'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
@@ -42,7 +42,7 @@ async function insertCareer(
 describe('Player freshness', () => {
   test('reports the older full V0 refresh and null when a section never came from V0', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const freshness = createPostgresPlayerFreshness(connectionString)
+    const freshness = createPostgresPlayerFreshness(database)
     try {
       await insertRanked(control, 1, '2026-10-07T10:00:00Z')
       await insertCareer(control, 1, '2026-10-07T08:00:00Z')
@@ -67,7 +67,7 @@ describe('Player freshness', () => {
       expect(await freshness.lastPlayedById([1, 2])).toEqual(new Map([[1, new Date('2026-10-07T12:00:00Z')]]))
       expect(await freshness.lastPlayedById([])).toEqual(new Map())
     } finally {
-      await Promise.all([control.end(), freshness.close()])
+      await control.end()
     }
   })
 })

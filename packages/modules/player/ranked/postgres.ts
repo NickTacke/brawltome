@@ -1,7 +1,6 @@
-import type { Sql } from '@brawltome/foundation'
+import type { Database, Sql } from '@brawltome/foundation'
 import { legendSlug } from '@brawltome/game-data'
 import { getLegendById } from '@brawltome/game-data/legends'
-import postgres from 'postgres'
 import { selectCanonicalPlayerName } from '../reference'
 import {
   type MainLegend,
@@ -262,7 +261,7 @@ function crawlOnlyName(brawlhallaId: number, names: CrawlOnlyNames | null): stri
 }
 
 export function createPostgresRankedPlayers(
-  connectionString: string,
+  database: Database,
   options: {
     resolveCareerMainLegend?: CareerMainLegendResolver
     now?: () => Date
@@ -280,9 +279,8 @@ export function createPostgresRankedPlayers(
   pulseStatusById(brawlhallaId: number): Promise<RankedPulseSourceStatus | null>
   applySnapshot(snapshot: V0RankedSnapshot, effect: CanonicalRankedEffect): Promise<CanonicalWriteResult>
   applyPulse(pulse: V1RankedPulse, effect: CanonicalRankedEffect): Promise<RankedWriteResult>
-  close(): Promise<void>
 } {
-  const client = postgres(connectionString)
+  const client = database.sql
   const now = options.now ?? (() => new Date())
 
   return {
@@ -334,7 +332,7 @@ export function createPostgresRankedPlayers(
     },
 
     async byId(brawlhallaId) {
-      return client.begin('isolation level repeatable read read only', async (transaction) => {
+      const profile = await client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
         const [profile] = await sql<ProfileRow[]>`
         SELECT profile.brawlhalla_id, profile.checked_at, profile.last_success_at, profile.region,
@@ -532,9 +530,6 @@ export function createPostgresRankedPlayers(
                 source: 'current-season' as const,
               }
             : null
-        const careerMainLegend = rankedMainLegend ? null : await options.resolveCareerMainLegend?.(brawlhallaId)
-        const mainLegend =
-          rankedMainLegend ?? (careerMainLegend ? { ...careerMainLegend, source: 'career' as const } : null)
         // Crawl-only entries carry no rank and are named like V0 names a team ("One+Two", lower id first, as the pair
         // is stored); a team whose partner has no known name is left out rather than shown nameless.
         const crawlOnlyFixedTeams: V0RankedSnapshot['fixedTeams'] = []
@@ -591,7 +586,7 @@ export function createPostgresRankedPlayers(
               legendNameKey: row.legend_name_key,
               ...values(row),
             })),
-            mainLegend,
+            mainLegend: rankedMainLegend,
             fixedTeams: [
               ...fixedTeamRows.map((row) => ({
                 brawlhallaIdOne: row.brawlhalla_id_one,
@@ -622,6 +617,17 @@ export function createPostgresRankedPlayers(
           },
         } satisfies RankedPlayerProfile
       })
+
+      if (!profile?.snapshot || profile.snapshot.mainLegend) return profile
+
+      // asked after the snapshot transaction ends: the career module shares this pool, and holding one connection
+      // while waiting for another lets a burst of profile reads exhaust it
+      const careerMainLegend = await options.resolveCareerMainLegend?.(brawlhallaId)
+      if (!careerMainLegend) return profile
+
+      const mainLegend = { ...careerMainLegend, source: 'career' as const }
+
+      return { ...profile, snapshot: { ...profile.snapshot, mainLegend } }
     },
 
     async recordChecked(brawlhallaId, effect) {
@@ -989,8 +995,6 @@ export function createPostgresRankedPlayers(
         return !newerThanCanonical || pulse.oneVsOne !== null ? ('stale' as const) : ('no-op' as const)
       })
     },
-
-    close: () => client.end(),
   }
 }
 

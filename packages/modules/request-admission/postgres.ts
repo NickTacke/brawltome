@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { requirePositiveInteger } from '@brawltome/foundation'
+import { type Database, requirePositiveInteger } from '@brawltome/foundation'
 import type {
   ActorAdmissionResult,
   AdmissionActor,
@@ -8,7 +8,6 @@ import type {
   SourceDomain,
   SourceQuotaUsage,
 } from '@brawltome/request-admission'
-import postgres from 'postgres'
 
 const defaultWindowSeconds = 15 * 60
 const defaultActorReservationRetentionSeconds = 24 * 60 * 60
@@ -52,7 +51,7 @@ function actorDimensions(actor: AdmissionActor, authenticatedIpLimit: number) {
   }
 }
 
-export function createPostgresRequestAdmission(connectionString: string, config: RequestAdmissionConfig) {
+export function createPostgresRequestAdmission(database: Database, config: RequestAdmissionConfig) {
   const authenticatedIpLimit = requirePositiveInteger(config.authenticatedIpLimit, 'authenticatedIpLimit')
   const windowSeconds = requirePositiveInteger(config.windowSeconds ?? defaultWindowSeconds, 'windowSeconds')
   const sourceBackgroundHeadroom = config.sourceBackgroundHeadroom ?? 0
@@ -79,7 +78,7 @@ export function createPostgresRequestAdmission(connectionString: string, config:
       requirePositiveInteger(seconds, `${domain} window seconds`),
     ]),
   ) as Record<string, number>
-  const client = postgres(connectionString)
+  const client = database.sql
 
   async function captureWindow(sql: typeof client, durationSeconds = windowSeconds) {
     const [databaseTime] = await sql<DatabaseTime[]>`SELECT clock_timestamp() AS now`
@@ -383,10 +382,6 @@ export function createPostgresRequestAdmission(connectionString: string, config:
         sourceUnits: Object.fromEntries(sources.map(({ domain, units }) => [domain, units])),
         sourceReservations: reservations.count,
       }
-    },
-
-    async close() {
-      await client.end()
     },
   }
 }

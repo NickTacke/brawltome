@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type OperationLease,
   type PlayerRefreshSettled,
@@ -16,7 +16,7 @@ import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
-let database: TestDatabase | undefined
+let database: TestDatabase
 let connectionString = ''
 
 const testAdmission = {
@@ -101,7 +101,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('reports bounded authoritative oldest-job, schedule-lateness, and dead-letter gauges', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     try {
       const pending = await operations.accept({
@@ -195,13 +195,12 @@ describe('durable Refresh Operations', () => {
         WHERE provenance ->> 'source' = 'telemetry-test'
           AND status <> 'dead_letter'
       `
-      await operations.close()
       await control.end()
     }
   })
 
   test('measures the oldest pending job from when it last became runnable, not from its creation', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     let yielded: Awaited<ReturnType<typeof operations.accept>> | undefined
     try {
@@ -226,12 +225,11 @@ describe('durable Refresh Operations', () => {
       // Later tests lease leaderboard work from this shared database; leave nothing pending behind.
       if (yielded) await control`DELETE FROM refresh_operations.operations WHERE id = ${yielded.operationId}`
       await control.end()
-      await operations.close()
     }
   })
 
   test('accepts a later same-owner migration while rejecting known history mutation', async () => {
-    const readiness = createPostgresReadiness(connectionString, refreshOperationsMigrationInventory)
+    const readiness = createPostgresReadiness(database.sql, refreshOperationsMigrationInventory)
     await readiness.check()
 
     const control = postgres(connectionString, { max: 1 })
@@ -266,12 +264,11 @@ describe('durable Refresh Operations', () => {
         WHERE identity = ${laterIdentity}
       `
       await control.end()
-      await readiness.close()
     }
   })
 
   test('renews an active lease until its durable effect and completion commit', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const accepted = await operations.accept({
       dedupeKey: `renew:${randomUUID()}`,
       operationKey: `renew-effect:${randomUUID()}`,
@@ -295,11 +292,10 @@ describe('durable Refresh Operations', () => {
     expect(state.operation.status).toBe('succeeded')
     expect(state.effects).toHaveLength(1)
     expect(state.attempts.map(({ outcome }) => outcome)).toEqual(['succeeded'])
-    await operations.close()
   })
 
   test('deduplicates acceptance, notifies, and reconciles a final-attempt crash after one effect', async () => {
-    const producer = createPostgresRefreshOperations(connectionString)
+    const producer = createPostgresRefreshOperations({ database })
     let notifiedOperationId = ''
     let resolveNotification: (() => void) | undefined
     const notification = new Promise<void>((resolve) => {
@@ -323,9 +319,8 @@ describe('durable Refresh Operations', () => {
     await notification
     expect(notifiedOperationId).toBe(accepted[0].operationId)
     await listener.unlisten()
-    await producer.close()
 
-    const worker = createPostgresRefreshOperations(connectionString)
+    const worker = createPostgresRefreshOperations({ database })
     const lease = requireLease(await worker.claim('worker-a', 1_000, testAdmission), 'proof')
     expect(await worker.commitProofEffect(lease)).toBe('applied')
     await expire(lease.operationId)
@@ -346,11 +341,10 @@ describe('durable Refresh Operations', () => {
         admission: testAdmission,
       }),
     ).toBe(true)
-    await worker.close()
   })
 
   test('rejects expired and superseded leases and detects conflicting effect keys', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const accepted = await operations.accept({
       dedupeKey: `fence:${randomUUID()}`,
       operationKey: `shared-effect:${randomUUID()}`,
@@ -388,11 +382,10 @@ describe('durable Refresh Operations', () => {
     })
     expect(conflictState.effects).toHaveLength(0)
     expect((await operations.inspect(accepted.operationId)).effects).toHaveLength(1)
-    await operations.close()
   })
 
   test('gives interactive player and clan refreshes four attempts to ride out brief source failures', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const player = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `interactive:${randomUUID()}`,
       operationKey: `interactive:${randomUUID()}`,
@@ -411,11 +404,10 @@ describe('durable Refresh Operations', () => {
     })
     expect((await operations.inspect(player.operationId)).operation).toMatchObject({ max_attempts: 4 })
     expect((await operations.inspect(clan.operationId)).operation).toMatchObject({ max_attempts: 4 })
-    await operations.close()
   })
 
   test('reports an operation status cheaply for scheduler backoff decisions', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const accepted = await operations.accept({
       kind: 'discovery-reconciliation',
       dedupeKey: `discovery:player:reconciliation:${randomUUID()}`,
@@ -433,11 +425,10 @@ describe('durable Refresh Operations', () => {
     await operations.fail(lease, { code: 'database_unavailable', message: 'disk full', retryable: true }, 0)
     expect(await operations.operationStatus(accepted.operationId)).toBe('dead_letter')
     expect(await operations.operationStatus(randomUUID())).toBeNull()
-    await operations.close()
   })
 
   test('checkpoints completed interactive sections across lease expiry', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `interactive:${randomUUID()}`,
       operationKey: `interactive:${randomUUID()}`,
@@ -468,11 +459,10 @@ describe('durable Refresh Operations', () => {
     expect(await operations.commitInteractiveSection(first, 'stats')).toBe('lease-lost')
     expect(await operations.commitInteractiveSection(retry, 'stats')).toBe('transitioned')
     expect(await operations.complete(retry)).toBe('transitioned')
-    await operations.close()
   })
 
   test('notifies when a player refresh settles and pushes it to open event streams', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
     const settled: PlayerRefreshSettled[] = []
     const listener = await operations.listenPlayerRefreshSettled((event) => settled.push(event))
@@ -544,12 +534,11 @@ describe('durable Refresh Operations', () => {
     } finally {
       await listener.unlisten()
       await streams.close()
-      await operations.close()
     }
   })
 
   test('deduplicates concurrent clan refreshes and fences profile and roster checkpoints', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const dedupeKey = `clan:${randomUUID()}`
     const reservations = await Promise.all(
       Array.from({ length: 8 }, () =>
@@ -577,11 +566,10 @@ describe('durable Refresh Operations', () => {
     expect(await operations.commitInteractiveSection(stale, 'roster')).toBe('lease-lost')
     expect(await operations.commitInteractiveSection(current, 'roster')).toBe('transitioned')
     expect(await operations.complete(current)).toBe('transitioned')
-    await operations.close()
   })
 
   test('admits every implemented operation kind under shared cross-kind concurrency', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const admission = {
       ...testAdmission,
       totalConcurrency: 8,
@@ -763,11 +751,10 @@ describe('durable Refresh Operations', () => {
       await settleWithin(`complete ${lease.kind}`, operations.complete(lease))
     }
     await settleWithin('restore admission policy', operations.configureAdmission(testAdmission))
-    await settleWithin('close cross-kind operations', operations.close())
   })
 
   test('runs the real route-to-polling-worker seam and dead-letters bounded runtime failures', async () => {
-    const producer = createPostgresRefreshOperations(connectionString)
+    const producer = createPostgresRefreshOperations({ database })
     const secret = 'operations-integration-secret-operations'
     const app = createRefreshOperationRoutes(producer, secret)
     const response = await app.request('/proof', {
@@ -781,9 +768,8 @@ describe('durable Refresh Operations', () => {
     })
     const accepted = (await response.json()) as { operationId: string }
     expect(response.status).toBe(202)
-    await producer.close()
 
-    const worker = createPostgresRefreshOperations(connectionString)
+    const worker = createPostgresRefreshOperations({ database })
     expect(
       await runOneRefreshOperation(worker, 'poll-worker', {
         leaseMs: 1_000,
@@ -828,11 +814,10 @@ describe('durable Refresh Operations', () => {
     expect(state.attempts).toHaveLength(2)
     expect(state.attempts.every(({ outcome, error }) => outcome && error?.code === 'proof_execution_failed')).toBe(true)
     expect(state.effects).toHaveLength(0)
-    await worker.close()
   })
 
   test('defers retry-aware source failures without consuming the durable attempt budget', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const deferred = await operations.accept({
       dedupeKey: `source-deferral:${randomUUID()}`,
       operationKey: `source-deferral:${randomUUID()}`,
@@ -871,12 +856,11 @@ describe('durable Refresh Operations', () => {
         WHERE id = ${deferred.operationId}
       `
       await control.end()
-      await operations.close()
     }
   })
 
   test('supersedes obsolete pending leaderboard windows without leaving retry or alert backlog', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     const intervalMs = 60_000
     const schedule = await operations.reconcileLeaderboardSchedule({
@@ -931,17 +915,15 @@ describe('durable Refresh Operations', () => {
       expect(await operations.complete(current)).toBe('transitioned')
     } finally {
       await control.end()
-      await operations.close()
     }
   })
 
   test('coalesces missed windows once and retains anchored history after repository restart', async () => {
     const intervalMs = 3_600_000
     const firstDueAt = new Date(Date.now() - 5 * intervalMs - 10_000).toISOString()
-    const schedulers = [
-      createPostgresRefreshOperations(connectionString),
-      createPostgresRefreshOperations(connectionString),
-    ]
+    // two scheduler replicas, then a restart: each process gets a client of its own
+    const schedulerClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
+    const schedulers = schedulerClients.map((client) => createPostgresRefreshOperations({ database: client }))
     await expect(
       schedulers[0].createSchedule({
         scheduleKey: `invalid-offset:${randomUUID()}`,
@@ -993,9 +975,10 @@ describe('durable Refresh Operations', () => {
     expect(committedOccurrence.operationId).toMatch(/^[0-9a-f-]{36}$/)
     expect(committedOccurrence.occurrenceId).toMatch(/^[0-9a-f-]{36}$/)
     expect(committedOccurrence.latenessMs).toBeGreaterThanOrEqual(0)
-    await Promise.all(schedulers.map((scheduler) => scheduler.close()))
+    await Promise.all(schedulerClients.map((client) => client.close()))
 
-    const restarted = createPostgresRefreshOperations(connectionString)
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const history = await restarted.inspectSchedule(created.scheduleId)
     expect(history.occurrences).toHaveLength(1)
     expect(history.occurrences[0]).toMatchObject({
@@ -1013,16 +996,15 @@ describe('durable Refresh Operations', () => {
     const lease = requireLease(await restarted.claim('schedule-cleanup', 10_000, testAdmission))
     expect(lease.workClass).toBe('projection')
     expect(await restarted.complete(lease)).toBe('transitioned')
-    await restarted.close()
+    await restartedClient.close()
   })
 
   test('reconciles verified Primary monitoring across replicas, ownership changes, and restart', async () => {
     const intervalMs = 24 * 60 * 60 * 1_000
     const verifiedAt = new Date(Date.now() - intervalMs - 10_000)
-    const replicas = [
-      createPostgresRefreshOperations(connectionString),
-      createPostgresRefreshOperations(connectionString),
-    ]
+    // two replicas, then a restart: each process gets a client of its own
+    const replicaClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
+    const replicas = replicaClients.map((client) => createPostgresRefreshOperations({ database: client }))
     const assignmentId = randomUUID()
     const observedAt = new Date()
     const target = { assignmentId, brawlhallaId: 4242, verifiedAt }
@@ -1067,9 +1049,10 @@ describe('durable Refresh Operations', () => {
       FROM refresh_operations.schedules
       WHERE schedule_key = ${`primary-player:4242:${assignmentId}`}
     `
-    await Promise.all(replicas.map((replica) => replica.close()))
+    await Promise.all(replicaClients.map((client) => client.close()))
 
-    const restarted = createPostgresRefreshOperations(connectionString)
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const history = await restarted.inspectSchedule(schedule.id)
     expect(history.schedule).toMatchObject({
       enabled: true,
@@ -1173,11 +1156,11 @@ describe('durable Refresh Operations', () => {
       payload: { brawlhallaId: partialTarget.brawlhallaId, staleSections: ['ranked', 'stats'] },
     })
     expect(await restarted.complete(monitoringAfterPartial)).toBe('transitioned')
-    await Promise.all([control.end(), restarted.close()])
+    await Promise.all([control.end(), restartedClient.close()])
   })
 
   test('expires abandoned blockers and requires both full-refresh checkpoints after the due watermark', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const control = postgres(connectionString, { max: 1 })
     const intervalMs = 24 * 60 * 60 * 1_000
     const expiredTarget = {
@@ -1263,11 +1246,11 @@ describe('durable Refresh Operations', () => {
       payload: { brawlhallaId: splitTarget.brawlhallaId },
     })
     expect(await operations.complete(afterSplit)).toBe('transitioned')
-    await Promise.all([control.end(), operations.close()])
+    await control.end()
   })
 
   test('keeps scheduled effects idempotent without colliding across schedules', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const sharedPrefix = `shared-schedule-effect:${randomUUID()}`
     const firstDueAt = new Date(Date.now() - 1_000).toISOString()
     for (let index = 0; index < 2; index += 1) {
@@ -1291,11 +1274,10 @@ describe('durable Refresh Operations', () => {
       expect(await operations.commitProofEffect(lease)).toBe('applied')
       expect(await operations.complete(lease)).toBe('transitioned')
     }
-    await operations.close()
   })
 
   test('hard-reserves interactive capacity while background work is due', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const admission = {
       ...testAdmission,
       totalConcurrency: 4,
@@ -1316,14 +1298,13 @@ describe('durable Refresh Operations', () => {
         provenance: { source: 'integration-test' },
       })
     }
-    const claimers = Array.from({ length: 8 }, () => createPostgresRefreshOperations(connectionString))
+    const claimers = Array.from({ length: 8 }, () => createPostgresRefreshOperations({ database }))
     const concurrentClaims = await Promise.all(
       claimers.map((claimer, index) => claimer.claim(`background-${index}`, 10_000, admission)),
     )
     const backgroundLeases = concurrentClaims.filter((lease): lease is OperationLease => lease !== null)
     expect(backgroundLeases).toHaveLength(3)
     expect(backgroundLeases.every(({ workClass }) => workClass === 'maintenance')).toBe(true)
-    await Promise.all(claimers.map((claimer) => claimer.close()))
 
     await operations.accept({
       dedupeKey: `interactive:${randomUUID()}`,
@@ -1340,11 +1321,10 @@ describe('durable Refresh Operations', () => {
     }
     const remainingBackground = requireLease(await operations.claim('remaining-background', 10_000, admission))
     expect(await operations.complete(remainingBackground)).toBe('transitioned')
-    await operations.close()
   })
 
   test('keeps a two-slot worker available for Player refresh during Discovery work', async () => {
-    const operations = createPostgresRefreshOperations(connectionString)
+    const operations = createPostgresRefreshOperations({ database })
     const admission = {
       ...testAdmission,
       totalConcurrency: 2,
@@ -1400,7 +1380,6 @@ describe('durable Refresh Operations', () => {
     const remainingDiscovery = requireLease(await operations.claim('remaining-discovery', 10_000, admission))
     expect(remainingDiscovery.kind).toBe('clan-discovery-projection')
     expect(await operations.complete(remainingDiscovery)).toBe('transitioned')
-    await operations.close()
   })
 
   test('enforces class bounds and persists deterministic weighted admission across replicas', async () => {
@@ -1422,7 +1401,7 @@ describe('durable Refresh Operations', () => {
         leaderboard: 1,
       },
     } as const
-    const producer = createPostgresRefreshOperations(connectionString)
+    const producer = createPostgresRefreshOperations({ database })
     await producer.configureAdmission(admission)
     await expect(producer.claim('mismatched-replica', 10_000, testAdmission)).rejects.toThrow(
       'differs from the policy active in PostgreSQL',
@@ -1437,14 +1416,13 @@ describe('durable Refresh Operations', () => {
         provenance: { source: 'integration-test' },
       })
     }
-    const boundedReplicas = Array.from({ length: 4 }, () => createPostgresRefreshOperations(connectionString))
+    const boundedReplicas = Array.from({ length: 4 }, () => createPostgresRefreshOperations({ database }))
     const boundedClaims = await Promise.all(
       boundedReplicas.map((replica, index) => replica.claim(`bounded-${index}`, 10_000, admission)),
     )
     const boundedLeases = boundedClaims.filter((lease): lease is OperationLease => lease !== null)
     expect(boundedLeases).toHaveLength(1)
     expect(boundedLeases[0].workClass).toBe('maintenance')
-    await Promise.all(boundedReplicas.map((replica) => replica.close()))
     expect(await producer.complete(boundedLeases[0])).toBe('transitioned')
     const boundedNext = requireLease(await producer.claim('bounded-2', 10_000, admission))
     expect(boundedNext.workClass).toBe('maintenance')
@@ -1461,17 +1439,15 @@ describe('durable Refresh Operations', () => {
         })
       }
     }
-    await producer.close()
 
     const sequence: string[] = []
     for (let replicaNumber = 0; replicaNumber < 2; replicaNumber += 1) {
-      const replica = createPostgresRefreshOperations(connectionString)
+      const replica = createPostgresRefreshOperations({ database })
       for (let index = 0; index < 8; index += 1) {
         const lease = requireLease(await replica.claim(`replica-${replicaNumber}`, 10_000, admission))
         sequence.push(lease.workClass)
         expect(await replica.complete(lease)).toBe('transitioned')
       }
-      await replica.close()
     }
     expect(sequence).toEqual(
       Array.from({ length: 4 }, () => [
@@ -1482,12 +1458,11 @@ describe('durable Refresh Operations', () => {
       ]).flat(),
     )
 
-    const cleanup = createPostgresRefreshOperations(connectionString)
+    const cleanup = createPostgresRefreshOperations({ database })
     for (;;) {
       const lease = await cleanup.claim('weighted-cleanup', 10_000, admission)
       if (!lease) break
       expect(await cleanup.complete(lease)).toBe('transitioned')
     }
-    await cleanup.close()
   })
 })

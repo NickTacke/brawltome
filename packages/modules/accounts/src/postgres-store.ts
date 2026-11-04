@@ -1,4 +1,5 @@
-import postgres, { type Sql, type TransactionSql } from 'postgres'
+import type { Database } from '@brawltome/foundation'
+import type { Sql, TransactionSql } from 'postgres'
 import {
   ACCOUNT_THEMES,
   type Account,
@@ -92,12 +93,11 @@ const verificationAttemptQuery = `SELECT
 FROM accounts.primary_player_verification_attempts attempts
 LEFT JOIN accounts.primary_player_verification_outcomes outcomes ON outcomes.attempt_id = attempts.id`
 
-export function createPostgresAccountsStore(connectionString: string): {
+export function createPostgresAccountsStore(database: Database): {
   store: AccountsStore
   readDemandedPlayerIds: () => Promise<number[]>
-  close: () => Promise<void>
 } {
-  const client = postgres(connectionString)
+  const client = database.sql
   return {
     store: postgresAccountsStore(client),
     // Players someone pinned or linked as their Primary Player.
@@ -110,7 +110,6 @@ export function createPostgresAccountsStore(connectionString: string): {
       )
       return rows.map(({ brawlhalla_id }) => brawlhalla_id)
     },
-    close: () => client.end(),
   }
 }
 

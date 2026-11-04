@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash, randomUUID } from 'node:crypto'
+import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 
 const connectionString = process.env.DATABASE_URL
@@ -54,7 +55,8 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       }
 
       await migratePostgres(databaseUrl.toString(), orderedMigrations)
-      const runtime = createPostgresAccounts(databaseUrl.toString())
+      const runtimeDatabase = openTestClient(databaseUrl.toString())
+      const runtime = createPostgresAccounts(runtimeDatabase)
       let accountId = ''
       try {
         const results = await Promise.all(
@@ -95,7 +97,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           account: { id: accountId },
         })
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
       }
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
@@ -123,7 +125,8 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await client.end()
       }
 
-      const concurrentRuntime = createPostgresAccounts(databaseUrl.toString())
+      const concurrentRuntimeDatabase = openTestClient(databaseUrl.toString())
+      const concurrentRuntime = createPostgresAccounts(concurrentRuntimeDatabase)
       try {
         const signIn = await concurrentRuntime.accounts.signInWithDiscord({
           providerAccountId: 'discord-concurrent',
@@ -135,7 +138,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           account: { id: signIn.account.id, displayName: 'Concurrent Ada' },
         })
       } finally {
-        await concurrentRuntime.close()
+        await concurrentRuntimeDatabase.close()
       }
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
@@ -307,7 +310,8 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         await client.end()
       }
 
-      const runtime = createPostgresAccounts(databaseUrl.toString())
+      const runtimeDatabase = openTestClient(databaseUrl.toString())
+      const runtime = createPostgresAccounts(runtimeDatabase)
       try {
         const authenticated = await runtime.accounts.authenticate(rawToken)
         expect(authenticated.status).toBe('signedIn')
@@ -326,10 +330,11 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         // V2 sessions created after the migration are no longer imported
         expect(await runtime.accounts.authenticate(lateRawToken)).toEqual({ status: 'anonymous' })
       } finally {
-        await runtime.close()
+        await runtimeDatabase.close()
       }
 
-      const revocationRuntime = createPostgresAccounts(databaseUrl.toString())
+      const revocationRuntimeDatabase = openTestClient(databaseUrl.toString())
+      const revocationRuntime = createPostgresAccounts(revocationRuntimeDatabase)
       try {
         await revocationRuntime.accounts.signOut(rawToken)
         expect(await revocationRuntime.accounts.authenticate(rawToken)).toEqual({ status: 'anonymous' })
@@ -346,7 +351,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           await legacy.end()
         }
       } finally {
-        await revocationRuntime.close()
+        await revocationRuntimeDatabase.close()
       }
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
@@ -374,7 +379,8 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       await migratePostgres(databaseUrl.toString(), orderedMigrations)
-      const firstRuntime = createPostgresAccounts(databaseUrl.toString())
+      const firstRuntimeDatabase = openTestClient(databaseUrl.toString())
+      const firstRuntime = createPostgresAccounts(firstRuntimeDatabase)
       let accountId = ''
       let secondDeviceToken = ''
       try {
@@ -408,10 +414,11 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           theme: 'purple',
         })
       } finally {
-        await firstRuntime.close()
+        await firstRuntimeDatabase.close()
       }
 
-      const secondRuntime = createPostgresAccounts(databaseUrl.toString())
+      const secondRuntimeDatabase = openTestClient(databaseUrl.toString())
+      const secondRuntime = createPostgresAccounts(secondRuntimeDatabase)
       try {
         const authentication = await secondRuntime.accounts.authenticate(secondDeviceToken)
         expect(authentication).toMatchObject({ status: 'signedIn', account: { id: accountId } })
@@ -474,7 +481,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
         expect(await secondRuntime.accounts.getPreferences(accountId)).toEqual(defaultPreferences)
       } finally {
-        await secondRuntime.close()
+        await secondRuntimeDatabase.close()
       }
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)

@@ -1,5 +1,4 @@
-import type { Sql } from '@brawltome/foundation'
-import postgres from 'postgres'
+import type { Database, Sql } from '@brawltome/foundation'
 import type { ClanDiscoveryFact, ClanDiscoverySource } from './discovery-facts'
 
 const deliveredTrimBatch = 1_000
@@ -30,10 +29,8 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<ClanDiscove
   }))
 }
 
-export function createPostgresClanDiscoverySource(connectionString: string): ClanDiscoverySource & {
-  close(): Promise<void>
-} {
-  const client = postgres(connectionString)
+export function createPostgresClanDiscoverySource(database: Database): ClanDiscoverySource {
+  const client = database.sql
   return {
     async pendingEvents(limit) {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) {
@@ -109,8 +106,6 @@ export function createPostgresClanDiscoverySource(connectionString: string): Cla
       `
       return row.count
     },
-
-    close: () => client.end(),
   }
 }
 

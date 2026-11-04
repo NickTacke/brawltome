@@ -1,4 +1,4 @@
-import postgres from 'postgres'
+import type { Sql } from '@brawltome/foundation'
 
 type ExpectedMigration = {
   identity: string
@@ -31,21 +31,63 @@ export function assertKnownMigrationsApplied(
   }
 }
 
-export function createPostgresReadiness(connectionString: string, expectedMigrations: readonly ExpectedMigration[]) {
-  const client = postgres(connectionString, { max: 1, connect_timeout: 5 })
+// below Docker's 3 s health check timeout, so a busy pool reports unready instead of a hung probe
+export const readinessTimeoutMs = 2_000
 
+export type PostgresReadinessOptions = {
+  timeoutMs?: number
+}
+
+// runs on the process's own client: a pool too busy to answer in time is a dependency that isn't ready
+export function createPostgresReadiness(
+  sql: Sql,
+  expectedMigrations: readonly ExpectedMigration[],
+  { timeoutMs = readinessTimeoutMs }: PostgresReadinessOptions = {},
+) {
   return {
     async check(): Promise<void> {
-      const rows = await client<AppliedMigration[]>`
-        SELECT identity, checksum
-        FROM brawltome_migrations.history
-      `
+      const rows = await withinTimeout(
+        sql<AppliedMigration[]>`
+          SELECT identity, checksum
+          FROM brawltome_migrations.history
+        `,
+        timeoutMs,
+      )
+
       assertKnownMigrationsApplied(expectedMigrations, rows)
     },
-    async close(): Promise<void> {
-      await client.end({ timeout: 5 })
-    },
   }
+}
+
+// a postgres.js query: a promise that can be cancelled
+type CancellableQuery<T> = Promise<T> & { cancel(): unknown }
+
+// a timed-out probe is cancelled: postgres.js drops it from the queue if it hasn't started, so probes made while the
+// pool is saturated don't pile up behind each other
+async function withinTimeout<T>(query: CancellableQuery<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      cancelQuietly(query)
+      reject(
+        new Error(
+          `postgres readiness: the database did not answer within ${timeoutMs} ms (pool busy or database unreachable)`,
+        ),
+      )
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([query, timedOut])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// postgres.js types cancel() as void but returns a promise that rejects if the cancel request itself fails; the probe
+// has already failed by then, so that error has nothing left to report to
+function cancelQuietly(query: CancellableQuery<unknown>): void {
+  Promise.resolve(query.cancel()).catch(() => undefined)
 }
 
 export type PostgresReadiness = ReturnType<typeof createPostgresReadiness>

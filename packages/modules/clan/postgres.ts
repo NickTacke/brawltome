@@ -1,4 +1,4 @@
-import postgres from 'postgres'
+import type { Database } from '@brawltome/foundation'
 
 export type ClanRefreshEffect = {
   operationId: string
@@ -76,8 +76,8 @@ type MemberRow = {
   guild_points: string | null
 }
 
-export function createPostgresClans(connectionString: string) {
-  const client = postgres(connectionString)
+export function createPostgresClans(database: Database) {
+  const client = database.sql
   const ensureIdentity = async (sql: typeof client, clanId: number) => {
     await sql`INSERT INTO clans.clans (clan_id) VALUES (${clanId}) ON CONFLICT DO NOTHING`
   }
@@ -390,10 +390,6 @@ export function createPostgresClans(connectionString: string) {
         `
         return true
       })
-    },
-
-    async close() {
-      await client.end()
     },
   }
 }

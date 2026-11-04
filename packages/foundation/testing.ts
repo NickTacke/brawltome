@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import postgres from 'postgres'
-import type { Sql } from './database'
+import { type Database, createDatabase } from './database'
 import type { Migration } from './migration'
 import { orderMigrations } from './migrations/order'
 import { migratePostgres } from './migrations/postgres'
@@ -12,14 +12,16 @@ export type CreateTestDatabaseOptions = {
   modules: readonly BrawltomeModule[]
 }
 
-export type TestDatabase = {
+// a Database, so tests hand it straight to the module factories; close() ends the client, drop() also removes it
+export type TestDatabase = Database & {
   connectionString: string
-  sql: Sql
   drop(): Promise<void>
 }
 
 const maxNameBytes = 63
 const clientConnections = 5
+// lets tests that count connections in pg_stat_activity leave out their own
+const testApplicationName = 'brawltome-test'
 
 /** Creates a fresh database on the DATABASE_URL server and migrates the given modules into it. */
 export async function createTestDatabase({ label, modules }: CreateTestDatabaseOptions): Promise<TestDatabase> {
@@ -39,18 +41,27 @@ export async function createTestDatabase({ label, modules }: CreateTestDatabaseO
   const connectionString = withDatabaseName(serverUrl, databaseName)
   await migrateOrDrop(connectionString, migrations, dropDatabase)
 
-  const sql = postgres(connectionString, { max: clientConnections })
+  const database = openTestClient(connectionString)
 
   return {
+    ...database,
     connectionString,
-    sql,
-    drop: () => closeAndDrop(sql, dropDatabase, databaseName),
+    drop: () => closeAndDrop(database, dropDatabase, databaseName),
   }
 }
 
+// another client on a test database, like the one a separate or restarted process opens; the caller closes it
+export function openTestClient(connectionString: string): Database {
+  return createDatabase(connectionString, { maxConnections: clientConnections, applicationName: testApplicationName })
+}
+
 // the database goes even when closing the client fails, and neither failure is lost
-async function closeAndDrop(sql: Sql, dropDatabase: () => Promise<void>, databaseName: string): Promise<void> {
-  const closeError = await failureOf(() => sql.end())
+async function closeAndDrop(
+  database: Database,
+  dropDatabase: () => Promise<void>,
+  databaseName: string,
+): Promise<void> {
+  const closeError = await failureOf(() => database.close())
   const dropError = await failureOf(dropDatabase)
 
   if (closeError !== undefined && dropError !== undefined) {
