@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 fn main() {
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let spec_path = package_root.join("openapi/contract-proof.openapi.json");
+    let spec_path = package_root.join("openapi/contracts.openapi.json");
     let output_path = package_root.join("rust/src/generated.rs");
 
     let spec =
@@ -21,36 +21,7 @@ fn main() {
 }
 
 fn enforce_wire_semantics(source: String) -> String {
-    let nullable_field = "        #[serde(rename = \"requiredNullable\")]\n        pub required_nullable: ::std::option::Option<::std::string::String>,";
-    let count_field = "        pub count: i32,";
-    let attempt_field = "        Ready { attempt: i32 },";
-    let date_time_field = "        #[serde(rename = \"occurredAt\")]\n        pub occurred_at: ::chrono::DateTime<::chrono::offset::Utc>,";
-    assert!(
-        source.contains(nullable_field),
-        "Progenitor required-nullable mapping changed"
-    );
-    assert!(
-        source.contains(count_field),
-        "Progenitor bounded count mapping changed"
-    );
-    assert!(
-        source.contains(attempt_field),
-        "Progenitor bounded attempt mapping changed"
-    );
-    assert!(
-        source.contains(date_time_field),
-        "Progenitor date-time mapping changed"
-    );
-
-    let helpers = r#"    fn deserialize_required_nullable<'de, D>(
-        deserializer: D,
-    ) -> ::std::result::Result<::std::option::Option<::std::string::String>, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        <::std::option::Option<::std::string::String> as ::serde::Deserialize>::deserialize(deserializer)
-    }
-    fn deserialize_nonnegative_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
+    let helpers = r#"    fn deserialize_nonnegative_int32<'de, D>(deserializer: D) -> ::std::result::Result<i32, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
@@ -179,28 +150,11 @@ fn enforce_wire_semantics(source: String) -> String {
         )
     }
 "#;
-    let source = source
-        .replacen("pub mod types {\n", &format!("pub mod types {{\n{helpers}"), 1)
-        .replacen(
-            nullable_field,
-            "        #[serde(\n            rename = \"requiredNullable\",\n            deserialize_with = \"deserialize_required_nullable\"\n        )]\n        pub required_nullable: ::std::option::Option<::std::string::String>,",
-            1,
-        )
-        .replacen(
-            count_field,
-            "        #[serde(deserialize_with = \"deserialize_nonnegative_int32\")]\n        pub count: i32,",
-            1,
-        )
-        .replacen(
-            attempt_field,
-            "        Ready {\n            #[serde(deserialize_with = \"deserialize_nonnegative_int32\")]\n            attempt: i32,\n        },",
-            1,
-        )
-        .replacen(
-            date_time_field,
-            "        #[serde(\n            rename = \"occurredAt\",\n            deserialize_with = \"deserialize_utc_datetime\"\n        )]\n        pub occurred_at: ::chrono::DateTime<::chrono::offset::Utc>,",
-            1,
-        );
+    let source = source.replacen(
+        "pub mod types {\n",
+        &format!("pub mod types {{\n{helpers}"),
+        1,
+    );
     enforce_career_wire_semantics(enforce_ranked_wire_semantics(source))
 }
 

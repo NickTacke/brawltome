@@ -1,15 +1,12 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi'
 import { clanProfileSchema, clanRefreshResponseSchema } from './clan'
-import { contractProofSchema } from './contract-proof'
 import { desktopRankedLookupInputSchema, desktopRankedLookupSchema } from './desktop-ranked'
 import { playerCareerProfileSchema } from './player-career'
 import { playerRankedProfileSchema } from './player-ranked'
 import { playerRefreshResponseSchema, refreshOutcomeSchema } from './refresh-outcome'
-import { z } from './zod'
 
 export function generateContractOpenApi() {
   const registry = new OpenAPIRegistry()
-  const responseSchema = registry.register('ContractProof', contractProofSchema)
   const desktopRankedResponseSchema = registry.register('DesktopRankedLookup', desktopRankedLookupSchema)
   registry.register('RefreshOutcome', refreshOutcomeSchema)
   registry.register('PlayerRefreshResponse', playerRefreshResponseSchema)
@@ -31,27 +28,6 @@ export function generateContractOpenApi() {
         content: {
           'application/json': {
             schema: desktopRankedResponseSchema,
-          },
-        },
-      },
-    },
-  })
-
-  registry.registerPath({
-    method: 'get',
-    path: '/internal/contracts/proof',
-    operationId: 'getContractProof',
-    request: {
-      headers: z.object({
-        'x-internal-secret': z.string().min(1),
-      }),
-    },
-    responses: {
-      200: {
-        description: 'Canonical cross-language contract proof',
-        content: {
-          'application/json': {
-            schema: responseSchema,
           },
         },
       },
