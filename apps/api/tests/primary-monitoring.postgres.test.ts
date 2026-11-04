@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
@@ -113,8 +113,10 @@ describe('Primary Player monitoring', () => {
       }),
     })
 
-    const operationsA = createPostgresRefreshOperations({ database })
-    const operationsB = createPostgresRefreshOperations({ database })
+    // two replicas, then a restart: each process gets a client of its own
+    const replicaClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
+    const operationsA = createPostgresRefreshOperations({ database: replicaClients[0] })
+    const operationsB = createPostgresRefreshOperations({ database: replicaClients[1] })
     const snapshot = await accounts.primaryMonitoring.readSnapshot()
     const reconciled = await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
@@ -235,9 +237,10 @@ describe('Primary Player monitoring', () => {
       retired: 1,
     })
 
-    await control.end()
+    await Promise.all([control.end(), ...replicaClients.map((client) => client.close())])
 
-    const restarted = createPostgresRefreshOperations({ database })
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const restartedControl = postgres(connectionString, { max: 1 })
     const [enabled] = await restartedControl`
       SELECT count(*)::int AS count
@@ -245,6 +248,6 @@ describe('Primary Player monitoring', () => {
       WHERE enabled AND provenance ->> 'source' = 'primary-player-monitoring'
     `
     expect(enabled.count).toBe(0)
-    await restartedControl.end()
+    await Promise.all([restartedControl.end(), restartedClient.close()])
   })
 })

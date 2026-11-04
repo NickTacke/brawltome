@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type LeaderboardGenerationCandidate,
   type LeaderboardMode,
@@ -881,7 +881,9 @@ describe('recent ranked activity', () => {
 describe('immutable Ranking snapshots for every mode', () => {
   test('publishes all modes independently with fixed-team identity and restart parity', async () => {
     const operations = createPostgresRefreshOperations({ database })
-    let ranking = createPostgresRanking(database)
+    // the ranking repository restarts below, so it gets a client of its own to close and reopen
+    let rankingClient = openTestClient(database.connectionString)
+    let ranking = createPostgresRanking(rankingClient)
     for (const [variant, mode] of leaderboardModes.entries()) {
       const lease = await leaseOperation(operations, mode, `publish-${mode}`)
       const publication = candidate(mode, lease.operationKey, undefined, 2, variant + 1)
@@ -954,11 +956,14 @@ describe('immutable Ranking snapshots for every mode', () => {
       fixed.entries[0].identity.players[0].brawlhallaId,
     )
 
-    ranking = createPostgresRanking(database)
+    await rankingClient.close()
+    rankingClient = openTestClient(database.connectionString)
+    ranking = createPostgresRanking(rankingClient)
     for (const mode of leaderboardModes) {
       const view = await ranking.queries.getLeaderboard({ mode, region: 'EU', page: 1 })
       expect(view).toMatchObject({ mode, status: 'fresh', totalRows: 2 })
     }
+    await rankingClient.close()
   })
 
   test('replays a mode-specific dead letter with stable effect identity and fences cross-kind key reuse', async () => {
@@ -1330,8 +1335,11 @@ describe('immutable Ranking snapshots for every mode', () => {
 
 describe('durable multi-mode collection operations', () => {
   test('reconciles four independently staggered schedules concurrently and preserves them on restart', async () => {
-    const first = createPostgresRefreshOperations({ database })
-    const second = createPostgresRefreshOperations({ database })
+    // two replicas, then a restart: each process gets a client of its own
+    const firstClient = openTestClient(database.connectionString)
+    const secondClient = openTestClient(database.connectionString)
+    const first = createPostgresRefreshOperations({ database: firstClient })
+    const second = createPostgresRefreshOperations({ database: secondClient })
     const base = Date.now() - intervalMs
     const definitions = leaderboardModes.map((mode, index) => ({
       kind: operationKind(mode),
@@ -1358,12 +1366,14 @@ describe('durable multi-mode collection operations', () => {
     expect(new Set(rows.map(({ kind }) => kind))).toEqual(new Set(definitions.map(({ kind }) => kind)))
     expect(rows.every(({ work_class }) => work_class === 'leaderboard')).toBe(true)
     expect(new Set(rows.map(({ first_due_at }) => first_due_at.getTime())).size).toBe(4)
+    await Promise.all([firstClient.close(), secondClient.close()])
 
-    const restarted = createPostgresRefreshOperations({ database })
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     for (const definition of definitions) {
       expect((await restarted.reconcileLeaderboardSchedule(definition)).outcome).toBe('already-exists')
     }
-    await control.end()
+    await Promise.all([control.end(), restartedClient.close()])
   })
 
   test('publishes an empty region as a fresh empty snapshot instead of serving older rows', async () => {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
@@ -109,12 +109,20 @@ const lifetimeEvidence = (id: number) => ({
 
 describe('Statistics durable production worker', () => {
   test('admits each V1 attempt, survives restart, and never calls team or guild endpoints', async () => {
-    let operations = createPostgresRefreshOperations({ database })
-    let statistics = createPostgresStatistics(database)
+    // each simulated worker process has its own client, closed and reopened at every restart
+    let workerClient = openTestClient(database.connectionString)
+    let operations = createPostgresRefreshOperations({ database: workerClient })
+    let statistics = createPostgresStatistics(workerClient)
     const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 10, 'brawlhalla-v1': 10 },
     })
+    async function restart(): Promise<void> {
+      await workerClient.close()
+      workerClient = openTestClient(database.connectionString)
+      operations = createPostgresRefreshOperations({ database: workerClient })
+      statistics = createPostgresStatistics(workerClient)
+    }
     const calls: string[] = []
     let forbiddenCalls = 0
     let lifetimeAttempts = 0
@@ -169,8 +177,7 @@ describe('Statistics durable production worker', () => {
     await statistics.recordCollectionOperation(lifetimeIntent, lifetime.operationId)
     expect(await operations.claim('worker-before-binding', 1_000, admission)).toBeNull()
 
-    operations = createPostgresRefreshOperations({ database })
-    statistics = createPostgresStatistics(database)
+    await restart()
     await reconcileStatisticsCohort(statistics, operations, {
       getLeaderboard: async (input) => ({
         status: 'unavailable',
@@ -193,8 +200,7 @@ describe('Statistics durable production worker', () => {
     expect(await runOneRefreshOperation(operations, 'worker-before-restart', options())).toBe(true)
     expect(await runOneRefreshOperation(operations, 'worker-before-restart', options())).toBe(true)
 
-    operations = createPostgresRefreshOperations({ database })
-    statistics = createPostgresStatistics(database)
+    await restart()
     expect(await runOneRefreshOperation(operations, 'worker-after-restart', options())).toBe(true)
 
     const audit = await statistics.getCohort()
@@ -266,5 +272,7 @@ describe('Statistics durable production worker', () => {
     } finally {
       await sql.end()
     }
+
+    await workerClient.close()
   })
 })

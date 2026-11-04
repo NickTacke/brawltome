@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanMigrationInventory, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
-import { type Database, createDatabase } from '@brawltome/foundation'
+import type { Database } from '@brawltome/foundation'
+import { openTestClient } from '@brawltome/foundation/testing'
 import { playerMigrationInventory } from '@brawltome/player'
 import {
   type AdmissionConfig,
@@ -40,7 +41,7 @@ beforeAll(async () => {
   const databaseUrl = new URL(dedicatedServer)
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
-  database = createDatabase(connectionString, { maxConnections: 5, applicationName: 'brawltome-test' })
+  database = openTestClient(connectionString)
   const setup = postgres(connectionString, { max: 1 })
   try {
     await setup.unsafe(`
@@ -120,8 +121,16 @@ describe('Clan Discovery delivery and reconciliation', () => {
     const source = createPostgresClanDiscoverySource(database)
     const discovery = createPostgresDiscovery(database)
     const control = postgres(connectionString)
+    // the operations worker restarts twice below, so it gets a client of its own to close and reopen
+    let operationsClient = openTestClient(connectionString)
+    async function restartOperationsClient(): Promise<Database> {
+      await operationsClient.close()
+      operationsClient = openTestClient(connectionString)
+
+      return operationsClient
+    }
     let operations = createPostgresRefreshOperations(
-      { database },
+      { database: operationsClient },
       {
         projectionEffectState: (kind, effectOperationId) =>
           kind === 'player-discovery-projection'
@@ -174,7 +183,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect(await source.lag()).toBeGreaterThan(0)
 
       operations = createPostgresRefreshOperations(
-        { database },
+        { database: await restartOperationsClient() },
         {
           projectionEffectState: (kind, effectOperationId) =>
             kind === 'player-discovery-projection'
@@ -261,7 +270,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
         releaseRecovery = resolve
       })
       operations = createPostgresRefreshOperations(
-        { database },
+        { database: await restartOperationsClient() },
         {
           reconciliationEffectApplied: async (effectOperationId) => {
             const applied = await discovery.reconciliationEffectApplied(effectOperationId)
@@ -302,7 +311,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect(String(await lateEffectOutcome)).toContain('Discovery effect lease is no longer active')
       expect(await discovery.reconciliationEffectApplied(lateLease.effectOperationId)).toBe(false)
     } finally {
-      await control.end()
+      await Promise.all([control.end(), operationsClient.close()])
     }
   }, 30_000)
 })

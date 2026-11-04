@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type OperationLease,
   type PlayerRefreshSettled,
@@ -921,7 +921,9 @@ describe('durable Refresh Operations', () => {
   test('coalesces missed windows once and retains anchored history after repository restart', async () => {
     const intervalMs = 3_600_000
     const firstDueAt = new Date(Date.now() - 5 * intervalMs - 10_000).toISOString()
-    const schedulers = [createPostgresRefreshOperations({ database }), createPostgresRefreshOperations({ database })]
+    // two scheduler replicas, then a restart: each process gets a client of its own
+    const schedulerClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
+    const schedulers = schedulerClients.map((client) => createPostgresRefreshOperations({ database: client }))
     await expect(
       schedulers[0].createSchedule({
         scheduleKey: `invalid-offset:${randomUUID()}`,
@@ -973,8 +975,10 @@ describe('durable Refresh Operations', () => {
     expect(committedOccurrence.operationId).toMatch(/^[0-9a-f-]{36}$/)
     expect(committedOccurrence.occurrenceId).toMatch(/^[0-9a-f-]{36}$/)
     expect(committedOccurrence.latenessMs).toBeGreaterThanOrEqual(0)
+    await Promise.all(schedulerClients.map((client) => client.close()))
 
-    const restarted = createPostgresRefreshOperations({ database })
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const history = await restarted.inspectSchedule(created.scheduleId)
     expect(history.occurrences).toHaveLength(1)
     expect(history.occurrences[0]).toMatchObject({
@@ -992,12 +996,15 @@ describe('durable Refresh Operations', () => {
     const lease = requireLease(await restarted.claim('schedule-cleanup', 10_000, testAdmission))
     expect(lease.workClass).toBe('projection')
     expect(await restarted.complete(lease)).toBe('transitioned')
+    await restartedClient.close()
   })
 
   test('reconciles verified Primary monitoring across replicas, ownership changes, and restart', async () => {
     const intervalMs = 24 * 60 * 60 * 1_000
     const verifiedAt = new Date(Date.now() - intervalMs - 10_000)
-    const replicas = [createPostgresRefreshOperations({ database }), createPostgresRefreshOperations({ database })]
+    // two replicas, then a restart: each process gets a client of its own
+    const replicaClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
+    const replicas = replicaClients.map((client) => createPostgresRefreshOperations({ database: client }))
     const assignmentId = randomUUID()
     const observedAt = new Date()
     const target = { assignmentId, brawlhallaId: 4242, verifiedAt }
@@ -1042,8 +1049,10 @@ describe('durable Refresh Operations', () => {
       FROM refresh_operations.schedules
       WHERE schedule_key = ${`primary-player:4242:${assignmentId}`}
     `
+    await Promise.all(replicaClients.map((client) => client.close()))
 
-    const restarted = createPostgresRefreshOperations({ database })
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const history = await restarted.inspectSchedule(schedule.id)
     expect(history.schedule).toMatchObject({
       enabled: true,
@@ -1147,7 +1156,7 @@ describe('durable Refresh Operations', () => {
       payload: { brawlhallaId: partialTarget.brawlhallaId, staleSections: ['ranked', 'stats'] },
     })
     expect(await restarted.complete(monitoringAfterPartial)).toBe('transitioned')
-    await control.end()
+    await Promise.all([control.end(), restartedClient.close()])
   })
 
   test('expires abandoned blockers and requires both full-refresh checkpoints after the due watermark', async () => {

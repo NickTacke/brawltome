@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
   type OperationLease,
@@ -190,14 +190,20 @@ describe('Statistics EU Diamond+ production tracer', () => {
   })
 
   test('concurrent reconciliation pins one immutable generation and restart keeps it after newer input', async () => {
-    const first = createPostgresStatistics(database)
+    // the first replica restarts below, so it gets a client of its own to close and reopen
+    const firstClient = openTestClient(database.connectionString)
+    const first = createPostgresStatistics(firstClient)
     const second = createPostgresStatistics(database)
     const [left, right] = await Promise.all([first.reconcileCohort(snapshot(1)), second.reconcileCohort(snapshot(2))])
     expect(right).toEqual(left)
     expect(left.members).toHaveLength(3)
 
-    const restarted = createPostgresStatistics(database)
+    await firstClient.close()
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresStatistics(restartedClient)
     const afterRestart = await restarted.reconcileCohort(snapshot(3))
+    await restartedClient.close()
+
     expect(afterRestart).toEqual(left)
     expect(afterRestart.sourceSnapshotId).not.toBe(snapshot(3).snapshotId)
   }, 15_000)

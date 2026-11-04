@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
@@ -391,7 +391,9 @@ function publicationAuthorization(
 
 describe('Statistics full launch cohort publication', () => {
   test('persists 18 cells, fences immutable product decisions, retains prior valid, and replays without duplication', async () => {
-    let statistics = createPostgresStatistics(database)
+    // the statistics side restarts below, so it gets a client of its own to close and reopen
+    let statisticsClient = openTestClient(database.connectionString)
+    let statistics = createPostgresStatistics(statisticsClient)
     const concurrent = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
     const [first, duplicate] = await Promise.all([
@@ -985,7 +987,9 @@ describe('Statistics full launch cohort publication', () => {
     ).toBe(true)
     expect((await statistics.getLaunchCohort(second.generationId))?.decisions).toHaveLength(2)
 
-    statistics = createPostgresStatistics(database)
+    await statisticsClient.close()
+    statisticsClient = openTestClient(database.connectionString)
+    statistics = createPostgresStatistics(statisticsClient)
     expect((await statistics.getPublication('ranked'))?.active?.generationId).toBe(third.generationId)
     expect(await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
       status: 'fresh',
@@ -993,5 +997,7 @@ describe('Statistics full launch cohort publication', () => {
       generationId: third.generationId,
       latestDecision: { generationId: third.generationId, outcome: 'accepted' },
     })
+
+    await statisticsClient.close()
   }, 120_000)
 })

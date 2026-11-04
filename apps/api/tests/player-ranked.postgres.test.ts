@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createDatabase } from '@brawltome/foundation'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import {
   createPostgresRankedPlayers,
   playerModule,
@@ -910,7 +910,9 @@ describe('Players-owned canonical ranked state', () => {
 
   test('rejects stale pulse completion and preserves ordering across replay and repository restart', async () => {
     const brawlhallaId = 91913845
-    let players = createPostgresRankedPlayers(database)
+    // the repository restarts below, so it gets a client of its own to close and reopen
+    let playersClient = openTestClient(database.connectionString)
+    let players = createPostgresRankedPlayers(playersClient)
     const operations = createPostgresRefreshOperations({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
     await refreshCanonicalRankedPlayer(
@@ -974,8 +976,13 @@ describe('Players-owned canonical ranked state', () => {
     await operations.complete(older)
     await operations.complete(newer)
 
-    players = createPostgresRankedPlayers(database)
-    expect(await players.byId(brawlhallaId)).toMatchObject({
+    await playersClient.close()
+    playersClient = openTestClient(database.connectionString)
+    players = createPostgresRankedPlayers(playersClient)
+    const afterRestart = await players.byId(brawlhallaId)
+    await playersClient.close()
+
+    expect(afterRestart).toMatchObject({
       snapshot: { oneVsOne: { rating: 1700, games: 12 }, ratingHistory: [{ rating: 1500, games: 10 }] },
     })
   })

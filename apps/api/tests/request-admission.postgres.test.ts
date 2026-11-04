@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -328,15 +328,24 @@ describe('PostgreSQL interactive refresh admission', () => {
         await Bun.sleep(1_100)
       },
     }
-    const first = createPostgresRequestAdmission(database, options)
+    // the admitting process restarts below, so it gets a client of its own to close and reopen
+    const firstClient = openTestClient(database.connectionString)
+    const first = createPostgresRequestAdmission(firstClient, options)
     expect(await first.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })).toMatchObject({
       outcome: 'admitted',
     })
+    await firstClient.close()
 
-    const restarted = createPostgresRequestAdmission(database, options)
-    expect(
-      await restarted.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
-    ).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: 1 })
+    const restartedClient = openTestClient(database.connectionString)
+    const restarted = createPostgresRequestAdmission(restartedClient, options)
+    const afterRestart = await restarted.admitSource({
+      domain: 'brawlhalla-v0',
+      reservationKey: randomUUID(),
+      units: 1,
+    })
+    await restartedClient.close()
+
+    expect(afterRestart).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: 1 })
   })
 
   test('shares provider backoff across admission instances', async () => {
