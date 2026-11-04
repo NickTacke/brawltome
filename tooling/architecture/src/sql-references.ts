@@ -14,16 +14,25 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
   const pattern = referencePattern(schemas)
   const references: SchemaReference[] = []
 
-  function visit(node: ts.Node) {
-    if (isLiteralPart(node) && !isModuleSpecifier(node)) {
-      const start = node.getStart(sourceFile) + 1
-      const sql = blankSqlComments(source.slice(start, node.end - closingDelimiterLength(node)))
+  function collect(sql: string, offset: number) {
+    for (const match of blankSqlComments(sql).matchAll(pattern)) {
+      const position = offset + (match.index ?? 0)
+      const line = sourceFile.getLineAndCharacterOfPosition(position).line + 1
+      references.push({ schema: match[1] ?? match[2], line })
+    }
+  }
 
-      for (const match of sql.matchAll(pattern)) {
-        const position = start + (match.index ?? 0)
-        const line = sourceFile.getLineAndCharacterOfPosition(position).line + 1
-        references.push({ schema: match[1] ?? match[2], line })
-      }
+  function visit(node: ts.Node) {
+    if (ts.isTemplateExpression(node)) {
+      collect(templateSql(node, source, sourceFile), node.getStart(sourceFile) + 1)
+      // a substitution is code, but it may hold a literal of its own
+      for (const span of node.templateSpans) visit(span.expression)
+      return
+    }
+
+    if (isPlainLiteral(node) && !isModuleSpecifier(node)) {
+      // the text between the quotes or backticks is what sql sees
+      collect(source.slice(node.getStart(sourceFile) + 1, node.end - 1), node.getStart(sourceFile) + 1)
       return
     }
 
@@ -35,19 +44,25 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
   return references
 }
 
-// the text between the delimiters is what sql sees: quotes or backticks, and `${` or `}` around substitutions
-function closingDelimiterLength(node: ts.Node): number {
-  return ts.isTemplateHead(node) || ts.isTemplateMiddle(node) ? 2 : 1
+// the whole template as one text, so quote and comment state carries across substitutions;
+// each `${...}` becomes spaces of the same length, newlines kept so lines stay true
+function templateSql(template: ts.TemplateExpression, source: string, sourceFile: ts.SourceFile): string {
+  const textStart = template.getStart(sourceFile) + 1
+  let sql = source.slice(textStart, template.end - 1)
+
+  for (const [index, span] of template.templateSpans.entries()) {
+    const previousLiteral = index === 0 ? template.head : template.templateSpans[index - 1].literal
+    const substitutionStart = previousLiteral.end - 2 - textStart
+    const substitutionEnd = span.literal.getStart(sourceFile) + 1 - textStart
+    const blanked = sql.slice(substitutionStart, substitutionEnd).replace(/[^\n]/g, ' ')
+    sql = sql.slice(0, substitutionStart) + blanked + sql.slice(substitutionEnd)
+  }
+
+  return sql
 }
 
-function isLiteralPart(node: ts.Node): boolean {
-  return (
-    ts.isStringLiteral(node) ||
-    ts.isNoSubstitutionTemplateLiteral(node) ||
-    ts.isTemplateHead(node) ||
-    ts.isTemplateMiddle(node) ||
-    ts.isTemplateTail(node)
-  )
+function isPlainLiteral(node: ts.Node): boolean {
+  return ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)
 }
 
 // './statistics.router' is a file path, not a reference to a schema

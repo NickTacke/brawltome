@@ -111,6 +111,38 @@ describe('findSchemaReferences', () => {
     expect(findSchemaReferences(source, schemas)).toEqual([])
   })
 
+  it('carries quote state across a template substitution', () => {
+    const source = "const query = `SELECT '${value}' -- players.profiles`"
+
+    expect(findSchemaReferences(source, schemas)).toEqual([])
+  })
+
+  it('still reads a reference after a quoted substitution', () => {
+    const source = "const query = `SELECT '${value}', x FROM players.profiles`"
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'players', line: 1 }])
+  })
+
+  it('keeps line numbers true after a multi-line substitution', () => {
+    const source = [
+      'const query = `',
+      '  SELECT ${[',
+      '    first,',
+      '    second,',
+      '  ].join(",")}',
+      '  FROM rankings.entries',
+      '`',
+    ].join('\n')
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'rankings', line: 6 }])
+  })
+
+  it('does not read substitution code as sql, but reads a literal nested in it', () => {
+    const source = 'const query = `SELECT ${players.length} ${sql`FROM rankings.entries`}`'
+
+    expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'rankings', line: 1 }])
+  })
+
   it('ignores module specifiers in every import form', () => {
     const source = [
       "import { router } from './players.router'",
