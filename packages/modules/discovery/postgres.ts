@@ -20,7 +20,7 @@ import {
   type ReconciliationResult,
   normalizeDiscoveryTerm,
   playerSearchTerms,
-} from './index'
+} from './model'
 
 type TermRow = {
   entity_kind: ProjectionOwner

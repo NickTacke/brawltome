@@ -1,6 +1,9 @@
-import type { Database } from '@brawltome/database'
-import { type CanonicalPlayerNameEvidence, selectCanonicalPlayerName } from '@brawltome/player'
-import { createPlayerReferenceQueries } from '@brawltome/player/composition'
+import type { Database } from '@brawltome/foundation'
+import {
+  type CanonicalPlayerNameEvidence,
+  createPlayerReferenceQueries,
+  selectCanonicalPlayerName,
+} from '@brawltome/player'
 import { sql } from 'drizzle-orm'
 
 type CanonicalReferenceEvidence = CanonicalPlayerNameEvidence & {
@@ -12,7 +15,7 @@ type CanonicalReferenceEvidence = CanonicalPlayerNameEvidence & {
 type FindCanonicalReference = (brawlhallaId: number) => Promise<CanonicalReferenceEvidence | null>
 
 export function createDatabasePlayerReferenceQueries(
-  db: Database,
+  database: Database,
   findRankedReference: FindCanonicalReference = async () => null,
   findCareerReference: FindCanonicalReference = async () => null,
   findLeaderboardReference: FindCanonicalReference = async () => null,
@@ -22,7 +25,7 @@ export function createDatabasePlayerReferenceQueries(
       findRankedReference(brawlhallaId),
       findCareerReference(brawlhallaId),
       findLeaderboardReference(brawlhallaId),
-      db.execute<{ display_alias: string }>(sql`
+      database.db.execute<{ display_alias: string }>(sql`
         SELECT display_alias
         FROM (
           SELECT DISTINCT ON (normalized_alias) normalized_alias, display_alias, observed_at, source_rank

@@ -1,3 +1,9 @@
+import type { BrawltomeModule } from '@brawltome/foundation'
+import { initializeClans } from './migrations/0001-initialize-clans'
+import { addClanDiscoveryFacts } from './migrations/0002-add-discovery-facts'
+import { addV2ClanImportEvidence } from './migrations/0003-add-v2-import-evidence'
+import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
+
 export {
   processRefreshClan,
   processRefreshClanSection,
@@ -11,4 +17,24 @@ export type {
   ClanDiscoverySnapshot,
   ClanDiscoverySource,
 } from './discovery-facts'
-export type { ClanProvenance, ClanQueries, ClanRefreshEffect } from './postgres'
+export {
+  createPostgresClans,
+  type ClanProvenance,
+  type ClanQueries,
+  type ClanRefreshEffect,
+  type PostgresClans,
+} from './postgres'
+export { createPostgresClanDiscoverySource, type PostgresClanDiscoverySource } from './discovery-postgres'
+
+export const clanMigrationInventory = [
+  initializeClans,
+  addClanDiscoveryFacts,
+  addV2ClanImportEvidence,
+  allowSparseClanMembers,
+] as const
+
+export const clanModule = {
+  name: 'clan',
+  dependsOn: [],
+  migrations: clanMigrationInventory,
+} satisfies BrawltomeModule

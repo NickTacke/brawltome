@@ -1,20 +1,19 @@
-import { createPostgresAccounts } from '@brawltome/accounts/composition'
-import { createPostgresClans } from '@brawltome/clan/composition'
-import { closeDatabase, db } from '@brawltome/database'
-import { globalMigrationInventory } from '@brawltome/database/migrations'
-import { createPostgresDiscovery } from '@brawltome/discovery/composition'
+import { createPostgresAccounts } from '@brawltome/accounts'
+import { createPostgresClans } from '@brawltome/clan'
+import { createPostgresDiscovery } from '@brawltome/discovery'
+import { checkModuleList, createDatabase } from '@brawltome/foundation'
 import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
   createPostgresLeaderboardRanked,
   createPostgresProfileViews,
   createPostgresRankedPlayers,
-} from '@brawltome/player/composition'
-import { createPostgresRanking } from '@brawltome/ranking/composition'
-import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
-import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis/composition'
-import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
-import { createPostgresStatistics } from '@brawltome/statistics/composition'
+} from '@brawltome/player'
+import { createPostgresRanking } from '@brawltome/ranking'
+import { createPostgresRefreshOperations } from '@brawltome/refresh-operations'
+import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis'
+import { createPostgresRequestAdmission } from '@brawltome/request-admission'
+import { createPostgresStatistics } from '@brawltome/statistics'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
@@ -32,6 +31,7 @@ import { createAuthRoutes } from './auth/routes'
 import { verifyTurnstileResult } from './auth/turnstile'
 import { requestWithVerifiedClientIp } from './client-ip'
 import { createHealthRoutes } from './health-routes'
+import { apiModules } from './modules'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
@@ -61,6 +61,8 @@ if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimi
   throw new Error('AUTHENTICATED_REFRESH_IP_LIMIT must be a positive integer')
 }
 
+checkModuleList(apiModules)
+
 const telemetry = createRuntimeTelemetry('api')
 const runtimeConfig = readRuntimeConfig(process.env)
 const shutdownAnnounceMs = readShutdownAnnounceMs(process.env.RUNTIME_SHUTDOWN_ANNOUNCE_MS)
@@ -74,8 +76,10 @@ const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databaseUrl)
 const profileViews = createPostgresProfileViews(databaseUrl)
 const leaderboardStandings = createPostgresLeaderboardRanked(databaseUrl)
 const discovery = createPostgresDiscovery(databaseUrl)
+// 10 connections is the postgres.js default the old shared client used
+const database = createDatabase(databaseUrl, { maxConnections: 10, applicationName: 'brawltome-api' })
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(
-  db,
+  database,
   (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => careerPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => leaderboardPlayerNames.referenceById(brawlhallaId),
@@ -90,7 +94,10 @@ const ranking = createPostgresRanking(databaseUrl)
 const statistics = createPostgresStatistics(databaseUrl)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(databaseUrl)
 const clanRepo = createPostgresClans(databaseUrl)
-const postgresReadiness = createPostgresReadiness(databaseUrl, globalMigrationInventory)
+const postgresReadiness = createPostgresReadiness(
+  databaseUrl,
+  apiModules.flatMap((module) => module.migrations),
+)
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
 
 const lifecycle = createRuntimeLifecycle({
@@ -120,7 +127,7 @@ const lifecycle = createRuntimeLifecycle({
     { name: 'ranking-postgres', close: ranking.close },
     { name: 'statistics-postgres', close: statistics.close },
     { name: 'replay-analysis-postgres', close: replayAnalysisJobs.close },
-    { name: 'database-postgres', close: closeDatabase },
+    { name: 'database-postgres', close: database.close },
     { name: 'readiness-postgres', close: postgresReadiness.close },
     { name: 'telemetry', close: () => telemetry.shutdown(runtimeConfig.cleanupReserveMs) },
   ],

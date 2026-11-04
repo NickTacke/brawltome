@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts/composition'
+import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
 import postgres from 'postgres'
 import { migratePostgres } from '../src/postgres'
 

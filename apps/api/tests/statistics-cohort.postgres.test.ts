@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { AdmissionConfig, OperationLease } from '@brawltome/refresh-operations'
 import {
+  type AdmissionConfig,
+  type OperationLease,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import { type CohortCandidateSnapshot, type CohortCollectionIntent, launchCohortRegions } from '@brawltome/statistics'
-import { createPostgresStatistics, statisticsMigrationInventory } from '@brawltome/statistics/composition'
+} from '@brawltome/refresh-operations'
+import {
+  type CohortCandidateSnapshot,
+  type CohortCollectionIntent,
+  createPostgresStatistics,
+  launchCohortRegions,
+  statisticsMigrationInventory,
+} from '@brawltome/statistics'
 import postgres from 'postgres'
 
 const baseUrl = process.env.DATABASE_URL

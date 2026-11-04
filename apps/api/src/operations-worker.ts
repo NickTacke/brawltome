@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
-import { createPostgresAccounts } from '@brawltome/accounts/composition'
+import { createPostgresAccounts } from '@brawltome/accounts'
 import { BhApiClient, type BhApiClientOptions, createBhApiRequestQueue } from '@brawltome/bhapi'
-import { processRefreshClanSection } from '@brawltome/clan'
-import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan/composition'
-import { globalMigrationInventory } from '@brawltome/database/migrations'
-import { createPostgresDiscovery } from '@brawltome/discovery/composition'
+import { createPostgresClanDiscoverySource, createPostgresClans, processRefreshClanSection } from '@brawltome/clan'
+import { createPostgresDiscovery } from '@brawltome/discovery'
+import { checkModuleList } from '@brawltome/foundation'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
 import {
   createPostgresCareerPlayers,
@@ -20,11 +19,11 @@ import {
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
-} from '@brawltome/player/composition'
-import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking/composition'
-import { createPostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
-import { createPostgresRequestAdmission } from '@brawltome/request-admission/composition'
-import { createPostgresStatistics } from '@brawltome/statistics/composition'
+} from '@brawltome/player'
+import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking'
+import { createPostgresRefreshOperations } from '@brawltome/refresh-operations'
+import { createPostgresRequestAdmission } from '@brawltome/request-admission'
+import { createPostgresStatistics } from '@brawltome/statistics'
 import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
@@ -58,6 +57,7 @@ import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
+import { workerModules } from './worker-modules'
 
 const configuredConnectionString = process.env.DATABASE_URL
 if (!configuredConnectionString) throw new Error('DATABASE_URL is required')
@@ -75,6 +75,8 @@ const legendReferences = createLegendReferenceIndex(
       weaponTwo: legend.weaponTwo,
     })),
 )
+
+checkModuleList(workerModules)
 
 const telemetry = createRuntimeTelemetry('operations-worker')
 const workerConfig = readOperationsWorkerConfig(process.env)
@@ -129,7 +131,10 @@ const rankedPlayers = createPostgresRankedPlayers(connectionString, {
 const clans = createPostgresClans(connectionString)
 const playerDiscoverySource = createPostgresPlayerDiscoverySource(discoveryConnectionString)
 const clanDiscoverySource = createPostgresClanDiscoverySource(discoveryConnectionString)
-const postgresReadiness = createPostgresReadiness(connectionString, globalMigrationInventory)
+const postgresReadiness = createPostgresReadiness(
+  connectionString,
+  workerModules.flatMap((module) => module.migrations),
+)
 const workerId = `${hostname()}:${process.pid}`
 const runtimeConfig = readRuntimeConfig(process.env)
 let listener: Awaited<ReturnType<typeof operations.listen>> | undefined

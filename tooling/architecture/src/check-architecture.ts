@@ -197,17 +197,6 @@ function checkImports(
           })
         }
 
-        const compositionEntry = `${dependency.name}/composition`
-        const isCompositionEntry = importPath === compositionEntry
-        const isNestedCompositionImport = importPath.startsWith(`${compositionEntry}/`)
-        if (isNestedCompositionImport || (isCompositionEntry && !policy.compositionImporters.includes(importer.name))) {
-          violations.push({
-            rule: 'composition-import',
-            ...common,
-            message: `${importer.name} is not authorized to import composition entrypoints`,
-          })
-        }
-
         const dependencyViolation = checkDependencyRule(importer, dependency, policy, common)
         if (dependencyViolation) violations.push(dependencyViolation)
       }

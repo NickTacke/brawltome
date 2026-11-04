@@ -38,7 +38,6 @@ COPY apps/desktop/package.json apps/desktop/
 COPY apps/discord-bot/package.json apps/discord-bot/
 COPY apps/replay-bridge/package.json apps/replay-bridge/
 COPY apps/web/package.json apps/web/
-COPY packages/database/package.json packages/database/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/telemetry/package.json packages/telemetry/
 COPY packages/modules/accounts/package.json packages/modules/accounts/

@@ -7,7 +7,7 @@ import {
   type ReplayJobFailure,
   type ReplayJobStatus,
   type ReplayJobSummary,
-} from './index'
+} from './model'
 
 type JobRow = {
   id: string

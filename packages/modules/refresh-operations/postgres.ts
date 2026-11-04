@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import postgres from 'postgres'
 import {
   type AcceptOperation,
   type AcceptOperationResult,
@@ -54,8 +55,7 @@ import {
   validateLeaderboardOperationPayload,
   validateRankingRetentionPayload,
   workClasses,
-} from '@brawltome/refresh-operations'
-import postgres from 'postgres'
+} from './model'
 
 const wakeupChannel = 'refresh_operations_wakeup'
 const admissionLockId = 1_920_192

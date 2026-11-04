@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { BhApiHttpError } from '@brawltome/bhapi'
 import { RateLimitError } from '@brawltome/bhapi'
-import { LeaderboardSourceError } from '@brawltome/ranking/composition'
+import { LeaderboardSourceError } from '@brawltome/ranking'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { retryDelayForAttempt, runOneRefreshOperation } from '../src/refresh-operations-worker'

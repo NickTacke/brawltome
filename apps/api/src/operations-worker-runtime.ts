@@ -1,5 +1,4 @@
-import type { AdmissionConfig } from '@brawltome/refresh-operations'
-import type { PostgresRefreshOperations } from '@brawltome/refresh-operations/composition'
+import type { AdmissionConfig, PostgresRefreshOperations } from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
 import { type RetryBackoff, runOneRefreshOperation } from './refresh-operations-worker'
 import type { RuntimeLifecycle } from './runtime-lifecycle'

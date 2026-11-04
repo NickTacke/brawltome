@@ -21,7 +21,6 @@ export const policy: ArchitecturePolicy = {
     '@fixture/players': [],
     '@fixture/rankings': ['@fixture/players'],
   },
-  compositionImporters: ['@fixture/api'],
   contractsDependencies: ['@fixture/game-data'],
   localImportAliases: {
     '@fixture/web': ['@/'],

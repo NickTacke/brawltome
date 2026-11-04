@@ -7,7 +7,7 @@ import {
   createPostgresPlayerDiscoverySource,
   createPostgresRankedPlayers,
   playerMigrationInventory,
-} from '../composition'
+} from '../index'
 
 const baseUrl = process.env.DATABASE_URL
 const databaseName = `bt_player_names_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 20)}`

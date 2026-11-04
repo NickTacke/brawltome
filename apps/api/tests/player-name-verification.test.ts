@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NameVerificationPreparation } from '@brawltome/player/composition'
+import type { NameVerificationPreparation } from '@brawltome/player'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
   createPlayerNameVerificationPlanner,

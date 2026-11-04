@@ -11,7 +11,7 @@ import {
   leaderboardDeepCrawlStandings,
   leaderboardDeepCrawlTeams,
   leaderboardModeFromOperationKind,
-} from '@brawltome/ranking/composition'
+} from '@brawltome/ranking'
 import type {
   AdmissionConfig,
   FencedResult,

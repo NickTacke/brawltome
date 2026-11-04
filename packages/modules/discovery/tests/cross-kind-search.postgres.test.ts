@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { ClanProjectionSource } from '@brawltome/discovery'
-import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery/composition'
+import { type ClanProjectionSource, createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
 import postgres from 'postgres'
 
 const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'

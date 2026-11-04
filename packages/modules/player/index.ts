@@ -1,3 +1,25 @@
+import type { BrawltomeModule } from '@brawltome/foundation'
+import { initializePlayersSchema } from './migrations/0001-initialize-schema'
+import { addInteractiveRefreshEffects } from './migrations/0002-add-interactive-refresh-effects'
+import { addCanonicalRankedState } from './migrations/0003-add-canonical-ranked-state'
+import { addCanonicalCareerState } from './migrations/0004-add-canonical-career-state'
+import { addDiscoveryFacts } from './migrations/0005-add-discovery-facts'
+import { addRankedPulseOverlays } from './migrations/0006-add-ranked-pulse-overlays'
+import { addV2PlayerImport } from './migrations/0007-add-v2-player-import'
+import { addLegacyBestLegend } from './migrations/0008-add-legacy-best-legend'
+import { addCareerGuild } from './migrations/0009-add-career-guild'
+import { allowRankedWithoutIdentity } from './migrations/0010-allow-ranked-without-identity'
+import { reconcileCareerNameMojibake } from './migrations/0011-reconcile-career-name-mojibake'
+import { addHistoricalCareerSource } from './migrations/0012-add-historical-career-source'
+import { addCompactReferenceImport } from './migrations/0013-add-compact-reference-import'
+import { addLeaderboardNameObservations } from './migrations/0014-add-leaderboard-name-observations'
+import { addNameVerifications } from './migrations/0015-add-name-verifications'
+import { addCareerLegendsBestOrderIndex } from './migrations/0016-add-career-legends-best-order-index'
+import { addLeaderboardRankedObservations } from './migrations/0017-add-leaderboard-ranked-observations'
+import { addProfileViewDays } from './migrations/0018-add-profile-view-days'
+import { addLeaderboardTeamModeObservations } from './migrations/0019-add-leaderboard-team-mode-observations'
+import { addLeaderboardTeamObservationsSecondPlayerIndex } from './migrations/0020-add-leaderboard-team-observations-second-player-index'
+
 export {
   CAREER_FRESHNESS_SECONDS,
   type CareerPlayerProfile,
@@ -28,4 +50,89 @@ export type {
   PlayerDiscoverySnapshotStream,
   PlayerDiscoverySource,
 } from './discovery-facts'
-export type { SteamPlayerEvidence, SteamPlayerEvidenceResolver } from './verification'
+
+export {
+  createPostgresCareerPlayers,
+  type CanonicalCareerEffect,
+  type PostgresCareerPlayers,
+} from './career/postgres'
+export { refreshCanonicalCareerPlayer, type V0CareerSource } from './career/refresh'
+export type { CareerLegendResolver, CareerLegendReference } from './career/source'
+export {
+  createPostgresRankedPlayers,
+  type CanonicalRankedEffect,
+  type PostgresRankedPlayers,
+} from './ranked/postgres'
+export {
+  refreshCanonicalRankedPlayer,
+  refreshRankedPlayerPulse,
+  type V0RankedSource,
+  type V1RankedPulseSource,
+} from './ranked/refresh'
+export {
+  createPostgresLeaderboardPlayerNames,
+  type LeaderboardPlayerName,
+  type PostgresLeaderboardPlayerNames,
+} from './leaderboard-names'
+export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
+export {
+  createPostgresProfileViews,
+  type PostgresProfileViews,
+  type ProfileViewDemand,
+} from './profile-views'
+export {
+  createPostgresLeaderboardRanked,
+  type LeaderboardRankedObservation,
+  type LeaderboardRankedStanding,
+  type LeaderboardTeamObservation,
+  type PostgresLeaderboardRanked,
+} from './leaderboard-ranked'
+export {
+  createPostgresPlayerNameVerifications,
+  type NameVerificationBacklog,
+  type NameVerificationCandidate,
+  type NameVerificationOutcome,
+  type NameVerificationPolicy,
+  type NameVerificationPreparation,
+  type PostgresPlayerNameVerifications,
+} from './name-verification'
+export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
+export {
+  createPostgresPlayerDiscoverySource,
+  type PostgresPlayerDiscoverySource,
+} from './discovery-postgres'
+export {
+  createSteamPlayerEvidenceResolver,
+  type SteamPlayerEvidence,
+  type SteamPlayerEvidenceResolver,
+} from './verification'
+
+export const playerMigrationInventory = [
+  initializePlayersSchema,
+  addInteractiveRefreshEffects,
+  addCanonicalRankedState,
+  addCanonicalCareerState,
+  addDiscoveryFacts,
+  addRankedPulseOverlays,
+  addV2PlayerImport,
+  addLegacyBestLegend,
+  addCareerGuild,
+  allowRankedWithoutIdentity,
+  reconcileCareerNameMojibake,
+  addHistoricalCareerSource,
+  addCompactReferenceImport,
+  addLeaderboardNameObservations,
+  addNameVerifications,
+  addCareerLegendsBestOrderIndex,
+  addLeaderboardRankedObservations,
+  addProfileViewDays,
+  addLeaderboardTeamModeObservations,
+  addLeaderboardTeamObservationsSecondPlayerIndex,
+] as const
+
+// the ranked and career stores fence their writes with refresh_operations lease functions
+export const playerModule = {
+  name: 'player',
+  dependsOn: ['refresh-operations'],
+  migrations: playerMigrationInventory,
+} satisfies BrawltomeModule

@@ -61,26 +61,6 @@ describe('dependency architecture', () => {
     expect(rulesFor(fixture)).toContain('capability-allow-list')
   })
 
-  it('rejects unauthorized composition imports and nested composition subpaths', () => {
-    const fixture = withImport('@fixture/web', '@fixture/players/composition/internal', {
-      dependency: '@fixture/players',
-    })
-    const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
-    if (!players) throw new Error('Missing Players fixture')
-    players.exports.push('./composition/*')
-
-    expect(rulesFor(fixture)).toContain('composition-import')
-  })
-
-  it('rejects nested composition imports from otherwise authorized roots', () => {
-    const fixture = withImport('@fixture/api', '@fixture/players/composition/internal')
-    const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
-    if (!players) throw new Error('Missing Players fixture')
-    players.exports.push('./composition/*')
-
-    expect(rulesFor(fixture)).toContain('composition-import')
-  })
-
   it('rejects workspaces without an assigned role', () => {
     const fixture = structuredClone(validFixture)
     fixture.workspaces.push({
@@ -171,7 +151,7 @@ describe('dependency architecture', () => {
     expect(players).not.toMatch(/playerClan|getPlayerGuildV1|getGuildStatsV1/)
   })
 
-  it('keeps dead-letter operator tooling capability-owned and behind a narrow composition boundary', () => {
+  it('keeps dead-letter operator tooling capability-owned behind one public surface', () => {
     const repositoryRoot = resolve(import.meta.dir, '../../..')
     const repository = readArchitectureRepository(repositoryRoot)
     const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/refresh-operations')
@@ -180,7 +160,7 @@ describe('dependency architecture', () => {
     ) as { scripts?: Record<string, string> }
 
     expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(true)
-    expect(refreshOperations?.exports.sort()).toEqual(['.', './composition'])
+    expect(refreshOperations?.exports).toEqual(['.'])
     expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
   })
 

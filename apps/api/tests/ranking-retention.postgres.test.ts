@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { LeaderboardMode, LeaderboardScope } from '@brawltome/ranking'
-import { createPostgresRanking, rankingMigrationInventory } from '@brawltome/ranking/composition'
 import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
-import { requestAdmissionMigrationInventory } from '@brawltome/request-admission/composition'
+  type LeaderboardMode,
+  type LeaderboardScope,
+  createPostgresRanking,
+  rankingMigrationInventory,
+} from '@brawltome/ranking'
+import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
+import { requestAdmissionMigrationInventory } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { rankingRetentionScheduleDefinition, readOperationsWorkerConfig } from '../src/operations-worker-config'

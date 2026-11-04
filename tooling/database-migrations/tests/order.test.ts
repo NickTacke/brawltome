@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Migration } from '@brawltome/foundation'
 import { deployedOrder } from '../src/deployed-order'
-import { globalMigrationInventory } from '../src/inventories'
+import { migrationModules } from '../src/modules'
 import { checkDeployedMigrationsPresent, orderMigrations } from '../src/order'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
@@ -27,7 +27,21 @@ function shuffle<T>(items: readonly T[]): T[] {
   return shuffled
 }
 
-const deployedMigrations = [...globalMigrationInventory]
+// the deployed migrations chained per module, so the ordering tests do not depend on the real inventory growing
+function deployedFixture(): Migration[] {
+  const lastInModule = new Map<string, string>()
+
+  return deployedOrder.map((identity) => {
+    const moduleName = identity.split('/')[0]
+    const predecessor = lastInModule.get(moduleName) ?? null
+    lastInModule.set(moduleName, identity)
+
+    return migration(identity, predecessor)
+  })
+}
+
+const deployedMigrations = deployedFixture()
+const realMigrations = migrationModules.flatMap((module) => module.migrations)
 const playersAddition = migration('players/0021', 'players/0020')
 
 describe('orderMigrations', () => {
@@ -38,10 +52,11 @@ describe('orderMigrations', () => {
     expect(identities(orderMigrations(shuffled))).toEqual([...deployedOrder])
   })
 
-  test('orders a shuffled global inventory exactly like the old index list', () => {
-    const ordered = orderMigrations(shuffle(globalMigrationInventory))
+  test("starts the modules' migrations with the deployed order, whatever else they hold", () => {
+    const ordered = identities(orderMigrations(shuffle(realMigrations)))
 
-    expect(identities(ordered)).toEqual(identities(globalMigrationInventory))
+    expect(ordered.slice(0, deployedOrder.length)).toEqual([...deployedOrder])
+    expect([...ordered].sort()).toEqual(identities(realMigrations).sort())
   })
 
   test('puts a new migration without requirements after every deployed migration', () => {
@@ -77,7 +92,7 @@ describe('orderMigrations', () => {
   })
 
   test('orders the deployed migrations that are present when modules are missing', () => {
-    const ordered = orderMigrations(shuffle([...globalMigrationInventory.filter(isPlayersOrRankings)]))
+    const ordered = orderMigrations(shuffle(deployedMigrations.filter(isPlayersOrRankings)))
 
     expect(identities(ordered)).toEqual(deployedOrder.filter((identity) => isPlayersOrRankings({ identity })))
   })
@@ -108,21 +123,28 @@ describe('orderMigrations', () => {
   })
 
   test('rejects a deployed migration that requires a later one', () => {
-    const requiringFirst = { ...deployedMigrations[0], requires: ['discovery/0005'] }
+    const isFirstDeployed = ({ identity }: Migration) => identity === 'players/0001'
+    const firstDeployed = deployedMigrations.find(isFirstDeployed)
+    if (!firstDeployed) {
+      throw new Error('players/0001 is missing from the module migrations')
+    }
 
-    expect(() => orderMigrations([requiringFirst, ...deployedMigrations.slice(1)])).toThrow(
+    const requiringFirst = { ...firstDeployed, requires: ['discovery/0005'] }
+    const others = deployedMigrations.filter((migration) => !isFirstDeployed(migration))
+
+    expect(() => orderMigrations([requiringFirst, ...others])).toThrow(
       'deployed migration players/0001 cannot depend on discovery/0005, which does not come before it in the deployed order',
     )
   })
 })
 
 describe('checkDeployedMigrationsPresent', () => {
-  test('accepts the full deployed set', () => {
-    expect(() => checkDeployedMigrationsPresent(shuffle(deployedMigrations))).not.toThrow()
+  test('accepts the migrations of every module the runner loads, in any order', () => {
+    expect(() => checkDeployedMigrationsPresent(shuffle(realMigrations))).not.toThrow()
   })
 
   test('rejects a missing deployed migration', () => {
-    const withoutRankings = deployedMigrations.filter(({ identity }) => identity !== 'rankings/0004')
+    const withoutRankings = realMigrations.filter(({ identity }) => identity !== 'rankings/0004')
 
     expect(() => checkDeployedMigrationsPresent(withoutRankings)).toThrow(
       'deployed migration rankings/0004 is missing from the modules',

@@ -6,13 +6,13 @@ import {
   playerMigrationInventory,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
-} from '@brawltome/player/composition'
-import type { OperationLease } from '@brawltome/refresh-operations'
+} from '@brawltome/player'
 import {
+  type OperationLease,
   type PostgresRefreshOperations,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
+} from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
 const baseUrl = process.env.DATABASE_URL

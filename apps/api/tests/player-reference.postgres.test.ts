@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { randomInt } from 'node:crypto'
-import { type Database, db } from '@brawltome/database'
+import { type Database, createDatabase } from '@brawltome/foundation'
 import { sql } from 'drizzle-orm'
 import { createDatabasePlayerReferenceQueries } from '../src/adapters/player-reference.database'
 
@@ -16,9 +16,13 @@ describe('stored Player Reference', () => {
     const renamedId = storedId + 7
     const leaderboardOnlyId = storedId + 8
     const rollback = new Error('rollback Player Reference integration test')
+    const database = createDatabase(process.env.DATABASE_URL as string, {
+      maxConnections: 1,
+      applicationName: 'player-reference-test',
+    })
 
     try {
-      await db.transaction(async (transaction) => {
+      await database.db.transaction(async (transaction) => {
         const archiveChecksum = 'a'.repeat(64)
         await transaction.execute(sql`
           INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
@@ -35,7 +39,7 @@ describe('stored Player Reference', () => {
         `)
 
         const queries = createDatabasePlayerReferenceQueries(
-          transaction as unknown as Database,
+          { ...database, db: transaction } as unknown as Database,
           async (brawlhallaId) => {
             if (brawlhallaId === storedId) {
               return {
@@ -147,6 +151,8 @@ describe('stored Player Reference', () => {
       })
     } catch (error) {
       if (error !== rollback) throw error
+    } finally {
+      await database.close()
     }
   })
 })

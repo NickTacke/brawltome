@@ -1,17 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { clanMigrationInventory, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
+import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
+import { playerMigrationInventory } from '@brawltome/player'
 import {
-  clanMigrationInventory,
-  createPostgresClanDiscoverySource,
-  createPostgresClans,
-} from '@brawltome/clan/composition'
-import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery/composition'
-import { playerMigrationInventory } from '@brawltome/player/composition'
-import type { AdmissionConfig } from '@brawltome/refresh-operations'
-import {
+  type AdmissionConfig,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
+} from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 

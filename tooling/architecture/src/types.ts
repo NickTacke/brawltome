@@ -3,7 +3,6 @@ export type WorkspaceRole = 'application' | 'capability' | 'foundation' | 'contr
 export type ArchitectureRule =
   | 'app-to-app'
   | 'capability-allow-list'
-  | 'composition-import'
   | 'cross-package-relative-import'
   | 'cycle'
   | 'deep-import'
@@ -46,7 +45,6 @@ export interface ArchitecturePolicy {
   roles: Record<string, WorkspaceRole>
   allowedExports: Record<string, string[]>
   capabilityDependencies: Record<string, string[]>
-  compositionImporters: string[]
   contractsDependencies: string[]
   localImportAliases: Record<string, string[]>
   workspaceRoleDependencies: Record<string, WorkspaceRole[]>

@@ -1,13 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { globalMigrationInventory } from '@brawltome/database/migrations'
-import type { OperationLease, PlayerRefreshSettled } from '@brawltome/refresh-operations'
 import {
+  type OperationLease,
+  type PlayerRefreshSettled,
   createPostgresRefreshOperations,
   refreshOperationsMigrationInventory,
-} from '@brawltome/refresh-operations/composition'
+} from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
+import { apiModules } from '../src/modules'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
@@ -114,93 +115,17 @@ async function expire(operationId: string) {
 }
 
 describe('durable Refresh Operations', () => {
-  test('preserves the deployed runtime prefix and appends later migrations in dependency order', () => {
-    expect(globalMigrationInventory.map(({ identity }): string => identity)).toEqual([
-      'players/0001',
-      'players/0002',
-      'players/0003',
-      'refresh-operations/0001',
-      'refresh-operations/0002',
-      'refresh-operations/0003',
-      'refresh-operations/0004',
-      'refresh-operations/0005',
-      'refresh-operations/0006',
-      'request-admission/0001',
-      'request-admission/0002',
-      'accounts/0001',
-      'accounts/0002',
-      'rankings/0001',
-      'clans/0001',
-      'refresh-operations/0007',
-      'refresh-operations/0008',
-      'accounts/0003',
-      'refresh-operations/0009',
-      'rankings/0002',
-      'players/0004',
-      'players/0005',
-      'refresh-operations/0010',
-      'discovery/0001',
-      'accounts/0004',
-      'players/0006',
-      'refresh-operations/0011',
-      'refresh-operations/0012',
-      'clans/0002',
-      'discovery/0002',
-      'refresh-operations/0013',
-      'statistics/0001',
-      'refresh-operations/0014',
-      'accounts/0005',
-      'players/0007',
-      'statistics/0002',
-      'refresh-operations/0015',
-      'clans/0003',
-      'rankings/0003',
-      'accounts/0006',
-      'statistics/0003',
-      'refresh-operations/0016',
-      'statistics/0004',
-      'request-admission/0003',
-      'discovery/0003',
-      'accounts/0007',
-      'rankings/0004',
-      'rankings/0005',
-      'players/0008',
-      'rankings/0006',
-      'players/0009',
-      'players/0010',
-      'clans/0004',
-      'players/0011',
-      'players/0012',
-      'players/0013',
-      'replay-analysis/0001',
-      'accounts/0008',
-      'accounts/0009',
-      'rankings/0007',
-      'rankings/0008',
-      'players/0014',
-      'players/0015',
-      'refresh-operations/0017',
-      'rankings/0009',
-      'refresh-operations/0018',
-      'refresh-operations/0019',
-      'players/0016',
-      'rankings/0010',
-      'rankings/0011',
-      'rankings/0012',
-      'players/0017',
-      'refresh-operations/0020',
-      'refresh-operations/0021',
-      'refresh-operations/0022',
-      'refresh-operations/0023',
-      'players/0018',
-      'refresh-operations/0024',
-      'refresh-operations/0025',
-      'players/0019',
-      'players/0020',
-      'refresh-operations/0026',
-      'discovery/0004',
-      'discovery/0005',
-    ])
+  test('loads every migration that the loaded migrations build on', () => {
+    const migrations = apiModules.flatMap((module) => module.migrations)
+    const identities = new Set(migrations.map(({ identity }): string => identity))
+    const dependencies = migrations.flatMap(({ predecessor, requires }) => {
+      const predecessors = predecessor === null ? [] : [predecessor]
+
+      return [...predecessors, ...(requires ?? [])]
+    })
+    const missing = dependencies.filter((identity) => !identities.has(identity))
+
+    expect(missing).toEqual([])
   })
 
   test('reports bounded authoritative oldest-job, schedule-lateness, and dead-letter gauges', async () => {
