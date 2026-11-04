@@ -29,7 +29,6 @@ import type {
   nullableClanProfileSchema,
   playerClanMembershipSchema,
 } from './clan'
-import type { contractProofSchema } from './contract-proof'
 import type { discoverySearchInputSchema, discoverySearchOutputSchema } from './discovery'
 import type {
   leaderboardInputSchema,
@@ -71,9 +70,6 @@ type AppRouterRecord = {
     pinPlayer: Mutation<Output<typeof pinnedPlayerInputSchema>, Output<typeof pinnedPlayersSchema>>
     unpinPlayer: Mutation<Output<typeof pinnedPlayerInputSchema>, Output<typeof pinnedPlayersSchema>>
     reorderPinnedPlayers: Mutation<Output<typeof pinnedPlayerOrderInputSchema>, Output<typeof pinnedPlayersSchema>>
-  }
-  contractProof: {
-    get: Query<void, Output<typeof contractProofSchema>>
   }
   clan: {
     byId: Query<Output<typeof clanByIdInputSchema>, Output<typeof nullableClanProfileSchema>>

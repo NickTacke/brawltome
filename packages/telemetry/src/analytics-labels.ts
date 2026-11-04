@@ -41,7 +41,6 @@ export const analyticsTrpcProcedure = [
   'account.unpinPlayer',
   'account.reorderPinnedPlayers',
   'status.discordReady',
-  'contractProof.get',
   'player.referenceById',
   'player.rankedById',
   'player.careerById',

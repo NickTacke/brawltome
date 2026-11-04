@@ -36,7 +36,6 @@ import { createHealthRoutes } from './health-routes'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
-import { createContractProofRoutes } from './routes/contract-proof.routes'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshEventRoutes } from './routes/refresh-events.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
@@ -195,7 +194,6 @@ app.route(
     logger: telemetry.logger,
   }),
 )
-app.route('/internal/contracts', createContractProofRoutes())
 app.route(
   '/api/overlay',
   createDesktopRankedRoutes({

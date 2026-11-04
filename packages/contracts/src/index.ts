@@ -45,13 +45,6 @@ export {
   type DiscordClanRefreshInputContract,
 } from './clan'
 export {
-  contractProofEventSchema,
-  contractProofSchema,
-  createContractProof,
-  parseContractProofOutput,
-  type ContractProof,
-} from './contract-proof'
-export {
   desktopRankedLookupInputSchema,
   desktopRankedLookupSchema,
   parseDesktopRankedLookupOutput,
