@@ -69,7 +69,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/web': ['@/'],
   },
   workspaceRoleDependencies: {
-    '@brawltome/database-migrations': ['adapter', 'capability'],
+    '@brawltome/database-migrations': ['adapter', 'capability', 'foundation'],
   },
   exceptions: [],
 }

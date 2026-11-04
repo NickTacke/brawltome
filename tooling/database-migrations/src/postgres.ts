@@ -1,5 +1,6 @@
+import type { Migration } from '@brawltome/foundation'
 import postgres from 'postgres'
-import { type AppliedMigration, type Migration, buildMigrationPlan } from './plan'
+import { type AppliedMigration, buildMigrationPlan } from './plan'
 import { runMigrations } from './run'
 
 const advisoryLockKey = 1_113_282_925

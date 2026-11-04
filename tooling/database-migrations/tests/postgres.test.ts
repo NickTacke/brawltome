@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { accountsMigrationInventory } from '@brawltome/accounts/composition'
 import { clanMigrationInventory } from '@brawltome/clan/composition'
 import { discoveryMigrationInventory } from '@brawltome/discovery/composition'
+import type { Migration } from '@brawltome/foundation'
 import { playerMigrationInventory } from '@brawltome/player/composition'
 import { rankingMigrationInventory } from '@brawltome/ranking/composition'
 import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations/composition'
@@ -11,7 +12,7 @@ import { requestAdmissionMigrationInventory } from '@brawltome/request-admission
 import { statisticsMigrationInventory } from '@brawltome/statistics/composition'
 import postgres from 'postgres'
 import { globalMigrationInventory } from '../src/inventories'
-import { type Migration, checksumSql } from '../src/plan'
+import { checksumSql } from '../src/plan'
 import { migratePostgres } from '../src/postgres'
 
 const connectionString = process.env.DATABASE_URL

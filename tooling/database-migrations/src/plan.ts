@@ -1,11 +1,5 @@
 import { createHash } from 'node:crypto'
-
-export type Migration = {
-  identity: string
-  predecessor: string | null
-  checksum: string
-  sql: string
-}
+import type { Migration } from '@brawltome/foundation'
 
 export type AppliedMigration = {
   identity: string

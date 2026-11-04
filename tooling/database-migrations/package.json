@@ -12,6 +12,7 @@
     "@brawltome/clan": "workspace:*",
     "@brawltome/database": "workspace:*",
     "@brawltome/discovery": "workspace:*",
+    "@brawltome/foundation": "workspace:*",
     "@brawltome/player": "workspace:*",
     "@brawltome/ranking": "workspace:*",
     "@brawltome/request-admission": "workspace:*",
