@@ -111,7 +111,7 @@ function decimal(value: unknown, path: string): string {
   return value
 }
 
-// derive one whole-string Latin-1 layer; persistence requires exact stored evidence before using it.
+// one whole-string Latin-1 layer only; persistence requires exact stored evidence before using it
 export function decodeV0CareerNameCandidate(value: string): string | null {
   const characters = [...value]
 
