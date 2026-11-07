@@ -306,25 +306,17 @@ function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
   return { code: 'invalid-ranked-observation' }
 }
 
-export function createPostgresStatistics(
-  database: Database,
-  options: {
-    now?: () => Date
-    legendReferences?: readonly LegendReference[]
-  } = {},
-) {
+export function createPostgresStatistics(database: Database, options: { now?: () => Date } = {}) {
   const client = database.sql
   const now = options.now ?? (() => new Date())
 
-  const legendReferences =
-    options.legendReferences ??
-    referenceLegends.map((legend) => ({
-      legendId: legend.heroId,
-      legendNameKey: legend.heroName,
-      bioName: legend.displayName,
-      weaponOne: legend.weaponOne,
-      weaponTwo: legend.weaponTwo,
-    }))
+  const legendReferences: readonly LegendReference[] = referenceLegends.map((legend) => ({
+    legendId: legend.heroId,
+    legendNameKey: legend.heroName,
+    bioName: legend.displayName,
+    weaponOne: legend.weaponOne,
+    weaponTwo: legend.weaponTwo,
+  }))
 
   async function members(sql: typeof client, cohortIds: readonly string[]): Promise<MemberRow[]> {
     if (cohortIds.length === 0) return []
