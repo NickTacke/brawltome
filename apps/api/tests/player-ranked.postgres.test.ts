@@ -86,12 +86,16 @@ async function claimRankedOperation(operations: PostgresRefreshOperations, brawl
     provenance: { source: 'integration-test' },
     reservationTtlSeconds: 30,
   })
+
   if (reserved.outcome !== 'reserved') throw new Error('Expected a reserved operation')
+
   await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
   const lease = await operations.claim('ranked-test-worker', 10_000, admission, 'interactive-player-refresh')
+
   if (!lease || lease.kind !== 'interactive-player-refresh' || lease.operationId !== reserved.operationId) {
     throw new Error('Expected an interactive lease')
   }
+
   return lease
 }
 
@@ -104,15 +108,19 @@ async function claimPulseOperation(operations: PostgresRefreshOperations, brawlh
     payload: { brawlhallaId },
     provenance: { source: 'integration-test' },
   })
+
   const lease = await operations.claim(`ranked-pulse-worker:${randomUUID()}`, 10_000, admission, 'ranked-player-pulse')
+
   if (!lease || lease.kind !== 'ranked-player-pulse' || lease.operationId !== accepted.operationId) {
     throw new Error('Expected a ranked pulse lease')
   }
+
   return lease
 }
 
 async function expireLease(operationId: string) {
   const control = postgres(connectionString, { max: 1 })
+
   try {
     await control`
       UPDATE refresh_operations.operations
@@ -138,6 +146,7 @@ function effectFor(lease: OperationLease) {
 const source = (payload: unknown) => ({
   getRanked: async (_id: number, options: { onAttempt(): void }) => {
     options.onAttempt()
+
     return payload
   },
 })
@@ -145,10 +154,12 @@ const source = (payload: unknown) => ({
 const pulseSource = (oneVsOne: unknown, fixedTeams: unknown = null) => ({
   getOneVsOne: async (_id: number, options: { onAttempt(): void }) => {
     options.onAttempt()
+
     return oneVsOne
   },
   getFixedTeams: async (_id: number, options: { onAttempt(): void }) => {
     options.onAttempt()
+
     return fixedTeams
   },
 })
@@ -158,6 +169,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const lease = await claimRankedOperation(operations, 91913839)
+
     expect(await operations.beginInteractiveSection(lease, 'ranked')).toBe('execute')
 
     await refreshCanonicalRankedPlayer(players, source(snapshot), 91913839, { caller: 'on-demand' }, effectFor(lease))
@@ -171,7 +183,9 @@ describe('Players-owned canonical ranked state', () => {
       bestLegendNameKey: null,
       legacyRating: null,
     })
+
     const profile = await players.byId(91913839)
+
     expect(profile?.snapshot).toMatchObject({
       oneVsOne: { rating: 0, games: 0, globalRank: null },
       rankedLegends: [],
@@ -179,6 +193,7 @@ describe('Players-owned canonical ranked state', () => {
       soloQueue: [{ rating: 1670, games: 2, region: 'EU' }],
       ratingHistory: [],
     })
+
     expect(profile?.checkedAt).toBeInstanceOf(Date)
     expect(profile?.lastSuccessAt).toEqual(profile?.checkedAt)
   })
@@ -189,6 +204,7 @@ describe('Players-owned canonical ranked state', () => {
     const operations = createPostgresRefreshOperations({ database })
     const lease = await claimRankedOperation(operations, brawlhallaId)
     const refreshed = { ...snapshot, brawlhalla_id: brawlhallaId, '2v2': [] }
+
     await refreshCanonicalRankedPlayer(
       writer,
       source(refreshed),
@@ -196,11 +212,14 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(lease),
     )
+
     // one connection: a career lookup made inside the profile's transaction would wait for it forever
     const oneConnection = createDatabase(connectionString, { maxConnections: 1, applicationName: 'brawltome-test' })
+
     const reader = createPostgresRankedPlayers(oneConnection, {
       resolveCareerMainLegend: async () => {
         await oneConnection.sql`SELECT 1`
+
         return { legendId: 3, legendNameKey: 'bodvar' }
       },
     })
@@ -219,6 +238,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const lease = await claimRankedOperation(operations, brawlhallaId)
+
     expect(
       await refreshCanonicalRankedPlayer(
         players,
@@ -228,9 +248,11 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(lease),
       ),
     ).toBe('applied')
+
     expect(await players.byId(brawlhallaId)).toMatchObject({
       snapshot: { oneVsOne: { rating: 1700 } },
     })
+
     expect(await players.referenceById(brawlhallaId)).toBeNull()
     expect(await operations.commitInteractiveSection(lease, 'ranked')).toBe('transitioned')
     expect(await operations.complete(lease)).toBe('transitioned')
@@ -241,14 +263,18 @@ describe('Players-owned canonical ranked state', () => {
     const control = postgres(connectionString, { max: 1 })
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
+
     try {
       await control`
         INSERT INTO players.legacy_discovery_profiles
           (brawlhalla_id, player_name, view_count, observed_at, archive_checksum)
         VALUES (${brawlhallaId}, 'Imported Identity', 0, clock_timestamp(), ${'a'.repeat(64)})
       `
+
       const lease = await claimRankedOperation(operations, brawlhallaId)
+
       expect(await operations.beginInteractiveSection(lease, 'ranked')).toBe('execute')
+
       await refreshCanonicalRankedPlayer(
         players,
         source({ ...snapshot, brawlhalla_id: brawlhallaId, name: '', '2v2': [] }),
@@ -256,6 +282,7 @@ describe('Players-owned canonical ranked state', () => {
         { caller: 'on-demand' },
         effectFor(lease),
       )
+
       expect(await operations.commitInteractiveSection(lease, 'ranked')).toBe('transitioned')
       expect(await operations.complete(lease)).toBe('transitioned')
       expect(await players.referenceById(brawlhallaId)).toMatchObject({ name: 'Imported Identity' })
@@ -269,6 +296,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const lease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source({ ...snapshot, brawlhalla_id: brawlhallaId, '2v2': [] }),
@@ -276,11 +304,13 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(lease),
     )
+
     expect(await operations.beginInteractiveSection(lease, 'ranked')).toBe('already-applied')
 
     await expireLease(lease.operationId)
     expect(await operations.claim('recovery-worker', 10_000, admission)).toBeNull()
     expect((await operations.inspect(lease.operationId)).operation.status).toBe('succeeded')
+
     expect(await players.referenceById(brawlhallaId)).toEqual({
       brawlhallaId,
       name: 'Canonical Player',
@@ -294,6 +324,7 @@ describe('Players-owned canonical ranked state', () => {
     const brawlhallaId = 91913840
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
+
     const populated = {
       ...snapshot,
       brawlhalla_id: brawlhallaId,
@@ -329,7 +360,9 @@ describe('Players-owned canonical ranked state', () => {
         },
       ],
     }
+
     const firstLease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source(populated),
@@ -337,13 +370,16 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(firstLease),
     )
+
     await operations.commitInteractiveSection(firstLease, 'ranked')
     await operations.complete(firstLease)
     const first = await players.byId(brawlhallaId)
+
     if (!first?.lastSuccessAt) throw new Error('Expected an initial success')
 
     await Bun.sleep(5)
     const retryLease = await claimRankedOperation(operations, brawlhallaId)
+
     await expect(
       refreshCanonicalRankedPlayer(
         players,
@@ -355,6 +391,7 @@ describe('Players-owned canonical ranked state', () => {
     ).rejects.toThrow('ranked.legends must be an array')
 
     const afterFailure = await players.byId(brawlhallaId)
+
     expect(afterFailure?.lastSuccessAt).toEqual(first.lastSuccessAt)
     expect(afterFailure?.checkedAt.getTime()).toBeGreaterThan(first.checkedAt.getTime())
     expect(afterFailure?.snapshot?.rankedLegends).toHaveLength(1)
@@ -373,10 +410,12 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(retryLease),
     )
+
     await operations.commitInteractiveSection(retryLease, 'ranked')
     await operations.complete(retryLease)
 
     const applied = await players.byId(brawlhallaId)
+
     expect(applied?.snapshot).toMatchObject({
       rankedLegends: [],
       fixedTeams: [],
@@ -400,6 +439,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source({ ...snapshot, brawlhalla_id: brawlhallaId, rating: 1500, games: 10, '2v2': [] }),
@@ -407,6 +447,7 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(canonicalLease),
     )
+
     await operations.commitInteractiveSection(canonicalLease, 'ranked')
     await operations.complete(canonicalLease)
 
@@ -418,6 +459,7 @@ describe('Players-owned canonical ranked state', () => {
       payload: { brawlhallaId },
       provenance: { source: 'integration-test' },
     })
+
     expect(
       await runOneRefreshOperation(operations, 'ranked-pulse-worker', {
         leaseMs: 10_000,
@@ -438,7 +480,9 @@ describe('Players-owned canonical ranked state', () => {
         },
       }),
     ).toBe(true)
+
     expect((await operations.inspect(accepted.operationId)).operation.status).toBe('succeeded')
+
     expect(await players.byId(brawlhallaId)).toMatchObject({
       lastSuccessAt: expect.any(Date),
       sparsePulse: {
@@ -459,6 +503,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source({
@@ -518,12 +563,15 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(canonicalLease),
     )
+
     await operations.commitInteractiveSection(canonicalLease, 'ranked')
     await operations.complete(canonicalLease)
     const canonical = await players.byId(brawlhallaId)
+
     if (!canonical?.lastSuccessAt) throw new Error('Expected canonical ranked state')
 
     const pulseLease = await claimPulseOperation(operations, brawlhallaId)
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -578,10 +626,13 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(pulseLease),
       ),
     ).toBe('applied')
+
     await operations.complete(pulseLease)
 
     const updated = await players.byId(brawlhallaId)
+
     expect(updated?.lastSuccessAt).toEqual(canonical.lastSuccessAt)
+
     expect(updated?.snapshot).toMatchObject({
       oneVsOne: {
         rating: 1700,
@@ -623,15 +674,19 @@ describe('Players-owned canonical ranked state', () => {
       soloQueue: [{ rating: 1670, games: 2, region: 'EU' }],
       ratingHistory: [{ rating: 1600, games: 10, tier: 'Gold 4' }],
     })
+
     const pulseStatus = await players.pulseStatusById(brawlhallaId)
+
     expect(pulseStatus).toMatchObject({
       checkedAt: expect.any(Date),
       lastSuccessAt: expect.any(Date),
     })
 
     const stalePulseLease = await claimPulseOperation(operations, brawlhallaId)
+
     await Bun.sleep(2)
     const newerCanonicalLease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source({
@@ -663,8 +718,10 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(newerCanonicalLease),
     )
+
     await operations.commitInteractiveSection(newerCanonicalLease, 'ranked')
     await operations.complete(newerCanonicalLease)
+
     expect(await players.byId(brawlhallaId)).toMatchObject({
       snapshot: {
         oneVsOne: { rating: 1800, peakRating: 1820, tier: 'Platinum 1', wins: 9, games: 15 },
@@ -675,7 +732,9 @@ describe('Players-owned canonical ranked state', () => {
         ],
       },
     })
+
     expect(await players.pulseStatusById(brawlhallaId)).toEqual(pulseStatus)
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -685,11 +744,13 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(stalePulseLease),
       ),
     ).toBe('stale')
+
     expect(await players.pulseStatusById(brawlhallaId)).toEqual(pulseStatus)
     await operations.complete(stalePulseLease)
 
     await Bun.sleep(2)
     const sparsePulseLease = await claimPulseOperation(operations, brawlhallaId)
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -707,12 +768,14 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(sparsePulseLease),
       ),
     ).toBe('applied')
+
     expect(await players.byId(brawlhallaId)).toMatchObject({
       snapshot: {
         oneVsOne: { rating: 1850, peakRating: 1820, wins: 9, games: 15 },
         fixedTeams: [{ rating: 1650, peakRating: 1610, wins: 8, games: 14 }],
       },
     })
+
     await operations.complete(sparsePulseLease)
   })
 
@@ -721,6 +784,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source({ ...snapshot, brawlhalla_id: brawlhallaId, '2v2': [] }),
@@ -728,6 +792,7 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(canonicalLease),
     )
+
     await operations.commitInteractiveSection(canonicalLease, 'ranked')
     await operations.complete(canonicalLease)
     const canonical = await players.byId(brawlhallaId)
@@ -739,8 +804,10 @@ describe('Players-owned canonical ranked state', () => {
       { brawlhalla_id: brawlhallaId, tier: 'Gold' },
       { brawlhalla_id: brawlhallaId, rating: 'malformed' },
     ]
+
     for (const attempt of attempts) {
       const lease = await claimPulseOperation(operations, brawlhallaId)
+
       const run = refreshRankedPlayerPulse(
         players,
         attempt instanceof Error
@@ -756,11 +823,13 @@ describe('Players-owned canonical ranked state', () => {
         { caller: 'background' },
         effectFor(lease),
       )
+
       expect(await run).toBe('no-op')
       await operations.complete(lease)
     }
 
     const admissionLease = await claimPulseOperation(operations, brawlhallaId)
+
     await expect(
       refreshRankedPlayerPulse(
         players,
@@ -775,6 +844,7 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(admissionLease),
       ),
     ).rejects.toThrow('source admission blocked')
+
     await operations.fail(
       admissionLease,
       { code: 'expected_admission_failure', message: 'expected', retryable: false },
@@ -782,6 +852,7 @@ describe('Players-owned canonical ranked state', () => {
     )
 
     const crashLease = await claimPulseOperation(operations, brawlhallaId)
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -791,6 +862,7 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(crashLease),
       ),
     ).toBe('no-op')
+
     await expireLease(crashLease.operationId)
     expect(await operations.claim('ranked-noop-recovery', 10_000, admission)).toBeNull()
     expect((await operations.inspect(crashLease.operationId)).operation.status).toBe('succeeded')
@@ -799,6 +871,7 @@ describe('Players-owned canonical ranked state', () => {
       ...canonical,
       sparsePulse: { checkedAt: expect.any(Date), lastSuccessAt: null },
     })
+
     expect(await players.pulseStatusById(brawlhallaId)).toMatchObject({
       checkedAt: expect.any(Date),
       lastSuccessAt: null,
@@ -810,6 +883,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
+
     const canonicalTeams = [
       {
         brawlhalla_id_one: brawlhallaId,
@@ -836,6 +910,7 @@ describe('Players-owned canonical ranked state', () => {
         global_rank: 0,
       },
     ]
+
     await refreshCanonicalRankedPlayer(
       players,
       source({ ...snapshot, brawlhalla_id: brawlhallaId, rating: 1500, games: 10, '2v2': canonicalTeams }),
@@ -843,31 +918,38 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(canonicalLease),
     )
+
     await operations.commitInteractiveSection(canonicalLease, 'ranked')
     await operations.complete(canonicalLease)
 
     const older = await claimPulseOperation(operations, brawlhallaId)
+
     await Bun.sleep(2)
     const newer = await claimPulseOperation(operations, brawlhallaId)
     let releaseOlder!: () => void
     let markOlderStarted!: () => void
+
     const olderStarted = new Promise<void>((resolve) => {
       markOlderStarted = resolve
     })
+
     const olderBlocked = new Promise<void>((resolve) => {
       releaseOlder = resolve
     })
+
     const olderRun = refreshRankedPlayerPulse(
       players,
       {
         getOneVsOne: async (_id: number, options: { onAttempt(): void }) => {
           options.onAttempt()
+
           return null
         },
         getFixedTeams: async (_id: number, options: { onAttempt(): void }) => {
           options.onAttempt()
           markOlderStarted()
           await olderBlocked
+
           return {
             brawlhalla_id: brawlhallaId,
             teams: { ranked_2v2: [{ brawlhalla_id_one: brawlhallaId, brawlhalla_id_two: 43, rating: 1510 }] },
@@ -878,7 +960,9 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'background' },
       effectFor(older),
     )
+
     await olderStarted
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -894,8 +978,10 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(newer),
       ),
     ).toBe('applied')
+
     releaseOlder()
     expect(await olderRun).toBe('applied')
+
     expect(await players.byId(brawlhallaId)).toMatchObject({
       snapshot: {
         oneVsOne: { rating: 1700 },
@@ -905,6 +991,7 @@ describe('Players-owned canonical ranked state', () => {
         ],
       },
     })
+
     for (const lease of [older, newer]) await operations.complete(lease)
   })
 
@@ -915,6 +1002,7 @@ describe('Players-owned canonical ranked state', () => {
     let players = createPostgresRankedPlayers(playersClient)
     const operations = createPostgresRefreshOperations({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
+
     await refreshCanonicalRankedPlayer(
       players,
       source({ ...snapshot, brawlhalla_id: brawlhallaId, rating: 1500, games: 10, '2v2': [] }),
@@ -922,21 +1010,26 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(canonicalLease),
     )
+
     await operations.commitInteractiveSection(canonicalLease, 'ranked')
     await operations.complete(canonicalLease)
 
     const older = await claimPulseOperation(operations, brawlhallaId)
+
     await Bun.sleep(2)
     const newer = await claimPulseOperation(operations, brawlhallaId)
 
     let releaseOlder!: () => void
     let markOlderStarted!: () => void
+
     const olderStarted = new Promise<void>((resolve) => {
       markOlderStarted = resolve
     })
+
     const olderBlocked = new Promise<void>((resolve) => {
       releaseOlder = resolve
     })
+
     const olderRun = refreshRankedPlayerPulse(
       players,
       {
@@ -944,6 +1037,7 @@ describe('Players-owned canonical ranked state', () => {
           options.onAttempt()
           markOlderStarted()
           await olderBlocked
+
           return { brawlhalla_id: brawlhallaId, rating: 1600, games: 11 }
         },
         getFixedTeams: async () => null,
@@ -952,7 +1046,9 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'background' },
       effectFor(older),
     )
+
     await olderStarted
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -962,8 +1058,10 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(newer),
       ),
     ).toBe('applied')
+
     releaseOlder()
     expect(await olderRun).toBe('stale')
+
     expect(
       await refreshRankedPlayerPulse(
         players,
@@ -973,6 +1071,7 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(newer),
       ),
     ).toBe('already-applied')
+
     await operations.complete(older)
     await operations.complete(newer)
 
@@ -980,6 +1079,7 @@ describe('Players-owned canonical ranked state', () => {
     playersClient = openTestClient(database.connectionString)
     players = createPostgresRankedPlayers(playersClient)
     const afterRestart = await players.byId(brawlhallaId)
+
     await playersClient.close()
 
     expect(afterRestart).toMatchObject({
@@ -992,16 +1092,20 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
     const older = await claimPulseOperation(operations, brawlhallaId)
+
     await Bun.sleep(2)
     const newer = await claimPulseOperation(operations, brawlhallaId)
     let releaseOlder!: () => void
     let markOlderStarted!: () => void
+
     const olderStarted = new Promise<void>((resolve) => {
       markOlderStarted = resolve
     })
+
     const olderBlocked = new Promise<void>((resolve) => {
       releaseOlder = resolve
     })
+
     const olderRun = refreshCanonicalRankedPlayer(
       players,
       {
@@ -1009,6 +1113,7 @@ describe('Players-owned canonical ranked state', () => {
           options.onAttempt()
           markOlderStarted()
           await olderBlocked
+
           return {
             ...snapshot,
             brawlhalla_id: brawlhallaId,
@@ -1023,7 +1128,9 @@ describe('Players-owned canonical ranked state', () => {
       { caller: 'on-demand' },
       effectFor(older),
     )
+
     await olderStarted
+
     expect(
       await refreshCanonicalRankedPlayer(
         players,
@@ -1040,11 +1147,14 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(newer),
       ),
     ).toBe('applied')
+
     releaseOlder()
     expect(await olderRun).toBe('stale')
+
     expect(await players.byId(brawlhallaId)).toMatchObject({
       snapshot: { oneVsOne: { rating: 1700, games: 12 }, ratingHistory: [{ rating: 1700, games: 12 }] },
     })
+
     for (const lease of [older, newer]) await operations.complete(lease)
   })
 
@@ -1052,6 +1162,7 @@ describe('Players-owned canonical ranked state', () => {
     const brawlhallaId = 91913842
     const players = createPostgresRankedPlayers(database)
     const operations = createPostgresRefreshOperations({ database })
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `ranked:${randomUUID()}`,
       operationKey: `ranked:${randomUUID()}`,
@@ -1060,10 +1171,14 @@ describe('Players-owned canonical ranked state', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected a reserved operation')
+
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
     const lease = await operations.claim('expired-ranked-worker', 10_000, admission)
+
     if (!lease || lease.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')
+
     await expireLease(lease.operationId)
 
     await expect(
@@ -1075,6 +1190,7 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(lease),
       ),
     ).rejects.toThrow('lease lost')
+
     await expect(
       refreshRankedPlayerPulse(
         players,
@@ -1084,6 +1200,7 @@ describe('Players-owned canonical ranked state', () => {
         effectFor(lease),
       ),
     ).rejects.toThrow('lease lost')
+
     expect(await players.byId(brawlhallaId)).toBeNull()
   })
 })

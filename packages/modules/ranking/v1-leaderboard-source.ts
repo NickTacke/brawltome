@@ -61,6 +61,7 @@ function requiredInteger(value: unknown, field: string, minimum: number): number
   if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > 2_147_483_647) {
     invalid(`${field} must be an integer between ${minimum} and 2147483647`)
   }
+
   return value as number
 }
 
@@ -68,12 +69,15 @@ function requiredName(value: unknown, field: string, playerId: number): string {
   if (typeof value !== 'string' || [...value].length > 256) {
     invalid(`${field} must be a string containing at most 256 Unicode characters`)
   }
+
   return /[^\p{Separator}\p{Format}]/u.test(value) ? value : `Name unavailable #${playerId}`
 }
 
 function decodePlayer(value: unknown, field: string): SourcePlayer {
   if (!isObject(value)) invalid(`${field} must be an object`)
+
   const id = requiredInteger(value.id, `${field}.id`, 1)
+
   return {
     id,
     username: requiredName(value.username, `${field}.username`, id),
@@ -82,16 +86,22 @@ function decodePlayer(value: unknown, field: string): SourcePlayer {
 
 function decodeIdentity(value: unknown, mode: LeaderboardMode, index: number): SourceLeaderboardIdentity {
   if (!Array.isArray(value)) invalid(`rankings[${index}].players must be an array`)
+
   const expectedCount = mode === '2v2' ? 2 : 1
+
   if (value.length !== expectedCount) {
     invalid(
       `rankings[${index}].players must contain exactly ${expectedCount} player object${expectedCount === 1 ? '' : 's'}`,
     )
   }
+
   const players = value.map((entry, playerIndex) => decodePlayer(entry, `rankings[${index}].players[${playerIndex}]`))
+
   if (mode === '2v2') {
     const [first, second] = players
+
     if (!first || !second) invalid(`rankings[${index}].players must contain two players`)
+
     if (first.id === second.id && first.username === second.username) {
       throw new LeaderboardSourceError(
         'source_data_inconsistent',
@@ -99,29 +109,41 @@ function decodeIdentity(value: unknown, mode: LeaderboardMode, index: number): S
         true,
       )
     }
+
     const canonical =
       first.id < second.id || (first.id === second.id && first.username.localeCompare(second.username) < 0)
         ? [first, second]
         : [second, first]
+
     return { type: 'fixed-two-vs-two-team', players: canonical as [SourcePlayer, SourcePlayer] }
   }
+
   const player = players[0]
+
   if (!player) invalid(`rankings[${index}].players must contain one player`)
+
   if (mode === '1v1') return { type: 'one-vs-one-player', player }
+
   if (mode === 'solo2v2') return { type: 'solo-two-vs-two-player', player }
+
   return { type: 'three-vs-three-player', player }
 }
 
 function decodeRow(value: unknown, mode: LeaderboardMode, index: number): SourceLeaderboardRow {
   if (!isObject(value)) invalid(`rankings[${index}] must be an object`)
+
   const region = typeof value.region === 'string' ? normalizeRegion(value.region) : value.region
+
   if (!regionalLeaderboardScopes.includes(region as RegionalLeaderboardScope)) {
     invalid(`rankings[${index}].region must be a supported region`)
   }
+
   const tier = value.tier
+
   if (tier !== undefined && tier !== null && (typeof tier !== 'string' || tier.length < 1 || tier.length > 100)) {
     invalid(`rankings[${index}].tier must be a non-empty bounded string when present`)
   }
+
   const rating = requiredInteger(value.rating, `rankings[${index}].rating`, 0)
   const bestRating = requiredInteger(value.best_rating, `rankings[${index}].best_rating`, 0)
   // Live V1 rows sometimes report a season peak below the current rating (several per deep US-E page range). Rejecting
@@ -129,7 +151,9 @@ function decodeRow(value: unknown, mode: LeaderboardMode, index: number): Source
   const peakRating = Math.max(bestRating, rating)
   const wins = requiredInteger(value.wins, `rankings[${index}].wins`, 0)
   const losses = requiredInteger(value.losses, `rankings[${index}].losses`, 0)
+
   if (wins + losses > 2_147_483_647) invalid(`rankings[${index}] wins plus losses exceeds int32`)
+
   return {
     identity: decodeIdentity(value.players, mode, index),
     rating,
@@ -147,15 +171,22 @@ export function decodeLeaderboardPage(
   expected: { mode: LeaderboardMode; region: RegionalLeaderboardScope; page: number },
 ): SourceLeaderboardPage {
   if (!leaderboardModes.includes(expected.mode)) invalid(`unsupported leaderboard mode ${expected.mode}`)
+
   if (!isObject(value)) invalid('leaderboard response must be an object')
+
   if (!Array.isArray(value.rankings)) invalid('rankings must be an array')
+
   if (value.rankings.length > 50) invalid('rankings cannot contain more than 50 rows')
+
   const totalPages = requiredInteger(value.total_pages, 'total_pages', 0)
+
   // Empty regions report zero pages, e.g. after a season reset.
   if (totalPages === 0 && value.rankings.length > 0) invalid('total_pages 0 cannot contain rankings')
+
   if (!Number.isSafeInteger(expected.page) || expected.page < 1 || expected.page > Math.max(1, totalPages)) {
     invalid(`requested page ${expected.page} exceeds total_pages ${totalPages}`)
   }
+
   return {
     rankings: value.rankings.map((row, index) => decodeRow(row, expected.mode, index)),
     totalPages,
@@ -163,6 +194,7 @@ export function decodeLeaderboardPage(
 }
 
 const sourceBase = 'https://api.brawlhalla.com/v1/leaderboard/ranked'
+
 const sourceModes: Record<LeaderboardMode, string> = {
   '1v1': '1v1',
   '2v2': '2v2',
@@ -173,9 +205,13 @@ const sourceModes: Record<LeaderboardMode, string> = {
 function retryAfterSeconds(response: Response): number {
   const value = response.headers.get('retry-after') ?? ''
   const seconds = Number.parseInt(value, 10)
+
   if (Number.isFinite(seconds) && seconds > 0) return seconds + 1
+
   const dateMs = Date.parse(value)
+
   if (Number.isFinite(dateMs) && dateMs > Date.now()) return Math.ceil((dateMs - Date.now()) / 1_000) + 1
+
   return 6
 }
 
@@ -190,14 +226,18 @@ export async function fetchLeaderboardPage(
   if (!leaderboardModes.includes(input.mode)) {
     throw new LeaderboardSourceError('source_contract_invalid', `unsupported source mode ${input.mode}`, false)
   }
+
   if (!regionalLeaderboardScopes.includes(input.region)) {
     throw new LeaderboardSourceError('source_contract_invalid', `unsupported source region ${input.region}`, false)
   }
+
   if (!Number.isSafeInteger(input.page) || input.page < 1) {
     throw new LeaderboardSourceError('source_contract_invalid', 'source page must be a positive integer', false)
   }
+
   const url = `${sourceBase}?region=${input.region}&game_mode=${sourceModes[input.mode]}&page=${input.page}&max_results=50&leaderboard=prod`
   let response: Response
+
   try {
     response = await (dependencies.fetcher ?? fetch)(url, {
       signal: AbortSignal.timeout(dependencies.timeoutMs ?? 15_000),
@@ -210,6 +250,7 @@ export async function fetchLeaderboardPage(
       { cause: error },
     )
   }
+
   if (!response.ok) {
     if (response.status === 429) {
       await dependencies.onRateLimited?.(retryAfterSeconds(response))
@@ -219,6 +260,7 @@ export async function fetchLeaderboardPage(
         true,
       )
     }
+
     if (response.status === 404) {
       throw new LeaderboardSourceError(
         'source_not_found',
@@ -226,13 +268,16 @@ export async function fetchLeaderboardPage(
         false,
       )
     }
+
     throw new LeaderboardSourceError(
       'source_unavailable',
       `V1 leaderboard returned ${response.status} for ${input.mode}/${input.region}`,
       response.status >= 500,
     )
   }
+
   let body: unknown
+
   try {
     body = await response.json()
   } catch (error) {
@@ -240,5 +285,6 @@ export async function fetchLeaderboardPage(
       cause: error,
     })
   }
+
   return decodeLeaderboardPage(body, input)
 }

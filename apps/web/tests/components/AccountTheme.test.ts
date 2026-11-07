@@ -3,6 +3,7 @@ import { resolveAccountTheme } from '../../src/components/AccountTheme'
 
 const account = { id: 'account-id' }
 const purplePreferences = { theme: 'purple' as const }
+
 const ready = {
   account,
   accountLoading: false,

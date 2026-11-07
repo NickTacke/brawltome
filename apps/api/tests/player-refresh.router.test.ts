@@ -37,10 +37,12 @@ function harness(
   let reserveInput: unknown
   const operationId = crypto.randomUUID()
   const playerReferenceQueries: PlayerReferenceQueries = { byId: async () => cached }
+
   const operations: InteractiveRefreshOperations = {
     findActiveInteractivePlayerRefresh: async (dedupeKey, brawlhallaId) => {
       activeLookupDedupeKey = dedupeKey
       activeLookupPlayerId = brawlhallaId
+
       return options.activeOperationId
         ? {
             operationId: options.activeOperationId,
@@ -53,6 +55,7 @@ function harness(
     reserveInteractivePlayerRefresh: async (input) => {
       calls.reserve++
       reserveInput = input
+
       return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() }
     },
     reserveInteractiveClanRefresh: async () => ({
@@ -62,15 +65,18 @@ function harness(
     }),
     activateInteractiveRefresh: async () => {
       calls.activate++
+
       return 'transitioned'
     },
     activateAdmittedInteractiveRefresh: async () => {
       calls.activate++
+
       return 'transitioned'
     },
     rejectInteractiveRefresh: async () => 'transitioned',
     rejectExpiredInteractiveRefresh: async () => 'transitioned',
   }
+
   const context = {
     internalSecret: secret,
     discordInternalSecret: options.discordCredential === false ? undefined : discordSecret,
@@ -85,10 +91,13 @@ function harness(
         if ('rankedLastSuccess' in options) {
           return options.rankedLastSuccess ? { lastSuccessAt: options.rankedLastSuccess } : null
         }
+
         const stored = options.player === undefined ? stalePlayer : options.player
+
         if (!stored || typeof stored !== 'object' || !('rankedLastUpdated' in stored) || !stored.rankedLastUpdated) {
           return null
         }
+
         return { lastSuccessAt: stored.rankedLastUpdated }
       },
     },
@@ -99,10 +108,13 @@ function harness(
             ? { lastSuccessAt: options.careerLastSuccess, snapshotSource: options.careerSnapshotSource ?? null }
             : null
         }
+
         const stored = options.player === undefined ? stalePlayer : options.player
+
         if (!stored || typeof stored !== 'object' || !('statsLastUpdated' in stored) || !stored.statsLastUpdated) {
           return null
         }
+
         return { lastSuccessAt: stored.statsLastUpdated }
       },
     },
@@ -111,11 +123,13 @@ function harness(
       admitActor: async (actor: { kind: string }) => {
         calls.actor++
         calls.actorKind = actor.kind
+
         return options.actor ?? { outcome: 'admitted' }
       },
       hasActorReservation: async () => options.actorReserved ?? false,
       admitSource: async () => {
         calls.source++
+
         return options.source ?? { outcome: 'admitted', deduplicated: false }
       },
     },
@@ -125,9 +139,11 @@ function harness(
     },
     verifyRefreshChallenge: async () => {
       calls.verify++
+
       return options.verification ?? 'invalid'
     },
   } as unknown as Context
+
   return {
     context,
     calls,
@@ -142,6 +158,7 @@ function caller(options: Parameters<typeof harness>[0] = {}) {
   const result = harness(options)
   const procedure = createInternalProcedure(secret)
   const discordProcedure = createDiscordBotProcedure(secret, discordSecret)
+
   return {
     ...result,
     canonical: createCanonicalPlayerRefreshRouter(procedure, discordProcedure, options.now).createCaller(
@@ -156,10 +173,12 @@ describe('canonical player interactive refresh', () => {
     const { canonical, calls } = caller({
       player: { rankedLastUpdated: new Date(), statsLastUpdated: new Date() },
     })
+
     await expect(canonical.requestRefresh({ id: 42 })).resolves.toEqual({
       player: cached,
       refresh: { outcome: 'notNeeded', retry: { kind: 'none' } },
     })
+
     expect(calls).toEqual({
       verify: 0,
       actor: 0,
@@ -174,18 +193,22 @@ describe('canonical player interactive refresh', () => {
   test('uses canonical last-success rather than checked-at or legacy ranked timestamps for freshness', async () => {
     const freshStats = { rankedLastUpdated: new Date(), statsLastUpdated: new Date() }
     const stale = caller({ player: freshStats, rankedLastSuccess: null, trusted: true })
+
     await expect(stale.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       refresh: { outcome: 'accepted' },
     })
+
     expect(stale.calls.reserve).toBe(1)
 
     const fresh = caller({
       player: { rankedLastUpdated: null, statsLastUpdated: new Date() },
       rankedLastSuccess: new Date(),
     })
+
     await expect(fresh.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       refresh: { outcome: 'notNeeded' },
     })
+
     expect(fresh.calls.reserve).toBe(0)
   })
 
@@ -196,6 +219,7 @@ describe('canonical player interactive refresh', () => {
       careerLastSuccess: null,
       trusted: true,
     })
+
     await expect(missingCareer.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       refresh: { outcome: 'accepted' },
     })
@@ -205,6 +229,7 @@ describe('canonical player interactive refresh', () => {
       rankedLastSuccess: new Date(),
       careerLastSuccess: new Date(),
     })
+
     await expect(freshCareer.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       refresh: { outcome: 'notNeeded' },
     })
@@ -217,21 +242,25 @@ describe('canonical player interactive refresh', () => {
       careerSnapshotSource: 'legacy-v2',
       trusted: true,
     })
+
     await expect(historical.canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       refresh: { outcome: 'accepted' },
     })
+
     expect(historical.reserveInput()).toMatchObject({ staleSections: ['stats'] })
   })
 
   test('includes newly stale canonical domains in dedupe identity without changing stored timestamps', async () => {
     const lastSuccess = new Date('2026-08-10T00:00:00.000Z')
     const activeOperationId = crypto.randomUUID()
+
     const rankedOnly = caller({
       activeOperationId,
       rankedLastSuccess: lastSuccess,
       careerLastSuccess: lastSuccess,
       now: () => Date.parse('2026-08-10T02:00:00.000Z'),
     })
+
     await rankedOnly.canonical.requestRefresh({ id: 42 })
 
     const rankedAndCareer = caller({
@@ -240,6 +269,7 @@ describe('canonical player interactive refresh', () => {
       careerLastSuccess: lastSuccess,
       now: () => Date.parse('2026-08-10T13:00:00.000Z'),
     })
+
     await rankedAndCareer.canonical.requestRefresh({ id: 42 })
 
     expect(rankedOnly.activeLookupDedupeKey()).not.toBe(rankedAndCareer.activeLookupDedupeKey())
@@ -248,6 +278,7 @@ describe('canonical player interactive refresh', () => {
   test('returns alreadyRefreshing before verification or source admission', async () => {
     const activeOperationId = crypto.randomUUID()
     const { canonical, calls, activeLookupPlayerId } = caller({ activeOperationId })
+
     await expect(canonical.requestRefresh({ id: 42 })).resolves.toEqual({
       player: cached,
       refresh: {
@@ -256,6 +287,7 @@ describe('canonical player interactive refresh', () => {
         retry: { kind: 'poll', afterSeconds: 2 },
       },
     })
+
     expect(calls.source).toBe(0)
     expect(calls.verify).toBe(0)
     expect(activeLookupPlayerId()).toBe(42)
@@ -264,10 +296,12 @@ describe('canonical player interactive refresh', () => {
   test('reconciles actor-admitted work after an activation crash without charging again', async () => {
     const activeOperationId = crypto.randomUUID()
     const { canonical, calls } = caller({ activeOperationId, activeAwaiting: true, actorReserved: true })
+
     await expect(canonical.requestRefresh({ id: 42 })).resolves.toMatchObject({
       player: cached,
       refresh: { outcome: 'alreadyRefreshing', operationId: activeOperationId },
     })
+
     expect(calls.activate).toBe(1)
     expect(calls.actor).toBe(0)
     expect(calls.source).toBe(0)
@@ -275,20 +309,24 @@ describe('canonical player interactive refresh', () => {
 
   test('returns verificationRequired, rateLimited, and temporarilyUnavailable with unchanged cache', async () => {
     const verification = caller({ verification: 'invalid' })
+
     await expect(verification.canonical.requestRefresh({ id: 42 })).resolves.toEqual({
       player: cached,
       refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } },
     })
 
     const limited = caller({ verification: 'valid', actor: { outcome: 'rate-limited', retryAfterSeconds: 77 } })
+
     await expect(limited.canonical.requestRefresh({ id: 42, turnstileToken: 'valid-token' })).resolves.toEqual({
       player: cached,
       refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: 77 } },
     })
+
     expect(limited.calls.source).toBe(0)
     expect(limited.calls.grant).toBe(1)
 
     const unavailable = caller({ verification: 'unavailable' })
+
     await expect(unavailable.canonical.requestRefresh({ id: 42, turnstileToken: 'token' })).resolves.toEqual({
       player: cached,
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
@@ -297,27 +335,33 @@ describe('canonical player interactive refresh', () => {
 
   test('counts each user-facing refresh outcome by kind and source', async () => {
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
+
     await caller({
       telemetry,
       player: { rankedLastUpdated: new Date(), statsLastUpdated: new Date() },
     }).canonical.requestRefresh({ id: 42 })
+
     await caller({ telemetry, verification: 'invalid' }).canonical.requestRefresh({ id: 42 })
     await caller({ telemetry, verification: 'unavailable' }).canonical.requestRefresh({ id: 42, turnstileToken: 't' })
+
     await caller({
       telemetry,
       trusted: true,
       actor: { outcome: 'rate-limited', retryAfterSeconds: 5 },
     }).canonical.requestRefresh({ id: 42 })
+
     await caller({ telemetry, trusted: true }).canonical.requestRefresh({ id: 42 })
     await caller({ telemetry, trusted: true }).canonical.requestRefresh({ id: 42 })
     await caller({ telemetry, activeOperationId: crypto.randomUUID() }).canonical.requestRefresh({ id: 42 })
     await caller({ telemetry }).canonical.refreshDiscord({ id: 42, discordUserId: '123456789012345678' })
 
     const output = renderPrometheus(telemetry.metrics.snapshot())
+
     const count = (outcome: string, source = 'interactive-api') =>
       output.match(
         new RegExp(`^refresh_requests_total\\{kind="player",outcome="${outcome}",source="${source}"\\} (\\d+)$`, 'm'),
       )?.[1]
+
     expect(count('notNeeded')).toBe('1')
     expect(count('verificationRequired')).toBe('1')
     expect(count('temporarilyUnavailable')).toBe('1')
@@ -331,10 +375,12 @@ describe('canonical player interactive refresh', () => {
   test('authenticated and trusted callers bypass verification without rolling trust', async () => {
     for (const options of [{ authenticated: true }, { trusted: true }]) {
       const { canonical, calls, operationId } = caller(options)
+
       await expect(canonical.requestRefresh({ id: 42 })).resolves.toEqual({
         player: cached,
         refresh: { outcome: 'accepted', operationId, retry: { kind: 'poll', afterSeconds: 2 } },
       })
+
       expect(calls.verify).toBe(0)
       expect(calls.grant).toBe(0)
       expect(calls.source).toBe(0)
@@ -343,11 +389,13 @@ describe('canonical player interactive refresh', () => {
 
   test('requires the Discord service credential and refreshes only stale canonical domains', async () => {
     const genericInternalCaller = caller({ discordCredential: false })
+
     await expect(
       genericInternalCaller.canonical.refreshDiscord({ id: 42, discordUserId: '123456789012345678' }),
     ).rejects.toThrow('Access denied')
 
     const discord = caller({ rankedLastSuccess: null, careerLastSuccess: new Date() })
+
     await expect(
       discord.canonical.requestRefresh({ id: 42, discordUserId: '123456789012345678' } as never),
     ).rejects.toThrow()
@@ -358,7 +406,9 @@ describe('canonical player interactive refresh', () => {
       player: cached,
       refresh: { outcome: 'accepted' },
     })
+
     expect(discord.calls.actorKind).toBe('discord')
+
     expect(discord.reserveInput()).toMatchObject({
       brawlhallaId: 42,
       staleSections: ['ranked'],
@@ -368,9 +418,11 @@ describe('canonical player interactive refresh', () => {
 
   test('keeps the V2 input/output usable while mapping canonical polling outcomes', async () => {
     const accepted = caller({ authenticated: true })
+
     await expect(accepted.v2.refresh({ id: 42, turnstileToken: '' })).resolves.toEqual({ isRefreshing: true })
 
     const blocked = caller({ verification: 'invalid' })
+
     await expect(blocked.v2.refresh({ id: 42, turnstileToken: 'bad' })).resolves.toEqual({ isRefreshing: false })
   })
 })

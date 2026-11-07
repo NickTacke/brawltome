@@ -36,10 +36,12 @@ export function dependenciesOf(migration: Migration): string[] {
 
 function validateDependencies(migrations: readonly Migration[]): void {
   const identities = new Set<string>()
+
   for (const { identity } of migrations) {
     if (identities.has(identity)) {
       throw new Error(`duplicate migration identity ${identity}`)
     }
+
     identities.add(identity)
   }
 
@@ -49,6 +51,7 @@ function validateDependencies(migrations: readonly Migration[]): void {
     }
 
     const unknownRequirement = migration.requires?.find((identity) => !identities.has(identity))
+
     if (unknownRequirement) {
       throw new Error(`unknown requirement ${unknownRequirement} for ${migration.identity}`)
     }
@@ -63,6 +66,7 @@ function orderDeployed(migrations: readonly Migration[]): Migration[] {
 
   for (const migration of present) {
     const laterDependency = dependenciesOf(migration).find((identity) => !placed.has(identity))
+
     if (laterDependency) {
       throw new Error(
         `deployed migration ${migration.identity} cannot depend on ${laterDependency}, which does not come before it in the deployed order`,
@@ -83,11 +87,13 @@ function orderByDependencies(migrations: readonly Migration[], placed: ReadonlyS
 
   while (remaining.size > 0) {
     const ready = readyIdentities(remaining, done)
+
     if (ready.length === 0) {
       throw new Error(`migrations depend on each other in a cycle: ${findCycle(remaining).join(' -> ')}`)
     }
 
     const next = remaining.get(ready[0]) as Migration
+
     ordered.push(next)
     done.add(next.identity)
     remaining.delete(next.identity)
@@ -112,6 +118,7 @@ function findCycle(remaining: ReadonlyMap<string, Migration>): string[] {
   while (!path.includes(current)) {
     path.push(current)
     const waitingOn = dependenciesOf(remaining.get(current) as Migration).filter((identity) => remaining.has(identity))
+
     current = waitingOn.sort()[0]
   }
 

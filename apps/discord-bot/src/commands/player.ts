@@ -50,7 +50,9 @@ async function pollPlayerUntilSectionsComplete(
 
   for (let attempt = 0; attempt < limit && (rankedPending || careerPending); attempt += 1) {
     const delayMs = afterSeconds * 1_000
+
     if (!Number.isFinite(delayMs) || delayMs < 0 || now() + delayMs >= deadline) break
+
     await wait(delayMs)
     try {
       const [currentSeason, career] = await Promise.all([
@@ -71,6 +73,7 @@ async function pollPlayerUntilSectionsComplete(
             })
           : Promise.resolve(player.career),
       ])
+
       player = { ...player, currentSeason, career }
       rankedPending = rankedPending && (!currentSeason?.lastSuccessAt || currentSeason.lastSuccessAt === rankedBaseline)
       careerPending = careerPending && (!career?.lastSuccessAt || career.lastSuccessAt === careerBaseline)
@@ -78,6 +81,7 @@ async function pollPlayerUntilSectionsComplete(
       break
     }
   }
+
   return player
 }
 
@@ -93,27 +97,34 @@ async function loadCanonicalPlayer(
 ): Promise<{ player: CanonicalPlayerResponse | null; refresh: PlayerRefreshResponse['refresh'] }> {
   const request = <T>(work: (signal: AbortSignal) => Promise<T>) =>
     runBeforeInteractionDeadline({ deadline, requestTimeoutMs, now, work })
+
   const [reference, currentSeason, career] = await Promise.all([
     request((signal) => client.player.referenceById.query({ id: playerId }, { signal })),
     request((signal) => client.player.rankedById.query({ id: playerId }, { signal })),
     request((signal) => client.player.careerById.query({ id: playerId }, { signal })),
   ])
+
   let refreshResponse: PlayerRefreshResponse
+
   try {
     refreshResponse = await request((signal) =>
       client.player.refreshDiscord.mutate({ id: playerId, discordUserId }, { signal }),
     )
   } catch (error) {
     discordTelemetry.logger.error('discord.player_refresh.failed', error)
+
     refreshResponse = {
       player: reference,
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
     }
   }
+
   const canonicalReference = reference ?? refreshResponse.player
+
   if (!canonicalReference) return { player: null, refresh: refreshResponse.refresh }
 
   let player: CanonicalPlayerResponse = { reference: canonicalReference, currentSeason, career }
+
   if (refreshResponse.refresh.retry.kind === 'poll') {
     player = await pollPlayerUntilSectionsComplete(
       player,
@@ -126,6 +137,7 @@ async function loadCanonicalPlayer(
       pollLimit,
     )
   }
+
   return { player, refresh: refreshResponse.refresh }
 }
 
@@ -153,6 +165,7 @@ export function createPlayerCommand({
       }
 
       const deadline = now() + workBudgetMs
+
       try {
         // Check if query is a numeric ID
         const numericId = Number.parseInt(query, 10)
@@ -172,6 +185,7 @@ export function createPlayerCommand({
             now,
             work: (signal) => client.search.local.query({ query }, { signal }),
           })
+
           searchResults = results.players
 
           if (searchResults.length === 0) {
@@ -183,6 +197,7 @@ export function createPlayerCommand({
                 ),
               ],
             })
+
             return
           }
 
@@ -207,6 +222,7 @@ export function createPlayerCommand({
             loaded.refresh.outcome === 'rateLimited' ||
             loaded.refresh.outcome === 'accepted' ||
             loaded.refresh.outcome === 'alreadyRefreshing'
+
           await interaction.editReply({
             embeds: [
               temporarilyUnavailable
@@ -217,6 +233,7 @@ export function createPlayerCommand({
                   ),
             ],
           })
+
           return
         }
 
@@ -233,6 +250,7 @@ export function createPlayerCommand({
 
           // Cache the search results for select menu interactions
           const cacheKey = interaction.id
+
           searchCache.set(cacheKey, {
             players: searchResults,
             timestamp: Date.now(),
@@ -245,6 +263,7 @@ export function createPlayerCommand({
         await interaction.editReply(responseOptions)
       } catch (error) {
         if (handleExpiredInteractionError(error, 'discord.player_response.expired')) return
+
         discordTelemetry.logger.error('discord.player_command.failed', error)
 
         if (error instanceof TRPCClientError) {
@@ -261,6 +280,7 @@ export function createPlayerCommand({
                 }),
               'discord.player_error_response.expired',
             )
+
             return
           }
 
@@ -274,6 +294,7 @@ export function createPlayerCommand({
                 }),
               'discord.player_error_response.expired',
             )
+
             return
           }
         }
@@ -305,6 +326,7 @@ export function createPlayerSelectHandler({
   return async function playerSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const playerId = Number.parseInt(interaction.values[0], 10)
     const interactionId = interaction.customId.split(':')[1]
+
     if (
       !(await runInteractionResponse(() => interaction.deferUpdate(), 'discord.player_select_acknowledgement.expired'))
     ) {
@@ -312,6 +334,7 @@ export function createPlayerSelectHandler({
     }
 
     const deadline = now() + workBudgetMs
+
     try {
       const loaded = await loadCanonicalPlayer(
         playerId,
@@ -323,6 +346,7 @@ export function createPlayerSelectHandler({
         requestTimeoutMs,
         deadline,
       )
+
       if (!loaded.player) {
         await runInteractionResponse(
           () =>
@@ -332,15 +356,19 @@ export function createPlayerSelectHandler({
             }),
           'discord.player_select_response.expired',
         )
+
         return
       }
+
       const embed = buildCanonicalPlayerEmbed(loaded.player, loaded.refresh, now())
       let searchResults: SearchResponse['players'] | undefined
 
       if (interactionId) {
         const cached = searchCache.get(interactionId)
+
         if (cached && now() - cached.timestamp < CACHE_TTL) searchResults = cached.players
       }
+
       if (!searchResults) {
         searchResults = getPlayersFromMessage(interaction.message, playerId)
         if (interactionId && searchResults.length > 0) {
@@ -350,10 +378,13 @@ export function createPlayerSelectHandler({
       }
 
       const components = searchResults.length > 1 ? [buildPlayerSelectMenu(searchResults, playerId, interactionId)] : []
+
       await interaction.editReply({ embeds: [embed], components })
     } catch (error) {
       if (handleExpiredInteractionError(error, 'discord.player_select_response.expired')) return
+
       discordTelemetry.logger.error('discord.player_select.failed', error)
+
       await runInteractionResponse(
         () =>
           interaction.editReply({
@@ -374,10 +405,13 @@ function getPlayersFromMessage(
 ): SearchResponse['players'] {
   try {
     if (!('components' in message)) return []
+
     const row = message.components[0]
+
     if (!row || !('components' in row)) return []
 
     const select = row.components[0]
+
     if (!select || select.type !== 3) return [] // 3 = StringSelect
 
     interface SelectOption {
@@ -396,6 +430,7 @@ function getPlayersFromMessage(
 
       // Extract legend name from emoji (e.g., "avatar_bodvar" -> "bodvar")
       let bestLegendNameKey: string | null = null
+
       if (opt.emoji?.name?.startsWith('avatar_')) {
         bestLegendNameKey = opt.emoji.name.replace('avatar_', '')
       }
@@ -427,6 +462,7 @@ function getPlayersFromMessage(
 
 function cleanupCache() {
   const now = Date.now()
+
   for (const [key, value] of searchCache.entries()) {
     if (now - value.timestamp > CACHE_TTL) {
       searchCache.delete(key)

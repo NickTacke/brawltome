@@ -24,6 +24,7 @@ const utcDateTimeSchema = z.iso
   .datetime({ offset: false })
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
+
 const nonnegativeSafeInteger = z.int().min(0).max(Number.MAX_SAFE_INTEGER)
 const basisPointsSchema = z.int().min(0).max(10_000)
 
@@ -38,7 +39,9 @@ const exactRatioSchema = z
     if (ratio.numerator > ratio.denominator) {
       context.addIssue({ code: 'custom', message: 'ratio numerator cannot exceed denominator' })
     }
+
     const expected = ratio.denominator === 0 ? null : Math.round((ratio.numerator * 10_000) / ratio.denominator)
+
     if (ratio.basisPoints !== expected) {
       context.addIssue({ code: 'custom', message: 'basis points must reproduce the exact ratio' })
     }
@@ -46,12 +49,14 @@ const exactRatioSchema = z
 
 function wilsonInterval95(wins: number, games: number) {
   if (games === 0) return null
+
   const z = 1.959963984540054
   const probability = wins / games
   const zSquared = z * z
   const denominator = 1 + zSquared / games
   const center = (probability + zSquared / (2 * games)) / denominator
   const margin = (z * Math.sqrt((probability * (1 - probability) + zSquared / (4 * games)) / games)) / denominator
+
   return {
     lowerBasisPoints: Math.max(0, Math.floor((center - margin) * 10_000)),
     upperBasisPoints: Math.min(10_000, Math.ceil((center + margin) * 10_000)),
@@ -77,6 +82,7 @@ const legendSchema = z
   .strict()
 
 const eligibleSchema = z.object({ status: z.literal('eligible') }).strict()
+
 const insufficientSchema = z
   .object({
     status: z.literal('insufficient-sample'),
@@ -109,17 +115,23 @@ const legendMetaRowSchema = z
     if (row.winCount > row.gameCount) {
       context.addIssue({ code: 'custom', message: 'win count cannot exceed game count' })
     }
+
     if (row.winRate.numerator !== row.winCount || row.winRate.denominator !== row.gameCount) {
       context.addIssue({ code: 'custom', message: 'win rate must reproduce row wins and games' })
     }
+
     const eligible = row.playerCount >= 30 && row.gameCount >= 200
+
     if (eligible !== (row.eligibility.status === 'eligible')) {
       context.addIssue({ code: 'custom', message: 'eligibility must reproduce fixed player and game minimums' })
     }
+
     if ((eligible && row.rank === null) || (!eligible && row.rank !== null)) {
       context.addIssue({ code: 'custom', message: 'only eligible rows can receive a rank' })
     }
+
     const expectedUncertainty = wilsonInterval95(row.winCount, row.gameCount)
+
     if (
       row.uncertainty95?.lowerBasisPoints !== expectedUncertainty?.lowerBasisPoints ||
       row.uncertainty95?.upperBasisPoints !== expectedUncertainty?.upperBasisPoints
@@ -241,22 +253,27 @@ function availableSchema(status: 'fresh' | 'stale') {
       if ((output.season.identity === null) !== (output.methodology.trends.status === 'disabled')) {
         context.addIssue({ code: 'custom', message: 'season identity must match trend methodology availability' })
       }
+
       if (output.observedPlayers > output.selectedPlayers) {
         context.addIssue({ code: 'custom', message: 'observed players cannot exceed selected players' })
       }
+
       if (
         output.coverage.numerator !== output.observedPlayers ||
         output.coverage.denominator !== output.selectedPlayers
       ) {
         context.addIssue({ code: 'custom', message: 'coverage must reproduce observed and selected players' })
       }
+
       if (output.rows.reduce((total, row) => total + row.gameCount, 0) !== output.observedLegendGames) {
         context.addIssue({ code: 'custom', message: 'row games must reproduce all observed legend games' })
       }
+
       for (const row of output.rows) {
         if (row.pickShare.numerator !== row.gameCount || row.pickShare.denominator !== output.observedLegendGames) {
           context.addIssue({ code: 'custom', message: 'pick share must reproduce row and total legend games' })
         }
+
         if (row.adoption.numerator !== row.playerCount || row.adoption.denominator !== output.observedPlayers) {
           context.addIssue({ code: 'custom', message: 'adoption must reproduce row and observed player counts' })
         }
@@ -306,22 +323,27 @@ const historySnapshotSchema = z
     if (snapshot.observedPlayers > snapshot.selectedPlayers) {
       context.addIssue({ code: 'custom', message: 'observed players cannot exceed selected players' })
     }
+
     if (
       snapshot.coverage.numerator !== snapshot.observedPlayers ||
       snapshot.coverage.denominator !== snapshot.selectedPlayers
     ) {
       context.addIssue({ code: 'custom', message: 'coverage must reproduce observed and selected players' })
     }
+
     if (snapshot.rows.reduce((total, row) => total + row.gameCount, 0) !== snapshot.observedLegendGames) {
       context.addIssue({ code: 'custom', message: 'row games must reproduce all observed legend games' })
     }
+
     if (new Set(snapshot.rows.map(({ legend }) => legend.legendId)).size !== snapshot.rows.length) {
       context.addIssue({ code: 'custom', message: 'Legend rows must be unique' })
     }
+
     for (const row of snapshot.rows) {
       if (row.pickShare.numerator !== row.gameCount || row.pickShare.denominator !== snapshot.observedLegendGames) {
         context.addIssue({ code: 'custom', message: 'pick share must reproduce row and total legend games' })
       }
+
       if (row.adoption.numerator !== row.playerCount || row.adoption.denominator !== snapshot.observedPlayers) {
         context.addIssue({ code: 'custom', message: 'adoption must reproduce row and observed player counts' })
       }
@@ -404,7 +426,9 @@ const legendMetaHistoryAvailableSchema = z
     validateHistoryStructure(history.entries, context)
     for (let index = 0; index < history.entries.length; index += 1) {
       const entry = history.entries[index]
+
       if (!entry) continue
+
       if (
         entry.snapshot.scope.region !== history.filter.region ||
         entry.snapshot.scope.bracket !== history.filter.bracket
@@ -415,11 +439,16 @@ const legendMetaHistoryAvailableSchema = z
           path: ['entries', index, 'snapshot', 'scope'],
         })
       }
+
       const previous = history.entries[index + 1]
+
       if (!previous || entry.comparisonToPrevious?.status !== 'available') continue
+
       const previousRows = new Map(previous.snapshot.rows.map((row) => [row.legend.legendId, row]))
+
       const expectedDeltaIds = entry.snapshot.rows.flatMap((row) => {
         const previousRow = previousRows.get(row.legend.legendId)
+
         return row.eligibility.status === 'eligible' &&
           previousRow?.eligibility.status === 'eligible' &&
           row.medianRating !== null &&
@@ -433,17 +462,22 @@ const legendMetaHistoryAvailableSchema = z
           ? [String(row.legend.legendId)]
           : []
       })
+
       validateExactHistoryDeltaKeys(
         expectedDeltaIds,
         entry.comparisonToPrevious.deltas.map(({ legend }) => String(legend.legendId)),
         context,
         ['entries', index, 'comparisonToPrevious', 'deltas'],
       )
+
       for (let deltaIndex = 0; deltaIndex < entry.comparisonToPrevious.deltas.length; deltaIndex += 1) {
         const delta = entry.comparisonToPrevious.deltas[deltaIndex]
+
         if (!delta) continue
+
         const currentRow = entry.snapshot.rows.find(({ legend }) => legend.legendId === delta.legend.legendId)
         const previousRow = previousRows.get(delta.legend.legendId)
+
         if (
           currentRow?.eligibility.status !== 'eligible' ||
           previousRow?.eligibility.status !== 'eligible' ||
@@ -461,8 +495,10 @@ const legendMetaHistoryAvailableSchema = z
             message: 'Legend history deltas require stored eligibility and complete metrics in both snapshots',
             path: ['entries', index, 'comparisonToPrevious', 'deltas', deltaIndex],
           })
+
           continue
         }
+
         if (
           delta.legend.name !== currentRow.legend.name ||
           delta.legend.slug !== currentRow.legend.slug ||

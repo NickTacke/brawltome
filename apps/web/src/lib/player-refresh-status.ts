@@ -52,6 +52,7 @@ function blocked(
   if (state.autoRetries >= MAX_AUTO_RETRIES) {
     return { ...state, status: { kind: 'gaveUp', reason } }
   }
+
   return {
     ...state,
     autoRetries: state.autoRetries + 1,
@@ -70,7 +71,9 @@ export function playerRefreshReducer(state: PlayerRefreshState, event: PlayerRef
       }
     case 'outcome': {
       if (state.status.kind !== 'requesting') return state
+
       const { refresh } = event
+
       switch (refresh.outcome) {
         case 'accepted':
         case 'alreadyRefreshing':
@@ -83,13 +86,17 @@ export function playerRefreshReducer(state: PlayerRefreshState, event: PlayerRef
         case 'temporarilyUnavailable':
           return blocked(state, refresh.outcome, refresh.retry.afterSeconds, event.now)
       }
+
       return state
     }
+
     case 'requestFailed':
       if (state.status.kind !== 'requesting') return state
+
       return blocked(state, 'temporarilyUnavailable', REQUEST_FAILED_RETRY_SECONDS, event.now)
     case 'pollSettled':
       if (state.status.kind !== 'polling') return state
+
       return { ...state, status: event.settlement === 'timeout' ? { kind: 'timedOut' } : { kind: 'idle' } }
     case 'verificationFailed':
       return { ...state, status: { kind: 'verificationFailed' } }
@@ -106,7 +113,9 @@ export function shouldRecheckOnVisible(state: PlayerRefreshState, pending: Pendi
     state.status.kind === 'timedOut' ||
     state.status.kind === 'gaveUp' ||
     state.status.kind === 'verificationFailed'
+
   if (!settled || (!pending.ranked && !pending.stats)) return false
+
   return state.lastRequestAt === null || now - state.lastRequestAt >= VISIBILITY_RECHECK_MIN_INTERVAL_MS
 }
 
@@ -142,6 +151,7 @@ export function getPlayerRefreshNotice(
     case 'waiting': {
       const seconds = secondsLeft ?? 0
       const countdown = seconds > 0 ? `Retrying in ${seconds}s.` : 'Retrying now...'
+
       return {
         tone: 'warning',
         title: BLOCKED_TITLE[status.reason],
@@ -150,9 +160,11 @@ export function getPlayerRefreshNotice(
         action: { label: 'Try now' },
       }
     }
+
     case 'gaveUp': {
       const cause =
         status.reason === 'rateLimited' ? 'Too many update requests right now.' : "Brawlhalla's servers are still busy."
+
       return {
         tone: 'warning',
         title: "Couldn't update this player",
@@ -161,6 +173,7 @@ export function getPlayerRefreshNotice(
         action: { label: 'Try again' },
       }
     }
+
     case 'timedOut':
       return hasData
         ? {
@@ -195,6 +208,7 @@ export function getPlayerRefreshNotice(
 /** Tags each request so a slower, older response can never overwrite the outcome of a newer one. */
 export function createLatestRequestTracker() {
   let latest = 0
+
   return {
     start: () => ++latest,
     isLatest: (sequence: number) => sequence === latest,

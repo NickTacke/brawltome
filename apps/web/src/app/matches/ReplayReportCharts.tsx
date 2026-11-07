@@ -13,6 +13,7 @@ function boundedWidth(value: number, denominator: number): string {
 
 function formatNumber(value: number | null): string {
   if (value === null) return '—'
+
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
@@ -22,11 +23,13 @@ function formatShare(value: number | null): string {
 
 export function formatDuration(milliseconds: number): string {
   const totalSeconds = Math.round(milliseconds / 1_000)
+
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`
 }
 
 export function timelineX(timestampMs: number, durationMs: number): number {
   const progress = durationMs > 0 ? timestampMs / durationMs : 0
+
   return 20 + Math.min(Math.max(progress, 0), 1) * 960
 }
 
@@ -98,6 +101,7 @@ export function PositioningBars({ players }: { players: readonly ReplayReportPla
       {players.map((player) => {
         const { airTimeShare: air, groundTimeShare: ground, wallTimeShare: wall } = player.movement
         const label = `Air ${formatShare(air)} · Ground ${formatShare(ground)} · Wall ${formatShare(wall)}`
+
         return (
           <section key={player.slot} aria-label={`${player.name} positioning`}>
             <div className="flex flex-col justify-between gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">

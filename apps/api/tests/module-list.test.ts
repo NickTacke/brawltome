@@ -63,6 +63,7 @@ describe('module lists', () => {
     expect(() => checkModuleList(without(apiModules, refreshOperationsModule))).toThrow(
       'module player depends on refresh-operations, which is not loaded',
     )
+
     expect(() => checkModuleList(without(apiModules, accountsModule))).toThrow(
       'module replay-analysis depends on accounts, which is not loaded',
     )

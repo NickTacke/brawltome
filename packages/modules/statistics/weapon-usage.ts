@@ -65,13 +65,17 @@ function nonnegativeCount(value: number, name: string): void {
 function greatestCommonDivisor(left: bigint, right: bigint): bigint {
   let a = left < 0n ? -left : left
   let b = right < 0n ? -right : right
+
   while (b !== 0n) [a, b] = [b, a % b]
+
   return a
 }
 
 export function exactRatio(numerator: bigint, denominator: bigint): CareerWeaponExactRatio {
   if (denominator <= 0n) throw new Error('exact ratio denominator must be positive')
+
   const divisor = greatestCommonDivisor(numerator, denominator)
+
   return {
     numerator: String(numerator / divisor),
     denominator: String(denominator / divisor),
@@ -81,16 +85,21 @@ export function exactRatio(numerator: bigint, denominator: bigint): CareerWeapon
 function compareRatios(left: CareerWeaponExactRatio, right: CareerWeaponExactRatio): number {
   const difference =
     BigInt(left.numerator) * BigInt(right.denominator) - BigInt(right.numerator) * BigInt(left.denominator)
+
   return difference < 0n ? -1 : difference > 0n ? 1 : 0
 }
 
 function median(values: readonly CareerWeaponExactRatio[]): CareerWeaponExactRatio {
   if (values.length === 0) throw new Error('median requires at least one value')
+
   const sorted = [...values].sort(compareRatios)
   const middle = Math.floor(sorted.length / 2)
   const upper = sorted[middle]
+
   if (sorted.length % 2 === 1) return upper
+
   const lower = sorted[middle - 1]
+
   return exactRatio(
     BigInt(lower.numerator) * BigInt(upper.denominator) + BigInt(upper.numerator) * BigInt(lower.denominator),
     2n * BigInt(lower.denominator) * BigInt(upper.denominator),
@@ -99,6 +108,7 @@ function median(values: readonly CareerWeaponExactRatio[]): CareerWeaponExactRat
 
 function addSlot(target: Map<string, WeaponTotals>, weapon: string, held: number, damage: number, kos: number): void {
   const current = target.get(weapon) ?? { heldSeconds: 0n, damage: 0n, kos: 0n }
+
   current.heldSeconds += BigInt(held)
   current.damage += BigInt(damage)
   current.kos += BigInt(kos)
@@ -111,15 +121,20 @@ function legendIndex(references: readonly LegendReference[]): {
 } {
   const byId = new Map<number, { weaponOne: string; weaponTwo: string }>()
   const weapons = new Set<string>()
+
   for (const reference of references) {
     if (byId.has(reference.legendId)) throw new Error(`duplicate legend reference ${reference.legendId}`)
+
     const weaponOne = normalizeWeaponName(reference.weaponOne)
     const weaponTwo = normalizeWeaponName(reference.weaponTwo)
+
     if (!weaponOne || !weaponTwo) continue
+
     byId.set(reference.legendId, { weaponOne, weaponTwo })
     weapons.add(weaponOne)
     weapons.add(weaponTwo)
   }
+
   return { byId, weapons: [...weapons].sort((left, right) => left.localeCompare(right)) }
 }
 
@@ -134,36 +149,46 @@ export function aggregateCareerWeaponUsage(input: {
   }
 
   const references = legendIndex(input.legendReferences)
+
   const aggregates = new Map<string, WeaponAggregate>(
     references.weapons.map((weapon) => [
       weapon,
       { heldSeconds: 0n, damage: 0n, kos: 0n, observedPlayers: 0, contributors: [] },
     ]),
   )
+
   const playerIds = new Set<number>()
 
   for (const rawObservation of input.observations) {
     const observation = validateLifetimeEvidence(rawObservation, rawObservation.brawlhallaId)
+
     if (playerIds.has(observation.brawlhallaId)) {
       throw new CareerWeaponUsageValidationError('duplicate-player', observation.brawlhallaId)
     }
+
     playerIds.add(observation.brawlhallaId)
 
     const playerWeapons = new Map<string, WeaponTotals>()
+
     for (const legend of observation.legends) {
       const reference = references.byId.get(legend.legendId)
+
       if (!reference) throw new CareerWeaponUsageValidationError('unresolved-legend', legend.legendId)
+
       addSlot(playerWeapons, reference.weaponOne, legend.timeHeldWeaponOne, legend.damageWeaponOne, legend.koWeaponOne)
       addSlot(playerWeapons, reference.weaponTwo, legend.timeHeldWeaponTwo, legend.damageWeaponTwo, legend.koWeaponTwo)
     }
 
     for (const [weapon, player] of playerWeapons) {
       const aggregate = aggregates.get(weapon)
+
       if (!aggregate) throw new Error(`Career Weapon Usage contains unresolved weapon ${weapon}`)
+
       aggregate.heldSeconds += player.heldSeconds
       aggregate.damage += player.damage
       aggregate.kos += player.kos
       if (player.heldSeconds > 0n) aggregate.observedPlayers += 1
+
       if (player.heldSeconds >= BigInt(CAREER_WEAPON_MIN_PLAYER_HELD_SECONDS)) {
         aggregate.contributors.push(player)
       }
@@ -172,6 +197,7 @@ export function aggregateCareerWeaponUsage(input: {
 
   const totalHeldSeconds = [...aggregates.values()].reduce((total, weapon) => total + weapon.heldSeconds, 0n)
   const successfulObservations = input.observations.length
+
   return {
     selectedPlayers: input.selectedPlayers,
     successfulObservations,
@@ -183,12 +209,17 @@ export function aggregateCareerWeaponUsage(input: {
         (total, contributor) => total + contributor.heldSeconds,
         0n,
       )
+
       const reasons: CareerWeaponComparisonReason[] = []
+
       if (aggregate.contributors.length < CAREER_WEAPON_MIN_CONTRIBUTORS) reasons.push('contributors-below-30')
+
       if (aggregate.heldSeconds < BigInt(CAREER_WEAPON_MIN_AGGREGATE_HELD_SECONDS)) {
         reasons.push('aggregate-held-time-below-30-hours')
       }
+
       const eligible = reasons.length === 0
+
       return {
         weapon,
         observedPlayers: aggregate.observedPlayers,

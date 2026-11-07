@@ -196,7 +196,9 @@ export function createAccounts({
       const account = await store.upsertDiscordIdentity(profile)
       const sessionToken = generateToken()
       const expiresAt = new Date(now().getTime() + SESSION_TTL_MS)
+
       await store.createSession({ id: hashSessionToken(sessionToken), accountId: account.id, expiresAt })
+
       return { account, sessionToken, expiresAt }
     },
 
@@ -206,6 +208,7 @@ export function createAccounts({
       const sessionId = hashSessionToken(sessionToken)
       const current = await store.findSessionAccount(sessionId)
       const checkedAt = now()
+
       if (!current || current.expiresAt.getTime() <= checkedAt.getTime()) return { status: 'anonymous' }
 
       if (current.expiresAt.getTime() - checkedAt.getTime() >= SESSION_EXTEND_THRESHOLD_MS) {
@@ -213,7 +216,9 @@ export function createAccounts({
       }
 
       const expiresAt = new Date(checkedAt.getTime() + SESSION_TTL_MS)
+
       await store.extendSession(sessionId, expiresAt)
+
       return { status: 'signedIn', account: current.account, expiresAt, extended: true }
     },
 
@@ -223,11 +228,13 @@ export function createAccounts({
 
     async getPreferences(accountId) {
       if (!accountId) return { ...DEFAULT_ACCOUNT_PREFERENCES }
+
       return (await store.findPreferences(accountId)) ?? { ...DEFAULT_ACCOUNT_PREFERENCES }
     },
 
     async updatePreferences(accountId, preferences) {
       if (!validPreferencesUpdate(preferences)) throw new InvalidAccountPreferencesError()
+
       return store.upsertPreferences(accountId, preferences)
     },
 
@@ -241,9 +248,13 @@ export function createAccounts({
 
     async resolvePrimaryPlayerVerification(attemptId, resolver) {
       const pending = await store.findPrimaryPlayerVerificationAttempt(attemptId)
+
       if (!pending) throw new Error('Unknown Primary Player verification attempt')
+
       if (pending.attempt.status !== 'pending') return pending.attempt
+
       const evidence = await resolver.resolve(pending.steamId)
+
       return store.completePrimaryPlayerVerification({ attemptId, evidence, completedAt: now() })
     },
 
@@ -257,11 +268,13 @@ export function createAccounts({
 
     pinPlayer(accountId, brawlhallaId) {
       requireBrawlhallaId(brawlhallaId)
+
       return store.pinPlayer(accountId, brawlhallaId)
     },
 
     unpinPlayer(accountId, brawlhallaId) {
       requireBrawlhallaId(brawlhallaId)
+
       return store.unpinPlayer(accountId, brawlhallaId)
     },
 
@@ -269,7 +282,9 @@ export function createAccounts({
       if (new Set(orderedBrawlhallaIds).size !== orderedBrawlhallaIds.length) {
         throw new InvalidPinnedPlayerError('Pinned Player order contains duplicate players')
       }
+
       for (const brawlhallaId of orderedBrawlhallaIds) requireBrawlhallaId(brawlhallaId)
+
       return store.reorderPinnedPlayers(accountId, orderedBrawlhallaIds)
     },
 
@@ -287,8 +302,10 @@ function requireBrawlhallaId(value: number): void {
 
 function validPreferencesUpdate(preferences: unknown): preferences is AccountPreferencesUpdate {
   if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) return false
+
   const value = preferences as Record<string, unknown>
   const keys = Object.keys(value)
+
   return (
     keys.length > 0 &&
     keys.every((key) => ['leaderboardBracket', 'leaderboardRegion', 'theme'].includes(key)) &&

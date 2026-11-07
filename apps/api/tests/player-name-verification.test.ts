@@ -15,8 +15,10 @@ const backlog = { rename_signal: 2, demand: 3, other: 40 }
 
 function metric(telemetry: ReturnType<typeof createTelemetry>, name: string, label: string) {
   const found = telemetry.metrics.snapshot().find((item) => item.name === name)
+
   return Object.fromEntries((found?.series ?? []).map(({ labels, value }) => [labels[label], value]))
 }
+
 const counters = (telemetry: ReturnType<typeof createTelemetry>) =>
   metric(telemetry, 'player_name_verifications_total', 'outcome')
 
@@ -24,19 +26,23 @@ function plannerFixture(options: { usage?: () => number; perWindow?: number } = 
   const calls = { usage: 0, demand: 0, claim: [] as unknown[], accept: [] as unknown[] }
   const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
   let now = 1_000_000
+
   const planner = createPlayerNameVerificationPlanner({
     config: { ...config, perWindow: options.perWindow ?? config.perWindow },
     readSourceUsage: async () => {
       calls.usage++
+
       return { used: options.usage?.() ?? 0, limit: 180 }
     },
     readDemandIds: async () => {
       calls.demand++
+
       return [7, 9]
     },
     verifications: {
       claim: async (policy) => {
         calls.claim.push(policy)
+
         return { backlog, usedInWindow: 0, claimed: [candidate] }
       },
       release: async () => {},
@@ -44,12 +50,14 @@ function plannerFixture(options: { usage?: () => number; perWindow?: number } = 
     operations: {
       accept: async (input) => {
         calls.accept.push(input)
+
         return { outcome: 'accepted', operationId: 'operation' }
       },
     },
     telemetry,
     now: () => now,
   })
+
   return {
     planner,
     calls,
@@ -70,13 +78,17 @@ describe('player name verification config', () => {
       intervalMs: 60_000,
       windowMs: 15 * 60 * 1000,
     })
+
     expect(readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_PER_WINDOW: '0' }).perWindow).toBe(0)
+
     expect(readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO: '0.25' }).maxUsageRatio).toBe(
       0.25,
     )
+
     expect(readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_STALE_RECHECK_DAYS: '30' }).staleRecheckMs).toBe(
       30 * 24 * 60 * 60 * 1000,
     )
+
     expect(() => readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_PER_WINDOW: '151' })).toThrow()
     expect(() => readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO: '0' })).toThrow()
     expect(() => readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO: '1.5' })).toThrow()
@@ -91,7 +103,9 @@ describe('player name verification config', () => {
 describe('player name verification planner', () => {
   test('claims with demand and enqueues low-priority maintenance work, reporting the backlog by tier', async () => {
     const { planner, calls, telemetry } = plannerFixture()
+
     expect(await planner.tick()).toBe(1)
+
     expect(calls.claim).toEqual([
       {
         perWindow: 24,
@@ -101,6 +115,7 @@ describe('player name verification planner', () => {
         demandIds: [7, 9],
       },
     ])
+
     expect(calls.accept).toEqual([
       expect.objectContaining({
         kind: 'player-name-verification',
@@ -109,12 +124,14 @@ describe('player name verification planner', () => {
         payload: { brawlhallaId: 7, playerName: 'New' },
       }),
     ])
+
     expect(metric(telemetry, 'player_name_verification_backlog', 'tier')).toEqual(backlog)
   })
 
   test('releases a claim whose operation was not accepted without failing the rest of the batch', async () => {
     const released: Array<[number, string]> = []
     const accepted: number[] = []
+
     const planner = createPlayerNameVerificationPlanner({
       config,
       readSourceUsage: async () => ({ used: 0, limit: 180 }),
@@ -134,11 +151,14 @@ describe('player name verification planner', () => {
       operations: {
         accept: async (input) => {
           if (input.payload.brawlhallaId === 7) throw new Error('database unavailable')
+
           accepted.push(input.payload.brawlhallaId)
+
           return { outcome: 'accepted', operationId: 'operation' }
         },
       },
     })
+
     expect(await planner.tick()).toBe(1)
     expect(accepted).toEqual([8])
     expect(released).toEqual([[7, 'New']])
@@ -146,6 +166,7 @@ describe('player name verification planner', () => {
 
   test('the kill switch makes no database or source reads', async () => {
     const { planner, calls } = plannerFixture({ perWindow: 0 })
+
     expect(await planner.tick()).toBe(0)
     expect(calls).toEqual({ usage: 0, demand: 0, claim: [], accept: [] })
   })
@@ -153,6 +174,7 @@ describe('player name verification planner', () => {
   test('stops above the usage ratio and resumes once V0 is quiet again', async () => {
     let used = 72
     const { planner, calls, telemetry, advance } = plannerFixture({ usage: () => used })
+
     expect(await planner.tick()).toBe(0)
     expect(calls.claim).toEqual([])
     expect(counters(telemetry)).toEqual({ skipped_budget: 1 })
@@ -164,6 +186,7 @@ describe('player name verification planner', () => {
 
   test('runs at most once per interval', async () => {
     const { planner, calls, advance } = plannerFixture()
+
     await planner.tick()
     await planner.tick()
     expect(calls.claim).toHaveLength(1)
@@ -183,6 +206,7 @@ describe('player name verification execution', () => {
   ) {
     const calls = { release: [] as unknown[], checked: [] as unknown[], failed: [] as unknown[], refresh: 0 }
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const run = () =>
       executePlayerNameVerification({
         config,
@@ -195,10 +219,12 @@ describe('player name verification execution', () => {
           },
           recordChecked: async (...args) => {
             calls.checked.push(args)
+
             return 'confirmed_stale'
           },
           recordFailed: async (...args) => {
             calls.failed.push(args)
+
             return 'failed'
           },
         },
@@ -208,11 +234,13 @@ describe('player name verification execution', () => {
         },
         telemetry,
       })
+
     return { run, calls, telemetry }
   }
 
   test('records the V0 outcome after one ranked refresh', async () => {
     const { run, calls, telemetry } = executionFixture()
+
     expect(await run()).toBe('unchanged')
     expect(calls).toMatchObject({ refresh: 1, checked: [[7, 'New']], release: [] })
     expect(counters(telemetry)).toEqual({ unchanged: 1 })
@@ -220,6 +248,7 @@ describe('player name verification execution', () => {
 
   test('a refresh that already happened resolves the claim without a call', async () => {
     const { run, calls, telemetry } = executionFixture({ preparation: { state: 'resolved', outcome: 'renamed' } })
+
     expect(await run()).toBe('resolved_free')
     expect(calls.refresh).toBe(0)
     expect(counters(telemetry)).toEqual({ resolved_free: 1 })
@@ -228,6 +257,7 @@ describe('player name verification execution', () => {
   test('re-checks the usage ratio right before every call and releases the claim', async () => {
     let used = 100
     const { run, calls, telemetry } = executionFixture({ usage: () => used })
+
     expect(await run()).toBe('skipped_budget')
     expect(calls).toMatchObject({ refresh: 0, release: [[7, 'New']] })
     used = 10
@@ -242,6 +272,7 @@ describe('player name verification execution', () => {
         throw new SourceAdmissionLimitedError(30)
       },
     })
+
     expect(await run()).toBe('skipped_budget')
     expect(calls.release).toEqual([[7, 'New']])
     expect(counters(telemetry)).toEqual({ skipped_budget: 1 })
@@ -254,6 +285,7 @@ describe('player name verification execution', () => {
         throw new Error('upstream 500')
       },
     })
+
     expect(await run()).toBe('failed')
     expect(calls).toMatchObject({ refresh: 1, failed: [[7, 'New']], release: [] })
     expect(counters(telemetry)).toEqual({ failed: 1 })

@@ -55,6 +55,7 @@ function logPath(path: string): string {
     .join('/')
     .slice(0, 120)
 }
+
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000
 
 export interface BhApiMetricsSink {
@@ -153,6 +154,7 @@ export class BhApiClient {
 
     const separator = endpoint.includes('?') ? '&' : '?'
     const url = `${this.baseUrl}${endpoint}${separator}api_key=${this.apiKey}`
+
     return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v0', false, opts.onAttempt)
   }
 
@@ -163,11 +165,13 @@ export class BhApiClient {
     await this.acquire(caller, path, 'brawlhalla-v1')
 
     const url = `${this.baseUrl}/v1${endpoint}`
+
     return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true, opts.onAttempt)
   }
 
   private async acquire(caller: Caller, path: string, domain: BhApiSourceDomain): Promise<void> {
     const waitMs = await this.queue.acquire(caller)
+
     this.telemetry?.logger.debug('source.queue.acquired', {
       domain,
       path: logPath(path),
@@ -189,12 +193,16 @@ export class BhApiClient {
     onAttempt?.()
     const started = performance.now()
     let outcome: 'succeeded' | 'not_found' | 'rate_limited' | 'failed' = 'failed'
+
     try {
       const performRequest = () => this.performRequest<T>(url, path, endpoint, domain, rejectNullPayload)
+
       const result = this.telemetry
         ? await this.telemetry.trace('source.call', { domain }, performRequest)
         : await performRequest()
+
       outcome = result === null ? 'not_found' : 'succeeded'
+
       return result
     } catch (error) {
       if (error instanceof RateLimitError) {
@@ -205,9 +213,11 @@ export class BhApiClient {
           this.telemetry?.logger.error('source.backoff.persist_failed', backoffError, { domain })
         }
       }
+
       throw error
     } finally {
       const labels = { domain, outcome }
+
       this.telemetry?.metrics.add('source_calls_total', 1, labels)
       this.telemetry?.metrics.observe('source_duration_ms', performance.now() - started, labels)
     }
@@ -235,8 +245,10 @@ export class BhApiClient {
         durationMs,
         ...extra,
       })
+
     const fetchStart = Date.now()
     let res: Response
+
     try {
       res = await fetch(url, { signal: AbortSignal.timeout(this.fetchTimeoutMs) })
     } catch (err) {
@@ -244,12 +256,15 @@ export class BhApiClient {
         await this.metrics?.incrementCounter('bhapi:timeouts')
         throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
       }
+
       throw err
     }
+
     const fetchMs = Date.now() - fetchStart
 
     if (res.status === 404) {
       logResponse('info', 404, 'not_found', fetchMs)
+
       return null
     }
 
@@ -257,13 +272,16 @@ export class BhApiClient {
       const retryAfterHeader = res.headers.get('retry-after') ?? ''
       const parsed = Number.parseInt(retryAfterHeader, 10)
       const parsedDateMs = Date.parse(retryAfterHeader)
+
       const retryAfter =
         Number.isFinite(parsed) && parsed > 0
           ? parsed
           : Number.isFinite(parsedDateMs) && parsedDateMs > Date.now()
             ? Math.ceil((parsedDateMs - Date.now()) / 1000)
             : 5
+
       const pauseMs = (retryAfter + 1) * 1000
+
       // The queue should have prevented this; the pause protects the shared upstream quota.
       logResponse('warn', 429, 'rate_limited', fetchMs, { retryAfterSeconds: retryAfter, queuePausedMs: pauseMs })
       this.queue.pause(pauseMs)
@@ -285,6 +303,7 @@ export class BhApiClient {
     }
 
     let payload: unknown
+
     try {
       payload = await res.json()
     } catch (err) {
@@ -294,6 +313,7 @@ export class BhApiClient {
         await this.metrics?.incrementCounter('bhapi:timeouts')
         throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
       }
+
       await this.metrics?.incrementCounter('bhapi:json_errors')
       throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
@@ -308,6 +328,7 @@ export class BhApiClient {
 
   getPlayerStatsV1Payload(id: number, mode: V1Mode = 'all', opts: CallOptions = {}): Promise<unknown | null> {
     const modeQuery = mode === 'all' ? '' : `&mode=${mode}`
+
     return this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
   }
 
@@ -317,6 +338,7 @@ export class BhApiClient {
     opts: CallOptions = {},
   ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
     const payload = await this.getPlayerStatsV1Payload(id, mode, opts)
+
     return payload === null ? null : validatePlayerStats(payload, id, mode)
   }
 
@@ -326,11 +348,13 @@ export class BhApiClient {
 
   async getPlayerTeamsV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerTeams | null> {
     const payload = await this.getPlayerTeamsV1Payload(id, opts)
+
     return payload === null ? null : validatePlayerTeams(payload, id)
   }
 
   async getPlayerGuildV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerGuild | null> {
     const payload = await this.callV1<unknown>(`/player/guild?brawlhalla_id=${id}`, opts)
+
     return payload === null ? null : validatePlayerGuild(payload, id)
   }
 
@@ -344,17 +368,23 @@ export class BhApiClient {
 
   async getAllLegendsV1(opts: CallOptions = {}): Promise<BhV1Legend[]> {
     const first = await this.callV1<BhV1LegendsPage>('/static/legends?page=1&max_results=100', opts)
+
     if (!first) return []
+
     const all = [...first.legends]
+
     for (let page = 2; page <= first.total_pages; page++) {
       const next = await this.callV1<BhV1LegendsPage>(`/static/legends?page=${page}&max_results=100`, opts)
+
       if (!next) {
         throw new Error(
           `Brawlhalla v1 legends pagination incomplete: page ${page} of ${first.total_pages} returned no data`,
         )
       }
+
       all.push(...next.legends)
     }
+
     return all
   }
 }

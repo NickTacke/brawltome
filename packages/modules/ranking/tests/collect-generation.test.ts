@@ -27,9 +27,13 @@ const authorization: RankingPublicationAuthorization = {
 
 function identity(mode: LeaderboardMode, id: number, teammateId = id + 10_000): SourceLeaderboardIdentity {
   const player = { id, username: `Player ${id}` }
+
   if (mode === '1v1') return { type: 'one-vs-one-player', player }
+
   if (mode === 'solo2v2') return { type: 'solo-two-vs-two-player', player }
+
   if (mode === '3v3') return { type: 'three-vs-three-player', player }
+
   return {
     type: 'fixed-two-vs-two-team',
     players: [player, { id: teammateId, username: `Player ${teammateId}` }],
@@ -58,21 +62,26 @@ function row(
 function publicationRecorder() {
   const published: LeaderboardGenerationCandidate[] = []
   const failures: Array<{ mode: LeaderboardMode; scope: LeaderboardScope; code: string; message: string }> = []
+
   const publication: RankingPublicationStore = {
     async publishGeneration(_authorization, candidate) {
       published.push(candidate)
+
       return 'published'
     },
     async recordCollectionFailure(_authorization, failure) {
       failures.push(failure)
+
       return 'recorded'
     },
   }
+
   return { publication, published, failures }
 }
 
 function auth(mode: LeaderboardMode): RankingPublicationAuthorization {
   const suffix = mode === 'solo2v2' ? 'solo-2v2' : mode
+
   return {
     ...authorization,
     operationKind: `leaderboard-${suffix}` as RankingPublicationAuthorization['operationKind'],
@@ -84,6 +93,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     test(`publishes one complete same-generation ${mode} candidate with explicit identities`, async () => {
       const calls: Array<{ mode: LeaderboardMode; region: RegionalLeaderboardScope; page: number }> = []
       const recorder = publicationRecorder()
+
       await collectAndPublishLeaderboardGeneration({
         mode,
         authorization: auth(mode),
@@ -91,14 +101,17 @@ describe('collectAndPublishLeaderboardGeneration', () => {
           async fetchPage(input) {
             calls.push(input)
             const index = regionalLeaderboardScopes.indexOf(input.region)
+
             return { rankings: [row(input.region, mode, index + 1, 1, 2300 - index)], totalPages: 1 }
           },
         },
         publication: recorder.publication,
       })
+
       expect(calls).toEqual(regionalLeaderboardScopes.map((region) => ({ mode, region, page: 1 })))
       expect(recorder.published[0]).toMatchObject({ mode })
       expect(recorder.published[0].snapshots.size).toBe(10)
+
       expect(recorder.published[0].snapshots.get('EU')?.[0]).toMatchObject({
         standing: 1,
         sourceRank: 1,
@@ -110,6 +123,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
   for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
     test(`orders regional ${mode} rows by current rating then wins and resolves missing tiers`, async () => {
       const recorder = publicationRecorder()
+
       await collectAndPublishLeaderboardGeneration({
         mode,
         authorization: auth(mode),
@@ -117,13 +131,17 @@ describe('collectAndPublishLeaderboardGeneration', () => {
           async fetchPage({ region }) {
             const offset = regionalLeaderboardScopes.indexOf(region) * 10_000
             const fallen = row(region, mode, offset + 1, 1, 1_900)
+
             fallen.best_rating = 2_300
             fallen.wins = 120
             fallen.tier = null
             const lowerWins = row(region, mode, offset + 2, 2, 2_400)
+
             lowerWins.wins = 20
             const higherWins = row(region, mode, offset + 3, 3, 2_400)
+
             higherWins.wins = 30
+
             return { rankings: [fallen, lowerWins, higherWins], totalPages: 1 }
           },
         },
@@ -142,6 +160,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     test(`publishes an empty ${mode} region as an empty regional snapshot`, async () => {
       const calls: RegionalLeaderboardScope[] = []
       const recorder = publicationRecorder()
+
       await collectAndPublishLeaderboardGeneration({
         mode,
         authorization: auth(mode),
@@ -149,11 +168,13 @@ describe('collectAndPublishLeaderboardGeneration', () => {
           async fetchPage({ region, page }) {
             calls.push(region)
             if (region === 'JPN') return { rankings: [], totalPages: 0 }
+
             return { rankings: [row(region, mode, regionalLeaderboardScopes.indexOf(region) + 1, page)], totalPages: 1 }
           },
         },
         publication: recorder.publication,
       })
+
       expect(recorder.failures).toEqual([])
       expect(calls.filter((region) => region === 'JPN')).toHaveLength(1)
       expect(recorder.published[0].snapshots.get('JPN')).toEqual([])
@@ -168,6 +189,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
       [() => ({ rankings: [], totalPages: 0 }), 'no ranked rows'],
     ] as const) {
       const recorder = publicationRecorder()
+
       await expect(
         collectAndPublishLeaderboardGeneration({
           mode: '3v3',
@@ -185,6 +207,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
           publication: recorder.publication,
         }),
       ).rejects.toThrow(message)
+
       expect(recorder.failures).toEqual([expect.objectContaining({ code: 'leaderboard_candidate_invalid' })])
       expect(recorder.published).toHaveLength(0)
     }
@@ -192,6 +215,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('orders Global ties by wins before peak rating', async () => {
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: '1v1',
       authorization: auth('1v1'),
@@ -199,8 +223,10 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         async fetchPage({ region }) {
           const index = regionalLeaderboardScopes.indexOf(region)
           const result = row(region, '1v1', index + 1, 1, 2_400)
+
           result.wins = region === 'EU' ? 30 : 20
           result.best_rating = region === 'US-E' ? 2_500 : 2_450
+
           return { rankings: [result], totalPages: 1 }
         },
       },
@@ -217,6 +243,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
   test('collects 1v1 pages to the source or configured depth', async () => {
     const calls: Array<{ region: RegionalLeaderboardScope; page: number }> = []
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: '1v1',
       authorization: auth('1v1'),
@@ -225,10 +252,13 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         async fetchPage({ region, page }) {
           calls.push({ region, page })
           const regionOffset = regionalLeaderboardScopes.indexOf(region) * 10_000
+
           const rankings = Array.from({ length: 50 }, (_, index) => {
             const rank = (page - 1) * 50 + index + 1
+
             return row(region, '1v1', regionOffset + rank, rank, page <= 3 ? 2_100 : 1_800)
           })
+
           return { rankings, totalPages: 10 }
         },
       },
@@ -244,6 +274,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
   test('collects Solo 2v2 to the source or configured depth', async () => {
     const calls: Array<{ region: RegionalLeaderboardScope; page: number }> = []
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: 'solo2v2',
       authorization: auth('solo2v2'),
@@ -252,17 +283,22 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         async fetchPage({ region, page }) {
           calls.push({ region, page })
           const regionOffset = regionalLeaderboardScopes.indexOf(region) * 10_000
+
           const rankings = Array.from({ length: 50 }, (_, index) => {
             const rank = (page - 1) * 50 + index + 1
             const result = row(region, 'solo2v2', regionOffset + rank, rank)
+
             result.tier = page === 1 ? 'Valhallan' : page === 2 && index === 0 ? null : 'Diamond'
             if (page === 2 && index === 0) result.rating = result.best_rating = 2_100
+
             if (page === 3 && index < 3) {
               result.rating = result.best_rating = 2_400
               result.wins = index === 0 ? 30 : 20
             }
+
             return result
           })
+
           return { rankings, totalPages: 5 }
         },
       },
@@ -271,11 +307,13 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
     expect(calls).toHaveLength(regionalLeaderboardScopes.length * 5)
     expect(recorder.published[0].pageDepth).toBe(5)
+
     expect(recorder.published[0].snapshots.get('EU')?.slice(0, 3)).toMatchObject([
       { standing: 1, sourceRank: 101, rating: 2_400, wins: 30, tier: 'Diamond' },
       { standing: 2, sourceRank: 102, rating: 2_400, wins: 20, tier: 'Diamond' },
       { standing: 3, sourceRank: 103, rating: 2_400, wins: 20, tier: 'Diamond' },
     ])
+
     expect(recorder.published[0].snapshots.get('EU')?.find(({ sourceRank }) => sourceRank === 51)).toMatchObject({
       tier: 'Diamond',
       rating: 2_100,
@@ -284,6 +322,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('publishes a capped collection when adaptive statistics coverage remains insufficient', async () => {
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: '1v1',
       authorization: auth('1v1'),
@@ -291,9 +330,11 @@ describe('collectAndPublishLeaderboardGeneration', () => {
       source: {
         async fetchPage({ region, page }) {
           const regionOffset = regionalLeaderboardScopes.indexOf(region) * 10_000
+
           return {
             rankings: Array.from({ length: 50 }, (_, index) => {
               const rank = (page - 1) * 50 + index + 1
+
               return row(region, '1v1', regionOffset + rank, rank, 2_100)
             }),
             totalPages: 10,
@@ -310,6 +351,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('deduplicates repeated regional identities using rating then wins while preserving source rank', async () => {
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: 'solo2v2',
       authorization: auth('solo2v2'),
@@ -317,12 +359,15 @@ describe('collectAndPublishLeaderboardGeneration', () => {
       source: {
         async fetchPage({ region, page }) {
           const offset = regionalLeaderboardScopes.indexOf(region) * 10_000
+
           return {
             rankings: Array.from({ length: 50 }, (_, index) => {
               const rank = (page - 1) * 50 + index + 1
               const id = page === 2 && index === 0 ? offset + 1 : offset + rank
               const result = row(region, 'solo2v2', id, rank, id === offset + 1 ? 2_400 : 2_000)
+
               if (page === 2 && index === 0) result.wins = 30
+
               return result
             }),
             totalPages: 2,
@@ -333,6 +378,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     })
 
     expect(recorder.published[0].snapshots.get('EU')).toHaveLength(99)
+
     expect(recorder.published[0].snapshots.get('EU')?.[0]).toMatchObject({
       standing: 1,
       sourceRank: 51,
@@ -343,12 +389,14 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('preserves requested rosters and chooses the Global duplicate by wins before peak rating', async () => {
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: '1v1',
       authorization: auth('1v1'),
       source: {
         async fetchPage({ region }) {
           const duplicate = region === 'EU' || region === 'US-E'
+
           const result = row(
             duplicate ? 'US-E' : region,
             '1v1',
@@ -356,8 +404,10 @@ describe('collectAndPublishLeaderboardGeneration', () => {
             1,
             2_400,
           )
+
           result.wins = region === 'EU' ? 30 : 20
           result.best_rating = region === 'US-E' ? 2_500 : 2_450
+
           return { rankings: [result], totalPages: 1 }
         },
       },
@@ -366,6 +416,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
     expect(recorder.published[0].snapshots.get('EU')).toMatchObject([{ region: 'US-E', wins: 30 }])
     expect(recorder.published[0].snapshots.get('US-E')).toMatchObject([{ region: 'US-E', wins: 20, peakRating: 2_500 }])
+
     expect(
       recorder.published[0].snapshots
         .get('all')
@@ -375,6 +426,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('canonicalizes fixed teams, permits one player in different teams, and deduplicates only identical teams globally', async () => {
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: '2v2',
       authorization: auth('2v2'),
@@ -382,14 +434,19 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         async fetchPage({ region }) {
           const regionIndex = regionalLeaderboardScopes.indexOf(region)
           const first = row(region, '2v2', 7, 1, 2400 - regionIndex)
+
           first.identity = identity('2v2', 7, region === 'EU' || region === 'US-E' ? 8 : 100 + regionIndex)
+
           return { rankings: [first], totalPages: 1 }
         },
       },
       publication: recorder.publication,
     })
+
     const global = recorder.published[0].snapshots.get('all') ?? []
+
     expect(global).toHaveLength(8)
+
     expect(
       global.filter(
         ({ identity }) => identity.type === 'fixed-two-vs-two-team' && identity.players[0].brawlhallaId === 7,
@@ -399,22 +456,26 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('preserves regional source rank while deriving deterministic Global standing', async () => {
     const recorder = publicationRecorder()
+
     await collectAndPublishLeaderboardGeneration({
       mode: '3v3',
       authorization: auth('3v3'),
       source: {
         async fetchPage({ region }) {
           const index = regionalLeaderboardScopes.indexOf(region)
+
           return { rankings: [row(region, '3v3', index + 1, index + 10, 2400 - index)], totalPages: 1 }
         },
       },
       publication: recorder.publication,
     })
+
     expect(recorder.published[0].snapshots.get('all')?.[0]).toMatchObject({ standing: 1, sourceRank: 10 })
   })
 
   test('rejects identity/rank/order/page drift and records one mode-scoped failure without publishing', async () => {
     const recorder = publicationRecorder()
+
     await expect(
       collectAndPublishLeaderboardGeneration({
         mode: 'solo2v2',
@@ -426,7 +487,9 @@ describe('collectAndPublishLeaderboardGeneration', () => {
               ? {
                   rankings: Array.from({ length: 50 }, (_, index) => {
                     const result = row(region, 'solo2v2', index + 1, index + 1)
+
                     result.tier = 'Valhallan'
+
                     return result
                   }),
                   totalPages: 3,
@@ -441,7 +504,9 @@ describe('collectAndPublishLeaderboardGeneration', () => {
       // The source resized mid-collection (total_pages 3 then 4): a retry re-collects a consistent leaderboard.
       retryable: true,
     })
+
     expect(recorder.published).toHaveLength(0)
+
     expect(recorder.failures).toEqual([
       expect.objectContaining({ mode: 'solo2v2', scope: 'US-E', code: 'leaderboard_candidate_invalid' }),
     ])
@@ -449,6 +514,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('records the regional scope whose source fetch fails', async () => {
     const recorder = publicationRecorder()
+
     await expect(
       collectAndPublishLeaderboardGeneration({
         mode: '3v3',
@@ -456,13 +522,16 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         source: {
           async fetchPage({ region }) {
             if (region === 'BRZ') throw new Error('regional source unavailable')
+
             return { rankings: [row(region, '3v3', regionalLeaderboardScopes.indexOf(region) + 1)], totalPages: 1 }
           },
         },
         publication: recorder.publication,
       }),
     ).rejects.toThrow('regional source unavailable')
+
     expect(recorder.published).toHaveLength(0)
+
     expect(recorder.failures).toEqual([
       expect.objectContaining({ mode: '3v3', scope: 'BRZ', code: 'leaderboard_collection_failed' }),
     ])
@@ -471,6 +540,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
   test('stops immediately without failure recording when a page reports lease loss', async () => {
     const recorder = publicationRecorder()
     let sourceCalls = 0
+
     await expect(
       collectAndPublishLeaderboardGeneration({
         mode: '1v1',
@@ -479,12 +549,14 @@ describe('collectAndPublishLeaderboardGeneration', () => {
           async fetchPage({ region }) {
             sourceCalls++
             if (region === 'US-W') throw new LeaderboardLeaseLostError()
+
             return { rankings: [row(region, '1v1', regionalLeaderboardScopes.indexOf(region) + 1)], totalPages: 1 }
           },
         },
         publication: recorder.publication,
       }),
     ).rejects.toBeInstanceOf(LeaderboardLeaseLostError)
+
     expect(sourceCalls).toBe(2)
     expect(recorder.failures).toHaveLength(0)
     expect(recorder.published).toHaveLength(0)
@@ -492,9 +564,11 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
   test('does not record a source failure when atomic publication storage fails', async () => {
     const recorder = publicationRecorder()
+
     recorder.publication.publishGeneration = async () => {
       throw new Error('database unavailable during publication')
     }
+
     await expect(
       collectAndPublishLeaderboardGeneration({
         mode: '1v1',
@@ -507,6 +581,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
         publication: recorder.publication,
       }),
     ).rejects.toThrow('database unavailable')
+
     expect(recorder.failures).toHaveLength(0)
   })
 })

@@ -11,6 +11,7 @@ const openDatabases: Database[] = []
 
 function open(options: Parameters<typeof createDatabase>[1]): Database {
   const database = createDatabase(connectionString ?? '', options)
+
   openDatabases.push(database)
 
   return database
@@ -84,6 +85,7 @@ describeWithDatabase('createDatabase', () => {
   test('close resolves', async () => {
     // opened through the helper so afterAll still ends the client if an assertion fails first
     const database = open({ maxConnections: 1, applicationName: 'foundation-test' })
+
     await database.sql`select 1`
 
     await expect(database.close()).resolves.toBeUndefined()
@@ -97,6 +99,7 @@ const document: Document = { name: 'scratch', tags: ['a', 'b'], score: 3 }
 // one connection, so the temporary table is there for every query the test runs
 async function openScratch(columnsSql: string): Promise<Database> {
   const database = open({ maxConnections: 1, applicationName: 'foundation-test' })
+
   await database.sql.unsafe(`create temporary table scratch (id integer primary key, ${columnsSql})`)
 
   return database
@@ -104,6 +107,7 @@ async function openScratch(columnsSql: string): Promise<Database> {
 
 async function inTimeZone(timeZone: string, run: () => Promise<void>): Promise<void> {
   const previousTimeZone = process.env.TZ
+
   process.env.TZ = timeZone
 
   try {
@@ -175,10 +179,12 @@ describeWithDatabase('drizzle columns on the shared client', () => {
 
   test('timestamptz round-trips the same instant in any process time zone', async () => {
     const database = await openScratch('at timestamptz not null')
+
     const scratch = pgTable('scratch', {
       id: integer('id').primaryKey(),
       at: timestamp('at', { withTimezone: true }).notNull(),
     })
+
     const at = new Date('2026-11-04T12:34:56.789Z')
 
     await inTimeZone('Europe/Amsterdam', async () => {

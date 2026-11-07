@@ -32,8 +32,11 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
   // an inert <dialog>, so we keep the explicit lock as a belt.
   useEffect(() => {
     if (!isMobileOpen) return
+
     const previous = document.body.style.overflow
+
     document.body.style.overflow = 'hidden'
+
     return () => {
       document.body.style.overflow = previous
     }
@@ -42,16 +45,22 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
   // biome-ignore lint/correctness/useExhaustiveDependencies: isMobileOpen is a trigger, not read; the ref only populates on the render where it's true, so the effect must re-run then to call showModal.
   useLayoutEffect(() => {
     const dialog = dialogRef.current
+
     if (!dialog || dialog.open) return
+
     dialog.showModal()
   }, [isMobileOpen])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: same trigger pattern as the showModal effect above.
   useEffect(() => {
     const dialog = dialogRef.current
+
     if (!dialog) return
+
     const handler = () => close()
+
     dialog.addEventListener('close', handler)
+
     return () => dialog.removeEventListener('close', handler)
   }, [isMobileOpen, close])
 
@@ -100,6 +109,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
               const isActive = item.href === pathname
               const Icon = item.icon
               const showWipOpacity = item.wip && !isActive
+
               return (
                 <li key={item.href}>
                   <Link
@@ -129,6 +139,7 @@ export function MobileMenu({ account, playerShortcuts, shortcutsLoading, shortcu
             <ul aria-label="Player shortcuts" className="mt-6">
               {shortcutList.map((shortcut) => {
                 const active = shortcut.href === pathname
+
                 return (
                   <li key={`${shortcut.kind}:${shortcut.href}`}>
                     <Link

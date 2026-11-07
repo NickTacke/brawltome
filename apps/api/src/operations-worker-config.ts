@@ -20,8 +20,11 @@ import {
 
 function strictBoolean(value: string | undefined, fallback: boolean, name: string): boolean {
   if (value === undefined || value === '') return fallback
+
   if (value === 'true') return true
+
   if (value === 'false') return false
+
   throw new Error(`${name} must be true or false`)
 }
 
@@ -61,14 +64,17 @@ export type WorkerDatabaseSessionConfig = {
  */
 export function workerDatabaseUrl(connectionString: string, config: WorkerDatabaseSessionConfig): string {
   const url = new URL(connectionString)
+
   const defaults: Record<string, number> = {
     connect_timeout: config.connectTimeoutSeconds,
     statement_timeout: config.statementTimeoutMs,
     idle_in_transaction_session_timeout: config.idleInTransactionSessionTimeoutMs,
   }
+
   for (const [name, value] of Object.entries(defaults)) {
     if (!url.searchParams.has(name)) url.searchParams.set(name, String(value))
   }
+
   return url.toString()
 }
 
@@ -102,8 +108,11 @@ export function leaderboardScheduleDefinitions(config: {
   firstDueAt: string
 }) {
   const baseDueAt = new Date(config.firstDueAt).getTime()
+
   if (!Number.isFinite(baseDueAt)) throw new Error('leaderboard firstDueAt must be a valid timestamp')
+
   const staggerMs = Math.floor(config.intervalMs / leaderboardModes.length)
+
   return leaderboardModes.map((definition, index) => ({
     ...definition,
     scheduleKey: `rankings:${definition.mode}:v1`,
@@ -158,12 +167,14 @@ export function leaderboardDeepCrawlScheduleDefinitions(
   config: LeaderboardDeepCrawlConfig,
 ): CreateLeaderboardDeepCrawlSchedule[] {
   const baseDueAt = new Date(config.firstDueAt).getTime()
+
   const definitions = (
     mode: LeaderboardDeepCrawlMode,
     intervalMs: number,
     offsetMs: number,
   ): CreateLeaderboardDeepCrawlSchedule[] => {
     const staggerMs = Math.floor(intervalMs / leaderboardDeepCrawlRegions.length)
+
     return leaderboardDeepCrawlRegions.map((region, index) => ({
       kind: 'leaderboard-deep-crawl' as const,
       scheduleKey: `rankings:${mode}:deep:${region}`,
@@ -176,6 +187,7 @@ export function leaderboardDeepCrawlScheduleDefinitions(
       provenance: { source: 'leaderboard-deep-crawl-schedule', requestedBy: 'proactive-freshness' },
     }))
   }
+
   // Solo 2v2 regions start halfway between the 1v1 ones; each mode then keeps its own cadence.
   return [
     ...definitions('1v1', config.intervalMs, 0),
@@ -197,7 +209,9 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     projection: 2,
     maintenance: 1,
   }
+
   const classMaximums: Partial<Record<WorkClass, number>> = { projection: maxProjectionConcurrency }
+
   const weightDefaults: Record<BackgroundWorkClass, number> = {
     'primary-monitoring': 8,
     leaderboard: 4,
@@ -205,6 +219,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     projection: 4,
     maintenance: 1,
   }
+
   const admission: AdmissionConfig = {
     totalConcurrency: parsePositiveInteger(env.OPERATIONS_TOTAL_CONCURRENCY, {
       name: 'OPERATIONS_TOTAL_CONCURRENCY',
@@ -246,6 +261,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     fallback: 2_000,
     maximum: 300_000,
   })
+
   const retryBackoff = {
     multiplier: parseBoundedInteger(env.OPERATIONS_RETRY_BACKOFF_MULTIPLIER, {
       name: 'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',

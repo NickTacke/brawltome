@@ -18,6 +18,7 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
     for (const match of blankSqlComments(sql).matchAll(pattern)) {
       const position = offset + (match.index ?? 0)
       const line = sourceFile.getLineAndCharacterOfPosition(position).line + 1
+
       references.push({ schema: match[1] ?? match[2], line })
     }
   }
@@ -27,12 +28,14 @@ export function findSchemaReferences(source: string, schemas: readonly string[])
       collect(templateSql(node, source, sourceFile), node.getStart(sourceFile) + 1)
       // a substitution is code, but it may hold a literal of its own
       for (const span of node.templateSpans) visit(span.expression)
+
       return
     }
 
     if (isPlainLiteral(node) && !isModuleSpecifier(node)) {
       // the text between the quotes or backticks is what sql sees
       collect(source.slice(node.getStart(sourceFile) + 1, node.end - 1), node.getStart(sourceFile) + 1)
+
       return
     }
 
@@ -55,6 +58,7 @@ function templateSql(template: ts.TemplateExpression, source: string, sourceFile
     const substitutionStart = previousLiteral.end - 2 - textStart
     const substitutionEnd = span.literal.getStart(sourceFile) + 1 - textStart
     const blanked = sql.slice(substitutionStart, substitutionEnd).replace(/[^\n]/g, ' ')
+
     sql = sql.slice(0, substitutionStart) + blanked + sql.slice(substitutionEnd)
   }
 
@@ -68,15 +72,20 @@ function isPlainLiteral(node: ts.Node): boolean {
 // './statistics.router' is a file path, not a reference to a schema
 function isModuleSpecifier(node: ts.Node): boolean {
   const parent = node.parent
+
   if (!parent) return false
 
   if (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) return parent.moduleSpecifier === node
+
   if (ts.isExternalModuleReference(parent)) return true
+
   if (ts.isLiteralTypeNode(parent)) return ts.isImportTypeNode(parent.parent)
+
   if (!ts.isCallExpression(parent) || parent.arguments[0] !== node) return false
 
   const isDynamicImport = parent.expression.kind === ts.SyntaxKind.ImportKeyword
   const isRequire = ts.isIdentifier(parent.expression) && parent.expression.text === 'require'
+
   return isDynamicImport || isRequire
 }
 
@@ -100,6 +109,7 @@ function blankSqlComments(sql: string): string {
 
   while (index < sql.length) {
     const token = readSqlToken(sql, index)
+
     result += token.isComment ? token.text.replace(/[^\n]/g, ' ') : token.text
     index += token.text.length
   }
@@ -113,11 +123,13 @@ function readSqlToken(sql: string, start: number): SqlToken {
 
   if (sql.startsWith('--', start)) {
     const lineEnd = sql.indexOf('\n', start)
+
     return { text: sql.slice(start, lineEnd === -1 ? sql.length : lineEnd), isComment: true }
   }
 
   if (sql.startsWith('/*', start)) {
     const commentEnd = sql.indexOf('*/', start + 2)
+
     return { text: sql.slice(start, commentEnd === -1 ? sql.length : commentEnd + 2), isComment: true }
   }
 
@@ -137,6 +149,7 @@ function quotedEnd(sql: string, start: number, quote: string): number {
       index += 1
       continue
     }
+
     if (sql[index + 1] !== quote) return index + 1
 
     index += 2

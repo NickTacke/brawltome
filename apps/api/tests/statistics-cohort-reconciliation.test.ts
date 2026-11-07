@@ -47,12 +47,15 @@ function view(page: number, ids: number[], hasMore: boolean) {
 describe('Statistics immutable Ranking adapter', () => {
   test('pins every page to the first snapshot and preserves generation lineage', async () => {
     const calls: Array<{ page: number; snapshotId?: string }> = []
+
     const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         calls.push({ page: input.page, snapshotId: input.snapshotId })
+
         return input.page === 1 ? view(1, [1, 2], true) : view(2, [3], false)
       },
     }
+
     expect(await loadLaunchCohortCandidates(ranking)).toEqual({
       snapshotId,
       generationId,
@@ -65,6 +68,7 @@ describe('Statistics immutable Ranking adapter', () => {
         { brawlhallaId: 3, rating: 2003 },
       ],
     })
+
     expect(calls).toEqual([
       { page: 1, snapshotId: undefined },
       { page: 2, snapshotId },
@@ -73,12 +77,14 @@ describe('Statistics immutable Ranking adapter', () => {
 
   test('loads exactly all nine pinned regional snapshots from one immutable generation', async () => {
     const calls: string[] = []
+
     const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         calls.push(`${input.region}:${input.page}`)
         const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
         const regionalSnapshotId = `00000000-0000-4000-8000-${String(regionIndex + 1).padStart(12, '0')}`
         const regional = view(1, [regionIndex + 1], false)
+
         return {
           ...regional,
           snapshotId: regionalSnapshotId,
@@ -92,6 +98,7 @@ describe('Statistics immutable Ranking adapter', () => {
     }
 
     const snapshots = await loadFullLaunchCohortCandidates(ranking)
+
     expect(snapshots?.map(({ region }) => region)).toEqual([...launchCohortRegions])
     expect(new Set(snapshots?.map(({ generationId }) => generationId))).toEqual(new Set([generationId]))
     expect(calls).toEqual(launchCohortRegions.map((region) => `${region}:1`))
@@ -100,6 +107,7 @@ describe('Statistics immutable Ranking adapter', () => {
   test('creates the full generation and initializes preserved #209 evidence on a fresh deployment', async () => {
     let reconciledSnapshots = 0
     const reconciledLegacyRegions: string[] = []
+
     const launchAudit = {
       generationId,
       methodologyVersion: 'full-launch-cohort-v1',
@@ -112,14 +120,17 @@ describe('Statistics immutable Ranking adapter', () => {
       cells: [],
       decisions: [],
     } as never
+
     const statistics = {
       reconciliationState: async () => ({ legacyCohortExists: false, launch: null }),
       reconcileCohort: async (snapshot: { region: string }) => {
         reconciledLegacyRegions.push(snapshot.region)
+
         return { members: [] }
       },
       reconcileLaunchCohort: async (snapshots: unknown[]) => {
         reconciledSnapshots = snapshots.length
+
         return launchAudit
       },
       boundCollectionOperationIds: async () => [],
@@ -129,15 +140,18 @@ describe('Statistics immutable Ranking adapter', () => {
       boundLegendMetaPublicationOperationIds: async () => [],
       legendMetaPublicationIntents: async () => [],
     } as unknown as StatisticsTracer
+
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
+
     const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
         const regional = view(1, [regionIndex + 1], false)
+
         return {
           ...regional,
           snapshotId: `00000000-0000-4000-8000-${String(regionIndex + 1).padStart(12, '0')}`,
@@ -154,10 +168,12 @@ describe('Statistics immutable Ranking adapter', () => {
   test('initializes #209 from EU when another launch region is unavailable', async () => {
     let legacyReconciliations = 0
     let launchReconciliations = 0
+
     const statistics = {
       reconciliationState: async () => ({ legacyCohortExists: false, launch: null }),
       reconcileCohort: async () => {
         legacyReconciliations++
+
         return { members: [] }
       },
       reconcileLaunchCohort: async () => {
@@ -171,11 +187,13 @@ describe('Statistics immutable Ranking adapter', () => {
       boundLegendMetaPublicationOperationIds: async () => [],
       legendMetaPublicationIntents: async () => [],
     } as unknown as StatisticsTracer
+
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
+
     const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
         if (input.region !== 'EU') {
@@ -187,6 +205,7 @@ describe('Statistics immutable Ranking adapter', () => {
             pageSize: input.pageSize ?? 50,
           }
         }
+
         return view(1, [1], false)
       },
     }
@@ -203,6 +222,7 @@ describe('Statistics immutable Ranking adapter', () => {
     test(scenario.name, async () => {
       const requests: { pageSize?: number }[] = []
       let launchReconciliations = 0
+
       const statistics = {
         reconciliationState: async () => ({
           legacyCohortExists: true,
@@ -210,6 +230,7 @@ describe('Statistics immutable Ranking adapter', () => {
         }),
         reconcileLaunchCohort: async () => {
           launchReconciliations++
+
           return { generationId, sourceGenerationId: scenario.current, decisions: [], cells: [] }
         },
         boundCollectionOperationIds: async () => [],
@@ -219,15 +240,18 @@ describe('Statistics immutable Ranking adapter', () => {
         boundLegendMetaPublicationOperationIds: async () => [],
         legendMetaPublicationIntents: async () => [],
       } as unknown as StatisticsTracer
+
       const operations = {
         listAwaitingStatisticsCollections: async () => [],
         listAwaitingStatisticsPublications: async () => [],
         listAwaitingStatisticsLegendMetaPublications: async () => [],
       } as unknown as StatisticsOperations
+
       const ranking: LeaderboardQueries = {
         async getLeaderboard(input) {
           requests.push({ pageSize: input.pageSize })
           const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
+
           return {
             ...view(1, [regionIndex + 1], false),
             generationId: scenario.current,
@@ -240,6 +264,7 @@ describe('Statistics immutable Ranking adapter', () => {
       await reconcileStatisticsCohort(statistics, operations, ranking)
 
       const probes = requests.filter(({ pageSize }) => pageSize === 1)
+
       expect(probes).toHaveLength(launchCohortRegions.length)
       if (scenario.current === generationId) {
         expect(requests).toHaveLength(launchCohortRegions.length)
@@ -254,6 +279,7 @@ describe('Statistics immutable Ranking adapter', () => {
   test('bounds one saturated reconciliation pass without loading the full cohort audit', async () => {
     const awaitingCollections = Array.from({ length: 500 }, (_, index) => `awaiting-collection-${index}`)
     const awaitingPublications = Array.from({ length: 100 }, (_, index) => `awaiting-publication-${index}`)
+
     const intents = Array.from({ length: 500 }, (_, index) => ({
       cohortId: '20000000-0000-4000-8000-000000000001',
       brawlhallaId: index + 1,
@@ -261,10 +287,12 @@ describe('Statistics immutable Ranking adapter', () => {
       kind: 'statistics-ranked-collection' as const,
       operationKey: `statistics:cohort:${index + 1}:ranked:v1`,
     }))
+
     let collectionBindingLookups = 0
     let publicationBindingLookups = 0
     let activatedCollections = 0
     let activatedPublications = 0
+
     const statistics = {
       reconciliationState: async () => ({
         legacyCohortExists: true,
@@ -277,22 +305,26 @@ describe('Statistics immutable Ranking adapter', () => {
       }),
       boundCollectionOperationIds: async (operationIds: readonly string[]) => {
         collectionBindingLookups = operationIds.length
+
         return [...operationIds]
       },
       collectionIntents: async () => intents,
       recordCollectionOperation: async () => {},
       boundPublicationOperationIds: async (operationIds: readonly string[]) => {
         publicationBindingLookups = operationIds.length
+
         return [...operationIds]
       },
       publicationIntents: async () => [],
       boundLegendMetaPublicationOperationIds: async () => [],
       legendMetaPublicationIntents: async () => [],
     } as unknown as StatisticsTracer
+
     const operations = {
       listAwaitingStatisticsCollections: async () => awaitingCollections,
       activateStatisticsCollection: async () => {
         activatedCollections++
+
         return 'transitioned' as const
       },
       reserveStatisticsCollection: async (_input: unknown) => ({
@@ -302,10 +334,12 @@ describe('Statistics immutable Ranking adapter', () => {
       listAwaitingStatisticsPublications: async () => awaitingPublications,
       activateStatisticsPublication: async () => {
         activatedPublications++
+
         return 'transitioned' as const
       },
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsOperations
+
     const ranking: LeaderboardQueries = {
       async getLeaderboard() {
         throw new Error('settled generation must not reload Ranking snapshots')
@@ -321,11 +355,13 @@ describe('Statistics immutable Ranking adapter', () => {
 
   test('reserves and binds Legend Meta only after an immutable ranked decision exists', async () => {
     const calls: unknown[] = []
+
     const intent = {
       generationId,
       kind: 'statistics-legend-meta-publication' as const,
       operationKey: `statistics:${generationId}:legend-meta`,
     }
+
     const statistics = {
       reconciliationState: async () => ({
         legacyCohortExists: true,
@@ -341,19 +377,23 @@ describe('Statistics immutable Ranking adapter', () => {
         calls.push({ recordedIntent, operationId })
       },
     } as unknown as StatisticsTracer
+
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
       reserveStatisticsLegendMetaPublication: async (input: unknown) => {
         calls.push(input)
+
         return { outcome: 'accepted' as const, operationId: '30000000-0000-4000-8000-000000000001' }
       },
       activateStatisticsLegendMetaPublication: async (operationId: string) => {
         calls.push({ activated: operationId })
+
         return 'transitioned' as const
       },
     } as unknown as StatisticsOperations
+
     const ranking: LeaderboardQueries = {
       async getLeaderboard() {
         throw new Error('an active generation must not reload Ranking snapshots')
@@ -361,6 +401,7 @@ describe('Statistics immutable Ranking adapter', () => {
     }
 
     expect(await reconcileStatisticsCohort(statistics, operations, ranking)).toBe(1)
+
     expect(calls).toContainEqual({
       kind: 'statistics-legend-meta-publication',
       dedupeKey: intent.operationKey,
@@ -370,6 +411,7 @@ describe('Statistics immutable Ranking adapter', () => {
       provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
       maxAttempts: 3,
     })
+
     expect(calls).toContainEqual({ activated: '30000000-0000-4000-8000-000000000001' })
   })
 
@@ -385,6 +427,7 @@ describe('Statistics immutable Ranking adapter', () => {
         }
       },
     }
+
     expect(await loadLaunchCohortCandidates(ranking)).toBeNull()
   })
 })

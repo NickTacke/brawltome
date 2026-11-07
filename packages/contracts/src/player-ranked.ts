@@ -4,10 +4,12 @@ import { z } from './zod'
 const int32 = z.int().min(0).max(2_147_483_647).meta({ format: 'int32' })
 const signedInt32 = z.int().min(-2_147_483_647).max(2_147_483_647).meta({ format: 'int32' })
 const positiveInt32 = int32.min(1)
+
 const utcDateTime = z.iso
   .datetime({ offset: false })
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
+
 const visibleText = z
   .string()
   .min(1)
@@ -84,9 +86,11 @@ const observedRatingDirectionSchema = z
   .strict()
   .superRefine((value, context) => {
     const expectedDirection = value.ratingChange > 0 ? 'up' : value.ratingChange < 0 ? 'down' : 'unchanged'
+
     if (value.direction !== expectedDirection) {
       context.addIssue({ code: 'custom', message: 'direction must match ratingChange', path: ['direction'] })
     }
+
     if (Date.parse(value.fromObservedAt) > Date.parse(value.toObservedAt)) {
       context.addIssue({ code: 'custom', message: 'observation coverage must be chronological' })
     }
@@ -117,8 +121,11 @@ export const playerRankedSnapshotSchema = z
   .strict()
   .superRefine((snapshot, context) => {
     const direction = snapshot.observedRatingDirection
+
     if (!direction) return
+
     const observationTimes = new Set(snapshot.ratingHistory.map((point) => point.recordedAt))
+
     if (
       direction.observationCount > snapshot.ratingHistory.length ||
       !observationTimes.has(direction.fromObservedAt) ||
@@ -143,10 +150,13 @@ export const playerRankedProfileSchema = z
   .superRefine((profile, context) => {
     const unavailable =
       profile.lastSuccessAt === null && profile.freshness === 'unavailable' && profile.snapshot === null
+
     const available = profile.lastSuccessAt !== null && profile.freshness !== 'unavailable' && profile.snapshot !== null
+
     if (!unavailable && !available) {
       context.addIssue({ code: 'custom', message: 'ranked availability fields are inconsistent' })
     }
+
     if (profile.sparsePulse && !available) {
       context.addIssue({ code: 'custom', message: 'sparse pulse evidence requires canonical ranked state' })
     }

@@ -35,6 +35,7 @@ beforeAll(async () => {
     label: 'request_admission',
     modules: [refreshOperationsModule, requestAdmissionModule],
   })
+
   connectionString = database.connectionString
 })
 
@@ -44,11 +45,14 @@ afterAll(async () => {
 
 beforeEach(async () => {
   const control = postgres(connectionString, { max: 1 })
+
   try {
     await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions DISABLE TRIGGER USER')
+
     await control.unsafe(
       'TRUNCATE request_admission.source_backoffs, request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, refresh_operations.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
     )
+
     await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions ENABLE TRIGGER USER')
   } finally {
     await control.end()
@@ -61,22 +65,28 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 3, 'brawlhalla-v1': 5 },
     })
+
     await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 2 })
     const usage = await admission.inspectCurrentUsage()
+
     expect(usage.domains).toEqual([
       { domain: 'brawlhalla-v0', used: 2, limit: 3 },
       { domain: 'brawlhalla-v1', used: 0, limit: 5 },
     ])
+
     expect(new Date(usage.observedAt).getTime()).toBeGreaterThanOrEqual(new Date(usage.windowStartedAt).getTime())
   })
 
   test('50 concurrent duplicates reserve one operation and consume actor/source once', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 300 },
     })
+
     const dedupeKey = `player:42:${randomUUID()}`
+
     const attempts = await Promise.all(
       Array.from({ length: 50 }, async () => {
         const reserved = await operations.reserveInteractivePlayerRefresh({
@@ -87,21 +97,28 @@ describe('PostgreSQL interactive refresh admission', () => {
           provenance: { source: 'integration-test' },
           reservationTtlSeconds: 30,
         })
+
         if (reserved.outcome === 'already-active') return reserved
+
         const actor = await admission.admitActor(
           { kind: 'verified-anonymous', ip: '203.0.113.42' },
           reserved.operationId,
         )
+
         expect(actor.outcome).toBe('admitted')
+
         const source = await admission.admitSource({
           domain: 'brawlhalla-v0',
           reservationKey: reserved.operationId,
           units: 2,
         })
+
         expect(source.outcome).toBe('admitted')
+
         expect(await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)).toBe(
           'transitioned',
         )
+
         return reserved
       }),
     )
@@ -109,6 +126,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     expect(attempts.filter(({ outcome }) => outcome === 'reserved')).toHaveLength(1)
     expect(attempts.filter(({ outcome }) => outcome === 'already-active')).toHaveLength(49)
     expect(new Set(attempts.map(({ operationId }) => operationId)).size).toBe(1)
+
     expect(await admission.inspectUsage()).toMatchObject({
       actorUnits: 1,
       sourceUnits: { 'brawlhalla-v0': 2 },
@@ -121,14 +139,17 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 1,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     expect(
       await admission.admitActorOnce({ kind: 'authenticated', accountId: 'account-a', ip: '203.0.113.7' }),
     ).toEqual({
       outcome: 'admitted',
     })
+
     expect(
       await admission.admitActorOnce({ kind: 'authenticated', accountId: 'account-b', ip: '203.0.113.7' }),
     ).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: expect.any(Number) })
+
     expect((await admission.inspectUsage()).actorUnits).toBe(2)
   })
 
@@ -137,17 +158,22 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     const viewer = { kind: 'profile-view', ip: '203.0.113.90' } as const
+
     for (let view = 0; view < 20; view++) {
       expect(await admission.admitActorOnce(viewer)).toEqual({ outcome: 'admitted' })
     }
+
     expect(await admission.admitActorOnce(viewer)).toMatchObject({
       outcome: 'rate-limited',
       retryAfterSeconds: expect.any(Number),
     })
+
     expect(await admission.admitActorOnce({ kind: 'profile-view', ip: '203.0.113.91' })).toEqual({
       outcome: 'admitted',
     })
+
     expect(await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.90' }, randomUUID())).toEqual({
       outcome: 'admitted',
     })
@@ -159,15 +185,19 @@ describe('PostgreSQL interactive refresh admission', () => {
       sourceLimits: { 'brawlhalla-v0': 180 },
       actorReservationRetentionSeconds: 1,
     })
+
     const reservationKey = `expired-actor:${randomUUID()}`
     const control = postgres(connectionString, { max: 1 })
+
     try {
       await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.201' }, reservationKey)
+
       await control`
         UPDATE request_admission.actor_reservations
         SET admitted_at = clock_timestamp() - interval '2 seconds'
         WHERE reservation_key = ${reservationKey}
       `
+
       await admission.admitActorOnce({ kind: 'desktop', ip: '203.0.113.202' })
       expect(await admission.hasActorReservation(reservationKey)).toBe(false)
     } finally {
@@ -177,11 +207,14 @@ describe('PostgreSQL interactive refresh admission', () => {
 
   test('reconciles actor-admitted work after a crash before activation', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     const key = `activation-crash:${randomUUID()}`
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
@@ -190,7 +223,9 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 1,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+
     expect(
       await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.89' }, reserved.operationId),
     ).toEqual({ outcome: 'admitted' })
@@ -205,12 +240,15 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     const reservationKey = `operation:${randomUUID()}`
+
     const results = await Promise.all(
       Array.from({ length: 20 }, () =>
         admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.88' }, reservationKey),
       ),
     )
+
     expect(results.every(({ outcome }) => outcome === 'admitted')).toBe(true)
     expect((await admission.inspectUsage()).actorUnits).toBe(1)
     expect(await admission.hasActorReservation(reservationKey)).toBe(true)
@@ -221,11 +259,13 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 3 },
     })
+
     const results = await Promise.all(
       Array.from({ length: 12 }, () =>
         admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
       ),
     )
+
     expect(results.filter(({ outcome }) => outcome === 'admitted')).toHaveLength(3)
     expect(results.filter(({ outcome }) => outcome === 'rate-limited')).toHaveLength(9)
   })
@@ -236,6 +276,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       sourceLimits: { 'brawlhalla-v0': 3, 'brawlhalla-v1': 1 },
       sourceBackgroundHeadroom: 1,
     })
+
     for (let call = 0; call < 2; call++) {
       expect(
         await admission.admitSource({
@@ -246,6 +287,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         }),
       ).toMatchObject({ outcome: 'admitted' })
     }
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v0',
@@ -254,6 +296,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         caller: 'background',
       }),
     ).toMatchObject({ outcome: 'rate-limited' })
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v0',
@@ -262,6 +305,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         caller: 'on-demand',
       }),
     ).toMatchObject({ outcome: 'admitted' })
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v1',
@@ -270,6 +314,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         caller: 'background',
       }),
     ).toMatchObject({ outcome: 'rate-limited' })
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v1',
@@ -286,10 +331,13 @@ describe('PostgreSQL interactive refresh admission', () => {
       sourceLimits: { 'brawlhalla-v0': 180 },
       minimumSourceSpacingMs: 75,
     }
+
     const first = createPostgresRequestAdmission(database, options)
     const second = createPostgresRequestAdmission(database, options)
+
     await first.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })
     const startedAt = performance.now()
+
     await second.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })
     expect(performance.now() - startedAt).toBeGreaterThanOrEqual(60)
   })
@@ -301,16 +349,20 @@ describe('PostgreSQL interactive refresh admission', () => {
       sourceWindowSeconds: { 'brawlhalla-v1': 1 },
       windowSeconds: 60,
     })
+
     await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })
     await admission.admitSource({ domain: 'brawlhalla-v1', reservationKey: randomUUID(), units: 1 })
     await Bun.sleep(1_100)
+
     expect((await admission.inspectCurrentUsage()).domains).toEqual([
       { domain: 'brawlhalla-v0', used: 1, limit: 1 },
       { domain: 'brawlhalla-v1', used: 0, limit: 1 },
     ])
+
     expect(
       await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
     ).toMatchObject({ outcome: 'rate-limited' })
+
     expect(
       await admission.admitSource({ domain: 'brawlhalla-v1', reservationKey: randomUUID(), units: 1 }),
     ).toMatchObject({ outcome: 'admitted' })
@@ -318,31 +370,38 @@ describe('PostgreSQL interactive refresh admission', () => {
 
   test('keeps source reservations inside a rolling window across an aligned boundary and restart', async () => {
     let delayed = false
+
     const options = {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 1 },
       windowSeconds: 1,
       afterWindowCaptured: async () => {
         if (delayed) return
+
         delayed = true
         await Bun.sleep(1_100)
       },
     }
+
     // the admitting process restarts below, so it gets a client of its own to close and reopen
     const firstClient = openTestClient(database.connectionString)
     const first = createPostgresRequestAdmission(firstClient, options)
+
     expect(await first.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })).toMatchObject({
       outcome: 'admitted',
     })
+
     await firstClient.close()
 
     const restartedClient = openTestClient(database.connectionString)
     const restarted = createPostgresRequestAdmission(restartedClient, options)
+
     const afterRestart = await restarted.admitSource({
       domain: 'brawlhalla-v0',
       reservationKey: randomUUID(),
       units: 1,
     })
+
     await restartedClient.close()
 
     expect(afterRestart).toMatchObject({ outcome: 'rate-limited', retryAfterSeconds: 1 })
@@ -353,11 +412,14 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     const second = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     await first.pauseSource('brawlhalla-v0', 30)
+
     expect(await second.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })).toMatchObject(
       { outcome: 'rate-limited', retryAfterSeconds: expect.any(Number) },
     )
@@ -366,6 +428,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   test('uses one database timestamp when a transaction crosses a window boundary', async () => {
     let delayed = false
     let capturedAt: Date | undefined
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
@@ -373,20 +436,26 @@ describe('PostgreSQL interactive refresh admission', () => {
       afterWindowCaptured: async (databaseNow) => {
         capturedAt = databaseNow
         if (delayed) return
+
         delayed = true
         await Bun.sleep(1_100)
       },
     })
+
     expect(await admission.admitActor({ kind: 'verified-anonymous', ip: '203.0.113.99' }, randomUUID())).toEqual({
       outcome: 'admitted',
     })
+
     const control = postgres(connectionString, { max: 1 })
+
     try {
       const [window] = await control<{ window_started_at: Date }[]>`
         SELECT window_started_at FROM request_admission.actor_windows
         WHERE domain = 'anonymous-refresh'
       `
+
       if (!capturedAt) throw new Error('Expected captured database time')
+
       expect(window.window_started_at.getTime()).toBe(Math.floor(capturedAt.getTime() / 1_000) * 1_000)
       expect(Date.now() - capturedAt.getTime()).toBeGreaterThanOrEqual(1_000)
     } finally {
@@ -397,6 +466,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   test('expires abandoned admission reservations before allowing replacement work', async () => {
     const operations = createPostgresRefreshOperations({ database })
     const dedupeKey = `expired:${randomUUID()}`
+
     const first = await operations.reserveInteractivePlayerRefresh({
       dedupeKey,
       operationKey: dedupeKey,
@@ -405,8 +475,10 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     expect(first.outcome).toBe('reserved')
     const control = postgres(connectionString, { max: 1 })
+
     try {
       await control`
         UPDATE refresh_operations.operations SET reservation_expires_at = clock_timestamp() - interval '1 second'
@@ -415,6 +487,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     } finally {
       await control.end()
     }
+
     const replacement = await operations.reserveInteractivePlayerRefresh({
       dedupeKey,
       operationKey: dedupeKey,
@@ -423,6 +496,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     expect(replacement).toMatchObject({ outcome: 'reserved' })
     expect(replacement.operationId).not.toBe(first.operationId)
     expect((await operations.inspect(first.operationId)).operation.status).toBe('dead_letter')
@@ -430,11 +504,14 @@ describe('PostgreSQL interactive refresh admission', () => {
 
   test('admits every actual upstream call made inside one section', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
+
     const key = `multi-call:${randomUUID()}`
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
@@ -443,8 +520,11 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+
     expect(
       await runOneRefreshOperation(operations, 'multi-call-worker', {
         leaseMs: 1_000,
@@ -457,16 +537,19 @@ describe('PostgreSQL interactive refresh admission', () => {
         },
       }),
     ).toBe(true)
+
     expect((await admission.inspectUsage()).sourceUnits).toEqual({ 'brawlhalla-v1': 2 })
     expect((await operations.inspect(reserved.operationId)).operation.status).toBe('succeeded')
   })
 
   test('dispatches proof, interactive, and leaderboard kinds through one fair claimant', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
+
     const proof = await operations.accept({
       dedupeKey: `dispatch-proof:${randomUUID()}`,
       operationKey: `dispatch-proof:${randomUUID()}`,
@@ -474,6 +557,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       payload: { value: 'proof' },
       provenance: { source: 'integration-test' },
     })
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `dispatch-interactive:${randomUUID()}`,
       operationKey: `dispatch-interactive:${randomUUID()}`,
@@ -482,8 +566,11 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+
     const leaderboard = await operations.accept({
       kind: 'leaderboard-1v1',
       dedupeKey: `dispatch-leaderboard:${randomUUID()}`,
@@ -492,6 +579,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       payload: { pageDepth: 1, intervalMs: 60_000 },
       provenance: { source: 'integration-test' },
     })
+
     const options = {
       leaseMs: 1_000,
       retryDelayMs: 0,
@@ -501,6 +589,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       leaderboardSource: {
         async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
           if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
+
           return {
             rankings: [
               {
@@ -542,10 +631,12 @@ describe('PostgreSQL interactive refresh admission', () => {
   test('continuously renews an interactive section beyond its initial lease', async () => {
     const operations = createPostgresRefreshOperations({ database })
     const competing = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `renew-interactive:${randomUUID()}`,
       operationKey: `renew-interactive:${randomUUID()}`,
@@ -554,12 +645,16 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
     let sectionStarted: (() => void) | undefined
+
     const started = new Promise<void>((resolve) => {
       sectionStarted = resolve
     })
+
     const executing = runOneRefreshOperation(operations, 'renew-interactive-worker', {
       // Wide margins: a 40 ms renewal cadence on a 200 ms lease missed renewals on loaded CI runners, so the lease
       // expired mid-section and completion was rejected. The section still outlives the initial lease.
@@ -573,22 +668,28 @@ describe('PostgreSQL interactive refresh admission', () => {
         await Bun.sleep(1_750)
       },
     })
+
     await started
     await Bun.sleep(1_200)
+
     expect(
       await competing.claim('competing-interactive-worker', 1_000, testAdmission, 'interactive-player-refresh'),
     ).toBeNull()
+
     expect(await executing).toBe(true)
     expect((await operations.inspect(reserved.operationId)).operation.status).toBe('succeeded')
   })
 
   test('charges every repeated upstream attempt after lease loss', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
+
     const key = `source-retry:${randomUUID()}`
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
@@ -597,10 +698,14 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
     const first = await operations.claim('source-worker-a', 1_000, testAdmission, 'interactive-player-refresh')
+
     if (!first || first.kind !== 'interactive-player-refresh') throw new Error('Expected first interactive lease')
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v0',
@@ -610,6 +715,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     ).toMatchObject({ outcome: 'admitted', deduplicated: false })
 
     const control = postgres(connectionString, { max: 1 })
+
     try {
       await control`
         UPDATE refresh_operations.operations
@@ -619,8 +725,11 @@ describe('PostgreSQL interactive refresh admission', () => {
     } finally {
       await control.end()
     }
+
     const retry = await operations.claim('source-worker-b', 1_000, testAdmission, 'interactive-player-refresh')
+
     if (!retry || retry.kind !== 'interactive-player-refresh') throw new Error('Expected retry interactive lease')
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v0',
@@ -628,16 +737,20 @@ describe('PostgreSQL interactive refresh admission', () => {
         units: 1,
       }),
     ).toMatchObject({ outcome: 'admitted', deduplicated: false })
+
     expect((await admission.inspectUsage()).sourceUnits).toEqual({ 'brawlhalla-v0': 2 })
   })
 
   test('charges replay source calls while preserving the original effect identity', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v1': 180 },
     })
+
     const key = `source-replay:${randomUUID()}`
+
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
@@ -646,15 +759,20 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
+
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+
     const original = await operations.claim(
       'source-replay-original',
       1_000,
       testAdmission,
       'interactive-player-refresh',
     )
+
     if (!original || original.kind !== 'interactive-player-refresh') throw new Error('Expected original lease')
+
     expect(
       await admission.admitSource({
         domain: 'brawlhalla-v1',
@@ -662,6 +780,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         units: 1,
       }),
     ).toMatchObject({ outcome: 'admitted', deduplicated: false })
+
     await operations.fail(original, { code: 'operator_repairable', message: 'repairable', retryable: false }, 0)
 
     const replay = await operations.replayDeadLetter({
@@ -669,7 +788,9 @@ describe('PostgreSQL interactive refresh admission', () => {
       actorId: 'operator:integration',
       reason: 'upstream repaired',
     })
+
     if (replay.outcome !== 'replayed') throw new Error('Expected replay')
+
     expect(
       await runOneRefreshOperation(operations, 'source-replay-successor', {
         leaseMs: 1_000,
@@ -683,6 +804,7 @@ describe('PostgreSQL interactive refresh admission', () => {
         },
       }),
     ).toBe(true)
+
     expect(await admission.inspectUsage()).toMatchObject({
       sourceUnits: { 'brawlhalla-v1': 2 },
       sourceReservations: 2,
@@ -694,26 +816,32 @@ describe('PostgreSQL interactive refresh admission', () => {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 5, 'brawlhalla-v1': 2 },
     })
+
     const v0 = await Promise.all(
       Array.from({ length: 20 }, (_, index) =>
         admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: `v0:${randomUUID()}:${index}`, units: 1 }),
       ),
     )
+
     expect(v0.filter(({ outcome }) => outcome === 'admitted')).toHaveLength(5)
     expect(v0.filter(({ outcome }) => outcome === 'rate-limited')).toHaveLength(15)
+
     expect(
       await admission.admitSource({ domain: 'brawlhalla-v1', reservationKey: randomUUID(), units: 2 }),
     ).toMatchObject({ outcome: 'admitted' })
+
     const duplicate = await admission.admitSource({
       domain: 'brawlhalla-v1',
       reservationKey: 'same-source-reservation',
       units: 2,
     })
+
     const duplicateAgain = await admission.admitSource({
       domain: 'brawlhalla-v1',
       reservationKey: 'same-source-reservation',
       units: 2,
     })
+
     expect(duplicate.outcome).toBe('rate-limited')
     expect(duplicateAgain.outcome).toBe('rate-limited')
   })

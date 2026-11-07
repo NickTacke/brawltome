@@ -27,6 +27,7 @@ describe('resolvePollDelay', () => {
 
   test('uses the schedule for the elapsed time when given a function', () => {
     const schedule = (elapsed: number) => (elapsed < 10_000 ? 1_000 : 4_000)
+
     expect(resolvePollDelay(schedule, 0)).toBe(1_000)
     expect(resolvePollDelay(schedule, 10_000)).toBe(4_000)
   })

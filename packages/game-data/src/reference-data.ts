@@ -69,6 +69,7 @@ export function aggregateWeapons(legends: LegendWeaponStats[], references: Legen
 
   for (const legend of legends) {
     const reference = references.getById(legend.legendId)
+
     if (!reference) continue
 
     addWeaponStats(aggregates, normalizeWeaponName(reference.weaponOne), {
@@ -76,6 +77,7 @@ export function aggregateWeapons(legends: LegendWeaponStats[], references: Legen
       damage: legend.damageWeaponOne,
       kos: legend.koWeaponOne,
     })
+
     addWeaponStats(aggregates, normalizeWeaponName(reference.weaponTwo), {
       timeHeld: legend.timeHeldWeaponTwo,
       damage: legend.damageWeaponTwo,
@@ -94,6 +96,7 @@ function addWeaponStats(
   stats: Omit<WeaponAggregate, 'weapon'>,
 ): void {
   const current = aggregates.get(weapon) ?? { timeHeld: 0, damage: 0n, kos: 0 }
+
   current.timeHeld += stats.timeHeld
   current.damage += stats.damage
   current.kos += stats.kos

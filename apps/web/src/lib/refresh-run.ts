@@ -70,14 +70,17 @@ export function startRefreshRun<T>(options: RefreshRunOptions<T>): () => void {
 
   const clearTimer = () => {
     if (timer !== null) clock.clearTimeout(timer)
+
     timer = null
   }
 
   const stop = () => {
     if (stopped) return
+
     stopped = true
     clearTimer()
     const close = closePush
+
     closePush = undefined
     close?.()
   }
@@ -90,62 +93,81 @@ export function startRefreshRun<T>(options: RefreshRunOptions<T>): () => void {
   const schedule = () => {
     clearTimer()
     const schedulePollMs = pushed && options.pushedPollMs !== undefined ? options.pushedPollMs : options.pollMs
+
     timer = clock.setTimeout(() => void tick(), resolvePollDelay(schedulePollMs, clock.now() - start))
   }
 
   const tick = async () => {
     if (stopped) return
+
     timer = null
     if (clock.now() - start > options.maxRefreshMs) {
       settle('timeout', new RefreshTimeoutError())
+
       return
     }
+
     inFlight = true
     let next: T
+
     try {
       next = await options.queryFn()
     } catch (error) {
       inFlight = false
       if (!stopped) settle('error', error instanceof Error ? error : new Error(String(error)))
+
       return
     }
+
     inFlight = false
     if (stopped) return
+
     options.onData(next)
     if (options.isDone(previous, next)) {
       settle('done')
+
       return
     }
+
     previous = next
     if (wakeQueued) {
       wakeQueued = false
       void tick()
+
       return
     }
+
     schedule()
   }
 
   const handlers: RefreshPushHandlers = {
     wake: () => {
       if (stopped) return
+
       if (inFlight) {
         wakeQueued = true
+
         return
       }
+
       clearTimer()
       void tick()
     },
     connected: () => {
       if (stopped || pushed) return
+
       pushed = true
       if (!inFlight && timer !== null) schedule()
     },
     unavailable: () => {
       if (stopped) return
+
       const close = closePush
+
       closePush = undefined
       close?.()
       if (!pushed) return
+
       pushed = false
       if (!inFlight) schedule()
     },
@@ -154,8 +176,10 @@ export function startRefreshRun<T>(options: RefreshRunOptions<T>): () => void {
   schedule()
   if (options.push) {
     const close = options.push(handlers)
+
     if (stopped) close()
     else closePush = close
   }
+
   return stop
 }

@@ -22,6 +22,7 @@ function requesting(overrides: Partial<PlayerRefreshState> = {}): PlayerRefreshS
 describe('playerRefreshReducer', () => {
   test('starts requesting and records the request time', () => {
     const state = requesting()
+
     expect(state.status).toEqual({ kind: 'requesting' })
     expect(state.lastRequestAt).toBe(NOW)
   })
@@ -32,6 +33,7 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'accepted', retry: { kind: 'poll', afterSeconds: 2 } },
       now: NOW,
     })
+
     expect(accepted.status).toEqual({ kind: 'polling' })
     expect(accepted.pollRun).toBe(1)
 
@@ -40,6 +42,7 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'alreadyRefreshing', retry: { kind: 'poll', afterSeconds: 2 } },
       now: NOW,
     })
+
     expect(again.pollRun).toBe(2)
   })
 
@@ -49,6 +52,7 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: 12 } },
       now: NOW,
     })
+
     expect(limited.status).toEqual({ kind: 'waiting', reason: 'rateLimited', retryAt: NOW + 12_000 })
     expect(limited.autoRetries).toBe(1)
 
@@ -57,6 +61,7 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
       now: NOW,
     })
+
     expect(busy.status).toEqual({ kind: 'waiting', reason: 'temporarilyUnavailable', retryAt: NOW + 30_000 })
   })
 
@@ -66,15 +71,18 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
       now: NOW,
     })
+
     expect(exhausted.status).toEqual({ kind: 'gaveUp', reason: 'temporarilyUnavailable' })
   })
 
   test('keeps the retry count across automatic retries and resets it on manual retries', () => {
     expect(requesting({ autoRetries: 2 }).autoRetries).toBe(2)
+
     const manual = playerRefreshReducer(
       { ...initialPlayerRefreshState, autoRetries: 3, status: { kind: 'gaveUp', reason: 'rateLimited' } },
       { type: 'request', manual: true, now: NOW },
     )
+
     expect(manual.autoRetries).toBe(0)
     expect(manual.status).toEqual({ kind: 'requesting' })
   })
@@ -85,8 +93,10 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } },
       now: NOW,
     })
+
     expect(verify.status).toEqual({ kind: 'verifying' })
     expect(verify.autoRetries).toBe(0)
+
     expect(playerRefreshReducer(verify, { type: 'verificationFailed' }).status).toEqual({
       kind: 'verificationFailed',
     })
@@ -98,16 +108,19 @@ describe('playerRefreshReducer', () => {
       refresh: { outcome: 'notNeeded', retry: { kind: 'none' } },
       now: NOW,
     })
+
     expect(state.status).toEqual({ kind: 'idle' })
   })
 
   test('treats a failed request like a temporary outage', () => {
     const state = playerRefreshReducer(requesting(), { type: 'requestFailed', now: NOW })
+
     expect(state.status).toEqual({ kind: 'waiting', reason: 'temporarilyUnavailable', retryAt: NOW + 30_000 })
   })
 
   test('ignores outcomes that arrive when no request is in flight', () => {
     const idle = initialPlayerRefreshState
+
     expect(
       playerRefreshReducer(idle, {
         type: 'outcome',
@@ -115,17 +128,21 @@ describe('playerRefreshReducer', () => {
         now: NOW,
       }),
     ).toBe(idle)
+
     expect(playerRefreshReducer(idle, { type: 'requestFailed', now: NOW })).toBe(idle)
   })
 
   test('settles polling runs', () => {
     const polling: PlayerRefreshState = { ...initialPlayerRefreshState, status: { kind: 'polling' }, pollRun: 1 }
+
     expect(playerRefreshReducer(polling, { type: 'pollSettled', settlement: 'done' }).status).toEqual({
       kind: 'idle',
     })
+
     expect(playerRefreshReducer(polling, { type: 'pollSettled', settlement: 'timeout' }).status).toEqual({
       kind: 'timedOut',
     })
+
     expect(playerRefreshReducer(initialPlayerRefreshState, { type: 'pollSettled', settlement: 'timeout' })).toBe(
       initialPlayerRefreshState,
     )
@@ -173,6 +190,7 @@ describe('shouldRecheckOnVisible', () => {
 
   test('waits at least a minute after the previous request', () => {
     const recent = { ...initialPlayerRefreshState, lastRequestAt: NOW - 30_000 }
+
     expect(shouldRecheckOnVisible(recent, stale, NOW)).toBe(false)
     expect(shouldRecheckOnVisible(recent, stale, NOW + 30_000)).toBe(true)
   })
@@ -196,6 +214,7 @@ describe('getPlayerRefreshNotice', () => {
       { ...waiting, reason: 'rateLimited' },
       { hasData: true, secondsLeft: 5, dataAge: '3h ago' },
     )
+
     expect(notice?.title).toBe('Too many update requests right now')
     expect(notice?.detail).toBe('Retrying in 5s. Showing data from 3h ago.')
   })
@@ -211,6 +230,7 @@ describe('getPlayerRefreshNotice', () => {
       { kind: 'gaveUp', reason: 'temporarilyUnavailable' },
       { hasData: true, secondsLeft: null, dataAge: '2d ago' },
     )
+
     expect(notice).toEqual({
       tone: 'warning',
       title: "Couldn't update this player",
@@ -218,6 +238,7 @@ describe('getPlayerRefreshNotice', () => {
       countdownSeconds: null,
       action: { label: 'Try again' },
     })
+
     expect(
       getPlayerRefreshNotice(
         { kind: 'gaveUp', reason: 'rateLimited' },
@@ -240,6 +261,7 @@ describe('getPlayerRefreshNotice', () => {
 
   test('does not claim the player is missing when polling times out without data', () => {
     const notice = getPlayerRefreshNotice({ kind: 'timedOut' }, { hasData: false, secondsLeft: null, dataAge: null })
+
     expect(notice?.title).toBe("Couldn't load this player yet")
     expect(notice?.detail).toContain('Check the player ID')
     expect(notice?.action).toEqual({ label: 'Try again' })
@@ -250,6 +272,7 @@ describe('getPlayerRefreshNotice', () => {
       { kind: 'verificationFailed' },
       { hasData: true, secondsLeft: null, dataAge: 'just now' },
     )
+
     expect(notice?.title).toBe("Couldn't verify your browser")
     expect(notice?.action).toEqual({ label: 'Try again' })
   })
@@ -276,8 +299,10 @@ describe('createLatestRequestTracker', () => {
   test('only the most recently started request is current', () => {
     const tracker = createLatestRequestTracker()
     const first = tracker.start()
+
     expect(tracker.isLatest(first)).toBe(true)
     const second = tracker.start()
+
     expect(tracker.isLatest(first)).toBe(false)
     expect(tracker.isLatest(second)).toBe(true)
   })

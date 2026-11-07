@@ -19,6 +19,7 @@ export function TurnstileGate({ onToken, onError }: TurnstileGateProps) {
   }, [siteKey, onToken])
 
   if (failed) return null
+
   if (!siteKey) return null
 
   return (

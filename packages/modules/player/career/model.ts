@@ -26,6 +26,8 @@ export function careerFreshness(
   now = new Date(),
 ): CareerFreshness {
   if (!lastSuccessAt) return 'unavailable'
+
   if (snapshotSource === 'legacy-v2') return 'stale'
+
   return now.getTime() - lastSuccessAt.getTime() <= CAREER_FRESHNESS_MS ? 'fresh' : 'stale'
 }

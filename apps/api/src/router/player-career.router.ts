@@ -9,6 +9,7 @@ import { internalProcedure, router } from '../trpc/trpc'
 
 function mapPlayerCareerProfile(profile: CareerPlayerProfile | null): PlayerCareerProfileContract | null {
   if (!profile) return null
+
   return parsePlayerCareerProfileOutput({
     ...profile,
     checkedAt: profile.checkedAt.toISOString(),

@@ -52,6 +52,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true'
   const maintenanceEnd = process.env.MAINTENANCE_END
   const cookieStore = await cookies()
+
   const initialTheme = await resolveInitialAccountTheme(Boolean(cookieStore.get(SESSION_COOKIE)?.value), async () =>
     (await getServerTrpc()).account.preferences.query(),
   )

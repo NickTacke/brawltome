@@ -16,6 +16,7 @@ describe('deployedOrder', () => {
       predecessor,
       checksum,
     }))
+
     const history = deployedHistory.map(({ identity, predecessor, checksum }) => ({ identity, predecessor, checksum }))
 
     expect(inventory).toEqual(history)

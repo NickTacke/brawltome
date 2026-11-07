@@ -189,13 +189,18 @@ export function getPreviewAppearance(player: PreviewPlayer): PlayerAppearance {
 
 export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
   const playersById = new Map<string, PreviewPlayer>(previewPlayers.map((player) => [player.id, player]))
+
   const winnerNames = match.participants.flatMap(({ playerId, teamId }) => {
     const name = playersById.get(playerId)?.name
+
     return teamId === match.winningTeamId && name ? [name] : []
   })
+
   const teams = new Map<string, { id: string; playerSlots: number[]; score: number; won: boolean }>()
+
   for (const [slot, participant] of match.participants.entries()) {
     const team = teams.get(participant.teamId)
+
     if (team) {
       team.playerSlots.push(slot)
       team.score += participant.score
@@ -208,9 +213,12 @@ export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
       })
     }
   }
+
   const teamList = [...teams.values()]
+
   const nameAtSlot = (slot: number) => {
     const participant = match.participants[slot]
+
     return participant ? (playersById.get(participant.playerId)?.name ?? participant.playerId) : 'Unknown player'
   }
 
@@ -229,6 +237,7 @@ export function replayReportFromPreview(match: PreviewMatch): ReplayReport {
     teams: teamList,
     players: match.participants.flatMap((participant, slot) => {
       const player = playersById.get(participant.playerId)
+
       if (!player) return []
 
       return [

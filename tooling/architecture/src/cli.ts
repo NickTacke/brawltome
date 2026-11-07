@@ -10,6 +10,7 @@ const result = checkArchitecture(readArchitectureRepository(repositoryRoot), cur
 
 for (const violation of result.violations.sort(byDiagnostic)) {
   const location = violation.file ? ` ${violation.file}` : ''
+
   console.error(`[${violation.rule}]${location}: ${violation.message}`)
 }
 
@@ -25,6 +26,7 @@ const exceptionSummary = result.appliedExceptions
   .map(({ id }) => id)
   .sort()
   .join(', ')
+
 console.log(`Architecture check passed with ${result.appliedExceptions.length} temporary exceptions.`)
 console.log(exceptionSummary)
 

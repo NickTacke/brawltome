@@ -87,7 +87,9 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
 
   function onSettled(event: PlayerRefreshSettled) {
     const streams = streamsByPlayer.get(event.brawlhallaId)
+
     if (!streams) return
+
     for (const stream of [...streams]) {
       deliver(stream, 'settled', { status: event.status, operationId: event.operationId })
       metrics.add('refresh_events_delivered_total', 1, { event: event.status })
@@ -111,16 +113,22 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
     idleRelease = undefined
     if (!listening) {
       let established = false
+
       const current = options.source.listenPlayerRefreshSettled(onSettled, () => {
         if (established) onReconnected()
+
         established = true
       })
+
       listening = current
+
       current.catch((error) => {
         if (listening === current) listening = undefined
+
         logger.error('refresh_events.listen.failed', error)
       })
     }
+
     return listening
   }
 
@@ -128,8 +136,10 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
     clearTimeout(idleRelease)
     idleRelease = undefined
     const current = listening
+
     listening = undefined
     if (!current) return
+
     try {
       await (await current).unlisten()
     } catch {
@@ -139,44 +149,60 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
 
   function releaseWhenIdle() {
     if (openStreams > 0 || !listening || idleRelease) return
+
     idleRelease = setTimeout(() => {
       idleRelease = undefined
       if (openStreams === 0) void releaseListener()
     }, idleReleaseMs)
+
     idleRelease.unref?.()
   }
 
   function reconnectLater(): Response {
     metrics.add('refresh_event_streams_total', 1, { outcome: 'draining' })
+
     return new Response(`retry: ${retryMs}\n\n`, { status: 200, headers: streamHeaders })
   }
 
   function rejectOverLimit(clientIp: string): Response | undefined {
     let outcome: 'rejected_capacity' | 'rejected_client' | undefined
+
     if (openStreams >= maxStreams) outcome = 'rejected_capacity'
     else if ((streamsByClient.get(clientIp) ?? 0) >= maxStreamsPerClient) outcome = 'rejected_client'
+
     if (!outcome) return undefined
+
     metrics.add('refresh_event_streams_total', 1, { outcome })
+
     return Response.json({ error: 'too_many_event_streams' }, { status: 429, headers: { 'retry-after': '30' } })
   }
 
   async function open(input: OpenRefreshEventStream): Promise<Response> {
     if (draining) return reconnectLater()
+
     const overLimit = rejectOverLimit(input.clientIp)
+
     if (overLimit) return overLimit
+
     try {
       await ensureListening()
     } catch {
       metrics.add('refresh_event_streams_total', 1, { outcome: 'unavailable' })
+
       return Response.json({ error: 'refresh_events_unavailable' }, { status: 503, headers: { 'retry-after': '5' } })
     }
+
     // Shutdown may have been announced or capacity taken while LISTEN was being established.
     if (draining) return reconnectLater()
+
     const overLimitAfterListen = rejectOverLimit(input.clientIp)
+
     if (overLimitAfterListen) return overLimitAfterListen
+
     if (input.signal?.aborted) {
       // The request that opened the LISTEN may have gone away; let the idle release reclaim it.
       releaseWhenIdle()
+
       return new Response(null, { status: 204 })
     }
 
@@ -189,6 +215,7 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
       clientIp: input.clientIp,
       write(chunk) {
         if (closed) return
+
         try {
           controller.enqueue(encoder.encode(chunk))
         } catch {
@@ -197,16 +224,21 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
       },
       close(reason) {
         if (closed) return
+
         closed = true
         clearInterval(timers.keepAlive)
         clearTimeout(timers.expiry)
         input.signal?.removeEventListener('abort', onAbort)
         const players = streamsByPlayer.get(stream.brawlhallaId)
+
         players?.delete(stream)
         if (players?.size === 0) streamsByPlayer.delete(stream.brawlhallaId)
+
         const remaining = (streamsByClient.get(stream.clientIp) ?? 1) - 1
+
         if (remaining > 0) streamsByClient.set(stream.clientIp, remaining)
         else streamsByClient.delete(stream.clientIp)
+
         openStreams--
         metrics.add('refresh_event_streams_closed_total', 1, { reason })
         releaseWhenIdle()
@@ -219,6 +251,7 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
         }
       },
     }
+
     const onAbort = () => stream.close('client')
 
     const body = new ReadableStream<Uint8Array>({
@@ -233,6 +266,7 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
     openStreams++
     streamsByClient.set(input.clientIp, (streamsByClient.get(input.clientIp) ?? 0) + 1)
     const players = streamsByPlayer.get(input.brawlhallaId) ?? new Set<Stream>()
+
     players.add(stream)
     streamsByPlayer.set(input.brawlhallaId, players)
     metrics.add('refresh_event_streams_total', 1, { outcome: 'opened' })
@@ -244,6 +278,7 @@ export function createRefreshEventStreams(options: RefreshEventStreamsOptions) {
     // `ready` tells the page the subscription is live: it refetches once, so a refresh that settled before the
     // stream opened is not missed.
     stream.write(`retry: ${retryMs}\nevent: ready\ndata: {}\n\n`)
+
     return new Response(body, { status: 200, headers: streamHeaders })
   }
 

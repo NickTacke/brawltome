@@ -87,6 +87,7 @@ async function acquireLease(sql: Sql, effect: CanonicalCareerEffect): Promise<bo
       ${effect.leaseToken}
     ) AS active
   `
+
   return lease?.active === true
 }
 
@@ -99,6 +100,7 @@ async function commitInteractiveSection(sql: Sql, effect: CanonicalCareerEffect)
       ${effect.section}
     ) AS committed
   `
+
   return lease?.committed === true
 }
 
@@ -143,6 +145,7 @@ export function createPostgresCareerPlayers(
         ) legend ON true
         WHERE profile.brawlhalla_id = ${brawlhallaId} AND profile.last_success_at IS NOT NULL
       `
+
       return profile
         ? {
             brawlhallaId: profile.brawlhalla_id,
@@ -166,12 +169,14 @@ export function createPostgresCareerPlayers(
         ORDER BY xp DESC, level DESC, ordinal ASC
         LIMIT 1
       `
+
       return legend ? { legendId: legend.legend_id, legendNameKey: legend.legend_name_key } : null
     },
 
     async byId(brawlhallaId) {
       return client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const [profile] = await sql<ProfileRow[]>`
           SELECT brawlhalla_id, guild_id, guild_name, checked_at, last_success_at, snapshot_source,
                  xp, level, xp_percentage,
@@ -180,9 +185,11 @@ export function createPostgresCareerPlayers(
           FROM players.career_profiles
           WHERE brawlhalla_id = ${brawlhallaId}
         `
+
         if (!profile) return null
 
         const freshness = careerFreshness(profile.last_success_at, profile.snapshot_source, now())
+
         if (!profile.last_success_at) {
           return {
             brawlhallaId,
@@ -289,12 +296,15 @@ export function createPostgresCareerPlayers(
     async recordChecked(brawlhallaId, effect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         if (!(await acquireLease(sql, effect))) return 'lease-lost' as const
+
         await sql`
           INSERT INTO players.career_profiles (brawlhalla_id, checked_at)
           VALUES (${brawlhallaId}, clock_timestamp())
           ON CONFLICT (brawlhalla_id) DO UPDATE SET checked_at = EXCLUDED.checked_at
         `
+
         return 'applied' as const
       })
     },
@@ -302,7 +312,9 @@ export function createPostgresCareerPlayers(
     async applySnapshot(snapshot, effect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         if (!(await commitInteractiveSection(sql, effect))) return 'lease-lost' as const
+
         const inserted = await sql<{ operation_id: string }[]>`
           INSERT INTO players.interactive_refresh_effects (operation_id, section, lease_token, effect_version)
           VALUES (${effect.effectOperationId ?? effect.operationId}::uuid, ${effect.section}, ${effect.leaseToken}, 1)
@@ -312,14 +324,17 @@ export function createPostgresCareerPlayers(
           WHERE players.interactive_refresh_effects.effect_version IS NULL
           RETURNING operation_id
         `
+
         if (!inserted[0]) return 'already-applied' as const
 
         const [clock] = await sql<{ observed_at: Date }[]>`SELECT clock_timestamp() AS observed_at`
         const observedAt = clock.observed_at
+
         const [previous] = await sql<{ player_name: string | null }[]>`
           SELECT player_name FROM players.career_profiles
           WHERE brawlhalla_id = ${snapshot.brawlhallaId} FOR UPDATE
         `
+
         const evidenceRows = await sql<{ player_name: string }[]>`
           SELECT player_name FROM players.ranked_profiles
           WHERE brawlhalla_id = ${snapshot.brawlhallaId} AND last_success_at IS NOT NULL AND player_name IS NOT NULL
@@ -332,14 +347,20 @@ export function createPostgresCareerPlayers(
           UNION ALL
           SELECT player_name FROM players.legacy_profile_discovery WHERE brawlhalla_id = ${snapshot.brawlhallaId}
         `
+
         const nameEvidence = new Set(evidenceRows.map((row) => row.player_name))
+
         if (previous?.player_name) nameEvidence.add(previous.player_name)
+
         const candidate = decodeV0CareerNameCandidate(snapshot.name)
         const playerName = candidate && nameEvidence.has(candidate) ? candidate : snapshot.name
         const previousCandidate = previous?.player_name ? decodeV0CareerNameCandidate(previous.player_name) : null
+
         const previousName =
           previousCandidate && nameEvidence.has(previousCandidate) ? previousCandidate : previous?.player_name
+
         const { account, combat } = snapshot
+
         await sql`
           INSERT INTO players.career_profiles
             (brawlhalla_id, player_name, guild_id, guild_name, checked_at, last_success_at, snapshot_source,
@@ -428,6 +449,7 @@ export function createPostgresCareerPlayers(
             )}
           `
         }
+
         if (snapshot.weapons.length > 0) {
           await sql`
             INSERT INTO players.career_weapons ${sql(
@@ -442,6 +464,7 @@ export function createPostgresCareerPlayers(
             )}
           `
         }
+
         await sql`
           WITH version AS (
             UPDATE players.discovery_state
@@ -452,6 +475,7 @@ export function createPostgresCareerPlayers(
           INSERT INTO players.discovery_outbox (brawlhalla_id, source_version)
           SELECT ${snapshot.brawlhallaId}, source_version FROM version
         `
+
         return 'applied' as const
       })
     },

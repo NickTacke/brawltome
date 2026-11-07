@@ -7,6 +7,7 @@ import { leaderboardDeepCrawlScheduleDefinitions } from '../src/operations-worke
 
 let database: TestDatabase
 let connectionString = ''
+
 const admission = {
   totalConcurrency: 8,
   interactiveReservation: 2,
@@ -39,6 +40,7 @@ afterAll(async () => {
 describe('Leaderboard deep crawl operations', () => {
   test('reconciles, materializes, and claims one crawl per region schedule', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     const definitions = leaderboardDeepCrawlScheduleDefinitions({
       enabled: true,
       intervalMs: 3 * 60 * 60 * 1000,
@@ -47,16 +49,19 @@ describe('Leaderboard deep crawl operations', () => {
       soloIntervalMs: 3 * 60 * 60 * 1000,
       teamsIntervalMs: 3 * 60 * 60 * 1000,
     })
+
     for (const definition of definitions) {
       expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('created')
       expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('already-exists')
     }
+
     expect(await operations.disableLeaderboardDeepCrawlSchedule(definitions[8].scheduleKey)).toEqual({
       outcome: 'disabled',
     })
 
     await operations.materializeDueSchedules()
     const control = postgres(connectionString, { max: 1 })
+
     try {
       const keys = await control<{ dedupe_key: string; schedule_id: string }[]>`
         SELECT operation.dedupe_key, occurrence.schedule_id
@@ -65,13 +70,16 @@ describe('Leaderboard deep crawl operations', () => {
           ON occurrence.id = operation.origin_schedule_occurrence_id
         WHERE operation.kind = 'leaderboard-deep-crawl'
       `
+
       // Every enabled region and mode, each keyed to its schedule so a later window cannot stack a second crawl.
       expect(keys).toHaveLength(definitions.length - 1)
       for (const { dedupe_key, schedule_id } of keys) expect(dedupe_key).toBe(`schedule:${schedule_id}:deep-crawl`)
     } finally {
       await control.end()
     }
+
     const lease = await operations.claim('worker', 1_000, admission)
+
     expect(lease).toMatchObject({
       kind: 'leaderboard-deep-crawl',
       workClass: 'leaderboard',
@@ -81,9 +89,11 @@ describe('Leaderboard deep crawl operations', () => {
 
   test('rejects deep crawl rows outside the regional scopes or with extra fields', async () => {
     const control = postgres(connectionString, { max: 1 })
+
     try {
       const insert = async (payload: Record<string, unknown>) => {
         const id = randomUUID()
+
         await control`
           INSERT INTO refresh_operations.operations
             (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
@@ -92,16 +102,21 @@ describe('Leaderboard deep crawl operations', () => {
              ${control.json(payload)}, ${control.json({ source: 'test' })}, 3)
         `
       }
+
       await insert({ region: 'EU', intervalMs: 10_800_000 })
       await expect(insert({ region: 'all', intervalMs: 10_800_000 })).rejects.toThrow('operations_payload_by_kind')
       await expect(insert({ region: 'EU', intervalMs: 60_000 })).rejects.toThrow('operations_payload_by_kind')
+
       await expect(insert({ region: 'EU', intervalMs: 10_800_000, page: 3 })).rejects.toThrow(
         'operations_payload_by_kind',
       )
+
       await insert({ mode: 'solo2v2', region: 'EU', intervalMs: 10_800_000 })
+
       await expect(insert({ mode: '3v3', region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
         'operations_payload_by_kind',
       )
+
       await expect(insert({ mode: null, region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
         'operations_payload_by_kind',
       )
@@ -112,8 +127,10 @@ describe('Leaderboard deep crawl operations', () => {
 
   test('saves and replaces crawl progress per region', async () => {
     const operations = createPostgresRefreshOperations({ database })
+
     expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toBeNull()
     const windowAt = new Date('2026-10-07T16:00:00.000Z')
+
     await operations.saveLeaderboardDeepCrawlProgress({
       mode: '1v1',
       region: 'EU',
@@ -121,6 +138,7 @@ describe('Leaderboard deep crawl operations', () => {
       nextPage: 41,
       totalPages: 1630,
     })
+
     await operations.saveLeaderboardDeepCrawlProgress({
       mode: '1v1',
       region: 'EU',
@@ -128,6 +146,7 @@ describe('Leaderboard deep crawl operations', () => {
       nextPage: 141,
       totalPages: 1630,
     })
+
     await operations.saveLeaderboardDeepCrawlProgress({
       mode: '2v2',
       region: 'EU',
@@ -135,8 +154,10 @@ describe('Leaderboard deep crawl operations', () => {
       nextPage: 7,
       totalPages: 900,
     })
+
     expect(await operations.readLeaderboardDeepCrawlProgress('2v2', 'EU')).toMatchObject({ nextPage: 7 })
     expect(await operations.readLeaderboardDeepCrawlProgress('solo2v2', 'EU')).toBeNull()
+
     expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toEqual({
       windowAt,
       nextPage: 141,

@@ -70,5 +70,6 @@ export function keepLastStanding<T extends { leaderboardStanding?: LeaderboardSt
   next: T | null,
 ): T | null {
   if (!next || next.leaderboardStanding !== undefined || previous === undefined) return next
+
   return { ...next, leaderboardStanding: previous }
 }

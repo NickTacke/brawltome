@@ -5,6 +5,7 @@ import { runMigrations } from '../migrations/run'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
   const sql = `SELECT '${identity}';`
+
   return { identity, predecessor, sql, checksum: checksumSql(sql), requires }
 }
 
@@ -49,6 +50,7 @@ describe('buildMigrationPlan', () => {
     expect(() => buildMigrationPlan([migration('Players/latest', null)], [])).toThrow(
       'invalid migration identity Players/latest',
     )
+
     expect(() => buildMigrationPlan([first, first], [])).toThrow('duplicate migration identity players/0001')
   })
 
@@ -62,6 +64,7 @@ describe('buildMigrationPlan', () => {
     expect(() => buildMigrationPlan([migration('players/0002', 'players/0001')], [])).toThrow(
       'missing predecessor players/0001 for players/0002',
     )
+
     expect(() => buildMigrationPlan([first, { ...second, predecessor: null }], [])).toThrow(
       'predecessor <none> for players/0002 does not match owner-local order players/0001',
     )
@@ -80,6 +83,7 @@ describe('buildMigrationPlan', () => {
     expect(() => buildMigrationPlan([first, second], [applied(second)])).toThrow(
       'applied migration players/0002 depends on players/0001, which was not applied before it',
     )
+
     expect(() => buildMigrationPlan([alpha, zeta], [applied(zeta), applied(alpha)])).toThrow(
       'applied migration zeta/0001 depends on alpha/0001, which was not applied before it',
     )
@@ -110,6 +114,7 @@ describe('runMigrations', () => {
 
     for (const migrations of invalidInventories) {
       const execute = mock(async () => {})
+
       await expect(runMigrations({ migrations, loadApplied: async () => [], execute })).rejects.toThrow()
       expect(execute).not.toHaveBeenCalled()
     }
@@ -123,9 +128,11 @@ describe('runMigrations', () => {
 
     for (const history of invalidHistories) {
       const execute = mock(async () => {})
+
       await expect(
         runMigrations({ migrations: [first, second], loadApplied: async () => history, execute }),
       ).rejects.toThrow()
+
       expect(execute).not.toHaveBeenCalled()
     }
   })

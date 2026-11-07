@@ -134,10 +134,13 @@ export type PlayerSearchTerm = {
 export function playerSearchTerms(fact: PlayerDiscoveryFact): PlayerSearchTerm[] {
   const terms: PlayerSearchTerm[] = []
   const seen = new Set<string>()
+
   const add = (kind: PlayerSearchTerm['kind'], display: string) => {
     const normalized = normalizeDiscoveryTerm(display)
     const identity = `${kind}:${normalized}`
+
     if (!normalized || seen.has(identity)) return
+
     seen.add(identity)
     terms.push({ kind, display, normalized })
   }
@@ -146,12 +149,15 @@ export function playerSearchTerms(fact: PlayerDiscoveryFact): PlayerSearchTerm[]
   for (const segment of fact.name.split('|')) {
     if (normalizeDiscoveryTerm(segment) !== normalizeDiscoveryTerm(fact.name)) add('segment', segment.trim())
   }
+
   for (const alias of fact.aliases) add('alias', alias)
 
   // A word start only needs its own term when no name term starts with it; "Ahmed PickleBall" already matches "ahmed".
   const nameTerms = terms.filter((term) => term.kind !== 'alias').map((term) => term.normalized)
+
   for (const wordStart of nameFromEachWord(fact.name)) {
     const normalized = normalizeDiscoveryTerm(wordStart)
+
     if (!nameTerms.some((nameTerm) => nameTerm.startsWith(normalized))) add('word', wordStart)
   }
 
@@ -163,13 +169,16 @@ export function playerSearchTerms(fact: PlayerDiscoveryFact): PlayerSearchTerm[]
 // Starts under two characters are skipped, since a search needs at least two.
 function nameFromEachWord(name: string): string[] {
   const wordStarts: string[] = []
+
   for (const segment of name.split('|')) {
     const words = segment.trim().split(/\s+/)
+
     for (let index = 0; index < words.length; index++) {
       const wordStart = words
         .slice(index)
         .join(' ')
         .replace(/^[^\p{L}\p{N}]+/u, '')
+
       if ([...normalizeDiscoveryTerm(wordStart)].length >= 2) wordStarts.push(wordStart)
     }
   }

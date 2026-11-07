@@ -14,6 +14,7 @@ interface PageProps {
 
 const getPlayerPageData = cache(async (id: number) => {
   const trpc = await getServerTrpc()
+
   return loadPlayerWithReference(trpc, id)
 })
 
@@ -26,13 +27,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const playerName = fixEncoding(player.name)
   const matchTime = player.career?.snapshot?.combat.matchTime
   const playtimeHours = typeof matchTime === 'number' ? Math.round((matchTime / 3600) * 10) / 10 : null
+
   const playtimeStr =
     playtimeHours === null || playtimeHours <= 0
       ? null
       : Number.isInteger(playtimeHours)
         ? `${playtimeHours}h`
         : `${playtimeHours.toFixed(1)}h`
+
   const ranked = player.currentSeason?.snapshot?.oneVsOne
+
   const description = [
     playtimeStr ? `Playtime: ${playtimeStr}` : null,
     ranked

@@ -12,11 +12,13 @@ export interface BuildAuthorizeUrlParams {
 
 export function buildAuthorizeUrl(params: BuildAuthorizeUrlParams): string {
   const url = new URL(DISCORD_AUTHORIZE_URL)
+
   url.searchParams.set('client_id', params.clientId)
   url.searchParams.set('redirect_uri', params.redirectUri)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', 'identify')
   url.searchParams.set('state', params.state)
+
   return url.toString()
 }
 
@@ -48,6 +50,7 @@ export async function exchangeCode(params: ExchangeCodeParams): Promise<{ access
   }
 
   const data = z.object({ access_token: z.string().min(1) }).parse(await res.json())
+
   return { accessToken: data.access_token }
 }
 
@@ -78,6 +81,7 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
   }
 
   const data = discordUserSchema.parse(await res.json())
+
   return {
     discordId: data.id,
     username: data.username,

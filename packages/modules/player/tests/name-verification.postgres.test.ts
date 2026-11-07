@@ -14,6 +14,7 @@ const hourMs = 60 * 60 * 1000
 const dayMs = 24 * hourMs
 const ago = (ms: number) => new Date(now.getTime() - ms)
 const policy = { now, perWindow: 24, windowMs: 15 * 60 * 1000, dedupeMs: 14 * dayMs, staleRecheckMs: 60 * dayMs }
+
 const ids = async (input: Partial<typeof policy> & { demandIds?: number[] } = {}) =>
   (await verifications.candidates({ ...policy, ...input })).candidates.map(({ brawlhallaId }) => brawlhallaId)
 
@@ -22,6 +23,7 @@ beforeAll(async () => {
     label: 'player_name_verification',
     modules: [refreshOperationsModule, playerModule],
   })
+
   connectionString = database.connectionString
   control = postgres(connectionString, { max: 1, onnotice: () => {} })
   verifications = createPostgresPlayerNameVerifications(database)
@@ -125,6 +127,7 @@ describe('Player name verification candidates', () => {
 
   test('orders rename signals, then demand, then standing and the oldest V0 observation', async () => {
     const stale = '2026-06-01T00:00:00Z'
+
     // Plain mismatches, ordered by global rank, rating, then V0 age.
     await ranked(1, 'A', stale, { rating: 1500 })
     await ranked(2, 'A', stale, { rating: 2900, globalRank: 3 })
@@ -146,6 +149,7 @@ describe('Player name verification candidates', () => {
     await board(9, 'B', '2026-10-05T00:00:00Z', 'C')
 
     expect(await ids({ demandIds: [7, 8] })).toEqual([5, 6, 8, 7, 9, 3, 2, 4, 1])
+
     expect((await verifications.candidates({ ...policy, demandIds: [7, 8] })).backlog).toEqual({
       rename_signal: 2,
       demand: 2,
@@ -157,6 +161,7 @@ describe('Player name verification candidates', () => {
 describe('Player name verification suppression', () => {
   test('a confirmed stale name is not rechecked until the leaderboard moves or 60 days pass', async () => {
     const observedAt = '2026-08-01T00:00:00Z'
+
     // Verified 30 days ago: V0 kept "Old", so the V0 observation is newer than the cached V1 name.
     await ranked(1, 'Old', ago(30 * dayMs))
     await board(1, 'Cached', observedAt)
@@ -190,11 +195,13 @@ describe('Player name verification suppression', () => {
       [5, 3, 23, false],
       [6, 7, 25, true],
     ]
+
     for (const [id, failures, hours] of cases) {
       await ranked(id, 'Old', '2026-06-01T00:00:00Z')
       await board(id, 'New', '2026-10-05T00:00:00Z')
       await attempt(id, 'New', ago(hours * hourMs), 'failed', { failures })
     }
+
     await ranked(7, 'Old', '2026-06-01T00:00:00Z')
     await board(7, 'New', '2026-10-05T00:00:00Z')
     await attempt(7, 'New', ago(23 * hourMs), 'pending')
@@ -212,11 +219,13 @@ describe('Player name verification claims', () => {
       await ranked(id, 'Old', '2026-06-01T00:00:00Z', { rating: 3000 - id })
       await board(id, 'New', '2026-10-05T00:00:00Z')
     }
+
     await attempt(100, 'Elsewhere', ago(5 * 60 * 1000), 'renamed')
     await attempt(101, 'Free', ago(5 * 60 * 1000), 'renamed', { spent: false })
     await attempt(102, 'Expired', ago(20 * 60 * 1000), 'renamed')
 
     const first = await verifications.claim({ ...policy, perWindow: 3 })
+
     expect(first).toEqual({
       backlog: { rename_signal: 0, demand: 0, other: 6 },
       usedInWindow: 1,
@@ -225,18 +234,22 @@ describe('Player name verification claims', () => {
         { brawlhallaId: 2, playerName: 'New', v0Name: 'Old' },
       ],
     })
+
     expect(await verifications.claim({ ...policy, perWindow: 3 })).toEqual({
       backlog: { rename_signal: 0, demand: 0, other: 4 },
       usedInWindow: 3,
       claimed: [],
     })
+
     // Unexecuted claims keep counting however long they wait, so settle the first batch before the window rolls.
     await verifications.recordChecked(1, 'New')
     await verifications.recordChecked(2, 'New')
     const later = await verifications.claim({ ...policy, now: new Date(now.getTime() + 16 * 60 * 1000) })
+
     expect(later.claimed.map(({ brawlhallaId }) => brawlhallaId)).toEqual([3, 4, 5, 6])
 
     await verifications.release(3, 'New')
+
     expect((await verifications.claim({ ...policy, now: new Date(now.getTime() + 17 * 60 * 1000) })).claimed).toEqual([
       { brawlhallaId: 3, playerName: 'New', v0Name: 'Old' },
     ])
@@ -247,15 +260,18 @@ describe('Player name verification claims', () => {
       await ranked(id, 'Old', '2026-06-01T00:00:00Z', { rating: 3000 - id })
       await board(id, 'New', '2026-10-05T00:00:00Z')
     }
+
     await attempt(100, 'Delayed A', ago(40 * 60 * 1000), 'pending')
     await attempt(101, 'Delayed B', ago(30 * 60 * 1000), 'pending')
     // Past the pending hold the claim is abandoned and no longer counts.
     await attempt(102, 'Abandoned', ago(25 * hourMs), 'pending')
 
     const blocked = await verifications.claim({ ...policy, perWindow: 2 })
+
     expect(blocked.claimed).toEqual([])
     expect(blocked.usedInWindow).toBe(2)
     const open = await verifications.claim({ ...policy, perWindow: 3 })
+
     expect(open.claimed.map(({ brawlhallaId }) => brawlhallaId)).toEqual([1])
   })
 
@@ -275,14 +291,17 @@ describe('Player name verification claims', () => {
     expect(await verifications.recordChecked(1, 'New One')).toBe('renamed')
     expect(await verifications.recordChecked(2, 'Cached Two')).toBe('confirmed_stale')
     expect(await verifications.recordFailed(3, 'New Three')).toBe('failed')
+
     const rows = await control<{ outcome: string; failures: number; spent: boolean }[]>`
       SELECT outcome, failures, spent FROM players.name_verifications ORDER BY brawlhalla_id
     `
+
     expect([...rows]).toEqual([
       { outcome: 'renamed', failures: 0, spent: true },
       { outcome: 'confirmed_stale', failures: 0, spent: true },
       { outcome: 'failed', failures: 1, spent: true },
     ])
+
     expect((await verifications.candidates(policy)).candidates).toEqual([])
   })
 
@@ -306,24 +325,30 @@ describe('Player name verification claims', () => {
     expect(await verifications.prepare(2, 'Cached')).toEqual({ state: 'resolved', outcome: 'confirmed_stale' })
     expect(await verifications.prepare(3, 'New')).toEqual({ state: 'obsolete' })
     expect(await verifications.prepare(4, 'New')).toEqual({ state: 'needed' })
+
     const rows = await control<{ brawlhalla_id: number; outcome: string; spent: boolean }[]>`
       SELECT brawlhalla_id, outcome, spent FROM players.name_verifications ORDER BY brawlhalla_id
     `
+
     expect([...rows]).toEqual([
       { brawlhalla_id: 1, outcome: 'renamed', spent: false },
       { brawlhalla_id: 2, outcome: 'confirmed_stale', spent: false },
       { brawlhalla_id: 4, outcome: 'pending', spent: true },
     ])
+
     expect((await verifications.claim(policy)).usedInWindow).toBe(1)
   })
 
   test('leaderboard scans remember the name a player was seen with before a change', async () => {
     const names = createPostgresLeaderboardPlayerNames(database)
+
     await names.applyLeaderboardNames({ observedAt: ago(hourMs), players: [{ brawlhallaId: 1, name: 'First' }] })
     await names.applyLeaderboardNames({ observedAt: now, players: [{ brawlhallaId: 1, name: 'Second' }] })
+
     const [row] = await control<{ player_name: string; previous_player_name: string | null }[]>`
       SELECT player_name, previous_player_name FROM players.leaderboard_name_observations
     `
+
     expect(row).toEqual({ player_name: 'Second', previous_player_name: 'First' })
   })
 })

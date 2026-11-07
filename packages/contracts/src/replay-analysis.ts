@@ -11,6 +11,7 @@ const nonnegativeSchema = z.number().nonnegative()
 const identifierSchema = z.number().int().nonnegative()
 const nullableMetricSchema = nonnegativeSchema.nullable()
 const nullableShareSchema = z.number().min(0).max(1).nullable()
+
 const replayTimestampSchema = z
   .number()
   .min(0)

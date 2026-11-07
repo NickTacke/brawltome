@@ -25,20 +25,26 @@ async function probeHealth(
 ): Promise<HealthProbe> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
   try {
     const response = await telemetryFetch(discordTelemetry, 'api', fetcher, `${apiUrl}${path}`, {
       signal: controller.signal,
     })
+
     const body = (await response.json().catch(() => null)) as { status?: unknown } | null
+
     if (path === '/health/live' && response.ok && body?.status === 'live') {
       return { state: 'available', label: 'Live' }
     }
+
     if (path === '/health/ready' && response.ok && body?.status === 'ready') {
       return { state: 'available', label: 'Ready' }
     }
+
     if (path === '/health/ready' && response.status === 503 && body?.status === 'unready') {
       return { state: 'degraded', label: 'Degraded' }
     }
+
     return { state: 'unavailable', label: 'Unavailable' }
   } catch {
     return { state: 'unavailable', label: 'Unavailable' }
@@ -49,7 +55,9 @@ async function probeHealth(
 
 function statusIcon(state: ProbeState): string {
   if (state === 'available') return '✅'
+
   if (state === 'degraded') return '⚠️'
+
   return '❌'
 }
 
@@ -70,8 +78,10 @@ export function createStatusCommand({
         probeHealth(fetcher, apiUrl, '/health/live', timeoutMs),
         probeHealth(fetcher, apiUrl, '/health/ready', timeoutMs),
       ])
+
       const color =
         liveness.state === 'unavailable' ? Colors.Red : readiness.state === 'available' ? Colors.Green : Colors.Orange
+
       const embed = new EmbedBuilder()
         .setTitle('🌐 Service Status')
         .setColor(color)

@@ -14,15 +14,19 @@ function exactDifference(value: { numerator: string; denominator: string }, dire
   const digits = String(roundedHundredths).padStart(3, '0')
   const sign = numerator > 0n ? '+' : numerator < 0n ? '-' : ''
   const decimal = `${sign}${digits.slice(0, -2)}.${digits.slice(-2)}`
+
   if ((absolute * 100n) % denominator === 0n) return `${decimal} (${direction})`
+
   return `${decimal} (${direction}; exact ${sign}${absolute}/${denominator})`
 }
 
 function percentage(value: { numerator: string; denominator: string } | null): string {
   if (!value) return 'coverage unavailable'
+
   const numerator = BigInt(value.numerator)
   const denominator = BigInt(value.denominator)
   const roundedBasisPoints = (numerator * 20_000n + denominator) / (denominator * 2n)
+
   return `${(Number(roundedBasisPoints) / 100).toFixed(2)}% coverage`
 }
 
@@ -45,6 +49,7 @@ export function CareerWeaponUsageHistory({
       </section>
     )
   }
+
   if (!history) {
     return (
       <output aria-live="polite" className="block rounded-xl border border-border p-4">
@@ -52,6 +57,7 @@ export function CareerWeaponUsageHistory({
       </output>
     )
   }
+
   if (history.status === 'unavailable') {
     return (
       <section aria-labelledby="career-history-heading" className="space-y-3">

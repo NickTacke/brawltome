@@ -9,6 +9,7 @@ describe('oneVsOneFreshness', () => {
     expect(
       oneVsOneFreshness({ lastSuccessAt: null, snapshot: null }, { ...oneVsOne, observedAt: '2026-10-08T11:48:00Z' }),
     ).toEqual({ at: '2026-10-08T11:48:00Z', source: 'leaderboard' })
+
     expect(oneVsOneFreshness(null, { ...oneVsOne, observedAt: '2026-10-08T11:48:00Z' })).toEqual({
       at: '2026-10-08T11:48:00Z',
       source: 'leaderboard',
@@ -54,6 +55,7 @@ describe('oneVsOneFreshness', () => {
       at: '2026-10-08T09:00:00Z',
       source: 'refresh',
     })
+
     expect(oneVsOneFreshness(null, { ...oneVsOne, observedAt: 'not-a-date' })).toBeNull()
   })
 })

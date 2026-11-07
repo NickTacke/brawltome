@@ -13,14 +13,17 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
     const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_accounts_race_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
+
     adminUrl.pathname = '/postgres'
     const databaseUrl = new URL(connectionString as string)
+
     databaseUrl.pathname = `/${databaseName}`
     const admin = postgres(adminUrl.toString(), { max: 1 })
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
       const legacy = postgres(databaseUrl.toString(), { max: 1 })
+
       try {
         await legacy.unsafe(`
           CREATE TABLE public."user" (
@@ -58,6 +61,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       const runtimeDatabase = openTestClient(databaseUrl.toString())
       const runtime = createPostgresAccounts(runtimeDatabase)
       let accountId = ''
+
       try {
         const results = await Promise.all(
           Array.from({ length: 8 }, (_, index) =>
@@ -68,6 +72,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             }),
           ),
         )
+
         expect(new Set(results.map(({ account }) => account.id)).size).toBe(1)
         accountId = results[0].account.id
 
@@ -75,14 +80,17 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         const conflictingRawToken = 'conflicting-late-v2-token'
         const conflictingSessionId = createHash('sha256').update(conflictingRawToken).digest('hex')
         const legacy = postgres(databaseUrl.toString(), { max: 1 })
+
         try {
           await legacy.unsafe(`INSERT INTO public."user" VALUES ($1, '2026-08-09 18:42:01', '2026-08-09 18:42:01')`, [
             conflictingAccountId,
           ])
+
           await legacy.unsafe(
             `INSERT INTO public.oauth_account VALUES ('discord', 'discord-race', $1, 'Conflicting Ada', NULL, NULL, '2026-08-09 18:42:01', '2026-08-09 18:42:01')`,
             [conflictingAccountId],
           )
+
           await legacy.unsafe(
             `INSERT INTO public.session VALUES ($1, $2, '2099-09-08 18:00:00', '2026-08-09 18:42:01')`,
             [conflictingSessionId, conflictingAccountId],
@@ -92,6 +100,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         }
 
         expect(await runtime.accounts.authenticate(conflictingRawToken)).toEqual({ status: 'anonymous' })
+
         expect(await runtime.accounts.authenticate(results[0].sessionToken)).toMatchObject({
           status: 'signedIn',
           account: { id: accountId },
@@ -101,6 +110,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       }
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
+
       try {
         const [{ user_count, identity_count, session_count, legacy_user_count }] = await client<
           { user_count: number; identity_count: number; session_count: number; legacy_user_count: number }[]
@@ -111,6 +121,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             (SELECT count(*)::int FROM accounts.sessions) AS session_count,
             (SELECT count(*)::int FROM public."user" WHERE id = ${accountId}) AS legacy_user_count
         `
+
         // new accounts no longer get a V2 user row
         expect({ user_count, identity_count, session_count, legacy_user_count }).toEqual({
           user_count: 1,
@@ -118,6 +129,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           session_count: 8,
           legacy_user_count: 0,
         })
+
         await client`DELETE FROM public.session WHERE user_id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
         await client`DELETE FROM public.oauth_account WHERE user_id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
         await client`DELETE FROM public."user" WHERE id = 'd6bf157b-9c07-4ce3-9924-a053a28a59bb'`
@@ -127,12 +139,14 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
       const concurrentRuntimeDatabase = openTestClient(databaseUrl.toString())
       const concurrentRuntime = createPostgresAccounts(concurrentRuntimeDatabase)
+
       try {
         const signIn = await concurrentRuntime.accounts.signInWithDiscord({
           providerAccountId: 'discord-concurrent',
           displayName: 'Concurrent Ada',
           avatarHash: null,
         })
+
         expect(await concurrentRuntime.accounts.authenticate(signIn.sessionToken)).toMatchObject({
           status: 'signedIn',
           account: { id: signIn.account.id, displayName: 'Concurrent Ada' },
@@ -152,8 +166,10 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
     const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_accounts_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
+
     adminUrl.pathname = '/postgres'
     const databaseUrl = new URL(connectionString as string)
+
     databaseUrl.pathname = `/${databaseName}`
     const admin = postgres(adminUrl.toString(), { max: 1 })
 
@@ -173,6 +189,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       const unreconciledAccountId = '7802b6d1-c270-4672-8764-9ba242f94955'
       const unreconciledRawToken = 'unreconciled-v2-token'
       const unreconciledSessionId = createHash('sha256').update(unreconciledRawToken).digest('hex')
+
       try {
         await legacy.unsafe(`
           SET TIME ZONE 'America/Los_Angeles';
@@ -207,24 +224,29 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             linked_at timestamp NOT NULL
           );
         `)
+
         await legacy.unsafe(
           `INSERT INTO public."user" VALUES
              ($1, '2026-08-09 18:42:01', '2026-08-09 18:42:02'),
              ($2, '2026-08-09 19:42:01', '2026-08-09 19:42:02')`,
           [accountId, futureAccountId],
         )
+
         await legacy.unsafe(
           `INSERT INTO public.oauth_account VALUES ('discord', 'discord-42', $1, 'Ada', 'avatar', 'private-refresh', '2026-08-09 18:42:03', '2026-08-09 18:42:04')`,
           [accountId],
         )
+
         await legacy.unsafe(
           `INSERT INTO public.oauth_account VALUES ('future-provider', 'future-42', $1, 'Ada elsewhere', NULL, NULL, '2026-08-09 18:42:03', '2026-08-09 18:42:04')`,
           [accountId],
         )
+
         await legacy.unsafe(
           `INSERT INTO public.oauth_account VALUES ('future-provider', 'future-only', $1, 'Future Ada', 'not-discord', NULL, '2026-08-09 19:42:03', '2026-08-09 19:42:04')`,
           [futureAccountId],
         )
+
         await legacy.unsafe(
           `INSERT INTO public.session VALUES
              ($1, $2, '2099-09-08 18:00:00', '2026-08-09 18:00:00'),
@@ -240,14 +262,18 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       expect(await migratePostgres(databaseUrl.toString(), orderedMigrations)).toBe(0)
 
       const lateLegacy = postgres(databaseUrl.toString(), { max: 1 })
+
       try {
         const [databaseSession] = await lateLegacy<{ timezone: string }[]>`
           SELECT current_setting('TimeZone') AS timezone
         `
+
         expect(databaseSession.timezone).toBe('America/Los_Angeles')
+
         await lateLegacy.unsafe(`UPDATE public."user" SET updated_at = '2026-08-10 03:04:06.456' WHERE id = $1`, [
           accountId,
         ])
+
         await lateLegacy.unsafe(
           `UPDATE public.oauth_account
            SET username = 'Late Ada',
@@ -257,6 +283,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
                updated_at = '2026-08-10 03:04:08.456'
            WHERE provider = 'discord' AND provider_account_id = 'discord-42'`,
         )
+
         await lateLegacy.unsafe(
           `UPDATE public.oauth_account
            SET username = 'Late elsewhere',
@@ -266,17 +293,21 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
                updated_at = '2026-08-10 03:04:10.456'
            WHERE provider = 'future-provider' AND provider_account_id = 'future-42'`,
         )
+
         await lateLegacy.unsafe(
           `INSERT INTO public.session VALUES ($1, $2, '2099-10-11 12:13:14.789', '2026-08-10 03:04:11.789')`,
           [lateSessionId, accountId],
         )
+
         await lateLegacy.unsafe(`INSERT INTO public."user" VALUES ($1, '2026-08-10 04:00:00', '2026-08-10 04:00:01')`, [
           unreconciledAccountId,
         ])
+
         await lateLegacy.unsafe(
           `INSERT INTO public.oauth_account VALUES ('discord', 'discord-unreconciled', $1, 'Unreconciled Ada', NULL, NULL, '2026-08-10 04:00:02', '2026-08-10 04:00:03')`,
           [unreconciledAccountId],
         )
+
         await lateLegacy.unsafe(
           `INSERT INTO public.session VALUES ($1, $2, '2099-10-11 13:00:00', '2026-08-10 04:00:04')`,
           [unreconciledSessionId, unreconciledAccountId],
@@ -286,11 +317,15 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       }
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
+
       try {
         const users = await client`SELECT id, created_at FROM accounts.users`
+
         const identities =
           await client`SELECT provider, provider_account_id, refresh_token FROM accounts.oauth_identities ORDER BY provider`
+
         const sessions = await client`SELECT id, expires_at, created_at FROM accounts.sessions`
+
         const [legacyTables] = await client`
           SELECT to_regclass('public.user') IS NOT NULL AS has_user,
                  to_regclass('public.oauth_account') IS NOT NULL AS has_oauth,
@@ -312,15 +347,20 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
       const runtimeDatabase = openTestClient(databaseUrl.toString())
       const runtime = createPostgresAccounts(runtimeDatabase)
+
       try {
         const authenticated = await runtime.accounts.authenticate(rawToken)
+
         expect(authenticated.status).toBe('signedIn')
         if (authenticated.status !== 'signedIn') throw new Error('Expected migrated session to authenticate')
+
         expect(authenticated.account).toMatchObject({ id: accountId, displayName: 'Ada' })
 
         const futureAuthenticated = await runtime.accounts.authenticate(futureRawToken)
+
         expect(futureAuthenticated.status).toBe('signedIn')
         if (futureAuthenticated.status !== 'signedIn') throw new Error('Expected future provider session')
+
         expect(futureAuthenticated.account).toMatchObject({
           id: futureAccountId,
           displayName: 'Future Ada',
@@ -335,17 +375,20 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
       const revocationRuntimeDatabase = openTestClient(databaseUrl.toString())
       const revocationRuntime = createPostgresAccounts(revocationRuntimeDatabase)
+
       try {
         await revocationRuntime.accounts.signOut(rawToken)
         expect(await revocationRuntime.accounts.authenticate(rawToken)).toEqual({ status: 'anonymous' })
 
         const legacy = postgres(databaseUrl.toString(), { max: 1 })
+
         try {
           const [{ unreconciled_count }] = await legacy<{ unreconciled_count: number }[]>`
             SELECT count(*)::int AS unreconciled_count
             FROM accounts.sessions
             WHERE id = ${unreconciledSessionId}
           `
+
           expect(unreconciled_count).toBe(0)
         } finally {
           await legacy.end()
@@ -361,18 +404,22 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
   test('round-trips launch preferences across sessions and runtimes without anonymous persistence', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts')
+
     const defaultPreferences = {
       version: 2,
       leaderboardBracket: '1v1',
       leaderboardRegion: 'all',
       theme: 'neutral',
     } as const
+
     const { orderedMigrations } = await import('../src/inventories')
     const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_preferences_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
+
     adminUrl.pathname = '/postgres'
     const databaseUrl = new URL(connectionString as string)
+
     databaseUrl.pathname = `/${databaseName}`
     const admin = postgres(adminUrl.toString(), { max: 1 })
 
@@ -383,13 +430,16 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
       const firstRuntime = createPostgresAccounts(firstRuntimeDatabase)
       let accountId = ''
       let secondDeviceToken = ''
+
       try {
         expect(await firstRuntime.accounts.getPreferences(null)).toEqual(defaultPreferences)
         const anonymousClient = postgres(databaseUrl.toString(), { max: 1 })
+
         try {
           const [{ preference_count }] = await anonymousClient<{ preference_count: number }[]>`
             SELECT count(*)::int AS preference_count FROM accounts.preferences
           `
+
           expect(preference_count).toBe(0)
         } finally {
           await anonymousClient.end()
@@ -400,11 +450,13 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           displayName: 'Ada',
           avatarHash: null,
         })
+
         const secondDevice = await firstRuntime.accounts.signInWithDiscord({
           providerAccountId: 'discord-preferences',
           displayName: 'Ada',
           avatarHash: null,
         })
+
         accountId = firstDevice.account.id
         secondDeviceToken = secondDevice.sessionToken
 
@@ -419,9 +471,12 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
       const secondRuntimeDatabase = openTestClient(databaseUrl.toString())
       const secondRuntime = createPostgresAccounts(secondRuntimeDatabase)
+
       try {
         const authentication = await secondRuntime.accounts.authenticate(secondDeviceToken)
+
         expect(authentication).toMatchObject({ status: 'signedIn', account: { id: accountId } })
+
         expect(await secondRuntime.accounts.getPreferences(accountId)).toEqual({
           version: 2,
           leaderboardBracket: 'solo2v2',
@@ -434,6 +489,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
           displayName: 'Grace',
           avatarHash: null,
         })
+
         expect(otherAccount.account.id).not.toBe(accountId)
         expect(await secondRuntime.accounts.getPreferences(otherAccount.account.id)).toEqual(defaultPreferences)
 
@@ -444,6 +500,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             leaderboardRegion: 'EU',
           }),
         ])
+
         expect(await secondRuntime.accounts.getPreferences(otherAccount.account.id)).toEqual({
           version: 2,
           leaderboardBracket: '2v2',
@@ -452,6 +509,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
         })
 
         const client = postgres(databaseUrl.toString(), { max: 1 })
+
         try {
           const [stored] = await client<
             { schema_version: number; leaderboard_bracket: string; leaderboard_region: string; theme: string }[]
@@ -460,6 +518,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
             FROM accounts.preferences
             WHERE account_id = ${accountId}
           `
+
           expect(stored).toEqual({
             schema_version: 2,
             leaderboard_bracket: 'solo2v2',

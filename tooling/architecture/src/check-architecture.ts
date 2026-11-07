@@ -16,6 +16,7 @@ import type {
 const nodeBuiltins = new Set(
   builtinModules.flatMap((name) => {
     const bareName = name.replace(/^node:/, '')
+
     return [bareName, `node:${bareName}`]
   }),
 )
@@ -32,6 +33,7 @@ const allowedRoleDependencies: Record<WorkspaceRole, WorkspaceRole[]> = {
 
 export function checkArchitecture(repository: ArchitectureRepository, policy: ArchitecturePolicy): ArchitectureResult {
   const workspaceByName = new Map(repository.workspaces.map((workspace) => [workspace.name, workspace]))
+
   const violations = [
     ...repository.workspaces
       .filter((workspace) => !policy.roles[workspace.name])
@@ -48,15 +50,22 @@ export function checkArchitecture(repository: ArchitectureRepository, policy: Ar
     ...checkCycles(repository.workspaces, workspaceByName),
     ...checkCrossModuleSql(repository.workspaces, policy),
   ]
+
   const matchedFiles = new Map<TemporaryArchitectureException, Set<string>>()
+
   const unexcepted = violations.filter((violation) => {
     const exception = policy.exceptions.find((candidate) => matchesException(candidate, violation))
+
     if (!exception || !violation.file) return true
+
     const files = matchedFiles.get(exception) ?? new Set<string>()
+
     files.add(violation.file)
     matchedFiles.set(exception, files)
+
     return false
   })
+
   const appliedExceptions = [...matchedFiles.keys()]
 
   return {
@@ -64,6 +73,7 @@ export function checkArchitecture(repository: ArchitectureRepository, policy: Ar
     appliedExceptions,
     staleExceptions: policy.exceptions.filter((exception) => {
       const files = matchedFiles.get(exception)
+
       return (
         !Array.isArray(exception.files) ||
         exception.files.length === 0 ||
@@ -96,13 +106,16 @@ function checkDeclaredDependencies(
   return workspaces.flatMap((importer) =>
     importer.dependencies.flatMap((dependencyName) => {
       const dependency = workspaceByName.get(dependencyName)
+
       if (!dependency) return []
+
       const violation = checkDependencyRule(importer, dependency, policy, {
         importer: importer.name,
         dependency: dependency.name,
         file: `${importer.path}/package.json`,
         importPath: dependency.name,
       })
+
       return violation ? [violation] : []
     }),
   )
@@ -122,6 +135,7 @@ function checkImports(
       for (const importPath of sourceFile.imports) {
         if (importPath.startsWith('.')) {
           const target = findRelativeTarget(importer, sourceFile.path, importPath, workspaces)
+
           if (target && target.name !== importer.name) {
             violations.push({
               rule: 'cross-package-relative-import',
@@ -132,11 +146,13 @@ function checkImports(
               message: `${importer.name} crosses into ${target.name} through a relative import`,
             })
           }
+
           continue
         }
 
         if (isAlias(importPath)) {
           const allowedAliases = policy.localImportAliases[importer.name] ?? []
+
           if (!isConfinedLocalAlias(importPath, importer, allowedAliases)) {
             violations.push({
               rule: 'unresolved-alias',
@@ -146,12 +162,15 @@ function checkImports(
               message: `${importer.name} uses unresolved or escaping import alias ${importPath}`,
             })
           }
+
           continue
         }
 
         const dependencyName = workspaceNameFromSpecifier(importPath, workspaceByName)
+
         if (!dependencyName) {
           const externalDependency = externalDependencyName(importPath)
+
           if (externalDependency && !importer.dependencies.includes(externalDependency)) {
             violations.push({
               rule: 'undeclared-dependency',
@@ -162,9 +181,12 @@ function checkImports(
               message: `${importer.name} imports undeclared dependency ${externalDependency}`,
             })
           }
+
           continue
         }
+
         const dependency = workspaceByName.get(dependencyName)
+
         if (!dependency) continue
 
         const common = {
@@ -190,6 +212,7 @@ function checkImports(
               message: `${importPath} is not exported by ${dependency.name}`,
             })
           }
+
           continue
         }
 
@@ -210,6 +233,7 @@ function checkImports(
         }
 
         const dependencyViolation = checkDependencyRule(importer, dependency, policy, common)
+
         if (dependencyViolation) violations.push(dependencyViolation)
       }
     }
@@ -225,15 +249,18 @@ function checkCrossModuleSql(workspaces: Workspace[], policy: ArchitecturePolicy
 
   for (const workspace of workspaces) {
     const ownSchema = schemas.find((schema) => policy.moduleSchemas[schema] === workspace.name)
+
     if (!ownSchema) continue
 
     const foreignSchemas = schemas.filter((schema) => schema !== ownSchema)
+
     for (const sourceFile of workspace.sourceFiles) {
       if (isTestFile(sourceFile.path)) continue
 
       const fileViolations = isMigrationFile(sourceFile.path, workspace)
         ? checkMigrationSql(workspace, sourceFile, foreignSchemas, policy, ownerByMigration)
         : checkFileSql(workspace, sourceFile, foreignSchemas, policy)
+
       violations.push(...fileViolations)
     }
   }
@@ -269,6 +296,7 @@ function checkMigrationSql(
   ownerByMigration: Map<string, string>,
 ): ArchitectureViolation[] {
   const { identity, requires } = readMigrationDeclaration(sourceFile.source)
+
   if (identity !== undefined && policy.deployedMigrations.includes(identity)) return []
 
   const requiredOwners = new Set(requires.map((required) => ownerByMigration.get(required)))
@@ -295,7 +323,9 @@ function findLinesBySchema(sourceFile: SourceFile, foreignSchemas: string[]): Ma
 
   for (const { schema, line } of findSchemaReferences(sourceFile.source, foreignSchemas)) {
     const lines = linesBySchema.get(schema) ?? []
+
     if (!lines.includes(line)) lines.push(line)
+
     linesBySchema.set(schema, lines)
   }
 
@@ -314,6 +344,7 @@ function migrationOwners(workspaces: Workspace[], policy: ArchitecturePolicy): M
       if (!isMigrationFile(sourceFile.path, workspace)) continue
 
       const { identity } = readMigrationDeclaration(sourceFile.source)
+
       if (identity !== undefined) ownerByMigration.set(identity, workspace.name)
     }
   }
@@ -329,6 +360,7 @@ function checkDependencyRule(
 ): ArchitectureViolation | undefined {
   const importerRole = policy.roles[importer.name]
   const dependencyRole = policy.roles[dependency.name]
+
   if (!importerRole || !dependencyRole || importer.name === dependency.name) return undefined
 
   if (importerRole === 'application' && dependencyRole === 'application') {
@@ -341,8 +373,10 @@ function checkDependencyRule(
 
   const allowedRoles = policy.workspaceRoleDependencies[importer.name] ?? allowedRoleDependencies[importerRole]
   const roleIsForbidden = !allowedRoles.includes(dependencyRole)
+
   const contractDependencyIsForbidden =
     importerRole === 'contracts' && !policy.contractsDependencies.includes(dependency.name)
+
   if (roleIsForbidden || contractDependencyIsForbidden) {
     return {
       rule: 'role-dependency',
@@ -378,8 +412,10 @@ function checkCycles(workspaces: Workspace[], workspaceByName: Map<string, Works
       const cycleStart = stack.indexOf(workspace.name)
       const cycle = [...stack.slice(cycleStart), workspace.name]
       const key = [...new Set(cycle)].sort().join('|')
+
       if (!reported.has(key)) {
         reported.add(key)
+
         violations.push({
           rule: 'cycle',
           importer: workspace.name,
@@ -387,22 +423,27 @@ function checkCycles(workspaces: Workspace[], workspaceByName: Map<string, Works
           message: `Workspace dependency cycle: ${cycle.join(' -> ')}`,
         })
       }
+
       return
     }
+
     if (visited.has(workspace.name)) return
 
     active.add(workspace.name)
     stack.push(workspace.name)
     for (const dependencyName of workspace.dependencies) {
       const dependency = workspaceByName.get(dependencyName)
+
       if (dependency) visit(dependency)
     }
+
     stack.pop()
     active.delete(workspace.name)
     visited.add(workspace.name)
   }
 
   for (const workspace of workspaces) visit(workspace)
+
   return violations
 }
 
@@ -412,10 +453,12 @@ function isAlias(specifier: string): boolean {
 
 function isConfinedLocalAlias(specifier: string, importer: Workspace, prefixes: string[]): boolean {
   const prefix = prefixes.find((candidate) => specifier.startsWith(candidate))
+
   if (!prefix) return false
 
   const workspaceRoot = normalize(resolve('/', importer.path))
   const target = normalize(resolve(workspaceRoot, specifier.slice(prefix.length)))
+
   return target === workspaceRoot || target.startsWith(`${workspaceRoot}/`)
 }
 
@@ -426,8 +469,10 @@ function externalDependencyName(specifier: string): string | undefined {
 
   if (specifier.startsWith('@')) {
     const [scope, name] = specifier.split('/')
+
     return name ? `${scope}/${name}` : undefined
   }
+
   return specifier.split('/')[0] || undefined
 }
 
@@ -439,11 +484,16 @@ function workspaceNameFromSpecifier(specifier: string, workspaceByName: Map<stri
 
 function isExported(specifier: string, dependency: Workspace): boolean {
   if (specifier === dependency.name) return dependency.exports.includes('.')
+
   const subpath = `.${specifier.slice(dependency.name.length)}`
+
   return dependency.exports.some((exportPath) => {
     if (exportPath === subpath) return true
+
     if (!exportPath.includes('*')) return false
+
     const [prefix, suffix] = exportPath.split('*')
+
     return subpath.startsWith(prefix) && subpath.endsWith(suffix)
   })
 }
@@ -472,9 +522,12 @@ function findRelativeTarget(
   workspaces: Workspace[],
 ): Workspace | undefined {
   const absoluteTarget = normalize(resolve('/', dirname(sourcePath), specifier))
+
   return workspaces.find((candidate) => {
     if (candidate.name === importer.name) return false
+
     const workspaceRoot = normalize(resolve('/', candidate.path))
+
     return absoluteTarget === workspaceRoot || absoluteTarget.startsWith(`${workspaceRoot}/`)
   })
 }

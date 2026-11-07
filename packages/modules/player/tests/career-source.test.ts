@@ -163,6 +163,7 @@ describe('V0 career snapshot source contract', () => {
 
   test('omits an unresolved new legend without discarding the valid profile', () => {
     const decoded = decodeV0CareerSnapshot(completeSnapshot, 91913839, () => null)
+
     expect(decoded.name).toBe('Measured Zero')
     expect(decoded.combat.matchTime).toBe(600)
     expect(decoded.legends).toEqual([])

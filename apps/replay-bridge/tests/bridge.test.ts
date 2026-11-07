@@ -15,6 +15,7 @@ const config: ReplayBridgeConfig = {
 describe('replay bridge', () => {
   test('claims, submits, polls, returns, and deletes one replay', async () => {
     const requests: Request[] = []
+
     const responses = [
       new Response(Uint8Array.of(1, 2, 3), {
         status: 200,
@@ -49,14 +50,18 @@ describe('replay bridge', () => {
       new Response(null, { status: 204 }),
       new Response(null, { status: 204 }),
     ]
+
     const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
       requests.push(new Request(input, init))
       const response = responses.shift()
+
       if (!response) throw new Error('Unexpected request')
+
       return response
     }) as unknown as typeof fetch
 
     expect(await processNextReplay(config, fetcher, async () => undefined)).toBe(true)
+
     expect(requests.map(({ method, url }) => `${method} ${new URL(url).pathname}`)).toEqual([
       'POST /internal/replays/claim',
       'POST /v1/jobs',
@@ -65,15 +70,19 @@ describe('replay bridge', () => {
       'POST /internal/replays/1b2f7508-8e9c-4b1a-950f-d60fabe27176/result',
       'DELETE /v1/jobs/processor-job-0001',
     ])
+
     const submission = requests[1]
+
     expect(submission?.headers.get('idempotency-key')).toBe(`1b2f7508-8e9c-4b1a-950f-d60fabe27176:${leaseToken}:1`)
     expect(requests[4]?.headers.get('x-replay-lease-token')).toBe(leaseToken)
     if (!submission) throw new Error('Replay was not submitted')
+
     expect(new Uint8Array(await submission.arrayBuffer())).toEqual(Uint8Array.of(1, 2, 3))
   })
 
   test('rejects processor-controlled absolute URLs and releases the fenced claim', async () => {
     const requests: Request[] = []
+
     const responses = [
       new Response(Uint8Array.of(1), {
         status: 200,
@@ -96,30 +105,37 @@ describe('replay bridge', () => {
       ),
       new Response(null, { status: 204 }),
     ]
+
     const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
       requests.push(new Request(input, init))
       const response = responses.shift()
+
       if (!response) throw new Error('Unexpected request')
+
       return response
     }) as unknown as typeof fetch
 
     await expect(processNextReplay(config, fetcher, async () => undefined)).rejects.toThrow('invalid job')
+
     expect(requests.map(({ url }) => new URL(url).hostname)).toEqual([
       'api.brawltome.test',
       '127.0.0.1',
       'api.brawltome.test',
     ])
+
     expect(new URL(requests[2]?.url ?? '').pathname).toContain('/release')
   })
 
   test('uses a new idempotency key when a transient failure requires a new job', async () => {
     const requests: Request[] = []
+
     const base = {
       apiVersion: 1,
       jobId: 'processor-job-0001',
       statusUrl: '/v1/jobs/processor-job-0001',
       submittedAt: '2026-08-16T10:00:00Z',
     }
+
     const responses = [
       new Response(Uint8Array.of(1), {
         status: 200,
@@ -163,21 +179,26 @@ describe('replay bridge', () => {
       new Response(null, { status: 204 }),
       new Response(null, { status: 204 }),
     ]
+
     const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
       requests.push(new Request(input, init))
       const response = responses.shift()
+
       if (!response) throw new Error('Unexpected request')
+
       return response
     }) as unknown as typeof fetch
 
     expect(await processNextReplay(config, fetcher, async () => undefined)).toBe(true)
     const submissions = requests.filter(({ method, url }) => method === 'POST' && url.endsWith('/v1/jobs'))
+
     expect(submissions).toHaveLength(2)
     expect(submissions[0]?.headers.get('idempotency-key')).not.toBe(submissions[1]?.headers.get('idempotency-key'))
   })
 
   test('releases blocked work for retry after operator recovery', async () => {
     const requests: Request[] = []
+
     const responses = [
       new Response(Uint8Array.of(1), {
         status: 200,
@@ -200,10 +221,13 @@ describe('replay bridge', () => {
       ),
       new Response(null, { status: 204 }),
     ]
+
     const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
       requests.push(new Request(input, init))
       const response = responses.shift()
+
       if (!response) throw new Error('Unexpected request')
+
       return response
     }) as unknown as typeof fetch
 
@@ -214,6 +238,7 @@ describe('replay bridge', () => {
 
   test('renews a running processor job before its Brawltome lease expires', async () => {
     const requests: Request[] = []
+
     const responses = [
       new Response(Uint8Array.of(1), {
         status: 200,
@@ -249,12 +274,16 @@ describe('replay bridge', () => {
       new Response(null, { status: 204 }),
       new Response(null, { status: 204 }),
     ]
+
     const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
       requests.push(new Request(input, init))
       const response = responses.shift()
+
       if (!response) throw new Error('Unexpected request')
+
       return response
     }) as unknown as typeof fetch
+
     const times = [0, 0, 300_000, 300_000, 300_000, 300_000]
 
     expect(
@@ -265,6 +294,7 @@ describe('replay bridge', () => {
         () => times.shift() ?? 300_000,
       ),
     ).toBe(true)
+
     expect(requests.map(({ method, url }) => `${method} ${new URL(url).pathname}`)).toEqual([
       'POST /internal/replays/claim',
       'POST /v1/jobs',
@@ -279,6 +309,7 @@ describe('replay bridge', () => {
   test('renews before long result transfer and callback phases', async () => {
     const requests: Request[] = []
     const signals: AbortSignal[] = []
+
     const succeeded = {
       apiVersion: 1,
       state: 'succeeded',
@@ -289,6 +320,7 @@ describe('replay bridge', () => {
       terminalAt: '2026-08-16T10:01:00Z',
       expiresAt: '2026-08-16T11:01:00Z',
     }
+
     const responses = [
       new Response(Uint8Array.of(1), {
         status: 200,
@@ -305,13 +337,18 @@ describe('replay bridge', () => {
       new Response(null, { status: 204 }),
       new Response(null, { status: 204 }),
     ]
+
     const fetcher = mock(async (input: string | URL | Request, init?: RequestInit) => {
       requests.push(new Request(input, init))
       if (init?.signal) signals.push(init.signal)
+
       const response = responses.shift()
+
       if (!response) throw new Error('Unexpected request')
+
       return response
     }) as unknown as typeof fetch
+
     const times = [0, 0, 300_000, 300_000, 600_000, 600_000]
 
     expect(
@@ -322,7 +359,9 @@ describe('replay bridge', () => {
         () => times.shift() ?? 600_000,
       ),
     ).toBe(true)
+
     expect(signals).toHaveLength(requests.length)
+
     expect(requests.map(({ method, url }) => `${method} ${new URL(url).pathname}`)).toEqual([
       'POST /internal/replays/claim',
       'POST /v1/jobs',

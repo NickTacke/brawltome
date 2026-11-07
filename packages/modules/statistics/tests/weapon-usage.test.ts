@@ -94,8 +94,11 @@ function hammerEligibility(heldSeconds: readonly number[]) {
     ),
     legendReferences: legends,
   })
+
   const hammer = result.rows.find(({ weapon }) => weapon === 'Hammer')
+
   if (!hammer) throw new Error('Hammer row missing')
+
   return hammer
 }
 
@@ -163,11 +166,13 @@ describe('Career Weapon Usage formulas', () => {
     })
 
     expect(result.totalHeldSeconds).toBe('1800')
+
     expect(result.rows.find(({ weapon }) => weapon === 'Hammer')).toMatchObject({
       observedPlayers: 1,
       heldTimeSeconds: '1800',
       contributorCount: 1,
     })
+
     expect(result.rows.find(({ weapon }) => weapon === 'Sword')).toMatchObject({
       observedPlayers: 0,
       heldTimeSeconds: '0',
@@ -189,22 +194,26 @@ describe('Career Weapon Usage formulas', () => {
       medianDamagePerMinute: null,
       medianKosPerHour: null,
     })
+
     expect(hammerEligibility(Array(29).fill(4_000))).toMatchObject({
       contributorCount: 29,
       qualifyingHeldSeconds: '116000',
       comparison: { eligible: false, reasons: ['contributors-below-30'] },
     })
+
     expect(hammerEligibility([...Array(29).fill(3_600), 3_599])).toMatchObject({
       contributorCount: 30,
       qualifyingHeldSeconds: '107999',
       comparison: { eligible: false, reasons: ['aggregate-held-time-below-30-hours'] },
     })
+
     expect(hammerEligibility(Array(30).fill(3_600))).toMatchObject({
       contributorCount: 30,
       qualifyingHeldSeconds: '108000',
       comparison: { eligible: true, reasons: [] },
       medianDamagePerMinute: { numerator: '60', denominator: '1' },
     })
+
     expect(hammerEligibility([...Array(30).fill(1_800), ...Array(31).fill(1_799)])).toMatchObject({
       contributorCount: 30,
       heldTimeSeconds: '109769',
@@ -223,13 +232,17 @@ describe('Career Weapon Usage formulas', () => {
     ).toThrow('duplicate player 1')
 
     const unresolved = observation(2)
+
     unresolved.legends[0].legendId = 999_999
+
     expect(() =>
       aggregateCareerWeaponUsage({ selectedPlayers: 1, observations: [unresolved], legendReferences: legends }),
     ).toThrow('unresolved legend 999999')
 
     const pseudoLegend = observation(3)
+
     pseudoLegend.legends[0].legendId = 1
+
     expect(() =>
       aggregateCareerWeaponUsage({
         selectedPlayers: 1,

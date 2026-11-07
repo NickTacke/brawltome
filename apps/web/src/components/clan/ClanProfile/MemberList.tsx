@@ -54,6 +54,7 @@ export function MemberList({
   const sorted = sortMembers(filtered, sortBy)
   const totalPages = Math.ceil(sorted.length / pageSize)
   const visible = paginateMembers(sorted, page, pageSize)
+
   const rosterDelayed =
     roster?.checkedAt !== null &&
     roster?.checkedAt !== undefined &&
@@ -156,6 +157,7 @@ export function MemberList({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const val = Number.parseInt(e.currentTarget.value)
+
                     if (!Number.isNaN(val) && val >= 1 && val <= totalPages) onPageChange(val)
                   }
                 }}

@@ -7,6 +7,7 @@ import {
 } from '../source'
 
 const playerId = 91913839
+
 const ranked = {
   brawlhalla_id: playerId,
   name: 'Observed',
@@ -44,6 +45,7 @@ const lifetimeLegend = {
   time_held_weapon_one: 1200,
   time_held_weapon_two: 1500,
 }
+
 const lifetime = {
   brawlhalla_id: playerId,
   name: 'Observed',
@@ -79,13 +81,16 @@ describe('Statistics V1 purpose-specific source evidence', () => {
 
   test('preserves an omitted top-level ranked tier as unknown while keeping legend tiers strict', () => {
     const { tier: _omitted, ...withoutTier } = ranked
+
     expect(decodeRankedEvidence(withoutTier, playerId)).toMatchObject({
       brawlhallaId: playerId,
       tier: null,
       legends: [{ tier: 'Diamond' }],
     })
+
     expect(validateRankedEvidence(decodeRankedEvidence(withoutTier, playerId), playerId).tier).toBeNull()
     expect(() => decodeRankedEvidence({ ...withoutTier, tier: 1 }, playerId)).toThrow('tier')
+
     expect(() =>
       decodeRankedEvidence(
         {
@@ -99,6 +104,7 @@ describe('Statistics V1 purpose-specific source evidence', () => {
 
   test('accepts all-mode lifetime evidence with weapon-held facts', () => {
     const decoded = decodeLifetimeEvidence(lifetime, playerId)
+
     expect(decoded).toMatchObject({
       brawlhallaId: playerId,
       games: 100,

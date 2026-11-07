@@ -14,17 +14,21 @@ describe('operations worker configuration', () => {
   test('schedules one staggered deep crawl per region and bounds its interval', () => {
     const config = readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: String(2 * 60 * 60 * 1000) }).deepCrawl
     const all = leaderboardDeepCrawlScheduleDefinitions(config)
+
     expect(all).toHaveLength(27)
     // The original 1v1 schedules keep a mode-less payload, so their definitions do not change.
     const schedules = all.filter(({ payload }) => payload.mode === undefined)
     const solo = all.filter(({ payload }) => payload.mode === 'solo2v2')
     const teams = all.filter(({ payload }) => payload.mode === '2v2')
+
     expect(solo[0]).toMatchObject({ scheduleKey: 'rankings:solo2v2:deep:US-E', intervalMs: 3 * 60 * 60 * 1000 })
+
     expect(teams[0]).toMatchObject({
       scheduleKey: 'rankings:2v2:deep:US-E',
       intervalMs: 6 * 60 * 60 * 1000,
       payload: { mode: '2v2', region: 'US-E', intervalMs: 6 * 60 * 60 * 1000 },
     })
+
     // Byte-for-byte the definition production already has, so reconciling keeps the live schedule.
     expect(schedules[0]).toEqual({
       kind: 'leaderboard-deep-crawl',
@@ -36,6 +40,7 @@ describe('operations worker configuration', () => {
       payload: { region: 'US-E', intervalMs: 2 * 60 * 60 * 1000 },
       provenance: { source: 'leaderboard-deep-crawl-schedule', requestedBy: 'proactive-freshness' },
     })
+
     expect(schedules.map(({ payload }) => payload.region)).toEqual([
       'US-E',
       'US-W',
@@ -47,6 +52,7 @@ describe('operations worker configuration', () => {
       'ME',
       'SA',
     ])
+
     expect(schedules[0]).toMatchObject({
       kind: 'leaderboard-deep-crawl',
       scheduleKey: 'rankings:1v1:deep:US-E',
@@ -55,16 +61,20 @@ describe('operations worker configuration', () => {
       firstDueAt: '2026-10-07T19:30:00.000Z',
       payload: { region: 'US-E', intervalMs: 2 * 60 * 60 * 1000 },
     })
+
     expect(Date.parse(schedules[1].firstDueAt) - Date.parse(schedules[0].firstDueAt)).toBe(
       Math.floor((2 * 60 * 60 * 1000) / 9),
     )
+
     expect(readOperationsWorkerConfig({ DEEP_CRAWL_ENABLED: 'false' }).deepCrawl.enabled).toBe(false)
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_INTERVAL_MS: '60000' })).toThrow('DEEP_CRAWL_INTERVAL_MS')
     expect(readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '0' }).deepCrawl.pageDelayMs).toBe(0)
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '5001' })).toThrow('DEEP_CRAWL_PAGE_DELAY_MS')
+
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_SOLO_INTERVAL_MS: '60000' })).toThrow(
       'DEEP_CRAWL_SOLO_INTERVAL_MS',
     )
+
     expect(() => readOperationsWorkerConfig({ DEEP_CRAWL_TEAMS_INTERVAL_MS: '60000' })).toThrow(
       'DEEP_CRAWL_TEAMS_INTERVAL_MS',
     )
@@ -131,19 +141,25 @@ describe('operations worker configuration', () => {
         },
       },
     })
+
     for (const value of ['0', '-1', 'NaN', '1.5', '999999999']) {
       expect(() => readOperationsWorkerConfig({ OPERATIONS_LEASE_MS: value })).toThrow('OPERATIONS_LEASE_MS')
     }
+
     expect(() => readOperationsWorkerConfig({ LEADERBOARD_PAGE_DEPTH: '21' })).toThrow('LEADERBOARD_PAGE_DEPTH')
+
     expect(() => readOperationsWorkerConfig({ SOURCE_UNAVAILABLE_RETRY_MS: '999' })).toThrow(
       'SOURCE_UNAVAILABLE_RETRY_MS',
     )
+
     expect(() => readOperationsWorkerConfig({ DISCOVERY_PROJECTION_BATCH_SIZE: '1001' })).toThrow(
       'DISCOVERY_PROJECTION_BATCH_SIZE',
     )
+
     expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_INTERVAL_MS: '59999' })).toThrow(
       'DISCOVERY_RECONCILIATION_INTERVAL_MS',
     )
+
     expect(
       readOperationsWorkerConfig({
         OPERATIONS_RETRY_DELAY_MS: '1000',
@@ -151,21 +167,26 @@ describe('operations worker configuration', () => {
         OPERATIONS_RETRY_MAX_DELAY_MS: '8000',
       }),
     ).toMatchObject({ retryDelayMs: 1_000, retryBackoff: { multiplier: 2, maxDelayMs: 8_000, jitterRatio: 0.2 } })
+
     expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_BACKOFF_MULTIPLIER: '0' })).toThrow(
       'OPERATIONS_RETRY_BACKOFF_MULTIPLIER',
     )
+
     expect(() => readOperationsWorkerConfig({ OPERATIONS_RETRY_MAX_DELAY_MS: '1999' })).toThrow(
       'OPERATIONS_RETRY_MAX_DELAY_MS',
     )
+
     expect(() => readOperationsWorkerConfig({ DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS: '59999' })).toThrow(
       'DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS',
     )
+
     expect(() =>
       readOperationsWorkerConfig({
         DISCOVERY_RECONCILIATION_FAILURE_BACKOFF_MS: '600000',
         DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS: '599999',
       }),
     ).toThrow('DISCOVERY_RECONCILIATION_MAX_FAILURE_BACKOFF_MS')
+
     for (const value of ['0', '59999', '60000.5', '86400001']) {
       expect(() => readOperationsWorkerConfig({ LEADERBOARD_INTERVAL_MS: value })).toThrow('LEADERBOARD_INTERVAL_MS')
     }
@@ -174,21 +195,28 @@ describe('operations worker configuration', () => {
   test('bounds worker database sessions without overriding explicit connection parameters', () => {
     const database = readOperationsWorkerConfig({}).database
     const bounded = new URL(workerDatabaseUrl('postgres://worker:p%40ss@db:5432/brawltome?sslmode=disable', database))
+
     expect(bounded.password).toBe('p%40ss')
+
     expect(Object.fromEntries(bounded.searchParams)).toEqual({
       sslmode: 'disable',
       connect_timeout: '10',
       statement_timeout: '300000',
       idle_in_transaction_session_timeout: '300000',
     })
+
     const explicit = new URL(workerDatabaseUrl('postgres://worker@db/brawltome?statement_timeout=900000', database))
+
     expect(explicit.searchParams.get('statement_timeout')).toBe('900000')
+
     expect(() => readOperationsWorkerConfig({ OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS: '999' })).toThrow(
       'OPERATIONS_DATABASE_STATEMENT_TIMEOUT_MS',
     )
+
     expect(() => readOperationsWorkerConfig({ OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS: '0' })).toThrow(
       'OPERATIONS_DATABASE_CONNECT_TIMEOUT_SECONDS',
     )
+
     expect(() => readOperationsWorkerConfig({ OPERATIONS_STALL_TIMEOUT_MS: '59999' })).toThrow(
       'OPERATIONS_STALL_TIMEOUT_MS',
     )
@@ -205,12 +233,14 @@ describe('operations worker configuration', () => {
 
   test('defines four deterministic staggered schedules in the existing leaderboard work class', () => {
     const definitions = leaderboardScheduleDefinitions(readOperationsWorkerConfig({}).leaderboard)
+
     expect(definitions.map(({ mode, kind, workClass }) => ({ mode, kind, workClass }))).toEqual([
       { mode: '1v1', kind: 'leaderboard-1v1', workClass: 'leaderboard' },
       { mode: '2v2', kind: 'leaderboard-2v2', workClass: 'leaderboard' },
       { mode: 'solo2v2', kind: 'leaderboard-solo-2v2', workClass: 'leaderboard' },
       { mode: '3v3', kind: 'leaderboard-3v3', workClass: 'leaderboard' },
     ])
+
     expect(definitions.map(({ firstDueAt }) => firstDueAt)).toEqual([
       '2020-01-01T00:00:00.000Z',
       '2020-01-01T00:03:45.000Z',
@@ -229,12 +259,14 @@ describe('operations worker configuration', () => {
       intervalMs: 15 * 60 * 1000,
       firstDueAt: '2020-01-01T00:05:00.000Z',
     })
+
     // 24 hours is the decided policy floor; the database function enforces the same floor.
     expect(readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: '24' }).rankingRetention.retentionHours).toBe(24)
     expect(readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '200' }).rankingRetention.maxGenerations).toBe(200)
     for (const value of ['23', '2', '1', '0', '-24', '24.5', 'NaN', '8761']) {
       expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_HOURS: value })).toThrow('RANKING_RETENTION_HOURS')
     }
+
     for (const value of ['0', '201', '1001', '1.5']) {
       expect(() => readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: value })).toThrow('RANKING_RETENTION_BATCH')
     }
@@ -268,18 +300,21 @@ describe('operations worker configuration', () => {
     expect(() => readOperationsWorkerConfig({ OPERATIONS_TOTAL_CONCURRENCY: '33' })).toThrow(
       'OPERATIONS_TOTAL_CONCURRENCY',
     )
+
     expect(() =>
       readOperationsWorkerConfig({
         OPERATIONS_TOTAL_CONCURRENCY: '4',
         OPERATIONS_INTERACTIVE_RESERVATION: '4',
       }),
     ).toThrow('interactiveReservation')
+
     expect(() =>
       readOperationsWorkerConfig({
         OPERATIONS_INTERACTIVE_RESERVATION: '3',
         OPERATIONS_INTERACTIVE_CONCURRENCY: '2',
       }),
     ).toThrow('classConcurrency.interactive')
+
     expect(() => readOperationsWorkerConfig({ OPERATIONS_MAINTENANCE_WEIGHT: '0' })).toThrow(
       'OPERATIONS_MAINTENANCE_WEIGHT',
     )
@@ -287,14 +322,18 @@ describe('operations worker configuration', () => {
 
   test('uses a validated 60-second shutdown deadline', () => {
     expect(readRuntimeConfig({})).toEqual({ shutdownDeadlineMs: 60_000, cleanupReserveMs: 5_000 })
+
     expect(readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '10000', RUNTIME_CLEANUP_RESERVE_MS: '1000' })).toEqual({
       shutdownDeadlineMs: 10_000,
       cleanupReserveMs: 1_000,
     })
+
     expect(() => readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '999' })).toThrow('RUNTIME_SHUTDOWN_DEADLINE_MS')
+
     expect(() =>
       readRuntimeConfig({ RUNTIME_SHUTDOWN_DEADLINE_MS: '10000', RUNTIME_CLEANUP_RESERVE_MS: '10000' }),
     ).toThrow('RUNTIME_CLEANUP_RESERVE_MS')
+
     expect(readShutdownAnnounceMs(undefined)).toBe(0)
     expect(readShutdownAnnounceMs('5000')).toBe(5_000)
     expect(() => readShutdownAnnounceMs('30001')).toThrow('RUNTIME_SHUTDOWN_ANNOUNCE_MS')
@@ -306,6 +345,7 @@ describe('operations worker configuration', () => {
     expect(
       readOperationsWorkerConfig({ OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS: '3600000' }).discovery.statementTimeoutMs,
     ).toBe(3_600_000)
+
     for (const value of ['59999', '7200001', 'x']) {
       expect(() => readOperationsWorkerConfig({ OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS: value })).toThrow(
         'OPERATIONS_DISCOVERY_STATEMENT_TIMEOUT_MS',

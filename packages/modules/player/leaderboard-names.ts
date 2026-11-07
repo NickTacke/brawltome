@@ -10,12 +10,16 @@ const INT32_MAX = 2_147_483_647
 
 function leaderboardNamesById(players: readonly LeaderboardPlayerName[]): Map<number, string> {
   const names = new Map<number, string>()
+
   for (const { brawlhallaId, name } of players) {
     if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > INT32_MAX) continue
+
     // Ranking substitutes this placeholder for blank V1 usernames; it is not a name the player chose.
     if (name === `Name unavailable #${brawlhallaId}` || !isUsablePlayerName(name, brawlhallaId)) continue
+
     if (!names.has(brawlhallaId)) names.set(brawlhallaId, name)
   }
+
   return names
 }
 
@@ -30,14 +34,18 @@ export function createPostgresLeaderboardPlayerNames(database: Database) {
       players: readonly LeaderboardPlayerName[]
     }): Promise<{ changed: number }> {
       const names = leaderboardNamesById(input.players)
+
       if (names.size === 0) return { changed: 0 }
+
       const brawlhallaIds = [...names.keys()].sort((left, right) => left - right)
       const playerNames = brawlhallaIds.map((brawlhallaId) => names.get(brawlhallaId) as string)
       const repairedNames = playerNames.map((name) => decodeV0CareerNameCandidate(name) ?? '')
 
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         await sql`SELECT pg_advisory_xact_lock(hashtext('players.leaderboard_name_observations'))`
+
         const changed = await sql<ChangedRow[]>`
           WITH input AS (
             SELECT brawlhalla_id, player_name, NULLIF(repaired_name, '') AS repaired_name
@@ -131,6 +139,7 @@ export function createPostgresLeaderboardPlayerNames(database: Database) {
           FROM changed JOIN written USING (brawlhalla_id)
           ORDER BY changed.brawlhalla_id
         `
+
         if (changed.length === 0) return { changed: 0 }
 
         const aliases = changed.filter(
@@ -140,9 +149,11 @@ export function createPostgresLeaderboardPlayerNames(database: Database) {
             decodeV0CareerNameCandidate(previous_name) !== player_name &&
             isUsablePlayerName(previous_name, brawlhalla_id),
         ) as Array<ChangedRow & { previous_name: string }>
+
         if (aliases.length > 0) {
           // The outbox insert below already covers these identities; skip the per-row alias trigger.
           await sql`SELECT set_config('players.suppress_discovery_outbox', 'on', true)`
+
           await sql`
             INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
             SELECT brawlhalla_id, normalized_alias, display_alias, ${input.observedAt}
@@ -154,8 +165,10 @@ export function createPostgresLeaderboardPlayerNames(database: Database) {
             ON CONFLICT (brawlhalla_id, normalized_alias) DO UPDATE
             SET display_alias = EXCLUDED.display_alias, observed_at = EXCLUDED.observed_at
           `
+
           await sql`SELECT set_config('players.suppress_discovery_outbox', 'off', true)`
         }
+
         await sql`
           WITH version AS (
             UPDATE players.discovery_state
@@ -168,6 +181,7 @@ export function createPostgresLeaderboardPlayerNames(database: Database) {
           FROM unnest(${changed.map(({ brawlhalla_id }) => brawlhalla_id)}::integer[]) AS changed(brawlhalla_id)
           CROSS JOIN version
         `
+
         return { changed: changed.length }
       })
     },
@@ -180,6 +194,7 @@ export function createPostgresLeaderboardPlayerNames(database: Database) {
         FROM players.leaderboard_name_observations
         WHERE brawlhalla_id = ${brawlhallaId}
       `
+
       return observation
         ? {
             brawlhallaId: observation.brawlhalla_id,

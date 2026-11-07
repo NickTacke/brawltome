@@ -22,11 +22,13 @@ export function resolveAccountTheme({
   preferencesError,
 }: AccountThemeState): AccountThemeValue | null {
   if (accountLoading || accountError || preferencesLoading || preferencesError) return null
+
   return account ? (preferences?.theme ?? 'neutral') : 'neutral'
 }
 
 export function AccountTheme() {
   const { account, isLoading: accountLoading, isError: accountError } = useAccount()
+
   const {
     preferences,
     isLoading: preferencesLoading,

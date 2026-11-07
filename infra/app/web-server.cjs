@@ -8,9 +8,11 @@ const path = require('node:path')
 
 function milliseconds(name, fallback) {
   const value = process.env[name] === undefined ? fallback : Number(process.env[name])
+
   if (!Number.isInteger(value) || value < 0 || value > 60_000) {
     throw new Error(`${name} must be an integer from 0 through 60000`)
   }
+
   return value
 }
 
@@ -22,12 +24,15 @@ process.env.NEXT_MANUAL_SIG_HANDLE = 'true'
 globalThis[drainingKey] = false
 
 let stopping = false
+
 function stop() {
   if (stopping) return
+
   stopping = true
   globalThis[drainingKey] = true
   setTimeout(() => process.exit(0), announceMs + drainMs)
 }
+
 process.on('SIGTERM', stop)
 process.on('SIGINT', stop)
 

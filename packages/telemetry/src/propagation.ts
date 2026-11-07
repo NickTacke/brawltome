@@ -19,8 +19,11 @@ export function parseTraceparent(
   value: string | null | undefined,
 ): { traceId: string; spanId: string; sampled: boolean } | null {
   if (!value) return null
+
   const match = traceparentPattern.exec(value.trim().toLowerCase())
+
   if (!match || /^0+$/.test(match[1]) || /^0+$/.test(match[2])) return null
+
   return { traceId: match[1], spanId: match[2], sampled: (Number.parseInt(match[3], 16) & 1) === 1 }
 }
 
@@ -34,6 +37,7 @@ export function requestContextFromHeaders(
   options: { acceptIncoming?: boolean } = {},
 ): TelemetryContext {
   const incoming = options.acceptIncoming ? parseTraceparent(headers.traceparent) : null
+
   return {
     requestId:
       options.acceptIncoming && safeRequestId.test(headers['x-request-id'] ?? '')
@@ -47,6 +51,7 @@ export function requestContextFromHeaders(
 
 function randomHex(bytes: number): string {
   const values = crypto.getRandomValues(new Uint8Array(bytes))
+
   return Array.from(values, (value) => value.toString(16).padStart(2, '0')).join('')
 }
 

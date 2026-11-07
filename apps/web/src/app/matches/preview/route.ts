@@ -8,11 +8,14 @@ import { type NextRequest, NextResponse } from 'next/server'
 export function GET(request: NextRequest) {
   const url = request.nextUrl
   const response = new NextResponse(null, { headers: { location: '/matches' }, status: 307 })
+
   response.headers.set('cache-control', 'no-store')
   if (!matchesPreviewInviteAuthorized(url.searchParams.get('token'))) return response
 
   const cookie = matchesPreviewCookieValue()
+
   if (!cookie) return response
+
   response.cookies.set(matchesPreviewCookieName, cookie, {
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 30,
@@ -20,5 +23,6 @@ export function GET(request: NextRequest) {
     sameSite: 'strict',
     secure: true,
   })
+
   return response
 }

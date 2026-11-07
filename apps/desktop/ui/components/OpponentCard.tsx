@@ -9,7 +9,9 @@ interface OpponentCardProps {
 
 function winRateColor(rate: number): string {
   if (rate >= 55) return 'hsl(var(--overlay-success))'
+
   if (rate >= 45) return 'hsl(var(--overlay-muted-fg))'
+
   return 'hsl(var(--overlay-danger))'
 }
 

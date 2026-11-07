@@ -45,6 +45,7 @@ async function selectCandidates(
   limit: number,
 ): Promise<CandidateRow[]> {
   const demandIds = [...(policy.demandIds ?? [])]
+
   return sql<CandidateRow[]>`
     WITH clock AS (SELECT coalesce(${policy.now ?? null}::timestamptz, clock_timestamp()) AS now),
     observed AS (
@@ -109,6 +110,7 @@ async function selectCandidates(
 
 function backlogOf(rows: CandidateRow[]): NameVerificationBacklog {
   const [row] = rows
+
   return row ? { rename_signal: row.rename_signal, demand: row.demand, other: row.other } : { ...emptyBacklog }
 }
 
@@ -147,6 +149,7 @@ export function createPostgresPlayerNameVerifications(database: Database) {
       WHERE attempt.brawlhalla_id = ${brawlhallaId} AND attempt.player_name = ${playerName}
       RETURNING attempt.outcome
     `
+
     return row?.outcome ?? 'failed'
   }
 
@@ -155,6 +158,7 @@ export function createPostgresPlayerNameVerifications(database: Database) {
       policy: Omit<NameVerificationPolicy, 'perWindow' | 'windowMs'> & { limit?: number },
     ): Promise<{ backlog: NameVerificationBacklog; candidates: NameVerificationCandidate[] }> {
       const rows = await selectCandidates(client, policy, policy.limit ?? 1_000)
+
       return { backlog: backlogOf(rows), candidates: rows.map(toCandidate) }
     },
 
@@ -164,8 +168,10 @@ export function createPostgresPlayerNameVerifications(database: Database) {
     ): Promise<{ backlog: NameVerificationBacklog; usedInWindow: number; claimed: NameVerificationCandidate[] }> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         await sql`SELECT pg_advisory_xact_lock(hashtext('players.name_verifications'))`
         const now = policy.now ?? null
+
         const [window] = await sql<{ used: number }[]>`
           SELECT count(*)::integer AS used FROM players.name_verifications
           WHERE spent AND (
@@ -175,9 +181,11 @@ export function createPostgresPlayerNameVerifications(database: Database) {
               AND checked_at > coalesce(${now}::timestamptz, clock_timestamp()) - ${pendingHoldMs} * interval '1 millisecond')
           )
         `
+
         const remaining = Math.max(0, policy.perWindow - window.used)
         const rows = await selectCandidates(sql, policy, Math.max(1, remaining))
         const claimed = remaining > 0 ? rows : []
+
         if (claimed.length > 0) {
           await sql`
             INSERT INTO players.name_verifications AS attempt
@@ -197,6 +205,7 @@ export function createPostgresPlayerNameVerifications(database: Database) {
               outcome = 'pending', spent = true
           `
         }
+
         return { backlog: backlogOf(rows), usedInWindow: window.used, claimed: claimed.map(toCandidate) }
       })
     },
@@ -213,6 +222,7 @@ export function createPostgresPlayerNameVerifications(database: Database) {
     async prepare(brawlhallaId: number, playerName: string): Promise<NameVerificationPreparation> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const [row] = await sql<{ observed: boolean; refreshed: boolean }[]>`
           SELECT observation.player_name IS NOT DISTINCT FROM attempt.player_name AS observed,
                  coalesce(live.observed_at > attempt.v0_observed_at, false) AS refreshed
@@ -231,16 +241,22 @@ export function createPostgresPlayerNameVerifications(database: Database) {
             AND attempt.outcome = 'pending'
           FOR UPDATE OF attempt
         `
+
         if (!row?.observed) {
           await sql`
             DELETE FROM players.name_verifications
             WHERE brawlhalla_id = ${brawlhallaId} AND player_name = ${playerName} AND outcome = 'pending'
           `
+
           return { state: 'obsolete' as const }
         }
+
         if (!row.refreshed) return { state: 'needed' as const }
+
         const outcome = await settle(sql, brawlhallaId, playerName, false)
+
         if (outcome === 'failed') return { state: 'obsolete' as const }
+
         return { state: 'resolved' as const, outcome }
       })
     },
@@ -253,6 +269,7 @@ export function createPostgresPlayerNameVerifications(database: Database) {
         SET outcome = 'failed', spent = true, failures = failures + 1
         WHERE brawlhalla_id = ${brawlhallaId} AND player_name = ${playerName}
       `
+
       return 'failed'
     },
   }

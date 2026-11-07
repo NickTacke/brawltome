@@ -19,9 +19,11 @@ function secretMatches(provided: string | undefined, expected: string): boolean 
 export function createInternalMiddleware(expectedSecret: string) {
   return t.middleware(({ ctx, next }) => {
     const provided = ctx.internalSecret
+
     if (!secretMatches(provided, expectedSecret)) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
     }
+
     return next({ ctx })
   })
 }
@@ -31,6 +33,7 @@ export function createDiscordInternalMiddleware(expectedSecret: string) {
     if (!secretMatches(ctx.discordInternalSecret, expectedSecret)) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
     }
+
     return next({ ctx })
   })
 }
@@ -40,6 +43,7 @@ export function createProtectedMiddleware() {
     if (!ctx.account) {
       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sign in required' })
     }
+
     return next({
       ctx: {
         ...ctx,

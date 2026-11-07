@@ -54,6 +54,7 @@ describe('legend references', () => {
 
   test('aggregates resolved legend weapons by descending held time', () => {
     const index = createLegendReferenceIndex(references)
+
     const aggregates = aggregateWeapons(
       [
         {

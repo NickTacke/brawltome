@@ -11,12 +11,15 @@ export function trpcFailureEvent(
   error: unknown,
 ): { name: 'trpc.failed'; procedure: string; code: string } {
   let code = 'NETWORK'
+
   if (error instanceof TRPCClientError) {
     const raw = (error.data as { code?: unknown } | null | undefined)?.code ?? error.shape?.data?.code
+
     code = typeof raw === 'string' ? (knownCodes.includes(raw) ? raw : 'OTHER') : 'NETWORK'
   } else if (!(error instanceof TypeError)) {
     code = 'OTHER'
   }
+
   return { name: 'trpc.failed', procedure: path, code }
 }
 

@@ -12,6 +12,7 @@ let connectionString = ''
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)
+
   if (
     configured.protocol !== dedicated.protocol ||
     configured.hostname !== dedicated.hostname ||
@@ -21,6 +22,7 @@ beforeAll(async () => {
   ) {
     throw new Error(`Discovery PostgreSQL tests require the dedicated server ${dedicatedServer}`)
   }
+
   database = await createTestDatabase({ label: 'discovery_player_search', modules: [discoveryModule] })
   connectionString = database.connectionString
 }, 20_000)
@@ -52,6 +54,7 @@ const fact = (
 describe('Discovery player search', () => {
   test('normalizes terms and orders exact matches before prefixes across canonical, segment, and alias terms', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({
       sourceVersion: 1,
       facts: [
@@ -68,16 +71,20 @@ describe('Discovery player search', () => {
       expect.objectContaining({ brawlhallaId: 20, matchedAlias: null }),
       expect.objectContaining({ brawlhallaId: 90, matchedAlias: null }),
     ])
+
     await expect(playerResults(discovery, ' %_\\ ')).resolves.toEqual([])
+
     await expect(playerResults(discovery, ' team|alpha ')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 90, name: 'Team | Alpha Prime' }),
     ])
 
     const explain = postgres(connectionString, { max: 1 })
+
     try {
       const [generation] = await explain<{ generation_id: string }[]>`
         SELECT generation_id FROM discovery.generations WHERE entity_kind = 'player' AND active
       `
+
       await explain`
         INSERT INTO discovery.terms
           (entity_kind, generation_id, entity_id, term_kind, display_term, normalized_term,
@@ -87,7 +94,9 @@ describe('Discovery player search', () => {
                'Noise ' || value, 0
         FROM generate_series(1, 30000) AS value
       `
+
       await explain`ANALYZE discovery.terms`
+
       const plan = await explain`
         EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
         WITH candidates AS (
@@ -117,7 +126,9 @@ describe('Discovery player search', () => {
                  (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
         LIMIT 40
       `
+
       const serializedPlan = JSON.stringify(plan)
+
       expect(serializedPlan).toContain('discovery_terms_prefix')
       expect(serializedPlan).not.toContain('Seq Scan on terms')
     } finally {
@@ -127,6 +138,7 @@ describe('Discovery player search', () => {
 
   test('places available players with best legends ahead of missing legends and unavailable ratings', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({
       sourceVersion: 2,
       facts: [
@@ -142,30 +154,37 @@ describe('Discovery player search', () => {
   test('deduplicates identities, caps stable ties at 40, and replays events idempotently', async () => {
     const discovery = createPostgresDiscovery(database)
     const stableTies = Array.from({ length: 45 }, (_, index) => fact(100 + index, `Prefix ${index}`, 2000, 50))
+
     await discovery.rebuildPlayers({ sourceVersion: 3, facts: [...stableTies].reverse() })
 
     const capped = await playerResults(discovery, 'prefix')
+
     expect(capped).toHaveLength(40)
+
     expect(capped.map(({ brawlhallaId }) => brawlhallaId)).toEqual(
       Array.from({ length: 40 }, (_, index) => 100 + index),
     )
 
     const eventId = randomUUID()
+
     const event = {
       eventId,
       brawlhallaId: 999,
       sourceVersion: 4,
       fact: fact(999, 'Replay Target', 2100, 70, ['Prefix', 'Prefix Previous']),
     }
+
     await expect(discovery.applyPlayerEvents([event, event])).resolves.toEqual({ appliedEvents: 1 })
     await expect(discovery.applyPlayerEvents([event])).resolves.toEqual({ appliedEvents: 0 })
 
     const prefixHits = await playerResults(discovery, 'prefix')
+
     expect(prefixHits.filter(({ brawlhallaId }) => brawlhallaId === 999)).toHaveLength(1)
     expect(prefixHits.find(({ brawlhallaId }) => brawlhallaId === 999)?.matchedAlias).toBe('Prefix')
 
     await discovery.rebuildPlayers({ sourceVersion: 5, facts: [fact(777, 'Replacement', null, 0)] })
     await expect(playerResults(discovery, 'prefix')).resolves.toEqual([])
+
     await expect(playerResults(discovery, 'replacement')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 777, rating: null }),
     ])
@@ -173,10 +192,13 @@ describe('Discovery player search', () => {
 
   test('publishes a production-shaped player generation without per-entity database round trips', async () => {
     const discovery = createPostgresDiscovery(database)
+
     const facts = Array.from({ length: 10_001 }, (_, index) =>
       fact(1_000_000 + index, `Scale Player ${index}`, 2000 + (index % 100), index, [`Former ${index}`]),
     )
+
     await discovery.rebuildPlayers({ sourceVersion: 6, facts })
+
     await expect(
       discovery.applyPlayerEvents(
         facts.slice(0, 1_000).map((player) => ({
@@ -191,9 +213,11 @@ describe('Discovery player search', () => {
     await expect(playerResults(discovery, 'scale player 0')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 1_000_000, name: 'Scale Player 0' }),
     ])
+
     await expect(playerResults(discovery, 'scale player 10000')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 1_010_000, matchedAlias: null }),
     ])
+
     await expect(playerResults(discovery, 'former 10000')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 1_010_000, matchedAlias: 'Former 10000' }),
     ])
@@ -201,6 +225,7 @@ describe('Discovery player search', () => {
 
   test('uses the durable source watermark so delayed events and stale rebuilds cannot overwrite newer facts', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({ sourceVersion: 10, facts: [fact(500, 'Newest Name', 2200, 10)] })
 
     await expect(
@@ -213,18 +238,23 @@ describe('Discovery player search', () => {
         },
       ]),
     ).resolves.toEqual({ appliedEvents: 1 })
+
     await expect(playerResults(discovery, 'newest')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 500, name: 'Newest Name', rating: 2200 }),
     ])
+
     await expect(
       discovery.rebuildPlayers({ sourceVersion: 9, facts: [fact(500, 'Stale Rebuild', 1700, 0)] }),
     ).rejects.toThrow()
+
     await expect(playerResults(discovery, 'newest')).resolves.toHaveLength(1)
   })
 
   test('applies every batch of a bulk write enqueued under one source version', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({ sourceVersion: 20, facts: [fact(600, 'Burst One', 1500, 0)] })
+
     const burst = [600, 601, 602].map((brawlhallaId) => ({
       eventId: randomUUID(),
       brawlhallaId,
@@ -244,6 +274,7 @@ describe('Discovery player search', () => {
 
   test('finds a player from any word of their name on, below every name and alias match', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({
       sourceVersion: 30,
       facts: [
@@ -256,6 +287,7 @@ describe('Discovery player search', () => {
         fact(706, 'THE BEST UNARMED', 1600, 0),
       ],
     })
+
     const ids = async (query: string) => (await playerResults(discovery, query)).map(({ brawlhallaId }) => brawlhallaId)
 
     // decoration around a word no longer hides the player
@@ -270,6 +302,7 @@ describe('Discovery player search', () => {
     expect(await ids('unarm')).toEqual([706])
     // a word the name starts with adds no second hit
     expect(await ids('ahmed')).toEqual([701])
+
     await expect(playerResults(discovery, 'pickleb')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 701, name: 'Ahmed PickleBall', matchedAlias: null }),
     ])
@@ -277,10 +310,12 @@ describe('Discovery player search', () => {
 
   test('ignores accents and styled letters on both the name and the query', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({
       sourceVersion: 31,
       facts: [fact(710, 'La Fée', 1500, 0), fact(711, '𝓐𝓵𝓽𝓪𝓲𝓻', 1500, 0), fact(712, 'Ｚｅｎｉｔｈ', 1500, 0)],
     })
+
     const ids = async (query: string) => (await playerResults(discovery, query)).map(({ brawlhallaId }) => brawlhallaId)
 
     expect(await ids('la fee')).toEqual([710])
@@ -292,7 +327,9 @@ describe('Discovery player search', () => {
 
   test('indexes the words of a name that arrives through a projection event', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({ sourceVersion: 32, facts: [fact(720, 'Old Name', 1500, 0)] })
+
     await discovery.applyPlayerEvents([
       { eventId: randomUUID(), brawlhallaId: 720, sourceVersion: 33, fact: fact(720, '[x] Sparrow', 1500, 0) },
     ])

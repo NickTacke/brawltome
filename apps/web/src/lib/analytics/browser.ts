@@ -11,6 +11,7 @@ export function sendPayload(body: string, nav: BeaconNavigator, fetchFn: FetchLi
   } catch {
     // fall through to fetch
   }
+
   try {
     const pending = fetchFn?.('/api/a', {
       method: 'POST',
@@ -18,7 +19,9 @@ export function sendPayload(body: string, nav: BeaconNavigator, fetchFn: FetchLi
       keepalive: true,
       headers: { 'content-type': 'application/json' },
     })
+
     pending?.catch(() => {})
+
     return pending !== undefined
   } catch {
     return false
@@ -27,8 +30,10 @@ export function sendPayload(body: string, nav: BeaconNavigator, fetchFn: FetchLi
 
 export function referrerDomain(referrer: string, ownHost: string): string | undefined {
   if (!referrer) return 'direct'
+
   try {
     const host = new URL(referrer).hostname.replace(/^www\./, '')
+
     return host === ownHost.replace(/^www\./, '') ? undefined : host
   } catch {
     return undefined
@@ -39,6 +44,7 @@ let client: ReturnType<typeof createAnalyticsClient> | null = null
 
 function instance() {
   if (typeof window === 'undefined') return null
+
   client ??= createAnalyticsClient({
     enabled: process.env.NEXT_PUBLIC_ANALYTICS_ENABLED === 'true',
     doNotTrack: navigator.doNotTrack,
@@ -52,6 +58,7 @@ function instance() {
       ),
     send: (body) => sendPayload(body, navigator, (url, init) => fetch(url, init)),
   })
+
   return client
 }
 
@@ -62,6 +69,7 @@ export const track = (event: AnalyticsEventInput): void => {
     // Analytics must never break the page.
   }
 }
+
 export const flushAnalytics = (): void => {
   try {
     instance()?.flush()

@@ -61,15 +61,21 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   const abandonedRef = useRef(false)
   const stateDeduperRef = useRef(createStateDeduper())
   const requestTrackerRef = useRef(createLatestRequestTracker())
+
   stateRef.current = state
 
   const lastStandingRef = useRef(initialData?.leaderboardStanding)
+
   const queryFn = useCallback(async () => {
     const next = keepLastStanding(lastStandingRef.current, await getPlayerAction(Number(id)))
+
     if (next && next.leaderboardStanding !== undefined) lastStandingRef.current = next.leaderboardStanding
+
     return next
   }, [id])
+
   const push = useMemo(() => createRefreshEventPush(playerRefreshEventsUrl(publicApiUrl, Number(id))), [id])
+
   const { data, error } = useStaleRefresh<PlayerData | null>({
     initialData,
     queryFn,
@@ -88,12 +94,16 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
           waitMs: clampWaitMs(performance.now() - cycleStartedAtRef.current),
           retries: clampRetries(retriesRef.current),
         })
+
         retriesRef.current = 0
       }
+
       dispatch({ type: 'pollSettled', settlement })
     },
   })
+
   const dataRef = useRef(data)
+
   dataRef.current = data
 
   const request = useCallback(
@@ -104,12 +114,15 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
         stateDeduperRef.current.reset()
         retriesRef.current = 0
       }
+
       const sequence = requestTrackerRef.current.start()
       // An older in-flight response must not overwrite the outcome of a newer request.
       const isCurrent = () => mountedRef.current && requestTrackerRef.current.isLatest(sequence)
+
       dispatch({ type: 'request', manual, now: Date.now() })
       try {
         const result = await refreshPlayerAction(Number(id), token)
+
         if (isCurrent()) dispatch({ type: 'outcome', refresh: result.refresh, now: Date.now() })
       } catch {
         if (isCurrent()) dispatch({ type: 'requestFailed', now: Date.now() })
@@ -126,15 +139,19 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
 
   useEffect(() => {
     mountedRef.current = true
+
     const abandon = () =>
       abandonRefresh(stateRef.current.status.kind, abandonedRef, performance.now() - cycleStartedAtRef.current, {
         track,
         flush: flushAnalytics,
       })
+
     const onPageHide = (event: PageTransitionEvent) => {
       if (isPageExit(event)) abandon()
     }
+
     window.addEventListener('pagehide', onPageHide)
+
     return () => {
       mountedRef.current = false
       window.removeEventListener('pagehide', onPageHide)
@@ -144,8 +161,11 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
 
   useEffect(() => {
     if (initialRequestedRef.current) return
+
     const { pending } = baselineRef.current
+
     if (!pending.ranked && !pending.stats) return
+
     initialRequestedRef.current = true
     void request(true)
   }, [request])
@@ -154,14 +174,17 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
 
   useEffect(() => {
     const event = refreshStateEvent(previousStatusRef.current, status, Boolean(dataRef.current))
+
     previousStatusRef.current = status
     if (event && stateDeduperRef.current.allow(event)) track(event)
   }, [status])
 
   useEffect(() => {
     if (status.kind !== 'waiting') return
+
     setNow(Date.now())
     const intervalId = setInterval(() => setNow(Date.now()), 1_000)
+
     const timeoutId = setTimeout(
       () => {
         retriesRef.current += 1
@@ -169,6 +192,7 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
       },
       Math.max(0, status.retryAt - Date.now()),
     )
+
     return () => {
       clearInterval(intervalId)
       clearTimeout(timeoutId)
@@ -178,16 +202,21 @@ export function usePlayerRefresh({ id, initialData }: { id: string; initialData:
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
+
       if (!shouldRecheckOnVisible(stateRef.current, getPendingPlayerSections(dataRef.current), Date.now())) return
+
       startCycle()
     }
+
     document.addEventListener('visibilitychange', onVisibilityChange)
+
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [startCycle])
 
   const submitToken = useCallback(
     async (token: string) => {
       if (tokenInFlightRef.current || stateRef.current.status.kind !== 'verifying') return
+
       tokenInFlightRef.current = true
       try {
         await request(false, token)

@@ -12,12 +12,15 @@ function setup(now = Date.parse('2026-10-05T23:59:59Z')) {
   const telemetry = createTelemetry({ service: 'web', sink, capacity: 100, drainIntervalMs: 0 })
   let clock = now
   let seed = 0
+
   const salt = createDailySalt(
     () => clock,
     (bytes) => new Uint8Array(bytes).fill(++seed),
   )
+
   const limiter = createTabRateLimiter(30, () => clock)
   const ipLimiter = createTabRateLimiter(120, () => clock)
+
   return {
     sink,
     telemetry,
@@ -33,6 +36,7 @@ function setup(now = Date.parse('2026-10-05T23:59:59Z')) {
 describe('ingestBatch', () => {
   test('counts the age of each profile section on first paint', () => {
     const { telemetry, salt, limiter, ipLimiter } = setup()
+
     ingestBatch(
       {
         body: {
@@ -53,12 +57,16 @@ describe('ingestBatch', () => {
       },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     const sections = telemetry.metrics.snapshot().find(({ name }) => name === 'analytics_profile_section_age_total')
+
     expect(sections?.series.map(({ labels, value }) => ({ ...labels, value }))).toEqual([
       { section: 'ranked', data_age: 'lt_1h', value: 1 },
       { section: 'stats', data_age: '12h_7d', value: 1 },
     ])
+
     const sources = telemetry.metrics.snapshot().find(({ name }) => name === 'analytics_profile_ranked_source_total')
+
     expect(sources?.series.map(({ labels, value }) => ({ ...labels, value }))).toEqual([
       { source: 'leaderboard', value: 1 },
     ])
@@ -66,6 +74,7 @@ describe('ingestBatch', () => {
 
   test('records metrics and scrubbed logs without ip or user agent', async () => {
     const { sink, telemetry, salt, limiter, ipLimiter } = setup()
+
     ingestBatch(
       {
         body: {
@@ -93,8 +102,10 @@ describe('ingestBatch', () => {
       },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     await telemetry.flush(100)
     const output = JSON.stringify(sink.records)
+
     expect(output).not.toContain('203.0.113.7')
     expect(output).not.toContain('Mozilla/5.0 Test')
     expect(output).not.toContain('SECRET')
@@ -106,12 +117,14 @@ describe('ingestBatch', () => {
     expect(output).not.toContain('https://x.y')
     expect(output).not.toContain('abc')
     const names = telemetry.metrics.snapshot().map((metric) => metric.name)
+
     expect(names).toContain('analytics_pageviews_total')
     expect(names).toContain('analytics_searches_total')
   })
 
   test('maps vitals to a metric without a log, and normalizes unknown trpc labels', async () => {
     const { sink, telemetry, salt, limiter, ipLimiter } = setup()
+
     ingestBatch(
       {
         body: {
@@ -125,11 +138,14 @@ describe('ingestBatch', () => {
       },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     await telemetry.flush(100)
     const output = JSON.stringify(sink.records)
+
     expect(output).not.toContain('analytics.vitals')
     expect(output).toContain('analytics.trpc.failed')
     const snapshot = JSON.stringify(telemetry.metrics.snapshot())
+
     expect(snapshot).toContain('analytics_web_vitals')
     expect(snapshot).toContain('"procedure":"other"')
     expect(snapshot).toContain('"code":"OTHER"')
@@ -137,11 +153,13 @@ describe('ingestBatch', () => {
 
   test('drops hostile bodies with a reason and never throws', () => {
     const { telemetry, salt, limiter, ipLimiter } = setup()
+
     for (const body of [null, 'x', { events: 'no' }, { events: [{ ...base, name: 'evil' }] }]) {
       expect(() =>
         ingestBatch({ body, ip: '1.1.1.1', userAgent: 'a' }, { telemetry, salt, limiter, ipLimiter }),
       ).not.toThrow()
     }
+
     ingestBatch(
       {
         body: { events: Array.from({ length: 61 }, () => ({ ...base, name: 'pageview' })) },
@@ -150,7 +168,9 @@ describe('ingestBatch', () => {
       },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     const dropped = telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_events_dropped_total')
+
     expect(JSON.stringify(dropped)).toContain('too_many')
     expect(JSON.stringify(dropped)).toContain('invalid')
   })
@@ -158,13 +178,16 @@ describe('ingestBatch', () => {
   test('rate limits per tab', () => {
     const { telemetry, salt, ipLimiter } = setup()
     const limiter = createTabRateLimiter(2, () => 0)
+
     for (let index = 0; index < 3; index++) {
       ingestBatch(
         { body: { events: [{ ...base, name: 'pageview' }] }, ip: '1.1.1.1', userAgent: 'a' },
         { telemetry, salt, limiter, ipLimiter },
       )
     }
+
     const dropped = telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_events_dropped_total')
+
     expect(JSON.stringify(dropped)).toContain('rate_limited')
   })
 })
@@ -176,29 +199,36 @@ describe('ingestBatch abuse limits', () => {
   test('rate limits per client ip across rotating tab ids', () => {
     const { telemetry, salt, limiter } = setup()
     const ipLimiter = createTabRateLimiter(2, () => 0)
+
     for (let index = 0; index < 3; index++) {
       const rotating = String(index).repeat(32)
+
       ingestBatch(
         { body: { events: [{ ...base, tabId: rotating, name: 'pageview' }] }, ip: '198.51.100.4', userAgent: 'a' },
         { telemetry, salt, limiter, ipLimiter },
       )
     }
+
     const pageviews = telemetry.metrics.snapshot().find((metric) => metric.name === 'analytics_pageviews_total')
+
     expect(JSON.stringify(pageviews?.series)).toContain('"value":2')
     expect(dropReasons(telemetry)).toContain('rate_limited')
   })
 
   test('never exposes the ip in metrics', () => {
     const { telemetry, salt, limiter, ipLimiter } = setup()
+
     ingestBatch(
       { body: { events: [{ ...base, name: 'pageview' }] }, ip: '198.51.100.4', userAgent: 'a' },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     expect(JSON.stringify(telemetry.metrics.snapshot())).not.toContain('198.51.100.4')
   })
 
   test('rejects a batch whose events do not share one tabId', () => {
     const { telemetry, salt, limiter, ipLimiter } = setup()
+
     ingestBatch(
       {
         body: {
@@ -212,7 +242,9 @@ describe('ingestBatch abuse limits', () => {
       },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     const snapshot = telemetry.metrics.snapshot()
+
     expect(snapshot.find((metric) => metric.name === 'analytics_pageviews_total')).toBeUndefined()
     expect(dropReasons(telemetry)).toContain('invalid')
     expect(dropReasons(telemetry)).toContain('"value":2')
@@ -223,6 +255,7 @@ describe('createDailySalt', () => {
   test('stable within a UTC day, rotates at midnight', () => {
     const { salt, advance } = setup(Date.parse('2026-10-05T23:59:58Z'))
     const first = salt.visitorKey('1.2.3.4', 'ua')
+
     expect(salt.visitorKey('1.2.3.4', 'ua')).toBe(first)
     expect(first).toMatch(/^[0-9a-f]{16}$/)
     advance(5_000)
@@ -233,6 +266,7 @@ describe('createDailySalt', () => {
 describe('ingestBatch per-event validation', () => {
   test('records valid events and drops only the invalid one', () => {
     const { telemetry, salt, limiter, ipLimiter } = setup()
+
     ingestBatch(
       {
         body: {
@@ -247,9 +281,11 @@ describe('ingestBatch per-event validation', () => {
       },
       { telemetry, salt, limiter, ipLimiter },
     )
+
     const snapshot = telemetry.metrics.snapshot()
     const uses = snapshot.find((metric) => metric.name === 'analytics_feature_use_total')
     const dropped = snapshot.find((metric) => metric.name === 'analytics_events_dropped_total')
+
     expect(JSON.stringify(uses?.series)).toContain('"value":2')
     expect(JSON.stringify(dropped?.series)).toContain('"value":1')
     expect(JSON.stringify(dropped?.series)).toContain('invalid')

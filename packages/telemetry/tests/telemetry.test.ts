@@ -11,15 +11,18 @@ import {
 describe('telemetry foundation', () => {
   test('propagates deterministic request and trace context across asynchronous work', async () => {
     const sink = createMemorySink()
+
     const telemetry = createTelemetry({
       service: 'test',
       sink,
       now: () => 1_700_000_000_000,
       id: (() => {
         const ids = ['1'.repeat(32), '2'.repeat(16), '3'.repeat(32), '4'.repeat(16)]
+
         return () => ids.shift() ?? '5'.repeat(32)
       })(),
     })
+
     const context = requestContextFromHeaders(
       { 'x-request-id': 'request-123', traceparent: `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01` },
       telemetry.ids,
@@ -31,6 +34,7 @@ describe('telemetry foundation', () => {
       expect(telemetry.current()).toEqual(context)
       telemetry.logger.info('request.completed', { route: 'trpc' })
     })
+
     await telemetry.flush(50)
 
     expect(sink.records[0]).toMatchObject({
@@ -45,7 +49,9 @@ describe('telemetry foundation', () => {
 
   test('replaces malformed context and rejects all-zero W3C identifiers', () => {
     const ids = { traceId: () => '1'.repeat(32), spanId: () => '2'.repeat(16), requestId: () => 'request-new' }
+
     expect(parseTraceparent(`00-${'0'.repeat(32)}-${'1'.repeat(16)}-01`)).toBeNull()
+
     expect(requestContextFromHeaders({ 'x-request-id': 'contains spaces', traceparent: 'bad' }, ids)).toEqual({
       requestId: 'request-new',
       traceId: '1'.repeat(32),
@@ -57,6 +63,7 @@ describe('telemetry foundation', () => {
   test('redacts forbidden attributes and never recursively serializes arbitrary errors', async () => {
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'test', sink, drainIntervalMs: 0 })
+
     const error = Object.assign(new Error('failed token=secret-value'), {
       authorization: 'Bearer secret',
       response: { body: 'private payload' },
@@ -68,10 +75,12 @@ describe('telemetry foundation', () => {
       operationId: 'safe-correlation-id',
       payload: 'private',
     })
+
     await telemetry.flush(50)
 
     expect(JSON.stringify(sink.records)).not.toContain('secret-value')
     expect(JSON.stringify(sink.records)).not.toContain('private payload')
+
     expect(sink.records[0]).toMatchObject({
       error: { name: 'Error', message: 'Operation failed' },
       attributes: { operationId: 'safe-correlation-id' },
@@ -81,17 +90,21 @@ describe('telemetry foundation', () => {
   test('keeps redacted messages but exposes allow-listed error codes and HTTP statuses', async () => {
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'test', sink, drainIntervalMs: 0 })
+
     class LeaderboardSourceError extends Error {
       readonly code = 'source_transport_failed'
     }
+
     const postgresError = Object.assign(new Error('duplicate key value violates unique constraint'), {
       name: 'PostgresError',
       code: '23505',
       detail: 'Key (id)=(secret-row) already exists.',
     })
+
     const httpError = Object.assign(new Error('Brawlhalla API error: 503 for /player/1?api_key=leaked-key'), {
       status: 503,
     })
+
     const wrapped = new Error('Brawlhalla API timeout', {
       cause: Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }),
     })
@@ -108,6 +121,7 @@ describe('telemetry foundation', () => {
 
     expect(JSON.stringify(sink.records)).not.toContain('leaked-key')
     expect(JSON.stringify(sink.records)).not.toContain('secret-row')
+
     expect(sink.records.map((record) => record.error)).toEqual([
       { name: 'Error', message: 'Operation failed', code: 'source_transport_failed' },
       { name: 'Error', message: 'Operation failed', code: '23505' },
@@ -124,7 +138,9 @@ describe('telemetry foundation', () => {
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'test', sink, drainIntervalMs: 0 })
     const cyclic: Record<string, unknown> = {}
+
     cyclic.self = cyclic
+
     const attributes: Record<string, unknown> = {
       safe: 'yes',
       nested: { private: true },
@@ -133,8 +149,10 @@ describe('telemetry foundation', () => {
       infinity: Number.POSITIVE_INFINITY,
       bool: true,
     }
+
     for (let index = 0; index < 10_000; index++) attributes[`extra${index}`] = `value${index}`
     const error = new Error('private')
+
     error.name = 'Bearer malicious-secret'
 
     telemetry.logger.error('adversarial', error, attributes)
@@ -154,9 +172,11 @@ describe('telemetry foundation', () => {
     let active = 0
     let maximumActive = 0
     let release: (() => void) | undefined
+
     const blocked = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const telemetry = createTelemetry({
       service: 'test',
       drainIntervalMs: 0,
@@ -185,6 +205,7 @@ describe('telemetry foundation', () => {
 
   test('JSON output honors backpressure and aborts a blocked drain', async () => {
     let signalObserved = false
+
     const sink = createJsonConsoleSink({
       write: () => false,
       waitForDrain: async (signal) => {
@@ -200,7 +221,9 @@ describe('telemetry foundation', () => {
         })
       },
     })
+
     const telemetry = createTelemetry({ service: 'test', sink, drainIntervalMs: 0, exportTimeoutMs: 5 })
+
     telemetry.logger.info('blocked')
 
     await telemetry.flush(20)
@@ -226,6 +249,7 @@ describe('telemetry foundation', () => {
       telemetry.logger.info('two')
       telemetry.logger.info('three')
     }).not.toThrow()
+
     expect(telemetry.stats()).toEqual({ queued: 2, dropped: 1, exportFailures: 0, seriesDropped: 0 })
     await expect(telemetry.shutdown(10)).resolves.toBeUndefined()
     expect(telemetry.stats().exportFailures).toBe(1)
@@ -233,13 +257,16 @@ describe('telemetry foundation', () => {
 
   test('bridges local traces through the standard OpenTelemetry tracer interface', async () => {
     const observed: { name?: string; attributes?: unknown; ended?: boolean; status?: number } = {}
+
     const tracer = {
       startSpan(name: string, options: { attributes?: unknown }) {
         observed.name = name
         observed.attributes = options.attributes
+
         return {
           setStatus(status: { code: number }) {
             observed.status = status.code
+
             return this
           },
           recordException() {},
@@ -249,6 +276,7 @@ describe('telemetry foundation', () => {
         }
       },
     }
+
     const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0, tracer: tracer as never })
 
     await telemetry.trace('standard.span', { safe: true, nested: { rejected: true } }, async () => 'done')
@@ -268,10 +296,12 @@ describe('telemetry foundation', () => {
       return {
         spanContext() {
           if (method === 'spanContext') throw new Error('span context failed')
+
           return { traceId: 'a'.repeat(32), spanId: 'b'.repeat(16), traceFlags: 1 }
         },
         setStatus() {
           if (method === 'setStatus') throw new Error('status failed')
+
           return this
         },
         recordException() {
@@ -370,28 +400,34 @@ describe('telemetry foundation', () => {
     for (const testCase of successCases) {
       let calls = 0
       const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0, ...testCase.options } as never)
+
       await expect(
         telemetry.trace(testCase.name, {}, async () => {
           calls++
+
           return 'product result'
         }),
       ).resolves.toBe('product result')
+
       expect(calls).toBe(1)
     }
 
     for (const method of ['recordException', 'setStatus', 'end'] as const) {
       let calls = 0
+
       const telemetry = createTelemetry({
         service: 'test',
         drainIntervalMs: 0,
         tracer: { startSpan: () => throwingSpan(method) } as never,
       })
+
       await expect(
         telemetry.trace(method, {}, async () => {
           calls++
           throw productError
         }),
       ).rejects.toBe(productError)
+
       expect(calls).toBe(1)
     }
   })
@@ -403,13 +439,16 @@ describe('telemetry foundation', () => {
       spanId: 'b'.repeat(16),
       sampled: true,
     }
+
     let parentContext: unknown
+
     const telemetry = createTelemetry({
       service: 'test',
       drainIntervalMs: 0,
       tracer: {
         startSpan: (_name: string, _options: unknown, context: unknown) => {
           parentContext = context
+
           return {
             spanContext: () => ({ traceId: incoming.traceId, spanId: 'c'.repeat(16), traceFlags: 1 }),
             setStatus() {
@@ -466,26 +505,32 @@ describe('telemetry foundation', () => {
 
   test('uses a fixed metric catalog and bounded series', () => {
     const telemetry = createTelemetry({ service: 'test', maxSeriesPerMetric: 2, drainIntervalMs: 0 })
+
     telemetry.metrics.add('http_server_requests_total', 1, {
       runtime: 'api',
       method: 'GET',
       route: 'trpc',
       status_class: '2xx',
     })
+
     telemetry.metrics.add('http_server_requests_total', 1, {
       runtime: 'api',
       method: 'GET',
       route: 'unknown-id-123',
       status_class: '2xx',
     })
+
     telemetry.metrics.add('unknown_metric' as never, 1, {})
+
     telemetry.metrics.observe('http_server_duration_ms', 125, {
       runtime: 'api',
       method: 'GET',
       route: 'trpc',
       status_class: '2xx',
     })
+
     const operationTelemetry = createTelemetry({ service: 'test', drainIntervalMs: 0 })
+
     for (const kind of [
       'ranked-player-pulse',
       'player-discovery-projection',
@@ -512,7 +557,9 @@ describe('telemetry foundation', () => {
       work_class: 'global-statistics',
       outcome: 'succeeded',
     })
+
     const output = renderPrometheus([...telemetry.metrics.snapshot(), ...operationTelemetry.metrics.snapshot()])
+
     expect(output).toContain('http_server_requests_total{method="GET",route="trpc",runtime="api",status_class="2xx"} 1')
     expect(output).toContain('http_server_duration_ms_bucket')
     expect(output).not.toContain('unknown-id-123')
@@ -545,12 +592,14 @@ describe('telemetry foundation', () => {
       ['statistics-publication', 'global-statistics'],
       ['statistics-legend-meta-publication', 'global-statistics'],
     ] as const
+
     for (const [kind, workClass] of durableKinds) {
       telemetry.metrics.add('operation_attempts_total', 1, {
         kind,
         work_class: workClass,
         outcome: 'succeeded',
       })
+
       telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass, reason: 'execution' })
     }
 
@@ -559,12 +608,14 @@ describe('telemetry foundation', () => {
 
   test('accepts analytics metrics with allow-listed labels and drops unknown values', () => {
     const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
+
     telemetry.metrics.add('analytics_pageviews_total', 1, { route: '/player/[id]', device: 'mobile' })
     telemetry.metrics.add('analytics_pageviews_total', 1, { route: '/player/123', device: 'mobile' })
     telemetry.metrics.observe('analytics_web_vitals', 0.08, { name: 'CLS', route: '/', device: 'desktop' })
     telemetry.metrics.add('analytics_events_dropped_total', 3, { reason: 'invalid' })
     const snapshot = telemetry.metrics.snapshot()
     const pageviews = snapshot.find((metric) => metric.name === 'analytics_pageviews_total')
+
     expect(pageviews?.series).toHaveLength(1)
     expect(snapshot.some((metric) => metric.name === 'analytics_web_vitals')).toBe(true)
     expect(telemetry.stats().seriesDropped).toBe(1)
@@ -572,8 +623,10 @@ describe('telemetry foundation', () => {
 
   test('web vitals buckets resolve CLS above 0.25 and keep millisecond buckets', () => {
     const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
+
     telemetry.metrics.observe('analytics_web_vitals', 0.8, { name: 'CLS', route: '/', device: 'desktop' })
     const output = renderPrometheus(telemetry.metrics.snapshot())
+
     for (const le of ['0.5', '1', '2.5', '0.25', '100', '8000']) expect(output).toContain(`le="${le}"`)
   })
 })

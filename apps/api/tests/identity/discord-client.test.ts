@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { buildAuthorizeUrl, exchangeCode, fetchDiscordUser } from '../../src/auth/discord'
 
 const originalFetch = globalThis.fetch
+
 afterEach(() => {
   globalThis.fetch = originalFetch
 })
@@ -13,7 +14,9 @@ describe('buildAuthorizeUrl', () => {
       redirectUri: 'http://localhost:3000/auth/discord/callback',
       state: 'abc123',
     })
+
     const u = new URL(url)
+
     expect(u.origin).toBe('https://discord.com')
     expect(u.pathname).toBe('/api/oauth2/authorize')
     expect(u.searchParams.get('client_id')).toBe('cid')
@@ -27,8 +30,10 @@ describe('buildAuthorizeUrl', () => {
 describe('exchangeCode', () => {
   it('POSTs form-encoded credentials and returns the access_token', async () => {
     let capturedBody: string | null = null
+
     globalThis.fetch = mock(async (_url, init) => {
       capturedBody = init?.body as string
+
       return new Response(JSON.stringify({ access_token: 'tok', token_type: 'Bearer' }), { status: 200 })
     }) as unknown as typeof fetch
 
@@ -41,7 +46,9 @@ describe('exchangeCode', () => {
 
     expect(result).toEqual({ accessToken: 'tok' })
     const body = capturedBody as string | null
+
     if (body === null) throw new Error('Expected Discord token request body')
+
     expect(body).toContain('grant_type=authorization_code')
     expect(body).toContain('code=the-code')
     expect(body).toContain('client_id=cid')
@@ -52,6 +59,7 @@ describe('exchangeCode', () => {
     globalThis.fetch = mock(
       async () => new Response(JSON.stringify({ access_token: 42 }), { status: 200 }),
     ) as unknown as typeof fetch
+
     await expect(exchangeCode({ clientId: 'c', clientSecret: 's', redirectUri: 'r', code: 'x' })).rejects.toThrow()
   })
 
@@ -76,6 +84,7 @@ describe('fetchDiscordUser', () => {
     ) as unknown as typeof fetch
 
     const result = await fetchDiscordUser('tok')
+
     expect(result).toEqual({ discordId: '42', username: 'coolguy', avatarHash: 'abc' })
   })
 
@@ -83,7 +92,9 @@ describe('fetchDiscordUser', () => {
     globalThis.fetch = mock(
       async () => new Response(JSON.stringify({ id: '42', username: 'x', avatar: null }), { status: 200 }),
     ) as unknown as typeof fetch
+
     const result = await fetchDiscordUser('tok')
+
     expect(result.avatarHash).toBeNull()
   })
 
@@ -92,6 +103,7 @@ describe('fetchDiscordUser', () => {
       async () =>
         new Response(JSON.stringify({ id: 'not-a-snowflake', username: '', avatar: '../abc' }), { status: 200 }),
     ) as unknown as typeof fetch
+
     await expect(fetchDiscordUser('tok')).rejects.toThrow()
   })
 

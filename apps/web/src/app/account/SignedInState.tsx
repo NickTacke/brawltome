@@ -21,11 +21,13 @@ export function SignedInState({ account }: SignedInStateProps) {
   const queryClient = useQueryClient()
   const { preferences, isLoading: preferencesLoading } = useAccountPreferences(account.id)
   const { state: primaryPlayerState, isLoading: primaryPlayerLoading, isError: primaryPlayerError } = usePrimaryPlayer()
+
   const {
     pinnedPlayers,
     isLoading: pinnedPlayersLoading,
     isError: pinnedPlayersQueryError,
   } = usePinnedPlayers(account.id)
+
   const primaryPlayerKnown = !primaryPlayerLoading && !primaryPlayerError
   const primaryPlayerId = primaryPlayerKnown ? (primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null) : null
   const pinnedPlayersHeadingRef = useRef<HTMLHeadingElement>(null)
@@ -35,6 +37,7 @@ export function SignedInState({ account }: SignedInStateProps) {
   const [mutationStatus, setMutationStatus] = useState('')
   const [themeSaving, setThemeSaving] = useState(false)
   const [themeError, setThemeError] = useState<string | null>(null)
+
   const memberSince = new Date(account.createdAt).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
@@ -42,15 +45,20 @@ export function SignedInState({ account }: SignedInStateProps) {
 
   useEffect(() => {
     if (!primaryPlayerKnown) return
+
     const previousPrimaryPlayerId = previousPrimaryPlayerIdRef.current
+
     previousPrimaryPlayerIdRef.current = primaryPlayerId
     if (previousPrimaryPlayerId === undefined || previousPrimaryPlayerId === primaryPlayerId) return
+
     void invalidatePlayerNavigation(queryClient, account.id)
   }, [account.id, primaryPlayerKnown, primaryPlayerId, queryClient])
 
   async function handleThemeChange(event: ChangeEvent<HTMLSelectElement>) {
     const theme = ACCOUNT_THEME_OPTIONS.find(({ value }) => value === event.currentTarget.value)?.value
+
     if (!preferences || !theme || theme === preferences.theme) return
+
     setThemeSaving(true)
     setThemeError(null)
     try {
@@ -65,8 +73,10 @@ export function SignedInState({ account }: SignedInStateProps) {
 
   async function handleUnpin(brawlhallaId: number) {
     if (!primaryPlayerKnown || pendingPlayerId !== null || brawlhallaId === primaryPlayerId) return
+
     const unpinned = pinnedPlayers.find((pinnedPlayer) => pinnedPlayer.brawlhallaId === brawlhallaId)
     const label = unpinned?.player?.name ?? `Player ID ${brawlhallaId}`
+
     setPendingPlayerId(brawlhallaId)
     setMutationError(null)
     setMutationStatus('')
@@ -83,16 +93,22 @@ export function SignedInState({ account }: SignedInStateProps) {
 
   async function handleMove(fromIndex: number, toIndex: number) {
     if (!primaryPlayerKnown || pendingPlayerId !== null) return
+
     const moved = pinnedPlayers[fromIndex]
+
     if (!moved || moved.brawlhallaId === primaryPlayerId) return
+
     const brawlhallaIds = movePinnedPlayer(pinnedPlayers, fromIndex, toIndex, primaryPlayerId)
+
     if (brawlhallaIds.every((id, index) => id === pinnedPlayers[index]?.brawlhallaId)) return
+
     setPendingPlayerId(moved.brawlhallaId)
     setMutationError(null)
     setMutationStatus('')
     try {
       await reorderPinnedPlayers(queryClient, account.id, brawlhallaIds)
       const label = moved.player?.name ?? `Player ID ${moved.brawlhallaId}`
+
       setMutationStatus(`Moved ${label} to Pinned Players position ${toIndex + 1}.`)
     } catch {
       setMutationError('Could not reorder Pinned Players. Try again.')

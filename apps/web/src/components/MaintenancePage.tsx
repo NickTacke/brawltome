@@ -7,6 +7,7 @@ import { BrandSocialPills } from './BrandSocialPills'
 
 function getTimeRemaining(endTime: string) {
   const total = new Date(endTime).getTime() - Date.now()
+
   if (total <= 0) return null
 
   return {
@@ -23,9 +24,11 @@ function CountdownTimer({ endTime }: { endTime: string }) {
   useEffect(() => {
     const interval = setInterval(() => {
       const time = getTimeRemaining(endTime)
+
       setRemaining(time)
       if (!time) clearInterval(interval)
     }, 1000)
+
     return () => clearInterval(interval)
   }, [endTime])
 

@@ -38,6 +38,7 @@ export function PaginationControls({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               const val = Number.parseInt(e.currentTarget.value.trim(), 10)
+
               if (!Number.isNaN(val) && val >= 1 && val <= maxPage) onPageChange(val)
               else {
                 onPageChange(1)

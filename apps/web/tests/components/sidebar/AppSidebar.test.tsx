@@ -3,9 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { PlayerShortcutNavigationItem } from '../../../src/lib/playerShortcuts'
 
 mock.module('next/navigation', () => ({ usePathname: () => '/' }))
+
 mock.module('../../../src/components/sidebar/SidebarProvider', () => ({
   useSidebar: () => ({ isMobileOpen: true, close: () => {} }),
 }))
+
 const { AppSidebar } = await import('../../../src/components/sidebar/AppSidebar')
 const { MobileMenu } = await import('../../../src/components/sidebar/MobileMenu')
 
@@ -31,6 +33,7 @@ describe('AppSidebar pinned-player navigation', () => {
     const emptyHtml = renderToStaticMarkup(
       <AppSidebar account={null} playerShortcuts={[]} shortcutsLoading shortcutsError={false} />,
     )
+
     const html = renderToStaticMarkup(
       <AppSidebar account={null} playerShortcuts={playerShortcuts} shortcutsLoading={false} shortcutsError={false} />,
     )
@@ -41,8 +44,10 @@ describe('AppSidebar pinned-player navigation', () => {
     expect(html).toContain('border-sidebar-border mt-2 border-t pt-2')
     const listStart = html.indexOf('<ul aria-label="Player shortcuts"')
     const shortcutList = html.slice(listStart, html.indexOf('</ul>', listStart))
+
     expect(shortcutList).toContain('aria-label="You, Ada"')
     expect(shortcutList).toContain('aria-label="Pinned Player, Lin"')
+
     expect(shortcutList.indexOf('aria-label="You, Ada"')).toBeLessThan(
       shortcutList.indexOf('aria-label="Pinned Player, Lin"'),
     )
@@ -70,11 +75,14 @@ describe('MobileMenu pinned-player navigation', () => {
 
     const listStart = html.indexOf('<ul aria-label="Player shortcuts"')
     const shortcutList = html.slice(listStart, html.indexOf('</ul>', listStart))
+
     expect(shortcutList).toContain('aria-label="You, Ada"')
     expect(shortcutList).toContain('aria-label="Pinned Player, Lin"')
+
     expect(shortcutList.indexOf('aria-label="You, Ada"')).toBeLessThan(
       shortcutList.indexOf('aria-label="Pinned Player, Lin"'),
     )
+
     expect(html).not.toContain('border-t border-white/[0.14]')
   })
 })

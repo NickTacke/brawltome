@@ -12,19 +12,25 @@ const cell = (v: string) => v.replace(/\|/g, '\\|')
 
 function ratioDelta({ current, previous }: PeriodValue): string {
   if (current === null || previous === null) return 'n/a'
+
   const pp = (current - previous) * 100
+
   return `${pp >= 0 ? '+' : ''}${pp.toFixed(1)} pp`
 }
 
 function countDelta({ current, previous }: PeriodValue): string {
   if (current === null || previous === null || previous === 0) return 'n/a'
+
   const change = ((current - previous) / previous) * 100
+
   return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`
 }
 
 function table(headers: string[], rows: string[][]): string {
   if (rows.length === 0) return '_No data._'
+
   const line = (cells: string[]) => `| ${cells.map(cell).join(' | ')} |`
+
   return [line(headers), line(headers.map(() => '---')), ...rows.map(line)].join('\n')
 }
 
@@ -38,14 +44,18 @@ function metricTable(rows: Array<[string, PeriodValue, (v: number | null) => str
 function friction(data: ReviewData): string[] {
   const items: string[] = []
   const { searchMissRate, refreshWaitP95Ms, abandonedRefreshRate } = data
+
   if (searchMissRate.current !== null && searchMissRate.current > thresholds.searchMissRate)
     items.push(`Search miss rate ${pct(searchMissRate.current)} (threshold ${pct(thresholds.searchMissRate)})`)
+
   if (refreshWaitP95Ms.current !== null && refreshWaitP95Ms.current > thresholds.refreshWaitP95Ms)
     items.push(`Refresh wait p95 ${ms(refreshWaitP95Ms.current)} (threshold ${ms(thresholds.refreshWaitP95Ms)})`)
+
   if (abandonedRefreshRate.current !== null && abandonedRefreshRate.current > thresholds.abandonedRefreshRate)
     items.push(
       `Abandoned refresh rate ${pct(abandonedRefreshRate.current)} (threshold ${pct(thresholds.abandonedRefreshRate)})`,
     )
+
   for (const lcp of data.lcpP75Ms)
     if (lcp.value > thresholds.lcpP75Ms)
       items.push(
@@ -54,6 +64,7 @@ function friction(data: ReviewData): string[] {
   for (const error of data.clientErrors)
     if (error.count >= CLIENT_ERROR_THRESHOLD)
       items.push(`Client errors: ${error.kind} on ${error.route} x${Math.round(error.count)}`)
+
   return items
 }
 
@@ -113,5 +124,6 @@ export function buildReport(data: ReviewData, meta: { days: number; end: Date })
       data.verificationBacklog.map((b) => [b.tier, num(b.value)]),
     )}`,
   ]
+
   return `${sections.join('\n\n')}\n`
 }

@@ -5,10 +5,12 @@ const int32 = z.int().min(0).max(2_147_483_647).meta({ format: 'int32' })
 const positiveInt32 = int32.min(1)
 const fraction = z.number().min(0).max(1)
 const decimal = z.string().regex(/^(0|[1-9]\d*)$/, 'must be a canonical non-negative decimal string')
+
 const utcDateTime = z.iso
   .datetime({ offset: false })
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
+
 const visibleText = z
   .string()
   .min(1)
@@ -113,14 +115,17 @@ export const playerCareerProfileSchema = z
       profile.snapshotSource === null &&
       profile.freshness === 'unavailable' &&
       profile.snapshot === null
+
     const available =
       profile.lastSuccessAt !== null &&
       profile.snapshotSource !== null &&
       profile.freshness !== 'unavailable' &&
       profile.snapshot !== null
+
     if (!unavailable && !available) {
       context.addIssue({ code: 'custom', message: 'career availability fields are inconsistent' })
     }
+
     if (profile.snapshotSource === 'legacy-v2' && profile.freshness !== 'stale') {
       context.addIssue({ code: 'custom', message: 'legacy career snapshots must remain stale' })
     }

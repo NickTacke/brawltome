@@ -16,6 +16,7 @@ const caller = t.createCallerFactory(router)
 describe('protectedProcedure', () => {
   it('allows requests with an authenticated account', async () => {
     const result = await caller({ account: { id: 'u1' } }).test()
+
     expect(result).toBe('u1')
   })
 

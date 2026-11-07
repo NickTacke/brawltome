@@ -18,8 +18,10 @@ export const trpc = createTRPCClient<AppRouter>({
       transformer: superjson,
       fetch: (url, opts) => {
         const headers = new Headers(opts?.headers)
+
         headers.set('x-request-id', crypto.randomUUID())
         headers.set('traceparent', `00-${randomHex(16)}-${randomHex(8)}-00`)
+
         return fetch(url, { ...opts, headers, credentials: 'include' })
       },
     }),

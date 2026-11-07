@@ -20,8 +20,10 @@ function stateEvent(
 
 function changed(previous: PlayerRefreshStatus, next: PlayerRefreshStatus): boolean {
   if (previous.kind !== next.kind) return true
+
   const previousReason = 'reason' in previous ? previous.reason : undefined
   const nextReason = 'reason' in next ? next.reason : undefined
+
   return previousReason !== nextReason
 }
 
@@ -32,6 +34,7 @@ export function refreshStateEvent(
   hasData: boolean,
 ): AnalyticsEventInput | null {
   if (!changed(previous, next)) return null
+
   switch (next.kind) {
     case 'requesting':
       return hasData ? null : stateEvent('looking_up')
@@ -51,11 +54,15 @@ export function refreshStateEvent(
 /** Lets each refresh.state value through at most once per refresh cycle. */
 export function createStateDeduper() {
   const seen = new Set<string>()
+
   return {
     allow(event: AnalyticsEventInput): boolean {
       if (event.name !== 'refresh.state') return true
+
       if (seen.has(event.state)) return false
+
       seen.add(event.state)
+
       return true
     },
     reset: () => seen.clear(),
@@ -73,9 +80,12 @@ export function abandonRefresh(
   deps: { track: (event: AnalyticsEventInput) => void; flush: () => void },
 ): boolean {
   if (trackedRef.current) return false
+
   if (statusKind !== 'requesting' && statusKind !== 'polling' && statusKind !== 'waiting') return false
+
   trackedRef.current = true
   deps.track({ name: 'refresh.abandoned', waitedMs: clampWaitMs(waitedMs) })
   deps.flush()
+
   return true
 }

@@ -29,7 +29,9 @@ interface RatingChartProps {
 
 function seasonRange(seasons: SeasonDef[], name: string): { start: number; end: number } | null {
   const index = seasons.findIndex((season) => season.name === name)
+
   if (index === -1) return null
+
   return {
     start: seasons[index].startsAt.getTime(),
     end: seasons[index + 1]?.startsAt.getTime() ?? Number.POSITIVE_INFINITY,
@@ -45,40 +47,52 @@ export function RatingChart({ data }: RatingChartProps) {
 
   const availableSeasons = seasonsAsc.filter((season) => {
     const range = seasonRange(seasonsAsc, season.name)
+
     return range && allSorted.some((point) => point.timestamp >= range.start && point.timestamp < range.end)
   })
 
   const withSeasonDrops = useMemo(() => {
     const boundaries = seasonsAsc.filter((s) => s.startsAt.getTime() > 0).map((s) => s.startsAt.getTime())
     const result: ChartPoint[] = []
+
     for (let i = 0; i < allSorted.length; i++) {
       const prev = result[result.length - 1]
       const curr = allSorted[i]
+
       if (prev) {
         const crossed = boundaries.filter((b) => prev.timestamp < b && curr.timestamp >= b).sort((a, b) => a - b)
+
         for (const boundary of crossed) {
           result.push({ ...prev, timestamp: boundary - 1 })
           result.push({ ...curr, timestamp: boundary })
         }
       }
+
       result.push(curr)
     }
+
     return result
   }, [allSorted, seasonsAsc])
 
   const sorted = useMemo(() => {
     if (!selectedSeason) return withSeasonDrops
+
     const range = seasonRange(seasonsAsc, selectedSeason)
+
     if (!range) return withSeasonDrops
+
     return withSeasonDrops.filter((point) => point.timestamp >= range.start && point.timestamp < range.end)
   }, [selectedSeason, withSeasonDrops, seasonsAsc])
 
   const uniqueTicks = useMemo(() => {
     const seen = new Set<string>()
+
     return sorted
       .filter((d) => {
         if (seen.has(d.date)) return false
+
         seen.add(d.date)
+
         return true
       })
       .map((d) => d.timestamp)
@@ -94,12 +108,15 @@ export function RatingChart({ data }: RatingChartProps) {
 
   const firstTs = sorted[0].timestamp
   const lastTs = sorted[sorted.length - 1].timestamp
+
   const visibleSeasonBoundaries = seasonsAsc.filter((s) => {
     const ts = s.startsAt.getTime()
+
     return ts > 0 && ts >= firstTs && ts <= lastTs
   })
 
   const accessibleRange = selectedSeason ? seasonRange(seasonsAsc, selectedSeason) : null
+
   const accessibleObservations = accessibleRange
     ? allSorted.filter((point) => point.timestamp >= accessibleRange.start && point.timestamp < accessibleRange.end)
     : allSorted

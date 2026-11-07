@@ -29,6 +29,7 @@ export function mapLegendMetaOutput(result: LegendMetaQueryResult): LegendMetaOu
   }
 
   const { slice, region, bracket, staleReason, ...snapshot } = result
+
   return parseLegendMetaOutput({
     ...snapshot,
     staleReason:
@@ -61,6 +62,7 @@ export function mapLegendMetaHistoryOutput(result: LegendMetaHistoryView): Legen
     entries: result.entries.map(({ snapshot, comparisonToPrevious }) => {
       const { compatibility, data, sequence: _sequence, rows: _rows, ...identity } = snapshot
       const { region: _region, bracket: _bracket, rows, ...evidence } = data
+
       return {
         snapshot: {
           ...identity,

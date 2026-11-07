@@ -13,6 +13,7 @@ describe('internalProcedure', () => {
 
   it('allows requests with valid secret', async () => {
     const result = await caller({ internalSecret: 'test-secret-value' }).test()
+
     expect(result).toBe('ok')
   })
 

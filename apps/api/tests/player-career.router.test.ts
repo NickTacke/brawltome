@@ -8,12 +8,14 @@ const secret = 'player-career-test-secret'
 
 function callerFor(careerPlayerQueries: CareerPlayerQueries) {
   const context = { internalSecret: secret, careerPlayerQueries } as Context
+
   return createPlayerCareerRouter(createInternalProcedure(secret)).createCaller(context)
 }
 
 describe('player.careerById', () => {
   test('maps dates and exact damage into canonical output and rejects malformed producer values', async () => {
     const observedAt = new Date('2026-08-09T22:00:00Z')
+
     const caller = callerFor({
       byId: async (brawlhallaId) => ({
         brawlhallaId,
@@ -57,6 +59,7 @@ describe('player.careerById', () => {
         weapons: [],
       },
     })
+
     await expect(caller.careerById({ id: 0 })).rejects.toThrow()
 
     const malformed = {
@@ -70,6 +73,7 @@ describe('player.careerById', () => {
         snapshot: null,
       }),
     } as unknown as CareerPlayerQueries
+
     await expect(callerFor(malformed).careerById({ id: 42 })).rejects.toThrow()
   })
 })

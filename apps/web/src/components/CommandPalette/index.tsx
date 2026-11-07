@@ -49,6 +49,7 @@ export function CommandPalette() {
           viaAlias: cmd.kind === 'player' && Boolean(cmd.matchedAlias),
         })
       }
+
       router.push(cmd.href)
       close()
     },
@@ -60,27 +61,33 @@ export function CommandPalette() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         if (!open) track({ name: 'feature.used', feature: 'command_palette.open' })
+
         setOpen((o) => !o)
       } else if (e.key === 'Escape' && open) {
         e.preventDefault()
         close()
       }
     }
+
     window.addEventListener('keydown', handler)
+
     return () => window.removeEventListener('keydown', handler)
   }, [open, close])
 
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => inputRef.current?.focus())
+
       return
     }
+
     const t = setTimeout(() => {
       setQuery('')
       setPlayerResults([])
       setClanResults([])
       setSelectedIndex(0)
     }, 200)
+
     return () => clearTimeout(t)
   }, [open])
 
@@ -91,19 +98,25 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!open) return
+
     let cancelled = false
+
     if (debouncedQuery.trim().length < 2) {
       setPlayerResults([])
       setClanResults([])
       setIsSearching(false)
+
       return
     }
+
     setIsSearching(true)
     const started = performance.now()
+
     trpc.search.local
       .query({ query: debouncedQuery })
       .then((data) => {
         if (cancelled) return
+
         track({
           name: 'search.performed',
           source: 'palette',
@@ -112,19 +125,23 @@ export function CommandPalette() {
           aliasResults: Math.min(data.players.filter((p) => p.matchedAlias).length, 100),
           latencyMs: Math.min(Math.round(performance.now() - started), 600000),
         })
+
         setPlayerResults(data.players)
         setClanResults(data.clans)
         setIsSearching(false)
       })
       .catch(() => {
         if (cancelled) return
+
         track({
           name: 'search.failed',
           source: 'palette',
           latencyMs: Math.min(Math.round(performance.now() - started), 600000),
         })
+
         setIsSearching(false)
       })
+
     return () => {
       cancelled = true
     }
@@ -132,16 +149,23 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!open) return
+
     const list = listRef.current
+
     if (!list) return
+
     const el = list.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`)
+
     if (el) el.scrollIntoView({ block: 'nearest' })
   }, [selectedIndex, open])
 
   useEffect(() => {
     if (!open) return
+
     const prev = document.body.style.overflow
+
     document.body.style.overflow = 'hidden'
+
     return () => {
       document.body.style.overflow = prev
     }
@@ -157,10 +181,13 @@ export function CommandPalette() {
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const cmd = commands[selectedIndex]
+
       if (cmd) {
         activate(cmd)
+
         return
       }
+
       if (isNumericPlayerId(query)) {
         router.push(`/player/${query.trim()}`)
         close()

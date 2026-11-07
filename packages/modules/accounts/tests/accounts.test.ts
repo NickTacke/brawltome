@@ -15,16 +15,21 @@ function makeStore() {
   const accounts = new Map<string, { id: string; displayName: string; avatarUrl: string | null; createdAt: Date }>()
   const sessions = new Map<string, { accountId: string; expiresAt: Date }>()
   const preferences = new Map<string, typeof DEFAULT_ACCOUNT_PREFERENCES>()
+
   const store: AccountsStore = {
     async upsertDiscordIdentity(profile) {
       const existing = accounts.get(profile.providerAccountId)
+
       if (existing) {
         existing.displayName = profile.displayName
+
         existing.avatarUrl = profile.avatarHash
           ? `https://cdn.discordapp.com/avatars/${profile.providerAccountId}/${profile.avatarHash}.png`
           : null
+
         return existing
       }
+
       const account = {
         id: ACCOUNT_ID,
         displayName: profile.displayName,
@@ -33,7 +38,9 @@ function makeStore() {
           : null,
         createdAt: now,
       }
+
       accounts.set(profile.providerAccountId, account)
+
       return account
     },
     async createSession(session) {
@@ -41,12 +48,16 @@ function makeStore() {
     },
     async findSessionAccount(id) {
       const session = sessions.get(id)
+
       if (!session) return null
+
       const account = [...accounts.values()].find(({ id: accountId }) => accountId === session.accountId)
+
       return account ? { account, expiresAt: session.expiresAt } : null
     },
     async extendSession(id, expiresAt) {
       const session = sessions.get(id)
+
       if (session) session.expiresAt = expiresAt
     },
     async deleteSession(id) {
@@ -57,7 +68,9 @@ function makeStore() {
     },
     async upsertPreferences(accountId, nextPreferences) {
       const updated = { ...(preferences.get(accountId) ?? DEFAULT_ACCOUNT_PREFERENCES), ...nextPreferences }
+
       preferences.set(accountId, updated)
+
       return updated
     },
     async beginPrimaryPlayerVerification() {
@@ -89,6 +102,7 @@ function makeStore() {
       return { primaryPlayer: null, pinnedPlayers: [] }
     },
   }
+
   return { store, accounts, sessions, preferences }
 }
 
@@ -99,6 +113,7 @@ function makeAccounts(store: AccountsStore, token = 'raw-session-token') {
 describe('Accounts', () => {
   test('delegates the pinned-player add cap to the store', async () => {
     const state = makeStore()
+
     const service = makeAccounts({
       ...state.store,
       async pinPlayer() {
@@ -120,6 +135,7 @@ describe('Accounts', () => {
         displayName: 'Ada',
         avatarHash: null,
       })
+
       expect(result.sessionToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
       tokens.add(result.sessionToken)
     }
@@ -136,6 +152,7 @@ describe('Accounts', () => {
       displayName: 'Ada',
       avatarHash: 'avatar',
     })
+
     const second = await accounts.signInWithDiscord({
       providerAccountId: 'discord-42',
       displayName: 'Ada Updated',
@@ -162,6 +179,7 @@ describe('Accounts', () => {
       accountId: ACCOUNT_ID,
       expiresAt: now,
     })
+
     expect(await accounts.authenticate('expired')).toEqual({ status: 'anonymous' })
 
     await state.store.createSession({
@@ -169,6 +187,7 @@ describe('Accounts', () => {
       accountId: ACCOUNT_ID,
       expiresAt: new Date('2099-01-01T00:00:00.000Z'),
     })
+
     expect(await accounts.authenticate('orphan')).toEqual({ status: 'anonymous' })
   })
 
@@ -180,12 +199,15 @@ describe('Accounts', () => {
     ] as const) {
       const state = makeStore()
       const accounts = makeAccounts(state.store)
+
       await accounts.signInWithDiscord({
         providerAccountId: 'discord-42',
         displayName: 'Ada',
         avatarHash: null,
       })
+
       const session = [...state.sessions.values()][0]
+
       session.expiresAt = new Date(now.getTime() + deltaMs)
 
       expect((await accounts.authenticate('raw-session-token')).status).toBe(expectedStatus)
@@ -194,6 +216,7 @@ describe('Accounts', () => {
 
   test('uses an exact seven-day session-extension boundary', async () => {
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+
     for (const { deltaMs, extended } of [
       { deltaMs: -1, extended: true },
       { deltaMs: 0, extended: false },
@@ -201,12 +224,15 @@ describe('Accounts', () => {
     ] as const) {
       const state = makeStore()
       const accounts = makeAccounts(state.store)
+
       await accounts.signInWithDiscord({
         providerAccountId: 'discord-42',
         displayName: 'Ada',
         avatarHash: null,
       })
+
       const session = [...state.sessions.values()][0]
+
       session.expiresAt = new Date(now.getTime() + sevenDaysMs + deltaMs)
 
       expect(await accounts.authenticate('raw-session-token')).toMatchObject({ status: 'signedIn', extended })
@@ -216,18 +242,22 @@ describe('Accounts', () => {
   test('authenticates a valid session and rolls it to 30 days inside the seven-day threshold', async () => {
     const state = makeStore()
     const accounts = makeAccounts(state.store)
+
     await accounts.signInWithDiscord({
       providerAccountId: 'discord-42',
       displayName: 'Ada',
       avatarHash: null,
     })
+
     const session = [...state.sessions.values()][0]
+
     session.expiresAt = new Date('2026-08-12T18:00:00.000Z')
 
     const result = await accounts.authenticate('raw-session-token')
 
     expect(result.status).toBe('signedIn')
     if (result.status !== 'signedIn') throw new Error('Expected signed-in account')
+
     expect(result.account).toMatchObject({ id: ACCOUNT_ID, displayName: 'Ada', avatarUrl: null })
     expect(result.extended).toBe(true)
     expect(result.expiresAt.toISOString()).toBe('2026-09-08T18:00:00.000Z')
@@ -236,6 +266,7 @@ describe('Accounts', () => {
   test('does not roll a session with at least seven days remaining', async () => {
     const state = makeStore()
     const accounts = makeAccounts(state.store)
+
     await accounts.signInWithDiscord({
       providerAccountId: 'discord-42',
       displayName: 'Ada',
@@ -243,6 +274,7 @@ describe('Accounts', () => {
     })
 
     const result = await accounts.authenticate('raw-session-token')
+
     expect(result).toMatchObject({ status: 'signedIn', extended: false })
   })
 
@@ -276,18 +308,21 @@ describe('Accounts', () => {
         leaderboardRegion: 'EU',
       }),
     ).rejects.toBeInstanceOf(InvalidAccountPreferencesError)
+
     await expect(
       accounts.updatePreferences(ACCOUNT_ID, {
         ...DEFAULT_ACCOUNT_PREFERENCES,
         theme: 'dark',
       } as never),
     ).rejects.toBeInstanceOf(InvalidAccountPreferencesError)
+
     expect(await accounts.getPreferences(ACCOUNT_ID)).toEqual(DEFAULT_ACCOUNT_PREFERENCES)
   })
 
   test('sign-out revokes known sessions and is idempotent for unknown tokens', async () => {
     const state = makeStore()
     const accounts = makeAccounts(state.store)
+
     await accounts.signInWithDiscord({
       providerAccountId: 'discord-42',
       displayName: 'Ada',

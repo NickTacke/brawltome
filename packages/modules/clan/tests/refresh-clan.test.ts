@@ -20,7 +20,9 @@ const stats = (name = 'Canonical') => ({
   guild_points: '900719925474099355555',
   is_recruiting: false,
 })
+
 const roster = (members: unknown[]) => ({ guild_id: 990070, guild_members: members })
+
 const alpha = {
   brawlhalla_id: 1001,
   name: 'Alpha',
@@ -48,15 +50,19 @@ describe('Clans PostgreSQL capability', () => {
       },
       990070,
     )
+
     const first = await clans.getById(990070)
+
     expect(first?.clanXp).toBe('900719925474099312345')
     expect(first?.clanLifetimeXp).toBe('1801439850948198711110')
     expect(first?.members[0].xp).toBe('900719925474099388888')
+
     expect(await clans.getPlayerMembership(1001)).toMatchObject({
       clanId: 990070,
       clanName: 'Canonical',
       personalXp: '900719925474099388888',
     })
+
     const rosterSuccess = first?.roster?.lastSuccessAt
 
     const result = await processRefreshClan(
@@ -71,19 +77,24 @@ describe('Clans PostgreSQL capability', () => {
       },
       990070,
     )
+
     const partial = await clans.getById(990070)
+
     expect(result.map((section) => section.outcome).sort()).toEqual(['preserved', 'published'])
     expect(partial?.clanName).toBe('Updated')
     expect(partial?.members.map((member) => member.brawlhallaId)).toEqual([1001])
     expect(partial?.roster?.lastSuccessAt).toEqual(rosterSuccess)
+
     expect(partial?.roster?.lastSuccessProvenance).toEqual({
       source: 'v1-guild-members',
       outcome: 'success',
     })
+
     expect(partial?.roster?.checkProvenance).toEqual({
       source: 'v1-guild-members',
       outcome: 'ambiguous-failure',
     })
+
     expect(partial?.roster?.checkedAt?.getTime()).toBeGreaterThanOrEqual(rosterSuccess?.getTime() ?? 0)
 
     await processRefreshClan(
@@ -98,7 +109,9 @@ describe('Clans PostgreSQL capability', () => {
       },
       990070,
     )
+
     const inversePartial = await clans.getById(990070)
+
     expect(inversePartial?.clanName).toBe('Updated')
     expect(inversePartial?.profile.lastSuccessAt).toEqual(partial?.profile.lastSuccessAt)
     expect(inversePartial?.roster?.lastSuccessAt?.getTime()).toBeGreaterThanOrEqual(rosterSuccess?.getTime() ?? 0)
@@ -107,6 +120,7 @@ describe('Clans PostgreSQL capability', () => {
   test('records admission-limited check provenance and preserves the successful snapshot', async () => {
     const before = await clans.getById(990070)
     const admissionError = Object.assign(new Error('source admission limited'), { retryAfterSeconds: 17 })
+
     await expect(
       processRefreshClanSection(
         clans,
@@ -120,9 +134,12 @@ describe('Clans PostgreSQL capability', () => {
         'profile',
       ),
     ).rejects.toBe(admissionError)
+
     const after = await clans.getById(990070)
+
     expect(after?.profile.lastSuccessAt).toEqual(before?.profile.lastSuccessAt)
     expect(after?.profile.lastSuccessProvenance).toEqual(before?.profile.lastSuccessProvenance)
+
     expect(after?.profile.checkProvenance).toEqual({
       source: 'v1-guild-stats',
       outcome: 'admission-limited',
@@ -131,21 +148,26 @@ describe('Clans PostgreSQL capability', () => {
 
   test('raises the owner fence before source I/O and rejects an expired stale lease', async () => {
     const operationId = randomUUID()
+
     const staleEffect = {
       operationId,
       section: 'profile' as const,
       leaseToken: 1,
       leaseExpiresAt: new Date(Date.now() + 60_000),
     }
+
     const currentEffect = { ...staleEffect, leaseToken: 2 }
+
     expect(await clans.prepareRefreshEffect(staleEffect)).toBe('execute')
     expect(await clans.prepareRefreshEffect(currentEffect)).toBe('execute')
     let staleSourceCalls = 0
+
     const stale = await processRefreshClanSection(
       clans,
       {
         getGuildStatsV1: async () => {
           staleSourceCalls++
+
           return stats('Stale Lease')
         },
         getGuildMembersV1: async () => null,
@@ -156,6 +178,7 @@ describe('Clans PostgreSQL capability', () => {
       new Date(),
       staleEffect,
     )
+
     expect(stale).toMatchObject({ outcome: 'preserved' })
     expect(staleSourceCalls).toBe(0)
 
@@ -168,6 +191,7 @@ describe('Clans PostgreSQL capability', () => {
       new Date(),
       currentEffect,
     )
+
     expect(current.outcome).toBe('published')
     expect((await clans.getById(990070))?.clanName).toBe('Current Lease')
   })
@@ -179,13 +203,16 @@ describe('Clans PostgreSQL capability', () => {
       leaseToken: 1,
       leaseExpiresAt: new Date(Date.now() - 1_000),
     }
+
     expect(await clans.prepareRefreshEffect(effect)).toBe('fenced')
     let sourceCalls = 0
+
     const result = await processRefreshClanSection(
       clans,
       {
         getGuildStatsV1: async () => {
           sourceCalls++
+
           return stats('Expired Lease')
         },
         getGuildMembersV1: async () => null,
@@ -196,6 +223,7 @@ describe('Clans PostgreSQL capability', () => {
       new Date(),
       effect,
     )
+
     expect(result.outcome).toBe('preserved')
     expect(sourceCalls).toBe(0)
     expect((await clans.getById(990070))?.clanName).not.toBe('Expired Lease')
@@ -208,20 +236,25 @@ describe('Clans PostgreSQL capability', () => {
       leaseToken: 1,
       leaseExpiresAt: new Date(Date.now() + 60_000),
     }
+
     let releaseSource!: () => void
     let signalSourceEntered!: () => void
+
     const sourceBlocked = new Promise<void>((resolve) => {
       releaseSource = resolve
     })
+
     const sourceEntered = new Promise<void>((resolve) => {
       signalSourceEntered = resolve
     })
+
     const refresh = processRefreshClanSection(
       clans,
       {
         getGuildStatsV1: async () => {
           signalSourceEntered()
           await sourceBlocked
+
           return stats('Revoked Lease')
         },
         getGuildMembersV1: async () => null,
@@ -232,14 +265,17 @@ describe('Clans PostgreSQL capability', () => {
       new Date(),
       effect,
     )
+
     await sourceEntered
     await clans.revokeRefreshEffect(effect)
+
     expect(
       await clans.prepareRefreshEffect({
         ...effect,
         leaseExpiresAt: new Date(effect.leaseExpiresAt.getTime() + 60_000),
       }),
     ).toBe('fenced')
+
     releaseSource()
     expect((await refresh).outcome).toBe('preserved')
     expect((await clans.getById(990070))?.clanName).not.toBe('Revoked Lease')
@@ -250,6 +286,7 @@ describe('Clans PostgreSQL capability', () => {
     const successAt = new Date(Date.now() + 10_000)
     const failedCheckAt = new Date(successAt.getTime() + 10_000)
     const profile = (name: string) => ({ ...stats(name), guild_id: clanId })
+
     await processRefreshClanSection(
       clans,
       { getGuildStatsV1: async () => profile('Before Failure'), getGuildMembersV1: async () => roster([alpha]) },
@@ -258,6 +295,7 @@ describe('Clans PostgreSQL capability', () => {
       'background',
       successAt,
     )
+
     await processRefreshClanSection(
       clans,
       {
@@ -271,6 +309,7 @@ describe('Clans PostgreSQL capability', () => {
       'background',
       failedCheckAt,
     )
+
     await processRefreshClanSection(
       clans,
       { getGuildStatsV1: async () => profile('Late Success'), getGuildMembersV1: async () => roster([alpha]) },
@@ -279,7 +318,9 @@ describe('Clans PostgreSQL capability', () => {
       'background',
       successAt,
     )
+
     const result = await clans.getById(clanId)
+
     expect(result?.clanName).toBe('Late Success')
     expect(result?.profile.lastSuccessAt).toEqual(successAt)
     expect(result?.profile.checkedAt).toEqual(failedCheckAt)
@@ -290,6 +331,7 @@ describe('Clans PostgreSQL capability', () => {
   test('prevents older section and cross-clan membership observations from overwriting newer facts', async () => {
     const newer = new Date(Date.now() + 2_000)
     const older = new Date(Date.now() + 1_000)
+
     await processRefreshClanSection(
       clans,
       { getGuildStatsV1: async () => stats('Newer'), getGuildMembersV1: async () => null },
@@ -298,6 +340,7 @@ describe('Clans PostgreSQL capability', () => {
       'background',
       newer,
     )
+
     await processRefreshClanSection(
       clans,
       { getGuildStatsV1: async () => stats('Older'), getGuildMembersV1: async () => null },
@@ -306,6 +349,7 @@ describe('Clans PostgreSQL capability', () => {
       'background',
       older,
     )
+
     expect((await clans.getById(990070))?.clanName).toBe('Newer')
 
     await clans.publishProfile(
@@ -324,6 +368,7 @@ describe('Clans PostgreSQL capability', () => {
       newer,
       { source: 'v1-guild-stats', outcome: 'success' },
     )
+
     const member = {
       brawlhallaId: 2001,
       name: alpha.name,
@@ -332,6 +377,7 @@ describe('Clans PostgreSQL capability', () => {
       xp: alpha.xp,
       guildPoints: alpha.guild_points,
     }
+
     await clans.publishRoster(990071, [member], newer, { source: 'v1-guild-members', outcome: 'success' })
     await clans.publishRoster(990073, [member], older, { source: 'v1-guild-members', outcome: 'success' })
     expect(await clans.getPlayerMembership(2001)).toMatchObject({ clanId: 990071 })
@@ -339,6 +385,7 @@ describe('Clans PostgreSQL capability', () => {
 
   test('persists the exact 41-digit sum of maximum 40-digit source XP operands', async () => {
     const maximum = '9999999999999999999999999999999999999999'
+
     const result = await processRefreshClanSection(
       clans,
       {
@@ -348,12 +395,14 @@ describe('Clans PostgreSQL capability', () => {
       990072,
       'profile',
     )
+
     expect(result.outcome).toBe('published')
     expect((await clans.getById(990072))?.clanLifetimeXp).toBe('19999999999999999999999999999999999999998')
   })
 
   test('publishes sparse roster members without inventing unavailable metadata', async () => {
     const clanId = 990075
+
     await processRefreshClanSection(
       clans,
       {
@@ -395,6 +444,7 @@ describe('Clans PostgreSQL capability', () => {
     )
 
     expect(result.outcome).toBe('published')
+
     expect((await clans.getById(clanId))?.members).toEqual([
       {
         brawlhallaId: 3002,
@@ -433,10 +483,13 @@ describe('Clans PostgreSQL capability', () => {
       async () => ({ guild_id: 990071, guild_members: [] }),
       async () => roster([{ ...alpha, rank: 7 }]),
     ]
+
     const successAt = (await clans.getById(990070))?.roster?.lastSuccessAt
+
     for (const getGuildMembersV1 of failures) {
       await processRefreshClan({ clans, source: { getGuildStatsV1: async () => null, getGuildMembersV1 } }, 990070)
       const preserved = await clans.getById(990070)
+
       expect(preserved?.members).toHaveLength(1)
       expect(preserved?.roster?.lastSuccessAt).toEqual(successAt)
     }
@@ -445,6 +498,7 @@ describe('Clans PostgreSQL capability', () => {
       { clans, source: { getGuildStatsV1: async () => null, getGuildMembersV1: async () => roster([]) } },
       990070,
     )
+
     expect((await clans.getById(990070))?.members).toHaveLength(0)
   })
 })

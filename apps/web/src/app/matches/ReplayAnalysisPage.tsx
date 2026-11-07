@@ -124,10 +124,12 @@ function ReplayHistory({
 
 export function ReplayAnalysisPage() {
   const { account, isLoading } = useAccount()
+
   const [{ jobs, selectedId }, setReplaySelection] = useState<{
     jobs: ReplayJobSummaryContract[]
     selectedId: string | null
   }>({ jobs: [], selectedId: null })
+
   const [selected, setSelected] = useState<ReplayJobDetailContract | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -137,28 +139,37 @@ export function ReplayAnalysisPage() {
 
   const loadJobs = useCallback(async (signal: AbortSignal) => {
     const response = await fetch(`${publicApiUrl}/api/replays`, { credentials: 'include', signal })
+
     if (!response.ok) throw new Error(`Replay list failed with status ${response.status}`)
+
     return replayJobSummarySchema.array().parse(await response.json())
   }, [])
 
   const loadSelected = useCallback(async (id: string) => {
     const response = await fetch(`${publicApiUrl}/api/replays/${id}`, { credentials: 'include' })
+
     if (!response.ok) throw new Error(`Replay status failed with status ${response.status}`)
+
     return replayJobDetailSchema.parse(await response.json())
   }, [])
 
   const hasActiveJobs = jobs.some(({ status }) => status === 'pending' || status === 'processing')
   let uploadButtonLabel = 'Analyze replay'
+
   if (hasActiveJobs) uploadButtonLabel = 'Analysis in progress'
   else if (uploading) uploadButtonLabel = 'Uploading…'
+
   useEffect(() => {
     if (!account) return
+
     let cancelled = false
     let timer: number | undefined
     const controller = new AbortController()
+
     const refresh = async () => {
       try {
         const nextJobs = await loadJobs(controller.signal)
+
         if (!cancelled) {
           setReplaySelection((current) => ({
             jobs: nextJobs,
@@ -171,7 +182,9 @@ export function ReplayAnalysisPage() {
         if (!cancelled && hasActiveJobs) timer = window.setTimeout(refresh, 2_000)
       }
     }
+
     void refresh()
+
     return () => {
       cancelled = true
       controller.abort()
@@ -180,11 +193,14 @@ export function ReplayAnalysisPage() {
   }, [account, hasActiveJobs, loadJobs])
 
   const selectedStatus = jobs.find(({ id }) => id === selectedId)?.status
+
   useEffect(() => {
     let cancelled = false
+
     setSelected(null)
     if (selectedId && selectedStatus) {
       setLoadingSelected(true)
+
       void loadSelected(selectedId)
         .then((detail) => {
           if (!cancelled) setSelected(selectLoadedReplay(selectedId, detail))
@@ -196,6 +212,7 @@ export function ReplayAnalysisPage() {
           if (!cancelled) setLoadingSelected(false)
         })
     }
+
     return () => {
       cancelled = true
     }
@@ -205,8 +222,10 @@ export function ReplayAnalysisPage() {
     if (nextFile && nextFile.size > REPLAY_UPLOAD_LIMIT_BYTES) {
       setFile(null)
       setError('Replay files must be 16 MiB or smaller.')
+
       return
     }
+
     setError(null)
     setFile(nextFile)
   }
@@ -220,6 +239,7 @@ export function ReplayAnalysisPage() {
   async function upload(event: FormEvent) {
     event.preventDefault()
     if (!file || uploading) return
+
     setUploading(true)
     setError(null)
     try {
@@ -232,8 +252,11 @@ export function ReplayAnalysisPage() {
         },
         body: file,
       })
+
       if (!response.ok) throw new Error(`Upload failed with status ${response.status}`)
+
       const job = replayJobSummarySchema.parse(await response.json())
+
       setReplaySelection((current) => selectUploadedReplay(current.jobs, job))
       setFile(null)
     } catch {

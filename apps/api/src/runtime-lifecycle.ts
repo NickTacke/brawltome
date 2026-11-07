@@ -32,9 +32,11 @@ export type ShutdownResult = {
 export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
   const now = options.now ?? Date.now
   const cleanupReserveMs = options.cleanupReserveMs ?? Math.min(5_000, Math.floor(options.shutdownDeadlineMs / 4))
+
   if (!Number.isInteger(options.shutdownDeadlineMs) || options.shutdownDeadlineMs <= 0) {
     throw new Error('shutdownDeadlineMs must be a positive integer')
   }
+
   if (!Number.isInteger(cleanupReserveMs) || cleanupReserveMs < 0 || cleanupReserveMs >= options.shutdownDeadlineMs) {
     throw new Error('cleanupReserveMs must be a non-negative integer smaller than shutdownDeadlineMs')
   }
@@ -52,10 +54,13 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
 
   function startWork(): (() => void) | null {
     if (state !== 'ready') return null
+
     activeWork++
     let finished = false
+
     return () => {
       if (finished) return
+
       finished = true
       activeWork--
       if (activeWork === 0) {
@@ -77,6 +82,7 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
 
   function beginShutdown(): void {
     if (state === 'draining' || state === 'stopped') return
+
     state = 'draining'
     shutdownController.abort()
     options.stopAdmission?.()
@@ -84,32 +90,42 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
 
   async function readiness(): Promise<ReadinessResult> {
     if (state !== 'ready') return { ready: false, reason: state }
+
     if (shutdownAnnounced) return { ready: false, reason: 'draining' }
+
     for (const probe of options.readinessProbes ?? []) {
       try {
         await probe.check()
       } catch {
         return { ready: false, reason: 'dependency', dependency: probe.name }
       }
+
       if (state !== 'ready') return { ready: false, reason: state }
     }
+
     return { ready: true }
   }
 
   function waitUntilIdle(timeoutMs: number): Promise<boolean> {
     if (activeWork === 0) return Promise.resolve(true)
+
     if (timeoutMs <= 0) return Promise.resolve(false)
+
     return new Promise((resolve) => {
       let settled = false
+
       const finish = (drained: boolean) => {
         if (settled) return
+
         settled = true
         clearTimeout(timer)
         drainWaiters.delete(onDrained)
         resolve(drained)
       }
+
       const onDrained = () => finish(true)
       const timer = setTimeout(() => finish(false), timeoutMs)
+
       drainWaiters.add(onDrained)
     })
   }
@@ -117,31 +133,40 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
   function waitForSettled<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
     if (timeoutMs <= 0) {
       void promise.catch(() => undefined)
+
       return Promise.resolve(undefined)
     }
+
     return new Promise((resolve) => {
       let settled = false
+
       const finish = (value: T | undefined) => {
         if (settled) return
+
         settled = true
         clearTimeout(timer)
         resolve(value)
       }
+
       const timer = setTimeout(() => finish(undefined), timeoutMs)
+
       promise.then(finish, () => finish(undefined))
     })
   }
 
   function shutdown(): Promise<ShutdownResult> {
     if (shutdownPromise) return shutdownPromise
+
     beginShutdown()
     const deadlineAt = now() + options.shutdownDeadlineMs
     const drainDeadlineAt = deadlineAt - cleanupReserveMs
 
     shutdownPromise = (async () => {
       const drained = await waitUntilIdle(Math.max(0, drainDeadlineAt - now()))
+
       const cleanup = (async () => {
         const results: ({ resource: string; error: unknown } | null)[] = []
+
         for (const { name, close } of options.closers ?? []) {
           try {
             await close()
@@ -150,10 +175,14 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
             results.push({ resource: name, error })
           }
         }
+
         return results
       })()
+
       const cleanupResults = await waitForSettled(cleanup, Math.max(0, deadlineAt - now()))
+
       state = 'stopped'
+
       return {
         drained,
         cleanupCompleted: cleanupResults !== undefined,
@@ -161,6 +190,7 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
           cleanupResults?.filter((result): result is { resource: string; error: unknown } => result !== null) ?? [],
       }
     })()
+
     return shutdownPromise
   }
 

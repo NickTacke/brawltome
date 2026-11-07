@@ -13,6 +13,7 @@ describe('parseLeaderboardSearchParams', () => {
   it('preserves established bracket, region, and page URL keys', () => {
     for (const bracket of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
       const result = parseLeaderboardSearchParams(new URLSearchParams(`bracket=${bracket}&region=EU&page=3`))
+
       expect(result).toEqual({ bracket, region: 'EU', page: 3 })
     }
   })
@@ -23,6 +24,7 @@ describe('parseLeaderboardSearchParams', () => {
       region: 'all',
       page: 1,
     })
+
     expect(parseLeaderboardSearchParams(new URLSearchParams('page=9999&sort=wins&order=asc')).page).toBe(500)
     expect(parseLeaderboardSearchParams(new URLSearchParams('page=0')).page).toBe(1)
   })
@@ -40,6 +42,7 @@ describe('parseLeaderboardSearchParams', () => {
       region: 'JPN',
       page: 1,
     })
+
     expect(parseLeaderboardSearchParams(new URLSearchParams('bracket=retired&region=retired'), preferences)).toEqual({
       bracket: '3v3',
       region: 'JPN',
@@ -121,6 +124,7 @@ describe('buildLeaderboardQueryString', () => {
   it('round-trips canonical preserved URL keys without legacy sorting', () => {
     const filters = parseLeaderboardSearchParams(new URLSearchParams('bracket=2v2&page=5&region=EU'))
     const params = new URLSearchParams(buildLeaderboardQueryString(filters))
+
     expect(parseLeaderboardSearchParams(params)).toEqual(filters)
     expect(params.get('bracket')).toBe('2v2')
     expect(params.get('region')).toBe('EU')

@@ -53,6 +53,7 @@ export function createApiDatabase(connectionString: string): Database {
 export function createWorkerDatabases(connectionString: string, config: WorkerConfig): WorkerDatabases {
   const sizes = workerPoolSizes(config.admission.totalConcurrency)
   const workerUrl = workerDatabaseUrl(connectionString, config.database)
+
   // the timeout goes in the URL like the worker's other session settings: postgres.js lets URL parameters win over
   // connection options, so an operator's own statement_timeout in DATABASE_URL still applies
   const discoveryUrl = workerDatabaseUrl(connectionString, {

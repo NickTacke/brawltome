@@ -81,19 +81,25 @@ function validateMethodologyVersion(methodologyVersion: string): void {
 
 function candidateRatings(snapshot: CohortCandidateSnapshot): Map<number, number> {
   const ratings = new Map<number, number>()
+
   for (const candidate of snapshot.candidates) {
     if (!Number.isSafeInteger(candidate.brawlhallaId) || candidate.brawlhallaId <= 0) {
       throw new Error('candidate brawlhallaId must be a positive safe integer')
     }
+
     if (!Number.isSafeInteger(candidate.rating) || candidate.rating < 0) {
       throw new Error('candidate rating must be a non-negative safe integer')
     }
+
     const previous = ratings.get(candidate.brawlhallaId)
+
     if (previous !== undefined && previous !== candidate.rating) {
       throw new Error(`candidate ${candidate.brawlhallaId} has conflicting ratings`)
     }
+
     ratings.set(candidate.brawlhallaId, candidate.rating)
   }
+
   return ratings
 }
 
@@ -105,7 +111,9 @@ export function selectLaunchCohortCell(
   if (!launchCohortRegions.includes(snapshot.region) || snapshot.mode !== '1v1') {
     throw new Error('launch cohort source must be a supported regional 1v1 snapshot')
   }
+
   if (!launchCohortBrackets.includes(bracket)) throw new Error('launch cohort bracket is unsupported')
+
   validateMethodologyVersion(methodologyVersion)
 
   const eligible = new Map(
@@ -119,7 +127,9 @@ export function selectLaunchCohortCell(
   }))
     .sort((left, right) => {
       if (left.selectionHash < right.selectionHash) return -1
+
       if (left.selectionHash > right.selectionHash) return 1
+
       return left.brawlhallaId - right.brawlhallaId
     })
     .slice(0, LAUNCH_COHORT_CAP)
@@ -152,6 +162,7 @@ export function selectLaunchCohort(
   if (snapshot.region !== LAUNCH_COHORT_REGION || snapshot.mode !== '1v1') {
     throw new Error('launch cohort source must be the EU 1v1 snapshot')
   }
+
   return selectLaunchCohortCell(snapshot, LAUNCH_COHORT_BRACKET, methodologyVersion)
 }
 
@@ -163,23 +174,31 @@ export function selectFullLaunchCohort(
   if (snapshots.length !== launchCohortRegions.length) {
     throw new Error('full launch cohort requires exactly nine regional snapshots')
   }
+
   const byRegion = new Map(snapshots.map((snapshot) => [snapshot.region, snapshot]))
+
   if (byRegion.size !== launchCohortRegions.length || launchCohortRegions.some((region) => !byRegion.has(region))) {
     throw new Error('full launch cohort requires exactly one snapshot per launch region')
   }
+
   const [first] = snapshots
+
   if (!first || snapshots.some((snapshot) => snapshot.generationId !== first.generationId)) {
     throw new Error('full launch cohort must use one immutable Ranking generation')
   }
+
   if (snapshots.some((snapshot) => snapshot.observedAt !== first.observedAt)) {
     throw new Error('full launch cohort snapshots must share one observation timestamp')
   }
 
   const cells = launchCohortRegions.flatMap((region) => {
     const snapshot = byRegion.get(region)
+
     if (!snapshot) throw new Error(`missing launch cohort region ${region}`)
+
     return launchCohortBrackets.map((bracket) => selectLaunchCohortCell(snapshot, bracket, methodologyVersion))
   })
+
   const selectedPlayers = cells.reduce((total, cell) => total + cell.selectedPlayers, 0)
   const plannedRequests = selectedPlayers * LAUNCH_COHORT_REQUESTS_PER_PLAYER
   const maximumSourceAttempts = plannedRequests * LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST

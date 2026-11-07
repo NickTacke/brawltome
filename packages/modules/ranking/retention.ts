@@ -35,6 +35,7 @@ export function validateRankingRetentionInput(input: RankingRetentionInput): Ran
       `ranking retention hours must be an integer between ${minRankingRetentionHours} and ${maxRankingRetentionHours}`,
     )
   }
+
   if (
     !Number.isSafeInteger(input.maxGenerations) ||
     input.maxGenerations < 1 ||
@@ -42,5 +43,6 @@ export function validateRankingRetentionInput(input: RankingRetentionInput): Ran
   ) {
     throw new Error(`ranking retention batch must be an integer between 1 and ${maxRankingRetentionBatch}`)
   }
+
   return input
 }

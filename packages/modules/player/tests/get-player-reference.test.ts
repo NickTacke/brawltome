@@ -15,6 +15,7 @@ describe('getPlayerReference', () => {
     )
 
     expect(result).toEqual({ brawlhallaId: 42, name: 'Ada', aliases: ['Former Ada'], legacyRating: 1800 })
+
     await expect(
       getPlayerReference(async () => ({ brawlhallaId: 42, name: 'Müller', aliases: ['MÃ¼ller'] }), 42),
     ).resolves.toEqual({ brawlhallaId: 42, name: 'Müller', aliases: [] })
@@ -24,6 +25,7 @@ describe('getPlayerReference', () => {
     expect(await getPlayerReference(async () => null, 42)).toBeNull()
     expect(await getPlayerReference(async () => ({ brawlhallaId: 42, name: 'Player 42', rating: 0 }), 42)).toBeNull()
     expect(await getPlayerReference(async () => ({ brawlhallaId: 42, name: '\u200b', rating: 0 }), 42)).toBeNull()
+
     expect(
       await getPlayerReference(async () => ({ brawlhallaId: 42, name: 'a'.repeat(257), rating: 0 }), 42),
     ).toBeNull()

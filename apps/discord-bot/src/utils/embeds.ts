@@ -16,26 +16,33 @@ const TIER_COLORS: Record<string, number> = {
 
 function getTierColor(tier: string | null): number {
   const baseTier = tier?.split(' ')[0] || 'Unranked'
+
   return TIER_COLORS[baseTier] || Colors.DarkGrey
 }
 
 function formatPlaytime(seconds: number): string {
   const hours = Math.floor(seconds / 3600)
+
   if (hours > 0) {
     return `${hours}h`
   }
+
   return `${Math.floor(seconds / 60)}m`
 }
 
 function formatNumber(num: number | bigint): string {
   const n = Number(num)
+
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
+
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
+
   return n.toString()
 }
 
 function getLegendAvatarUrl(legendNameKey: string | undefined): string | null {
   if (!legendNameKey) return null
+
   return `https://brawltome.app/images/legends/avatars/${encodeURIComponent(legendNameKey)}.png`
 }
 
@@ -49,9 +56,12 @@ function updatedLabel(
   active: boolean,
 ): string {
   if (active && freshness !== 'fresh') return 'Refreshing'
+
   if (!lastSuccessAt || freshness === 'unavailable') return 'Unavailable'
+
   const unixSeconds = Math.floor(new Date(lastSuccessAt).getTime() / 1_000)
   const updated = Number.isFinite(unixSeconds) ? `Updated <t:${unixSeconds}:R>` : 'Updated'
+
   return freshness === 'stale' ? `Update delayed • ${updated}` : updated
 }
 
@@ -60,7 +70,9 @@ function retryLabel(
   now: number,
 ): string | null {
   if (refresh.outcome !== 'rateLimited' && refresh.outcome !== 'temporarilyUnavailable') return null
+
   const retryAt = Math.floor(now / 1_000) + refresh.retry.afterSeconds
+
   return `Update delayed. Try again <t:${retryAt}:R>.`
 }
 
@@ -74,6 +86,7 @@ export function buildCanonicalPlayerEmbed(
   const career = player.career
   const careerSnapshot = career?.snapshot
   const tier = rankedSnapshot?.oneVsOne.tier ?? null
+
   const embed = new EmbedBuilder()
     .setTitle(escapeDiscordText(player.reference.name))
     .setColor(getTierColor(tier))
@@ -81,9 +94,11 @@ export function buildCanonicalPlayerEmbed(
 
   const mainLegend = rankedSnapshot?.mainLegend?.legendNameKey
   const avatarUrl = getLegendAvatarUrl(mainLegend)
+
   if (avatarUrl) embed.setThumbnail(avatarUrl)
 
   const retry = retryLabel(refresh, now)
+
   if (retry) embed.setDescription(retry)
 
   const competitive = rankedSnapshot
@@ -93,10 +108,12 @@ export function buildCanonicalPlayerEmbed(
         `**${rankedSnapshot.oneVsOne.wins}W** / **${rankedSnapshot.oneVsOne.games - rankedSnapshot.oneVsOne.wins}L**`,
       ].join('\n')
     : 'Unavailable'
+
   embed.addFields({ name: 'Competitive Snapshot', value: competitive, inline: false })
 
   const active = refreshActive(refresh)
   const currentSeason = [updatedLabel(ranked?.lastSuccessAt ?? null, ranked?.freshness ?? 'unavailable', active)]
+
   if (rankedSnapshot) {
     currentSeason.push(
       rankedSnapshot.rankedLegends.length > 0
@@ -104,9 +121,11 @@ export function buildCanonicalPlayerEmbed(
         : 'No ranked legend games observed',
     )
   }
+
   embed.addFields({ name: 'Current Season', value: currentSeason.join('\n'), inline: true })
 
   const careerLines = [updatedLabel(career?.lastSuccessAt ?? null, career?.freshness ?? 'unavailable', active)]
+
   if (careerSnapshot) {
     careerLines.push(
       `Level **${careerSnapshot.account.level}**`,
@@ -114,19 +133,27 @@ export function buildCanonicalPlayerEmbed(
       `Playtime **${formatPlaytime(careerSnapshot.combat.matchTime)}**`,
     )
   }
+
   embed.addFields({ name: 'Career Statistics', value: careerLines.join('\n'), inline: true })
 
   embed.setFooter({ text: 'BrawlTome-observed • brawltome.app' }).setTimestamp()
+
   return embed
 }
 
 function clanSectionLabel(lastSuccessAt: string | null | undefined, now: number, active: boolean): string {
   if (active && !lastSuccessAt) return 'Refreshing'
+
   if (!lastSuccessAt) return 'Unavailable'
+
   const timestamp = new Date(lastSuccessAt).getTime()
+
   if (!Number.isFinite(timestamp)) return 'Unavailable'
+
   const updated = `Updated <t:${Math.floor(timestamp / 1_000)}:R>`
+
   if (active && now - timestamp > 60 * 60 * 1_000) return 'Refreshing'
+
   return now - timestamp > 60 * 60 * 1_000 ? `Update delayed • ${updated}` : updated
 }
 
@@ -137,6 +164,7 @@ export function buildClanEmbed(
   now = Date.now(),
 ): EmbedBuilder {
   const ITEMS_PER_PAGE = 5
+
   const embed = new EmbedBuilder()
     .setTitle(escapeDiscordText(clan.clanName))
     .setColor(0x35228a)
@@ -145,6 +173,7 @@ export function buildClanEmbed(
 
   if (refresh) {
     const retry = retryLabel(refresh, now)
+
     if (retry) embed.setDescription(retry)
   }
 
@@ -169,8 +198,10 @@ export function buildClanEmbed(
     const sortedMembers = [...clan.members].sort((a, b) => {
       const left = BigInt(a.xp)
       const right = BigInt(b.xp)
+
       return left === right ? 0 : left > right ? -1 : 1
     })
+
     const start = page * ITEMS_PER_PAGE
     const pageMembers = sortedMembers.slice(start, start + ITEMS_PER_PAGE)
 
@@ -206,6 +237,7 @@ export function buildClanEmbed(
 
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str
+
   return `${str.slice(0, maxLength - 3)}...`
 }
 

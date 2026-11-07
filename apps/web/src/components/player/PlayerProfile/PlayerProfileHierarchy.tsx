@@ -32,8 +32,10 @@ interface PlayerProfileHierarchyProps {
 
 function careerLegends(player: CanonicalPlayerProfileView): PlayerData[] {
   if (!player.career?.snapshot) return []
+
   return player.career.snapshot.legends.map((legend) => {
     const reference = getLegendById(legend.legendId)
+
     return {
       ...legend,
       bioName: legend.legendNameKey,
@@ -53,7 +55,9 @@ function careerLegends(player: CanonicalPlayerProfileView): PlayerData[] {
 
 function rankedTeams(profile: PlayerRankedProfileContract | null) {
   const snapshot = profile?.snapshot
+
   if (!snapshot) return []
+
   return [
     ...snapshot.fixedTeams,
     ...snapshot.soloQueue.map((team) => ({
@@ -71,6 +75,7 @@ function v2Player(player: CanonicalPlayerProfileView, legends: PlayerData[]): Pl
   const standing = ranked ? null : (player.leaderboardStanding ?? null)
   const oneVsOne = ranked?.oneVsOne ?? standing
   const oneVsOneUpdated = oneVsOneFreshness(player.currentSeason, player.leaderboardStanding)
+
   return {
     brawlhallaId: player.brawlhallaId,
     name: player.name,
@@ -105,6 +110,7 @@ export function PlayerProfileHierarchy({ player, refreshing }: PlayerProfileHier
   const teams = rankedTeams(player.currentSeason)
   const display = v2Player(player, allLegends)
   const weaponStats = aggregateRichWeaponStats(allLegends, rankedLegends)
+
   const topLegend = player.career?.snapshot
     ? (allLegends[0] ??
       (player.currentSeason?.snapshot?.mainLegend

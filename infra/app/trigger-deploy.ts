@@ -37,12 +37,14 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError')
         throw new Error(`dokploy request for compose ${options.composeId} timed out after ${requestTimeoutMs / 1000} s`)
+
       throw error
     }
   }
 
   async function readDeployments(): Promise<Deployment[]> {
     const response = await request(composeUrl, {})
+
     if (!response.ok)
       throw new Error(`dokploy status request for compose ${options.composeId} failed: HTTP ${response.status}`)
 
@@ -59,6 +61,7 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
     method: 'POST',
     body: JSON.stringify({ composeId: options.composeId }),
   })
+
   if (!deployResponse.ok)
     throw new Error(
       `dokploy rejected the deploy request for compose ${options.composeId}: HTTP ${deployResponse.status}`,
@@ -69,12 +72,15 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
     const newDeployments = deployments.filter((deployment) => !existingDeploymentIds.has(deployment.deploymentId))
 
     const outcome = readOutcome(newDeployments)
+
     if (outcome?.status === 'error')
       throw new Error(`dokploy deployment ${outcome.deploymentId} for compose ${options.composeId} failed`)
+
     if (outcome) return 'done'
 
     if (now() >= deadlineMs) {
       const timeoutMinutes = Math.round(timeoutMs / 60_000)
+
       throw new Error(`dokploy deployment for compose ${options.composeId} did not finish within ${timeoutMinutes} min`)
     }
 
@@ -86,6 +92,7 @@ export async function triggerDeploy(options: TriggerDeployOptions): Promise<'don
 // from ours: wait for all of them and judge by the newest one, which is the state production ends up in
 function readOutcome(newDeployments: Deployment[]): Deployment | undefined {
   if (newDeployments.length === 0) return undefined
+
   if (newDeployments.some((deployment) => deployment.status !== 'done' && deployment.status !== 'error'))
     return undefined
 
@@ -96,6 +103,7 @@ function readOutcome(newDeployments: Deployment[]): Deployment | undefined {
 
 function requireEnvironment(name: string): string {
   const value = process.env[name]
+
   if (!value) throw new Error(`${name} is not set`)
 
   return value
@@ -108,6 +116,7 @@ if (import.meta.main) {
       token: requireEnvironment('DOKPLOY_TOKEN'),
       composeId: requireEnvironment('DOKPLOY_COMPOSE_ID'),
     })
+
     console.log('Dokploy deployment finished.')
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))

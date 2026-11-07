@@ -16,11 +16,13 @@ describe('desktop ranked lookup contract', () => {
       'stale-rate-limited',
       'stale-temporarily-unavailable',
     ]
+
     const fixtures = await Promise.all(
       names.map((name) => Bun.file(`${import.meta.dir}/fixtures/desktop-ranked-${name}.json`).json()),
     )
 
     expect(fixtures.map((fixture) => parseDesktopRankedLookupOutput(fixture))).toEqual(fixtures)
+
     expect(fixtures.map((fixture) => fixture.refresh.outcome)).toEqual([
       'accepted',
       'verificationRequired',

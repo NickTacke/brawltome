@@ -26,6 +26,7 @@ export function createDatabase(connectionString: string, options: CreateDatabase
     max: options.maxConnections,
     connection: sessionSettings(options),
   })
+
   const db = drizzle(withOwnParsers(sql))
 
   return {

@@ -6,8 +6,10 @@ export function useContentBounds<T extends HTMLElement>(active: boolean) {
 
   useEffect(() => {
     const el = ref.current
+
     if (!el || !active) {
       invoke('update_content_bounds', { x: 0, y: 0, width: 0, height: 0 })
+
       return
     }
 
@@ -18,13 +20,16 @@ export function useContentBounds<T extends HTMLElement>(active: boolean) {
 
     const report = () => {
       const rect = el.getBoundingClientRect()
+
       if (rect.x === lastX && rect.y === lastY && rect.width === lastW && rect.height === lastH) {
         return
       }
+
       lastX = rect.x
       lastY = rect.y
       lastW = rect.width
       lastH = rect.height
+
       invoke('update_content_bounds', {
         x: rect.x,
         y: rect.y,
@@ -35,6 +40,7 @@ export function useContentBounds<T extends HTMLElement>(active: boolean) {
 
     report()
     const observer = new ResizeObserver(report)
+
     observer.observe(el)
     const interval = setInterval(report, 500)
 

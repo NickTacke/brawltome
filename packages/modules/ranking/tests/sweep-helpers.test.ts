@@ -5,11 +5,13 @@ describe('normalizeRegion', () => {
   it('maps JPS -> JPN (the only divergent region)', () => {
     expect(normalizeRegion('JPS')).toBe('JPN')
   })
+
   it('passes through canonical region codes unchanged', () => {
     for (const r of ['US-E', 'US-W', 'EU', 'SEA', 'BRZ', 'AUS', 'JPN', 'ME', 'SA']) {
       expect(normalizeRegion(r)).toBe(r)
     }
   })
+
   it('passes through unknown codes unchanged', () => {
     expect(normalizeRegion('XYZ')).toBe('XYZ')
   })
@@ -40,8 +42,10 @@ describe('resolveTier', () => {
       [999, 'Tin'],
       [0, 'Tin'],
     ]
+
     for (const [bestRating, expectedTier] of cases) {
       const r = resolveTier({ apiTier: undefined, bestRating })
+
       expect(r.tier).toBe(expectedTier)
       expect(r.fallback).toBe('unexpected_null')
     }

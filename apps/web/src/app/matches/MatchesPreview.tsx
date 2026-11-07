@@ -25,7 +25,9 @@ export function MatchesPreview({
   notice?: string
 }) {
   if (matchId) return <PreviewMatchDetail matchId={matchId} />
+
   if (playerId) return <PreviewPlayerHistory playerId={playerId} />
+
   return <PreviewFeed notice={notice} />
 }
 
@@ -64,9 +66,11 @@ function winnerNames(match: PreviewMatch): string {
 
 function matchTeams(match: PreviewMatch) {
   const teams = new Map<string, PreviewMatch['participants'][number][]>()
+
   for (const participant of match.participants) {
     teams.set(participant.teamId, [...(teams.get(participant.teamId) ?? []), participant])
   }
+
   return [...teams].map(([id, participants]) => ({
     id,
     participants,
@@ -154,7 +158,9 @@ function AppearanceImage({
   initials: string
 }) {
   const [imageUrl, setImageUrl] = useState(primaryImageUrl)
+
   if (!imageUrl) return <AvatarFallback className="rounded-md">{initials}</AvatarFallback>
+
   return (
     <img
       src={imageUrl}
@@ -167,10 +173,13 @@ function AppearanceImage({
 
 function Appearance({ playerId }: { playerId: string }) {
   const player = getPreviewPlayer(playerId)
+
   if (!player) return null
+
   const appearance = getPreviewAppearance(player)
   const primaryImageUrl = appearance.imageUrl ?? appearance.fallbackImageUrl ?? undefined
   const fallbackImageUrl = appearance.imageUrl ? (appearance.fallbackImageUrl ?? undefined) : undefined
+
   return (
     <div className="flex items-center gap-3">
       <Avatar className="h-12 w-12 rounded-md border border-border bg-muted">
@@ -194,7 +203,9 @@ function Appearance({ playerId }: { playerId: string }) {
 
 function PreviewMatchDetail({ matchId }: { matchId: string }) {
   const match = getPreviewMatch(matchId)
+
   if (!match) return <PreviewFeed notice="Preview match is unavailable." />
+
   return (
     <PreviewShell title="Match report">
       <Button asChild variant="ghost">
@@ -207,8 +218,11 @@ function PreviewMatchDetail({ matchId }: { matchId: string }) {
 
 function PreviewPlayerHistory({ playerId }: { playerId: string }) {
   const player = getPreviewPlayer(playerId)
+
   if (!player) return <PreviewFeed notice="Preview player is unavailable." />
+
   const matches = previewMatchesForPlayer(playerId)
+
   return (
     <PreviewShell title="Player history">
       <Button asChild variant="ghost">
@@ -225,6 +239,7 @@ function PreviewPlayerHistory({ playerId }: { playerId: string }) {
       <section className="grid gap-4" aria-label={`${player.name} preview match history`}>
         {matches.map((match) => {
           const participant = match.participants.find(({ playerId: id }) => id === playerId)
+
           return (
             <Card key={match.id}>
               <CardHeader>

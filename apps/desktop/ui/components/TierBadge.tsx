@@ -36,6 +36,7 @@ const TIER_STYLES: Record<string, { gradient: string; text: string }> = {
 function getStyle(tier: string) {
   // Tier strings may include rank number e.g. "Diamond 1", so match on prefix
   const base = Object.keys(TIER_STYLES).find((key) => tier.startsWith(key))
+
   return TIER_STYLES[base ?? 'Unranked']
 }
 

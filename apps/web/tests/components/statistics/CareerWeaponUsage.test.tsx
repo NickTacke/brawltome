@@ -72,6 +72,7 @@ describe('Career Weapon Usage page content', () => {
     ]) {
       expect(html).toContain(heading)
     }
+
     expect(html).toContain('aria-describedby="career-methodology"')
     expect(html).toContain('dateTime="2026-08-10T00:00:00Z"')
     expect(html).toContain('dateTime="2026-08-17T00:00:01Z"')
@@ -95,7 +96,9 @@ describe('Career Weapon Usage page content', () => {
       status: 'stale',
       staleReasons: ['newer_publication_rejected', 'weekly_publication_overdue'],
     }
+
     const staleHtml = renderToStaticMarkup(<CareerWeaponUsage view={stale} />)
+
     expect(staleHtml).toContain('Update delayed')
     expect(staleHtml).toContain('Showing the last valid career observations')
     expect(staleHtml).toContain('Hammer')
@@ -109,6 +112,7 @@ describe('Career Weapon Usage page content', () => {
         }}
       />,
     )
+
     expect(unavailableHtml).toContain('Career Weapon Usage is not yet available')
     expect(unavailableHtml).not.toContain('0 players')
     expect(unavailableHtml).not.toContain('<table')
@@ -141,10 +145,12 @@ describe('Career Weapon Usage URL filters', () => {
       region: 'EU',
       bracket: 'Diamond+',
     })
+
     expect(parseCareerWeaponUsageFilters({ region: 'historical', bracket: 'Gold' })).toEqual({
       region: 'all',
       bracket: 'all',
     })
+
     expect(parseCareerWeaponUsageFilters({ region: ['EU'], bracket: ['Diamond+'] })).toEqual({
       region: 'all',
       bracket: 'all',

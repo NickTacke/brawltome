@@ -22,6 +22,7 @@ describe('Steam Primary Player evidence', () => {
 
   test('distinguishes no mapping from malformed source evidence', async () => {
     const absent = createSteamPlayerEvidenceResolver({ searchBySteamId: async () => null }, () => checkedAt)
+
     const malformed = createSteamPlayerEvidenceResolver(
       { searchBySteamId: async () => ({ brawlhalla_id: 0, name: '' }) },
       () => checkedAt,

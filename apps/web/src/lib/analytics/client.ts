@@ -23,7 +23,9 @@ export function createAnalyticsClient(env: ClientEnv) {
 
   function flush(): void {
     if (!enabled || queue.length === 0) return
+
     const events = queue.splice(0, MAX_BATCH)
+
     try {
       env.send(JSON.stringify({ events }))
     } catch {
@@ -33,7 +35,9 @@ export function createAnalyticsClient(env: ClientEnv) {
 
   function track(event: AnalyticsEventInput): void {
     if (!enabled) return
+
     const width = env.width()
+
     queue.push({
       ...event,
       tabId,
@@ -42,6 +46,7 @@ export function createAnalyticsClient(env: ClientEnv) {
       viewport: viewportBucket(width),
       t: Math.min(MAX_T_MS, Math.max(0, Math.round(env.now() - startedAt))),
     })
+
     if (queue.length >= MAX_BATCH) flush()
   }
 

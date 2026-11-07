@@ -3,6 +3,7 @@ import { readClientIp, requestWithVerifiedClientIp } from '../src/client-ip'
 
 function verified(peerAddress: string, headers: Record<string, string>): string | null {
   const request = new Request('http://localhost/api/overlay/opponent/42', { headers })
+
   return requestWithVerifiedClientIp(request, peerAddress).headers.get('x-client-ip')
 }
 
@@ -31,9 +32,11 @@ describe('verified client IP', () => {
 
   test('through Traefik, trusts the visitor address only when Cloudflare connected', () => {
     expect(verified('10.0.1.5', { 'x-real-ip': '188.114.97.3', 'cf-connecting-ip': '203.0.113.9' })).toBe('203.0.113.9')
+
     expect(verified('10.0.1.5', { 'x-real-ip': '2606:4700::6810:1', 'cf-connecting-ip': '203.0.113.9' })).toBe(
       '203.0.113.9',
     )
+
     expect(
       verified('10.0.1.5', {
         'x-real-ip': '198.51.100.20',
@@ -41,6 +44,7 @@ describe('verified client IP', () => {
         'x-forwarded-for': '203.0.113.10',
       }),
     ).toBe('198.51.100.20')
+
     expect(verified('10.0.1.5', { 'x-real-ip': '188.114.97.3' })).toBe('188.114.97.3')
   })
 })

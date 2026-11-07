@@ -17,6 +17,7 @@ function dependencies() {
     updatedAt: '2026-08-16T10:00:00.000Z',
     failure: null,
   }))
+
   const accounts = {
     authenticate: mock(async () => ({
       status: 'signedIn' as const,
@@ -24,7 +25,9 @@ function dependencies() {
       account: { id: accountId, displayName: 'Player', avatarUrl: null, createdAt: new Date() },
     })),
   } as unknown as Accounts
+
   const jobs = { create } as unknown as ReplayAnalysisJobs
+
   return { accounts, jobs, create }
 }
 
@@ -38,6 +41,7 @@ describe('replay upload routes', () => {
       headers: { 'content-type': 'application/octet-stream' },
       body: Uint8Array.of(1),
     })
+
     expect(forbidden.status).toBe(403)
     expect(deps.create).not.toHaveBeenCalled()
 
@@ -51,7 +55,9 @@ describe('replay upload routes', () => {
       },
       body: Uint8Array.of(1, 2, 3),
     })
+
     expect(accepted.status).toBe(202)
+
     expect(deps.create).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId,
@@ -64,6 +70,7 @@ describe('replay upload routes', () => {
   test('rejects a declared oversized replay without reading it', async () => {
     const deps = dependencies()
     const app = createReplayAnalysisRoutes({ ...deps, webOrigin: 'https://brawltome.app' })
+
     const response = await app.request('/replays', {
       method: 'POST',
       headers: {
@@ -74,6 +81,7 @@ describe('replay upload routes', () => {
       },
       body: Uint8Array.of(1),
     })
+
     expect(response.status).toBe(413)
     expect(deps.create).not.toHaveBeenCalled()
   })
@@ -87,6 +95,7 @@ describe('replay bridge routes', () => {
       replayBytes: Uint8Array.of(1, 2, 3),
       replayDigest: `sha256:${'a'.repeat(64)}`,
     }))
+
     const release = mock(async (_id: string, token: string) => token === leaseToken)
     const renew = mock(async (_id: string, token: string) => token === leaseToken)
     const jobs = { claim, release, renew } as unknown as ReplayAnalysisJobs
@@ -97,6 +106,7 @@ describe('replay bridge routes', () => {
       method: 'POST',
       headers: { authorization: `Bearer ${secret}` },
     })
+
     expect(claimed.status).toBe(200)
     expect(claimed.headers.get('x-replay-lease-seconds')).toBe('600')
     expect(claimed.headers.get('x-replay-lease-token')).toBe(leaseToken)
@@ -106,6 +116,7 @@ describe('replay bridge routes', () => {
       method: 'POST',
       headers: { authorization: `Bearer ${secret}`, 'x-replay-lease-token': leaseToken },
     })
+
     expect(renewed.status).toBe(204)
     expect(renew).toHaveBeenCalledWith(jobId, leaseToken, 600)
 
@@ -116,12 +127,14 @@ describe('replay bridge routes', () => {
         'x-replay-lease-token': '11111111-1111-4111-8111-111111111111',
       },
     })
+
     expect(staleRelease.status).toBe(409)
 
     const currentRelease = await app.request(`/${jobId}/release`, {
       method: 'POST',
       headers: { authorization: `Bearer ${secret}`, 'x-replay-lease-token': leaseToken },
     })
+
     expect(currentRelease.status).toBe(204)
     expect(release).toHaveBeenLastCalledWith(jobId, leaseToken)
   })

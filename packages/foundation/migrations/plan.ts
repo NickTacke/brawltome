@@ -22,6 +22,7 @@ export function buildMigrationPlan(
   validateMigrations(migrations)
 
   const ordered = orderMigrations(migrations)
+
   validateOwnerChains(ordered)
   validateAppliedHistory(ordered, applied)
 
@@ -34,13 +35,16 @@ export function buildMigrationPlan(
 
 function validateMigrations(migrations: readonly Migration[]): void {
   const identities = new Set<string>()
+
   for (const migration of migrations) {
     if (!/^[a-z][a-z0-9-]*\/\d{4}$/.test(migration.identity)) {
       throw new Error(`invalid migration identity ${migration.identity}`)
     }
+
     if (identities.has(migration.identity)) {
       throw new Error(`duplicate migration identity ${migration.identity}`)
     }
+
     identities.add(migration.identity)
 
     if (checksumSql(migration.sql) !== migration.checksum) {
@@ -55,6 +59,7 @@ function validateOwnerChains(ordered: readonly Migration[]): void {
   for (const migration of ordered) {
     const owner = migration.identity.split('/')[0]
     const expectedPredecessor = latestByOwner.get(owner) ?? null
+
     if (migration.predecessor !== expectedPredecessor) {
       throw new Error(
         `predecessor ${migration.predecessor ?? '<none>'} for ${migration.identity} does not match owner-local order ${expectedPredecessor ?? '<start>'}`,
@@ -73,14 +78,17 @@ function validateAppliedHistory(ordered: readonly Migration[], applied: readonly
 
   for (const recorded of applied) {
     const migration = byIdentity.get(recorded.identity)
+
     if (!migration) {
       throw new Error(`applied migration ${recorded.identity} is not in the modules`)
     }
+
     if (recorded.checksum !== migration.checksum) {
       throw new Error(`checksum mismatch for applied migration ${recorded.identity}`)
     }
 
     const missingDependency = dependenciesOf(migration).find((identity) => !appliedBefore.has(identity))
+
     if (missingDependency) {
       throw new Error(
         `applied migration ${recorded.identity} depends on ${missingDependency}, which was not applied before it`,
@@ -99,6 +107,7 @@ function validateDeployedPrefix(ordered: readonly Migration[], applied: readonly
 
   for (const [index, recorded] of applied.slice(0, appliedDeployedCount).entries()) {
     const expected = ordered[index]
+
     if (recorded.identity !== expected.identity) {
       throw new Error(`applied migration ${recorded.identity} breaks the deployed order, expected ${expected.identity}`)
     }

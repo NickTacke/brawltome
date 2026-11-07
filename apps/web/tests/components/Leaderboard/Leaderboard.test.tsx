@@ -8,6 +8,7 @@ describe('LeaderboardErrorState', () => {
     const onRetryAction = mock(() => undefined)
     const errorState = LeaderboardErrorState({ onRetryAction })
     const html = renderToStaticMarkup(errorState)
+
     const retryButton = Children.toArray(errorState.props.children).find(
       (child) => isValidElement<{ onClick?: () => void }>(child) && child.props.onClick === onRetryAction,
     )
@@ -18,6 +19,7 @@ describe('LeaderboardErrorState', () => {
     expect(html).not.toContain('transport')
     expect(retryButton).toBeDefined()
     if (isValidElement<{ onClick?: () => void }>(retryButton)) retryButton.props.onClick?.()
+
     expect(onRetryAction).toHaveBeenCalledTimes(1)
   })
 })

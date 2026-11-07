@@ -72,15 +72,22 @@ function withoutInjectedDefaultNetwork(
   networks: Record<string, unknown>,
 ): { services: Record<string, unknown>; networks: Record<string, unknown> } {
   const injected = networks.default
+
   if (!isRecord(injected) || injected.external === true) return { services, networks }
+
   const others = Object.entries(services).filter(([name]) => name !== 'grafana')
+
   if (others.some(([, service]) => isRecord(service) && isRecord(service.networks) && 'default' in service.networks)) {
     return { services, networks }
   }
+
   const grafana = services.grafana
+
   if (!isRecord(grafana) || !isRecord(grafana.networks)) return { services, networks }
+
   const { default: _injectedNetwork, ...restNetworks } = networks
   const { default: _grafanaDefault, ...grafanaNetworks } = grafana.networks
+
   return { services: { ...services, grafana: { ...grafana, networks: grafanaNetworks } }, networks: restNetworks }
 }
 
@@ -91,6 +98,7 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
     isRecord(document.services) ? document.services : {},
     isRecord(document.networks) ? document.networks : {},
   )
+
   const secrets = isRecord(document.secrets) ? document.secrets : {}
   const violations: string[] = []
 
@@ -100,6 +108,7 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
 
   for (const [name, expectedNetworks] of Object.entries(expectedServiceNetworks)) {
     const service = services[name]
+
     if (!isRecord(service)) {
       violations.push(`${name} must be a service object`)
       continue
@@ -108,14 +117,19 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
     if (!isRecord(service.networks) || !sameValues(Object.keys(service.networks), expectedNetworks)) {
       violations.push(`${name} networks must be exactly: ${expectedNetworks.join(', ')}`)
     }
+
     if (service.ports !== undefined && (!Array.isArray(service.ports) || service.ports.length > 0)) {
       violations.push(`${name} must not publish ports`)
     }
+
     if (service.image !== expectedImages[name]) violations.push(`${name} must use the approved pinned image`)
+
     if (service.user !== expectedUsers[name]) violations.push(`${name} must use the approved unprivileged user`)
+
     if (JSON.stringify(service.secrets ?? []) !== JSON.stringify(expectedServiceSecrets[name])) {
       violations.push(`${name} secrets must match the approved attachments exactly`)
     }
+
     checkSecretMountShadowing(
       violations,
       name,
@@ -124,6 +138,7 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
     )
 
     const labels = service.labels
+
     if (labels !== undefined && !isStringRecord(labels)) {
       violations.push(`${name} labels must be a string map`)
     } else if (name !== 'grafana' && labels && traefikEntries(labels).length > 0) {
@@ -138,10 +153,15 @@ export function verifyRenderedTopology(document: unknown, applicationNetworkName
   for (const [key, file] of Object.entries(expectedSecretFiles)) checkSecret(violations, key, secrets[key], file)
 
   const grafana = services.grafana
+
   if (isRecord(grafana)) checkGrafana(violations, grafana)
+
   const nodeExporter = services['node-exporter']
+
   if (isRecord(nodeExporter)) checkNodeExporter(violations, nodeExporter)
+
   const alertRelay = services['alert-relay']
+
   if (isRecord(alertRelay)) checkAlertRelay(violations, alertRelay)
 
   return violations
@@ -155,6 +175,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
     '--collector.textfile',
     '--collector.textfile.directory=/textfile',
   ]
+
   if (
     !Array.isArray(nodeExporter.command) ||
     nodeExporter.command.some((value) => typeof value !== 'string') ||
@@ -162,6 +183,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
   ) {
     violations.push('node-exporter command must match the approved collector set exactly')
   }
+
   const expectedVolumes = [
     ['/srv/brawltome-observability/prometheus', '/storage/prometheus'],
     ['/srv/brawltome-observability/loki', '/storage/loki'],
@@ -169,7 +191,9 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
     ['/srv/brawltome-observability/backup-integrity', '/textfile'],
     ['/srv/brawltome/postgres', '/storage/postgres'],
   ]
+
   const volumes = Array.isArray(nodeExporter.volumes) ? nodeExporter.volumes : []
+
   const volumesMatch =
     volumes.length === expectedVolumes.length &&
     expectedVolumes.every(([source, target]) =>
@@ -182,6 +206,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
           volume.read_only === true,
       ),
     )
+
   if (!volumesMatch) {
     violations.push('node-exporter volumes must match the approved read-only host paths exactly')
   }
@@ -191,6 +216,7 @@ function checkNodeExporter(violations: string[], nodeExporter: Record<string, un
 function checkAlertRelay(violations: string[], relay: Record<string, unknown>): void {
   const volumes = Array.isArray(relay.volumes) ? relay.volumes : []
   const bind = (volume: unknown): volume is Record<string, unknown> => isRecord(volume) && volume.type === 'bind'
+
   const code = volumes.filter(
     (volume) =>
       bind(volume) &&
@@ -199,10 +225,12 @@ function checkAlertRelay(violations: string[], relay: Record<string, unknown>): 
       typeof volume.source === 'string' &&
       volume.source.endsWith('/infra/observability/alert-relay'),
   )
+
   const state = volumes.filter(
     (volume) =>
       bind(volume) && volume.target === '/state' && volume.source === '/srv/brawltome-observability/alert-relay',
   )
+
   if (volumes.length !== 2 || code.length !== 1 || state.length !== 1) {
     violations.push('alert-relay volumes must be exactly its read-only code and the state directory')
   }
@@ -210,8 +238,10 @@ function checkAlertRelay(violations: string[], relay: Record<string, unknown>): 
   // Docker cannot start a container whose primary network is the endpoint-less notifications overlay, so the
   // always-attached observability network must win the primary slot.
   const networks = isRecord(relay.networks) ? relay.networks : {}
+
   const priority = (network: unknown) =>
     isRecord(network) && typeof network.priority === 'number' ? network.priority : 0
+
   if (!(priority(networks.observability) > priority(networks.notifications))) {
     violations.push('alert-relay must give the observability network a higher priority than notifications')
   }
@@ -223,12 +253,14 @@ function checkGrafana(violations: string[], grafana: Record<string, unknown>): v
   } else {
     const ruleKeys = Object.keys(grafana.labels).filter((key) => /^traefik\.http\.routers\..+-web\.rule$/.test(key))
     const match = ruleKeys.length === 1 ? ruleKeys[0]?.match(/^traefik\.http\.routers\.(.+)-web\.rule$/) : null
+
     if (!match) {
       violations.push('Grafana must have exactly one approved HTTP router')
     } else {
       const base = match[1]
       const expectedLabels = grafanaTraefikLabels(base)
       const actualLabels = Object.fromEntries(traefikEntries(grafana.labels))
+
       if (!sameStringRecords(actualLabels, expectedLabels)) {
         violations.push('Grafana Traefik labels must match the approved HTTPS route exactly')
       }
@@ -249,6 +281,7 @@ function checkGrafana(violations: string[], grafana: Record<string, unknown>): v
       GF_UNIFIED_ALERTING_ENABLED: 'false',
       GF_USERS_ALLOW_SIGN_UP: 'false',
     }
+
     if (!sameStringRecords(grafana.environment, expectedEnvironment)) {
       violations.push('Grafana environment must match the approved authentication configuration exactly')
     }
@@ -262,15 +295,20 @@ function checkSecretMountShadowing(
   secretTargets: string[],
 ): void {
   const mountTargets: string[] = []
+
   for (const field of ['volumes', 'configs'] as const) {
     const mounts = service[field]
+
     if (mounts === undefined) continue
+
     if (!Array.isArray(mounts) || mounts.some((mount) => !isRecord(mount) || typeof mount.target !== 'string')) {
       violations.push(`${serviceName} ${field} must be rendered mount objects`)
       continue
     }
+
     mountTargets.push(...mounts.map((mount) => String(mount.target)))
   }
+
   if (service.tmpfs !== undefined) {
     if (!Array.isArray(service.tmpfs) || service.tmpfs.some((mount) => typeof mount !== 'string')) {
       violations.push(`${serviceName} tmpfs must be rendered strings`)
@@ -278,6 +316,7 @@ function checkSecretMountShadowing(
       mountTargets.push(...service.tmpfs.map((mount) => mount.split(':', 1)[0] ?? ''))
     }
   }
+
   if (mountTargets.some((mount) => secretTargets.some((secret) => shadowsPath(mount, secret)))) {
     violations.push(`${serviceName} mounts must not shadow approved secret targets`)
   }
@@ -286,6 +325,7 @@ function checkSecretMountShadowing(
 function shadowsPath(mount: string, target: string): boolean {
   const normalizedMount = posix.normalize(mount)
   const normalizedTarget = posix.normalize(target)
+
   return (
     normalizedMount === '/' ||
     normalizedTarget === normalizedMount ||
@@ -302,6 +342,7 @@ function checkSecret(violations: string[], key: string, value: unknown, expected
 function grafanaTraefikLabels(base: string): Record<string, string> {
   const web = `${base}-web`
   const websecure = `${base}-websecure`
+
   return {
     'traefik.docker.network': 'dokploy-network',
     'traefik.enable': 'true',
@@ -336,6 +377,7 @@ function checkNetwork(
   expectedName: string,
 ): void {
   const network = networks[key]
+
   if (!isRecord(network) || network.external !== true || network.name !== expectedName) {
     violations.push(`${key} must be external network ${expectedName}`)
   }
@@ -352,11 +394,13 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 function sameValues(left: string[], right: string[]): boolean {
   const sortedLeft = [...left].sort()
   const sortedRight = [...right].sort()
+
   return sortedLeft.length === sortedRight.length && sortedLeft.every((value, index) => value === sortedRight[index])
 }
 
 function sameStringRecords(left: Record<string, string>, right: Record<string, string>): boolean {
   const keys = Object.keys(left)
+
   return sameValues(keys, Object.keys(right)) && keys.every((key) => left[key] === right[key])
 }
 
@@ -368,8 +412,10 @@ if (import.meta.main) {
   try {
     const document = JSON.parse(await Bun.stdin.text())
     const violations = verifyRenderedTopology(document, process.env.BRAWLTOME_NETWORK_NAME)
+
     for (const violation of violations) console.error(`rendered-topology: ${violation}`)
     if (violations.length > 0) process.exit(1)
+
     console.log('Rendered observability topology verified.')
   } catch {
     console.error('rendered-topology: input must be valid Docker Compose JSON')

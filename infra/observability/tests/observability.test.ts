@@ -50,6 +50,7 @@ describe('observability deployment contract', () => {
     expect(packageJson.scripts?.['infra:app:storage-preflight']).toBe('sh infra/app/storage/verify-postgres-mount.sh')
     expect(packageJson.scripts?.['infra:observability:check']).toContain('sh infra/observability/validate.sh')
     expect(packageJson.scripts?.['infra:observability:deploy']).toBe('bash infra/observability/deploy-via-dokploy.sh')
+
     expect(
       Object.keys(packageJson.scripts ?? {}).some(
         (name) => name.startsWith('observability:') || name.startsWith(legacyScriptPrefix),
@@ -57,11 +58,14 @@ describe('observability deployment contract', () => {
     ).toBe(false)
 
     const deploymentScript = read('deploy-via-dokploy.sh')
+
     expect(deploymentScript).toContain('curl --silent --show-error --fail-with-body --config -')
     expect(deploymentScript).toContain('compose.getConvertedCompose')
+
     expect(deploymentScript.indexOf('bun infra/observability/verify-rendered-topology.ts')).toBeLessThan(
       deploymentScript.indexOf('api_post compose.deploy'),
     )
+
     expect(Bun.spawnSync(['bash', '-n', deploy('deploy-via-dokploy.sh')]).exitCode).toBe(0)
   })
 
@@ -86,7 +90,9 @@ describe('observability deployment contract', () => {
       stdout: 'pipe',
       stderr: 'pipe',
     })
+
     expect(compose.exitCode, compose.stderr.toString()).toBe(0)
+
     const rendered = JSON.parse(compose.stdout.toString()) as {
       networks?: Record<string, unknown>
       services: Record<
@@ -119,6 +125,7 @@ describe('observability deployment contract', () => {
         }
       >
     }
+
     const expected = [
       'alert-relay',
       'alertmanager',
@@ -130,6 +137,7 @@ describe('observability deployment contract', () => {
       'prometheus',
       'tempo',
     ]
+
     const expectedNetworks: Record<string, string[]> = {
       'alert-relay': ['notifications', 'observability'],
       alertmanager: ['observability'],
@@ -155,15 +163,19 @@ describe('observability deployment contract', () => {
         expect(service.environment?.GF_SECURITY_COOKIE_SECURE).toBe('true')
         expect(service.environment?.GF_SERVER_ROOT_URL).toBe('https://observability.brawltome.app')
       }
+
       expect(Object.keys(service.networks ?? {}).sort(), `${name} network membership`).toEqual(expectedNetworks[name])
     }
+
     expect(rendered.networks).toMatchObject({
       application: { external: true, name: 'brawltome' },
       'dokploy-network': { external: true, name: 'dokploy-network' },
       notifications: { external: true, name: 'brawltome-notifications' },
       observability: { external: true, name: 'brawltome-observability' },
     })
+
     const nodeExporter = rendered.services['node-exporter']
+
     expect(nodeExporter?.command).toEqual([
       '--collector.disable-defaults',
       '--collector.filesystem',
@@ -171,6 +183,7 @@ describe('observability deployment contract', () => {
       '--collector.textfile',
       '--collector.textfile.directory=/textfile',
     ])
+
     expect(nodeExporter?.volumes).toContainEqual({
       type: 'bind',
       source: '/srv/brawltome/postgres',
@@ -178,6 +191,7 @@ describe('observability deployment contract', () => {
       read_only: true,
       bind: { create_host_path: true },
     })
+
     expect(nodeExporter?.volumes).toContainEqual({
       type: 'bind',
       source: '/srv/brawltome-observability/backup-integrity',
@@ -202,6 +216,7 @@ describe('observability deployment contract', () => {
       expect(compose).toContain(`${service}:`)
       expect(compose).toContain(quota)
     }
+
     expect(read('storage', 'verify-quota-mounts.sh')).toContain('findmnt')
   })
 
@@ -215,18 +230,22 @@ describe('observability deployment contract', () => {
         }>
       }>
     }
+
     const job = (name: string) => config.scrape_configs.find(({ job_name }) => job_name === name)?.static_configs
 
     expect(job('api')).toEqual([{ targets: ['api:3000'], labels: { runtime: 'api' } }])
+
     expect(job('operations-worker')).toEqual([
       {
         targets: ['operations-worker:3001'],
         labels: { runtime: 'operations-worker' },
       },
     ])
+
     expect(job('web')).toEqual([{ targets: ['web:3000'], labels: { runtime: 'web' } }])
     expect(job('discord')).toBeUndefined()
     expect(job('availability')).toBeUndefined()
+
     expect(job('readiness')).toEqual([
       { targets: ['http://api:3000/health/ready'], labels: { runtime: 'api' } },
       {
@@ -241,6 +260,7 @@ describe('observability deployment contract', () => {
     const evidence = read('prometheus', 'tests', 'alerts.test.yml')
 
     const declaredAlerts = Array.from(rules.matchAll(/^\s+- alert: (\S+)$/gm), ([, alert]) => alert)
+
     // PostgresDiskSpaceLow is declared once per severity tier.
     expect([...new Set(declaredAlerts)]).toEqual([...requiredAlerts])
     for (const alert of requiredAlerts) expect(evidence).toContain(`alertname: ${alert}`)
@@ -248,7 +268,9 @@ describe('observability deployment contract', () => {
     for (const aggregation of ['max by (runtime)', 'sum by (runtime, le)', 'sum by (runtime)', 'max by (work_class)']) {
       expect(rules).toContain(aggregation)
     }
+
     const alertmanager = read('alertmanager', 'alertmanager.yml')
+
     expect(alertmanager).toContain('url: http://alert-relay:8080/alertmanager')
     expect(alertmanager).not.toContain('discord_configs')
     expect(alertmanager).toContain('send_resolved: true')
@@ -270,18 +292,23 @@ describe('observability deployment contract', () => {
         rules: Array<{ alert: string; labels: { severity: string }; annotations: Record<string, string> }>
       }>
     }
+
     const runbook = readFileSync(resolve(root, 'docs/operations/alerts.md'), 'utf8')
     const anchors = new Set(Array.from(runbook.matchAll(/^### (\S+)$/gm), ([, heading]) => heading?.toLowerCase()))
     const severities = new Map<string, string[]>()
+
     for (const rule of rules.groups.flatMap((group) => group.rules)) {
       expect(['critical', 'warning', 'none'], `${rule.alert} severity`).toContain(rule.labels.severity)
       severities.set(rule.alert, [...(severities.get(rule.alert) ?? []), rule.labels.severity])
       const anchor = rule.alert.toLowerCase()
+
       expect(rule.annotations.runbook_url).toBe(
         `https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#${anchor}`,
       )
+
       expect(anchors.has(anchor), `docs/operations/alerts.md documents ${rule.alert}`).toBe(true)
     }
+
     expect(severities.get('NewDeadLetters')).toEqual(['warning'])
     expect(severities.get('BrawlhallaSourceUnavailable')).toEqual(['warning'])
     expect(severities.get('Watchdog')).toEqual(['none'])
@@ -293,6 +320,7 @@ describe('observability deployment contract', () => {
     const http = dashboard('http-health')
     const telemetry = dashboard('telemetry-storage')
     const titles = [...operations.panels, ...http.panels, ...telemetry.panels].map(({ title }) => title)
+
     const queries = [...operations.panels, ...http.panels, ...telemetry.panels]
       .flatMap(({ targets = [] }) => targets.map(({ expr = '' }) => expr))
       .join('\n')
@@ -309,6 +337,7 @@ describe('observability deployment contract', () => {
     ]) {
       expect(titles).toContain(title)
     }
+
     expect(queries).not.toContain(legacyDimension)
     for (const metric of [
       'probe_success',
@@ -326,8 +355,10 @@ describe('observability deployment contract', () => {
 
   test('product health dashboard covers every friction question', async () => {
     const dashboard = JSON.parse(await Bun.file('infra/observability/grafana/dashboards/product-health.json').text())
+
     expect(dashboard.uid).toBe('brawltome-product-health')
     const exprs = JSON.stringify(dashboard.panels)
+
     for (const metric of [
       'analytics_searches_total',
       'analytics_search_latency_ms',
@@ -346,16 +377,20 @@ describe('observability deployment contract', () => {
     ]) {
       expect(exprs).toContain(metric)
     }
+
     expect(exprs).toContain('analytics.search.performed')
+
     const missRate = dashboard.panels
       .flatMap((panel: { targets?: Array<{ expr?: string }> }) => panel.targets ?? [])
       .map((target: { expr?: string }) => target.expr ?? '')
       .find((expr: string) => expr.includes('outcome=\\"miss\\"') || expr.includes('outcome="miss"'))
+
     expect(missRate).toContain('outcome=~"hit|miss"')
   })
 
   test('loki keeps logs for 30 days', async () => {
     const config = await Bun.file('infra/observability/loki/loki.yml').text()
+
     expect(config).toContain('retention_period: 720h')
     expect(config).toContain('max_query_lookback: 720h')
   })

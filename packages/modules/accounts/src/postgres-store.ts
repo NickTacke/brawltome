@@ -97,6 +97,7 @@ export function createPostgresAccountsStore(database: Database): {
   readDemandedPlayerIds: () => Promise<number[]>
 } {
   const client = database.sql
+
   return {
     store: postgresAccountsStore(client),
     // Players someone pinned or linked as their Primary Player.
@@ -107,6 +108,7 @@ export function createPostgresAccountsStore(database: Database): {
          SELECT brawlhalla_id::int FROM accounts.primary_players
          ORDER BY brawlhalla_id`,
       )
+
       return rows.map(({ brawlhalla_id }) => brawlhalla_id)
     },
   }
@@ -114,6 +116,7 @@ export function createPostgresAccountsStore(database: Database): {
 
 async function inTransaction<T>(client: Sql, run: (transaction: TransactionSql) => Promise<T>): Promise<T> {
   const result = await client.begin(run)
+
   return result as T
 }
 
@@ -122,6 +125,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async upsertDiscordIdentity(profile) {
       return inTransaction(client, async (transaction) => {
         const lockKey = `discord:${profile.providerAccountId}`
+
         await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey])
 
         const existing = await transaction.unsafe<AccountRow[]>(
@@ -158,6 +162,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
                users.created_at`,
             [profile.displayName, profile.avatarHash, profile.providerAccountId],
           )
+
           return mapAccount(updated[0])
         }
 
@@ -182,6 +187,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
              $5::timestamptz AS created_at`,
           [profile.providerAccountId, createdUser.id, profile.displayName, profile.avatarHash, createdUser.created_at],
         )
+
         return mapAccount(createdIdentity)
       })
     },
@@ -199,6 +205,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async findSessionAccount(id) {
       return inTransaction(client, async (transaction) => {
         const [current] = await transaction.unsafe<SessionAccountRow[]>(sessionAccountQuery, [id])
+
         return current ? mapSessionAccount(current) : null
       })
     },
@@ -222,6 +229,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
          WHERE account_id = $1`,
         [accountId],
       )
+
       return row ? mapPreferences(row) : null
     },
 
@@ -233,6 +241,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
           preferences.leaderboardRegion ?? null,
           preferences.theme ?? null,
         ]
+
         const [row] = await transaction.unsafe<PreferencesRow[]>(
           `INSERT INTO accounts.preferences AS existing_preferences (
              account_id,
@@ -259,8 +268,11 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            RETURNING schema_version, leaderboard_bracket, leaderboard_region, theme`,
           values,
         )
+
         const stored = mapPreferences(row)
+
         if (!stored) throw new Error('Accounts stored an unsupported preference version')
+
         return stored
       })
     },
@@ -274,18 +286,22 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            ON CONFLICT (idempotency_key) DO NOTHING`,
           [input.attemptId, input.accountId, input.steamId, input.idempotencyKey, input.startedAt],
         )
+
         const [attempt] = await transaction.unsafe<VerificationAttemptRow[]>(
           `${verificationAttemptQuery}
            WHERE attempts.account_id = $1 AND attempts.idempotency_key = $2`,
           [input.accountId, input.idempotencyKey],
         )
+
         if (!attempt) throw new Error('Failed to create Primary Player verification attempt')
+
         return mapVerificationAttempt(attempt)
       })
     },
 
     async findPrimaryPlayerVerificationAttempt(attemptId) {
       const attempt = await findVerificationAttempt(client, attemptId)
+
       return attempt ? { attempt: mapVerificationAttempt(attempt), steamId: attempt.proof_subject } : null
     },
 
@@ -298,10 +314,13 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            FOR UPDATE`,
           [input.attemptId],
         )
+
         if (!owner) throw new Error('Unknown Primary Player verification attempt')
 
         const existing = await findVerificationAttempt(transaction, input.attemptId)
+
         if (!existing) throw new Error('Unknown Primary Player verification attempt')
+
         if (existing.status !== 'pending') return mapVerificationAttempt(existing)
 
         if (!input.evidence) {
@@ -311,12 +330,16 @@ function postgresAccountsStore(client: Sql): AccountsStore {
              ) VALUES ($1, 'failed', $2)`,
             [input.attemptId, input.completedAt],
           )
+
           const completed = await findVerificationAttempt(transaction, input.attemptId)
+
           if (!completed) throw new Error('Failed to record Primary Player verification outcome')
+
           return mapVerificationAttempt(completed)
         }
 
         const lockKeys = [`account:${owner.account_id}`, `player:${input.evidence.brawlhallaId}`].sort()
+
         for (const lockKey of lockKeys) {
           await transaction.unsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey])
         }
@@ -328,8 +351,10 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            FOR UPDATE`,
           [owner.account_id, input.evidence.brawlhallaId],
         )
+
         const accountOwnership = ownership.find(({ account_id }) => account_id === owner.account_id)
         const playerOwnership = ownership.find(({ brawlhalla_id }) => brawlhalla_id === input.evidence?.brawlhallaId)
+
         const conflict =
           (accountOwnership && accountOwnership.brawlhalla_id !== input.evidence.brawlhallaId) ||
           (playerOwnership && playerOwnership.account_id !== owner.account_id)
@@ -363,8 +388,11 @@ function postgresAccountsStore(client: Sql): AccountsStore {
             input.completedAt,
           ],
         )
+
         const completed = await findVerificationAttempt(transaction, input.attemptId)
+
         if (!completed) throw new Error('Failed to record Primary Player verification outcome')
+
         return mapVerificationAttempt(completed)
       })
     },
@@ -377,12 +405,14 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            WHERE account_id = $1`,
           [accountId],
         )
+
         const attemptRows = await transaction.unsafe<VerificationAttemptRow[]>(
           `${verificationAttemptQuery}
            WHERE attempts.account_id = $1
            ORDER BY attempts.started_at DESC, attempts.id DESC`,
           [accountId],
         )
+
         return mapVerificationState(primaryRows[0], attemptRows)
       })
     },
@@ -390,11 +420,13 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async readPrimaryMonitoringSnapshot() {
       return client.begin('ISOLATION LEVEL REPEATABLE READ READ ONLY', async (transaction) => {
         const [clock] = await transaction.unsafe<{ observed_at: Date }[]>('SELECT clock_timestamp() AS observed_at')
+
         const rows = await transaction.unsafe<PrimaryPlayerRow[]>(
           `SELECT account_id, brawlhalla_id::int, player_name, verified_at, verification_attempt_id
            FROM accounts.primary_players
            ORDER BY brawlhalla_id`,
         )
+
         return {
           observedAt: clock.observed_at,
           targets: rows.map(({ brawlhalla_id, verified_at, verification_attempt_id }) => ({
@@ -413,18 +445,23 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async pinPlayer(accountId, brawlhallaId) {
       return inTransaction(client, async (transaction) => {
         await lockPinnedPlayers(transaction, accountId)
+
         const [primaryPlayer] = await transaction.unsafe<{ brawlhalla_id: number }[]>(
           `SELECT brawlhalla_id::int
            FROM accounts.primary_players
            WHERE account_id = $1`,
           [accountId],
         )
+
         const pinnedPlayers = await readPinnedPlayers(transaction, accountId)
         const existing = pinnedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
+
         if (existing) return existing
+
         const managedPinnedPlayers = pinnedPlayers.filter(
           ({ brawlhallaId: pinnedBrawlhallaId }) => pinnedBrawlhallaId !== primaryPlayer?.brawlhalla_id,
         )
+
         if (managedPinnedPlayers.length >= MAX_PINNED_PLAYERS) {
           throw new InvalidPinnedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
         }
@@ -435,7 +472,9 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            RETURNING brawlhalla_id::int, position, pinned_at`,
           [accountId, brawlhallaId, pinnedPlayers.length],
         )
+
         if (!pinnedPlayer) throw new Error('Failed to pin player')
+
         return mapPinnedPlayer(pinnedPlayer)
       })
     },
@@ -443,13 +482,16 @@ function postgresAccountsStore(client: Sql): AccountsStore {
     async unpinPlayer(accountId, brawlhallaId) {
       await inTransaction(client, async (transaction) => {
         await lockPinnedPlayers(transaction, accountId)
+
         const [removed] = await transaction.unsafe<{ position: number }[]>(
           `DELETE FROM accounts.pinned_players
            WHERE account_id = $1 AND brawlhalla_id = $2
            RETURNING position`,
           [accountId, brawlhallaId],
         )
+
         if (!removed) return
+
         await transaction.unsafe(
           `UPDATE accounts.pinned_players
            SET position = position - 1
@@ -465,22 +507,27 @@ function postgresAccountsStore(client: Sql): AccountsStore {
         const current = await readPinnedPlayers(transaction, accountId)
         const currentIds = current.map(({ brawlhallaId }) => brawlhallaId).sort((left, right) => left - right)
         const requestedIds = [...orderedBrawlhallaIds].sort((left, right) => left - right)
+
         if (
           currentIds.length !== requestedIds.length ||
           currentIds.some((brawlhallaId, index) => brawlhallaId !== requestedIds[index])
         ) {
           throw new InvalidPinnedPlayerError('Pinned Player order must contain the complete pinned collection')
         }
+
         const [primaryPlayer] = await transaction.unsafe<{ brawlhalla_id: number }[]>(
           `SELECT brawlhalla_id::int
            FROM accounts.primary_players
            WHERE account_id = $1`,
           [accountId],
         )
+
         const retainedPrimary = current.find(({ brawlhallaId }) => brawlhallaId === primaryPlayer?.brawlhalla_id)
+
         if (retainedPrimary && orderedBrawlhallaIds.indexOf(retainedPrimary.brawlhallaId) !== retainedPrimary.order) {
           throw new InvalidPinnedPlayerError('Primary Player position cannot be changed')
         }
+
         await transaction.unsafe(
           `UPDATE accounts.pinned_players pinned
            SET position = requested.position
@@ -491,6 +538,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            WHERE pinned.account_id = $1 AND pinned.brawlhalla_id = requested.brawlhalla_id`,
           [accountId, orderedBrawlhallaIds],
         )
+
         return readPinnedPlayers(transaction, accountId)
       })
     },
@@ -503,6 +551,7 @@ function postgresAccountsStore(client: Sql): AccountsStore {
            WHERE account_id = $1`,
           [accountId],
         )
+
         return {
           primaryPlayer: primary
             ? {
@@ -530,6 +579,7 @@ async function readPinnedPlayers(client: Sql | TransactionSql, accountId: string
      ORDER BY position, brawlhalla_id`,
     [accountId],
   )
+
   return rows.map(mapPinnedPlayer)
 }
 
@@ -550,6 +600,7 @@ function mapPreferences(row: PreferencesRow): AccountPreferences | null {
   ) {
     return null
   }
+
   return {
     version: 2,
     leaderboardBracket: row.leaderboard_bracket as AccountPreferences['leaderboardBracket'],
@@ -566,6 +617,7 @@ async function findVerificationAttempt(
     `${verificationAttemptQuery} WHERE attempts.id = $1`,
     [attemptId],
   )
+
   return attempt ?? null
 }
 

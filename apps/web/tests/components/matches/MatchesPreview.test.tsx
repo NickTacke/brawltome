@@ -18,12 +18,14 @@ describe('matches preview fixtures', () => {
 
     const knight = getPreviewPlayer('preview-knight')
     const bodvar = getPreviewPlayer('preview-bodvar')
+
     expect(knight && getPreviewAppearance(knight)).toMatchObject({
       kind: 'crossover',
       name: 'King Knight',
       fallbackImageUrl: '/images/legends/avatars/sir%20roland.png',
       diagnostic: null,
     })
+
     expect(bodvar && getPreviewAppearance(bodvar)).toMatchObject({
       kind: 'legend',
       name: 'BÖDVAR',
@@ -35,6 +37,7 @@ describe('matches preview fixtures', () => {
   test('assigns participants to consistent winning teams', () => {
     for (const match of previewMatches) {
       const teamIds = match.participants.map(({ teamId }) => teamId)
+
       expect(teamIds.every(Boolean)).toBe(true)
       expect(new Set(teamIds).size).toBe(2)
       expect(teamIds).toContain(match.winningTeamId)
@@ -42,6 +45,7 @@ describe('matches preview fixtures', () => {
 
     expect(getPreviewMatch('preview-final')?.participants.map(({ teamId }) => teamId)).toEqual(['1', '2'])
     expect(getPreviewMatch('preview-rematch')?.participants.map(({ teamId }) => teamId)).toEqual(['1', '2'])
+
     expect(getPreviewMatch('preview-team')?.participants.map(({ playerId, teamId }) => [playerId, teamId])).toEqual([
       ['preview-knight', '1'],
       ['preview-orion', '1'],

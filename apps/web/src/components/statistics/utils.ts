@@ -3,6 +3,7 @@ import { type LegendMetaInput, legendMetaBrackets, legendMetaRegions } from '@br
 export function parseLegendMetaSearchParams(searchParams: URLSearchParams): LegendMetaInput {
   const region = searchParams.get('region')
   const bracket = searchParams.get('bracket')
+
   return {
     region: legendMetaRegions.includes(region as LegendMetaInput['region'])
       ? (region as LegendMetaInput['region'])

@@ -20,14 +20,17 @@ type FixtureOptions = {
 
 function fixture(options: FixtureOptions = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-network-test-'))
+
   temporaryDirectories.push(directory)
   const bin = join(directory, 'bin')
   const state = join(directory, 'state')
   const log = join(directory, 'docker.log')
+
   mkdirSync(bin)
   mkdirSync(state)
 
   const docker = join(bin, 'docker')
+
   writeFileSync(
     docker,
     `#!/bin/sh
@@ -101,6 +104,7 @@ printf 'unexpected docker invocation: %s\\n' "$*" >&2
 exit 1
 `,
   )
+
   chmodSync(docker, 0o755)
 
   const env = {
@@ -116,6 +120,7 @@ exit 1
     MOCK_STATE: state,
     MOCK_SWARM_STATE: options.swarm ?? 'active',
   }
+
   const run = (args = options.args ?? []) =>
     Bun.spawnSync({
       cmd: ['sh', preflight, ...args],
@@ -150,6 +155,7 @@ describe('observability network preflight', () => {
     expect(result.exitCode, result.stderr.toString()).toBe(0)
     const firstLog = dockerLog()
     const lines = firstLog.trim().split('\n')
+
     expect(lines).toHaveLength(3)
     expect(lines.find((line) => line.endsWith('brawltome-observability'))).toContain('--internal')
     expect(lines.find((line) => line.endsWith('brawltome-notifications'))).not.toContain('--internal')
@@ -161,6 +167,7 @@ describe('observability network preflight', () => {
     }
 
     const rerun = run(['--provision'])
+
     expect(rerun.exitCode, rerun.stderr.toString()).toBe(0)
     expect(dockerLog()).toBe(firstLog)
   })
@@ -218,10 +225,12 @@ describe('observability network preflight', () => {
 
   test('rejects extra arguments and option-like network names', () => {
     const extra = fixture({ args: ['--provision', 'unexpected'] }).result
+
     expect(extra.exitCode).not.toBe(0)
     expect(extra.stderr.toString()).toContain('usage: ensure.sh [--provision]')
 
     const optionLike = fixture({ networkName: '--scope=local' }).result
+
     expect(optionLike.exitCode).not.toBe(0)
     expect(optionLike.stderr.toString()).toContain('invalid BRAWLTOME_NETWORK_NAME')
   })

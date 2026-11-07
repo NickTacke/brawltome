@@ -6,9 +6,11 @@ function integerInRange(
   maximum: number,
 ): number {
   const parsed = value === undefined ? fallback : Number(value)
+
   if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
     throw new Error(`${name} must be an integer from ${minimum} through ${maximum}`)
   }
+
   return parsed
 }
 
@@ -20,6 +22,7 @@ export function readRuntimeConfig(env: NodeJS.ProcessEnv) {
     1_000,
     300_000,
   )
+
   const cleanupReserveMs = integerInRange(
     env.RUNTIME_CLEANUP_RESERVE_MS,
     Math.min(5_000, Math.floor(shutdownDeadlineMs / 4)),
@@ -27,6 +30,7 @@ export function readRuntimeConfig(env: NodeJS.ProcessEnv) {
     0,
     shutdownDeadlineMs - 1,
   )
+
   return { shutdownDeadlineMs, cleanupReserveMs }
 }
 

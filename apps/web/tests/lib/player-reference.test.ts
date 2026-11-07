@@ -55,6 +55,7 @@ describe('loadPlayerWithReference', () => {
       bestLegendNameKey: 'bodvar',
       legacyRating: 1_800,
     }
+
     const result = await loadPlayerWithReference(client(reference), 42)
 
     expect(result.player).toMatchObject({ bestLegendNameKey: 'bodvar', legacyRating: 1_800 })
@@ -66,6 +67,7 @@ describe('loadPlayerWithReference', () => {
 
   test('propagates canonical transport failures', async () => {
     const failing = client(null)
+
     failing.player.referenceById.query = async () => Promise.reject(new Error('transport failed'))
 
     await expect(loadPlayerWithReference(failing, 42)).rejects.toThrow('transport failed')
@@ -88,6 +90,7 @@ describe('loadPlayerWithReference', () => {
       },
       42,
     )
+
     expect(result.player).not.toBeNull()
     expect(result.player?.leaderboardStanding).toBeUndefined()
   })
@@ -102,7 +105,9 @@ describe('loadPlayerWithReference', () => {
       games: 69,
       observedAt: 'x',
     }
+
     const newer = { ...standing, rating: 2000 }
+
     expect(keepLastStanding(standing, { id: 1 })).toEqual({ id: 1, leaderboardStanding: standing })
     expect(keepLastStanding(standing, { id: 1, leaderboardStanding: newer })?.leaderboardStanding).toBe(newer)
     expect(keepLastStanding(standing, { id: 1, leaderboardStanding: null })?.leaderboardStanding).toBeNull()

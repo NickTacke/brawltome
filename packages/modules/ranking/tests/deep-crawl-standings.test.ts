@@ -101,6 +101,7 @@ describe('deep crawl standings', () => {
         },
       ],
     }
+
     expect(leaderboardDeepCrawlStandings(page)).toEqual([
       {
         brawlhallaId: 9,
@@ -113,6 +114,7 @@ describe('deep crawl standings', () => {
         games: 5,
       },
     ])
+
     expect(leaderboardDeepCrawlTeams(page)).toEqual([
       {
         brawlhallaIdOne: 21,

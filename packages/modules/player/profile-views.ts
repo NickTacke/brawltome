@@ -12,6 +12,7 @@ export function createPostgresProfileViews(database: Database) {
     // made-up IDs never become background refresh demand. New players arrive through the admitted interactive refresh.
     async recordView(brawlhallaId: number): Promise<void> {
       if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) return
+
       await client`
         INSERT INTO players.profile_view_days (day, brawlhalla_id, views)
         SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date, ${brawlhallaId}, 1
@@ -40,6 +41,7 @@ export function createPostgresProfileViews(database: Database) {
         WHERE day > (clock_timestamp() AT TIME ZONE 'UTC')::date - ${input.days}::integer
         GROUP BY brawlhalla_id
       `
+
       return rows.map((row) => ({
         brawlhallaId: row.brawlhalla_id,
         viewDays: row.view_days,
@@ -52,6 +54,7 @@ export function createPostgresProfileViews(database: Database) {
         DELETE FROM players.profile_view_days
         WHERE day <= (clock_timestamp() AT TIME ZONE 'UTC')::date - ${input.keepDays}::integer
       `
+
       return deleted.count
     },
   }

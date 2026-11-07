@@ -16,30 +16,38 @@ describe('refreshStateEvent', () => {
       name: 'refresh.state',
       state: 'looking_up',
     })
+
     expect(refreshStateEvent(idle, { kind: 'requesting' } as never, true)).toBeNull()
+
     expect(refreshStateEvent(idle, { kind: 'waiting', reason: 'rateLimited', retryAt: 1 } as never, true)).toEqual({
       name: 'refresh.state',
       state: 'rate_limited',
     })
+
     expect(
       refreshStateEvent(idle, { kind: 'waiting', reason: 'temporarilyUnavailable', retryAt: 1 } as never, true),
     ).toEqual({ name: 'refresh.state', state: 'busy' })
+
     expect(refreshStateEvent(idle, { kind: 'gaveUp', reason: 'rateLimited' } as never, true)).toEqual({
       name: 'refresh.state',
       state: 'gave_up',
     })
+
     expect(refreshStateEvent(idle, { kind: 'timedOut' } as never, true)).toEqual({
       name: 'refresh.state',
       state: 'still_updating',
     })
+
     expect(refreshStateEvent(idle, { kind: 'timedOut' } as never, false)).toEqual({
       name: 'refresh.state',
       state: 'timed_out',
     })
+
     expect(refreshStateEvent(idle, { kind: 'verificationFailed' } as never, false)).toEqual({
       name: 'refresh.state',
       state: 'verify_failed',
     })
+
     expect(refreshStateEvent({ kind: 'timedOut' } as never, { kind: 'timedOut' } as never, false)).toBeNull()
   })
 
@@ -52,6 +60,7 @@ describe('refreshStateEvent', () => {
   test('fires again when the reason changes but not when it repeats', () => {
     const a = { kind: 'waiting', reason: 'rateLimited', retryAt: 1 } as never
     const b = { kind: 'waiting', reason: 'temporarilyUnavailable', retryAt: 2 } as never
+
     expect(refreshStateEvent(a, { kind: 'waiting', reason: 'rateLimited', retryAt: 9 } as never, true)).toBeNull()
     expect(refreshStateEvent(a, b, true)).toEqual({ name: 'refresh.state', state: 'busy' })
   })
@@ -74,6 +83,7 @@ describe('createStateDeduper', () => {
     const dedupe = createStateDeduper()
     const busy = { name: 'refresh.state', state: 'busy' } as const
     const gaveUp = { name: 'refresh.state', state: 'gave_up' } as const
+
     expect(dedupe.allow(busy)).toBe(true)
     expect(dedupe.allow(busy)).toBe(false)
     expect(dedupe.allow(gaveUp)).toBe(true)
@@ -85,12 +95,14 @@ describe('createStateDeduper', () => {
 describe('abandonRefresh', () => {
   const calls = () => {
     const log: string[] = []
+
     return { log, deps: { track: (e: { name: string }) => log.push(e.name), flush: () => log.push('flush') } }
   }
 
   test('tracks and flushes once per cycle for active statuses', () => {
     const { log, deps } = calls()
     const flag = { current: false }
+
     expect(abandonRefresh('polling', flag, 1234, deps)).toBe(true)
     expect(abandonRefresh('polling', flag, 1234, deps)).toBe(false)
     expect(log).toEqual(['refresh.abandoned', 'flush'])
@@ -98,6 +110,7 @@ describe('abandonRefresh', () => {
 
   test('ignores inactive statuses', () => {
     const { log, deps } = calls()
+
     expect(abandonRefresh('idle', { current: false }, 5, deps)).toBe(false)
     expect(log).toEqual([])
   })

@@ -55,9 +55,11 @@ describe('private Player shortcut navigation', () => {
       name: `Player ${index}`,
       mainLegend: null,
     }))
+
     const navigation = createPlayerShortcutNavigation({ primary: null, pins })
 
     expect(navigation).toHaveLength(pins.length)
+
     expect(navigation.map(({ kind, href }) => [kind, href])).toEqual(
       pins.map(({ brawlhallaId }) => ['pin', `/player/${brawlhallaId}`]),
     )
@@ -70,6 +72,7 @@ describe('private Player shortcut navigation', () => {
 
   test('invalidates both private views after a Primary Player transition', async () => {
     const invalidations: unknown[] = []
+
     const queryClient = {
       async invalidateQueries(options: unknown) {
         invalidations.push(options)

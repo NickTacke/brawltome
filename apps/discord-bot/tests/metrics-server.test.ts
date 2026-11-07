@@ -7,6 +7,7 @@ describe('Discord metrics and health listener', () => {
     const telemetry = createTelemetry({ service: 'discord', drainIntervalMs: 0 })
     let ready = false
     let handler: ((request: Request) => Response | Promise<Response>) | undefined
+
     const server = startDiscordMetricsServer({
       telemetry,
       port: 3002,
@@ -14,15 +15,18 @@ describe('Discord metrics and health listener', () => {
       readiness: () => ready,
       serve: ((options: { fetch: typeof handler }) => {
         handler = options.fetch
+
         return { stop: async () => {} }
       }) as never,
     })
+
     expect(server).toBeDefined()
     expect((await handler?.(new Request('http://localhost/health/live')))?.status).toBe(200)
     expect((await handler?.(new Request('http://localhost/health/ready')))?.status).toBe(503)
     ready = true
     expect((await handler?.(new Request('http://localhost/health/ready')))?.status).toBe(200)
     expect((await handler?.(new Request('http://localhost/metrics')))?.status).toBe(401)
+
     expect(
       (
         await handler?.(
@@ -30,6 +34,7 @@ describe('Discord metrics and health listener', () => {
         )
       )?.status,
     ).toBe(401)
+
     expect(
       (await handler?.(new Request('http://localhost/metrics', { headers: { 'x-metrics-secret': 'internal-secret' } })))
         ?.status,
@@ -48,9 +53,11 @@ describe('Discord metrics and health listener', () => {
         throw new Error('address in use')
       }) as never,
     })
+
     await telemetry.flush(50)
 
     expect(server).toBeUndefined()
+
     expect(sink.records[0]).toMatchObject({
       event: 'discord.metrics.startup_failed',
       error: { name: 'Error', message: 'Operation failed' },

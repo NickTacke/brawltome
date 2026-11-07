@@ -52,6 +52,7 @@ function mountHandler(
       prefix,
       context: createOrpcContext(c.req.raw, telemetry),
     })
+
     if (!matched) return next()
 
     return c.newResponse(response.body, response)
@@ -69,6 +70,7 @@ export function createOrpcRoutes(options: { telemetry: Telemetry }): Hono {
 
     telemetry.logger.error('orpc.request.failed', error)
   }
+
   const rpcHandler = new RPCHandler(orpcRouter, { interceptors: [onError(logServerFailure)] })
   const restHandler = new OpenAPIHandler(orpcRouter, { interceptors: [onError(logServerFailure)] })
 

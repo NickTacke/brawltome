@@ -15,12 +15,14 @@ mock.module('@/lib/auth', () => ({
     state: { attempts: [], primaryPlayer: null },
   }),
 }))
+
 mock.module('@/lib/pinnedPlayers', () => ({
   movePinnedPlayer: () => [],
   reorderPinnedPlayers: async () => [],
   unpinPlayer: async () => [],
   usePinnedPlayers: () => ({ isError: false, isLoading: false, pinnedPlayers: [] }),
 }))
+
 mock.module('@/lib/playerShortcuts', () => ({ invalidatePlayerNavigation: async () => {} }))
 mock.module('@tanstack/react-query', () => ({ useQueryClient: () => ({}) }))
 

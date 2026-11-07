@@ -98,6 +98,7 @@ async function acquireLease(sql: Sql, effect: CanonicalRankedEffect): Promise<bo
       ${effect.leaseToken}
     ) AS active
   `
+
   return lease?.active === true
 }
 
@@ -110,6 +111,7 @@ async function commitInteractiveSection(sql: Sql, effect: CanonicalRankedEffect)
       ${effect.section}
     ) AS committed
   `
+
   return lease?.committed === true
 }
 
@@ -125,8 +127,11 @@ function values(row: ValuesRow) {
 
 function isNewer(left: UpdateOrder, right: UpdateOrder): boolean {
   if (!left.createdAt) return false
+
   if (!right.createdAt) return true
+
   if (left.createdAt !== right.createdAt) return left.createdAt > right.createdAt
+
   return (left.operationId ?? '') > (right.operationId ?? '')
 }
 
@@ -136,6 +141,7 @@ function pulseIsEffective(row: PulseValuesRow, canonicalOrder: UpdateOrder): boo
 
 function effectiveValues(row: ValuesRow & PulseValuesRow, canonicalOrder: UpdateOrder) {
   if (!pulseIsEffective(row, canonicalOrder)) return values(row)
+
   return {
     rating: row.pulse_rating ?? row.rating,
     peakRating: row.pulse_peak_rating ?? row.peak_rating,
@@ -154,6 +160,7 @@ function effectiveValuesAt(
   pulseAt: Date | null,
 ): number {
   if (!pulseIsEffective(row, canonicalOrder)) return v0RefreshedAt
+
   return Math.max(v0RefreshedAt, pulseAt?.getTime() ?? 0)
 }
 
@@ -183,6 +190,7 @@ function withNewerObservation(
   ) {
     return current
   }
+
   return {
     rating: row.observation_rating,
     peakRating: row.observation_peak_rating,
@@ -200,6 +208,7 @@ function withLeaderboardObservation(
   refreshedAt: number,
 ): ReturnType<typeof values> & { region: string } {
   const observedAt = profile.observation_observed_at
+
   if (
     !observedAt ||
     profile.observation_rating === null ||
@@ -210,7 +219,9 @@ function withLeaderboardObservation(
   ) {
     return current
   }
+
   if (observedAt.getTime() <= refreshedAt) return current
+
   return {
     rating: profile.observation_rating,
     peakRating: profile.observation_peak_rating,
@@ -248,8 +259,10 @@ type CrawlOnlyRow = {
 // The name the player reference would show: the same evidence, picked the same way.
 function crawlOnlyName(brawlhallaId: number, names: CrawlOnlyNames | null): string | null {
   if (!names) return null
+
   const evidence = (name: string | null, at: string | null, legacy = false) =>
     name ? { name, observedAt: at ? new Date(at) : null, legacy } : null
+
   return (
     selectCanonicalPlayerName({
       brawlhallaId,
@@ -316,7 +329,9 @@ export function createPostgresRankedPlayers(
         ORDER BY source_rank
         LIMIT 1
       `
+
       if (!profile) return null
+
       return {
         brawlhallaId: profile.brawlhalla_id,
         name: profile.player_name,
@@ -325,6 +340,7 @@ export function createPostgresRankedPlayers(
           profile.legend_name_key ??
           (() => {
             const legend = getLegendById(profile.best_legend ?? 0)
+
             return legend ? legendSlug(legend.heroId, legend.displayName) : null
           })(),
         legacyRating: profile.legacy_rating,
@@ -334,6 +350,7 @@ export function createPostgresRankedPlayers(
     async byId(brawlhallaId) {
       const profile = await client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const [profile] = await sql<ProfileRow[]>`
         SELECT profile.brawlhalla_id, profile.checked_at, profile.last_success_at, profile.region,
                profile.rating, profile.peak_rating, profile.tier, profile.wins, profile.games,
@@ -357,12 +374,15 @@ export function createPostgresRankedPlayers(
         LEFT JOIN players.leaderboard_ranked_observations observation USING (brawlhalla_id)
         WHERE profile.brawlhalla_id = ${brawlhallaId}
       `
+
         if (!profile) return null
 
         const freshness = rankedFreshness(profile.last_success_at, now())
+
         const sparsePulse = profile.pulse_checked_at
           ? { checkedAt: profile.pulse_checked_at, lastSuccessAt: profile.pulse_last_success_at }
           : null
+
         if (!profile.last_success_at) {
           return {
             brawlhallaId,
@@ -510,10 +530,12 @@ export function createPostgresRankedPlayers(
           createdAt: profile.v0_effect_created_at,
           operationId: profile.v0_effect_operation_id,
         }
+
         // Each leaderboard observation competes with the source its values currently come from: the V0 refresh, or a
         // pulse that overrides it. Solo queue has no pulse. The pulse state's last_success_at also moves on team-only
         // pulses, so for 1v1 it is an upper bound on when the effective 1v1 pulse landed.
         const v0RefreshedAt = profile.last_success_at?.getTime() ?? 0
+
         const oneVsOne = withLeaderboardObservation(
           profile,
           {
@@ -522,6 +544,7 @@ export function createPostgresRankedPlayers(
           },
           effectiveValuesAt(profile, canonicalOrder, v0RefreshedAt, profile.pulse_last_success_at),
         )
+
         const rankedMainLegend =
           profile.ranked_main_legend_id && profile.ranked_main_legend_name_key
             ? {
@@ -530,12 +553,15 @@ export function createPostgresRankedPlayers(
                 source: 'current-season' as const,
               }
             : null
+
         // Crawl-only entries carry no rank and are named like V0 names a team ("One+Two", lower id first, as the pair
         // is stored); a team whose partner has no known name is left out rather than shown nameless.
         const crawlOnlyFixedTeams: V0RankedSnapshot['fixedTeams'] = []
         const crawlOnlySoloQueue: V0RankedSnapshot['soloQueue'] = []
+
         for (const row of crawlOnlyRows) {
           const nameOne = crawlOnlyName(row.brawlhalla_id_one, row.one_names)
+
           const entryValues = {
             region: row.region,
             globalRank: null,
@@ -545,12 +571,17 @@ export function createPostgresRankedPlayers(
             wins: row.wins,
             games: row.games,
           }
+
           if (row.brawlhalla_id_two === 0) {
             if (nameOne) crawlOnlySoloQueue.push({ secondPlayerId: 0, teamName: nameOne, ...entryValues })
+
             continue
           }
+
           const nameTwo = crawlOnlyName(row.brawlhalla_id_two, row.two_names)
+
           if (!nameOne || !nameTwo) continue
+
           crawlOnlyFixedTeams.push({
             brawlhallaIdOne: row.brawlhalla_id_one,
             brawlhallaIdTwo: row.brawlhalla_id_two,
@@ -558,6 +589,7 @@ export function createPostgresRankedPlayers(
             ...entryValues,
           })
         }
+
         const ratingHistory = historyRows.map((row) => ({
           rating: row.rating,
           peakRating: row.peak_rating,
@@ -623,6 +655,7 @@ export function createPostgresRankedPlayers(
       // asked after the snapshot transaction ends: the career module shares this pool, and holding one connection
       // while waiting for another lets a burst of profile reads exhaust it
       const careerMainLegend = await options.resolveCareerMainLegend?.(brawlhallaId)
+
       if (!careerMainLegend) return profile
 
       const mainLegend = { ...careerMainLegend, source: 'career' as const }
@@ -633,12 +666,15 @@ export function createPostgresRankedPlayers(
     async recordChecked(brawlhallaId, effect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         if (!(await acquireLease(sql, effect))) return 'lease-lost' as const
+
         await sql`
           INSERT INTO players.ranked_profiles (brawlhalla_id, checked_at)
           VALUES (${brawlhallaId}, clock_timestamp())
           ON CONFLICT (brawlhalla_id) DO UPDATE SET checked_at = EXCLUDED.checked_at
         `
+
         return 'applied' as const
       })
     },
@@ -646,15 +682,20 @@ export function createPostgresRankedPlayers(
     async recordPulseChecked(brawlhallaId, effect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         if (!(await commitInteractiveSection(sql, effect))) return 'lease-lost' as const
+
         await lockRankedPlayer(sql, brawlhallaId)
+
         const inserted = await sql<{ operation_id: string }[]>`
           INSERT INTO players.interactive_refresh_effects (operation_id, section, lease_token)
           VALUES (${effect.effectOperationId ?? effect.operationId}::uuid, ${effect.section}, ${effect.leaseToken})
           ON CONFLICT (operation_id, section) DO NOTHING
           RETURNING operation_id
         `
+
         if (!inserted[0]) return 'already-applied' as const
+
         const recorded = await sql<{ brawlhalla_id: number }[]>`
           INSERT INTO players.ranked_v1_pulse_state (brawlhalla_id, checked_at)
           SELECT brawlhalla_id, clock_timestamp()
@@ -663,6 +704,7 @@ export function createPostgresRankedPlayers(
           ON CONFLICT (brawlhalla_id) DO UPDATE SET checked_at = EXCLUDED.checked_at
           RETURNING brawlhalla_id
         `
+
         return recorded[0] ? ('applied' as const) : ('no-op' as const)
       })
     },
@@ -673,20 +715,25 @@ export function createPostgresRankedPlayers(
         FROM players.ranked_v1_pulse_state
         WHERE brawlhalla_id = ${brawlhallaId}
       `
+
       return status ? { checkedAt: status.checked_at, lastSuccessAt: status.last_success_at } : null
     },
 
     async applySnapshot(snapshot, effect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         if (!(await commitInteractiveSection(sql, effect))) return 'lease-lost' as const
+
         await lockRankedPlayer(sql, snapshot.brawlhallaId)
+
         const inserted = await sql<{ operation_id: string }[]>`
           INSERT INTO players.interactive_refresh_effects (operation_id, section, lease_token)
           VALUES (${effect.effectOperationId ?? effect.operationId}::uuid, ${effect.section}, ${effect.leaseToken})
           ON CONFLICT (operation_id, section) DO NOTHING
           RETURNING operation_id
         `
+
         if (!inserted[0]) return 'already-applied' as const
 
         const [current] = await sql<{ v0_effect_created_at: string | null; v0_effect_operation_id: string | null }[]>`
@@ -697,6 +744,7 @@ export function createPostgresRankedPlayers(
           WHERE brawlhalla_id = ${snapshot.brawlhallaId}
           FOR UPDATE
         `
+
         if (
           current &&
           !isNewer(
@@ -709,9 +757,11 @@ export function createPostgresRankedPlayers(
 
         const [clock] = await sql<{ observed_at: Date }[]>`SELECT clock_timestamp() AS observed_at`
         const observedAt = clock.observed_at
+
         const [previous] = await sql<{ player_name: string | null }[]>`
           SELECT player_name FROM players.ranked_profiles WHERE brawlhalla_id = ${snapshot.brawlhallaId}
         `
+
         const [reference] = snapshot.name
           ? []
           : await sql<{ player_name: string | null }[]>`
@@ -726,8 +776,10 @@ export function createPostgresRankedPlayers(
               ORDER BY source_rank
               LIMIT 1
             `
+
         const playerName = snapshot.name ?? previous?.player_name ?? reference?.player_name ?? null
         const one = snapshot.oneVsOne
+
         await sql`
           INSERT INTO players.ranked_profiles
             (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating,
@@ -765,12 +817,14 @@ export function createPostgresRankedPlayers(
             AND (one_vs_one_effect_created_at, one_vs_one_effect_operation_id::text) <=
               (${effect.effectCreatedAt}::timestamptz, ${effect.effectOperationId ?? effect.operationId}::text)
         `
+
         await sql`
           DELETE FROM players.ranked_v1_fixed_team_pulses
           WHERE brawlhalla_id = ${snapshot.brawlhallaId}
             AND (effect_created_at, effect_operation_id::text) <=
               (${effect.effectCreatedAt}::timestamptz, ${effect.effectOperationId ?? effect.operationId}::text)
         `
+
         if (snapshot.name && previous?.player_name && previous.player_name !== snapshot.name) {
           await sql`
             INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
@@ -803,6 +857,7 @@ export function createPostgresRankedPlayers(
             )}
           `
         }
+
         if (snapshot.fixedTeams.length > 0) {
           await sql`
             INSERT INTO players.ranked_fixed_teams ${sql(
@@ -823,6 +878,7 @@ export function createPostgresRankedPlayers(
             )}
           `
         }
+
         if (snapshot.soloQueue.length > 0) {
           await sql`
             INSERT INTO players.ranked_solo_queue ${sql(
@@ -852,6 +908,7 @@ export function createPostgresRankedPlayers(
             ORDER BY recorded_at DESC, source_order DESC NULLS LAST, id DESC
             LIMIT 1
           `
+
           if (!last || last.rating !== one.rating || last.games !== one.games) {
             await sql`
               INSERT INTO players.ranked_rating_history
@@ -862,6 +919,7 @@ export function createPostgresRankedPlayers(
             `
           }
         }
+
         return 'applied' as const
       })
     },
@@ -869,7 +927,9 @@ export function createPostgresRankedPlayers(
     async applyPulse(pulse, effect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         if (!(await commitInteractiveSection(sql, effect))) return 'lease-lost' as const
+
         await lockRankedPlayer(sql, pulse.brawlhallaId)
 
         const [profile] = await sql<
@@ -893,17 +953,20 @@ export function createPostgresRankedPlayers(
           WHERE profile.brawlhalla_id = ${pulse.brawlhallaId} AND profile.last_success_at IS NOT NULL
           FOR UPDATE OF profile
         `
+
         if (!profile) return 'no-op' as const
 
         const incomingOrder = {
           createdAt: effect.effectCreatedAt,
           operationId: effect.effectOperationId ?? effect.operationId,
         }
+
         const [existingEffect] = await sql<{ operation_id: string }[]>`
           SELECT operation_id
           FROM players.interactive_refresh_effects
           WHERE operation_id = ${incomingOrder.operationId}::uuid AND section = ${effect.section}
         `
+
         if (existingEffect) return 'already-applied' as const
 
         const inserted = await sql<{ operation_id: string }[]>`
@@ -912,24 +975,30 @@ export function createPostgresRankedPlayers(
           ON CONFLICT (operation_id, section) DO NOTHING
           RETURNING operation_id
         `
+
         if (!inserted[0]) return 'already-applied' as const
 
         const canonicalOrder = {
           createdAt: profile.v0_effect_created_at,
           operationId: profile.v0_effect_operation_id,
         }
+
         const previousPulseOrder = {
           createdAt: profile.pulse_effect_created_at,
           operationId: profile.pulse_effect_operation_id,
         }
+
         const newerThanCanonical = isNewer(incomingOrder, canonicalOrder)
+
         const oneVsOneApplied =
           pulse.oneVsOne !== null && newerThanCanonical && isNewer(incomingOrder, previousPulseOrder)
+
         const [clock] = await sql<{ observed_at: Date }[]>`SELECT clock_timestamp() AS observed_at`
         const observedAt = clock.observed_at
 
         if (oneVsOneApplied && pulse.oneVsOne) {
           const one = pulse.oneVsOne
+
           await sql`
             INSERT INTO players.ranked_v1_pulse_state
               (brawlhalla_id, checked_at, last_success_at, rating, peak_rating, wins, games,
@@ -981,7 +1050,9 @@ export function createPostgresRankedPlayers(
               ),
             )
           : []
+
         const fixedTeamApplied = teamResults.some((rows) => rows.length > 0)
+
         if (fixedTeamApplied && !oneVsOneApplied) {
           await sql`
             INSERT INTO players.ranked_v1_pulse_state (brawlhalla_id, checked_at, last_success_at)
@@ -991,7 +1062,9 @@ export function createPostgresRankedPlayers(
               last_success_at = EXCLUDED.last_success_at
           `
         }
+
         if (oneVsOneApplied || fixedTeamApplied) return 'applied' as const
+
         return !newerThanCanonical || pulse.oneVsOne !== null ? ('stale' as const) : ('no-op' as const)
       })
     },

@@ -35,7 +35,9 @@ const timestampPattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}
 
 function processorFailure(value: unknown): ProcessorFailure {
   if (!value || typeof value !== 'object') throw new Error('Replay Processor returned an invalid failure')
+
   const record = value as Record<string, unknown>
+
   const validAction =
     (record.class === 'usage' || record.class === 'input') && record.action === 'fix_request'
       ? true
@@ -44,6 +46,7 @@ function processorFailure(value: unknown): ProcessorFailure {
         : record.class === 'blocked' && record.action === 'operator_recovery'
           ? true
           : record.class === 'internal' && record.action === 'report_bug'
+
   if (
     record.failureSchemaVersion !== 1 ||
     !validAction ||
@@ -57,14 +60,19 @@ function processorFailure(value: unknown): ProcessorFailure {
   ) {
     throw new Error('Replay Processor returned an invalid failure')
   }
+
   const details = record.details
+
   if (details !== undefined && (!details || typeof details !== 'object')) {
     throw new Error('Replay Processor returned an invalid failure')
   }
+
   const retryAfterSeconds = (details as Record<string, unknown> | undefined)?.retryAfterSeconds
+
   if (retryAfterSeconds !== undefined && (!Number.isInteger(retryAfterSeconds) || Number(retryAfterSeconds) < 1)) {
     throw new Error('Replay Processor returned an invalid failure')
   }
+
   return {
     action: record.action as FailureAction,
     class: record.class as FailureClass,
@@ -76,7 +84,9 @@ function processorFailure(value: unknown): ProcessorFailure {
 
 function workerJob(value: unknown, expectedJobId?: string): WorkerJob {
   if (!value || typeof value !== 'object') throw new Error('Replay Processor returned an invalid job')
+
   const record = value as Record<string, unknown>
+
   if (
     record.apiVersion !== 1 ||
     typeof record.jobId !== 'string' ||
@@ -88,9 +98,11 @@ function workerJob(value: unknown, expectedJobId?: string): WorkerJob {
   ) {
     throw new Error('Replay Processor returned an invalid job')
   }
+
   if (record.state === 'running' && typeof record.startedAt === 'string' && timestampPattern.test(record.startedAt)) {
     return { state: record.state, jobId: record.jobId, statusUrl: record.statusUrl }
   }
+
   if (
     record.state === 'succeeded' &&
     record.resultUrl === `${record.statusUrl}/result` &&
@@ -106,6 +118,7 @@ function workerJob(value: unknown, expectedJobId?: string): WorkerJob {
       resultUrl: record.resultUrl as string,
     }
   }
+
   if (
     record.state === 'failed' &&
     typeof record.expiresAt === 'string' &&
@@ -120,6 +133,7 @@ function workerJob(value: unknown, expectedJobId?: string): WorkerJob {
       failure: processorFailure(record.failure),
     }
   }
+
   throw new Error('Replay Processor returned an invalid job')
 }
 
@@ -159,6 +173,7 @@ async function reportFailure(
     headers: bridgeHeaders(config, leaseToken, true),
     body: JSON.stringify({ code: failure.code, message: failure.message }),
   })
+
   if (response.status !== 204) throw new Error(`Brawltome rejected failure callback with HTTP ${response.status}`)
 }
 
@@ -172,8 +187,11 @@ async function renewClaim(
     method: 'POST',
     headers: bridgeHeaders(config, leaseToken),
   })
+
   if (response.status === 204) return true
+
   if (response.status === 409) return false
+
   throw new Error(`Brawltome rejected lease renewal with HTTP ${response.status}`)
 }
 
@@ -182,6 +200,7 @@ async function releaseClaim(config: ReplayBridgeConfig, fetcher: Fetch, id: stri
     method: 'POST',
     headers: bridgeHeaders(config, leaseToken),
   })
+
   if (response.status !== 204) throw new Error(`Brawltome rejected lease release with HTTP ${response.status}`)
 }
 
@@ -202,30 +221,41 @@ export async function processNextReplay(
     method: 'POST',
     headers: { authorization: `Bearer ${config.brawltomeToken}` },
   })
+
   if (claim.status === 204) return false
+
   if (!claim.ok) throw new Error(`Replay claim failed with HTTP ${claim.status}`)
+
   const id = claim.headers.get('x-replay-job-id')
   const leaseSeconds = Number(claim.headers.get('x-replay-lease-seconds'))
   const leaseToken = claim.headers.get('x-replay-lease-token')
+
   if (!id || !leaseToken || !Number.isInteger(leaseSeconds) || leaseSeconds < 1) {
     throw new Error('Replay claim omitted its identity or lease')
   }
+
   const renewalIntervalMs = (leaseSeconds * 1_000) / 2
   let renewAt = now() + renewalIntervalMs
   const replayBytes = await claim.arrayBuffer()
+
   const maintainLease = async (): Promise<boolean> => {
     if (now() + REQUEST_TIMEOUT_MS < renewAt) return true
+
     if (!(await renewClaim(config, fetcher, id, leaseToken))) return false
+
     renewAt = now() + renewalIntervalMs
+
     return true
   }
 
   try {
     for (let submissionNumber = 1; submissionNumber <= MAX_SUBMISSIONS_PER_CLAIM; submissionNumber += 1) {
       let current: WorkerJob | undefined
+
       for (let busyAttempt = 0; busyAttempt < MAX_BUSY_ATTEMPTS; busyAttempt += 1) {
         // pi-lens-ignore: await-in-loop
         if (!(await maintainLease())) return true
+
         const submitted = await request(fetcher, url(config.processorUrl, '/v1/jobs'), {
           method: 'POST',
           headers: {
@@ -235,36 +265,51 @@ export async function processNextReplay(
           },
           body: replayBytes,
         })
+
         const submittedBody = await json(submitted)
+
         if (submitted.status === 202) {
           current = workerJob(submittedBody)
           break
         }
+
         const failure = processorFailure(submittedBody)
+
         if (failure.action === 'operator_recovery') {
           await wait(config.pollMs)
           if (!(await maintainLease())) return true
+
           await releaseClaim(config, fetcher, id, leaseToken)
+
           return true
         }
+
         if (failure.class === 'transient' && failure.action === 'wait') {
           const requestedDelay = failure.details?.retryAfterSeconds ?? Number(submitted.headers.get('retry-after'))
           const retryAfterSeconds = Number.isInteger(requestedDelay) ? Math.min(Math.max(requestedDelay, 1), 10) : 1
+
           await wait(retryAfterSeconds * 1_000)
           continue
         }
+
         if (failure.class === 'transient' && failure.action === 'submit_new_job') break
+
         // pi-lens-ignore: await-in-loop
         if (!(await maintainLease())) return true
+
         // pi-lens-ignore: await-in-loop
         await reportFailure(config, fetcher, id, leaseToken, failure)
+
         return true
       }
 
       if (!current) {
         if (submissionNumber < MAX_SUBMISSIONS_PER_CLAIM) continue
+
         if (!(await maintainLease())) return true
+
         await releaseClaim(config, fetcher, id, leaseToken)
+
         return true
       }
 
@@ -273,88 +318,119 @@ export async function processNextReplay(
         await wait(config.pollMs)
         // pi-lens-ignore: await-in-loop
         if (!(await maintainLease())) return true
+
         const status = await request(fetcher, url(config.processorUrl, current.statusUrl), {
           headers: { authorization: `Bearer ${config.processorToken}` },
         })
+
         if (!status.ok) throw new Error(`Replay Processor status failed with HTTP ${status.status}`)
+
         current = workerJob(await json(status), current.jobId)
       }
 
       if (current.state === 'failed') {
         if (!(await maintainLease())) return true
+
         await deleteProcessorJob(config, fetcher, current.statusUrl)
         if (current.failure.action === 'operator_recovery') {
           await wait(config.pollMs)
           if (!(await maintainLease())) return true
+
           await releaseClaim(config, fetcher, id, leaseToken)
+
           return true
         }
+
         if (current.failure.class === 'transient') {
           if (current.failure.action === 'submit_new_job' && submissionNumber < MAX_SUBMISSIONS_PER_CLAIM) continue
+
           await wait(
             current.failure.details?.retryAfterSeconds
               ? Math.min(current.failure.details.retryAfterSeconds * 1_000, 10_000)
               : config.pollMs,
           )
+
           if (!(await maintainLease())) return true
+
           await releaseClaim(config, fetcher, id, leaseToken)
+
           return true
         }
+
         if (!(await maintainLease())) return true
+
         await reportFailure(config, fetcher, id, leaseToken, current.failure)
+
         return true
       }
 
       if (!(await maintainLease())) return true
+
       const result = await request(fetcher, url(config.processorUrl, current.resultUrl), {
         headers: { authorization: `Bearer ${config.processorToken}` },
       })
+
       if (!result.ok) throw new Error(`Replay Processor result failed with HTTP ${result.status}`)
+
       const resultBody = await result.arrayBuffer()
+
       if (!(await maintainLease())) return true
+
       const accepted = await request(fetcher, url(config.brawltomeUrl, `/internal/replays/${id}/result`), {
         method: 'POST',
         headers: bridgeHeaders(config, leaseToken, true),
         body: resultBody,
       })
+
       if (accepted.status !== 204) throw new Error(`Brawltome rejected analysis result with HTTP ${accepted.status}`)
 
       // pi-lens-ignore: await-in-loop
       await deleteProcessorJob(config, fetcher, current.statusUrl)
+
       return true
     }
   } catch (error) {
     await releaseClaim(config, fetcher, id, leaseToken).catch(() => undefined)
     throw error
   }
+
   return true
 }
 
 function required(name: string): string {
   const value = process.env[name]?.trim()
+
   if (!value) throw new Error(`${name} is required`)
+
   return value
 }
 
 function readToken(pathVariable: string): string {
   const token = readFileSync(required(pathVariable), 'utf8').trimEnd()
+
   if (!token || /[\r\n]/.test(token)) throw new Error(`${pathVariable} contains an invalid token`)
+
   return token
 }
 
 function configuration(): ReplayBridgeConfig {
   const pollMs = Number(process.env.REPLAY_BRIDGE_POLL_MS ?? 2_000)
+
   if (!Number.isInteger(pollMs) || pollMs < 100) throw new Error('REPLAY_BRIDGE_POLL_MS must be at least 100')
+
   const processorUrl = process.env.REPLAY_PROCESSOR_URL ?? 'http://127.0.0.1:8080'
   let processor: URL
+
   try {
     processor = new URL(processorUrl)
   } catch {
     throw new Error('REPLAY_PROCESSOR_URL must be a valid loopback URL')
   }
+
   if (processor.protocol !== 'http:' || !['127.0.0.1', '::1', 'localhost'].includes(processor.hostname)) {
     throw new Error('REPLAY_PROCESSOR_URL must use loopback HTTP')
   }
+
   return {
     brawltomeUrl: required('BRAWLTOME_API_URL'),
     brawltomeToken: readToken('BRAWLTOME_REPLAY_BRIDGE_TOKEN_FILE'),
@@ -366,9 +442,11 @@ function configuration(): ReplayBridgeConfig {
 
 if (import.meta.main) {
   const config = configuration()
+
   for (;;) {
     try {
       const processed = await processNextReplay(config)
+
       if (!processed) await sleep(config.pollMs)
     } catch (error) {
       console.error(error)

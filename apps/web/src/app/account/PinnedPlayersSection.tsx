@@ -26,6 +26,7 @@ function playerLabel(pinnedPlayer: PinnedPlayerContract): string {
 function RankedSummary({ pinnedPlayer }: { pinnedPlayer: PinnedPlayerContract }) {
   const currentSeason = pinnedPlayer.currentSeason
   const snapshot = currentSeason?.snapshot
+
   if (!currentSeason || !snapshot)
     return <p className="text-muted-foreground text-sm">Ranked observation unavailable.</p>
 
@@ -71,6 +72,7 @@ export function PinnedPlayersSection({
   const managedPinnedPlayers = primaryPlayerKnown
     ? pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId)
     : []
+
   const managedPinnedCount = managedPinnedPlayers.length
 
   return (
@@ -103,9 +105,11 @@ export function PinnedPlayersSection({
               const label = playerLabel(pinnedPlayer)
               const pending = pendingPlayerId !== null
               const isPrimary = primaryPlayerKnown && pinnedPlayer.brawlhallaId === primaryPlayerId
+
               const managedIndex = managedPinnedPlayers.findIndex(
                 ({ brawlhallaId }) => brawlhallaId === pinnedPlayer.brawlhallaId,
               )
+
               return (
                 <li key={pinnedPlayer.brawlhallaId} className="min-w-0">
                   <Card className="min-w-0 bg-linear-to-br from-card to-background p-4">

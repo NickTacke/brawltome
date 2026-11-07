@@ -26,10 +26,13 @@ export function TeamSection({ player, rankedTeams, brawlhallaId }: TeamSectionPr
 
   const soloQueueRows = rankedTeams.filter((team) => {
     const teammateId = team.brawlhallaIdOne === brawlhallaId ? team.brawlhallaIdTwo : team.brawlhallaIdOne
+
     return teammateId === 0
   })
+
   const pairedTeams = rankedTeams.filter((t) => {
     const teammateId = t.brawlhallaIdOne === brawlhallaId ? t.brawlhallaIdTwo : t.brawlhallaIdOne
+
     return teammateId !== 0
   })
 
@@ -37,10 +40,12 @@ export function TeamSection({ player, rankedTeams, brawlhallaId }: TeamSectionPr
     (acc: { games: number; wins: number }, team: RankedTeam) => {
       acc.games += team.games
       acc.wins += team.wins
+
       return acc
     },
     { games: 0, wins: 0 },
   )
+
   const teamsWinrate = teamsTotals.games > 0 ? (teamsTotals.wins / teamsTotals.games) * 100 : null
 
   return (
@@ -62,6 +67,7 @@ export function TeamSection({ player, rankedTeams, brawlhallaId }: TeamSectionPr
               <div className="flex-1 min-w-0 space-y-6">
                 {soloQueueRows.map((soloQueue, index) => {
                   const winRate = soloQueue.games > 0 ? (soloQueue.wins / soloQueue.games) * 100 : null
+
                   return (
                     <div key={`${soloQueue.teamName}:${soloQueue.region}:${index}`} className="flex gap-4">
                       <div className="w-16 sm:w-20 shrink-0">
@@ -153,14 +159,17 @@ export function TeamSection({ player, rankedTeams, brawlhallaId }: TeamSectionPr
           const bannerUrl = getRankBanner(team.tier)
 
           let teammateName = ''
+
           if (team.teamName) {
             const teamNameParts = fixEncoding(team.teamName).split('+')
             const teammateNameIndex = team.brawlhallaIdOne === brawlhallaId ? 1 : 0
+
             teammateName =
               teamNameParts[teammateNameIndex]?.trim() ||
               teamNameParts.find((part: string) => part.trim() !== fixEncoding(player.name))?.trim() ||
               ''
           }
+
           if (!teammateName) teammateName = `Player ${teammateId}`
 
           return (

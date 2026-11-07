@@ -72,10 +72,12 @@ describe('desktop render acknowledgement', () => {
   test('acknowledges only rendered opponents and classifies safe API failure presentation', () => {
     expect(renderAcknowledgement(null, [])).toBeNull()
     expect(renderAcknowledgement('sample-1', [])).toBeNull()
+
     expect(renderAcknowledgement('sample-1', [{ refreshState: 'idle' }])).toEqual({
       sampleId: 'sample-1',
       apiFailurePresented: false,
     })
+
     expect(renderAcknowledgement('sample-2', [{ refreshState: 'apiFailure' }])).toEqual({
       sampleId: 'sample-2',
       apiFailurePresented: true,
@@ -92,12 +94,14 @@ describe('Windows 11 desktop acceptance evidence', () => {
     const result = evaluateWindowsAcceptance(evidence, policy)
 
     expect(result.status).toBe('pending')
+
     expect(result.claims).toEqual({
       windows11: false,
       hardware: false,
       updaterInstall: false,
       performance: false,
     })
+
     expect(result.pending).toContain('supported Windows 11 observation')
   })
 
@@ -115,6 +119,7 @@ describe('Windows 11 desktop acceptance evidence', () => {
 
     for (const durations of [equalDurations, aboveDurations]) {
       const result = evaluateWindowsAcceptance(completeEvidence(durations), policy)
+
       expect(result.status).toBe('failed')
       expect(result.claims.performance).toBe(false)
       expect(result.failures).toContain(`opponent presentation p95 must be below ${policy.maximumP95Ms} ms`)
@@ -123,20 +128,25 @@ describe('Windows 11 desktop acceptance evidence', () => {
 
   test('rejects duplicate, invalid, and insufficient performance samples', () => {
     const duplicate = completeEvidence()
+
     duplicate.workload.samples[1].id = duplicate.workload.samples[0].id
     expect(evaluateWindowsAcceptance(duplicate, policy).failures).toContain('performance sample IDs must be unique')
 
     const invalid = completeEvidence()
+
     invalid.workload.samples[0].durationMs = -1
+
     expect(evaluateWindowsAcceptance(invalid, policy).failures).toContain(
       'performance sample durations must be finite non-negative milliseconds',
     )
 
     const insufficient = completeEvidence().workload.samples.slice(0, 19)
+
     const result = evaluateWindowsAcceptance(
       { ...completeEvidence(), workload: { id: policy.workloadId, samples: insufficient } },
       policy,
     )
+
     expect(result.status).toBe('pending')
     expect(result.pending).toContain('at least 20 completed opponent-render samples')
   })
@@ -164,6 +174,7 @@ describe('Windows 11 desktop acceptance evidence', () => {
 
     for (const platform of unsupportedPlatforms) {
       const result = evaluateWindowsAcceptance({ ...completeEvidence(), platform }, policy)
+
       expect(result.status).toBe('failed')
       expect(result.claims.windows11).toBe(false)
     }
@@ -172,8 +183,10 @@ describe('Windows 11 desktop acceptance evidence', () => {
   test('fails closed when a required lifecycle, API failure, or updater check fails', () => {
     for (const check of ['processDetached', 'appSurvivedApiFailure', 'updaterVersionReplaced'] as const) {
       const evidence = completeEvidence()
+
       evidence.checks[check] = false
       const result = evaluateWindowsAcceptance(evidence, policy)
+
       expect(result.status).toBe('failed')
       expect(result.failures).toContain(`${check} did not pass`)
       expect(Object.values(result.claims).every((claim) => !claim)).toBe(true)
@@ -184,18 +197,22 @@ describe('Windows 11 desktop acceptance evidence', () => {
     expect(() => evaluateWindowsAcceptance(completeEvidence(), { ...policy, windowsRelease: '' })).toThrow(
       'windowsRelease must not be empty',
     )
+
     expect(() => evaluateWindowsAcceptance(completeEvidence(), { ...policy, hardware: '' })).toThrow(
       'hardware must not be empty',
     )
+
     expect(() => evaluateWindowsAcceptance(completeEvidence(), { ...policy, minimumSamples: 0 })).toThrow(
       'minimumSamples must be a positive integer',
     )
+
     expect(() =>
       evaluateWindowsAcceptance(completeEvidence(), {
         ...policy,
         requiredModeSamples: { ranked1v1: 19, ranked2v2: 0, ranked3v3: 0 },
       }),
     ).toThrow('requiredModeSamples must cover minimumSamples')
+
     expect(() => evaluateWindowsAcceptance(completeEvidence(), { ...policy, maximumP95Ms: 2_001 })).toThrow(
       'maximumP95Ms must be 2000 for #217',
     )

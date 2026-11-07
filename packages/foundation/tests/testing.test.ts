@@ -23,6 +23,7 @@ const playersModule: BrawltomeModule = {
 
 async function create(label: string, modules: readonly BrawltomeModule[]): Promise<TestDatabase> {
   const database = await createTestDatabase({ label, modules })
+
   createdDatabases.push(database)
 
   return database
@@ -34,8 +35,10 @@ function databaseNameOf(database: TestDatabase): string {
 
 async function existingDatabaseNames(pattern: string): Promise<string[]> {
   const admin = postgres(connectionString ?? '', { max: 1 })
+
   try {
     const rows = await admin<{ datname: string }[]>`SELECT datname FROM pg_database WHERE datname LIKE ${pattern}`
+
     return rows.map(({ datname }) => datname)
   } finally {
     await admin.end()
@@ -46,6 +49,7 @@ async function existingDatabaseNames(pattern: string): Promise<string[]> {
 function restoreDatabaseUrl(configured: string | undefined): void {
   if (configured === undefined) {
     Reflect.deleteProperty(process.env, 'DATABASE_URL')
+
     return
   }
 
@@ -73,6 +77,7 @@ describe('createTestDatabase without a database', () => {
 
   test('names the test that needs DATABASE_URL when it is missing', async () => {
     const configured = process.env.DATABASE_URL
+
     Reflect.deleteProperty(process.env, 'DATABASE_URL')
 
     try {
@@ -93,6 +98,7 @@ describeWithDatabase('createTestDatabase', () => {
     expect(databaseNameOf(first)).not.toBe(databaseNameOf(second))
     for (const database of [first, second]) {
       const schemas = await database.sql`SELECT 1 FROM information_schema.schemata WHERE schema_name = 'players'`
+
       expect(schemas).toHaveLength(1)
     }
   })
@@ -122,6 +128,7 @@ describeWithDatabase('createTestDatabase', () => {
     const [row] = await client.sql<{ name: string; database: string }[]>`
       SELECT current_setting('application_name') AS name, current_database() AS database
     `
+
     await client.close()
 
     expect(row).toEqual({ name: 'brawltome-test', database: databaseNameOf(database) })
@@ -155,6 +162,7 @@ describeWithDatabase('createTestDatabase', () => {
     await expect(createTestDatabase({ label: 'unordered', modules: [orphanModule] })).rejects.toThrow(
       'missing predecessor testing-orphan/0001 for testing-orphan/0002',
     )
+
     expect(await existingDatabaseNames(`bt_unordered_${process.pid}_%`)).toEqual([])
   })
 
@@ -168,6 +176,7 @@ describeWithDatabase('createTestDatabase', () => {
     await expect(createTestDatabase({ label: 'broken', modules: [brokenModule] })).rejects.toThrow(
       /migrate test database bt_broken_\d+_[0-9a-f]{12}/,
     )
+
     expect(await existingDatabaseNames(`bt_broken_${process.pid}_%`)).toEqual([])
   })
 })

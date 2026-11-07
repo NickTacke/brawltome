@@ -44,6 +44,7 @@ describe('Current Season Legend Meta formulas', () => {
     expect(result.coverage).toEqual({ numerator: 4, denominator: 5, basisPoints: 8_000 })
     expect(result.observedPlayers).toBe(4)
     expect(result.observedLegendGames).toBe(600)
+
     expect(result.rows.find(({ legend }) => legend.legendId === 4)).toMatchObject({
       legend: legends[1],
       playerCount: 2,
@@ -56,6 +57,7 @@ describe('Current Season Legend Meta formulas', () => {
       eligible: false,
       rank: null,
     })
+
     expect(result.rows.find(({ legend }) => legend.legendId === 3)).toMatchObject({
       legend: legends[0],
       playerCount: 2,
@@ -91,6 +93,7 @@ describe('Current Season Legend Meta formulas', () => {
         { legendId: 4, games: 7, wins: 3 },
       ]),
     )
+
     const exact = aggregateLegendMetaSlice({ legends, selectedPlayers: 30, observations })
 
     expect(exact.rows.find(({ legend }) => legend.legendId === 3)).toMatchObject({
@@ -99,12 +102,14 @@ describe('Current Season Legend Meta formulas', () => {
       eligible: true,
       rank: 2,
     })
+
     expect(exact.rows.find(({ legend }) => legend.legendId === 4)).toMatchObject({
       playerCount: 30,
       gameCount: 210,
       eligible: true,
       rank: 1,
     })
+
     expect(exact.rows.find(({ legend }) => legend.legendId === 5)).toMatchObject({
       playerCount: 0,
       gameCount: 0,
@@ -120,6 +125,7 @@ describe('Current Season Legend Meta formulas', () => {
         legends: [{ legendId: 3, games: 10, wins: 5 }],
       })),
     })
+
     const tooFewGames = aggregateLegendMetaSlice({
       legends: legends.slice(0, 1),
       selectedPlayers: 30,
@@ -139,6 +145,7 @@ describe('Current Season Legend Meta formulas', () => {
       selectedPlayers: 2,
       observations: [player(1, 2_000, [{ legendId: 3, games: 10, wins: 0 }])],
     })
+
     const orion = measuredZero.rows.find(({ legend }) => legend.legendId === 5)
 
     expect(orion).toMatchObject({
@@ -155,6 +162,7 @@ describe('Current Season Legend Meta formulas', () => {
     })
 
     const missing = aggregateLegendMetaSlice({ legends, selectedPlayers: 2, observations: [] })
+
     expect(missing.coverage).toEqual({ numerator: 0, denominator: 2, basisPoints: 0 })
     expect(missing.rows[0]?.pickShare.basisPoints).toBeNull()
     expect(missing.rows[0]?.adoption.basisPoints).toBeNull()
@@ -174,6 +182,7 @@ describe('Current Season Legend Meta formulas', () => {
         observations: [player(1, 2_000, []), player(1, 2_000, [])],
       }),
     ).toThrow('duplicate observed player')
+
     expect(() =>
       aggregateLegendMetaSlice({
         legends,
@@ -181,6 +190,7 @@ describe('Current Season Legend Meta formulas', () => {
         observations: [player(1, 2_000, [{ legendId: 999, games: 1, wins: 1 }])],
       }),
     ).toThrow('unknown legend')
+
     expect(() =>
       aggregateLegendMetaSlice({
         legends,
@@ -192,9 +202,11 @@ describe('Current Season Legend Meta formulas', () => {
 
   test('materializes every independent all, region, and bracket filter from the same observations', () => {
     let nextPlayerId = 1
+
     const cells = launchCohortRegions.flatMap((region) =>
       launchCohortBrackets.map((bracket) => {
         const brawlhallaId = nextPlayerId++
+
         const observedLegends =
           region === 'US-E' && bracket === 'Platinum'
             ? [{ legendId: 3, games: 10, wins: 4 }]
@@ -203,6 +215,7 @@ describe('Current Season Legend Meta formulas', () => {
               : region === 'EU' && bracket === 'Platinum'
                 ? [{ legendId: 3, games: 30, wins: 20 }]
                 : []
+
         return {
           region,
           bracket,
@@ -211,6 +224,7 @@ describe('Current Season Legend Meta formulas', () => {
         }
       }),
     )
+
     const artifact = buildLegendMetaArtifact({
       snapshotId: '10000000-0000-4000-8000-000000000001',
       generationId: '10000000-0000-4000-8000-000000000002',
@@ -228,11 +242,13 @@ describe('Current Season Legend Meta formulas', () => {
 
     expect(artifact.slices).toHaveLength(30)
     expect(artifact.expectedNextPublicationAt).toBe('2026-08-19T00:00:00.000Z')
+
     expect(artifact.season).toEqual({
       scope: 'current-season',
       identity: null,
       source: 'brawlhalla-v1-ranked-1v1',
     })
+
     expect(artifact.methodology.trends).toEqual({
       status: 'disabled',
       reason: 'season-identity-unavailable',
@@ -253,27 +269,33 @@ describe('Current Season Legend Meta formulas', () => {
       legends,
       cells,
     })
+
     expect(authoritativeSeason.season.identity).toBe('season-38')
+
     expect(authoritativeSeason.methodology.trends).toEqual({
       status: 'conditional',
       requirement:
         'Adjacent snapshots require the same authoritative season, cohort methodology, metric methodology, and scope.',
     })
+
     expect(artifact.slices.find(({ region, bracket }) => region === 'all' && bracket === 'all')).toMatchObject({
       selectedPlayers: 36,
       observedPlayers: 18,
       observedLegendGames: 60,
     })
+
     expect(artifact.slices.find(({ region, bracket }) => region === 'US-E' && bracket === 'all')).toMatchObject({
       selectedPlayers: 4,
       observedPlayers: 2,
       observedLegendGames: 30,
     })
+
     expect(artifact.slices.find(({ region, bracket }) => region === 'all' && bracket === 'Platinum')).toMatchObject({
       selectedPlayers: 18,
       observedPlayers: 9,
       observedLegendGames: 40,
     })
+
     expect(artifact.slices.find(({ region, bracket }) => region === 'EU' && bracket === 'Platinum')).toMatchObject({
       selectedPlayers: 2,
       observedPlayers: 1,
@@ -285,6 +307,7 @@ describe('Current Season Legend Meta formulas', () => {
     const cells = launchCohortRegions.flatMap((region) =>
       launchCohortBrackets.map((bracket) => ({ region, bracket, selectedPlayers: 0, observations: [] })),
     )
+
     const input = {
       snapshotId: '10000000-0000-4000-8000-000000000001',
       generationId: '10000000-0000-4000-8000-000000000002',

@@ -15,10 +15,13 @@ export function parsePinnedPlayersResponse(value: unknown): PinnedPlayersContrac
 
 export function createLatestPinnedPlayerMutationGuard() {
   const latestByAccount = new Map<string, symbol>()
+
   return {
     begin(accountId: string) {
       const token = Symbol(accountId)
+
       latestByAccount.set(accountId, token)
+
       return () => latestByAccount.get(accountId) === token
     },
   }
@@ -28,9 +31,13 @@ const mutationGuards = new WeakMap<object, ReturnType<typeof createLatestPinnedP
 
 function mutationGuard(queryClient: object) {
   const existing = mutationGuards.get(queryClient)
+
   if (existing) return existing
+
   const created = createLatestPinnedPlayerMutationGuard()
+
   mutationGuards.set(queryClient, created)
+
   return created
 }
 
@@ -40,16 +47,20 @@ export async function updatePinnedPlayersCache(
   mutation: () => Promise<unknown>,
 ): Promise<PinnedPlayersContract> {
   const isLatest = mutationGuard(queryClient).begin(accountId)
+
   await queryClient.cancelQueries({ queryKey: pinnedPlayersKey(accountId) })
   try {
     const pinnedPlayers = parsePinnedPlayersResponse(await mutation())
+
     if (isLatest()) {
       await queryClient.cancelQueries({ queryKey: pinnedPlayersKey(accountId) })
       if (isLatest()) queryClient.setQueryData(pinnedPlayersKey(accountId), pinnedPlayers)
     }
+
     return pinnedPlayers
   } catch (error) {
     if (isLatest()) await queryClient.invalidateQueries({ queryKey: pinnedPlayersKey(accountId) })
+
     throw error
   }
 }

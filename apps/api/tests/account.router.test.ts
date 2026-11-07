@@ -90,6 +90,7 @@ const account: Account = {
 function makeAccounts() {
   let preferences: AccountPreferences = { ...DEFAULT_ACCOUNT_PREFERENCES }
   let pinnedPlayers: PinnedPlayer[] = []
+
   const service: Accounts = {
     async signInWithDiscord() {
       throw new Error('Not used')
@@ -103,6 +104,7 @@ function makeAccounts() {
     },
     async updatePreferences(_accountId, nextPreferences) {
       preferences = { ...preferences, ...nextPreferences }
+
       return preferences
     },
     async beginPrimaryPlayerVerification() {
@@ -119,13 +121,17 @@ function makeAccounts() {
     },
     async pinPlayer(_accountId, brawlhallaId) {
       const existing = pinnedPlayers.find((player) => player.brawlhallaId === brawlhallaId)
+
       if (existing) return existing
+
       const pinnedPlayer = {
         brawlhallaId,
         order: pinnedPlayers.length,
         pinnedAt: new Date('2026-08-10T10:04:00.000Z'),
       }
+
       pinnedPlayers = [...pinnedPlayers, pinnedPlayer]
+
       return pinnedPlayer
     },
     async unpinPlayer(_accountId, brawlhallaId) {
@@ -138,12 +144,14 @@ function makeAccounts() {
         ...(pinnedPlayers.find((player) => player.brawlhallaId === brawlhallaId) as PinnedPlayer),
         order,
       }))
+
       return pinnedPlayers
     },
     async getPlayerShortcuts() {
       return { primaryPlayer: null, pinnedPlayers }
     },
   }
+
   return service
 }
 
@@ -175,6 +183,7 @@ function context(currentAccount: Account | null, accountService = makeAccounts()
 describe('account.current', () => {
   test('returns the canonical anonymous view', async () => {
     const result = await (caller(context(null)) as { current: () => Promise<unknown> }).current()
+
     expect(result).toEqual({ status: 'anonymous' })
     expect(accountViewSchema.parse(result)).toEqual({ status: 'anonymous' })
   })
@@ -185,6 +194,7 @@ describe('account.current', () => {
 
   test('returns the canonical signed-in view with an ISO UTC timestamp', async () => {
     const result = await (caller(context(account)) as { current: () => Promise<unknown> }).current()
+
     expect(result).toEqual({
       status: 'signedIn',
       account: {
@@ -248,7 +258,9 @@ describe('account.playerShortcuts', () => {
         }
       },
     }
+
     const shortcutContext = context(account, shortcutAccounts)
+
     shortcutContext.rankedPlayerQueries.byId = async (id) => ({
       brawlhallaId: id,
       checkedAt: new Date('2026-08-10T10:00:00.000Z'),
@@ -282,6 +294,7 @@ describe('account.playerShortcuts', () => {
         observedRatingDirection: null,
       },
     })
+
     const api = caller(shortcutContext) as { playerShortcuts: () => Promise<unknown> }
 
     expect(playerShortcutsSchema.parse(await api.playerShortcuts())).toEqual({
@@ -306,6 +319,7 @@ describe('account.playerShortcuts', () => {
       playerShortcuts: () => Promise<unknown>
       pinPlayer: (input: unknown) => Promise<unknown>
     }
+
     await expect(api.playerShortcuts()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
     await expect(api.pinPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
@@ -314,6 +328,7 @@ describe('account.playerShortcuts', () => {
 describe('account.pinnedPlayers', () => {
   test('returns canonical Player Profile facts for session-owned pins only', async () => {
     const accountService = makeAccounts()
+
     const api = caller(context(account, accountService)) as {
       pinnedPlayers: () => Promise<unknown>
       pinPlayer: (input: unknown) => Promise<unknown>
@@ -347,14 +362,17 @@ describe('account.pinnedPlayers', () => {
       unpinPlayer: (input: unknown) => Promise<unknown>
       reorderPinnedPlayers: (input: unknown) => Promise<unknown>
     }
+
     await api.pinPlayer({ brawlhallaId: 42 })
     await api.pinPlayer({ brawlhallaId: 43 })
 
     const reordered = pinnedPlayersSchema.parse(await api.reorderPinnedPlayers({ brawlhallaIds: [43, 42] }))
+
     expect(reordered.map(({ brawlhallaId, order }) => ({ brawlhallaId, order }))).toEqual([
       { brawlhallaId: 43, order: 0 },
       { brawlhallaId: 42, order: 1 },
     ])
+
     expect(await api.unpinPlayer({ brawlhallaId: 43 })).toHaveLength(1)
     expect(await api.unpinPlayer({ brawlhallaId: 43 })).toHaveLength(1)
   })
@@ -366,17 +384,21 @@ describe('account.pinnedPlayers', () => {
       unpinPlayer: (input: unknown) => Promise<unknown>
       reorderPinnedPlayers: (input: unknown) => Promise<unknown>
     }
+
     await expect(anonymousApi.pinnedPlayers()).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
     await expect(anonymousApi.pinPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
     await expect(anonymousApi.unpinPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+
     await expect(anonymousApi.reorderPinnedPlayers({ brawlhallaIds: [] })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
 
     const signedInApi = caller(context(account)) as { pinPlayer: (input: unknown) => Promise<unknown> }
+
     await expect(
       signedInApi.pinPlayer({ brawlhallaId: 42, accountId: 'd6bf157b-9c07-4ce3-9924-a053a28a59bb' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
     await expect(signedInApi.pinPlayer({ brawlhallaId: 404 })).rejects.toMatchObject({ code: 'NOT_FOUND' })
 
     const limitedAccounts: Accounts = {
@@ -385,7 +407,9 @@ describe('account.pinnedPlayers', () => {
         throw new InvalidPinnedPlayerError('Pinned Players cannot exceed 20')
       },
     }
+
     const limitedApi = caller(context(account, limitedAccounts)) as { pinPlayer: (input: unknown) => Promise<unknown> }
+
     await expect(limitedApi.pinPlayer({ brawlhallaId: 42 })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 })
@@ -403,6 +427,7 @@ describe('account.preferences', () => {
       preferences: () => Promise<unknown>
       updatePreferences: (input: unknown) => Promise<unknown>
     }
+
     const updated = {
       leaderboardBracket: '2v2' as const,
       leaderboardRegion: 'US-W' as const,
@@ -410,6 +435,7 @@ describe('account.preferences', () => {
     }
 
     const expected = { ...DEFAULT_ACCOUNT_PREFERENCES, ...updated }
+
     expect(await api.updatePreferences(updated)).toEqual(expected)
     expect(await api.preferences()).toEqual(expected)
   })
@@ -418,6 +444,7 @@ describe('account.preferences', () => {
     const anonymousApi = caller(context(null)) as {
       updatePreferences: (input: unknown) => Promise<unknown>
     }
+
     const signedInApi = caller(context(account)) as {
       updatePreferences: (input: unknown) => Promise<unknown>
     }
@@ -425,6 +452,7 @@ describe('account.preferences', () => {
     await expect(anonymousApi.updatePreferences(DEFAULT_ACCOUNT_PREFERENCES)).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     })
+
     await expect(
       signedInApi.updatePreferences({ ...DEFAULT_ACCOUNT_PREFERENCES, theme: 'dark' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })

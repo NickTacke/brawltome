@@ -12,6 +12,7 @@ beforeAll(async () => {
     label: 'player_leaderboard_names',
     modules: [refreshOperationsModule, playerModule],
   })
+
   connectionString = database.connectionString
 }, 20_000)
 
@@ -50,9 +51,12 @@ describe('Player names observed on leaderboards', () => {
     const control = postgres(connectionString, { max: 1 })
     const source = createPostgresPlayerDiscoverySource(database)
     const names = createPostgresLeaderboardPlayerNames(database)
+
     const outboxCount = async () =>
       Number((await control<{ count: string }[]>`SELECT count(*) AS count FROM players.discovery_outbox`)[0].count)
+
     const factsById = async () => new Map((await source.snapshot()).facts.map((fact) => [fact.brawlhallaId, fact]))
+
     try {
       await insertCareer(control, 100, 'Old Name', '2024-01-01T00:00:00Z', 'legacy-v2')
       await insertRanked(control, 101, 'Same Name', '2026-09-01T00:00:00Z')
@@ -62,6 +66,7 @@ describe('Player names observed on leaderboards', () => {
 
       const before = await outboxCount()
       const firstScan = new Date('2026-10-05T00:00:00Z')
+
       await names.applyLeaderboardNames({
         observedAt: firstScan,
         players: [
@@ -76,9 +81,11 @@ describe('Player names observed on leaderboards', () => {
           { brawlhallaId: 107, name: 'Cached Old' },
         ],
       })
+
       expect(await outboxCount()).toBeGreaterThan(before)
 
       let facts = await factsById()
+
       expect(facts.get(100)).toMatchObject({ name: 'New Name', aliases: ['Old Name'] })
       expect(facts.get(101)).toMatchObject({ name: 'Same Name', aliases: [] })
       expect(facts.get(102)).toMatchObject({ name: 'Unknown Climber', aliases: [], rating: null })
@@ -88,13 +95,16 @@ describe('Player names observed on leaderboards', () => {
       expect(facts.has(106)).toBe(false)
       // A cached V1 name never replaces a live V0 name, but stays searchable as an alias.
       expect(facts.get(107)).toMatchObject({ name: 'Current V0', aliases: ['Cached Old'] })
+
       const recordedAliases = await control<{ brawlhalla_id: number; display_alias: string }[]>`
         SELECT brawlhalla_id, display_alias FROM players.discovery_aliases ORDER BY brawlhalla_id, display_alias
       `
+
       expect([...recordedAliases]).toEqual([{ brawlhalla_id: 100, display_alias: 'Old Name' }])
       expect(await names.referenceById(100)).toEqual({ brawlhallaId: 100, name: 'New Name', observedAt: firstScan })
 
       const settled = await outboxCount()
+
       await names.applyLeaderboardNames({
         observedAt: new Date('2026-10-05T00:15:00Z'),
         players: [
@@ -103,10 +113,12 @@ describe('Player names observed on leaderboards', () => {
           { brawlhallaId: 103, name: 'MÃ¼ller' },
         ],
       })
+
       await names.applyLeaderboardNames({
         observedAt: new Date('2026-09-01T00:00:00Z'),
         players: [{ brawlhallaId: 100, name: 'Ancient Name' }],
       })
+
       expect(await outboxCount()).toBe(settled)
       expect((await factsById()).get(100)).toMatchObject({ name: 'New Name' })
 
@@ -114,6 +126,7 @@ describe('Player names observed on leaderboards', () => {
         observedAt: new Date('2026-10-05T00:30:00Z'),
         players: [{ brawlhallaId: 100, name: 'Newest Name' }],
       })
+
       facts = await factsById()
       expect(facts.get(100)?.name).toBe('Newest Name')
       expect(facts.get(100)?.aliases).toEqual(expect.arrayContaining(['New Name', 'Old Name']))
@@ -128,23 +141,30 @@ describe('Player names observed on leaderboards', () => {
     const control = postgres(connectionString, { max: 1 })
     const source = createPostgresPlayerDiscoverySource(database)
     const names = createPostgresLeaderboardPlayerNames(database)
+
     try {
       await insertRanked(control, 110, 'Current V0', '2026-09-01T00:00:00Z')
+
       await names.applyLeaderboardNames({
         observedAt: new Date('2026-10-05T01:00:00Z'),
         players: [{ brawlhallaId: 110, name: 'Old Board' }],
       })
+
       await names.applyLeaderboardNames({
         observedAt: new Date('2026-10-05T01:15:00Z'),
         players: [{ brawlhallaId: 110, name: 'New Board' }],
       })
+
       const fact = (await source.snapshot()).facts.find((candidate) => candidate.brawlhallaId === 110)
+
       expect(fact?.name).toBe('Current V0')
       expect(fact?.aliases).toEqual(expect.arrayContaining(['Old Board', 'New Board']))
       expect(fact?.aliases).not.toContain('Current V0')
+
       const recorded = await control<{ display_alias: string }[]>`
         SELECT display_alias FROM players.discovery_aliases WHERE brawlhalla_id = 110
       `
+
       expect(recorded.map((row) => row.display_alias)).toEqual(['Old Board'])
     } finally {
       await control.end()
@@ -155,6 +175,7 @@ describe('Player names observed on leaderboards', () => {
   test('applies a full leaderboard generation of renamed players in bounded statements', async () => {
     const control = postgres(connectionString, { max: 1 })
     const names = createPostgresLeaderboardPlayerNames(database)
+
     try {
       await control`
         INSERT INTO players.career_profiles
@@ -165,21 +186,26 @@ describe('Player names observed on leaderboards', () => {
                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         FROM generate_series(1000000, 1019999) AS identity
       `
+
       const players = Array.from({ length: 20_000 }, (_, index) => ({
         brawlhallaId: 1_000_000 + index,
         name: `Board ${index}`,
       }))
+
       await expect(
         names.applyLeaderboardNames({ observedAt: new Date('2026-10-05T00:00:00Z'), players }),
       ).resolves.toEqual({ changed: 20_000 })
+
       await expect(
         names.applyLeaderboardNames({ observedAt: new Date('2026-10-05T00:15:00Z'), players }),
       ).resolves.toEqual({ changed: 0 })
+
       const [counts] = await control<{ aliases: number; events: number }[]>`
         SELECT
           (SELECT count(*)::integer FROM players.discovery_aliases WHERE brawlhalla_id >= 1000000) AS aliases,
           (SELECT count(*)::integer FROM players.discovery_outbox WHERE brawlhalla_id >= 1000000) AS events
       `
+
       expect(counts).toEqual({ aliases: 20_000, events: 20_000 })
     } finally {
       await control.end()

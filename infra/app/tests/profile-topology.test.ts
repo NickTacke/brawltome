@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dir, '../../..')
 const releaseCommit = '0000000000000000000000000000000000000000'
+
 // The first `docker compose config` on a cold CI runner has taken over 8 s, past bun's 5 s default.
 setDefaultTimeout(30_000)
 
@@ -20,7 +21,9 @@ function renderCompose(profile: 'discord' | 'operator') {
     stdout: 'pipe',
     stderr: 'pipe',
   })
+
   expect(result.exitCode, result.stderr.toString()).toBe(0)
+
   return JSON.parse(result.stdout.toString()) as {
     services: Record<
       string,
@@ -62,13 +65,16 @@ describe('application profile topology', () => {
       depends_on: { api: { condition: 'service_healthy' } },
       environment: { API_URL: 'http://api:3000', DISCORD_CLIENT_ID: '123456789012345678' },
     })
+
     expect(Object.keys(discord.networks ?? {}).sort()).toEqual(['application', 'observability'])
     expect(discord.healthcheck?.test?.join(' ')).toContain('http://localhost:3002/health/ready')
     expect(discord.stop_grace_period).toBe('1m10s')
+
     expect(discord.deploy).toMatchObject({
       replicas: 1,
       resources: { limits: { memory: '536870912', pids: 192 } },
     })
+
     expect(discord.secrets?.toSorted((left, right) => left.source.localeCompare(right.source))).toEqual([
       {
         source: 'discord_internal_api_secret',
@@ -79,10 +85,12 @@ describe('application profile topology', () => {
       { source: 'metrics_scrape_secret', target: '/run/secrets/metrics_scrape_secret' },
       { source: 'otel_authorization', target: '/run/secrets/otel_authorization' },
     ])
+
     expect(rendered.secrets.discord_token).toEqual({
       file: '/var/lib/brawltome-secrets/discord-token',
       name: 'brawltome_discord_token',
     })
+
     expect(discord.ports ?? []).toHaveLength(0)
   })
 
@@ -103,8 +111,10 @@ describe('application profile topology', () => {
       security_opt: ['no-new-privileges:true'],
       depends_on: { migration: { condition: 'service_completed_successfully' } },
     })
+
     expect(Object.keys(role.networks ?? {})).toEqual(['application'])
     expect(role.deploy).toMatchObject({ resources: { limits: { memory: '134217728', pids: 64 } } })
+
     expect(role.secrets?.toSorted((left, right) => left.source.localeCompare(right.source))).toEqual([
       {
         source: 'postgres_dead_letter_password',
@@ -123,8 +133,10 @@ describe('application profile topology', () => {
       security_opt: ['no-new-privileges:true'],
       depends_on: { 'dead-letter-role': { condition: 'service_completed_successfully' } },
     })
+
     expect(Object.keys(cli.networks ?? {})).toEqual(['application'])
     expect(cli.deploy).toMatchObject({ resources: { limits: { memory: '134217728', pids: 64 } } })
+
     expect(cli.secrets?.toSorted((left, right) => left.source.localeCompare(right.source))).toEqual([
       { source: 'dead_letter_database_url', target: '/run/secrets/dead_letter_database_url' },
       {
@@ -132,7 +144,9 @@ describe('application profile topology', () => {
         target: '/run/secrets/dead_letter_operator_tokens',
       },
     ])
+
     expect(services).not.toHaveProperty('discord-bot')
+
     expect(rendered.secrets).toMatchObject({
       dead_letter_database_url: {
         file: '/var/lib/brawltome-secrets/dead-letter-database-url',
@@ -147,6 +161,7 @@ describe('application profile topology', () => {
         name: 'brawltome_postgres_dead_letter_password',
       },
     })
+
     expect(cli.environment ?? {}).not.toHaveProperty('DEAD_LETTER_OPERATOR_TOKEN')
     expect(cli.ports ?? []).toHaveLength(0)
   })
@@ -163,9 +178,11 @@ describe('application profile topology', () => {
     expect(dockerfile).toContain('AS web')
     expect(dockerfile).toContain('/app/packages/contracts/node_modules packages/contracts/node_modules')
     expect(dockerfile).toContain('apps/web/.next/standalone')
+
     expect(
       dockerfile.match(/org\.opencontainers\.image\.source="https:\/\/github\.com\/NickTacke\/brawltome"/g),
     ).toHaveLength(3)
+
     expect(dockerfile).not.toContain('org.opencontainers.image.created=""')
     expect(dockerfile).not.toContain('org.opencontainers.image.revision=""')
     expect(dockerfile).not.toContain('org.opencontainers.image.version=""')

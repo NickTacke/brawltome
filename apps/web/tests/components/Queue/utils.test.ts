@@ -13,9 +13,11 @@ const snapshotId = '10000000-0000-4000-8000-000000000004'
 describe('Queue URL filters', () => {
   test('defaults missing, invalid, array, and out-of-range values', () => {
     expect(parseQueueSearchParams({})).toEqual({ mode: '1v1', region: 'all', page: 1, snapshotId: undefined })
+
     expect(
       parseQueueSearchParams({ mode: 'retired', region: 'mars', page: '0', snapshotId: ['bad', snapshotId] }),
     ).toEqual({ mode: '1v1', region: 'all', page: 1, snapshotId: undefined })
+
     expect(parseQueueSearchParams({ page: '9999', snapshotId: 'not-a-uuid' })).toEqual({
       mode: '1v1',
       region: 'all',
@@ -39,6 +41,7 @@ describe('Queue URL filters', () => {
 
   test('serializes current filters while pinning pagination to the current output snapshot', () => {
     const filters = { mode: '1v1' as const, region: 'EU' as const, page: 3, snapshotId }
+
     expect(buildQueueFilterQueryString(filters)).toBe('mode=1v1&region=EU&page=3')
     expect(buildQueuePageQueryString(filters, 4, snapshotId)).toBe(`mode=1v1&region=EU&page=4&snapshotId=${snapshotId}`)
   })
@@ -54,12 +57,14 @@ describe('Queue browser preference', () => {
 
   test('uses remembered filters as defaults while valid URL filters win', () => {
     const remembered = { mode: '2v2' as const, region: 'EU' as const }
+
     expect(parseQueueSearchParams({}, remembered)).toEqual({
       mode: '2v2',
       region: 'EU',
       page: 1,
       snapshotId: undefined,
     })
+
     expect(parseQueueSearchParams({ mode: '3v3', region: 'US-W' }, remembered)).toMatchObject({
       mode: '3v3',
       region: 'US-W',

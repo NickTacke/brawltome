@@ -22,10 +22,13 @@ export function computeRefreshState(input: RefreshStateInput): RefreshState {
   if (input.startedAt === null) {
     return { isRefreshing: false }
   }
+
   const elapsed = input.now - input.startedAt
+
   if (elapsed > input.maxRefreshMs) {
     return { isRefreshing: false }
   }
+
   return { isRefreshing: true }
 }
 
@@ -89,7 +92,9 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
   // biome-ignore lint/correctness/useExhaustiveDependencies: runKey intentionally restarts polling.
   useEffect(() => {
     if (opts.startSignal === false || !shouldStartRef.current(dataRef.current)) return
+
     const start = Date.now()
+
     setError(null)
     setStartedAt(start)
     setNow(start)
@@ -112,8 +117,10 @@ export function useStaleRefresh<T>(opts: UseStaleRefreshOptions<T>): UseStaleRef
       },
       onSettled: (settlement: StaleRefreshSettlement, settledError?: Error) => {
         if (settledError) setError(settledError)
+
         setNow(Date.now())
         if (settlement !== 'timeout') setStartedAt(null)
+
         onSettledRef.current?.(settlement)
       },
     })

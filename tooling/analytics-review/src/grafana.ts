@@ -17,8 +17,11 @@ export function createGrafanaApi(baseUrl: string, password: string): GrafanaApi 
   async function instant(path: string, query: string, time: string): Promise<Sample[]> {
     const url = `${root}${path}?${new URLSearchParams({ query, time })}`
     const response = await fetch(url, { headers: { authorization } })
+
     if (!response.ok) throw new Error(`Grafana query failed with HTTP ${response.status} for ${path}`)
+
     const body = (await response.json()) as InstantResponse
+
     return (body.data?.result ?? []).flatMap((row) =>
       row.value ? [{ metric: row.metric ?? {}, value: Number(row.value[1]) }] : [],
     )

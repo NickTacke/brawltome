@@ -8,5 +8,6 @@ export { formatDuration, timelineX } from './ReplayReportCharts'
 
 export function ReplayResultView({ job }: { job: ReplayJobDetailContract }) {
   const report = replayReportFromJob(job)
+
   return report ? <ReplayReportView report={report} /> : null
 }

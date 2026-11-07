@@ -17,6 +17,7 @@ const sourceGlob = new Bun.Glob('**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}')
 
 export function readArchitectureRepository(root: string): ArchitectureRepository {
   const rootManifest = readManifest(resolve(root, 'package.json'))
+
   const manifestPaths = (rootManifest.workspaces ?? []).flatMap((workspacePattern) => [
     ...new Bun.Glob(`${workspacePattern}/package.json`).scanSync({ cwd: root, onlyFiles: true }),
   ])
@@ -28,14 +29,17 @@ export function readArchitectureRepository(root: string): ArchitectureRepository
 
 function readWorkspace(root: string, manifestPath: string): Workspace {
   const manifest = readManifest(resolve(root, manifestPath))
+
   if (!manifest.name) throw new Error(`Workspace manifest has no name: ${manifestPath}`)
 
   const workspacePath = manifestPath.slice(0, -'/package.json'.length)
+
   const sourceFiles = [...sourceGlob.scanSync({ cwd: resolve(root, workspacePath), onlyFiles: true })]
     .filter((path) => !isIgnoredSource(path))
     .map((path) => {
       const repositoryPath = `${workspacePath}/${path}`
       const source = readFileSync(resolve(root, repositoryPath), 'utf8')
+
       return { repositoryPath, source }
     })
 
@@ -71,9 +75,11 @@ function declaredDependencies(manifest: PackageManifest): string[] {
 
 function exportedSubpaths(exportsField: unknown): string[] {
   if (typeof exportsField === 'string' || Array.isArray(exportsField)) return ['.']
+
   if (!exportsField || typeof exportsField !== 'object') return []
 
   const keys = Object.keys(exportsField)
+
   return keys.some((key) => key.startsWith('.')) ? keys.sort() : ['.']
 }
 

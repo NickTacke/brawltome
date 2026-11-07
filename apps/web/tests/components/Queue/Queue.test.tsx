@@ -5,6 +5,7 @@ import { QueueLoadError, QueueView } from '../../../src/components/Queue'
 import type { QueueFilters } from '../../../src/components/Queue/utils'
 
 const filters: QueueFilters = { mode: '1v1', region: 'EU', page: 1, snapshotId: undefined }
+
 const base = {
   status: 'fresh' as const,
   mode: '1v1' as const,
@@ -20,6 +21,7 @@ const base = {
   hasMore: false,
   totalRows: 1,
 }
+
 const metrics = {
   standing: 4,
   region: 'EU' as const,
@@ -29,6 +31,7 @@ const metrics = {
   lossesDelta: 2,
   gamesDelta: 3,
 }
+
 const playerView = {
   ...base,
   entries: [
@@ -49,6 +52,7 @@ function render(view: LeaderboardRecentActivityOutput, currentFilters: QueueFilt
 describe('Queue activity presentation', () => {
   test('renders each inferred player activity once with rating-first metrics', () => {
     const html = render(playerView)
+
     expect(html).toContain('<h1')
     expect(html).toContain('Queue')
     expect(html.match(/href="\/player\/42"/g)).toHaveLength(1)
@@ -78,6 +82,7 @@ describe('Queue activity presentation', () => {
 
   test('places right-aligned W/L labels above the bar in a compact footer', () => {
     const html = render(playerView)
+
     expect(html.indexOf('1W')).toBeLessThan(html.indexOf('aria-label="Win rate 33.3%"'))
     expect(html).toContain('text-right text-[10px] font-bold')
     expect(html).toContain('mt-3 space-y-2 border-t border-border/50 pt-2')
@@ -104,7 +109,9 @@ describe('Queue activity presentation', () => {
         },
       ],
     } satisfies LeaderboardRecentActivityOutput
+
     const html = render(view, { ...filters, mode: '2v2' })
+
     expect(html.match(/href="\/player\/42"/g)).toHaveLength(1)
     expect(html.match(/href="\/player\/43"/g)).toHaveLength(1)
     expect(html).toContain('Ada with an exceptionally long tournament name')
@@ -124,6 +131,7 @@ describe('Queue activity presentation', () => {
 
   test('renders stale results without a scan alert', () => {
     const stale = render({ ...playerView, status: 'stale' })
+
     expect(stale).toContain('aria-label="Recent ranked activity"')
     expect(stale).not.toContain('role="alert"')
     expect(stale).not.toContain('Last activity scan')
@@ -131,10 +139,12 @@ describe('Queue activity presentation', () => {
 
   test('keeps empty, history, gap, and transport failures distinct and accessible', () => {
     const empty = render({ ...base, totalRows: 0, entries: [] })
+
     expect(empty).toContain('No qualifying ranked activity was observed in this scan interval.')
     expect(empty).toContain('<output')
 
     const outOfRange = render({ ...base, page: 3, totalRows: 1, entries: [] })
+
     expect(outOfRange).toContain('No activity entries are available on this page.')
     expect(outOfRange).toContain('Use Previous to return to activity results.')
     expect(outOfRange).not.toContain('No qualifying ranked activity was observed')
@@ -148,6 +158,7 @@ describe('Queue activity presentation', () => {
       page: 1,
       pageSize: 20,
     })
+
     expect(history).toContain('At least one hour of official scans is needed')
     expect(history).not.toContain('scan interval was skipped')
 
@@ -159,10 +170,12 @@ describe('Queue activity presentation', () => {
       page: 1,
       pageSize: 20,
     })
+
     expect(gap).toContain('A scheduled scan interval was skipped')
     expect(gap).not.toContain('Two completed official scans are needed')
 
     const failure = renderToStaticMarkup(<QueueLoadError filters={filters} />)
+
     expect(failure).toContain('role="alert"')
     expect(failure).toContain('Queue could not be loaded')
     expect(failure).toContain('Try again')
@@ -171,6 +184,7 @@ describe('Queue activity presentation', () => {
 
   test('keeps activity cards shrinkable on narrow mobile viewports', () => {
     const html = render(playerView)
+
     expect(html).toContain('aria-label="Recent ranked activity" class="grid min-w-0')
     expect(html).toContain('<article class="min-w-0">')
     expect(html).toContain('h-full min-w-0')
@@ -182,6 +196,7 @@ describe('Queue activity presentation', () => {
       { ...playerView, page: 2, hasMore: true },
       { mode: '1v1', region: 'EU', page: 2, snapshotId: base.currentSnapshotId },
     )
+
     expect(html.match(/role="combobox"/g)).toHaveLength(2)
     expect(html).toContain('aria-label="Queue mode"')
     expect(html).toContain('aria-label="Queue region"')

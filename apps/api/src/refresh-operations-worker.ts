@@ -183,13 +183,16 @@ function unavailableSourceDomain(error: unknown): SourceDomain | null {
     ) {
       return current.domain
     }
+
     current = typeof current === 'object' && 'cause' in current ? current.cause : undefined
   }
+
   return null
 }
 
 function sourceRetryAfterMs(error: unknown): number | null {
   if (error instanceof SourceAdmissionLimitedError) return error.retryAfterSeconds * 1_000
+
   if (
     typeof error === 'object' &&
     error !== null &&
@@ -199,6 +202,7 @@ function sourceRetryAfterMs(error: unknown): number | null {
   ) {
     return Math.max(0, error.retryAfterMs)
   }
+
   return null
 }
 
@@ -209,11 +213,13 @@ export function retryDelayForAttempt(
   const exponent = Math.max(0, attemptNumber - 1)
   const nominal = policy.baseDelayMs * policy.multiplier ** exponent
   const jitter = 1 + policy.jitterRatio * (2 * policy.random() - 1)
+
   return Math.max(0, Math.min(policy.maxDelayMs, Math.floor(nominal * jitter)))
 }
 
 function executionRetryDelayMs(lease: OperationLease, options: RunOneRefreshOperationOptions): number {
   if (!options.retryBackoff) return options.retryDelayMs
+
   return retryDelayForAttempt(lease.attemptNumber, {
     baseDelayMs: options.retryDelayMs,
     multiplier: options.retryBackoff.multiplier,
@@ -225,13 +231,16 @@ function executionRetryDelayMs(lease: OperationLease, options: RunOneRefreshOper
 
 function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve()
+
   return new Promise((resolve) => {
     const done = () => {
       clearTimeout(timer)
       signal.removeEventListener('abort', done)
       resolve()
     }
+
     const timer = setTimeout(done, intervalMs)
+
     signal.addEventListener('abort', done, { once: true })
   })
 }
@@ -249,6 +258,7 @@ async function renewLease(
   const revokeActiveAuthority = async () => {
     authorityLost.abort()
     const active = clanAuthority.active
+
     if (active && options.revokeClanLeaseAuthority) {
       await options.revokeClanLeaseAuthority(active.lease, active.section).catch(() => undefined)
     }
@@ -257,23 +267,30 @@ async function renewLease(
   while (!signal.aborted) {
     await waitForRenewal(intervalMs, signal)
     if (signal.aborted) return
+
     try {
       if (lease.kind === 'clan-refresh') {
         const authority = await operations.renewWithAuthority(lease, leaseMs)
+
         if (authority.outcome === 'lease-lost') {
           await revokeActiveAuthority()
+
           return
         }
+
         const active = clanAuthority.active
+
         if (active && options.syncClanLeaseAuthority) {
           await options.syncClanLeaseAuthority(active.lease, active.section, authority.leaseExpiresAt)
         }
       } else if ((await operations.renew(lease, leaseMs)) === 'lease-lost') {
         authorityLost.abort()
+
         return
       }
     } catch {
       await revokeActiveAuthority()
+
       return
     }
   }
@@ -284,10 +301,13 @@ export async function reconcileInteractiveAdmissions(
   actorAdmission: ActorAdmission,
 ): Promise<number> {
   let activated = 0
+
   for (const operationId of await operations.listAwaitingInteractiveRefreshes()) {
     if (!(await actorAdmission.hasActorReservation(operationId))) continue
+
     if ((await operations.activateAdmittedInteractiveRefresh(operationId)) === 'transitioned') activated++
   }
+
   return activated
 }
 
@@ -301,6 +321,7 @@ function failureDetails(error: unknown, fallbackCode: string) {
       retryable: !('retryable' in error) || error.retryable !== false,
     }
   }
+
   return { code: fallbackCode, message: 'Unknown operation failure', retryable: true }
 }
 
@@ -312,15 +333,19 @@ async function executeProof(
   options: RunOneRefreshOperationOptions,
 ): Promise<AttemptExecutionOutcome> {
   const effect = options.executeEffect ? await options.executeEffect(lease) : await operations.commitProofEffect(lease)
+
   if (effect === 'lease-lost') return 'lease_lost'
+
   if (effect === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'effect_conflict', message: 'Operation key belongs to a different effect', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -330,6 +355,7 @@ function createSourceAdmission(
   section: InteractiveSection | 'ranked-pulse' | 'name-verification',
 ): (domain: SourceDomain) => Promise<void> {
   let sourceCall = 0
+
   return async (domain) => {
     const sourceAdmission = await options.sourceAdmission?.admitSource({
       domain,
@@ -337,7 +363,9 @@ function createSourceAdmission(
       units: 1,
       caller: lease.workClass === 'interactive' ? 'on-demand' : 'background',
     })
+
     if (!sourceAdmission) throw new Error('Source admission is unavailable')
+
     if (sourceAdmission.outcome === 'rate-limited') {
       throw new SourceAdmissionLimitedError(sourceAdmission.retryAfterSeconds)
     }
@@ -362,40 +390,53 @@ async function executeInteractive(
   authorityLost: AbortController,
 ): Promise<AttemptExecutionOutcome> {
   if (!options.sourceAdmission) throw new Error('Interactive refresh dependencies are unavailable')
+
   const failures: unknown[] = []
 
   for (const section of lease.payload.staleSections as InteractiveSection[]) {
     if (authorityLost.signal.aborted) return 'lease_lost'
+
     // Account Primary refreshes stop once their assignment ends; recently viewed refreshes belong to no account.
     if (isAccountPrimaryLease(lease)) {
       if (!options.isPrimaryMonitoringTarget) throw new Error('Primary monitoring eligibility is unavailable')
+
       if (!(await options.isPrimaryMonitoringTarget(lease))) {
         return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
       }
     }
+
     let leaseExpiresAt: Date | undefined
+
     if (lease.kind === 'clan-refresh') {
       const authority = await operations.renewWithAuthority(lease, options.leaseMs)
+
       if (authority.outcome === 'lease-lost') {
         authorityLost.abort()
+
         return 'lease_lost'
       }
+
       leaseExpiresAt = authority.leaseExpiresAt
     } else if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') {
       authorityLost.abort()
+
       return 'lease_lost'
     }
 
     const checkpoint = await operations.beginInteractiveSection(lease, section)
+
     if (checkpoint === 'lease-lost' || authorityLost.signal.aborted) return 'lease_lost'
+
     if (checkpoint === 'already-applied') continue
 
     const admitSourceCall = createSourceAdmission(options, lease, section)
+
     try {
       if (lease.kind === 'interactive-player-refresh') {
         if (!options.executeSection || (section !== 'ranked' && section !== 'stats')) {
           throw new Error('Player refresh handler unavailable')
         }
+
         await options.executeSection(
           lease,
           section,
@@ -411,11 +452,14 @@ async function executeInteractive(
         ) {
           throw new Error('Clan refresh handler unavailable')
         }
+
         clanAuthority.active = { lease, section }
         await options.syncClanLeaseAuthority(lease, section, leaseExpiresAt)
         await options.executeClanSection(lease, section, admitSourceCall, leaseExpiresAt)
       }
+
       if (authorityLost.signal.aborted) return 'lease_lost'
+
       if ((await operations.commitInteractiveSection(lease, section)) === 'lease-lost') return 'lease_lost'
     } catch (error) {
       failures.push(error)
@@ -425,15 +469,20 @@ async function executeInteractive(
   }
 
   if (authorityLost.signal.aborted) return 'lease_lost'
+
   if (failures.length > 0) {
     const executionFailure = failures.find((error) => sourceRetryAfterMs(error) === null)
+
     if (executionFailure) throw executionFailure
+
     const retryAware = failures
       .map((error) => ({ error, retryAfterMs: sourceRetryAfterMs(error) }))
       .filter((failure): failure is { error: unknown; retryAfterMs: number } => failure.retryAfterMs !== null)
       .sort((left, right) => right.retryAfterMs - left.retryAfterMs)[0]
+
     throw retryAware?.error ?? failures[0]
   }
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -444,8 +493,11 @@ async function executeDiscoveryProjection(
 ): Promise<AttemptExecutionOutcome> {
   const execute =
     lease.kind === 'player-discovery-projection' ? options.executePlayerProjection : options.executeClanProjection
+
   if (!execute) throw new Error('Discovery projection executor is unavailable')
+
   await execute(lease)
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -455,7 +507,9 @@ async function executeDiscoveryReconciliation(
   options: RunOneRefreshOperationOptions,
 ): Promise<AttemptExecutionOutcome> {
   if (!options.executeDiscoveryReconciliation) throw new Error('Discovery reconciliation executor is unavailable')
+
   await options.executeDiscoveryReconciliation(lease)
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -474,9 +528,12 @@ async function executeRankedPulse(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   await options.executeRankedPulse(lease, createSourceAdmission(options, lease, 'ranked-pulse'))
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -496,10 +553,14 @@ async function executeNameVerification(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+
   await options.executePlayerNameVerification(lease, createSourceAdmission(options, lease, 'name-verification'))
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -512,7 +573,9 @@ async function executeRankingRetention(
 ): Promise<AttemptExecutionOutcome> {
   if (options.rankingRetentionEnabled === false) {
     const transition = await operations.complete(lease)
+
     if (transition === 'lease-lost') return 'lease_lost'
+
     try {
       options.telemetry?.logger.info('ranking.retention.skipped', {
         operationId: lease.operationId,
@@ -522,8 +585,10 @@ async function executeRankingRetention(
     } catch {
       // Telemetry never decides the outcome of committed work.
     }
+
     return 'succeeded'
   }
+
   if (!options.rankingRetention) {
     const transition = await operations.fail(
       lease,
@@ -534,22 +599,31 @@ async function executeRankingRetention(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+
   const started = performance.now()
+
   const result = await options.rankingRetention.expireGenerations(
     { operationId: lease.operationId, leaseOwner: lease.leaseOwner, leaseToken: lease.leaseToken },
     lease.payload,
   )
+
   if (result.outcome === 'lease-lost') return 'lease_lost'
+
   const telemetry = options.telemetry
+
   if (telemetry) {
     try {
       const durationMs = Math.round(performance.now() - started)
+
       telemetry.metrics.add('ranking_retention_deleted_generations_total', result.deletedGenerations, {})
       telemetry.metrics.set('ranking_retention_expirable_generations', result.expirableGenerations, {})
       telemetry.metrics.observe('ranking_retention_duration_ms', durationMs, {})
+
       telemetry.logger.info('ranking.retention.completed', {
         operationId: lease.operationId,
         deletedGenerations: result.deletedGenerations,
@@ -564,6 +638,7 @@ async function executeRankingRetention(
       // Telemetry never decides the outcome of committed work.
     }
   }
+
   return 'succeeded'
 }
 
@@ -578,9 +653,12 @@ async function executeStatisticsCollection(
       { code: 'statistics_executor_unavailable', message: 'Statistics executor is not configured', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+
   const authorization = {
     operationId: lease.operationId,
     effectOperationId: lease.effectOperationId,
@@ -592,20 +670,27 @@ async function executeStatisticsCollection(
     cohortId: lease.payload.cohortId,
     brawlhallaId: lease.payload.brawlhallaId,
   }
+
   const preflight = await options.statistics.preflightCollection(authorization)
+
   if (preflight === 'already-applied') {
     return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
   }
+
   if (preflight === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'statistics_effect_conflict', message: 'Statistics effect identity conflicts', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const attemptPreflight = await options.statistics.preflightCollectionAttempt(authorization)
+
   if (attemptPreflight === 'lease-lost') return 'lease_lost'
+
   if (attemptPreflight === 'capacity-exceeded') {
     const transition = await operations.fail(
       lease,
@@ -616,26 +701,35 @@ async function executeStatisticsCollection(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if (attemptPreflight === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'statistics_effect_conflict', message: 'Statistics attempt identity conflicts', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const admission = await options.sourceAdmission.admitSource({
     domain: 'brawlhalla-v1',
     reservationKey: `${lease.operationId}:${lease.attemptNumber}:${lease.kind}`,
     units: 1,
     caller: 'background',
   })
+
   if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
+
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+
   const attempt = await options.statistics.recordCollectionAttempt(authorization)
+
   if (attempt === 'lease-lost') return 'lease_lost'
+
   if (attempt === 'capacity-exceeded') {
     const transition = await operations.fail(
       lease,
@@ -646,17 +740,22 @@ async function executeStatisticsCollection(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if (attempt === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'statistics_effect_conflict', message: 'Statistics attempt identity conflicts', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const evidence = await options.executeStatisticsCollection(lease)
+
   const committed =
     lease.kind === 'statistics-ranked-collection'
       ? await options.statistics.commitObservation({
@@ -667,15 +766,19 @@ async function executeStatisticsCollection(
           authorization: { ...authorization, kind: lease.kind },
           evidence: evidence as LifetimeEvidence,
         })
+
   if (committed === 'lease-lost') return 'lease_lost'
+
   if (committed === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'statistics_effect_conflict', message: 'Statistics effect identity conflicts', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -690,9 +793,12 @@ async function executeStatisticsPublication(
       { code: 'statistics_executor_unavailable', message: 'Statistics executor is not configured', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+
   const authorization = {
     operationId: lease.operationId,
     effectOperationId: lease.effectOperationId,
@@ -703,20 +809,27 @@ async function executeStatisticsPublication(
     generationId: lease.payload.generationId,
     product: lease.payload.product,
   }
+
   const preflight = await options.statistics.preflightPublication(authorization)
+
   if (preflight === 'already-applied') {
     return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
   }
+
   if (preflight === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'statistics_effect_conflict', message: 'Statistics publication identity conflicts', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const published = await options.statistics.validateAndPublish(authorization)
+
   if (published.result === 'lease-lost') return 'lease_lost'
+
   if (published.result === 'collection-active') {
     const transition = await operations.defer(
       lease,
@@ -727,16 +840,20 @@ async function executeStatisticsPublication(
       },
       options.retryDelayMs,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'retry'
   }
+
   if (published.result === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
       { code: 'statistics_effect_conflict', message: 'Statistics publication identity conflicts', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -755,9 +872,12 @@ async function executeStatisticsLegendMetaPublication(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
+
   const authorization = {
     operationId: lease.operationId,
     effectOperationId: lease.effectOperationId,
@@ -767,10 +887,13 @@ async function executeStatisticsLegendMetaPublication(
     leaseToken: lease.leaseToken,
     generationId: lease.payload.generationId,
   }
+
   const preflight = await options.statistics.preflightLegendMetaPublication(authorization)
+
   if (preflight === 'already-applied') {
     return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
   }
+
   if (preflight === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
@@ -781,10 +904,14 @@ async function executeStatisticsLegendMetaPublication(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const published = await options.statistics.buildAndPublishLegendMeta(authorization)
+
   if (published.result === 'lease-lost') return 'lease_lost'
+
   if (published.result === 'prerequisite-missing') {
     const transition = await operations.defer(
       lease,
@@ -795,8 +922,10 @@ async function executeStatisticsLegendMetaPublication(
       },
       options.retryDelayMs,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'retry'
   }
+
   if (published.result === 'effect-conflict') {
     const transition = await operations.fail(
       lease,
@@ -807,8 +936,10 @@ async function executeStatisticsLegendMetaPublication(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -825,14 +956,17 @@ function isTransientLeaderboardPageFailure(error: unknown): boolean {
 
 function leaderboardContestants(candidate: LeaderboardGenerationCandidate) {
   const contestants = new Map<number, string>()
+
   for (const rows of candidate.snapshots.values()) {
     for (const { identity } of rows) {
       const players = identity.type === 'fixed-two-vs-two-team' ? identity.players : [identity.player]
+
       for (const player of players) {
         if (!contestants.has(player.brawlhallaId)) contestants.set(player.brawlhallaId, player.name)
       }
     }
   }
+
   return [...contestants].map(([brawlhallaId, name]) => ({ brawlhallaId, name }))
 }
 
@@ -849,11 +983,15 @@ function oneVsOneStandings(candidate: LeaderboardGenerationCandidate) {
       games: number
     }
   >()
+
   for (const rows of candidate.snapshots.values()) {
     for (const row of rows) {
       if (row.identity.type !== 'one-vs-one-player') continue
+
       const { brawlhallaId } = row.identity.player
+
       if (standings.has(brawlhallaId)) continue
+
       standings.set(brawlhallaId, {
         brawlhallaId,
         region: row.region,
@@ -865,6 +1003,7 @@ function oneVsOneStandings(candidate: LeaderboardGenerationCandidate) {
       })
     }
   }
+
   return [...standings.values()]
 }
 
@@ -877,41 +1016,50 @@ function withLeaderboardNamePropagation(
   telemetry: Telemetry | undefined,
 ): RankingPublicationStore {
   if (!names && !standings) return ranking
+
   return {
     recordCollectionFailure: (authorization, failure) => ranking.recordCollectionFailure(authorization, failure),
     async publishGeneration(authorization, candidate) {
       const result = await ranking.publishGeneration(authorization, candidate)
+
       if (result !== 'published' && result !== 'already-published') return result
+
       const log = (write: (active: Telemetry) => void) => {
         if (!telemetry) return
+
         try {
           write(telemetry)
         } catch {
           return
         }
       }
+
       if (names) {
         try {
           const { changed } = await names.applyLeaderboardNames({
             observedAt: candidate.observedAt,
             players: leaderboardContestants(candidate),
           })
+
           log((active) => active.logger.info('leaderboard.player_names.applied', { mode: candidate.mode, changed }))
         } catch (error) {
           log((active) => active.logger.error('leaderboard.player_names.failed', error, { mode: candidate.mode }))
         }
       }
+
       if (standings && candidate.mode === '1v1') {
         try {
           const { changed } = await standings.applyLeaderboardRanked({
             observedAt: candidate.observedAt,
             players: oneVsOneStandings(candidate),
           })
+
           log((active) => active.logger.info('leaderboard.player_ranked.applied', { mode: candidate.mode, changed }))
         } catch (error) {
           log((active) => active.logger.error('leaderboard.player_ranked.failed', error, { mode: candidate.mode }))
         }
       }
+
       return result
     },
   }
@@ -930,8 +1078,10 @@ function admittedLeaderboardPageFetch(
   const renewLeaderboardLease = async () => {
     if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') throw new LeaderboardLeaseLostError()
   }
+
   return async (input) => {
     const pageKey = `${lease.operationId}:${lease.leaseToken}:${input.mode}:${input.region}:${input.page}`
+
     for (let retry = 0; ; retry += 1) {
       await renewLeaderboardLease()
       for (;;) {
@@ -942,11 +1092,15 @@ function admittedLeaderboardPageFetch(
           units: 1,
           caller: 'background',
         })
+
         if (admission.outcome === 'admitted') break
+
         await (options.waitForSourceAdmission ?? waitForRenewal)(admission.retryAfterSeconds * 1_000, authorityLost)
         if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+
         await renewLeaderboardLease()
       }
+
       await renewLeaderboardLease()
       try {
         return await (options.telemetry
@@ -954,7 +1108,9 @@ function admittedLeaderboardPageFetch(
           : leaderboardSource.fetchPage(input))
       } catch (error) {
         const delayMs = leaderboardPageRetryDelaysMs[retry]
+
         if (delayMs === undefined || !isTransientLeaderboardPageFailure(error)) throw error
+
         await (options.waitForSourceRetry ?? waitForRenewal)(delayMs, authorityLost)
         if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
       }
@@ -983,7 +1139,9 @@ async function executeLeaderboardDeepCrawl(
 ): Promise<AttemptExecutionOutcome> {
   const { leaderboardSource, sourceAdmission, leaderboardPlayerNames, leaderboardRanked, leaderboardTeamModes } =
     options
+
   const mode = lease.payload.mode ?? '1v1'
+
   if (
     !leaderboardSource ||
     !sourceAdmission ||
@@ -998,12 +1156,15 @@ async function executeLeaderboardDeepCrawl(
       },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const { region } = lease.payload
   const progress = options.leaderboardDeepCrawlProgress
   const slicePages = options.deepCrawlSlicePages ?? defaultDeepCrawlSlicePages
   const windowAt = new Date(lease.scheduleWindowAt ?? lease.effectCreatedAt)
+
   const fetchPage = admittedLeaderboardPageFetch(
     operations,
     lease,
@@ -1012,14 +1173,17 @@ async function executeLeaderboardDeepCrawl(
     leaderboardSource,
     authorityLost,
   )
+
   const record = (write: (active: Telemetry) => void) => {
     if (!options.telemetry) return
+
     try {
       write(options.telemetry)
     } catch {
       return
     }
   }
+
   const started = performance.now()
   const saved = await progress?.read(mode, region)
   const resuming = saved !== undefined && saved !== null && saved.windowAt.getTime() === windowAt.getTime()
@@ -1032,18 +1196,22 @@ async function executeLeaderboardDeepCrawl(
   let changedStandings = 0
   let pagesRead = 0
   let pagesSkipped = 0
+
   const changed = (change: 'name' | 'standing' | 'solo' | 'team', count: number) =>
     record((active) => active.metrics.add('leaderboard_deep_crawl_changed_total', count, { mode, region, change }))
+
   const flush = async () => {
     if (chunk.length > 0 && mode === '1v1' && leaderboardPlayerNames && leaderboardRanked) {
       const names = await leaderboardPlayerNames.applyLeaderboardNames({
         observedAt: chunkObservedAt,
         players: chunk.map(({ brawlhallaId, name }) => ({ brawlhallaId, name })),
       })
+
       const standings = await leaderboardRanked.applyLeaderboardRanked({
         observedAt: chunkObservedAt,
         players: chunk.map(({ name: _name, ...standing }) => standing),
       })
+
       changedNames += names.changed
       changedStandings += standings.changed
       changed('name', names.changed)
@@ -1054,17 +1222,21 @@ async function executeLeaderboardDeepCrawl(
         observedAt: chunkObservedAt,
         players: chunk.map(({ name: _name, ...standing }) => standing),
       })
+
       changedStandings += solo.changed
       changed('solo', solo.changed)
     } else if (teamChunk.length > 0 && leaderboardTeamModes) {
       const teams = await leaderboardTeamModes.applyLeaderboardTeams({ observedAt: chunkObservedAt, teams: teamChunk })
+
       changedStandings += teams.changed
       changed('team', teams.changed)
     }
+
     chunk = []
     teamChunk = []
     await progress?.save({ mode, region, windowAt, nextPage: page, totalPages })
   }
+
   const log = (outcome: 'completed' | 'yielded') =>
     record((active) =>
       active.logger.info(`leaderboard.deep_crawl.${outcome}`, {
@@ -1082,8 +1254,11 @@ async function executeLeaderboardDeepCrawl(
 
   while (page <= totalPages) {
     if (authorityLost.aborted) throw new LeaderboardLeaseLostError()
+
     if (chunk.length === 0 && teamChunk.length === 0) chunkObservedAt = new Date()
+
     let result: Awaited<ReturnType<LeaderboardPageSource['fetchPage']>>
+
     try {
       result = await fetchPage({ mode, region, page })
     } catch (error) {
@@ -1092,24 +1267,33 @@ async function executeLeaderboardDeepCrawl(
       if (!(error instanceof LeaderboardSourceError) || error.code !== 'source_contract_invalid' || page === 1) {
         throw error
       }
+
       if (/exceeds total_pages/.test(error.message)) break
+
       pagesSkipped += 1
+
       record((active) =>
         active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode, region, outcome: 'skipped' }),
       )
+
       page += 1
       continue
     }
+
     if (page === 1) totalPages = result.totalPages
+
     if (result.rankings.length === 0) break
+
     pagesRead += 1
     record((active) => active.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode, region, outcome: 'read' }))
     if (mode === '2v2') teamChunk.push(...leaderboardDeepCrawlTeams(result))
     else chunk.push(...leaderboardDeepCrawlStandings(result))
+
     page += 1
     if (options.deepCrawlPageDelayMs && page <= totalPages) {
       await (options.waitForSourceRetry ?? waitForRenewal)(options.deepCrawlPageDelayMs, authorityLost)
     }
+
     if (pagesRead % deepCrawlChunkPages === 0) {
       await flush()
       if (pagesRead >= slicePages && page <= totalPages) {
@@ -1118,9 +1302,11 @@ async function executeLeaderboardDeepCrawl(
       }
     }
   }
+
   page = totalPages + 1
   await flush()
   log('completed')
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -1136,10 +1322,13 @@ async function executeLeaderboard(
       { code: 'leaderboard_executor_unavailable', message: 'Leaderboard executor is not configured', retryable: false },
       0,
     )
+
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
+
   const { leaderboardSource, ranking, sourceAdmission } = options
   const mode = leaderboardModeFromOperationKind(lease.kind)
+
   await collectAndPublishLeaderboardGeneration({
     mode,
     authorization: {
@@ -1170,6 +1359,7 @@ async function executeLeaderboard(
     pageDepth: lease.payload.pageDepth,
     intervalMs: lease.payload.intervalMs,
   })
+
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
@@ -1179,12 +1369,15 @@ export async function runOneRefreshOperation(
   options: RunOneRefreshOperationOptions,
 ): Promise<boolean> {
   const claimed = await operations.claim(workerId, options.leaseMs, options.admission)
+
   if (!claimed) return false
+
   const lease: OperationLease = claimed
 
   const telemetry = options.telemetry
   const started = performance.now()
   let attemptOutcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost' = 'succeeded'
+
   let failureCategory:
     | 'admission_deferred'
     | 'source_rate_limited'
@@ -1195,6 +1388,7 @@ export async function runOneRefreshOperation(
 
   function record(recording: (active: Telemetry) => void): void {
     if (!telemetry) return
+
     try {
       recording(telemetry)
     } catch {
@@ -1213,9 +1407,11 @@ export async function runOneRefreshOperation(
         scheduled: lease.scheduleWindowAt !== null,
       }),
     )
+
     const renewal = new AbortController()
     const authorityLost = new AbortController()
     const clanAuthority: { active: ActiveClanAuthority } = { active: null }
+
     const renewalLoop = renewLease(
       operations,
       lease,
@@ -1226,6 +1422,7 @@ export async function runOneRefreshOperation(
       authorityLost,
       options,
     )
+
     try {
       if (lease.kind === 'proof') attemptOutcome = await executeProof(operations, lease, options)
       else if (lease.kind === 'interactive-player-refresh' || lease.kind === 'clan-refresh') {
@@ -1251,51 +1448,66 @@ export async function runOneRefreshOperation(
       } else {
         attemptOutcome = await executeLeaderboard(operations, lease, options, authorityLost.signal)
       }
+
       if (attemptOutcome === 'lease_lost') failureCategory = 'lease_lost'
     } catch (error) {
       if (error instanceof LeaderboardLeaseLostError) {
         attemptOutcome = 'lease_lost'
         failureCategory = 'lease_lost'
+
         return true
       }
+
       if (error instanceof LeaderboardDeepCrawlYield) {
         const transition = await operations.defer(
           lease,
           { code: 'deep_crawl_yield', message: error.message, retryable: true },
           0,
         )
+
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
         failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'admission_deferred'
+
         return true
       }
+
       if (error instanceof SourceAdmissionLimitedError) {
         const transition = await operations.defer(
           lease,
           failureDetails(error, 'source_rate_limited'),
           error.retryAfterSeconds * 1_000,
         )
+
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
         failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'admission_deferred'
+
         return true
       }
+
       if (error instanceof LeaderboardSourceError && error.retryable) {
         const transition = await operations.defer(
           lease,
           failureDetails(error, error.code),
           Math.max(60_000, options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs),
         )
+
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
+
         failureCategory =
           transition === 'lease-lost'
             ? 'lease_lost'
             : error.code === 'source_rate_limited'
               ? 'source_rate_limited'
               : 'source_unavailable'
+
         return true
       }
+
       const unavailableDomain = unavailableSourceDomain(error)
+
       if (unavailableDomain) {
         const retryMs = Math.max(60_000, options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs)
+
         // Pausing the source holds every other caller too, instead of each discovering the outage on its own.
         try {
           await options.sourceAdmission?.pauseSource(unavailableDomain, Math.ceil(retryMs / 1_000))
@@ -1304,13 +1516,18 @@ export async function runOneRefreshOperation(
             active.logger.error('source.backoff.persist_failed', pauseError, { domain: unavailableDomain }),
           )
         }
+
         const transition = await operations.defer(lease, failureDetails(error, 'source_unavailable'), retryMs)
+
         attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
         failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_unavailable'
+
         return true
       }
+
       if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {
         let effectState: 'none' | 'applied' | 'acknowledged'
+
         try {
           effectState = options.projectionEffectState
             ? await options.projectionEffectState(lease.kind, lease.effectOperationId)
@@ -1319,24 +1536,34 @@ export async function runOneRefreshOperation(
               : 'none'
         } catch {
           const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
+
           attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
           failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'execution'
+
           return true
         }
+
         if (effectState === 'acknowledged') {
           const transition = await operations.complete(lease)
+
           attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'succeeded'
           failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'unknown'
+
           return true
         }
+
         if (effectState === 'applied') {
           const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
+
           attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
           failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'execution'
+
           return true
         }
       }
+
       const sourceRetryMs = sourceRetryAfterMs(error)
+
       const fallbackCode =
         sourceRetryMs !== null
           ? 'source_rate_limited'
@@ -1368,7 +1595,9 @@ export async function runOneRefreshOperation(
                                   : lease.kind === 'statistics-legend-meta-publication'
                                     ? 'statistics_legend_meta_publication_failed'
                                     : 'leaderboard_collection_failed'
+
       const failure = failureDetails(error, fallbackCode)
+
       attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
       failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'
       if (
@@ -1377,6 +1606,7 @@ export async function runOneRefreshOperation(
         attemptOutcome = 'lease_lost'
         failureCategory = 'lease_lost'
       }
+
       record((active) =>
         active.logger.error('operation.attempt.failed', error, {
           operationId: lease.operationId,
@@ -1393,12 +1623,14 @@ export async function runOneRefreshOperation(
       renewal.abort()
       await renewalLoop
       const labels = { kind: lease.kind, work_class: lease.workClass, outcome: attemptOutcome }
+
       record((active) => {
         active.metrics.add('operation_attempts_total', 1, labels)
         active.metrics.observe('operation_duration_ms', performance.now() - started, labels)
         if (attemptOutcome !== 'succeeded') {
           active.metrics.add('refresh_failures_total', 1, { kind: lease.kind, failure_category: failureCategory })
         }
+
         active.logger.info('operation.attempt.completed', {
           operationId: lease.operationId,
           effectOperationId: lease.effectOperationId,
@@ -1410,11 +1642,14 @@ export async function runOneRefreshOperation(
         })
       })
     }
+
     return true
   }
 
   if (!telemetry) return executeClaimed()
+
   const context = telemetry.childContext()
+
   return telemetry.run(context, () =>
     telemetry.trace(
       'operation.attempt',

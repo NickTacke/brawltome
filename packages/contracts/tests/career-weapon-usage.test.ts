@@ -90,16 +90,19 @@ const previousHistorySnapshot = {
 describe('Career Weapon Usage contract', () => {
   test('accepts exact metrics while preserving measured zero and unavailable rates', () => {
     const parsed = parseCareerWeaponUsageOutput(available)
+
     if (parsed.status === 'unavailable') throw new Error('expected an available Career snapshot')
 
     expect(parsed).toMatchObject({
       cohortMethodologyVersion: 'full-launch-cohort-v1',
       methodologyVersion: 'career-weapon-usage-v1',
     })
+
     expect(parsed.rows[0]).toMatchObject({
       medianDamagePerMinute: { numerator: '0', denominator: '1' },
       medianKosPerHour: { numerator: '0', denominator: '1' },
     })
+
     expect(parsed.rows[1]).toMatchObject({
       observedPlayers: 0,
       prevalence: { numerator: '0', denominator: '1' },
@@ -114,8 +117,10 @@ describe('Career Weapon Usage contract', () => {
       region: 'all',
       bracket: 'all',
     })
+
     expect(() => careerWeaponUsageInputSchema.parse({ region: 'EU', bracket: 'Gold' })).toThrow()
     expect(() => careerWeaponUsageInputSchema.parse({ region: 'historical', bracket: 'Diamond+' })).toThrow()
+
     expect(
       careerWeaponUsageOutputSchema.parse({
         status: 'unavailable',
@@ -137,13 +142,16 @@ describe('Career Weapon Usage contract', () => {
         staleReasons: ['newer_publication_rejected', 'weekly_publication_overdue'],
       }).status,
     ).toBe('stale')
+
     expect(() => parseCareerWeaponUsageOutput({ ...available, status: 'stale', staleReasons: [] })).toThrow()
+
     expect(() =>
       parseCareerWeaponUsageOutput({
         ...available,
         rows: [{ ...available.rows[1], comparison: { eligible: true, reasons: [] } }],
       }),
     ).toThrow()
+
     expect(() =>
       parseCareerWeaponUsageOutput({
         ...available,
@@ -181,6 +189,7 @@ describe('Career Weapon Usage history contract', () => {
         direction: 'decrease',
       },
     } as const
+
     const output = {
       status: 'available',
       filters: available.filters,
@@ -232,10 +241,12 @@ describe('Career Weapon Usage history contract', () => {
       medianDamagePerMinute: { change: { numerator: '0', denominator: '1' }, direction: 'unchanged' },
       medianKosPerHour: { change: { numerator: '0', denominator: '1' }, direction: 'unchanged' },
     } as const
+
     const incompatiblePrevious = {
       ...previousHistorySnapshot,
       cohortMethodologyVersion: 'full-launch-cohort-v2',
     }
+
     const base = {
       status: 'available',
       filters: available.filters,
@@ -253,6 +264,7 @@ describe('Career Weapon Usage history contract', () => {
     } as const
 
     expect(() => parseCareerWeaponUsageHistoryOutput(base)).toThrow()
+
     expect(() =>
       parseCareerWeaponUsageHistoryOutput({
         ...base,
@@ -266,6 +278,7 @@ describe('Career Weapon Usage history contract', () => {
       ...previousHistorySnapshot,
       methodologyVersion: 'career-weapon-usage-v2',
     }
+
     expect(
       parseCareerWeaponUsageHistoryOutput({
         status: 'available',
@@ -288,6 +301,7 @@ describe('Career Weapon Usage history contract', () => {
         ],
       }).status,
     ).toBe('available')
+
     expect(() =>
       careerWeaponUsageHistoryOutputSchema.parse({
         status: 'available',
@@ -301,6 +315,7 @@ describe('Career Weapon Usage history contract', () => {
         })),
       }),
     ).toThrow()
+
     expect(
       parseCareerWeaponUsageHistoryOutput({
         status: 'unavailable',

@@ -8,6 +8,7 @@ export function createSearchRouter(procedure = publicProcedure) {
       .output(discoverySearchOutputSchema)
       .query(async ({ ctx, input }) => {
         const result = await ctx.discoveryQueries.search(input.query)
+
         try {
           ctx.telemetry.metrics.add('search_requests_total', 1, {
             outcome: result.players.length + result.clans.length > 0 ? 'hit' : 'miss',
@@ -15,6 +16,7 @@ export function createSearchRouter(procedure = publicProcedure) {
         } catch {
           // telemetry must never fail a search
         }
+
         return result
       }),
   })

@@ -13,11 +13,13 @@ function withOfficialValhallanTier(
   evidence: PlayerValhallanEvidence | null,
 ): RankedPlayerProfile | null {
   if (!profile?.snapshot || !evidence) return profile
+
   const fixedTeams = new Set(
     evidence.fixedTwoVsTwoTeams.map(({ brawlhallaIdOne, brawlhallaIdTwo }) =>
       [brawlhallaIdOne, brawlhallaIdTwo].sort((left, right) => left - right).join(':'),
     ),
   )
+
   return {
     ...profile,
     snapshot: {
@@ -52,6 +54,7 @@ export function createPlayerRankedRouter(procedure = internalProcedure) {
           ctx.rankedPlayerQueries.byId(input.id),
           ctx.rankingQueries.playerValhallanEvidenceById(input.id),
         ])
+
         return mapPlayerRankedProfile(withOfficialValhallanTier(profile, evidence))
       }),
     leaderboardStandingById: procedure
@@ -59,6 +62,7 @@ export function createPlayerRankedRouter(procedure = internalProcedure) {
       .output(nullableLeaderboardStandingSchema)
       .query(async ({ ctx, input }) => {
         const standing = await ctx.leaderboardStandings?.standingById(input.id)
+
         return standing ? { ...standing, observedAt: standing.observedAt.toISOString() } : null
       }),
   })

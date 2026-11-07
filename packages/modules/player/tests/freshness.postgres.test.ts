@@ -43,6 +43,7 @@ describe('Player freshness', () => {
   test('reports the older full V0 refresh and null when a section never came from V0', async () => {
     const control = postgres(connectionString, { max: 1 })
     const freshness = createPostgresPlayerFreshness(database)
+
     try {
       await insertRanked(control, 1, '2026-10-07T10:00:00Z')
       await insertCareer(control, 1, '2026-10-07T08:00:00Z')
@@ -58,12 +59,15 @@ describe('Player freshness', () => {
           [4, null],
         ]),
       )
+
       expect(await freshness.lastRefreshedById([])).toEqual(new Map())
+
       await control`
         INSERT INTO players.leaderboard_ranked_observations
           (brawlhalla_id, region, rating, peak_rating, tier, wins, games, observed_at)
         VALUES (1, 'EU', 2000, 2100, 'Diamond', 1, 2, '2026-10-07T12:00:00Z')
       `
+
       expect(await freshness.lastPlayedById([1, 2])).toEqual(new Map([[1, new Date('2026-10-07T12:00:00Z')]]))
       expect(await freshness.lastPlayedById([])).toEqual(new Map())
     } finally {

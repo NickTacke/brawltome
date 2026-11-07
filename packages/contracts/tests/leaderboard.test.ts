@@ -21,6 +21,7 @@ const common = {
   hasMore: false,
   totalRows: 1,
 }
+
 const metrics = {
   standing: 1,
   sourceRank: 4,
@@ -32,6 +33,7 @@ const metrics = {
   games: 30,
   tier: 'Diamond',
 }
+
 const player = { brawlhallaId: 42, name: 'Ada' }
 
 const activityBase = {
@@ -49,6 +51,7 @@ const activityBase = {
   hasMore: false,
   totalRows: 1,
 }
+
 const activityMetrics = {
   standing: 4,
   region: 'EU' as const,
@@ -79,6 +82,7 @@ describe('leaderboard contract', () => {
     for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
       expect(leaderboardInputSchema.parse({ mode, region: 'all', page: 1 })).toEqual({ mode, region: 'all', page: 1 })
     }
+
     expect(() => leaderboardInputSchema.parse({ bracket: '1v1', region: 'all', page: 1 })).toThrow()
     expect(() => leaderboardInputSchema.parse({ mode: 'solo_2v2', region: 'all', page: 1 })).toThrow()
     expect(() => leaderboardInputSchema.parse({ mode: '1v1', region: 'all', page: 1, extra: true })).toThrow()
@@ -101,6 +105,7 @@ describe('leaderboard contract', () => {
         },
       ],
     }
+
     expect(parseLeaderboardOutput(output)).toEqual(output)
   })
 
@@ -113,7 +118,9 @@ describe('leaderboard contract', () => {
           provenance: { ...common.provenance, contractVersion },
           entries: entries[mode],
         }
+
         const parsed = parseLeaderboardOutput(output)
+
         expect(parsed.mode).toBe(mode)
         expect(parsed).toEqual(output as never)
       }
@@ -134,7 +141,9 @@ describe('leaderboard contract', () => {
       },
       entries: entries['1v1'],
     }
+
     expect(parseLeaderboardOutput(output)).toEqual(output)
+
     expect(() =>
       leaderboardOutputSchema.parse({
         ...output,
@@ -151,6 +160,7 @@ describe('leaderboard contract', () => {
 
   test('rejects zero IDs, descending or duplicate fixed slots, inconsistent games, and unknown output fields', () => {
     const fixed = entries['2v2'][0]
+
     for (const identity of [
       { type: 'fixed-two-vs-two-team', players: [{ brawlhallaId: 0, name: 'Zero' }, player] },
       { type: 'fixed-two-vs-two-team', players: [player, player] },
@@ -160,9 +170,11 @@ describe('leaderboard contract', () => {
         leaderboardOutputSchema.parse({ ...common, mode: '2v2', entries: [{ ...fixed, identity }] }),
       ).toThrow()
     }
+
     expect(() =>
       leaderboardOutputSchema.parse({ ...common, mode: '1v1', entries: [{ ...entries['1v1'][0], games: 29 }] }),
     ).toThrow()
+
     expect(() =>
       leaderboardOutputSchema.parse({ ...common, mode: '1v1', entries: entries['1v1'], persistence: true }),
     ).toThrow()
@@ -186,6 +198,7 @@ describe('recent leaderboard activity contract', () => {
     ...activityMetrics,
     identity: { type: 'one-vs-one-player' as const, player },
   }
+
   const fixedTeamEntry = {
     ...activityMetrics,
     ratingDelta: 12,
@@ -200,9 +213,11 @@ describe('recent leaderboard activity contract', () => {
 
   test('accepts strict available player, fixed-team, stale, and empty activity', () => {
     const oneVsOne = { ...activityBase, entries: [playerEntry] }
+
     expect(parseLeaderboardRecentActivityOutput(oneVsOne)).toEqual(oneVsOne)
 
     const fixedTeam = { ...activityBase, mode: '2v2' as const, entries: [fixedTeamEntry] }
+
     expect(parseLeaderboardRecentActivityOutput(fixedTeam)).toEqual(fixedTeam)
 
     for (const [mode, identity] of [
@@ -216,10 +231,12 @@ describe('recent leaderboard activity contract', () => {
         totalRows: 1,
         entries: [{ ...activityMetrics, identity }],
       }
+
       expect(parseLeaderboardRecentActivityOutput(output)).toEqual(output as never)
     }
 
     const empty = { ...activityBase, totalRows: 0, entries: [] }
+
     expect(parseLeaderboardRecentActivityOutput(empty)).toEqual(empty)
   })
 
@@ -233,6 +250,7 @@ describe('recent leaderboard activity contract', () => {
         page: 1,
         pageSize: 20,
       }
+
       expect(parseLeaderboardRecentActivityOutput(unavailable)).toEqual(unavailable)
     }
 
@@ -246,6 +264,7 @@ describe('recent leaderboard activity contract', () => {
     ]) {
       expect(() => leaderboardRecentActivityOutputSchema.parse({ ...activityBase, entries: [entry] })).toThrow()
     }
+
     expect(() =>
       leaderboardRecentActivityOutputSchema.parse({
         ...activityBase,

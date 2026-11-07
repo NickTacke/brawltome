@@ -40,6 +40,7 @@ describe('EU Diamond+ launch cohort selection', () => {
         selectionHash: 'dc9c8f8aa1d401d16e1776b6279590186bfccd7c761a6bae27fc735e622dc30f',
       },
     ])
+
     expect(selected.eligiblePlayers).toBe(2)
     expect(selected.state).toBe('insufficient-evidence')
   })
@@ -53,6 +54,7 @@ describe('EU Diamond+ launch cohort selection', () => {
         [2, 2300],
       ]),
     )
+
     const second = selectLaunchCohort(
       snapshot([
         [2, 2300],
@@ -60,7 +62,9 @@ describe('EU Diamond+ launch cohort selection', () => {
         [1, 2200],
       ]),
     )
+
     expect(first.members).toEqual(second.members)
+
     expect(() =>
       selectLaunchCohort(
         snapshot([
@@ -75,6 +79,7 @@ describe('EU Diamond+ launch cohort selection', () => {
     const candidates = snapshot(Array.from({ length: 20 }, (_, index) => [index + 1, 2000 + index]))
     const first = selectLaunchCohort(candidates)
     const second = selectLaunchCohort(candidates, 'eu-diamond-tracer-v2')
+
     expect(first.members.map((member) => member.brawlhallaId)).not.toEqual(
       second.members.map((member) => member.brawlhallaId),
     )
@@ -82,19 +87,23 @@ describe('EU Diamond+ launch cohort selection', () => {
 
   test('caps at 750 and records the 124/125 minimum evidence boundary', () => {
     const candidates = (count: number) => snapshot(Array.from({ length: count }, (_, index) => [index + 1, 2000]))
+
     expect(selectLaunchCohort(candidates(751)).members).toHaveLength(750)
+
     expect(selectLaunchCohort(candidates(124))).toMatchObject({
       cap: 750,
       minimumEvidencePlayers: 125,
       selectedPlayers: 124,
       state: 'insufficient-evidence',
     })
+
     expect(selectLaunchCohort(candidates(125)).state).toBe('ready')
   })
 })
 
 function regionSnapshot(region: (typeof launchCohortRegions)[number], countPerBracket = 125) {
   const regionOffset = launchCohortRegions.indexOf(region) * 100_000
+
   return {
     snapshotId: `00000000-0000-4000-8000-${String(regionOffset + 1).padStart(12, '0')}`,
     generationId: '10000000-0000-4000-8000-000000000001',
@@ -120,9 +129,11 @@ describe('full launch cohort selection', () => {
 
     expect(selected.methodologyVersion).toBe(FULL_LAUNCH_COHORT_METHODOLOGY_VERSION)
     expect(selected.cells).toHaveLength(18)
+
     expect(selected.cells.map(({ region, bracket }) => `${region}:${bracket}`)).toEqual(
       launchCohortRegions.flatMap((region) => launchCohortBrackets.map((bracket) => `${region}:${bracket}`)),
     )
+
     expect(selected.cells.every((cell) => cell.selectedPlayers === 125 && cell.state === 'ready')).toBe(true)
     expect(selected.selectedPlayers).toBe(2_250)
     expect(selected.state).toBe('ready')
@@ -134,25 +145,31 @@ describe('full launch cohort selection', () => {
     )
 
     expect(selected.cells).toHaveLength(18)
+
     expect(selected.cells.filter(({ state }) => state === 'insufficient-evidence')).toEqual([
       expect.objectContaining({ region: 'ME', bracket: 'Platinum', selectedPlayers: 124 }),
       expect.objectContaining({ region: 'ME', bracket: 'Diamond+', selectedPlayers: 124 }),
     ])
+
     expect(selected.state).toBe('insufficient-evidence')
   })
 
   test('rejects missing, duplicate, or cross-generation regional snapshots before selection', () => {
     const snapshots = launchCohortRegions.map((region) => regionSnapshot(region))
+
     expect(() => selectFullLaunchCohort(snapshots.slice(1))).toThrow('exactly nine regional snapshots')
+
     expect(() => selectFullLaunchCohort([...snapshots.slice(0, -1), regionSnapshot('EU')])).toThrow(
       'exactly one snapshot per launch region',
     )
+
     expect(() =>
       selectFullLaunchCohort([
         { ...snapshots[0], generationId: '10000000-0000-4000-8000-000000000002' },
         ...snapshots.slice(1),
       ]),
     ).toThrow('one immutable Ranking generation')
+
     expect(() =>
       selectFullLaunchCohort([
         {
@@ -168,6 +185,7 @@ describe('full launch cohort selection', () => {
     const selected = selectFullLaunchCohort(launchCohortRegions.map((region) => regionSnapshot(region, 800)))
 
     expect(selected.cells.every(({ selectedPlayers }) => selectedPlayers === 750)).toBe(true)
+
     expect(selected.capacityEnvelope).toEqual({
       sourceDomain: 'brawlhalla-v1',
       quotaUnitsPerWindow: 150,

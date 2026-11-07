@@ -35,6 +35,7 @@ export interface WeaponStats {
 export function computeWeaponStats(input: WeaponInput): WeaponStats {
   const dps = input.time > 0 ? input.dmg / input.time : 0
   const timeToKill = input.kos > 0 && input.time > 0 ? input.time / input.kos : null
+
   return { dps, timeToKill }
 }
 
@@ -52,6 +53,7 @@ export function computeLegendStats(legend: RankedLegend): LegendStats {
 
 export function sortLegends(legends: RankedLegend[], key: LegendSortKey): RankedLegend[] {
   const sorted = [...legends]
+
   switch (key) {
     case 'xp':
       sorted.sort((a, b) => b.xp - a.xp)
@@ -63,8 +65,10 @@ export function sortLegends(legends: RankedLegend[], key: LegendSortKey): Ranked
       sorted.sort((a, b) => {
         const wa = a.games > 0 ? a.wins / a.games : -1
         const wb = b.games > 0 ? b.wins / b.games : -1
+
         return wb - wa
       })
+
       break
     case 'playtime':
       sorted.sort((a, b) => b.matchTime - a.matchTime)
@@ -79,5 +83,6 @@ export function sortLegends(legends: RankedLegend[], key: LegendSortKey): Ranked
       sorted.sort((a, b) => b.peakElo - a.peakElo)
       break
   }
+
   return sorted
 }

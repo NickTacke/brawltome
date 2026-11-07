@@ -62,11 +62,13 @@ describe('CareerStatistics', () => {
     for (const heading of ['Career Statistics', 'Career Combat Record', 'Career Weapon Usage', 'Legend Statistics']) {
       expect(html).toContain(heading)
     }
+
     expect(html).toContain('Account Level')
     expect(html).toContain('Overall Win Rate')
     expect(html).toContain('9,007,199,254,740,993 damage')
     expect(html).toContain('0.1h · 100.0%')
     const weaponSection = html.slice(html.indexOf('Career Weapon Usage'), html.indexOf('Legend Statistics'))
+
     for (const unsupported of [' games', ' wins', 'win rate', '>WR<', 'performance', 'strength']) {
       expect(weaponSection.toLowerCase()).not.toContain(unsupported.toLowerCase())
     }
@@ -111,6 +113,7 @@ describe('CareerStatistics', () => {
       freshForSeconds: 43_200,
       snapshot: null,
     }
+
     const html = renderToStaticMarkup(<CareerStatistics career={unavailable} />)
 
     expect(html).toContain('Lifetime career facts have not been successfully observed')
@@ -136,6 +139,7 @@ describe('CareerStatistics', () => {
       freshForSeconds: 43_200,
       snapshot: null,
     }
+
     const html = renderToStaticMarkup(<CareerStatistics career={unavailable} refreshing />)
 
     expect(html).toContain('Updating career statistics')

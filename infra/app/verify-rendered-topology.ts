@@ -66,6 +66,7 @@ const expectedServiceSecrets: Record<string, string[]> = {
 
 export function verifyAppRenderedTopology(document: unknown): string[] {
   if (!isRecord(document)) return ['rendered Compose must be an object']
+
   const services = isRecord(document.services) ? document.services : {}
   const networks = isRecord(document.networks) ? document.networks : {}
   const secrets = isRecord(document.secrets) ? document.secrets : {}
@@ -76,42 +77,54 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
   checkExactKeys(violations, 'secrets', secrets, Object.keys(expectedSecretFiles))
 
   const application = networks.application
+
   if (!isRecord(application) || application.external !== true || application.name !== 'brawltome') {
     violations.push('application must be external network brawltome')
   }
+
   const observability = networks.observability
+
   if (!isRecord(observability) || observability.external !== true || observability.name !== 'brawltome-observability') {
     violations.push('observability must be external network brawltome-observability')
   }
 
   for (const name of expectedServices) {
     const service = services[name]
+
     if (!isRecord(service)) {
       violations.push(`${name} must be a service object`)
       continue
     }
+
     const expectedNetworks = observabilityServices.has(name) ? ['application', 'observability'] : ['application']
+
     if (!isRecord(service.networks) || !sameValues(Object.keys(service.networks), expectedNetworks)) {
       violations.push(`${name} networks must match the approved topology`)
     }
+
     if (service.ports !== undefined && (!Array.isArray(service.ports) || service.ports.length > 0)) {
       violations.push(`${name} must not publish ports`)
     }
+
     if (service.labels !== undefined && !isRecord(service.labels)) {
       violations.push(`${name} labels must be an object`)
     } else if (hasUnapprovedTraefikLabels(service.labels)) {
       violations.push(`${name} must not have Traefik labels beyond retry and health checks`)
     }
+
     if (!sameSecretAttachments(service.secrets, expectedServiceSecrets[name])) {
       violations.push(`${name} secrets must match approved attachments exactly`)
     }
+
     if (name !== 'migration' && readPath(service, 'deploy', 'replicas') !== 1) {
       violations.push(`${name} must have exactly one replica`)
     }
+
     checkImageSource(violations, name, service)
     checkRuntimeContract(violations, name, service)
     checkRuntimeHardening(violations, name, service)
     checkSecretEnvironment(violations, name, service.environment)
+
     checkSecretMountShadowing(
       violations,
       name,
@@ -121,54 +134,69 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
   }
 
   const worker = services['operations-worker']
+
   if (isRecord(worker)) {
     if (readPath(worker, 'environment', 'BRAWLHALLA_V1_REQUEST_LIMIT') !== '1800') {
       violations.push('operations-worker must retain the V1 safety ceiling of 1800 requests per five minutes')
     }
+
     if (readPath(worker, 'environment', 'LEADERBOARD_PAGE_DEPTH') !== '20') {
       violations.push('operations-worker must retain adaptive leaderboard depth 20')
     }
+
     if (readPath(worker, 'environment', 'LEADERBOARD_INTERVAL_MS') !== '900000') {
       violations.push('operations-worker must retain 15-minute leaderboard cadence')
     }
+
     if (readPath(worker, 'environment', 'OPERATIONS_TOTAL_CONCURRENCY') !== '4') {
       violations.push('operations-worker must retain four total operation slots')
     }
+
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_RESERVATION') !== '1') {
       violations.push('operations-worker must retain one reserved interactive slot')
     }
+
     if (readPath(worker, 'environment', 'OPERATIONS_INTERACTIVE_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two interactive operation slots')
     }
+
     if (readPath(worker, 'environment', 'OPERATIONS_LEADERBOARD_CONCURRENCY') !== '2') {
       violations.push('operations-worker must retain two leaderboard operation slots')
     }
+
     if (readPath(worker, 'environment', 'SOURCE_BACKGROUND_HEADROOM') !== '30') {
       violations.push('operations-worker must retain 30 source units of on-demand headroom')
     }
+
     if (readPath(worker, 'environment', 'SOURCE_UNAVAILABLE_RETRY_MS') !== '60000') {
       violations.push('operations-worker must retain the 60-second source outage deferral')
     }
   }
 
   const api = services.api
+
   if (isRecord(api)) {
     if (readPath(api, 'environment', 'CORS_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must allow only the final public web origin')
     }
+
     const discordClientId = readPath(api, 'environment', 'DISCORD_CLIENT_ID')
+
     if (typeof discordClientId !== 'string' || !/^\d{17,20}$/.test(discordClientId)) {
       violations.push('api must receive a Discord OAuth client ID')
     }
+
     if (readPath(api, 'environment', 'DISCORD_REDIRECT_URI') !== 'https://api.brawltome.app/auth/discord/callback') {
       violations.push('api must use the public Discord OAuth callback')
     }
+
     if (readPath(api, 'environment', 'WEB_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must use the final public web origin')
     }
   }
 
   const web = services.web
+
   if (isRecord(web)) {
     if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
       violations.push('web must use the internal API origin for server calls')
@@ -177,6 +205,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
 
   for (const [key, file] of Object.entries(expectedSecretFiles)) {
     const secret = secrets[key]
+
     if (
       !isRecord(secret) ||
       secret.name !== `brawltome_${key}` ||
@@ -203,6 +232,7 @@ function checkExactKeys(
 function checkImageSource(violations: string[], name: string, service: Record<string, unknown>): void {
   if (name === 'postgres') {
     if (readPath(service, 'build', 'target') !== 'postgres') violations.push('postgres must use build target postgres')
+
     return
   }
 
@@ -211,6 +241,7 @@ function checkImageSource(violations: string[], name: string, service: Record<st
   const imagePrefix = `ghcr.io/nicktacke/brawltome-${name}:`
   const image = typeof service.image === 'string' ? service.image : ''
   const tag = image.slice(imagePrefix.length)
+
   if (!image.startsWith(imagePrefix) || !releaseCommitPattern.test(tag)) {
     violations.push(`${name} must use image ghcr.io/nicktacke/brawltome-${name} tagged with the release commit`)
   }
@@ -218,6 +249,7 @@ function checkImageSource(violations: string[], name: string, service: Record<st
 
 function checkRuntimeContract(violations: string[], name: string, service: Record<string, unknown>): void {
   const dependency = expectedDependencies[name]
+
   if (
     dependency &&
     (!isRecord(service.depends_on) ||
@@ -229,17 +261,20 @@ function checkRuntimeContract(violations: string[], name: string, service: Recor
 
   const healthPath = expectedHealthPaths[name]
   const healthCommand = asStringArray(readPath(service, 'healthcheck', 'test')).join(' ')
+
   if (healthPath && !healthCommand.includes(healthPath)) {
     violations.push(`${name} health check must use ${healthPath}`)
   }
 
   const stopGracePeriod = expectedStopGracePeriods[name]
+
   if (stopGracePeriod && service.stop_grace_period !== stopGracePeriod) {
     violations.push(`${name} must retain stop grace period ${stopGracePeriod}`)
   }
 
   const memory = readPath(service, 'deploy', 'resources', 'limits', 'memory')
   const pids = readPath(service, 'deploy', 'resources', 'limits', 'pids')
+
   if (typeof memory !== 'string' || typeof pids !== 'number' || pids <= 0) {
     violations.push(`${name} must retain bounded memory and PID resources`)
   }
@@ -247,24 +282,33 @@ function checkRuntimeContract(violations: string[], name: string, service: Recor
 
 function checkRuntimeHardening(violations: string[], name: string, service: Record<string, unknown>): void {
   if (service.read_only !== true) violations.push(`${name} root filesystem must remain read-only`)
+
   if (service.privileged !== undefined) violations.push(`${name} must not set privileged mode`)
+
   if (service.cap_add !== undefined) violations.push(`${name} must not add capabilities`)
+
   for (const field of ['cgroup', 'devices', 'ipc', 'network_mode', 'pid', 'uts', 'volumes_from']) {
     if (service[field] !== undefined) violations.push(`${name} must not set ${field}`)
   }
+
   if (name === 'postgres') {
     if (service.user !== '70:70') violations.push('postgres must run as 70:70')
   } else if (service.user !== undefined) {
     violations.push(`${name} must not override the image user`)
   }
+
   if (service.init !== true) violations.push(`${name} must retain an init process`)
+
   if (!sameValues(asStringArray(service.cap_drop), ['ALL'])) violations.push(`${name} must drop all capabilities`)
+
   if (!sameValues(asStringArray(service.security_opt), ['no-new-privileges:true'])) {
     violations.push(`${name} must retain no-new-privileges`)
   }
+
   if (service.command != null || service.entrypoint != null) {
     violations.push(`${name} must not override the image command or entrypoint`)
   }
+
   if (name === 'postgres') {
     if (!hasBind(service.volumes, '/srv/brawltome/postgres', '/var/lib/postgresql/data')) {
       violations.push('postgres must bind only the approved data filesystem')
@@ -272,6 +316,7 @@ function checkRuntimeHardening(violations: string[], name: string, service: Reco
   } else if (service.volumes !== undefined && (!Array.isArray(service.volumes) || service.volumes.length > 0)) {
     violations.push(`${name} must not add volumes`)
   }
+
   if (service.configs !== undefined && (!Array.isArray(service.configs) || service.configs.length > 0)) {
     violations.push(`${name} must not add configs`)
   }
@@ -279,6 +324,7 @@ function checkRuntimeHardening(violations: string[], name: string, service: Reco
 
 function checkSecretEnvironment(violations: string[], name: string, value: unknown): void {
   if (!isRecord(value)) return
+
   const secretNames = new Set([
     'BRAWLHALLA_API_KEY',
     'DATABASE_URL',
@@ -296,6 +342,7 @@ function checkSecretEnvironment(violations: string[], name: string, value: unkno
     'REFRESH_TRUST_COOKIE_SECRET',
     'REPLAY_BRIDGE_SECRET',
   ])
+
   if (Object.keys(value).some((key) => secretNames.has(key))) {
     violations.push(`${name} must not receive raw secret environment variables`)
   }
@@ -308,14 +355,19 @@ function checkSecretMountShadowing(
   secretTargets: string[],
 ): void {
   if (service.tmpfs === undefined) return
+
   if (!Array.isArray(service.tmpfs) || service.tmpfs.some((mount) => typeof mount !== 'string')) {
     violations.push(`${name} tmpfs must be rendered strings`)
+
     return
   }
+
   const shadows = service.tmpfs.some((mount) => {
     const target = posix.normalize(String(mount).split(':', 1)[0] ?? '')
+
     return secretTargets.some((secret) => secret === target || secret.startsWith(`${target}/`))
   })
+
   if (shadows) violations.push(`${name} tmpfs must not shadow secret targets`)
 }
 
@@ -352,30 +404,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readPath(value: Record<string, unknown>, ...path: string[]): unknown {
   let current: unknown = value
+
   for (const key of path) {
     if (!isRecord(current)) return undefined
+
     current = current[key]
   }
+
   return current
 }
 
 function sameSecretAttachments(value: unknown, expected: string[]): boolean {
   if (!Array.isArray(value) || value.some((item) => !isRecord(item))) return false
+
   const actual = value.map((item) => String(item.source))
+
   return sameValues(actual, expected) && value.every((item) => item.target === `/run/secrets/${String(item.source)}`)
 }
 
 function sameValues(left: string[], right: string[]): boolean {
   const sortedLeft = [...left].sort()
   const sortedRight = [...right].sort()
+
   return sortedLeft.length === sortedRight.length && sortedLeft.every((value, index) => value === sortedRight[index])
 }
 
 if (import.meta.main) {
   try {
     const violations = verifyAppRenderedTopology(JSON.parse(await Bun.stdin.text()))
+
     for (const violation of violations) console.error(`app-rendered-topology: ${violation}`)
     if (violations.length > 0) process.exit(1)
+
     console.log('Rendered application topology verified.')
   } catch {
     console.error('app-rendered-topology: input must be valid Docker Compose JSON')

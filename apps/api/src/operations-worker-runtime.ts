@@ -39,6 +39,7 @@ function createWakeupWaiter(intervalMs: number, signal: AbortSignal) {
 
   function wait(): Promise<void> {
     if (signal.aborted) return Promise.resolve()
+
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer)
@@ -46,7 +47,9 @@ function createWakeupWaiter(intervalMs: number, signal: AbortSignal) {
         waiters.delete(done)
         resolve()
       }
+
       const timer = setTimeout(done, intervalMs)
+
       waiters.add(done)
       signal.addEventListener('abort', done, { once: true })
     })
@@ -80,6 +83,7 @@ export function createOperationsTelemetryObserver(options: {
         active.metrics.set('operation_oldest_pending_age_ms', item.ageMs, { work_class: item.workClass }),
       )
     }
+
     for (const item of snapshot.deadLetters) {
       record((active) =>
         active.metrics.set('operation_dead_letters', item.count, {
@@ -89,6 +93,7 @@ export function createOperationsTelemetryObserver(options: {
         }),
       )
     }
+
     for (const item of snapshot.scheduleLateness) {
       record((active) => active.metrics.set('schedule_lateness_ms', item.latenessMs, { kind: item.kind }))
     }
@@ -96,8 +101,10 @@ export function createOperationsTelemetryObserver(options: {
 
   function trigger(): void {
     if (inspection || now() < nextTelemetryAt) return
+
     nextTelemetryAt = now() + options.intervalMs
     const underlying = Promise.resolve().then(() => options.operations.inspectTelemetry())
+
     inspection = underlying
       .then(
         () => undefined,
@@ -106,6 +113,7 @@ export function createOperationsTelemetryObserver(options: {
       .finally(() => {
         inspection = undefined
       })
+
     void Promise.race([
       underlying.then((snapshot) => ({ kind: 'snapshot' as const, snapshot })),
       new Promise<{ kind: 'timeout' }>((resolve) =>
@@ -140,6 +148,7 @@ export async function runOperationsWorker({
   let admissionInitialization: Promise<void> | undefined
   let listenerInitialization: Promise<void> | undefined
   let listenerReady = false
+
   const telemetryObserver =
     telemetry && 'inspectTelemetry' in operations
       ? createOperationsTelemetryObserver({
@@ -152,6 +161,7 @@ export async function runOperationsWorker({
 
   function recordTelemetry(recording: (active: Telemetry) => void): void {
     if (!telemetry) return
+
     try {
       recording(telemetry)
     } catch {
@@ -169,6 +179,7 @@ export async function runOperationsWorker({
 
   async function ensureWakeupListener(): Promise<void> {
     if (!ensureListener || listenerReady) return
+
     listenerInitialization ??= ensureListener(wakeup.wakeAll)
     try {
       await listenerInitialization
@@ -182,8 +193,10 @@ export async function runOperationsWorker({
 
   async function prepare(): Promise<boolean> {
     const readiness = await lifecycle.readiness()
+
     if (!readiness.ready) {
       if (readiness.reason === 'dependency') await wakeup.wait()
+
       return false
     }
 
@@ -195,22 +208,28 @@ export async function runOperationsWorker({
       recordTelemetry((active) => active.logger.error('worker.admission.failed', error))
       logger.error('[operations-worker] admission initialization failed; retrying by poll', error)
       await wakeup.wait()
+
       return false
     }
+
     await ensureWakeupListener()
     heartbeat()
     telemetryObserver?.trigger()
+
     return true
   }
 
   async function runTracked(work: () => Promise<boolean>): Promise<boolean | null> {
     const finishWork = lifecycle.startWork()
+
     if (!finishWork) return null
+
     try {
       return await work()
     } catch (error) {
       recordTelemetry((active) => active.logger.error('worker.loop.failed', error))
       logger.error('[operations-worker] claim or execution failed; retrying by poll', error)
+
       return false
     } finally {
       finishWork()
@@ -220,42 +239,54 @@ export async function runOperationsWorker({
   // Every loop iteration, including ones that only find the database unavailable, counts as progress. If no loop
   // has iterated for stallTimeoutMs, every loop is blocked on a hung call and the process should be replaced.
   let lastProgressAt = Date.now()
+
   function markProgress(): void {
     lastProgressAt = Date.now()
   }
+
   const stallTimeoutMs = config.stallTimeoutMs
+
   const watchdog =
     onStall && stallTimeoutMs !== undefined
       ? setInterval(
           () => {
             const stalledForMs = Date.now() - lastProgressAt
+
             if (stalledForMs < stallTimeoutMs || lifecycle.signal.aborted) return
+
             clearInterval(watchdog)
             onStall(stalledForMs)
           },
           Math.max(1, Math.floor(stallTimeoutMs / 4)),
         )
       : undefined
+
   watchdog?.unref?.()
 
   async function scheduleLoop(): Promise<void> {
     while (!lifecycle.signal.aborted) {
       markProgress()
       if (!(await prepare())) continue
+
       const active = await runTracked(async () => {
         const reconciled = !lifecycle.signal.aborted && reconcile ? await reconcile() : 0
+
         if (lifecycle.signal.aborted) return reconciled > 0
+
         let result: Awaited<ReturnType<PostgresRefreshOperations['materializeDueSchedules']>>
+
         try {
           result = await operations.materializeDueSchedules(config.scheduleBatchSize)
         } catch (error) {
           recordTelemetry((active) => active.metrics.add('schedule_materializations_total', 1, { outcome: 'failed' }))
           throw error
         }
+
         recordTelemetry((active) => {
           active.metrics.add('schedule_materializations_total', Math.max(1, result.occurrencesCreated), {
             outcome: result.occurrencesCreated > 0 ? 'created' : 'idle',
           })
+
           for (const occurrence of result.occurrences) {
             active.metrics.set('schedule_lateness_ms', occurrence.latenessMs, { kind: occurrence.kind })
             if (occurrence.missedWindowCount > 0) {
@@ -263,6 +294,7 @@ export async function runOperationsWorker({
                 kind: occurrence.kind,
               })
             }
+
             active.logger.info('schedule.materialized', {
               scheduleId: occurrence.scheduleId,
               occurrenceId: occurrence.occurrenceId,
@@ -274,9 +306,12 @@ export async function runOperationsWorker({
             })
           }
         })
+
         return result.occurrencesCreated > 0 || reconciled > 0
       })
+
       if (active === null) return
+
       if (!active) await wakeup.wait()
     }
   }
@@ -285,6 +320,7 @@ export async function runOperationsWorker({
     while (!lifecycle.signal.aborted) {
       markProgress()
       if (!(await prepare())) continue
+
       const processed = await runTracked(() =>
         runOne(operations, `${workerId}:${slot}`, {
           leaseMs: config.leaseMs,
@@ -294,7 +330,9 @@ export async function runOperationsWorker({
           telemetry,
         }),
       )
+
       if (processed === null) return
+
       if (!processed) await wakeup.wait()
     }
   }

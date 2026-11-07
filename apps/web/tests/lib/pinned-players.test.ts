@@ -51,6 +51,7 @@ describe('Pinned Players client state', () => {
   test('cancels an older query before a mutation updates the cache', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     let resolveStaleQuery: ((value: PinnedPlayersContract) => void) | undefined
+
     const staleQuery = queryClient.fetchQuery({
       queryKey: ['account', 'pinnedPlayers', 'account-one'],
       queryFn: () =>
@@ -58,6 +59,7 @@ describe('Pinned Players client state', () => {
           resolveStaleQuery = resolve
         }),
     })
+
     await Promise.resolve()
 
     await updatePinnedPlayersCache(queryClient, 'account-one', async () => pinnedPlayers)
@@ -65,26 +67,34 @@ describe('Pinned Players client state', () => {
     await staleQuery.catch(() => undefined)
 
     const cachedResult: unknown = queryClient.getQueryData(['account', 'pinnedPlayers', 'account-one'])
+
     expect(cachedResult).toEqual(pinnedPlayers)
   })
 
   test('cancels a query started while a mutation is in flight before writing the result', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     let markMutationStarted: (() => void) | undefined
+
     const mutationStarted = new Promise<void>((resolve) => {
       markMutationStarted = resolve
     })
+
     let resolveMutation: ((value: PinnedPlayersContract) => void) | undefined
+
     const mutationResult = new Promise<PinnedPlayersContract>((resolve) => {
       resolveMutation = resolve
     })
+
     const update = updatePinnedPlayersCache(queryClient, 'account-one', async () => {
       markMutationStarted?.()
+
       return mutationResult
     })
+
     await mutationStarted
 
     let resolveStaleQuery: ((value: PinnedPlayersContract) => void) | undefined
+
     const staleQuery = queryClient.fetchQuery({
       queryKey: ['account', 'pinnedPlayers', 'account-one'],
       queryFn: () =>
@@ -92,6 +102,7 @@ describe('Pinned Players client state', () => {
           resolveStaleQuery = resolve
         }),
     })
+
     await Promise.resolve()
     resolveMutation?.(pinnedPlayers)
     await update
@@ -99,6 +110,7 @@ describe('Pinned Players client state', () => {
     await staleQuery.catch(() => undefined)
 
     const cachedResult: unknown = queryClient.getQueryData(['account', 'pinnedPlayers', 'account-one'])
+
     expect(cachedResult).toEqual(pinnedPlayers)
   })
 
@@ -111,6 +123,7 @@ describe('Pinned Players client state', () => {
 
   test('reorders managed pins across a retained Primary Player without moving it', () => {
     const interleaved = [pinnedPlayers[1], pinnedPlayers[0], { ...pinnedPlayers[1], brawlhallaId: 44 }]
+
     expect(movePinnedPlayer(interleaved, 0, 1, 42)).toEqual([44, 42, 43])
     expect(movePinnedPlayer(interleaved, 2, 1, 42)).toEqual([44, 42, 43])
   })

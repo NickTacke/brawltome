@@ -28,11 +28,17 @@ export function relative(iso: string | number): string {
 
 export function formatDuration(ms: number): string {
   const minutes = Math.max(Math.round(ms / 60_000), 0)
+
   if (minutes < 1) return 'under a minute'
+
   if (minutes < 60) return `${minutes}m`
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) return minutes % 60 ? `${hours}h ${minutes % 60}m` : `${hours}h`
+
   const days = Math.floor(hours / 24)
+
   return hours % 24 ? `${days}d ${hours % 24}h` : `${days}d`
 }
 
@@ -53,10 +59,13 @@ function summary(alert: Alert): string {
 export function grafanaLink(grafanaUrl: string, generatorURL: string | undefined): string {
   const base = grafanaUrl.replace(/\/$/, '')
   let expr: string | null = null
+
   try {
     expr = generatorURL ? new URL(generatorURL).searchParams.get('g0.expr') : null
   } catch {}
+
   if (!expr) return base
+
   const panes = {
     a: {
       datasource: 'prometheus',
@@ -64,14 +73,18 @@ export function grafanaLink(grafanaUrl: string, generatorURL: string | undefined
       range: { from: 'now-6h', to: 'now' },
     },
   }
+
   const link = `${base}/explore?schemaVersion=1&orgId=1&panes=${encodeURIComponent(JSON.stringify(panes))}`
+
   // Discord rejects oversized URLs; very long expressions fall back to the Grafana home page.
   return link.length <= 1_800 ? link : base
 }
 
 function links(alert: Alert, grafanaUrl: string): string {
   const parts = [`[Grafana](${grafanaLink(grafanaUrl, alert.generatorURL)})`]
+
   if (alert.annotations.runbook_url) parts.push(`[Runbook](${alert.annotations.runbook_url})`)
+
   return truncate(parts.join(' · '), 1_024)
 }
 
@@ -84,6 +97,7 @@ function labelFields(alert: Alert): Embed['fields'] {
 // The content line is what a phone push notification shows, so it names the alert and what broke.
 export function pageMessage(alert: Alert, mention: string, grafanaUrl: string): MessageBody {
   const headline = `🔴 **${name(alert)}**: ${summary(alert)}`
+
   return {
     content: truncate(mention ? `${mention} ${headline}` : headline, 2_000),
     embeds: [
@@ -106,6 +120,7 @@ export function pageMessage(alert: Alert, mention: string, grafanaUrl: string): 
 
 export function resolvedEdit(alert: Alert, resolvedAt: number, grafanaUrl: string): MessageBody {
   const duration = formatDuration(resolvedAt - Date.parse(alert.startsAt))
+
   return {
     content: truncate(`✅ **${name(alert)}** resolved after ${duration}: ${summary(alert)}`, 2_000),
     embeds: [
@@ -133,6 +148,7 @@ export function resolvedEdit(alert: Alert, resolvedAt: number, grafanaUrl: strin
 // Used when the original page message is unknown (state lost): a short note that never pings.
 export function resolvedNotice(alert: Alert, resolvedAt: number): MessageBody {
   const duration = formatDuration(resolvedAt - Date.parse(alert.startsAt))
+
   return {
     content: truncate(`✅ **${name(alert)}** resolved after ${duration}: ${summary(alert)}`, 2_000),
     allowed_mentions: noMentions,
@@ -159,14 +175,20 @@ function section(title: string, alerts: Alert[], budget: number): string {
   const sorted = [...alerts].sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt))
   const lines = [title]
   let used = title.length
+
   for (const alert of sorted.slice(0, boardSectionLimit)) {
     const line = truncate(`• **${name(alert)}** — ${summary(alert)} · since ${relative(alert.startsAt)}`, 300)
+
     if (used + 1 + line.length + 1 + omittedReserve > budget) break
+
     lines.push(line)
     used += 1 + line.length
   }
+
   const omitted = sorted.length - (lines.length - 1)
+
   if (omitted > 0) lines.push(`…and ${omitted} more`)
+
   return lines.join('\n')
 }
 
@@ -179,28 +201,36 @@ export function renderBoard(input: BoardInput): { body: MessageBody; fingerprint
   const heartbeat = input.watchdogFiring
     ? '📡 Prometheus → Alertmanager heartbeat OK'
     : '⚠️ No Prometheus heartbeat (Watchdog): rules may not be evaluated, so this board may be missing alerts'
+
   let budget = boardLimit - heartbeat.length - 2
   const sections: string[] = []
+
   if (critical.length > 0) {
     const text = section(
       `**🔴 Critical (${critical.length})**`,
       critical,
       budget - (warning.length > 0 ? sectionReserve : 0),
     )
+
     sections.push(text)
     budget -= text.length + 2
   }
+
   if (warning.length > 0) sections.push(section(`**🟠 Warning (${warning.length})**`, warning, budget))
+
   if (sections.length === 0) {
     sections.push(input.clearSince ? `✅ All clear since ${relative(input.clearSince)}` : '✅ All clear')
   }
+
   sections.push(heartbeat)
 
   const content = sections.join('\n\n')
   const color = critical.length > 0 ? RED : warning.length > 0 || !input.watchdogFiring ? ORANGE : GREEN
   const embed: Embed = { title: 'BrawlTome status', description: content, color }
   const fingerprint = JSON.stringify(embed)
+
   embed.description = `${content}\n\nUpdated ${relative(input.now)}`
+
   return {
     body: { embeds: [embed], allowed_mentions: noMentions, flags: SUPPRESS_NOTIFICATIONS },
     fingerprint,

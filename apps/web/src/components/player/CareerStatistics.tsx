@@ -23,6 +23,7 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
       </p>
     )
   }
+
   if (!career.lastSuccessAt || career.freshness === 'unavailable') {
     return (
       <p className="text-sm text-muted-foreground">
@@ -31,6 +32,7 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
       </p>
     )
   }
+
   if (career.snapshotSource === 'legacy-v2') {
     return (
       <p className="text-sm text-muted-foreground">
@@ -39,6 +41,7 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
       </p>
     )
   }
+
   if (career.freshness === 'stale') {
     return (
       <p className="text-sm text-muted-foreground">
@@ -46,15 +49,18 @@ function Freshness({ career, refreshing }: { career: PlayerCareerProfileContract
       </p>
     )
   }
+
   return <p className="text-sm text-muted-foreground">Updated {observedDate(career.lastSuccessAt)}.</p>
 }
 
 export function CareerStatistics({ career, currentSeason = null, refreshing = false }: CareerStatisticsProps) {
   const snapshot = career?.snapshot
   const totalWeaponHeldTime = snapshot?.weapons.reduce((total, weapon) => total + weapon.heldTime, 0) ?? 0
+
   const legends =
     snapshot?.legends.map((legend) => {
       const reference = getLegendById(legend.legendId)
+
       return {
         ...legend,
         weaponOne: reference ? normalizeWeaponName(reference.weaponOne) : null,
@@ -69,6 +75,7 @@ export function CareerStatistics({ career, currentSeason = null, refreshing = fa
         damageUnarmed: legend.unarmed.damage,
       }
     }) ?? []
+
   const rankedLegends = currentSeason?.snapshot?.rankedLegends ?? []
 
   return (
@@ -111,6 +118,7 @@ export function CareerStatistics({ career, currentSeason = null, refreshing = fa
               <Card className="divide-y divide-border overflow-hidden border-border">
                 {snapshot.weapons.map((weapon) => {
                   const heldShare = totalWeaponHeldTime > 0 ? (weapon.heldTime / totalWeaponHeldTime) * 100 : 0
+
                   return (
                     <div key={weapon.weapon} className="flex items-center gap-4 p-4">
                       <img src={getWeaponIcon(weapon.weapon)} alt="" className="h-12 w-12 shrink-0 object-contain" />

@@ -24,14 +24,17 @@ function createFakeDokploy(options: { deployStatus?: number; hang?: boolean; com
 
   const fetchFake = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+
     calls.push({ url, init })
     if (options.hang)
       return new Promise<Response>((_resolve, reject) =>
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)),
       )
+
     if (url.includes('compose.deploy')) return new Response('{}', { status: options.deployStatus ?? 200 })
 
     const index = Math.min(composeReadCount, options.composeResults.length - 1)
+
     composeReadCount += 1
 
     return Response.json({ deployments: options.composeResults[index] })
@@ -81,6 +84,7 @@ describe('triggerDeploy', () => {
     await triggerDeploy(deployOptions(fake))
 
     const composeReadCount = fake.calls.filter((call) => call.url.includes('compose.one')).length
+
     expect(composeReadCount).toBe(4)
   })
 

@@ -2,16 +2,19 @@ import { createFanoutSink, createJsonConsoleSink, createOtlpHttpSink, createTele
 
 function traceSampleRate(value: string | undefined): number {
   const parsed = value === undefined ? 0.05 : Number(value)
+
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.05
 }
 
 export const webTraceSampleRate = traceSampleRate(process.env.TELEMETRY_TRACE_SAMPLE_RATE)
 const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim()
+
 export const webOtlpHeaders = process.env.OTEL_EXPORTER_OTLP_AUTHORIZATION?.trim()
   ? { authorization: process.env.OTEL_EXPORTER_OTLP_AUTHORIZATION.trim() }
   : undefined
 const consoleSink = createJsonConsoleSink()
 let sink = consoleSink
+
 if (endpoint) {
   try {
     sink = createFanoutSink([consoleSink, createOtlpHttpSink({ endpoint, headers: webOtlpHeaders })])

@@ -43,10 +43,12 @@ beforeAll(async () => {
   if (!configuredServer?.startsWith(dedicatedServer)) {
     throw new Error('Primary monitoring PostgreSQL tests require dedicated 127.0.0.1:55436')
   }
+
   database = await createTestDatabase({
     label: 'primary_monitoring',
     modules: [accountsModule, refreshOperationsModule, requestAdmissionModule, playerModule],
   })
+
   connectionString = database.connectionString
 })
 
@@ -93,17 +95,21 @@ const careerSnapshot = (brawlhallaId: number) => ({
 describe('Primary Player monitoring', () => {
   test('refreshes only verified ownership through one replica-safe full scheduled operation', async () => {
     const accounts = createPostgresAccounts(database)
+
     const signedIn = await accounts.accounts.signInWithDiscord({
       providerAccountId: `primary-monitoring-${randomUUID()}`,
       displayName: 'Ada',
       avatarHash: null,
     })
+
     const attempt = await accounts.accounts.beginPrimaryPlayerVerification({
       accountId: signedIn.account.id,
       steamId: '76561198000000000',
       idempotencyKey: randomUUID(),
     })
+
     const brawlhallaId = 919208
+
     await accounts.accounts.resolvePrimaryPlayerVerification(attempt.id, {
       resolve: async () => ({
         brawlhallaId,
@@ -118,33 +124,40 @@ describe('Primary Player monitoring', () => {
     const operationsA = createPostgresRefreshOperations({ database: replicaClients[0] })
     const operationsB = createPostgresRefreshOperations({ database: replicaClients[1] })
     const snapshot = await accounts.primaryMonitoring.readSnapshot()
+
     const reconciled = await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
         (index % 2 ? operationsA : operationsB).reconcilePrimaryMonitoring(snapshot),
       ),
     )
+
     expect(reconciled.reduce((sum, result) => sum + result.created, 0)).toBe(1)
 
     const control = postgres(connectionString, { max: 1 })
+
     await control`
       UPDATE refresh_operations.schedules
       SET next_due_at = clock_timestamp() - interval '2 seconds',
           first_due_at = clock_timestamp() - interval '2 seconds'
       WHERE resource_key = ${`player:${brawlhallaId}`} AND enabled
     `
+
     const materialized = await Promise.all(
       Array.from({ length: 12 }, (_, index) => (index % 2 ? operationsA : operationsB).materializeDueSchedules(1)),
     )
+
     expect(materialized.reduce((sum, result) => sum + result.occurrencesCreated, 0)).toBe(1)
 
     const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
+
     const rankedPlayers = createPostgresRankedPlayers(database)
     const careerPlayers = createPostgresCareerPlayers(database)
     let rankedCalls = 0
     let careerCalls = 0
+
     const run = (operations: typeof operationsA, workerId: string) =>
       runOneRefreshOperation(operations, workerId, {
         leaseMs: 10_000,
@@ -153,6 +166,7 @@ describe('Primary Player monitoring', () => {
         sourceAdmission,
         isPrimaryMonitoringTarget: async (lease) => {
           const current = await accounts.primaryMonitoring.readSnapshot()
+
           return current.targets.some(
             (target) =>
               target.assignmentId === lease.payload.assignmentId && target.brawlhallaId === lease.payload.brawlhallaId,
@@ -161,6 +175,7 @@ describe('Primary Player monitoring', () => {
         executeSection: async (lease, section, admitSourceCall, caller) => {
           expect(caller).toBe('background')
           await admitSourceCall('brawlhalla-v0')
+
           const effect = {
             operationId: lease.operationId,
             effectOperationId: lease.effectOperationId,
@@ -168,6 +183,7 @@ describe('Primary Player monitoring', () => {
             leaseOwner: lease.leaseOwner,
             leaseToken: lease.leaseToken,
           }
+
           if (section === 'ranked') {
             await refreshCanonicalRankedPlayer(
               rankedPlayers,
@@ -175,6 +191,7 @@ describe('Primary Player monitoring', () => {
                 getRanked: async (_id, options) => {
                   options.onAttempt()
                   rankedCalls++
+
                   return rankedSnapshot(brawlhallaId)
                 },
               },
@@ -189,6 +206,7 @@ describe('Primary Player monitoring', () => {
                 getStats: async (_id, options) => {
                   options.onAttempt()
                   careerCalls++
+
                   return careerSnapshot(brawlhallaId)
                 },
               },
@@ -202,16 +220,19 @@ describe('Primary Player monitoring', () => {
       })
 
     const executions = await Promise.all([run(operationsA, 'replica-a'), run(operationsB, 'replica-b')])
+
     expect(executions.filter(Boolean)).toHaveLength(1)
     expect({ rankedCalls, careerCalls }).toEqual({ rankedCalls: 1, careerCalls: 1 })
     expect((await sourceAdmission.inspectUsage()).sourceUnits).toEqual({ 'brawlhalla-v0': 2 })
     const rankedProfile = await rankedPlayers.byId(brawlhallaId)
     const careerProfile = await careerPlayers.byId(brawlhallaId)
+
     expect(rankedProfile?.snapshot?.oneVsOne.rating).toBe(1700)
     expect(careerProfile?.snapshot?.account.level).toBe(2)
 
     await control`DELETE FROM accounts.primary_players WHERE account_id = ${signedIn.account.id}`
     const afterRemoval = await accounts.primaryMonitoring.readSnapshot()
+
     expect(afterRemoval.targets).toEqual([])
     expect(await operationsA.reconcilePrimaryMonitoring(afterRemoval)).toEqual({ created: 0, retired: 1 })
 
@@ -220,6 +241,7 @@ describe('Primary Player monitoring', () => {
       steamId: '76561198000000001',
       idempotencyKey: randomUUID(),
     })
+
     await accounts.accounts.resolvePrimaryPlayerVerification(replacementAttempt.id, {
       resolve: async () => ({
         brawlhallaId: brawlhallaId + 1,
@@ -228,10 +250,13 @@ describe('Primary Player monitoring', () => {
         source: 'brawlhalla-v0-steam-search',
       }),
     })
+
     const afterReassignment = await accounts.primaryMonitoring.readSnapshot()
+
     expect(afterReassignment.targets.map(({ brawlhallaId: id }) => id)).toEqual([brawlhallaId + 1])
     expect(await operationsB.reconcilePrimaryMonitoring(afterReassignment)).toEqual({ created: 1, retired: 0 })
     await control`DELETE FROM accounts.primary_players WHERE account_id = ${signedIn.account.id}`
+
     expect(await operationsA.reconcilePrimaryMonitoring(await accounts.primaryMonitoring.readSnapshot())).toEqual({
       created: 0,
       retired: 1,
@@ -242,11 +267,13 @@ describe('Primary Player monitoring', () => {
     const restartedClient = openTestClient(database.connectionString)
     const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const restartedControl = postgres(connectionString, { max: 1 })
+
     const [enabled] = await restartedControl`
       SELECT count(*)::int AS count
       FROM refresh_operations.schedules
       WHERE enabled AND provenance ->> 'source' = 'primary-player-monitoring'
     `
+
     expect(enabled.count).toBe(0)
     await Promise.all([restartedControl.end(), restartedClient.close()])
   })

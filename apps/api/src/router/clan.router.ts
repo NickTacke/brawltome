@@ -42,7 +42,9 @@ function publicProvenance(
 
 export async function mapClan(clans: ClanQueries, clanId: number): Promise<ClanProfileContract | null> {
   const clan = await clans.getById(clanId)
+
   if (!clan) return null
+
   return clanProfileSchema.parse({
     ...clan,
     clanCreateDate: clan.clanCreateDate.toISOString(),
@@ -88,6 +90,7 @@ async function requestClanRefresh(
   now = Date.now(),
 ): Promise<ClanRefreshResponseContract> {
   const response = await resolveClanRefresh(ctx, input, discordUserId, now)
+
   recordTelemetry(() =>
     ctx.telemetry.metrics.add('refresh_requests_total', 1, {
       kind: 'clan',
@@ -95,6 +98,7 @@ async function requestClanRefresh(
       source: discordUserId ? 'discord' : 'interactive-api',
     }),
   )
+
   return response
 }
 
@@ -106,10 +110,12 @@ async function resolveClanRefresh(
 ): Promise<ClanRefreshResponseContract> {
   const stored = await ctx.clanRepo.getById(input.id)
   const clan = await mapClan(ctx.clanRepo, input.id)
+
   const staleSections = [
     stale(stored?.profile.lastSuccessAt, now) ? ('profile' as const) : null,
     stale(stored?.roster?.lastSuccessAt, now) ? ('roster' as const) : null,
   ].filter((section): section is 'profile' | 'roster' => section !== null)
+
   if (staleSections.length === 0) return { clan, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
 
   const dedupeKey = [
@@ -119,8 +125,10 @@ async function resolveClanRefresh(
     `roster:${timestamp(stored?.roster?.lastSuccessAt)}`,
     `sections:${staleSections.join(',')}`,
   ].join(':')
+
   try {
     const active = await ctx.refreshOperations.findActiveInteractiveClanRefresh(dedupeKey)
+
     if (
       active &&
       (!active.reservationExpired || (await ctx.requestAdmission.hasActorReservation(active.operationId)))
@@ -136,6 +144,7 @@ async function resolveClanRefresh(
     }
 
     let actor: Parameters<Context['requestAdmission']['admitActor']>[0]
+
     if (discordUserId) actor = { kind: 'discord', discordUserId }
     else if (ctx.account) actor = { kind: 'authenticated', accountId: ctx.account.id, ip: ctx.clientIp }
     else {
@@ -143,13 +152,18 @@ async function resolveClanRefresh(
         if (!input.turnstileToken) {
           return { clan, refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } } }
         }
+
         const verification = await ctx.verifyRefreshChallenge(input.turnstileToken, ctx.clientIp)
+
         if (verification === 'unavailable') return { clan, refresh: unavailable }
+
         if (verification === 'invalid') {
           return { clan, refresh: { outcome: 'verificationRequired', retry: { kind: 'verify' } } }
         }
+
         ctx.refreshTrust.grant()
       }
+
       actor = { kind: 'verified-anonymous', ip: ctx.clientIp }
     }
 
@@ -164,6 +178,7 @@ async function resolveClanRefresh(
       },
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome === 'already-active') {
       return {
         clan,
@@ -174,36 +189,43 @@ async function resolveClanRefresh(
         },
       }
     }
+
     const admission = await ctx.requestAdmission.admitActor(actor, reserved.operationId)
+
     if (admission.outcome === 'rate-limited') {
       await ctx.refreshOperations.rejectInteractiveRefresh(
         reserved.operationId,
         reserved.reservationToken,
         'actor_rate_limited',
       )
+
       return {
         clan,
         refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: admission.retryAfterSeconds } },
       }
     }
+
     if (
       (await ctx.refreshOperations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)) ===
       'lease-lost'
     ) {
       return { clan, refresh: unavailable }
     }
+
     recordTelemetry(() =>
       ctx.telemetry.logger.info('refresh.operation.accepted', {
         operationId: reserved.operationId,
         kind: 'clan-refresh',
       }),
     )
+
     return {
       clan,
       refresh: { outcome: 'accepted', operationId: reserved.operationId, retry: { kind: 'poll', afterSeconds: 2 } },
     }
   } catch (error) {
     recordTelemetry(() => ctx.telemetry.logger.error('refresh.request.failed', error, { kind: 'clan-refresh' }))
+
     return { clan, refresh: unavailable }
   }
 }
@@ -231,6 +253,7 @@ export function createClanRouter(
       .output(playerClanMembershipSchema.nullable())
       .query(async ({ ctx, input }) => {
         const membership = await ctx.clanRepo.getPlayerMembership(input.id)
+
         return membership ? { clanId: membership.clanId, clanName: membership.clanName } : null
       }),
     refresh: procedure

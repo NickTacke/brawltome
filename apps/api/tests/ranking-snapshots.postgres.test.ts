@@ -33,6 +33,7 @@ let connectionString = ''
 
 const intervalMs = 15 * 60 * 1000
 const activityWindowMs = 60 * 60 * 1000
+
 const admission = {
   totalConcurrency: 8,
   interactiveReservation: 2,
@@ -58,8 +59,10 @@ beforeAll(async () => {
     label: 'ranking_snapshots',
     modules: [refreshOperationsModule, requestAdmissionModule, rankingModule],
   })
+
   connectionString = database.connectionString
   const adminUrl = new URL(baseUrl as string)
+
   adminUrl.pathname = '/postgres'
   admin = postgres(adminUrl.toString(), { max: 1 })
 })
@@ -90,9 +93,13 @@ function authorization(
 
 function sourceIdentity(mode: LeaderboardMode, id: number, variant = 0) {
   const player = { id, username: `${mode} Player ${variant}-${id}` }
+
   if (mode === '1v1') return { type: 'one-vs-one-player' as const, player }
+
   if (mode === 'solo2v2') return { type: 'solo-two-vs-two-player' as const, player }
+
   if (mode === '3v3') return { type: 'three-vs-three-player' as const, player }
+
   return {
     type: 'fixed-two-vs-two-team' as const,
     players: [player, { id: id + 500_000, username: `Teammate ${variant}-${id}` }] as const,
@@ -102,6 +109,7 @@ function sourceIdentity(mode: LeaderboardMode, id: number, variant = 0) {
 function publishedIdentity(identity: ReturnType<typeof sourceIdentity>): PublishedLeaderboardRow['identity'] {
   if (identity.type === 'fixed-two-vs-two-team') {
     const [first, second] = identity.players
+
     return {
       type: identity.type,
       players: [
@@ -110,6 +118,7 @@ function publishedIdentity(identity: ReturnType<typeof sourceIdentity>): Publish
       ],
     }
   }
+
   return {
     type: identity.type,
     player: { brawlhallaId: identity.player.id, name: identity.player.username },
@@ -119,6 +128,7 @@ function publishedIdentity(identity: ReturnType<typeof sourceIdentity>): Publish
 function sourceRow(mode: LeaderboardMode, region: RegionalLeaderboardScope, index: number, variant = 0) {
   const regionIndex = regionalLeaderboardScopes.indexOf(region)
   const id = variant * 1_000_000 + regionIndex * 10_000 + index + 1
+
   return {
     identity: sourceIdentity(mode, id, variant),
     rating: 2400 - index - regionIndex,
@@ -143,6 +153,7 @@ function candidate(
       region,
       Array.from({ length: rowsPerRegion }, (_, index) => {
         const row = sourceRow(mode, region, index, variant)
+
         return {
           standing: row.rank,
           sourceRank: row.rank,
@@ -157,10 +168,12 @@ function candidate(
       }),
     ]),
   )
+
   const global = [...regional.values()]
     .flat()
     .sort((left, right) => right.rating - left.rating || left.sourceRank - right.sourceRank)
     .map((row, index) => ({ ...row, standing: index + 1 }))
+
   return {
     mode,
     operationKey,
@@ -181,12 +194,14 @@ function activityCandidate(
   transform: (row: PublishedLeaderboardRow, scope: LeaderboardScope, index: number) => PublishedLeaderboardRow | null,
 ): LeaderboardGenerationCandidate {
   const publication = candidate(mode, operationKey, scheduleWindowAt, rowsPerRegion, variant)
+
   publication.snapshots = new Map(
     [...publication.snapshots].map(([scope, rows]) => [
       scope,
       rows.map((row, index) => transform(row, scope, index)).filter((row) => row !== null),
     ]),
   )
+
   return publication
 }
 
@@ -203,6 +218,7 @@ async function publishActivityGeneration(
   },
 ) {
   const lease = await leaseOperation(operations, input.mode, input.label)
+
   const publication = activityCandidate(
     input.mode,
     lease.operationKey,
@@ -211,10 +227,13 @@ async function publishActivityGeneration(
     input.variant ?? 700,
     input.transform ?? ((row) => row),
   )
+
   expect(await ranking.publishGeneration(authorization(lease, input.window.toISOString()), publication)).toBe(
     'published',
   )
+
   await operations.complete(lease)
+
   return publication
 }
 
@@ -225,6 +244,7 @@ async function leaseOperation(
   options: { operationKey?: string; maxAttempts?: number } = {},
 ) {
   const kind = operationKind(mode)
+
   const accepted = await operations.accept({
     kind,
     dedupeKey: `ranking:${label}:${randomUUID()}`,
@@ -234,7 +254,9 @@ async function leaseOperation(
     provenance: { source: 'ranking-postgres-test' },
     maxAttempts: options.maxAttempts,
   })
+
   const lease = await operations.claim(`worker:${label}`, 10_000, admission, kind)
+
   if (
     !lease ||
     lease.operationId !== accepted.operationId ||
@@ -243,6 +265,7 @@ async function leaseOperation(
   ) {
     throw new Error(`Expected ${kind} lease`)
   }
+
   return lease
 }
 
@@ -250,6 +273,7 @@ function validSource(mode: LeaderboardMode, variant = 0, rows = 1) {
   return {
     async fetchPage(input: { mode: LeaderboardMode; region: RegionalLeaderboardScope; page: number }) {
       if (input.mode !== mode) throw new Error('source mode mismatch')
+
       return {
         rankings: Array.from({ length: rows }, (_, index) => sourceRow(mode, input.region, index, variant)),
         totalPages: 1,
@@ -265,9 +289,12 @@ function identityName(entry: { identity: PublishedLeaderboardRow['identity'] }):
 // the upgrade test applies only the first migrations, so it builds its database by hand
 async function createUpgradeDatabase(prefix: string) {
   const name = `${prefix}_${process.pid}_${randomUUID().replaceAll('-', '')}`
+
   await admin.unsafe(`CREATE DATABASE "${name}"`)
   const url = new URL(baseUrl as string)
+
   url.pathname = `/${name}`
+
   return { name, url: url.toString() }
 }
 
@@ -275,22 +302,26 @@ describe('Ranking mode migrations', () => {
   test('backfills applied #201 snapshots, effects, and unknowable failure scopes without mutating immutable rows', async () => {
     const database = await createUpgradeDatabase('brawltome_ranking_backfill')
     const client = postgres(database.url, { max: 1 })
+
     try {
       for (const migration of refreshOperationsMigrationInventory.slice(0, 8)) await client.unsafe(migration.sql)
       await client.unsafe(rankingMigrationInventory[0].sql)
       const operationId = randomUUID()
       const generationId = randomUUID()
       const snapshotId = randomUUID()
+
       await client`
         INSERT INTO refresh_operations.operations
           (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, status, max_attempts)
         VALUES (${operationId}, ${operationId}, 'leaderboard-1v1', ${randomUUID()}, ${randomUUID()}, 'leaderboard',
           ${client.json({ pageDepth: 1, intervalMs })}, ${client.json({ source: 'backfill-test' })}, 'pending', 3)
       `
+
       await client`
         INSERT INTO refresh_operations.leaderboard_effects (operation_key, operation_id, lease_token)
         VALUES (${randomUUID()}, ${operationId}, 1)
       `
+
       await client`
         INSERT INTO rankings.generations
           (id, operation_id, operation_key, observed_at, schedule_window_at,
@@ -298,12 +329,15 @@ describe('Ranking mode migrations', () => {
         VALUES (${generationId}, ${operationId}, ${randomUUID()}, now(), now(), now() + interval '15 minutes', 1,
           'brawlhalla-v1-ranked-leaderboard', 1)
       `
+
       await client`INSERT INTO rankings.snapshots (id, generation_id, scope, row_count) VALUES (${snapshotId}, ${generationId}, 'EU', 1)`
+
       await client`
         INSERT INTO rankings.snapshot_rows
           (snapshot_id, ordinal, standing, source_rank, brawlhalla_id, name, region, rating, peak_rating, wins, losses)
         VALUES (${snapshotId}, 1, 1, 1, 42, 'Ada', 'EU', 2100, 2200, 20, 10)
       `
+
       await client`
         INSERT INTO rankings.collection_failures
           (id, operation_key, schedule_window_at, checked_at, code, message)
@@ -312,29 +346,36 @@ describe('Ranking mode migrations', () => {
 
       await client.unsafe(refreshOperationsMigrationInventory[8].sql)
       await client.unsafe(rankingMigrationInventory[1].sql)
+
       const [row] = await client<
         { mode: string; identity_kind: string; player_one_id: number; player_two_id: number | null }[]
       >`
         SELECT mode, identity_kind, player_one_id, player_two_id FROM rankings.snapshot_rows
       `
+
       const [effect] = await client<{ operation_kind: string }[]>`
         SELECT operation_kind FROM refresh_operations.leaderboard_effects
       `
+
       const [failure] = await client<{ mode: string; scope: string }[]>`
         SELECT mode, scope FROM rankings.collection_failures
       `
+
       const [generation] = await client<{ finalized: boolean }[]>`
         SELECT finalized FROM rankings.generations WHERE id = ${generationId}
       `
+
       expect(row).toEqual({ mode: '1v1', identity_kind: 'one-vs-one-player', player_one_id: 42, player_two_id: null })
       expect(effect.operation_kind).toBe('leaderboard-1v1')
       expect(failure).toEqual({ mode: '1v1', scope: 'all' })
       expect(generation.finalized).toBe(true)
+
       const [scopeColumn] = await client<{ is_nullable: string; column_default: string | null }[]>`
         SELECT is_nullable, column_default
         FROM information_schema.columns
         WHERE table_schema = 'rankings' AND table_name = 'collection_failures' AND column_name = 'scope'
       `
+
       const [scopeConstraint] = await client<{ definition: string }[]>`
         SELECT pg_get_constraintdef(oid) AS definition
         FROM pg_constraint
@@ -342,6 +383,7 @@ describe('Ranking mode migrations', () => {
           AND contype = 'c'
           AND pg_get_constraintdef(oid) LIKE '%scope%'
       `
+
       expect(scopeColumn).toEqual({ is_nullable: 'NO', column_default: null })
       expect(scopeConstraint.definition).toContain("scope = ANY (ARRAY['all'::text, 'US-E'::text")
     } finally {
@@ -356,6 +398,7 @@ describe('recent ranked activity', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
+
     expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1 })).toEqual({
       status: 'unavailable',
       reason: 'not_enough_history',
@@ -366,21 +409,27 @@ describe('recent ranked activity', () => {
     })
 
     const window = new Date('2000-01-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-history-one',
       window,
     })
+
     const historyWindow = new Date(window.getTime() + activityWindowMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-history-two',
       window: historyWindow,
       transform: (row) => ({ ...row, wins: row.wins + 1 }),
     })
+
     const current = await ranking.queries.getLeaderboard({ mode: '1v1', region: 'EU', page: 1, now: historyWindow })
     const otherScope = await ranking.queries.getLeaderboard({ mode: '1v1', region: 'all', page: 1, now: historyWindow })
+
     if (current.status === 'unavailable' || otherScope.status === 'unavailable') throw new Error('Expected snapshots')
+
     await expect(
       ranking.queries.getRecentActivity({
         mode: '1v1',
@@ -390,6 +439,7 @@ describe('recent ranked activity', () => {
         now: historyWindow,
       }),
     ).resolves.toMatchObject({ status: 'fresh' })
+
     expect(
       await ranking.queries.getRecentActivity({
         mode: '1v1',
@@ -400,21 +450,26 @@ describe('recent ranked activity', () => {
     ).toMatchObject({ status: 'unavailable', reason: 'not_enough_history' })
 
     const twoVsTwoWindow = new Date('2000-01-02T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '2v2',
       label: 'activity-wrong-mode-previous',
       window: twoVsTwoWindow,
     })
+
     const twoVsTwoCurrentWindow = new Date(twoVsTwoWindow.getTime() + activityWindowMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '2v2',
       label: 'activity-wrong-mode-current',
       window: twoVsTwoCurrentWindow,
       transform: (row) => ({ ...row, wins: row.wins + 1 }),
     })
+
     await expect(
       ranking.queries.getRecentActivity({ mode: '2v2', region: 'EU', page: 1, now: twoVsTwoCurrentWindow }),
     ).resolves.toMatchObject({ status: 'fresh' })
+
     expect(
       await ranking.queries.getRecentActivity({
         mode: '2v2',
@@ -431,6 +486,7 @@ describe('recent ranked activity', () => {
       const generationId = randomUUID()
       const snapshotId = randomUUID()
       const scheduled = new Date(window.getTime() + (source === 'v2-legacy' ? 1 : 2) * intervalMs)
+
       const provenance =
         source === 'v2-legacy'
           ? {
@@ -441,6 +497,7 @@ describe('recent ranked activity', () => {
               completeness: 'frozen-repository-rows',
             }
           : { source, contractVersion: 1, pageDepth: 1 }
+
       await control`
         INSERT INTO rankings.generations
           (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
@@ -449,10 +506,12 @@ describe('recent ranked activity', () => {
           ${new Date(scheduled.getTime() + intervalMs)}, ${source === 'v2-legacy' ? null : 1}, ${source}, 1, false,
           ${control.json(provenance)})
       `
+
       await control`
         INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
         VALUES (${snapshotId}, ${generationId}, '1v1', 'EU', 1)
       `
+
       await control`
         INSERT INTO rankings.snapshot_rows
           (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
@@ -460,9 +519,12 @@ describe('recent ranked activity', () => {
         VALUES (${snapshotId}, '1v1', 1, 1, 1, 'one-vs-one-player', 990000001, 'Pinned Invalid',
           NULL, NULL, 'EU', 2000, 2100, 20, 10, 'Diamond')
       `
+
       if (finalized) await control`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+
       return snapshotId
     }
+
     for (const snapshotId of [
       await insertPinnedSnapshot('v2-legacy', true),
       await insertPinnedSnapshot('brawlhalla-v1-ranked-leaderboard', false),
@@ -475,6 +537,7 @@ describe('recent ranked activity', () => {
     const partialGenerationId = randomUUID()
     const partialSnapshotId = randomUUID()
     const partialWindow = new Date(window.getTime() + 3 * intervalMs)
+
     await control`
       INSERT INTO rankings.generations
         (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
@@ -484,10 +547,12 @@ describe('recent ranked activity', () => {
         'brawlhalla-v1-ranked-leaderboard', 1, false,
         ${control.json({ source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 })})
     `
+
     await control`
       INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
       VALUES (${partialSnapshotId}, ${partialGenerationId}, '1v1', 'all', 1)
     `
+
     await control`
       INSERT INTO rankings.snapshot_rows
         (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
@@ -495,14 +560,17 @@ describe('recent ranked activity', () => {
       VALUES (${partialSnapshotId}, '1v1', 1, 1, 1, 'one-vs-one-player', 990000002, 'Missing EU',
         NULL, NULL, 'EU', 2000, 2100, 20, 10, 'Diamond')
     `
+
     await control`UPDATE rankings.generations SET finalized = true WHERE id = ${partialGenerationId}`
     const currentWindow = new Date(partialWindow.getTime() + intervalMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-missing-scope-current',
       window: currentWindow,
       transform: (row) => ({ ...row, wins: row.wins + 1 }),
     })
+
     expect(
       await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1, now: currentWindow }),
     ).toMatchObject({ status: 'fresh', totalRows: 1 })
@@ -515,13 +583,16 @@ describe('recent ranked activity', () => {
     const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
     const previousWindow = new Date('2000-02-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-missing-current-previous',
       window: previousWindow,
       variant: 705,
     })
+
     const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-missing-current-complete',
@@ -533,6 +604,7 @@ describe('recent ranked activity', () => {
     const generationId = randomUUID()
     const snapshotId = randomUUID()
     const scheduleWindowAt = new Date(currentWindow.getTime() + intervalMs)
+
     await control`
       INSERT INTO rankings.generations
         (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
@@ -542,10 +614,12 @@ describe('recent ranked activity', () => {
         'brawlhalla-v1-ranked-leaderboard', 1, false,
         ${control.json({ source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 })})
     `
+
     await control`
       INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
       VALUES (${snapshotId}, ${generationId}, '1v1', 'all', 1)
     `
+
     await control`
       INSERT INTO rankings.snapshot_rows
         (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
@@ -553,27 +627,33 @@ describe('recent ranked activity', () => {
       VALUES (${snapshotId}, '1v1', 1, 1, 1, 'one-vs-one-player', 990000003, 'Missing Current EU',
         NULL, NULL, 'EU', 2000, 2100, 20, 10, 'Diamond')
     `
+
     await control`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
 
     expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1 })).toMatchObject({
       status: 'unavailable',
       reason: 'not_enough_history',
     })
+
     await control.end()
   })
 
   test('returns positive game deltas for stable identities in all four modes and both Global and EU scopes', async () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
+
     for (const [index, mode] of leaderboardModes.entries()) {
       const previousWindow = new Date(Date.UTC(2001, 0, index + 1))
+
       await publishActivityGeneration(operations, ranking, {
         mode,
         label: `activity-modes-previous-${mode}`,
         window: previousWindow,
         variant: 710 + index,
       })
+
       const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
+
       await publishActivityGeneration(operations, ranking, {
         mode,
         label: `activity-modes-current-${mode}`,
@@ -581,12 +661,16 @@ describe('recent ranked activity', () => {
         variant: 710 + index,
         transform: (row) => ({ ...row, rating: row.rating - 12, wins: row.wins + 1, losses: row.losses + 2 }),
       })
+
       for (const region of ['all', 'EU'] as const) {
         const view = await ranking.queries.getRecentActivity({ mode, region, page: 1, now: currentWindow })
+
         if (view.status === 'unavailable') throw new Error(`Expected ${mode} ${region} activity`)
+
         expect(view.status).toBe('fresh')
         expect(view.totalRows).toBe(region === 'all' ? 9 : 1)
         expect(view.entries[0]).toMatchObject({ ratingDelta: -12, winsDelta: 1, lossesDelta: 2, gamesDelta: 3 })
+
         expect(view.entries[0].identity.type).toBe(
           mode === '1v1'
             ? 'one-vs-one-player'
@@ -604,12 +688,14 @@ describe('recent ranked activity', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const baselineWindow = new Date('2001-06-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
       label: 'activity-hour-baseline',
       window: baselineWindow,
       variant: 715,
     })
+
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
       label: 'activity-hour-latest-intermediate',
@@ -617,7 +703,9 @@ describe('recent ranked activity', () => {
       variant: 715,
       transform: (row) => ({ ...row, wins: row.wins + 2 }),
     })
+
     const currentWindow = new Date(baselineWindow.getTime() + 75 * 60 * 1000)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
       label: 'activity-hour-current',
@@ -627,7 +715,9 @@ describe('recent ranked activity', () => {
     })
 
     const view = await ranking.queries.getRecentActivity({ mode: '3v3', region: 'all', page: 1, now: currentWindow })
+
     if (view.status === 'unavailable') throw new Error('Expected rolling activity')
+
     expect(view.previousObservedAt).toBe('2001-06-01T00:00:01.000Z')
     expect(view.totalRows).toBe(9)
     expect(view.entries[0]).toMatchObject({ winsDelta: 3, lossesDelta: 1, gamesDelta: 4 })
@@ -637,13 +727,16 @@ describe('recent ranked activity', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const baselineWindow = new Date('2001-07-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-freshness-baseline',
       window: baselineWindow,
       variant: 716,
     })
+
     const currentWindow = new Date(baselineWindow.getTime() + 60 * 60 * 1000)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-freshness-current',
@@ -651,8 +744,10 @@ describe('recent ranked activity', () => {
       variant: 716,
       transform: (row) => ({ ...row, wins: row.wins + 1 }),
     })
+
     const failedWindow = new Date(currentWindow.getTime() + 15 * 60 * 1000)
     const failed = await leaseOperation(operations, '1v1', 'activity-freshness-failure')
+
     expect(
       await ranking.recordCollectionFailure(authorization(failed, failedWindow.toISOString()), {
         mode: '1v1',
@@ -662,6 +757,7 @@ describe('recent ranked activity', () => {
         message: 'temporary source failure',
       }),
     ).toBe('recorded')
+
     await operations.fail(failed, { code: 'source_unavailable', message: 'temporary', retryable: false }, 0)
 
     await expect(
@@ -672,6 +768,7 @@ describe('recent ranked activity', () => {
         now: new Date(currentWindow.getTime() + 15 * 60 * 1000),
       }),
     ).resolves.toMatchObject({ status: 'fresh' })
+
     await expect(
       ranking.queries.getRecentActivity({
         mode: '1v1',
@@ -688,6 +785,7 @@ describe('recent ranked activity', () => {
     const previousWindow = new Date('2002-01-01T00:00:00Z')
     const ratings = [2300, 2400, 2300]
     const games = [2, 1, 4]
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-sort-previous',
@@ -696,7 +794,9 @@ describe('recent ranked activity', () => {
       variant: 720,
       transform: (row) => ({ ...row, rating: 2000, wins: 20, losses: 10 }),
     })
+
     const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-sort-current',
@@ -711,8 +811,11 @@ describe('recent ranked activity', () => {
         losses: 10,
       }),
     })
+
     const current = await ranking.queries.getLeaderboard({ mode: '1v1', region: 'EU', page: 1, now: currentWindow })
+
     if (current.status === 'unavailable') throw new Error('Expected current snapshot')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-sort-latest',
@@ -730,6 +833,7 @@ describe('recent ranked activity', () => {
       snapshotId: current.snapshotId,
       now: currentWindow,
     })
+
     const pageTwo = await ranking.queries.getRecentActivity({
       mode: '1v1',
       region: 'EU',
@@ -738,17 +842,22 @@ describe('recent ranked activity', () => {
       snapshotId: current.snapshotId,
       now: currentWindow,
     })
+
     if (pageOne.status === 'unavailable' || pageTwo.status === 'unavailable') throw new Error('Expected pinned pages')
+
     expect(pageOne.currentSnapshotId).toBe(current.snapshotId)
     expect(pageTwo.currentSnapshotId).toBe(current.snapshotId)
+
     expect(pageOne.entries.map(({ rating, gamesDelta }) => [rating, gamesDelta])).toEqual([
       [2400, 1],
       [2300, 4],
     ])
+
     expect(pageTwo.entries.map(({ rating, gamesDelta }) => [rating, gamesDelta])).toEqual([[2300, 2]])
     expect(pageOne.hasMore).toBe(true)
     expect(pageOne.totalRows).toBe(3)
     expect(pageTwo.hasMore).toBe(false)
+
     expect(
       await ranking.queries.getRecentActivity({
         mode: '1v1',
@@ -765,6 +874,7 @@ describe('recent ranked activity', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2003-01-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-exclusions-previous',
@@ -776,6 +886,7 @@ describe('recent ranked activity', () => {
     })
 
     const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '1v1',
       label: 'activity-exclusions-current',
@@ -784,16 +895,23 @@ describe('recent ranked activity', () => {
       variant: 730,
       transform: (row, scope, index) => {
         if (scope === 'EU' && index === 4) return null
+
         if (index === 0) return { ...row, wins: 21, losses: 10 }
+
         if (index === 1) return { ...row, rating: row.rating + 100, peakRating: 3000, wins: 20, losses: 10 }
+
         if (index === 2) return { ...row, wins: 19, losses: 12 }
+
         if (index === 3) return { ...row, wins: 5, losses: 3 }
+
         return { ...row, wins: 21, losses: 10 }
       },
     })
 
     const view = await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1, now: currentWindow })
+
     if (view.status === 'unavailable') throw new Error('Expected exclusion view')
+
     expect(view.entries).toHaveLength(1)
     expect(view.entries[0]).toMatchObject({ winsDelta: 1, lossesDelta: 0, gamesDelta: 1 })
   })
@@ -802,13 +920,16 @@ describe('recent ranked activity', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2003-06-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
       label: 'activity-gap-previous',
       window: previousWindow,
       variant: 740,
     })
+
     const currentWindow = new Date(previousWindow.getTime() + 2 * intervalMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: '3v3',
       label: 'activity-gap-current',
@@ -816,6 +937,7 @@ describe('recent ranked activity', () => {
       variant: 740,
       transform: (row) => ({ ...row, wins: row.wins + 1 }),
     })
+
     expect(await ranking.queries.getRecentActivity({ mode: '3v3', region: 'EU', page: 1, now: currentWindow })).toEqual(
       {
         status: 'unavailable',
@@ -832,28 +954,34 @@ describe('recent ranked activity', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2004-01-01T00:00:00Z')
+
     await publishActivityGeneration(operations, ranking, {
       mode: 'solo2v2',
       label: 'activity-empty-previous',
       window: previousWindow,
       variant: 750,
     })
+
     const currentWindow = new Date(previousWindow.getTime() + activityWindowMs)
+
     await publishActivityGeneration(operations, ranking, {
       mode: 'solo2v2',
       label: 'activity-empty-current',
       window: currentWindow,
       variant: 750,
     })
+
     const empty = await ranking.queries.getRecentActivity({
       mode: 'solo2v2',
       region: 'EU',
       page: 1,
       now: currentWindow,
     })
+
     expect(empty).toMatchObject({ status: 'fresh', totalRows: 0, entries: [] })
 
     const failure = await leaseOperation(operations, 'solo2v2', 'activity-empty-failure')
+
     expect(
       await ranking.recordCollectionFailure(authorization(failure), {
         mode: 'solo2v2',
@@ -863,10 +991,13 @@ describe('recent ranked activity', () => {
         message: 'activity freshness test',
       }),
     ).toBe('recorded')
+
     await operations.fail(failure, { code: 'source_unavailable', message: 'test', retryable: false }, 0)
+
     expect(
       await ranking.queries.getRecentActivity({ mode: 'solo2v2', region: 'EU', page: 1, now: currentWindow }),
     ).toMatchObject({ status: 'fresh', totalRows: 0, entries: [] })
+
     expect(
       await ranking.queries.getRecentActivity({
         mode: 'solo2v2',
@@ -884,11 +1015,14 @@ describe('immutable Ranking snapshots for every mode', () => {
     // the ranking repository restarts below, so it gets a client of its own to close and reopen
     let rankingClient = openTestClient(database.connectionString)
     let ranking = createPostgresRanking(rankingClient)
+
     for (const [variant, mode] of leaderboardModes.entries()) {
       const lease = await leaseOperation(operations, mode, `publish-${mode}`)
       const publication = candidate(mode, lease.operationKey, undefined, 2, variant + 1)
+
       if (mode === '2v2') {
         const euRows = publication.snapshots.get('EU')
+
         if (
           !euRows ||
           euRows[0].identity.type !== 'fixed-two-vs-two-team' ||
@@ -896,6 +1030,7 @@ describe('immutable Ranking snapshots for every mode', () => {
         ) {
           throw new Error('Expected fixed-team rows')
         }
+
         publication.snapshots = new Map(publication.snapshots).set('EU', [
           {
             ...euRows[0],
@@ -916,29 +1051,36 @@ describe('immutable Ranking snapshots for every mode', () => {
           },
         ])
       }
+
       expect(await ranking.publishGeneration(authorization(lease), publication)).toBe('published')
       await operations.complete(lease)
     }
 
     const fixedEu = await ranking.queries.getLeaderboard({ mode: '2v2', region: 'EU', page: 1 })
+
     if (fixedEu.status === 'unavailable') throw new Error('Expected fixed standings')
+
     expect(fixedEu.entries).toHaveLength(2)
+
     expect(fixedEu.provenance).toEqual({
       source: 'brawlhalla-v1-ranked-leaderboard',
       contractVersion: 2,
       pageDepth: 1,
     })
+
     if (
       fixedEu.entries[0].identity.type !== 'fixed-two-vs-two-team' ||
       fixedEu.entries[1].identity.type !== 'fixed-two-vs-two-team'
     ) {
       throw new Error('Expected fixed identities')
     }
+
     const couchTeam = fixedEu.entries.find(
       ({ identity }) =>
         identity.type === 'fixed-two-vs-two-team' &&
         identity.players[0].brawlhallaId === identity.players[1].brawlhallaId,
     )
+
     expect(couchTeam?.identity).toEqual({
       type: 'fixed-two-vs-two-team',
       players: [
@@ -948,10 +1090,14 @@ describe('immutable Ranking snapshots for every mode', () => {
     })
 
     const fixed = await ranking.queries.getLeaderboard({ mode: '2v2', region: 'all', page: 1 })
+
     if (fixed.status === 'unavailable') throw new Error('Expected fixed standings')
+
     expect(fixed.entries[0].identity.type).toBe('fixed-two-vs-two-team')
     if (fixed.entries[0].identity.type !== 'fixed-two-vs-two-team') throw new Error('Expected team')
+
     expect(fixed.entries[0].identity.players[0].brawlhallaId).toBeGreaterThan(0)
+
     expect(fixed.entries[0].identity.players[1].brawlhallaId).toBeGreaterThan(
       fixed.entries[0].identity.players[0].brawlhallaId,
     )
@@ -961,8 +1107,10 @@ describe('immutable Ranking snapshots for every mode', () => {
     ranking = createPostgresRanking(rankingClient)
     for (const mode of leaderboardModes) {
       const view = await ranking.queries.getLeaderboard({ mode, region: 'EU', page: 1 })
+
       expect(view).toMatchObject({ mode, status: 'fresh', totalRows: 2 })
     }
+
     await rankingClient.close()
   })
 
@@ -971,40 +1119,54 @@ describe('immutable Ranking snapshots for every mode', () => {
     const ranking = createPostgresRanking(database)
 
     const original = await leaseOperation(operations, 'solo2v2', 'mode-replay', { maxAttempts: 1 })
+
     await operations.fail(original, { code: 'source_repaired', message: 'repairable', retryable: false }, 0)
+
     const replayed = await operations.replayDeadLetter({
       operationId: original.operationId,
       actorId: 'operator:ranking',
       reason: 'mode source repaired',
     })
+
     if (replayed.outcome !== 'replayed') throw new Error('Expected mode-specific replay')
+
     const successor = await operations.claim('mode-replay-worker', 10_000, admission, 'leaderboard-solo-2v2')
+
     if (!successor || successor.kind !== 'leaderboard-solo-2v2') throw new Error('Expected Solo 2v2 replay lease')
+
     expect(successor.effectOperationId).toBe(original.effectOperationId)
+
     expect(
       await ranking.publishGeneration(
         authorization(successor),
         candidate('solo2v2', successor.operationKey, undefined, 1, 80),
       ),
     ).toBe('published')
+
     await operations.complete(successor)
 
     const sharedKey = `cross-kind:${randomUUID()}`
     const oneVsOne = await leaseOperation(operations, '1v1', 'cross-kind-first', { operationKey: sharedKey })
+
     expect(
       await ranking.publishGeneration(authorization(oneVsOne), candidate('1v1', sharedKey, undefined, 1, 81)),
     ).toBe('published')
+
     await operations.complete(oneVsOne)
     const threeVsThree = await leaseOperation(operations, '3v3', 'cross-kind-second', { operationKey: sharedKey })
+
     expect(
       await ranking.publishGeneration(authorization(threeVsThree), candidate('3v3', sharedKey, undefined, 1, 82)),
     ).toBe('effect-conflict')
+
     await operations.fail(threeVsThree, { code: 'effect_conflict', message: 'cross-kind reuse', retryable: false }, 0)
 
     const control = postgres(connectionString, { max: 1 })
+
     const [published] = await control<{ operation_id: string; mode: string }[]>`
       SELECT operation_id, mode FROM rankings.generations WHERE operation_key = ${original.operationKey}
     `
+
     expect(published).toEqual({ operation_id: original.effectOperationId, mode: 'solo2v2' })
     await control.end()
   })
@@ -1013,15 +1175,20 @@ describe('immutable Ranking snapshots for every mode', () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const baselineWindow = new Date(Date.now() + 10 * intervalMs)
+
     for (const mode of ['1v1', 'solo2v2', '3v3'] as const) {
       const lease = await leaseOperation(operations, mode, `isolation-base-${mode}`)
+
       await ranking.publishGeneration(
         authorization(lease, baselineWindow.toISOString()),
         candidate(mode, lease.operationKey, baselineWindow, 1, 20),
       )
+
       await operations.complete(lease)
     }
+
     const failed = await leaseOperation(operations, '3v3', 'isolation-failure')
+
     expect(
       await ranking.recordCollectionFailure(
         authorization(failed, new Date(baselineWindow.getTime() + intervalMs).toISOString()),
@@ -1034,6 +1201,7 @@ describe('immutable Ranking snapshots for every mode', () => {
         },
       ),
     ).toBe('recorded')
+
     await operations.fail(failed, { code: 'source_contract_invalid', message: 'drift', retryable: false }, 0)
 
     expect((await ranking.queries.getLeaderboard({ mode: '3v3', region: 'all', page: 1 })).status).toBe('stale')
@@ -1050,10 +1218,12 @@ describe('immutable Ranking snapshots for every mode', () => {
     const sharedKey = `shared:${randomUUID()}`
     const first = await leaseOperation(operations, '2v2', 'concurrent-first', { operationKey: sharedKey })
     const second = await leaseOperation(operations, '2v2', 'concurrent-second', { operationKey: sharedKey })
+
     const results = await Promise.all([
       ranking.publishGeneration(authorization(first), candidate('2v2', sharedKey, undefined, 1, 30)),
       ranking.publishGeneration(authorization(second), candidate('2v2', sharedKey, undefined, 1, 31)),
     ])
+
     expect([...results].sort()).toEqual(['effect-conflict', 'published'])
     for (const [lease, result] of [
       [first, results[0]],
@@ -1066,33 +1236,44 @@ describe('immutable Ranking snapshots for every mode', () => {
     const rollback = await leaseOperation(operations, '2v2', 'rollback')
     const malformed = candidate('2v2', rollback.operationKey, undefined, 1, 32)
     const eu = malformed.snapshots.get('EU')
+
     if (!eu || eu[0].identity.type !== 'fixed-two-vs-two-team') throw new Error('Expected fixed candidate')
+
     const players = eu[0].identity.players
+
     malformed.snapshots = new Map(malformed.snapshots).set('EU', [
       { ...eu[0], identity: { type: 'fixed-two-vs-two-team', players: [players[1], players[0]] } },
     ])
+
     await expect(ranking.publishGeneration(authorization(rollback), malformed)).rejects.toThrow()
     const control = postgres(connectionString, { max: 1 })
+
     const [counts] = await control<{ generations: number; effects: number }[]>`
       SELECT
         (SELECT count(*)::int FROM rankings.generations WHERE operation_id = ${rollback.operationId}) AS generations,
         (SELECT count(*)::int FROM refresh_operations.leaderboard_effects WHERE operation_id = ${rollback.operationId}) AS effects
     `
+
     expect(counts).toEqual({ generations: 0, effects: 0 })
     await operations.fail(rollback, { code: 'storage_invalid', message: 'invalid', retryable: false }, 0)
 
     const latest = await ranking.queries.getLeaderboard({ mode: '2v2', region: 'all', page: 1 })
+
     if (latest.status === 'unavailable') throw new Error('Expected snapshot')
+
     let immutableError: unknown
+
     try {
       await control`UPDATE rankings.snapshot_rows SET rating = rating + 1 WHERE snapshot_id = ${latest.snapshotId}`
     } catch (error) {
       immutableError = error
     }
+
     expect(immutableError).toBeInstanceOf(Error)
     expect((immutableError as Error).message).toContain('published ranking snapshots are immutable')
 
     let insertRowError: unknown
+
     try {
       await control`
         INSERT INTO rankings.snapshot_rows
@@ -1104,10 +1285,12 @@ describe('immutable Ranking snapshots for every mode', () => {
     } catch (error) {
       insertRowError = error
     }
+
     expect(insertRowError).toBeInstanceOf(Error)
     expect((insertRowError as Error).message).toContain('published ranking snapshots are immutable')
 
     let insertSnapshotError: unknown
+
     try {
       await control`
         INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
@@ -1116,6 +1299,7 @@ describe('immutable Ranking snapshots for every mode', () => {
     } catch (error) {
       insertSnapshotError = error
     }
+
     expect(insertSnapshotError).toBeInstanceOf(Error)
     expect((insertSnapshotError as Error).message).toContain('published ranking snapshots are immutable')
     await control.end()
@@ -1127,6 +1311,7 @@ describe('immutable Ranking snapshots for every mode', () => {
     const generationId = randomUUID()
     const snapshotId = randomUUID()
     const scheduleWindowAt = new Date(Date.now() + 100 * intervalMs)
+
     await control`
       INSERT INTO rankings.generations
         (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
@@ -1136,10 +1321,12 @@ describe('immutable Ranking snapshots for every mode', () => {
         'brawlhalla-v1-ranked-leaderboard', 1, false,
         ${control.json({ source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 1, pageDepth: 1 })})
     `
+
     await control`
       INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
       VALUES (${snapshotId}, ${generationId}, '1v1', 'EU', 1)
     `
+
     await control`
       INSERT INTO rankings.snapshot_rows
         (snapshot_id, mode, ordinal, standing, source_rank, identity_kind, player_one_id, player_one_name,
@@ -1155,12 +1342,14 @@ describe('immutable Ranking snapshots for every mode', () => {
       page: 1,
       pageSize: 20,
     })
+
     const [stored] = await control<{ finalized: boolean; row_count: number }[]>`
       SELECT generation.finalized, snapshot.row_count
       FROM rankings.generations generation
       JOIN rankings.snapshots snapshot ON snapshot.generation_id = generation.id
       WHERE generation.id = ${generationId}
     `
+
     expect(stored).toEqual({ finalized: false, row_count: 1 })
     await control.end()
   })
@@ -1168,14 +1357,18 @@ describe('immutable Ranking snapshots for every mode', () => {
   test('uses schedule windows for latest selection and pins pagination for every mode', async () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
+
     for (const [modeIndex, mode] of leaderboardModes.entries()) {
       const baseWindow = new Date(Date.now() + (20 + modeIndex * 5) * intervalMs)
       const newer = await leaseOperation(operations, mode, `window-new-${mode}`)
+
       await ranking.publishGeneration(
         authorization(newer, baseWindow.toISOString()),
         candidate(mode, newer.operationKey, baseWindow, 4, 40 + modeIndex),
       )
+
       await operations.complete(newer)
+
       const pageOne = await ranking.queries.getLeaderboard({
         mode,
         region: 'all',
@@ -1183,15 +1376,19 @@ describe('immutable Ranking snapshots for every mode', () => {
         pageSize: 5,
         now: baseWindow,
       })
+
       if (pageOne.status === 'unavailable') throw new Error('Expected page one')
 
       const older = await leaseOperation(operations, mode, `window-old-${mode}`)
       const olderWindow = new Date(baseWindow.getTime() - intervalMs)
+
       await ranking.publishGeneration(
         authorization(older, olderWindow.toISOString()),
         candidate(mode, older.operationKey, olderWindow, 4, 50 + modeIndex),
       )
+
       await operations.complete(older)
+
       const stillLatest = await ranking.queries.getLeaderboard({
         mode,
         region: 'all',
@@ -1199,16 +1396,21 @@ describe('immutable Ranking snapshots for every mode', () => {
         pageSize: 5,
         now: baseWindow,
       })
+
       if (stillLatest.status === 'unavailable') throw new Error('Expected latest')
+
       expect(identityName(stillLatest.entries[0])).toContain(`${40 + modeIndex}-`)
 
       const next = await leaseOperation(operations, mode, `window-next-${mode}`)
       const nextWindow = new Date(baseWindow.getTime() + intervalMs)
+
       await ranking.publishGeneration(
         authorization(next, nextWindow.toISOString()),
         candidate(mode, next.operationKey, nextWindow, 4, 60 + modeIndex),
       )
+
       await operations.complete(next)
+
       const pinned = await ranking.queries.getLeaderboard({
         mode,
         region: 'all',
@@ -1217,6 +1419,7 @@ describe('immutable Ranking snapshots for every mode', () => {
         snapshotId: pageOne.snapshotId,
         now: nextWindow,
       })
+
       const advanced = await ranking.queries.getLeaderboard({
         mode,
         region: 'all',
@@ -1224,10 +1427,13 @@ describe('immutable Ranking snapshots for every mode', () => {
         pageSize: 5,
         now: nextWindow,
       })
+
       if (pinned.status === 'unavailable' || advanced.status === 'unavailable') throw new Error('Expected pages')
+
       expect(pinned.generationId).toBe(pageOne.generationId)
       expect(identityName(pinned.entries[0])).toContain(`${40 + modeIndex}-`)
       expect(identityName(advanced.entries[0])).toContain(`${60 + modeIndex}-`)
+
       expect(
         await ranking.queries.getLeaderboard({ mode, region: 'EU', page: 1, snapshotId: pageOne.snapshotId }),
       ).toMatchObject({
@@ -1237,11 +1443,13 @@ describe('immutable Ranking snapshots for every mode', () => {
       })
     }
   })
+
   test('derives Player Valhallan evidence from each latest official generation', async () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
     const playerId = 77_777
     const teammateId = 88_888
+
     const publish = async (
       mode: LeaderboardMode,
       label: string,
@@ -1251,13 +1459,17 @@ describe('immutable Ranking snapshots for every mode', () => {
     ) => {
       const lease = await leaseOperation(operations, mode, label)
       const publication = candidate(mode, lease.operationKey, scheduleWindowAt)
+
       publication.snapshots = new Map(
         [...publication.snapshots].map(([scope, rows]) => [scope, [{ ...rows[0], identity, tier }]]),
       )
+
       expect(await ranking.publishGeneration(authorization(lease), publication)).toBe('published')
       await operations.complete(lease)
     }
+
     const firstWindow = new Date('2100-01-01T00:00:00Z')
+
     await publish(
       '1v1',
       'player-valhallan-1v1',
@@ -1265,6 +1477,7 @@ describe('immutable Ranking snapshots for every mode', () => {
       'Valhallan 1',
       firstWindow,
     )
+
     await publish(
       '2v2',
       'player-valhallan-2v2',
@@ -1278,6 +1491,7 @@ describe('immutable Ranking snapshots for every mode', () => {
       'Valhallan 2',
       firstWindow,
     )
+
     await publish(
       'solo2v2',
       'player-valhallan-solo',
@@ -1285,6 +1499,7 @@ describe('immutable Ranking snapshots for every mode', () => {
       'Valhallan 3',
       firstWindow,
     )
+
     await publish(
       '3v3',
       'player-valhallan-3v3',
@@ -1312,6 +1527,7 @@ describe('immutable Ranking snapshots for every mode', () => {
       'Valhallan 2',
       new Date(firstWindow.getTime() + intervalMs),
     )
+
     expect(await ranking.queries.playerValhallanEvidenceById(playerId)).toEqual({
       oneVsOne: true,
       fixedTwoVsTwoTeams: [{ brawlhallaIdOne: playerId, brawlhallaIdTwo: playerId }],
@@ -1325,6 +1541,7 @@ describe('immutable Ranking snapshots for every mode', () => {
       'Diamond',
       new Date(firstWindow.getTime() + intervalMs),
     )
+
     expect(await ranking.queries.playerValhallanEvidenceById(playerId)).toEqual({
       oneVsOne: false,
       fixedTwoVsTwoTeams: [{ brawlhallaIdOne: playerId, brawlhallaIdTwo: playerId }],
@@ -1341,6 +1558,7 @@ describe('durable multi-mode collection operations', () => {
     const first = createPostgresRefreshOperations({ database: firstClient })
     const second = createPostgresRefreshOperations({ database: secondClient })
     const base = Date.now() - intervalMs
+
     const definitions = leaderboardModes.map((mode, index) => ({
       kind: operationKind(mode),
       scheduleKey: `test-schedule:${mode}:${randomUUID()}`,
@@ -1351,18 +1569,23 @@ describe('durable multi-mode collection operations', () => {
       payload: { pageDepth: 1, intervalMs },
       provenance: { source: 'ranking-postgres-test', requestedBy: 'issue-202' },
     }))
+
     for (const definition of definitions) {
       const results = await Promise.all([
         first.reconcileLeaderboardSchedule(definition),
         second.reconcileLeaderboardSchedule(definition),
       ])
+
       expect(results.map(({ outcome }) => outcome).sort()).toEqual(['already-exists', 'created'])
     }
+
     const control = postgres(connectionString, { max: 1 })
+
     const rows = await control<{ kind: string; work_class: string; first_due_at: Date }[]>`
       SELECT kind, work_class, first_due_at FROM refresh_operations.schedules
       WHERE schedule_key LIKE 'test-schedule:%'
     `
+
     expect(new Set(rows.map(({ kind }) => kind))).toEqual(new Set(definitions.map(({ kind }) => kind)))
     expect(rows.every(({ work_class }) => work_class === 'leaderboard')).toBe(true)
     expect(new Set(rows.map(({ first_due_at }) => first_due_at.getTime())).size).toBe(4)
@@ -1370,9 +1593,11 @@ describe('durable multi-mode collection operations', () => {
 
     const restartedClient = openTestClient(database.connectionString)
     const restarted = createPostgresRefreshOperations({ database: restartedClient })
+
     for (const definition of definitions) {
       expect((await restarted.reconcileLeaderboardSchedule(definition)).outcome).toBe('already-exists')
     }
+
     await Promise.all([control.end(), restartedClient.close()])
   })
 
@@ -1381,12 +1606,14 @@ describe('durable multi-mode collection operations', () => {
     const ranking = createPostgresRanking(database)
     const firstWindow = new Date('2200-01-01T00:00:00Z')
     const secondWindow = new Date(firstWindow.getTime() + intervalMs)
+
     for (const [label, window, emptyRegion] of [
       ['empty-region-full', firstWindow, null],
       ['empty-region-reset', secondWindow, 'JPN'],
     ] as const) {
       const lease = await leaseOperation(operations, '3v3', label)
       const full = validSource('3v3', 900)
+
       expect(
         await collectAndPublishLeaderboardGeneration({
           mode: '3v3',
@@ -1398,12 +1625,15 @@ describe('durable multi-mode collection operations', () => {
           publication: ranking,
         }),
       ).toBe('published')
+
       await operations.complete(lease)
     }
 
     const japan = await ranking.queries.getLeaderboard({ mode: '3v3', region: 'JPN', page: 1, now: secondWindow })
+
     expect(japan).toMatchObject({ status: 'fresh', totalRows: 0, hasMore: false, entries: [] })
     expect(japan.status !== 'unavailable' && japan.provenance).toMatchObject({ pageDepth: 1 })
+
     expect(
       await ranking.queries.getLeaderboard({ mode: '3v3', region: 'all', page: 1, now: secondWindow }),
     ).toMatchObject({ status: 'fresh', totalRows: 8 })
@@ -1412,10 +1642,12 @@ describe('durable multi-mode collection operations', () => {
   test('admits every V1 page with stable attempt/mode/region/page identity before source access', async () => {
     const operations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
+
     const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
+
     const accepted = await operations.accept({
       kind: 'leaderboard-solo-2v2',
       dedupeKey: `source-admission:${randomUUID()}`,
@@ -1424,7 +1656,9 @@ describe('durable multi-mode collection operations', () => {
       payload: { pageDepth: 1, intervalMs },
       provenance: { source: 'ranking-postgres-test' },
     })
+
     const sourceCalls: string[] = []
+
     expect(
       await runOneDurableOperation(operations, 'source-admission-worker', {
         leaseMs: 10_000,
@@ -1435,23 +1669,29 @@ describe('durable multi-mode collection operations', () => {
         leaderboardSource: {
           async fetchPage(input) {
             sourceCalls.push(`${input.mode}:${input.region}:${input.page}`)
+
             return validSource('solo2v2').fetchPage(input)
           },
         },
       }),
     ).toBe(true)
+
     expect(sourceCalls).toEqual(regionalLeaderboardScopes.map((region) => `solo2v2:${region}:1`))
     const control = postgres(connectionString, { max: 1 })
+
     const reservations = await control<{ domain: string; reservation_key: string }[]>`
       SELECT domain, reservation_key FROM request_admission.source_reservations
       WHERE reservation_key LIKE ${`${accepted.operationId}:%`}
       ORDER BY reservation_key
     `
+
     expect(reservations).toHaveLength(9)
     expect(reservations.every(({ domain }) => domain === 'brawlhalla-v1')).toBe(true)
+
     expect(reservations.map(({ reservation_key }) => reservation_key)).toEqual(
       [...regionalLeaderboardScopes].map((region) => `${accepted.operationId}:1:solo2v2:${region}:1`).sort(),
     )
+
     await control.end()
   })
 
@@ -1459,11 +1699,14 @@ describe('durable multi-mode collection operations', () => {
     const operations = createPostgresRefreshOperations({ database })
     const replacementOperations = createPostgresRefreshOperations({ database })
     const ranking = createPostgresRanking(database)
+
     const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
     })
+
     const control = postgres(connectionString, { max: 1 })
+
     const accepted = await operations.accept({
       kind: 'leaderboard-1v1',
       dedupeKey: `lease-replacement:${randomUUID()}`,
@@ -1472,6 +1715,7 @@ describe('durable multi-mode collection operations', () => {
       payload: { pageDepth: 1, intervalMs },
       provenance: { source: 'ranking-postgres-test' },
     })
+
     let admissionCalls = 0
     let replacementLease: OperationLease | null = null
     const sourceCalls: string[] = []
@@ -1486,22 +1730,26 @@ describe('durable multi-mode collection operations', () => {
           async admitSource(input) {
             admissionCalls++
             const result = await sourceAdmission.admitSource(input)
+
             if (admissionCalls === 2) {
               await control`
                 UPDATE refresh_operations.operations
                 SET lease_expires_at = clock_timestamp() - interval '1 second'
                 WHERE id = ${accepted.operationId}
               `
+
               replacementLease = await replacementOperations.claim(
                 'replacement-leaderboard-worker',
                 10_000,
                 admission,
                 'leaderboard-1v1',
               )
+
               if (!replacementLease || replacementLease.operationId !== accepted.operationId) {
                 throw new Error('Expected replacement leaderboard lease')
               }
             }
+
             return result
           },
           pauseSource: (domain, retryAfterSeconds) => sourceAdmission.pauseSource(domain, retryAfterSeconds),
@@ -1510,6 +1758,7 @@ describe('durable multi-mode collection operations', () => {
         leaderboardSource: {
           async fetchPage(input) {
             sourceCalls.push(`${input.mode}:${input.region}:${input.page}`)
+
             return validSource('1v1').fetchPage(input)
           },
         },
@@ -1518,19 +1767,23 @@ describe('durable multi-mode collection operations', () => {
 
     expect(admissionCalls).toBe(2)
     expect(sourceCalls).toEqual(['1v1:US-E:1'])
+
     const [counts] = await control<{ generations: number; effects: number }[]>`
       SELECT
         (SELECT count(*)::int FROM rankings.generations WHERE operation_id = ${accepted.operationId}) AS generations,
         (SELECT count(*)::int FROM refresh_operations.leaderboard_effects
           WHERE operation_id = ${accepted.operationId}) AS effects
     `
+
     expect(counts).toEqual({ generations: 0, effects: 0 })
     if (!replacementLease) throw new Error('Expected replacement lease')
+
     await replacementOperations.fail(
       replacementLease,
       { code: 'test_cleanup', message: 'replacement lease test cleanup', retryable: false },
       0,
     )
+
     await control.end()
   })
 })

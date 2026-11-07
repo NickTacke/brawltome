@@ -20,8 +20,10 @@ describe('account theme application', () => {
 
   test('does not query preferences without a session cookie', async () => {
     let queried = false
+
     const theme = await resolveInitialAccountTheme(false, async () => {
       queried = true
+
       return { theme: 'purple' }
     })
 
@@ -33,16 +35,20 @@ describe('account theme application', () => {
     await expect(
       resolveInitialAccountTheme(true, async () => Promise.reject(new Error('offline'))),
     ).resolves.toBeUndefined()
+
     await expect(
       resolveInitialAccountTheme(true, async () => Promise.reject(new Error('offline'))),
     ).resolves.toBeUndefined()
+
     await expect(resolveInitialAccountTheme(true, async () => ({ theme: 'neutral' }))).resolves.toBeUndefined()
   })
 
   test('uses the current account preference for an authenticated session', async () => {
     let queried = false
+
     const theme = await resolveInitialAccountTheme(true, async () => {
       queried = true
+
       return { theme: 'neutral' }
     })
 
@@ -54,6 +60,7 @@ describe('account theme application', () => {
     const removeAttribute = mock(() => {})
     const dataset: Record<string, string> = {}
     const fakeDocument = { cookie: '', documentElement: { dataset, removeAttribute } }
+
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
       value: fakeDocument,

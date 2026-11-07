@@ -78,6 +78,7 @@ describe('RankedCard', () => {
 
   test('does not present a 1v1-only Glory figure as the total for leaderboard data', () => {
     const v0 = renderToStaticMarkup(<RankedCard player={availablePlayer} rankedTeams={[]} />)
+
     const html = renderToStaticMarkup(
       <RankedCard player={{ ...availablePlayer, rankedSource: 'leaderboard' }} rankedTeams={[]} />,
     )

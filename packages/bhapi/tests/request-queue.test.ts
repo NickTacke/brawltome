@@ -6,28 +6,35 @@ describe('RequestQueue', () => {
     it('grants first request immediately', async () => {
       const queue = new RequestQueue({ minSpacingMs: 100, sustainedLimit: 150, sustainedWindowMs: 900_000 })
       const waited = await queue.acquire('on-demand')
+
       expect(waited).toBeLessThan(10)
     })
 
     it('enforces minimum spacing between requests', async () => {
       const queue = new RequestQueue({ minSpacingMs: 50, sustainedLimit: 150, sustainedWindowMs: 900_000 })
+
       await queue.acquire('on-demand')
       const start = Date.now()
+
       await queue.acquire('on-demand')
       const elapsed = Date.now() - start
+
       expect(elapsed).toBeGreaterThanOrEqual(40) // allow small timing tolerance
     })
 
     it('serializes concurrent callers', async () => {
       const queue = new RequestQueue({ minSpacingMs: 50, sustainedLimit: 150, sustainedWindowMs: 900_000 })
       const start = Date.now()
+
       // Fire 3 concurrent acquire() calls
       const results = await Promise.all([
         queue.acquire('on-demand'),
         queue.acquire('on-demand'),
         queue.acquire('on-demand'),
       ])
+
       const totalElapsed = Date.now() - start
+
       // 3 requests with 50ms spacing = at least 100ms total
       expect(totalElapsed).toBeGreaterThanOrEqual(90)
       // First should be near-instant, others should have waited
@@ -40,6 +47,7 @@ describe('RequestQueue', () => {
   describe('sustained window', () => {
     it('reports remaining capacity', async () => {
       const queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 5, sustainedWindowMs: 900_000 })
+
       expect(queue.remainingOnDemand).toBe(5)
       await queue.acquire('on-demand')
       expect(queue.remainingOnDemand).toBe(4)
@@ -47,17 +55,21 @@ describe('RequestQueue', () => {
 
     it('blocks when sustained limit reached', async () => {
       const queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 2, sustainedWindowMs: 100 })
+
       await queue.acquire('on-demand')
       await queue.acquire('on-demand')
       expect(queue.remainingOnDemand).toBe(0)
       const start = Date.now()
+
       await queue.acquire('on-demand')
       const elapsed = Date.now() - start
+
       expect(elapsed).toBeGreaterThanOrEqual(80)
     })
 
     it('prunes old timestamps from window', async () => {
       const queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 3, sustainedWindowMs: 50 })
+
       await queue.acquire('on-demand')
       await queue.acquire('on-demand')
       expect(queue.remainingOnDemand).toBe(1)
@@ -69,20 +81,25 @@ describe('RequestQueue', () => {
   describe('pause', () => {
     it('blocks acquire during pause', async () => {
       const queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 150, sustainedWindowMs: 900_000 })
+
       queue.pause(100)
       expect(queue.isPaused).toBe(true)
       const start = Date.now()
+
       await queue.acquire('on-demand')
       const elapsed = Date.now() - start
+
       expect(elapsed).toBeGreaterThanOrEqual(80)
     })
 
     it('resumes after pause expires', async () => {
       const queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 150, sustainedWindowMs: 900_000 })
+
       queue.pause(50)
       await Bun.sleep(60)
       expect(queue.isPaused).toBe(false)
       const waited = await queue.acquire('on-demand')
+
       expect(waited).toBeLessThan(10)
     })
   })
@@ -101,11 +118,13 @@ describe('RequestQueue headroom', () => {
     for (let i = 0; i < 7; i++) {
       await q.acquire('background')
     }
+
     // 8th background acquire should block; race it against a short sleep
     const blocked = await Promise.race([
       q.acquire('background').then(() => 'acquired'),
       Bun.sleep(100).then(() => 'blocked'),
     ])
+
     expect(blocked).toBe('blocked')
   })
 
@@ -120,10 +139,12 @@ describe('RequestQueue headroom', () => {
     for (let i = 0; i < 7; i++) {
       await q.acquire('background')
     }
+
     // On-demand should still get through for the next 3 slots
     for (let i = 0; i < 3; i++) {
       await q.acquire('on-demand')
     }
+
     expect(q.remainingOnDemand).toBe(0)
   })
 
@@ -134,12 +155,14 @@ describe('RequestQueue headroom', () => {
       sustainedWindowMs: 60_000,
       onDemandHeadroom: 3,
     })
+
     expect(q.remainingOnDemand).toBe(10)
     expect(q.remainingBackground).toBe(7)
   })
 
   it('defaults to headroom 0 when option omitted (background sees full limit)', () => {
     const q = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 10, sustainedWindowMs: 60_000 })
+
     expect(q.remainingBackground).toBe(10)
     expect(q.remainingOnDemand).toBe(10)
   })

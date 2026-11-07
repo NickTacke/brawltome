@@ -2,6 +2,7 @@ import { createNodeRuntimeTelemetry } from '@brawltome/telemetry/node'
 
 function traceSampleRate(value: string | undefined): number {
   const parsed = value === undefined ? 0.1 : Number(value)
+
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.1
 }
 

@@ -17,6 +17,7 @@ const metrics = {
 }
 
 const player = (id: number, username: string) => ({ id, username })
+
 const realShapedRows: Record<LeaderboardMode, unknown> = {
   '1v1': { ...metrics, players: [player(42, 'Ada')] },
   '2v2': { ...metrics, players: [player(9, 'Nix'), player(3, 'Bodvar')] },
@@ -34,14 +35,17 @@ describe('V1 ranked leaderboard source', () => {
       type: 'one-vs-one-player',
       player: player(42, 'Ada'),
     })
+
     expect(decode('2v2').rankings[0].identity).toEqual({
       type: 'fixed-two-vs-two-team',
       players: [player(3, 'Bodvar'), player(9, 'Nix')],
     })
+
     expect(decode('solo2v2').rankings[0].identity).toEqual({
       type: 'solo-two-vs-two-player',
       player: player(43, 'Solo Ada'),
     })
+
     expect(decode('3v3').rankings[0].identity).toEqual({
       type: 'three-vs-three-player',
       player: player(44, 'Three Ada'),
@@ -50,6 +54,7 @@ describe('V1 ranked leaderboard source', () => {
 
   test('accepts additive fields, preserves supported row regions, and normalizes the provider JPS alias', () => {
     const row = { ...(realShapedRows['1v1'] as object), region: 'US-E', additive: true }
+
     expect(decode('1v1', row).rankings[0]).toMatchObject({ region: 'US-E', rating: 2100 })
     expect(decode('1v1', { ...row, region: 'JPS' }).rankings[0]).toMatchObject({ region: 'JPN' })
   })
@@ -59,6 +64,7 @@ describe('V1 ranked leaderboard source', () => {
       ...(realShapedRows['2v2'] as object),
       players: [player(91_850_384, 'Dounia-la_put921•2'), player(91_850_384, 'Dounia-la_put921')],
     }
+
     expect(decode('2v2', row).rankings[0].identity).toEqual({
       type: 'fixed-two-vs-two-team',
       players: [player(91_850_384, 'Dounia-la_put921'), player(91_850_384, 'Dounia-la_put921•2')],
@@ -70,10 +76,12 @@ describe('V1 ranked leaderboard source', () => {
       ...(realShapedRows['2v2'] as object),
       players: [player(9, 'Nix'), player(3, '  ')],
     }
+
     expect(decode('2v2', row).rankings[0].identity).toEqual({
       type: 'fixed-two-vs-two-team',
       players: [player(3, 'Name unavailable #3'), player(9, 'Nix')],
     })
+
     expect(() => decode('2v2', { ...row, players: [player(9, 'Nix'), { id: 3 }] })).toThrow(LeaderboardSourceError)
   })
 
@@ -85,6 +93,7 @@ describe('V1 ranked leaderboard source', () => {
         )
       }
     }
+
     for (const players of [
       [],
       [player(1, 'A')],
@@ -95,6 +104,7 @@ describe('V1 ranked leaderboard source', () => {
         expect.objectContaining({ code: 'source_contract_invalid', retryable: false }),
       )
     }
+
     expect(() => decode('2v2', { ...metrics, players: [player(1, 'A'), player(1, 'A')] })).toThrow(
       expect.objectContaining({ code: 'source_data_inconsistent', retryable: true }),
     )
@@ -102,6 +112,7 @@ describe('V1 ranked leaderboard source', () => {
 
   test('rejects malformed or drifted required semantics', () => {
     const valid = realShapedRows['1v1'] as Record<string, unknown>
+
     for (const body of [
       null,
       [],
@@ -121,6 +132,7 @@ describe('V1 ranked leaderboard source', () => {
 
   test('raises a season peak reported below the current rating instead of rejecting the page', () => {
     const row = { ...(realShapedRows['1v1'] as Record<string, unknown>), rating: 2100, best_rating: 2099 }
+
     expect(decode('1v1', row).rankings[0]).toMatchObject({ rating: 2100, best_rating: 2100 })
   })
 
@@ -129,6 +141,7 @@ describe('V1 ranked leaderboard source', () => {
       rankings: [],
       totalPages: 0,
     })
+
     for (const [body, page] of [
       [{ rankings: [], total_pages: 0 }, 2],
       [{ rankings: [], total_pages: 2 }, 3],
@@ -141,23 +154,29 @@ describe('V1 ranked leaderboard source', () => {
   test('uses the exact bounded V1 game_mode values and never requests Global', async () => {
     const urls: string[] = []
     const modes = ['1v1', '2v2', 'solo2v2', '3v3'] as const
+
     const fetcher = async (input: RequestInfo | URL) => {
       urls.push(String(input))
       const mode = modes[urls.length - 1]
+
       return new Response(JSON.stringify({ rankings: [realShapedRows[mode]], total_pages: 1 }))
     }
+
     for (const mode of modes) await fetchLeaderboardPage({ mode, region: 'JPN', page: 1 }, { fetcher })
+
     expect(urls).toEqual([
       'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=1v1&page=1&max_results=50&leaderboard=prod',
       'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=2v2&page=1&max_results=50&leaderboard=prod',
       'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=solo_2v2&page=1&max_results=50&leaderboard=prod',
       'https://api.brawlhalla.com/v1/leaderboard/ranked?region=JPN&game_mode=3v3&page=1&max_results=50&leaderboard=prod',
     ])
+
     await expect(fetchLeaderboardPage({ mode: '3v3', region: 'all' as never, page: 1 }, { fetcher })).rejects.toThrow()
   })
 
   test('reports provider Retry-After before classifying a rate limit for durable retry', async () => {
     const backoffs: number[] = []
+
     await expect(
       fetchLeaderboardPage(
         { mode: '1v1', region: 'EU', page: 1 },
@@ -169,6 +188,7 @@ describe('V1 ranked leaderboard source', () => {
         },
       ),
     ).rejects.toMatchObject({ code: 'source_rate_limited', retryable: true })
+
     expect(backoffs).toEqual([13])
   })
 
@@ -183,12 +203,14 @@ describe('V1 ranked leaderboard source', () => {
       code: 'source_contract_invalid',
       retryable: false,
     })
+
     await expect(
       fetchLeaderboardPage({ mode: '3v3', region: 'EU', page: 1 }, { fetcher: unavailable }),
     ).rejects.toMatchObject({
       code: 'source_unavailable',
       retryable: true,
     })
+
     await expect(
       fetchLeaderboardPage({ mode: '3v3', region: 'EU', page: 1 }, { fetcher: missing }),
     ).rejects.toMatchObject({

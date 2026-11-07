@@ -23,8 +23,11 @@ const healthRoutes: Record<string, WebRoute> = {
 
 function normalizeNextRoute(value: unknown): WebRoute {
   if (value === '/api/metrics') return 'metrics'
+
   if (typeof value === 'string' && healthRoutes[value]) return healthRoutes[value]
+
   if (typeof value === 'string' && value.startsWith('/api/')) return 'api'
+
   return 'web'
 }
 
@@ -38,8 +41,11 @@ export function createNextRequestSpanProcessor(): SpanProcessor {
     onEnd: (span) => {
       try {
         if (span.attributes['next.span_type'] !== NEXT_REQUEST_SPAN) return
+
         const method = span.attributes['http.method']
+
         if (typeof method !== 'string' || !methods.has(method)) return
+
         const route = normalizeNextRoute(span.attributes['next.route'] ?? span.attributes['http.route'])
         const status = span.attributes['http.status_code']
         const elapsedMs = durationMs(span)
@@ -51,10 +57,12 @@ export function createNextRequestSpanProcessor(): SpanProcessor {
           } else {
             webTelemetry.logger.info('web.request.completed_without_status', attributes)
           }
+
           return
         }
 
         const labels = { runtime: 'web', method, route, status_class: statusClassOf(status) }
+
         webTelemetry.metrics.add('http_server_requests_total', 1, labels)
         webTelemetry.metrics.observe('http_server_duration_ms', elapsedMs, labels)
         if (status >= 500 || span.status.code === SpanStatusCode.ERROR) {
@@ -77,7 +85,9 @@ const globalProvider = globalThis as typeof globalThis & {
 
 export function registerNextNodeTelemetry(): void {
   if (globalProvider.__brawltomeWebTracerProvider) return
+
   const requestProcessor = createNextRequestSpanProcessor()
+
   const localProvider = () =>
     new NodeTracerProvider({
       sampler: new AlwaysOnSampler(),
@@ -92,8 +102,10 @@ export function registerNextNodeTelemetry(): void {
       },
       spanProcessors: [requestProcessor],
     })
+
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim()
   let provider: NodeTracerProvider
+
   try {
     provider = endpoint
       ? createBrawltomeTraceProvider({
@@ -108,6 +120,7 @@ export function registerNextNodeTelemetry(): void {
   } catch {
     provider = localProvider()
   }
+
   provider.register()
   process.once('beforeExit', () => void provider.shutdown())
   globalProvider.__brawltomeWebTracerProvider = provider

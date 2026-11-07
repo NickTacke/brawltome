@@ -29,10 +29,12 @@ describe('MemberList', () => {
       getClanAction: async () => null,
       refreshClanAction: async () => ({ clan: null, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }),
     }))
+
     mock.module('@/components/NavBar', () => ({ NavBar: () => null }))
     mock.module('@/components/TurnstileGate', () => ({ TurnstileGate: () => null }))
     const { ClanProfile } = await import('../../../../src/components/clan/ClanProfile')
     const provenance = { source: 'v1-guild-stats', outcome: 'success' } as const
+
     const html = renderToStaticMarkup(
       <ClanProfile
         id="1524690"

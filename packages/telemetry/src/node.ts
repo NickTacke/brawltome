@@ -32,6 +32,7 @@ function recordSupportingSpans(sampleRate: number): Sampler {
   return {
     shouldSample(context, traceId, spanName, spanKind, attributes, links) {
       const sampler = attributes['brawltome.span'] === true ? traceSampler : supportingSpanSampler
+
       return sampler.shouldSample(context, traceId, spanName, spanKind, attributes, links)
     },
     toString: () => `RecordSupportingSpans{traceSampler=${traceSampler.toString()}}`,
@@ -40,6 +41,7 @@ function recordSupportingSpans(sampleRate: number): Sampler {
 
 function exportingBrawltomeSpans(processor: SpanProcessor): SpanProcessor {
   const marked = (span: Span | ReadableSpan) => span.attributes['brawltome.span'] === true
+
   return {
     onStart(span: Span, parentContext: Context) {
       if (marked(span)) processor.onStart(span, parentContext)
@@ -65,7 +67,9 @@ type TraceProviderOptions = {
 
 export function createBrawltomeTraceProvider(options: TraceProviderOptions): NodeTracerProvider {
   const exportTimeoutMs = Math.max(1, Math.min(options.exportTimeoutMs ?? 250, 5_000))
+
   if (!options.exporter && !options.endpoint) throw new Error('Trace provider requires an endpoint or exporter')
+
   const exporter =
     options.exporter ??
     new OTLPTraceExporter({
@@ -73,6 +77,7 @@ export function createBrawltomeTraceProvider(options: TraceProviderOptions): Nod
       timeoutMillis: exportTimeoutMs,
       headers: options.headers,
     })
+
   const processor = exportingBrawltomeSpans(
     new BatchSpanProcessor(exporter, {
       maxQueueSize: 256,
@@ -81,6 +86,7 @@ export function createBrawltomeTraceProvider(options: TraceProviderOptions): Nod
       exportTimeoutMillis: exportTimeoutMs,
     }),
   )
+
   return new NodeTracerProvider({
     resource: resourceFromAttributes({ 'service.name': options.service.slice(0, 80) }),
     sampler: recordSupportingSpans(Math.max(0, Math.min(options.sampleRate, 1))),
@@ -92,12 +98,14 @@ export function createBrawltomeTraceProvider(options: TraceProviderOptions): Nod
 
 async function settleWithin(work: Promise<unknown>, timeoutMs: number): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   await Promise.race([
     work.catch(() => undefined),
     new Promise<void>((resolve) => {
       timer = setTimeout(resolve, Math.max(1, timeoutMs))
     }),
   ])
+
   if (timer) clearTimeout(timer)
 }
 
@@ -118,6 +126,7 @@ export function createNodeRuntimeTelemetry(options: {
   const headers = options.authorization?.trim() ? { authorization: options.authorization.trim() } : undefined
   const consoleSink = createJsonConsoleSink()
   let sink = consoleSink
+
   if (endpoint) {
     try {
       provider = createBrawltomeTraceProvider({
@@ -127,6 +136,7 @@ export function createNodeRuntimeTelemetry(options: {
         exportTimeoutMs,
         headers,
       })
+
       provider.register()
       sink = createFanoutSink([consoleSink, createOtlpHttpSink({ endpoint, headers })])
     } catch {
@@ -134,6 +144,7 @@ export function createNodeRuntimeTelemetry(options: {
       sink = consoleSink
     }
   }
+
   const telemetry = createTelemetry({
     ...options,
     sampleRate,
@@ -141,14 +152,17 @@ export function createNodeRuntimeTelemetry(options: {
     sink,
     tracer: provider?.getTracer('@brawltome/telemetry'),
   })
+
   const shutdownTelemetry = telemetry.shutdown
 
   return {
     ...telemetry,
     shutdown: async (deadlineMs: number) => {
       const deadline = Date.now() + Math.max(0, deadlineMs)
+
       await shutdownTelemetry(Math.max(1, deadline - Date.now()))
       if (!provider) return
+
       await settleWithin(provider.forceFlush(), Math.max(1, deadline - Date.now()))
       await settleWithin(provider.shutdown(), Math.max(1, deadline - Date.now()))
     },

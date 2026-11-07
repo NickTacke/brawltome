@@ -190,6 +190,7 @@ describe('PlayerProfileHierarchy', () => {
         legends: [redRaptorLegend],
       },
     }
+
     const html = renderToStaticMarkup(
       <PlayerProfileHierarchy
         player={{
@@ -218,6 +219,7 @@ describe('PlayerProfileHierarchy', () => {
         combat: { ...career.snapshot.combat, games: 0, wins: 0 },
       },
     }
+
     const html = renderToStaticMarkup(
       <PlayerProfileHierarchy
         player={{
@@ -272,15 +274,18 @@ describe('PlayerProfileHierarchy', () => {
     // The API overlaid the newer leaderboard observation onto the 1v1 numbers.
     const overlaid = render(1_600)
     const ranked = overlaid.slice(overlaid.indexOf('Ranked Performance'), overlaid.indexOf('Combat Record'))
+
     expect(ranked).toContain('From leaderboard')
     expect(ranked).toContain('dateTime="2026-08-10T11:30:00.000Z"')
     const legends = overlaid.slice(overlaid.indexOf('Legend Statistics'))
+
     expect(legends).toContain('Updated')
     expect(legends).toContain('dateTime="2026-08-09T22:00:00.000Z"')
 
     // The standing does not match the shown numbers, so they still date from the V0 refresh.
     const refreshed = render(1_590)
     const refreshedRanked = refreshed.slice(refreshed.indexOf('Ranked Performance'), refreshed.indexOf('Combat Record'))
+
     expect(refreshedRanked).not.toContain('leaderboard')
     expect(refreshedRanked).toContain('dateTime="2026-08-10T10:00:00.000Z"')
     // Glory still counts the V0 teams: the overlay does not make the card leaderboard-only.

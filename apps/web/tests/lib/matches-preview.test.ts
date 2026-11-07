@@ -40,10 +40,12 @@ describe('matches preview invite', () => {
       previewCookie: cookieValue,
       query: { match: 'preview-final', player: 'preview-knight' },
     })
+
     expect(conflicting.type).toBe(MatchesPreview)
     expect(conflicting.props.notice).toBe('Choose one preview view at a time.')
 
     const repeated = MatchesContent({ previewCookie: cookieValue, query: { match: ['preview-final'] } })
+
     expect(repeated.type).toBe(MatchesPreview)
     expect(repeated.props.matchId).toBeUndefined()
     expect(MatchesContent({ previewCookie: undefined, query: { analyze: '1' } }).type).toBe(WorkInProgress)
@@ -61,9 +63,11 @@ describe('matches preview invite', () => {
 
   test('fails closed when the preview token is absent or too short', () => {
     Reflect.deleteProperty(process.env, 'MATCHES_PREVIEW_TOKEN')
+
     expect(GET(new NextRequest(`https://brawltome.app/matches/preview?token=${token}`)).headers.has('set-cookie')).toBe(
       false,
     )
+
     process.env.MATCHES_PREVIEW_TOKEN = 'too-short'
     expect(matchesPreviewCookieAuthorized(undefined)).toBe(false)
     expect(MatchesContent({ previewCookie: undefined }).type).toBe(WorkInProgress)

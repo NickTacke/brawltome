@@ -47,6 +47,7 @@ describe('observed rating direction', () => {
         point(1_900, 200, '2026-08-01T20:00:00Z'),
       ]),
     ).toBeNull()
+
     expect(deriveObservedRatingDirection([])).toBeNull()
   })
 })

@@ -40,6 +40,7 @@ export function createDesktopRankedRoutes(dependencies: DesktopRankedRouteDepend
     if (concurrentLookups >= maxConcurrentDesktopLookups) {
       return context.json({ error: 'too_many_concurrent_lookups' }, 429)
     }
+
     concurrentLookups++
     try {
       await next()
@@ -52,16 +53,19 @@ export function createDesktopRankedRoutes(dependencies: DesktopRankedRouteDepend
     const input = desktopRankedLookupInputSchema.safeParse({
       brawlhallaId: Number(context.req.param('brawlhallaId')),
     })
+
     if (!input.success) return context.json({ error: 'invalid_brawlhalla_id' }, 400)
 
     const [playerResult, rankedResult] = await Promise.allSettled([
       dependencies.playerReferences.byId(input.data.brawlhallaId),
       dependencies.rankedPlayers.byId(input.data.brawlhallaId),
     ])
+
     const player = playerResult.status === 'fulfilled' ? playerResult.value : null
     const rankedProfile = rankedResult.status === 'fulfilled' ? rankedResult.value : null
     let ranked: ReturnType<typeof mapPlayerRankedProfile> = null
     let rankedReadFailed = rankedResult.status === 'rejected'
+
     try {
       ranked = mapPlayerRankedProfile(rankedProfile)
     } catch {
@@ -69,6 +73,7 @@ export function createDesktopRankedRoutes(dependencies: DesktopRankedRouteDepend
     }
 
     const fresh = rankedProfile?.freshness === 'fresh'
+
     const refresh = rankedReadFailed
       ? temporarilyUnavailable
       : fresh
@@ -88,6 +93,7 @@ export function createDesktopRankedRoutes(dependencies: DesktopRankedRouteDepend
       ranked,
       refresh,
     })
+
     return context.json(response)
   })
 

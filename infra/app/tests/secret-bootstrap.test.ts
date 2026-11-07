@@ -10,9 +10,11 @@ const temporaryDirectories: string[] = []
 
 function fixture(secretValues: Record<string, string>) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-secrets-'))
+
   temporaryDirectories.push(directory)
   const secrets = join(directory, 'secrets')
   const bin = join(directory, 'bin')
+
   mkdirSync(secrets)
   mkdirSync(bin)
   for (const [name, value] of Object.entries(secretValues))
@@ -33,11 +35,14 @@ printf 'trust=%s\\n' "\${REFRESH_TRUST_COOKIE_SECRET:-}"
 printf 'replay-bridge=%s\\n' "\${REPLAY_BRIDGE_SECRET:-}"
 printf 'turnstile=%s\\n' "\${TURNSTILE_SECRET_KEY:-}"
 `
+
   for (const runtime of ['bun', 'node']) {
     const path = join(bin, runtime)
+
     writeFileSync(path, executable)
     chmodSync(path, 0o755)
   }
+
   return { bin, secrets }
 }
 
@@ -58,7 +63,9 @@ describe('application secret bootstrap', () => {
       replay_bridge_secret: 'replay-bridge-secret-value',
       turnstile_secret_key: 'turnstile-secret-value',
     }
+
     const { bin, secrets } = fixture(values)
+
     const result = spawnSync('sh', [runner, 'api'], {
       encoding: 'utf8',
       env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },
@@ -77,7 +84,9 @@ describe('application secret bootstrap', () => {
       metrics_scrape_secret: 'metrics-secret-value',
       otel_authorization: 'Bearer otel-secret-value',
     }
+
     const { bin, secrets } = fixture(values)
+
     const result = spawnSync('sh', [runner, 'web'], {
       encoding: 'utf8',
       env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },
@@ -94,7 +103,9 @@ describe('application secret bootstrap', () => {
       dead_letter_database_url: 'postgres://dead-letter-operator',
       dead_letter_operator_tokens: '[{"actorId":"operator:test","tokenSha256":"abc"}]',
     }
+
     const { bin, secrets } = fixture(values)
+
     const result = spawnSync('sh', [runner, 'dead-letter-cli', 'list', '--limit', '25'], {
       encoding: 'utf8',
       env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },
@@ -109,6 +120,7 @@ describe('application secret bootstrap', () => {
 
   test('fails closed without printing a missing secret value', () => {
     const { bin, secrets } = fixture({ runtime_database_url: 'postgres://runtime-secret' })
+
     const result = spawnSync('sh', [runner, 'api'], {
       encoding: 'utf8',
       env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },
@@ -121,6 +133,7 @@ describe('application secret bootstrap', () => {
 
   test('rejects unknown roles before executing a runtime', () => {
     const { bin, secrets } = fixture({})
+
     const result = spawnSync('sh', [runner, 'unknown'], {
       encoding: 'utf8',
       env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },

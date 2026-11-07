@@ -41,11 +41,13 @@ const newerLegend = legendSnapshot(
   '10000000-0000-4000-8000-000000000002',
   '2026-08-15T00:00:00.000Z',
 )
+
 const olderLegend = legendSnapshot(
   '10000000-0000-4000-8000-000000000011',
   '10000000-0000-4000-8000-000000000012',
   '2026-08-08T00:00:00.000Z',
 )
+
 const legendHistory = parseLegendMetaHistoryOutput({
   status: 'available',
   filter: { region: 'all', bracket: 'all' },
@@ -71,11 +73,13 @@ const compatibleNewerLegend = {
   ...newerLegend,
   season: { ...newerLegend.season, identity: 'season-38' },
 }
+
 const compatibleOlderLegend = {
   ...olderLegend,
   season: compatibleNewerLegend.season,
   rows: [{ ...legendRow, rank: 2, medianRating: 1_999.5 }],
 }
+
 const compatibleLegendHistory = parseLegendMetaHistoryOutput({
   status: 'available',
   filter: { region: 'all', bracket: 'all' },
@@ -135,16 +139,19 @@ const newerCareerBase = careerSnapshot(
   '2026-08-15T00:00:00.000Z',
   '2',
 )
+
 const newerCareer = {
   ...newerCareerBase,
   rows: [{ ...newerCareerBase.rows[0], medianDamagePerMinute: { numerator: '4', denominator: '3' } }],
 }
+
 const olderCareer = careerSnapshot(
   '10000000-0000-4000-8000-000000000031',
   '10000000-0000-4000-8000-000000000032',
   '2026-08-08T00:00:00.000Z',
   '1',
 )
+
 const careerHistory = parseCareerWeaponUsageHistoryOutput({
   status: 'available',
   filters: { region: 'all', bracket: 'all' },

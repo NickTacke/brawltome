@@ -18,6 +18,7 @@ let database: Database
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)
+
   if (
     configured.protocol !== dedicated.protocol ||
     configured.hostname !== dedicated.hostname ||
@@ -27,11 +28,14 @@ beforeAll(async () => {
   ) {
     throw new Error(`Discovery PostgreSQL tests require the dedicated server ${dedicatedServer}`)
   }
+
   const adminUrl = new URL(dedicatedServer)
+
   adminUrl.pathname = '/postgres'
   admin = postgres(adminUrl.toString(), { max: 1 })
   await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
   const databaseUrl = new URL(dedicatedServer)
+
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
   database = openTestClient(connectionString)
@@ -40,6 +44,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await database?.close()
   if (!admin) return
+
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
 }, 20_000)
@@ -49,12 +54,15 @@ describe('Discovery generalized migration', () => {
     const setup = postgres(connectionString, { max: 1 })
     const eventId = randomUUID()
     const operationId = randomUUID()
+
     try {
       await setup.unsafe(initializeDiscovery.sql)
+
       const [generation] = await setup<{ generation_id: string }[]>`
         UPDATE discovery.player_generations SET source_version = 7
         WHERE active RETURNING generation_id
       `
+
       await setup`
         INSERT INTO discovery.player_terms
           (generation_id, brawlhalla_id, term_kind, display_term, normalized_term,
@@ -63,19 +71,23 @@ describe('Discovery generalized migration', () => {
           (${generation.generation_id}, 42, 'canonical', 'Preserved Player', 'preserved player',
            'Preserved Player', 'EU', 2200, 9, 'bodvar')
       `
+
       await setup`
         INSERT INTO discovery.player_event_receipts (event_id) VALUES (${eventId})
       `
+
       await setup`
         INSERT INTO discovery.player_projection_effects (operation_id, source_version)
         VALUES (${operationId}, 7)
       `
+
       await setup.unsafe(generalizeDiscovery.sql)
     } finally {
       await setup.end()
     }
 
     const discovery = createPostgresDiscovery(database)
+
     expect(await discovery.search('preserved')).toEqual({
       players: [
         {
@@ -90,7 +102,9 @@ describe('Discovery generalized migration', () => {
       ],
       clans: [],
     })
+
     expect(await discovery.playerProjectionEffectState(operationId)).toBe('applied')
+
     expect(
       await discovery.applyPlayerEvents([
         {
@@ -114,7 +128,9 @@ describe('Discovery generalized migration', () => {
       sourceVersion: 1,
       facts: [{ clanId: 42, clanName: 'Preserved Clan', clanXp: '100', memberCount: 1 }],
     })
+
     const overlapping = await discovery.search('preserved')
+
     expect(overlapping.players[0]?.brawlhallaId).toBe(42)
     expect(overlapping.clans[0]?.clanId).toBe(42)
   })

@@ -114,10 +114,12 @@ const previousHistorySnapshot = {
 describe('Current Season Legend Meta contract', () => {
   test('accepts only independent launch region and current 1v1 bracket filters', () => {
     expect(legendMetaInputSchema.parse({ region: 'all', bracket: 'all' })).toEqual({ region: 'all', bracket: 'all' })
+
     expect(legendMetaInputSchema.parse({ region: 'EU', bracket: 'Diamond+' })).toEqual({
       region: 'EU',
       bracket: 'Diamond+',
     })
+
     expect(() => legendMetaInputSchema.parse({ region: 'GLOBAL', bracket: 'Gold' })).toThrow()
     expect(() => legendMetaInputSchema.parse({ region: 'EU', bracket: 'Platinum', season: 38 })).toThrow()
   })
@@ -147,7 +149,9 @@ describe('Current Season Legend Meta contract', () => {
     }
 
     const parsed = parseLegendMetaOutput(authoritative)
+
     if (parsed.status === 'unavailable') throw new Error('expected an available Legend Meta snapshot')
+
     expect(parsed.season.identity).toBe('season-38')
     expect(() => parseLegendMetaOutput({ ...available, season: authoritative.season })).toThrow()
     expect(() => parseLegendMetaOutput({ ...authoritative, season: available.season })).toThrow()
@@ -165,9 +169,11 @@ describe('Current Season Legend Meta contract', () => {
       reason: 'not_yet_published',
       filter: { region: 'all', bracket: 'all' },
     })
+
     expect(
       legendMetaOutputSchema.parse({ ...available, status: 'stale', staleReason: 'latest_build_failed' }),
     ).toMatchObject({ status: 'stale', staleReason: 'latest_build_failed', rows: available.rows })
+
     expect(() =>
       legendMetaOutputSchema.parse({ ...available, status: 'fresh', staleReason: 'publication_overdue' }),
     ).toThrow()
@@ -186,13 +192,16 @@ describe('Current Season Legend Meta contract', () => {
         ],
       }),
     ).toThrow()
+
     expect(() => legendMetaOutputSchema.parse({ ...available, trend: { direction: 'up' } })).toThrow()
+
     expect(() =>
       legendMetaOutputSchema.parse({
         ...available,
         rows: [{ ...available.rows[0], uncertainty95: { lowerBasisPoints: 6_000, upperBasisPoints: 5_000 } }],
       }),
     ).toThrow()
+
     expect(() =>
       legendMetaOutputSchema.parse({
         ...available,
@@ -228,6 +237,7 @@ describe('Legend Meta history contract', () => {
     } as const
 
     expect(parseLegendMetaHistoryOutput(output)).toEqual(JSON.parse(JSON.stringify(output)))
+
     expect(() =>
       legendMetaHistoryOutputSchema.parse({
         ...output,
@@ -247,6 +257,7 @@ describe('Legend Meta history contract', () => {
       ...historySnapshot,
       season: { ...historySnapshot.season, identity: 'season-38' },
     }
+
     const previous = {
       ...previousHistorySnapshot,
       season: authoritative.season,
@@ -260,6 +271,7 @@ describe('Legend Meta history contract', () => {
           : row,
       ),
     }
+
     const delta = {
       legend: authoritative.rows[1]?.legend,
       pickShare: { changeBasisPoints: 0, direction: 'unchanged' },
@@ -267,6 +279,7 @@ describe('Legend Meta history contract', () => {
       winRate: { changeBasisPoints: 0, direction: 'unchanged' },
       medianRating: { change: 0.5, direction: 'increase' },
     } as const
+
     const output = {
       status: 'available',
       filter: available.filter,
@@ -312,6 +325,7 @@ describe('Legend Meta history contract', () => {
         }),
       ).toThrow()
     }
+
     expect(() =>
       parseLegendMetaHistoryOutput({
         ...output,
@@ -327,6 +341,7 @@ describe('Legend Meta history contract', () => {
         ],
       }),
     ).toThrow()
+
     expect(() =>
       parseLegendMetaHistoryOutput({
         ...output,
@@ -358,6 +373,7 @@ describe('Legend Meta history contract', () => {
         })),
       }),
     ).toThrow()
+
     expect(
       parseLegendMetaHistoryOutput({
         status: 'unavailable',

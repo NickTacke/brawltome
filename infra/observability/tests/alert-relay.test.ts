@@ -29,6 +29,7 @@ function alert(overrides: Partial<WebhookAlert> & { labels?: Record<string, stri
 
 const apiAlert = (source: WebhookAlert, state: ApiAlert['status']['state'] = 'active'): ApiAlert => {
   const { status: _status, ...rest } = source
+
   return { ...rest, status: { state } }
 }
 
@@ -46,15 +47,20 @@ class FakeDiscord {
       this.failPosts--
       throw new Error('Discord POST failed with 502')
     }
+
     const id = String(this.next++)
+
     this.messages.set(id, body)
+
     return id
   }
 
   async edit(id: string, body: MessageBody): Promise<boolean> {
     this.calls.push({ op: 'edit', id, body })
     if (!this.messages.has(id)) return false
+
     this.messages.set(id, body)
+
     return true
   }
 
@@ -76,6 +82,7 @@ function setup(options: { initial?: RelayState; alerts?: ApiAlert[]; heartbeat?:
   const store = new MemoryStore(options.initial)
   const clock = { now: t0 + 60_000 }
   const am = { alerts: options.alerts ?? [watchdog] }
+
   const relay = new AlertRelay({
     discord,
     alertmanager: async () => am.alerts,
@@ -90,21 +97,25 @@ function setup(options: { initial?: RelayState; alerts?: ApiAlert[]; heartbeat?:
     },
     now: () => clock.now,
   })
+
   return { relay, discord, store, clock, am }
 }
 
 describe('alert relay message mapping', () => {
   test('a page names the alert in the push text and links Grafana Explore and the runbook', () => {
     const body = pageMessage(alert(), '<@123456789012345678>', grafana)
+
     expect(body.content).toBe('<@123456789012345678> 🔴 **HttpErrorRateHigh**: api HTTP 5xx rate exceeds one percent')
     expect(body.allowed_mentions).toEqual({ parse: [], users: ['123456789012345678'] })
     const [embed] = body.embeds ?? []
+
     expect(embed?.title).toBe('🔴 HttpErrorRateHigh: api HTTP 5xx rate exceeds one percent')
     expect(embed?.color).toBe(0xe5484d)
     expect(embed?.fields).toContainEqual({ name: 'Started', value: `<t:${t0 / 1000}:R>`, inline: true })
     expect(embed?.fields).toContainEqual({ name: 'runtime', value: 'api', inline: true })
     expect(embed?.url).toStartWith(`${grafana}/explore?`)
     const links = embed?.fields?.find((field) => field.name === 'Links')?.value
+
     expect(links).toContain(`[Runbook](${runbook})`)
     expect(JSON.stringify(body)).not.toContain('3f2a1b')
   })
@@ -112,6 +123,7 @@ describe('alert relay message mapping', () => {
   test('Grafana Explore keeps the Prometheus expression and falls back to the home page', () => {
     const link = new URL(grafanaLink(grafana, 'http://3f2a1b:9090/graph?g0.expr=up+%3D%3D+0&g0.tab=1'))
     const panes = JSON.parse(link.searchParams.get('panes') ?? '{}')
+
     expect(link.origin).toBe(grafana)
     expect(panes.a.queries[0].expr).toBe('up == 0')
     expect(grafanaLink(`${grafana}/`, undefined)).toBe(grafana)
@@ -140,6 +152,7 @@ describe('status board rendering', () => {
   test('all clear shows since when and the heartbeat', () => {
     const { body } = renderBoard({ alerts: [], watchdogFiring: true, clearSince: t0, now: t0 + 1_000 })
     const [embed] = body.embeds ?? []
+
     expect(embed?.color).toBe(0x30a46c)
     expect(embed?.description).toContain(`✅ All clear since <t:${t0 / 1000}:R>`)
     expect(embed?.description).toContain('heartbeat OK')
@@ -154,13 +167,17 @@ describe('status board rendering', () => {
       labels: { alertname: 'NewDeadLetters', severity: 'warning' },
       annotations: { summary: 'leaderboard-1v1 produced new dead letters' },
     })
+
     const { body } = renderBoard({ alerts: [warning, alert()], watchdogFiring: true, clearSince: undefined, now: t0 })
     const description = body.embeds?.[0]?.description ?? ''
+
     expect(body.embeds?.[0]?.color).toBe(0xe5484d)
     expect(description.indexOf('Critical (1)')).toBeLessThan(description.indexOf('Warning (1)'))
+
     expect(description).toContain(
       `• **NewDeadLetters** — leaderboard-1v1 produced new dead letters · since <t:${t0 / 1000}:R>`,
     )
+
     expect(description).not.toContain('All clear')
   })
 
@@ -168,8 +185,10 @@ describe('status board rendering', () => {
     const many = Array.from({ length: 25 }, (_, index) =>
       alert({ fingerprint: `fp-${index}`, labels: { alertname: `Warn${index}`, severity: 'warning' } }),
     )
+
     const { body } = renderBoard({ alerts: many, watchdogFiring: false, clearSince: undefined, now: t0 })
     const description = body.embeds?.[0]?.description ?? ''
+
     expect(description).toContain('No Prometheus heartbeat')
     expect(description).toContain('…and 5 more')
     expect(body.embeds?.[0]?.color).toBe(0xf5a524)
@@ -184,14 +203,17 @@ describe('status board rendering', () => {
           annotations: { summary: 'x'.repeat(280) },
         }),
       )
+
     const alerts = [...long('Crit', 'critical', 18), ...long('Warn', 'warning', 18)]
     const { body } = renderBoard({ alerts, watchdogFiring: true, clearSince: undefined, now: t0 })
     const description = body.embeds?.[0]?.description ?? ''
+
     expect(description.length).toBeLessThanOrEqual(4_096)
     expect(description).toContain('heartbeat OK')
     expect(description).toContain('Warning (18)')
     const shown = (description.match(/^• /gm) ?? []).length
     const omitted = [...description.matchAll(/…and (\d+) more/g)].reduce((sum, match) => sum + Number(match[1]), 0)
+
     expect(shown).toBeGreaterThan(0)
     expect(shown + omitted).toBe(36)
   })
@@ -199,6 +221,7 @@ describe('status board rendering', () => {
   test('the change fingerprint ignores the updated stamp', () => {
     const first = renderBoard({ alerts: [], watchdogFiring: true, clearSince: t0, now: t0 })
     const later = renderBoard({ alerts: [], watchdogFiring: true, clearSince: t0, now: t0 + 60_000 })
+
     expect(first.fingerprint).toBe(later.fingerprint)
     expect(first.body).not.toEqual(later.body)
   })
@@ -207,12 +230,14 @@ describe('status board rendering', () => {
 describe('edit versus post', () => {
   test('a critical alert pages once and its resolution edits the same message without a ping', async () => {
     const { relay, discord, clock, am } = setup()
+
     am.alerts = [watchdog, apiAlert(alert())]
 
     await relay.handleWebhook({ alerts: [alert()] })
     await relay.handleWebhook({ alerts: [alert()] })
     expect(discord.pages()).toHaveLength(1)
     const pageId = relay.snapshot().pages['fp-critical']?.messageId
+
     expect(pageId).toBeDefined()
 
     clock.now = t0 + 12 * 60_000
@@ -220,9 +245,11 @@ describe('edit versus post', () => {
     await relay.handleWebhook({ alerts: [alert({ status: 'resolved', endsAt: new Date(clock.now).toISOString() })] })
 
     const resolution = discord.calls.find((call) => call.op === 'edit' && call.id === pageId)
+
     expect(resolution?.body.content).toBe(
       '✅ **HttpErrorRateHigh** resolved after 12m: api HTTP 5xx rate exceeds one percent',
     )
+
     expect(resolution?.body.allowed_mentions).toEqual({ parse: [] })
     expect(resolution?.body.embeds?.[0]?.color).toBe(0x30a46c)
     expect(resolution?.body.embeds?.[0]?.description).toStartWith('Resolved after 12m.')
@@ -233,6 +260,7 @@ describe('edit versus post', () => {
   test('warnings never post a message of their own, only the board', async () => {
     const warning = alert({ fingerprint: 'fp-warning', labels: { alertname: 'NewDeadLetters', severity: 'warning' } })
     const { relay, discord, am } = setup()
+
     am.alerts = [watchdog, apiAlert(warning)]
 
     await relay.handleWebhook({ alerts: [warning] })
@@ -245,6 +273,7 @@ describe('edit versus post', () => {
 
   test('the board is posted once, then only edited when it changes or goes stale', async () => {
     const { relay, discord, clock, am } = setup()
+
     await relay.sync()
     await relay.sync()
     expect(discord.calls.map((call) => call.op)).toEqual(['post'])
@@ -254,6 +283,7 @@ describe('edit versus post', () => {
     expect(discord.calls.at(-1)).toMatchObject({ op: 'edit', id: '1' })
 
     const before = discord.calls.length
+
     clock.now += 60_000
     await relay.sync()
     expect(discord.calls.length).toBe(before)
@@ -265,6 +295,7 @@ describe('edit versus post', () => {
 
   test('a deleted board message is replaced by a new post', async () => {
     const { relay, discord } = setup({ initial: { pages: {}, boardMessageId: '999' } })
+
     await relay.sync()
     expect(discord.calls.map((call) => call.op)).toEqual(['edit', 'post'])
     expect(relay.snapshot().boardMessageId).toBe('1')
@@ -272,11 +303,13 @@ describe('edit versus post', () => {
 
   test('after a restart the persisted board and page are edited, not re-posted', async () => {
     const first = setup()
+
     first.am.alerts = [watchdog, apiAlert(alert())]
     await first.relay.handleWebhook({ alerts: [alert()] })
     const persisted = first.store.saved as RelayState
 
     const second = setup({ initial: persisted, alerts: [watchdog, apiAlert(alert())] })
+
     for (const [id, body] of first.discord.messages) second.discord.messages.set(id, body)
     await second.relay.handleWebhook({ alerts: [alert()] })
     second.clock.now += 400_000
@@ -285,6 +318,7 @@ describe('edit versus post', () => {
     await second.relay.handleWebhook({ alerts: [alert({ status: 'resolved' })] })
 
     expect(second.discord.posts()).toHaveLength(0)
+
     expect(second.discord.calls.filter((call) => call.op === 'edit').map((call) => call.id)).toContain(
       persisted.pages['fp-critical']?.messageId,
     )
@@ -292,12 +326,14 @@ describe('edit versus post', () => {
 
   test('a new episode of a paged alert pages again even when its resolution was missed', async () => {
     const { relay, discord, clock, am } = setup()
+
     am.alerts = [watchdog, apiAlert(alert())]
     await relay.handleWebhook({ alerts: [alert()] })
     const firstPage = relay.snapshot().pages['fp-critical']?.messageId
 
     clock.now = t0 + 10 * 60_000
     const second = alert({ startsAt: new Date(t0 + 9 * 60_000).toISOString() })
+
     am.alerts = [watchdog, apiAlert(second)]
     await relay.sync()
     clock.now += 180_000
@@ -306,23 +342,29 @@ describe('edit versus post', () => {
     expect(discord.pages()).toHaveLength(2)
     expect(discord.calls.find((call) => call.op === 'edit' && call.id === firstPage)?.body.content).toStartWith('✅')
     const secondPage = relay.snapshot().pages['fp-critical']
+
     expect(secondPage?.alert.startsAt).toBe(second.startsAt)
 
     // The first episode's resolution or a retried firing webhook arriving late must not touch the second page.
     const before = discord.calls.length
+
     await relay.handleWebhook({ alerts: [alert({ status: 'resolved' })] })
     await relay.handleWebhook({ alerts: [alert()] })
     expect(relay.snapshot().pages['fp-critical']?.messageId).toBe(secondPage?.messageId)
+
     expect(
       discord.calls.slice(before).filter((call) => call.op === 'post' || call.id === secondPage?.messageId),
     ).toEqual([])
+
     expect(discord.pages()).toHaveLength(2)
   })
 
   test('a resolution for an unknown page posts a short notice that does not notify', async () => {
     const { relay, discord } = setup()
+
     await relay.handleWebhook({ alerts: [alert({ status: 'resolved' })] })
     const notice = discord.posts().find((call) => call.body.content?.startsWith('✅'))
+
     expect(notice?.body.allowed_mentions).toEqual({ parse: [] })
     expect(notice?.body.flags).toBe(SUPPRESS_NOTIFICATIONS)
     expect(notice?.body.content).not.toContain('<@')
@@ -330,6 +372,7 @@ describe('edit versus post', () => {
 
   test('the poll resolves pages whose alert vanished, and a late resolved webhook stays quiet', async () => {
     const { relay, discord, clock, am } = setup()
+
     am.alerts = [watchdog, apiAlert(alert())]
     await relay.handleWebhook({ alerts: [alert()] })
 
@@ -343,12 +386,14 @@ describe('edit versus post', () => {
     expect(discord.calls.some((call) => call.op === 'edit' && call.body.content?.startsWith('✅'))).toBe(true)
 
     const posts = discord.posts().length
+
     await relay.handleWebhook({ alerts: [alert({ status: 'resolved' })] })
     expect(discord.posts()).toHaveLength(posts)
   })
 
   test('a failed page is reported to Alertmanager and retried by the poll', async () => {
     const { relay, discord, clock, am } = setup()
+
     am.alerts = [watchdog, apiAlert(alert())]
     discord.failPosts = 1
     await expect(relay.handleWebhook({ alerts: [alert()] })).rejects.toThrow('1 critical notification(s) failed')
@@ -362,6 +407,7 @@ describe('edit versus post', () => {
 
   test('silenced criticals neither page from the poll nor show on the board', async () => {
     const { relay, discord, clock } = setup({ alerts: [watchdog, apiAlert(alert(), 'suppressed')] })
+
     clock.now = t0 + 600_000
     await relay.sync()
     expect(discord.pages()).toHaveLength(0)
@@ -373,6 +419,7 @@ describe('heartbeat', () => {
   test('pings after a full sync while the Watchdog is firing', async () => {
     let pings = 0
     const { relay } = setup({ heartbeat: async () => void pings++ })
+
     await relay.sync()
     await relay.sync()
     expect(pings).toBe(2)
@@ -381,6 +428,7 @@ describe('heartbeat', () => {
   test('stays silent when the Watchdog is missing, so healthchecks.io alerts', async () => {
     let pings = 0
     const { relay } = setup({ alerts: [], heartbeat: async () => void pings++ })
+
     await relay.sync()
     expect(pings).toBe(0)
   })
@@ -388,11 +436,13 @@ describe('heartbeat', () => {
   test('stays silent when Alertmanager cannot be read', async () => {
     let pings = 0
     const { relay, am } = setup({ heartbeat: async () => void pings++ })
+
     Object.defineProperty(am, 'alerts', {
       get() {
         throw new Error('Alertmanager API answered 503')
       },
     })
+
     await expect(relay.sync()).rejects.toThrow('503')
     expect(pings).toBe(0)
   })
@@ -400,6 +450,7 @@ describe('heartbeat', () => {
   test('stays silent when the board cannot reach Discord', async () => {
     let pings = 0
     const { relay, discord } = setup({ heartbeat: async () => void pings++ })
+
     discord.failPosts = 10
     await expect(relay.sync()).rejects.toThrow('502')
     expect(pings).toBe(0)
@@ -411,6 +462,7 @@ describe('heartbeat', () => {
         throw new Error('heartbeat endpoint answered 500')
       },
     })
+
     await relay.sync()
     expect(discord.calls).toHaveLength(1)
   })
@@ -423,18 +475,22 @@ describe('Discord client', () => {
     const requests: Array<{ url: string; method?: string }> = []
     const sleeps: number[] = []
     const responses = [Response.json({ retry_after: 1.5, global: false }, { status: 429 }), ok('77')]
+
     const client = new DiscordClient({
       webhookUrl: 'https://discord.test/api/webhooks/1/secret-token',
       fetch: (async (url: URL, init: RequestInit) => {
         requests.push({ url: String(url), method: init.method })
+
         return responses.shift() as Response
       }) as unknown as typeof fetch,
       sleep: async (ms) => {
         sleeps.push(ms)
       },
     })
+
     expect(await client.post({ content: 'x', allowed_mentions: { parse: [] } })).toBe('77')
     expect(sleeps).toEqual([1_600])
+
     expect(requests.map((request) => request.url)).toEqual([
       'https://discord.test/api/webhooks/1/secret-token?wait=true',
       'https://discord.test/api/webhooks/1/secret-token?wait=true',
@@ -444,27 +500,33 @@ describe('Discord client', () => {
   test('falls back to the Retry-After header, retries 5xx with backoff, and edits by message id', async () => {
     const requests: Array<{ url: string; method?: string; body: string }> = []
     const sleeps: number[] = []
+
     const responses = [
       new Response('slow down', { status: 429, headers: { 'retry-after': '2' } }),
       new Response('bad gateway', { status: 502 }),
       ok('5'),
     ]
+
     const client = new DiscordClient({
       webhookUrl: 'https://discord.test/api/webhooks/1/secret-token',
       fetch: (async (url: URL, init: RequestInit) => {
         requests.push({ url: String(url), method: init.method, body: String(init.body) })
+
         return responses.shift() as Response
       }) as unknown as typeof fetch,
       sleep: async (ms) => {
         sleeps.push(ms)
       },
     })
+
     expect(await client.edit('5', { content: 'y', allowed_mentions: { parse: [] }, flags: 4096 })).toBe(true)
     expect(sleeps).toEqual([2_100, 1_000])
+
     expect(requests[0]).toMatchObject({
       method: 'PATCH',
       url: 'https://discord.test/api/webhooks/1/secret-token/messages/5',
     })
+
     expect(JSON.parse(requests[0]?.body ?? '{}')).not.toHaveProperty('flags')
   })
 
@@ -475,11 +537,15 @@ describe('Discord client', () => {
         fetch: (async () => new Response('{}', { status })) as unknown as typeof fetch,
         sleep: async () => {},
       })
+
     expect(await client(404).edit('1', { allowed_mentions: { parse: [] } })).toBe(false)
+
     const failure = client(503)
       .post({ allowed_mentions: { parse: [] } })
       .catch((error: Error) => error)
+
     const error = await failure
+
     expect(error).toBeInstanceOf(Error)
     expect(String(error)).toContain('503')
     expect(String(error)).not.toContain('secret-token')
@@ -492,6 +558,7 @@ describe('state file', () => {
     const path = join(directory, 'nested', 'state.json')
     const logs: string[] = []
     const store = new FileStateStore(path, (level, msg) => logs.push(`${level}:${msg}`))
+
     expect(store.load()).toEqual({ pages: {} })
     store.save({ pages: {}, boardMessageId: '9' })
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ pages: {}, boardMessageId: '9' })

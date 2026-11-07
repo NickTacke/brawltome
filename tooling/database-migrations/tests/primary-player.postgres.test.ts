@@ -11,10 +11,13 @@ const connectionString = process.env.DATABASE_URL
 async function withDatabase(run: (databaseUrl: string) => Promise<void>) {
   const databaseName = `brawltome_primary_${process.pid}_${randomUUID().replaceAll('-', '')}`
   const adminUrl = new URL(connectionString as string)
+
   adminUrl.pathname = '/postgres'
   const databaseUrl = new URL(connectionString as string)
+
   databaseUrl.pathname = `/${databaseName}`
   const admin = postgres(adminUrl.toString(), { max: 1 })
+
   await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
   try {
     await run(databaseUrl.toString())
@@ -28,6 +31,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
   test('migrates linked ownership and preserves non-successful legacy attempts', async () => {
     await withDatabase(async (databaseUrl) => {
       const sql = postgres(databaseUrl, { max: 1 })
+
       try {
         await sql.unsafe(`
           CREATE TABLE public."user" (
@@ -58,18 +62,22 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             ('ba1fbb0e-04fa-49f8-9f2a-e85c7d88298f', 99, 'steam-duplicate-a', 'steam', 'linked', '2026-08-09'),
             ('e72d7508-25e8-41b5-aee4-a67033fc9d8a', 99, 'steam-duplicate-b', 'steam', 'linked', '2026-08-10');
         `)
+
         await migratePostgres(databaseUrl, accountsMigrationInventory)
 
         const ownership = await sql`SELECT account_id::text, brawlhalla_id::int FROM accounts.primary_players`
+
         const attempts = await sql`
           SELECT a.account_id::text, COALESCE(o.status, 'pending') AS status
           FROM accounts.primary_player_verification_attempts a
           LEFT JOIN accounts.primary_player_verification_outcomes o ON o.attempt_id = a.id
           ORDER BY a.started_at
         `
+
         expect(ownership.map(({ account_id, brawlhalla_id }) => ({ account_id, brawlhalla_id }))).toEqual([
           { account_id: '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295', brawlhalla_id: 42 },
         ])
+
         expect(attempts.map(({ status }) => status)).toEqual([
           'verified',
           'pending',
@@ -90,11 +98,13 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
       const sql = postgres(databaseUrl, { max: 2 })
+
       try {
         const [firstAccount, secondAccount] = await Promise.all([
           runtime.accounts.signInWithDiscord({ providerAccountId: 'discord-1', displayName: 'One', avatarHash: null }),
           runtime.accounts.signInWithDiscord({ providerAccountId: 'discord-2', displayName: 'Two', avatarHash: null }),
         ])
+
         const [firstAttempt, secondAttempt] = await Promise.all([
           runtime.accounts.beginPrimaryPlayerVerification({
             accountId: firstAccount.account.id,
@@ -107,11 +117,13 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             idempotencyKey: 'nonce-2',
           }),
         ])
+
         const duplicateAttempt = await runtime.accounts.beginPrimaryPlayerVerification({
           accountId: firstAccount.account.id,
           steamId: 'steam-1',
           idempotencyKey: 'nonce-1',
         })
+
         expect(duplicateAttempt.id).toBe(firstAttempt.id)
 
         const evidence = {
@@ -120,17 +132,21 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
           checkedAt: new Date('2026-08-10T10:01:00.000Z'),
           source: 'brawlhalla-v0-steam-search' as const,
         }
+
         const resolver = { resolve: async () => evidence }
+
         const outcomes = await Promise.all([
           runtime.accounts.resolvePrimaryPlayerVerification(firstAttempt.id, resolver),
           runtime.accounts.resolvePrimaryPlayerVerification(secondAttempt.id, resolver),
         ])
 
         expect(outcomes.map(({ status }) => status).sort()).toEqual(['conflict', 'verified'])
+
         const replayedOutcomes = await Promise.all([
           runtime.accounts.resolvePrimaryPlayerVerification(firstAttempt.id, resolver),
           runtime.accounts.resolvePrimaryPlayerVerification(secondAttempt.id, resolver),
         ])
+
         expect(replayedOutcomes).toEqual(outcomes)
 
         const thirdAccount = await runtime.accounts.signInWithDiscord({
@@ -138,6 +154,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
           displayName: 'Three',
           avatarHash: null,
         })
+
         const [thirdAttempt, competingAttempt] = await Promise.all([
           runtime.accounts.beginPrimaryPlayerVerification({
             accountId: thirdAccount.account.id,
@@ -150,6 +167,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             idempotencyKey: 'nonce-3b',
           }),
         ])
+
         const sameAccountOutcomes = await Promise.all([
           runtime.accounts.resolvePrimaryPlayerVerification(thirdAttempt.id, {
             resolve: async () => ({ ...evidence, brawlhallaId: 100, name: 'Three A' }),
@@ -158,6 +176,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             resolve: async () => ({ ...evidence, brawlhallaId: 101, name: 'Three B' }),
           }),
         ])
+
         expect(sameAccountOutcomes.map(({ status }) => status).sort()).toEqual(['conflict', 'verified'])
 
         const replayedProof = await Promise.allSettled([
@@ -172,6 +191,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             idempotencyKey: 'shared-openid-nonce',
           }),
         ])
+
         expect(replayedProof.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected'])
 
         const fourthAccount = await runtime.accounts.signInWithDiscord({
@@ -179,12 +199,15 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
           displayName: 'Four',
           avatarHash: null,
         })
+
         const pendingAttempt = await runtime.accounts.beginPrimaryPlayerVerification({
           accountId: fourthAccount.account.id,
           steamId: 'steam-4',
           idempotencyKey: 'nonce-4',
         })
+
         let falseOwnershipError: unknown
+
         try {
           await sql`
             INSERT INTO accounts.primary_players (
@@ -194,6 +217,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
         } catch (error) {
           falseOwnershipError = error
         }
+
         expect((falseOwnershipError as Error).message).toContain('requires the account')
 
         const [{ owners, attempts }] = await sql<[{ owners: number; attempts: number }]>`
@@ -201,13 +225,16 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             (SELECT count(*)::int FROM accounts.primary_players) AS owners,
             (SELECT count(*)::int FROM accounts.primary_player_verification_attempts) AS attempts
         `
+
         expect({ owners, attempts }).toEqual({ owners: 2, attempts: 6 })
         let immutableError: unknown
+
         try {
           await sql.unsafe('DELETE FROM accounts.primary_player_verification_attempts WHERE id = $1', [firstAttempt.id])
         } catch (error) {
           immutableError = error
         }
+
         expect(immutableError).toBeInstanceOf(Error)
         expect((immutableError as Error).message).toContain('immutable')
       } finally {
