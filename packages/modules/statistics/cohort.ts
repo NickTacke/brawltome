@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { type CurrentOneVsOneBracket, currentOneVsOneBracket } from '@brawltome/game-data'
+import { rankedRegions } from '@brawltome/game-data/ranked'
 
 export const LAUNCH_COHORT_REGION = 'EU' as const
 export const LAUNCH_COHORT_BRACKET = 'Diamond+' as const
@@ -7,7 +8,7 @@ export const LAUNCH_COHORT_CAP = 750
 export const LAUNCH_COHORT_MINIMUM_EVIDENCE_PLAYERS = 125
 export const LAUNCH_COHORT_METHODOLOGY_VERSION = 'eu-diamond-tracer-v1'
 export const FULL_LAUNCH_COHORT_METHODOLOGY_VERSION = 'full-launch-cohort-v1'
-export const launchCohortRegions = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+export const launchCohortRegions = rankedRegions
 export const launchCohortBrackets = ['Platinum', 'Diamond+'] as const satisfies readonly CurrentOneVsOneBracket[]
 export const LAUNCH_COHORT_SOURCE_QUOTA_UNITS = 150
 export const LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS = 15 * 60

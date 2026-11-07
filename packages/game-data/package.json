@@ -5,6 +5,7 @@
   "exports": {
     ".": "./index.ts",
     "./legends": "./src/legends.ts",
+    "./ranked": "./src/ranked.ts",
     "./reference-data": "./src/reference-data.ts"
   },
   "scripts": {

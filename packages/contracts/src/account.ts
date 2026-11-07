@@ -1,20 +1,10 @@
+import { leaderboardModes, leaderboardScopes } from './leaderboard'
 import { nullablePlayerRankedProfileSchema } from './player-ranked'
 import { brawlhallaIdSchema, nullablePlayerReferenceSchema } from './player-reference'
 import { z } from './zod'
 
-export const leaderboardBracketPreferenceSchema = z.enum(['1v1', '2v2', 'solo2v2', '3v3'])
-export const leaderboardRegionPreferenceSchema = z.enum([
-  'all',
-  'US-E',
-  'US-W',
-  'EU',
-  'SEA',
-  'AUS',
-  'BRZ',
-  'JPN',
-  'ME',
-  'SA',
-])
+export const leaderboardBracketPreferenceSchema = z.enum(leaderboardModes)
+export const leaderboardRegionPreferenceSchema = z.enum(leaderboardScopes)
 export const accountThemeSchema = z.enum(['neutral', 'purple'])
 
 export const accountPreferencesSchema = z

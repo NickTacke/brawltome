@@ -1,3 +1,5 @@
+import { type RankedMode, rankedRegions } from '@brawltome/game-data/ranked'
+
 export const workClasses = [
   'interactive',
   'primary-monitoring',
@@ -118,12 +120,13 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
 
 // Reads every page of one region's V1 leaderboards to keep every ranked player's standing current in Players.
 export const leaderboardDeepCrawlKind = 'leaderboard-deep-crawl'
-export const leaderboardDeepCrawlRegions = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+export const leaderboardDeepCrawlRegions = rankedRegions
 export const minLeaderboardDeepCrawlIntervalMs = 60 * 60 * 1000
 export const maxLeaderboardDeepCrawlIntervalMs = 24 * 60 * 60 * 1000
 
 export type LeaderboardDeepCrawlRegion = (typeof leaderboardDeepCrawlRegions)[number]
-export const leaderboardDeepCrawlModes = ['1v1', 'solo2v2', '2v2'] as const
+// only the modes whose standings feed player profiles, 3v3 is not crawled
+export const leaderboardDeepCrawlModes = ['1v1', 'solo2v2', '2v2'] as const satisfies readonly RankedMode[]
 export type LeaderboardDeepCrawlMode = (typeof leaderboardDeepCrawlModes)[number]
 // A payload without a mode is a 1v1 crawl (the original schedules).
 export type LeaderboardDeepCrawlPayload = {

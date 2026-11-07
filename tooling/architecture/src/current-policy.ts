@@ -46,7 +46,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/bhapi': ['.'],
     '@brawltome/database-migrations': [],
     '@brawltome/foundation': ['.', './testing'],
-    '@brawltome/game-data': ['.', './legends', './reference-data'],
+    '@brawltome/game-data': ['.', './legends', './ranked', './reference-data'],
     '@brawltome/telemetry': ['.', './analytics-labels', './node', './propagation'],
     '@brawltome/architecture': [],
     '@brawltome/analytics-review': [],

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { type RankedMode, rankedRegions } from '@brawltome/game-data/ranked'
 import {
   type Context,
   type Span,
@@ -116,6 +117,8 @@ type MetricDefinition = {
   kind: MetricKind
   help: string
   labels: Readonly<Record<string, readonly string[]>>
+  // label keys whose unknown values are counted as 'other' instead of dropping the series
+  unknownAsOther?: readonly string[]
   buckets?: readonly number[]
 }
 
@@ -163,8 +166,10 @@ const workClass = [
   'maintenance',
 ] as const
 
-const deepCrawlMode = ['1v1', 'solo2v2', '2v2'] as const
-const deepCrawlRegion = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+// the deep crawl skips 3v3, like leaderboardDeepCrawlModes in refresh-operations
+const deepCrawlModes = ['1v1', 'solo2v2', '2v2'] as const satisfies readonly RankedMode[]
+const deepCrawlMode = [...deepCrawlModes, 'other'] as const
+const deepCrawlRegion = [...rankedRegions, 'other'] as const
 
 const operationKind = [
   'proof',
@@ -340,11 +345,13 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'V1 leaderboard pages the deep crawl read or skipped as malformed',
     labels: { mode: deepCrawlMode, region: deepCrawlRegion, outcome: ['read', 'skipped'] },
+    unknownAsOther: ['mode', 'region'],
   },
   leaderboard_deep_crawl_changed_total: {
     kind: 'counter',
     help: 'Names and standings the deep crawl changed',
     labels: { mode: deepCrawlMode, region: deepCrawlRegion, change: ['name', 'standing', 'solo', 'team'] },
+    unknownAsOther: ['mode', 'region'],
   },
   freshness_planner_skips_total: {
     kind: 'counter',
@@ -595,6 +602,20 @@ function labelsKey(labels: MetricLabels): string {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)
     .join(',')
+}
+
+function foldUnknownLabels(definition: MetricDefinition, labels: MetricLabels): MetricLabels {
+  if (!definition.unknownAsOther) return labels
+
+  const folded = { ...labels }
+
+  for (const key of definition.unknownAsOther) {
+    const isUnknown = key in folded && !definition.labels[key].includes(folded[key])
+
+    if (isUnknown) folded[key] = 'other'
+  }
+
+  return folded
 }
 
 function validLabels(definition: MetricDefinition, labels: MetricLabels): boolean {
@@ -865,11 +886,19 @@ export function createTelemetry(options: {
     }
   }
 
-  function metric(name: MetricName, value: number, labels: MetricLabels, mode: MetricKind): void {
+  function metric(name: MetricName, value: number, rawLabels: MetricLabels, mode: MetricKind): void {
     try {
       const definition = metricsCatalog[name]
 
-      if (!definition || definition.kind !== mode || !Number.isFinite(value) || !validLabels(definition, labels)) {
+      if (!definition || definition.kind !== mode || !Number.isFinite(value)) {
+        seriesDropped++
+
+        return
+      }
+
+      const labels = foldUnknownLabels(definition, rawLabels)
+
+      if (!validLabels(definition, labels)) {
         seriesDropped++
 
         return

@@ -141,6 +141,7 @@
       "name": "@brawltome/contracts",
       "dependencies": {
         "@asteasolutions/zod-to-openapi": "9.1.0",
+        "@brawltome/game-data": "workspace:*",
         "@trpc/server": "^11.0.0",
         "zod": "4.4.3",
       },
@@ -169,6 +170,7 @@
       "name": "@brawltome/accounts",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -213,6 +215,7 @@
       "name": "@brawltome/ranking",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
       },
       "devDependencies": {
@@ -223,6 +226,7 @@
       "name": "@brawltome/refresh-operations",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
@@ -265,6 +269,7 @@
     "packages/telemetry": {
       "name": "@brawltome/telemetry",
       "dependencies": {
+        "@brawltome/game-data": "workspace:*",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-http": "0.221.0",
         "@opentelemetry/resources": "2.10.0",
