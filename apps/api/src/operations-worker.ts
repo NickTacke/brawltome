@@ -52,7 +52,7 @@ import {
   reconcileInteractiveAdmissions,
   runOneRefreshOperation,
 } from './refresh-operations-worker'
-import { readHealthPort, readRuntimeConfig } from './runtime-config'
+import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
@@ -106,7 +106,7 @@ const operations = createPostgresRefreshOperations(
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {
-  authenticatedIpLimit: Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120),
+  authenticatedIpLimit: readAuthenticatedRefreshIpLimit(process.env.AUTHENTICATED_REFRESH_IP_LIMIT),
   sourceLimits: {
     'brawlhalla-v0': 180,
     'brawlhalla-v1': brawlhallaV1RequestLimit,
@@ -210,7 +210,7 @@ health.get('/metrics', async (context) => {
 
 const healthFetch = instrumentHttpHandler(telemetry, 'operations-worker', health.fetch)
 
-healthServer.current = serve({ port: readHealthPort(process.env.HEALTH_PORT, 3001), fetch: healthFetch })
+healthServer.current = serve({ port: readPort('HEALTH_PORT', process.env.HEALTH_PORT, 3001), fetch: healthFetch })
 lifecycle.markReady()
 
 let shutdownRequested = false

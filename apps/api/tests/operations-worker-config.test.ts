@@ -8,7 +8,12 @@ import {
   readSourceBackgroundHeadroom,
   workerDatabaseUrl,
 } from '../src/operations-worker-config'
-import { readHealthPort, readRuntimeConfig, readShutdownAnnounceMs } from '../src/runtime-config'
+import {
+  readAuthenticatedRefreshIpLimit,
+  readPort,
+  readRuntimeConfig,
+  readShutdownAnnounceMs,
+} from '../src/runtime-config'
 
 describe('operations worker configuration', () => {
   test('schedules one staggered deep crawl per region and bounds its interval', () => {
@@ -337,8 +342,15 @@ describe('operations worker configuration', () => {
     expect(readShutdownAnnounceMs(undefined)).toBe(0)
     expect(readShutdownAnnounceMs('5000')).toBe(5_000)
     expect(() => readShutdownAnnounceMs('30001')).toThrow('RUNTIME_SHUTDOWN_ANNOUNCE_MS')
-    expect(readHealthPort(undefined, 3001)).toBe(3001)
-    expect(() => readHealthPort('70000', 3001)).toThrow('HEALTH_PORT')
+    expect(() => readShutdownAnnounceMs('')).toThrow('RUNTIME_SHUTDOWN_ANNOUNCE_MS')
+  })
+
+  test('reads ports and the refresh ip limit as whole numbers in range', () => {
+    expect(readPort('HEALTH_PORT', undefined, 3001)).toBe(3001)
+    expect(() => readPort('HEALTH_PORT', '70000', 3001)).toThrow('HEALTH_PORT')
+    expect(() => readPort('PORT', 'abc', 3000)).toThrow('PORT')
+    expect(readAuthenticatedRefreshIpLimit(undefined)).toBe(120)
+    expect(() => readAuthenticatedRefreshIpLimit('0')).toThrow('AUTHENTICATED_REFRESH_IP_LIMIT')
   })
 
   test('gives discovery its own statement timeout for full-snapshot reconciliation', () => {
