@@ -2,11 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import { type LeaderboardMode, type LeaderboardScope, createPostgresRanking, rankingModule } from '@brawltome/ranking'
-import {
-  createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
@@ -1363,14 +1359,14 @@ describe('Ranking snapshot retention', () => {
     const sql = postgres(url.toString(), { max: 2, onnotice: () => undefined })
 
     try {
-      const validationIndex = refreshOperationsMigrationInventory.findIndex(
+      const validationIndex = refreshOperationsModule.migrations.findIndex(
         ({ identity }) => identity === 'refresh-operations/0019',
       )
 
-      const validation = refreshOperationsMigrationInventory[validationIndex]
+      const validation = refreshOperationsModule.migrations[validationIndex]
 
-      expect(refreshOperationsMigrationInventory[validationIndex - 1]?.identity).toBe('refresh-operations/0018')
-      for (const migration of refreshOperationsMigrationInventory.slice(0, validationIndex)) {
+      expect(refreshOperationsModule.migrations[validationIndex - 1]?.identity).toBe('refresh-operations/0018')
+      for (const migration of refreshOperationsModule.migrations.slice(0, validationIndex)) {
         await sql.begin((transaction) => transaction.unsafe(migration.sql))
       }
 

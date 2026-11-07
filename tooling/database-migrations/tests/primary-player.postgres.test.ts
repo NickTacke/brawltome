@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
+import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
 import { migratePostgres } from '@brawltome/foundation'
 import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
@@ -63,7 +63,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             ('e72d7508-25e8-41b5-aee4-a67033fc9d8a', 99, 'steam-duplicate-b', 'steam', 'linked', '2026-08-10');
         `)
 
-        await migratePostgres(databaseUrl, accountsMigrationInventory)
+        await migratePostgres(databaseUrl, accountsModule.migrations)
 
         const ownership = await sql`SELECT account_id::text, brawlhalla_id::int FROM accounts.primary_players`
 
@@ -94,7 +94,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
 
   test('atomically allows only one account to own a player and keeps both attempts', async () => {
     await withDatabase(async (databaseUrl) => {
-      await migratePostgres(databaseUrl, accountsMigrationInventory)
+      await migratePostgres(databaseUrl, accountsModule.migrations)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
       const sql = postgres(databaseUrl, { max: 2 })

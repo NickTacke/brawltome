@@ -108,7 +108,7 @@ change. Check each workflow's `paths` before assuming a change is covered.
 - Don't read or write another module's tables. Call what that module exports.
 - Migrations live in the module that owns the table. When one needs another module's table first, list its identity in
   `requires`. A new migration is a file in the module's `migrations/` folder, imported in the module's `index.ts` and
-  added to its `<name>MigrationInventory` array: the runner only reads that array. There is no central list; the order
+  added to the `migrations` array its `<name>Module` passes on: the runner only reads that array. There is no central list; the order
   comes from `predecessor` and `requires`.
   `architecture:check` fails on a new migration that names another module's schema without such a `requires`.
 - A new module is added to the three module lists, to `tooling/architecture/src/current-policy.ts` and to

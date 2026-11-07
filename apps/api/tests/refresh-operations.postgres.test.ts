@@ -5,7 +5,6 @@ import {
   type OperationLease,
   type PlayerRefreshSettled,
   createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
@@ -258,7 +257,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('accepts a later same-owner migration while rejecting known history mutation', async () => {
-    const readiness = createPostgresReadiness(database.sql, refreshOperationsMigrationInventory)
+    const readiness = createPostgresReadiness(database.sql, refreshOperationsModule.migrations)
 
     await readiness.check()
 
@@ -277,23 +276,23 @@ describe('durable Refresh Operations', () => {
       await control`
         UPDATE brawltome_migrations.history
         SET checksum = ${'0'.repeat(64)}
-        WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+        WHERE identity = ${refreshOperationsModule.migrations[0].identity}
       `
 
       await expect(readiness.check()).rejects.toThrow('schema checksum mismatch')
 
       await control`
         UPDATE brawltome_migrations.history
-        SET checksum = ${refreshOperationsMigrationInventory[0].checksum}
-        WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+        SET checksum = ${refreshOperationsModule.migrations[0].checksum}
+        WHERE identity = ${refreshOperationsModule.migrations[0].identity}
       `
 
       await readiness.check()
     } finally {
       await control`
         UPDATE brawltome_migrations.history
-        SET checksum = ${refreshOperationsMigrationInventory[0].checksum}
-        WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+        SET checksum = ${refreshOperationsModule.migrations[0].checksum}
+        WHERE identity = ${refreshOperationsModule.migrations[0].identity}
       `
 
       await control`
