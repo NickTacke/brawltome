@@ -109,7 +109,6 @@ type RunOneRefreshOperationOptions = {
     read(mode: string, region: string): Promise<{ windowAt: Date; nextPage: number; totalPages: number } | null>
     save(input: { mode: string; region: string; windowAt: Date; nextPage: number; totalPages: number }): Promise<void>
   }
-  // Solo 2v2 and fixed 2v2 standings from the deep crawl.
   leaderboardTeamModes?: {
     applyLeaderboardSoloQueue(input: {
       observedAt: Date

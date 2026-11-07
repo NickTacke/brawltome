@@ -28,7 +28,6 @@ export type PlayerNameVerificationConfig = {
   dedupeMs: number
   staleRecheckMs: number
   intervalMs: number
-  // The V0 admission window.
   windowMs: number
 }
 

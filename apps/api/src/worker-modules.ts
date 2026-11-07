@@ -8,7 +8,6 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
 
-// the modules the operations worker loads
 export const workerModules: readonly BrawltomeModule[] = [
   accountsModule,
   refreshOperationsModule,

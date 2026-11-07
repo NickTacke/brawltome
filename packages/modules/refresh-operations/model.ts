@@ -116,7 +116,7 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
   return payload
 }
 
-// Reads every page of one region's V1 1v1 leaderboard to keep every ranked player's standing current in Players.
+// Reads every page of one region's V1 leaderboards to keep every ranked player's standing current in Players.
 export const leaderboardDeepCrawlKind = 'leaderboard-deep-crawl'
 export const leaderboardDeepCrawlRegions = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
 export const minLeaderboardDeepCrawlIntervalMs = 60 * 60 * 1000

@@ -201,7 +201,6 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       return c.redirect(`${config.webOrigin}/account?error=state`)
     }
 
-    // Collect all openid.* params
     const openidParams: Record<string, string> = {}
 
     for (const [key, value] of Object.entries(c.req.query())) {
