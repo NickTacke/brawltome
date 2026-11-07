@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
-import { migratePostgres, orderMigrations } from '@brawltome/foundation'
+import { type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import {
