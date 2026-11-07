@@ -2,32 +2,20 @@ import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { MAX_PINNED_PLAYERS, accountsMigrationInventory, createPostgresAccounts } from '@brawltome/accounts'
 import { migratePostgres } from '@brawltome/foundation'
-import { openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 
-const dedicatedServer = 'postgres://brawltome_v3:brawltome_v3@127.0.0.1:55436'
-const configuredServer = process.env.DATABASE_URL
-const hasDedicatedServer = configuredServer?.startsWith(dedicatedServer) ?? false
+// the migrations up to 0007, before 0008 consolidates saved and pinned players
+const migrationsBeforeConsolidation = 7
 
-// an empty database by hand: the first test applies part of the accounts migrations and seeds rows first
+// starts empty: the first test applies part of the accounts migrations and seeds rows first
 async function withDatabase(run: (databaseUrl: string) => Promise<void>) {
-  if (!hasDedicatedServer) throw new Error('Pinned Players PostgreSQL tests require dedicated 127.0.0.1:55436')
+  const database = await createTestDatabase({ label: 'pinned_players', modules: [] })
 
-  const databaseName = `brawltome_pinned_players_${process.pid}_${randomUUID().replaceAll('-', '')}`
-  const adminUrl = new URL(configuredServer as string)
-
-  adminUrl.pathname = '/postgres'
-  const databaseUrl = new URL(configuredServer as string)
-
-  databaseUrl.pathname = `/${databaseName}`
-  const admin = postgres(adminUrl.toString(), { max: 1 })
-
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
   try {
-    await run(databaseUrl.toString())
+    await run(database.connectionString)
   } finally {
-    await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-    await admin.end()
+    await database.drop()
   }
 }
 
@@ -41,7 +29,7 @@ function pinnedIds(
   return players.map(({ brawlhallaId }) => brawlhallaId)
 }
 
-describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
+describe('Pinned Players PostgreSQL', () => {
   test('consolidates old saved rows with old pin order first and removes legacy tables', async () => {
     await withDatabase(async (databaseUrl) => {
       const accountId = '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295'
@@ -49,7 +37,7 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
       const seed = postgres(databaseUrl, { max: 1 })
 
       try {
-        await migratePostgres(databaseUrl, accountsMigrationInventory.slice(0, 7))
+        await migratePostgres(databaseUrl, accountsMigrationInventory.slice(0, migrationsBeforeConsolidation))
 
         await seed`
           INSERT INTO accounts.users (id) VALUES (${accountId}), (${legacyAccountId})
@@ -80,7 +68,9 @@ describe.skipIf(!hasDedicatedServer)('Pinned Players PostgreSQL', () => {
         await seed.end()
       }
 
-      expect(await migratePostgres(databaseUrl, accountsMigrationInventory)).toBe(1)
+      const pendingCount = accountsMigrationInventory.length - migrationsBeforeConsolidation
+
+      expect(await migratePostgres(databaseUrl, accountsMigrationInventory)).toBe(pendingCount)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
       const inspect = postgres(databaseUrl, { max: 1 })
