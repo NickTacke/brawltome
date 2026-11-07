@@ -28,7 +28,6 @@ const allowedRoleDependencies: Record<WorkspaceRole, WorkspaceRole[]> = {
   contracts: ['foundation'],
   adapter: ['capability', 'contracts', 'foundation'],
   tooling: ['adapter', 'capability', 'contracts', 'foundation'],
-  legacy: [],
 }
 
 export function checkArchitecture(repository: ArchitectureRepository, policy: ArchitecturePolicy): ArchitectureResult {
