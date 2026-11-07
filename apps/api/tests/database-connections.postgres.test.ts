@@ -38,12 +38,14 @@ afterAll(async () => {
 
 type ConnectionCounts = Record<string, number>
 
-// every connection to the test database except the test's own client, by application name
+// every connection to the test database except the test's own client, by application name. a connection that is
+// still starting up shows no state and no application name yet, so it is skipped until its name is set
 async function connectionCounts(): Promise<ConnectionCounts> {
   const rows = await database.sql<{ application_name: string; count: number }[]>`
     SELECT application_name, count(*)::int AS count
     FROM pg_stat_activity
-    WHERE datname = current_database() AND backend_type = 'client backend' AND application_name <> 'brawltome-test'
+    WHERE datname = current_database() AND backend_type = 'client backend' AND state IS NOT NULL
+      AND application_name <> 'brawltome-test'
     GROUP BY application_name
   `
 
