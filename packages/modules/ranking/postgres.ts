@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
+import {
+  completeRankingRetentionLease,
+  lockActiveLeaderboardLease,
+  lockActiveRankingRetentionLease,
+  recordLeaderboardEffect,
+} from '@brawltome/refresh-operations'
 import type {
   LeaderboardGenerationCandidate,
   LeaderboardScope,
@@ -204,40 +210,6 @@ export function createPostgresRanking(
   options: { afterMetadataRead?: () => Promise<void> } = {},
 ) {
   const client = database.sql
-
-  async function lockAuthorizedOperation(
-    sql: typeof client,
-    authorization: RankingPublicationAuthorization,
-  ): Promise<boolean> {
-    const [result] = await sql<{ active: boolean }[]>`
-      SELECT refresh_operations.lock_active_leaderboard_lease(
-        ${authorization.operationId},
-        ${authorization.operationKey},
-        ${authorization.operationKind},
-        ${authorization.leaseOwner},
-        ${authorization.leaseToken}
-      ) AS active
-    `
-
-    return result?.active === true
-  }
-
-  async function recordOperationEffect(
-    sql: typeof client,
-    authorization: RankingPublicationAuthorization,
-  ): Promise<'applied' | 'already-applied' | 'effect-conflict' | 'lease-lost'> {
-    const [result] = await sql<{ result: 'applied' | 'already-applied' | 'effect-conflict' | 'lease-lost' }[]>`
-      SELECT refresh_operations.record_leaderboard_effect(
-        ${authorization.operationId},
-        ${authorization.operationKey},
-        ${authorization.operationKind},
-        ${authorization.leaseOwner},
-        ${authorization.leaseToken}
-      ) AS result
-    `
-
-    return result?.result ?? 'lease-lost'
-  }
 
   async function playerValhallanEvidenceById(brawlhallaId: number): Promise<PlayerValhallanEvidence | null> {
     if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1) throw new Error('brawlhallaId must be positive')
@@ -585,7 +557,7 @@ export function createPostgresRanking(
           if (!rows || (scope === 'all' && rows.length === 0)) throw new Error(`candidate scope ${scope} is empty`)
         }
 
-        const effect = await recordOperationEffect(sql, authorization)
+        const effect = await recordLeaderboardEffect(sql, authorization)
 
         if (effect === 'lease-lost' || effect === 'effect-conflict') return effect
 
@@ -696,15 +668,7 @@ export function createPostgresRanking(
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
 
-        const [lease] = await sql<{ active: boolean }[]>`
-          SELECT refresh_operations.lock_active_ranking_retention_lease(
-            ${authorization.operationId},
-            ${authorization.leaseOwner},
-            ${authorization.leaseToken}
-          ) AS active
-        `
-
-        if (lease?.active !== true) return { outcome: 'lease-lost' as const }
+        if (!(await lockActiveRankingRetentionLease(sql, authorization))) return { outcome: 'lease-lost' as const }
 
         const [expired] = await sql<{ deleted_generations: number; expirable_generations: number }[]>`
           SELECT deleted_generations, expirable_generations
@@ -714,16 +678,10 @@ export function createPostgresRanking(
           )
         `
 
-        const [completed] = await sql<{ completed: boolean }[]>`
-          SELECT refresh_operations.complete_ranking_retention_lease(
-            ${authorization.operationId},
-            ${authorization.leaseOwner},
-            ${authorization.leaseToken}
-          ) AS completed
-        `
+        const isCompleted = await completeRankingRetentionLease(sql, authorization)
 
         // The lease row has been locked since the check above, so completion cannot lose it; fail loudly if it did.
-        if (completed?.completed !== true) throw new Error('ranking retention lease changed while its row was locked')
+        if (!isCompleted) throw new Error('ranking retention lease changed while its row was locked')
 
         return {
           outcome: 'completed' as const,
@@ -744,7 +702,7 @@ export function createPostgresRanking(
           throw new Error('failure mode does not match operation kind')
         }
 
-        if (!(await lockAuthorizedOperation(sql, authorization))) return 'lease-lost' as const
+        if (!(await lockActiveLeaderboardLease(sql, authorization))) return 'lease-lost' as const
 
         const scheduleWindowAt = authorization.scheduleWindowAt
           ? new Date(authorization.scheduleWindowAt)

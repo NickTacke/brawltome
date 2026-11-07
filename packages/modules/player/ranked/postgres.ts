@@ -1,6 +1,7 @@
 import type { Database, Sql } from '@brawltome/foundation'
 import { legendSlug } from '@brawltome/game-data'
 import { getLegendById } from '@brawltome/game-data/legends'
+import { acquireActiveLease, commitInteractiveSection } from '@brawltome/refresh-operations'
 import { selectCanonicalPlayerName } from '../reference'
 import {
   type MainLegend,
@@ -88,31 +89,6 @@ const RANKED_PLAYER_LOCK_NAMESPACE = 196
 
 async function lockRankedPlayer(sql: Sql, brawlhallaId: number): Promise<void> {
   await sql`SELECT pg_advisory_xact_lock(${RANKED_PLAYER_LOCK_NAMESPACE}, ${brawlhallaId})`
-}
-
-async function acquireLease(sql: Sql, effect: CanonicalRankedEffect): Promise<boolean> {
-  const [lease] = await sql<{ active: boolean }[]>`
-    SELECT refresh_operations.acquire_active_lease(
-      ${effect.operationId}::uuid,
-      ${effect.leaseOwner},
-      ${effect.leaseToken}
-    ) AS active
-  `
-
-  return lease?.active === true
-}
-
-async function commitInteractiveSection(sql: Sql, effect: CanonicalRankedEffect): Promise<boolean> {
-  const [lease] = await sql<{ committed: boolean }[]>`
-    SELECT refresh_operations.commit_interactive_section_if_owned(
-      ${effect.operationId}::uuid,
-      ${effect.leaseOwner},
-      ${effect.leaseToken},
-      ${effect.section}
-    ) AS committed
-  `
-
-  return lease?.committed === true
 }
 
 function values(row: ValuesRow) {
@@ -667,7 +643,7 @@ export function createPostgresRankedPlayers(
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
 
-        if (!(await acquireLease(sql, effect))) return 'lease-lost' as const
+        if (!(await acquireActiveLease(sql, effect))) return 'lease-lost' as const
 
         await sql`
           INSERT INTO players.ranked_profiles (brawlhalla_id, checked_at)

@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@brawltome/foundation": "workspace:*"
+    "@brawltome/foundation": "workspace:*",
+    "@brawltome/refresh-operations": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
