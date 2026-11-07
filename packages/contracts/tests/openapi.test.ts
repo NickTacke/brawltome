@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { generateContractOpenApi, serializeContractOpenApi } from '../src'
+import { generateContractOpenApi, serializeContractOpenApi } from '../src/openapi'
 
 describe('OpenAPI contract artifact', () => {
   test('regenerates the committed OpenAPI document without a diff', async () => {

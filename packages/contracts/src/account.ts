@@ -44,8 +44,9 @@ export const accountSchema = z
   })
   .strict()
 
-export const anonymousAccountViewSchema = z.object({ status: z.literal('anonymous') }).strict()
-export const signedInAccountViewSchema = z
+const anonymousAccountViewSchema = z.object({ status: z.literal('anonymous') }).strict()
+
+const signedInAccountViewSchema = z
   .object({
     status: z.literal('signedIn'),
     account: accountSchema,
@@ -120,7 +121,7 @@ const utcDateTime = z.iso
 export const pinnedPlayerInputSchema = z.object({ brawlhallaId: brawlhallaIdSchema }).strict()
 
 export const MAX_PINNED_PLAYERS = 20
-export const MAX_PINNED_PLAYERS_OUTPUT = 100
+const MAX_PINNED_PLAYERS_OUTPUT = 100
 
 export const pinnedPlayerOrderInputSchema = z
   .object({ brawlhallaIds: z.array(brawlhallaIdSchema).max(MAX_PINNED_PLAYERS_OUTPUT) })
@@ -130,7 +131,7 @@ export const pinnedPlayerOrderInputSchema = z
     'Pinned Player order cannot contain duplicates',
   )
 
-export const pinnedPlayerSchema = z
+const pinnedPlayerSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     order: z.int().min(0).max(2_147_483_647),
@@ -158,7 +159,7 @@ const shortcutMainLegendSchema = z
   })
   .strict()
 
-export const playerShortcutSchema = z
+const playerShortcutSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     name: z.string().min(1).max(256).nullable(),
@@ -189,7 +190,6 @@ export type AccountPreferencesUpdateContract = z.infer<typeof accountPreferences
 export type AccountContract = z.infer<typeof accountSchema>
 export type AccountViewContract = z.infer<typeof accountViewSchema>
 export type PrimaryPlayerVerificationStateContract = z.infer<typeof primaryPlayerVerificationStateSchema>
-export type PlayerShortcutContract = z.infer<typeof playerShortcutSchema>
 export type PlayerShortcutsContract = z.infer<typeof playerShortcutsSchema>
 export type PinnedPlayerContract = z.infer<typeof pinnedPlayerSchema>
 export type PinnedPlayersContract = z.infer<typeof pinnedPlayersSchema>

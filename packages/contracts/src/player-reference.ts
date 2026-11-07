@@ -20,7 +20,3 @@ export const nullablePlayerReferenceSchema = playerReferenceSchema.nullable()
 export const playerReferenceByIdInputSchema = z.object({ id: brawlhallaIdSchema }).strict()
 
 export type PlayerReferenceContract = z.infer<typeof playerReferenceSchema>
-
-export function parsePlayerReferenceOutput(value: unknown): PlayerReferenceContract | null {
-  return nullablePlayerReferenceSchema.parse(value)
-}

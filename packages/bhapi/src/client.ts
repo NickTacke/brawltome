@@ -1,6 +1,5 @@
 import type { Telemetry } from '@brawltome/telemetry'
 import { type Caller, type RequestQueue, createBhApiRequestQueue } from './request-queue'
-import { validatePlayerGuild, validatePlayerStats, validatePlayerTeams } from './v1-validation'
 
 export class RateLimitError extends Error {
   constructor(
@@ -12,23 +11,11 @@ export class RateLimitError extends Error {
   }
 }
 import type {
-  BhApiClan,
-  BhApiLegend,
-  BhApiLegendFull,
   BhApiPlayerRanked,
   BhApiPlayerStats,
-  BhApiRanking1v1,
-  BhApiRanking2v2,
   BhApiSearchResult,
   BhV1Guild,
   BhV1GuildMembers,
-  BhV1Legend,
-  BhV1LegendsPage,
-  BhV1PlayerGuild,
-  BhV1PlayerStatsAll,
-  BhV1PlayerStatsRanked,
-  BhV1PlayerTeams,
-  Region,
   V1Mode,
 } from './types'
 
@@ -58,10 +45,6 @@ function logPath(path: string): string {
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000
 
-export interface BhApiMetricsSink {
-  incrementCounter(key: string): Promise<void>
-}
-
 export type BhApiSourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
 
 export interface BhApiClientOptions {
@@ -69,7 +52,6 @@ export interface BhApiClientOptions {
   onDemandHeadroom?: number
   baseUrl?: string
   fetchTimeoutMs?: number
-  metrics?: BhApiMetricsSink
   telemetry?: Telemetry
   queue?: RequestQueue
   beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
@@ -90,7 +72,6 @@ export class BhApiClient {
   private readonly baseUrl: string
   private readonly queue: RequestQueue
   private readonly fetchTimeoutMs: number
-  private readonly metrics?: BhApiMetricsSink
   private readonly telemetry?: Telemetry
   private readonly beforeRequest?: BhApiClientOptions['beforeRequest']
   private readonly onRateLimited?: BhApiClientOptions['onRateLimited']
@@ -99,31 +80,14 @@ export class BhApiClient {
     this.apiKey = opts.apiKey
     this.baseUrl = opts.baseUrl ?? BASE_URL
     this.fetchTimeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS
-    this.metrics = opts.metrics
     this.telemetry = opts.telemetry
     this.beforeRequest = opts.beforeRequest
     this.onRateLimited = opts.onRateLimited
     this.queue = opts.queue ?? createBhApiRequestQueue(opts.onDemandHeadroom)
   }
 
-  remainingTokens(caller: Caller = 'background'): number {
-    return caller === 'on-demand' ? this.queue.remainingOnDemand : this.queue.remainingBackground
-  }
-
-  get pausedUntilMs(): number {
-    return this.queue.pausedUntilMs
-  }
-
   async searchBySteamId(steamId: string, opts: CallOptions = {}): Promise<BhApiSearchResult | null> {
     return this.call(`/search?steamid=${encodeURIComponent(steamId)}`, opts)
-  }
-
-  async getRankings1v1(region: Region, page: number, opts: CallOptions = {}): Promise<BhApiRanking1v1[]> {
-    return (await this.call<BhApiRanking1v1[]>(`/rankings/1v1/${region}/${page}`, opts)) ?? []
-  }
-
-  async getRankings2v2(region: Region, page: number, opts: CallOptions = {}): Promise<BhApiRanking2v2[]> {
-    return (await this.call<BhApiRanking2v2[]>(`/rankings/2v2/${region}/${page}`, opts)) ?? []
   }
 
   async getPlayerStats(id: number, opts: CallOptions = {}): Promise<BhApiPlayerStats | null> {
@@ -132,18 +96,6 @@ export class BhApiClient {
 
   async getPlayerRanked(id: number, opts: CallOptions = {}): Promise<BhApiPlayerRanked | null> {
     return this.call(`/player/${id}/ranked`, opts)
-  }
-
-  async getClan(id: number, opts: CallOptions = {}): Promise<BhApiClan | null> {
-    return this.call(`/clan/${id}`, opts)
-  }
-
-  async getAllLegends(opts: CallOptions = {}): Promise<BhApiLegend[]> {
-    return (await this.call<BhApiLegend[]>('/legend/all', opts)) ?? []
-  }
-
-  async getLegend(id: number, opts: CallOptions = {}): Promise<BhApiLegendFull | null> {
-    return this.call(`/legend/${id}`, opts)
   }
 
   private async call<T>(endpoint: string, opts: CallOptions): Promise<T | null> {
@@ -179,6 +131,10 @@ export class BhApiClient {
       waitMs,
       remainingTokens: this.remainingTokens(caller),
     })
+  }
+
+  private remainingTokens(caller: Caller): number {
+    return caller === 'on-demand' ? this.queue.remainingOnDemand : this.queue.remainingBackground
   }
 
   private async sendRequest<T>(
@@ -253,7 +209,6 @@ export class BhApiClient {
       res = await fetch(url, { signal: AbortSignal.timeout(this.fetchTimeoutMs) })
     } catch (err) {
       if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-        await this.metrics?.incrementCounter('bhapi:timeouts')
         throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
       }
 
@@ -308,18 +263,15 @@ export class BhApiClient {
       payload = await res.json()
     } catch (err) {
       // AbortSignal.timeout() also aborts the response body stream, so a body-read
-      // timeout surfaces here as AbortError/TimeoutError. Route it to the timeout counter.
+      // timeout surfaces here as AbortError/TimeoutError. Report it as a timeout.
       if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-        await this.metrics?.incrementCounter('bhapi:timeouts')
         throw new Error(`Brawlhalla API timeout for ${endpoint}`, { cause: err })
       }
 
-      await this.metrics?.incrementCounter('bhapi:json_errors')
       throw new Error(`Invalid JSON from Brawlhalla API for ${endpoint}`, { cause: err })
     }
 
     if (rejectNullPayload && payload === null) {
-      await this.metrics?.incrementCounter('bhapi:payload_errors')
       throw new Error(`Invalid payload from Brawlhalla API for ${endpoint}: expected an object`)
     }
 
@@ -332,30 +284,8 @@ export class BhApiClient {
     return this.callV1<unknown>(`/player/stats?brawlhalla_id=${id}${modeQuery}`, opts)
   }
 
-  async getPlayerStatsV1(
-    id: number,
-    mode: V1Mode = 'all',
-    opts: CallOptions = {},
-  ): Promise<BhV1PlayerStatsAll | BhV1PlayerStatsRanked | null> {
-    const payload = await this.getPlayerStatsV1Payload(id, mode, opts)
-
-    return payload === null ? null : validatePlayerStats(payload, id, mode)
-  }
-
   getPlayerTeamsV1Payload(id: number, opts: CallOptions = {}): Promise<unknown | null> {
     return this.callV1<unknown>(`/player/teams?brawlhalla_id=${id}`, opts)
-  }
-
-  async getPlayerTeamsV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerTeams | null> {
-    const payload = await this.getPlayerTeamsV1Payload(id, opts)
-
-    return payload === null ? null : validatePlayerTeams(payload, id)
-  }
-
-  async getPlayerGuildV1(id: number, opts: CallOptions = {}): Promise<BhV1PlayerGuild | null> {
-    const payload = await this.callV1<unknown>(`/player/guild?brawlhalla_id=${id}`, opts)
-
-    return payload === null ? null : validatePlayerGuild(payload, id)
   }
 
   async getGuildStatsV1(guildId: number, opts: CallOptions = {}): Promise<BhV1Guild | null> {
@@ -364,27 +294,5 @@ export class BhApiClient {
 
   async getGuildMembersV1(guildId: number, opts: CallOptions = {}): Promise<BhV1GuildMembers | null> {
     return this.callV1<BhV1GuildMembers>(`/guild/members?guild_id=${guildId}`, opts)
-  }
-
-  async getAllLegendsV1(opts: CallOptions = {}): Promise<BhV1Legend[]> {
-    const first = await this.callV1<BhV1LegendsPage>('/static/legends?page=1&max_results=100', opts)
-
-    if (!first) return []
-
-    const all = [...first.legends]
-
-    for (let page = 2; page <= first.total_pages; page++) {
-      const next = await this.callV1<BhV1LegendsPage>(`/static/legends?page=${page}&max_results=100`, opts)
-
-      if (!next) {
-        throw new Error(
-          `Brawlhalla v1 legends pagination incomplete: page ${page} of ${first.total_pages} returned no data`,
-        )
-      }
-
-      all.push(...next.legends)
-    }
-
-    return all
   }
 }

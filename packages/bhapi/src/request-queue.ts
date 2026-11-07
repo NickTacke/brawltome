@@ -63,10 +63,6 @@ export class RequestQueue {
     return Math.max(0, this.effectiveLimit('background') - this.timestamps.length)
   }
 
-  get pausedUntilMs(): number {
-    return this.pausedUntil
-  }
-
   get isPaused(): boolean {
     return Date.now() < this.pausedUntil
   }

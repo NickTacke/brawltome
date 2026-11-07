@@ -1,11 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
   discordPlayerRefreshInputSchema,
-  parsePlayerRefreshResponseOutput,
-  parseRefreshOutcomeOutput,
   playerRefreshResponseSchema,
   refreshOutcomeSchema,
-} from '../src'
+} from '../src/refresh-outcome'
 
 const outcomes = [
   {
@@ -39,11 +37,11 @@ describe('canonical refresh outcome', () => {
       names.map((name) => Bun.file(`${import.meta.dir}/fixtures/refresh-${name}.json`).json()),
     )
 
-    expect(fixtures.map((value) => parseRefreshOutcomeOutput(value))).toEqual([...outcomes])
+    expect(fixtures.map((value) => refreshOutcomeSchema.parse(value))).toEqual([...outcomes])
   })
 
   test('validates all six semantic outcomes with exact retry guidance', () => {
-    expect(outcomes.map((value) => parseRefreshOutcomeOutput(value))).toEqual([...outcomes])
+    expect(outcomes.map((value) => refreshOutcomeSchema.parse(value))).toEqual([...outcomes])
 
     expect(outcomes.map(({ outcome }) => outcome)).toEqual([
       'accepted',
@@ -95,7 +93,7 @@ describe('canonical refresh outcome', () => {
     for (const refresh of outcomes) {
       const response = { player: { brawlhallaId: 42, name: 'Cached Ada', aliases: [] }, refresh }
 
-      expect(parsePlayerRefreshResponseOutput(response)).toEqual(response)
+      expect(playerRefreshResponseSchema.parse(response)).toEqual(response)
     }
 
     expect(playerRefreshResponseSchema.parse({ player: null, refresh: outcomes[2] })).toEqual({

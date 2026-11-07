@@ -4,7 +4,7 @@ import { z } from './zod'
 
 export const discoverySearchInputSchema = z.object({ query: z.string().max(100) }).strict()
 
-export const discoveryPlayerHitSchema = z
+const discoveryPlayerHitSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     name: playerNameSchema,
@@ -16,7 +16,7 @@ export const discoveryPlayerHitSchema = z
   })
   .strict()
 
-export const discoveryClanHitSchema = z
+const discoveryClanHitSchema = z
   .object({
     clanId: clanIdSchema,
     clanName: z.string().min(1),
@@ -34,4 +34,3 @@ export const discoverySearchOutputSchema = z
 
 export type DiscoveryPlayerHitContract = z.infer<typeof discoveryPlayerHitSchema>
 export type DiscoveryClanHitContract = z.infer<typeof discoveryClanHitSchema>
-export type DiscoverySearchOutputContract = z.infer<typeof discoverySearchOutputSchema>

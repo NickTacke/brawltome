@@ -23,84 +23,6 @@ afterAll(() => {
 const PLAYER_ID = 5461700
 const GUILD_ID = 2616365
 
-const V1_STATS_ALL = {
-  brawlhalla_id: PLAYER_ID,
-  name: 'Lopes',
-  games: 100,
-  wins: 60,
-  damage_bomb: 10,
-  damage_mine: 0,
-  damage_spikeball: 0,
-  damage_sidekick: 0,
-  hit_snowball: 0,
-  ko_bomb: 1,
-  ko_mine: 0,
-  ko_sidekick: 0,
-  ko_snowball: 0,
-  ko_spikeball: 0,
-  region_ranks: [],
-  legends: [
-    {
-      legend_id: 3,
-      games: 50,
-      wins: 30,
-      damage_dealt: 1000,
-      damage_taken: 900,
-      kos: 40,
-      falls: 35,
-      suicides: 1,
-      team_kos: 0,
-      match_time: 3000,
-      damage_unarmed: 10,
-      damage_thrown_item: 5,
-      damage_weapon_one: 400,
-      damage_weapon_two: 300,
-      damage_gadgets: 20,
-      ko_unarmed: 1,
-      ko_weapon_one: 15,
-      ko_weapon_two: 12,
-      ko_gadgets: 1,
-      time_held_weapon_one: 1200,
-      time_held_weapon_two: 1500,
-    },
-  ],
-}
-
-const V1_STATS_RANKED = {
-  brawlhalla_id: PLAYER_ID,
-  name: 'Lopes',
-  games: 100,
-  wins: 60,
-  rating: 2700,
-  peak_rating: 2750,
-  tier: 'Valhallan',
-  region: 'BRZ',
-  region_ranks: [],
-  legends: [{ legend_id: 3, games: 50, wins: 30, rating: 2600, peak_rating: 2650, tier: 'Diamond' }],
-}
-
-const V1_TEAMS = {
-  brawlhalla_id: PLAYER_ID,
-  teams: {
-    ranked_2v2: [
-      {
-        brawlhalla_id_one: PLAYER_ID,
-        brawlhalla_id_two: 2467374,
-        username_one: 'Lopes',
-        username_two: 'Upyri',
-        rating: 1600,
-        peak_rating: 1700,
-        tier: 'Gold 4',
-        wins: 40,
-        games: 80,
-        region: 'BRZ',
-        region_ranks: [],
-        global_rank: 195136,
-      },
-    ],
-  },
-}
-
 const V1_GUILD_STATS = {
   guild_id: GUILD_ID,
   name: 'Test Guild',
@@ -121,54 +43,6 @@ const V1_GUILD_MEMBERS = {
   guild_members: [
     { brawlhalla_id: PLAYER_ID, name: 'Lopes', rank: 'Leader', join_date: 1660419655, xp: 1000, guild_points: 50 },
   ],
-}
-
-const V1_LEGENDS_PAGE_1 = {
-  legends: [
-    {
-      legend_id: 3,
-      legend_name: 'bodvar',
-      bio_name: 'Bödvar',
-      bio_aka: '',
-      bio_quote: '',
-      bio_quote_about_attrib: '',
-      bio_quote_from: '',
-      bio_quote_from_attrib: '',
-      bio_text: '',
-      bot_name: '',
-      weapon_one: 'Hammer',
-      weapon_two: 'Sword',
-      strength: 6,
-      dexterity: 6,
-      defense: 4,
-      speed: 4,
-    },
-  ],
-  total_pages: 2,
-}
-
-const V1_LEGENDS_PAGE_2 = {
-  legends: [
-    {
-      legend_id: 4,
-      legend_name: 'cassidy',
-      bio_name: 'Cassidy',
-      bio_aka: '',
-      bio_quote: '',
-      bio_quote_about_attrib: '',
-      bio_quote_from: '',
-      bio_quote_from_attrib: '',
-      bio_text: '',
-      bot_name: '',
-      weapon_one: 'Pistol',
-      weapon_two: 'Hammer',
-      strength: 4,
-      dexterity: 6,
-      defense: 4,
-      speed: 6,
-    },
-  ],
-  total_pages: 2,
 }
 
 describe('searchBySteamId', () => {
@@ -204,7 +78,7 @@ describe('fetch hardening', () => {
         fetchTimeoutMs: 100,
       })
 
-      await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Brawlhalla API timeout for/)
+      await expect(client.getPlayerRanked(PLAYER_ID)).rejects.toThrow(/Brawlhalla API timeout for/)
     } finally {
       slow.stop()
     }
@@ -224,13 +98,13 @@ describe('fetch hardening', () => {
         baseUrl: `http://localhost:${html.port}`,
       })
 
-      await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Invalid JSON/)
+      await expect(client.getPlayerRanked(PLAYER_ID)).rejects.toThrow(/Invalid JSON/)
     } finally {
       html.stop()
     }
   })
 
-  it('routes body-read timeout to bhapi:timeouts not bhapi:json_errors', async () => {
+  it('reports a body-read timeout as a timeout, not as invalid JSON', async () => {
     // Server sends headers fast (200 OK) but stalls in the body - exactly the body-read
     // timeout case where AbortSignal.timeout fires during res.json().
     const slowBody = Bun.serve({
@@ -252,29 +126,17 @@ describe('fetch hardening', () => {
       },
     })
 
-    const counters: string[] = []
-
-    const metrics = {
-      incrementCounter: async (key: string) => {
-        counters.push(key)
-      },
-    }
-
     try {
       const client = new BhApiClient({
         apiKey: 'test',
         baseUrl: `http://localhost:${slowBody.port}`,
         fetchTimeoutMs: 100,
-        metrics,
       })
 
-      await expect(client.getRankings1v1('us-e', 1)).rejects.toThrow(/Brawlhalla API timeout for/)
+      await expect(client.getPlayerRanked(PLAYER_ID)).rejects.toThrow(/Brawlhalla API timeout for/)
     } finally {
       slowBody.stop()
     }
-
-    expect(counters).toContain('bhapi:timeouts')
-    expect(counters).not.toContain('bhapi:json_errors')
   })
 
   it('reports finite source backoff when Retry-After is an HTTP-date (non-numeric)', async () => {
@@ -302,7 +164,7 @@ describe('fetch hardening', () => {
       let caught: unknown
 
       try {
-        await client.getRankings1v1('us-e', 1)
+        await client.getPlayerRanked(PLAYER_ID)
       } catch (err) {
         caught = err
       }
@@ -313,7 +175,7 @@ describe('fetch hardening', () => {
 
       expect(reportedBackoff).toEqual({
         domain: 'brawlhalla-v0',
-        path: '/rankings/1v1/us-e/1',
+        path: `/player/${PLAYER_ID}/ranked`,
         retryAfterMs: (caught as RateLimitError).retryAfterMs,
       })
     } finally {
@@ -343,7 +205,7 @@ describe('fetch hardening', () => {
       let caught: unknown
 
       try {
-        await client.getRankings1v1('us-e', 1)
+        await client.getPlayerRanked(PLAYER_ID)
       } catch (err) {
         caught = err
       }
@@ -367,20 +229,11 @@ describe('v1 client', () => {
         const u = new URL(req.url)
         const p = u.pathname
         const mode = u.searchParams.get('mode')
-        const page = u.searchParams.get('page')
 
-        if (p === '/v1/player/stats') requestedStatsMode = mode
+        if (p === '/v1/player/stats') {
+          requestedStatsMode = mode
 
-        if (p === '/v1/player/stats' && (mode === null || mode === 'all')) {
-          return new Response(JSON.stringify(V1_STATS_ALL), { headers: { 'content-type': 'application/json' } })
-        }
-
-        if (p === '/v1/player/stats' && mode === 'ranked_1v1') {
-          return new Response(JSON.stringify(V1_STATS_RANKED), { headers: { 'content-type': 'application/json' } })
-        }
-
-        if (p === '/v1/player/teams') {
-          return new Response(JSON.stringify(V1_TEAMS), { headers: { 'content-type': 'application/json' } })
+          return Response.json({ brawlhalla_id: PLAYER_ID })
         }
 
         if (p === '/v1/guild/stats') {
@@ -391,97 +244,24 @@ describe('v1 client', () => {
           return new Response(JSON.stringify(V1_GUILD_MEMBERS), { headers: { 'content-type': 'application/json' } })
         }
 
-        if (p === '/v1/static/legends') {
-          const body = page === '2' ? V1_LEGENDS_PAGE_2 : V1_LEGENDS_PAGE_1
-
-          return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
-        }
-
         return new Response(null, { status: 404 })
       },
     })
   }
 
-  it('getPlayerStatsV1 mode=all returns damage fields as numbers + legends', async () => {
+  it('sends the stats mode only for ranked stats', async () => {
     const v1 = makeV1Server()
 
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      const result = await client.getPlayerStatsV1(PLAYER_ID, 'all')
 
+      await client.getPlayerStatsV1Payload(PLAYER_ID, 'all')
       expect(requestedStatsMode).toBeNull()
-      expect(result).not.toBeNull()
-      const stats = result as typeof V1_STATS_ALL
 
-      expect(typeof stats.damage_bomb).toBe('number')
-      expect(stats.legends).toHaveLength(1)
-      expect(typeof stats.legends[0].damage_dealt).toBe('number')
+      await client.getPlayerStatsV1Payload(PLAYER_ID, 'ranked_1v1')
+      expect(requestedStatsMode).toBe('ranked_1v1')
     } finally {
       v1.stop()
-    }
-  })
-
-  it('getPlayerStatsV1 mode=ranked_1v1 returns rating fields', async () => {
-    const v1 = makeV1Server()
-
-    try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      const result = await client.getPlayerStatsV1(PLAYER_ID, 'ranked_1v1')
-
-      expect(result).not.toBeNull()
-      const ranked = result as typeof V1_STATS_RANKED
-
-      expect(ranked.rating).toBe(2700)
-      expect(ranked.tier).toBe('Valhallan')
-    } finally {
-      v1.stop()
-    }
-  })
-
-  it('rejects teams for a different player', async () => {
-    const mismatchedTeams = Bun.serve({
-      port: 0,
-      fetch() {
-        return Response.json({ ...V1_TEAMS, brawlhalla_id: PLAYER_ID + 1 })
-      },
-    })
-
-    try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedTeams.port}` })
-
-      expect(client.getPlayerTeamsV1(PLAYER_ID)).rejects.toThrow('player ID')
-    } finally {
-      mismatchedTeams.stop()
-    }
-  })
-
-  it('getPlayerTeamsV1 returns teams.ranked_2v2[0].username_one', async () => {
-    const v1 = makeV1Server()
-
-    try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}` })
-      const result = await client.getPlayerTeamsV1(PLAYER_ID)
-
-      expect(result?.teams.ranked_2v2[0].username_one).toBe('Lopes')
-    } finally {
-      v1.stop()
-    }
-  })
-
-  it('rejects guild membership for a different player', async () => {
-    const mismatchedGuild = Bun.serve({
-      port: 0,
-      fetch() {
-        return Response.json({ brawlhalla_id: PLAYER_ID + 1, guild: {} })
-      },
-    })
-
-    try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedGuild.port}` })
-
-      expect(client.getPlayerGuildV1(PLAYER_ID)).rejects.toThrow('player ID')
-    } finally {
-      mismatchedGuild.stop()
     }
   })
 
@@ -534,35 +314,7 @@ describe('v1 client', () => {
     expect(attempts).toBe(1)
   })
 
-  it('admits every paginated V1 HTTP request at the request boundary', async () => {
-    const v1 = makeV1Server()
-    const admitted: Array<{ domain: string; path: string }> = []
-
-    try {
-      const client = new BhApiClient({
-        apiKey: 'test',
-        baseUrl: `http://localhost:${v1.port}`,
-        beforeRequest: async (request) => {
-          admitted.push(request)
-        },
-      })
-
-      const legends = await client.getAllLegendsV1()
-
-      expect(legends).toHaveLength(2)
-      expect(legends[0].legend_name).toBe('bodvar')
-      expect(legends[1].legend_name).toBe('cassidy')
-
-      expect(admitted).toEqual([
-        { domain: 'brawlhalla-v1', path: '/static/legends' },
-        { domain: 'brawlhalla-v1', path: '/static/legends' },
-      ])
-    } finally {
-      v1.stop()
-    }
-  })
-
-  it('returns sparse V1 player payloads without applying the legacy full-response validator', async () => {
+  it('returns sparse V1 player payloads unchanged', async () => {
     const sparseStats = { brawlhalla_id: PLAYER_ID, rating: 2700, games: 101 }
 
     const sparseTeams = {
@@ -584,45 +336,8 @@ describe('v1 client', () => {
 
       expect(await client.getPlayerStatsV1Payload(PLAYER_ID, 'ranked_1v1')).toEqual(sparseStats)
       expect(await client.getPlayerTeamsV1Payload(PLAYER_ID)).toEqual(sparseTeams)
-      await expect(client.getPlayerStatsV1(PLAYER_ID, 'ranked_1v1')).rejects.toThrow('name')
     } finally {
       sparse.stop()
-    }
-  })
-
-  it('rejects stats without a legends array', async () => {
-    const malformedStats = Bun.serve({
-      port: 0,
-      fetch() {
-        const { legends: _, ...withoutLegends } = V1_STATS_ALL
-
-        return Response.json(withoutLegends)
-      },
-    })
-
-    try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${malformedStats.port}` })
-
-      expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('legends')
-    } finally {
-      malformedStats.stop()
-    }
-  })
-
-  it('rejects stats for a different player', async () => {
-    const mismatchedPlayer = Bun.serve({
-      port: 0,
-      fetch() {
-        return Response.json({ ...V1_STATS_ALL, brawlhalla_id: PLAYER_ID + 1 })
-      },
-    })
-
-    try {
-      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${mismatchedPlayer.port}` })
-
-      expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('player ID')
-    } finally {
-      mismatchedPlayer.stop()
     }
   })
 
@@ -637,7 +352,7 @@ describe('v1 client', () => {
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${nullPayload.port}` })
 
-      expect(client.getPlayerStatsV1(PLAYER_ID)).rejects.toThrow('Invalid payload')
+      await expect(client.getPlayerStatsV1Payload(PLAYER_ID)).rejects.toThrow('Invalid payload')
     } finally {
       nullPayload.stop()
     }
@@ -653,7 +368,7 @@ describe('v1 client', () => {
 
     try {
       const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${notFound.port}` })
-      const result = await client.getPlayerStatsV1(PLAYER_ID)
+      const result = await client.getPlayerStatsV1Payload(PLAYER_ID)
 
       expect(result).toBeNull()
     } finally {

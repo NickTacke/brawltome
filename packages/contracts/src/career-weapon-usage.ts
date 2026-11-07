@@ -9,12 +9,13 @@ import {
 } from './statistics-history'
 import { z } from './zod'
 
-export const careerWeaponUsageMethodologyVersion = 'career-weapon-usage-v1' as const
+const careerWeaponUsageMethodologyVersion = 'career-weapon-usage-v1' as const
+
 export const careerWeaponUsageRegionScopes = ['all', ...leaderboardRegions] as const
 export const careerWeaponUsageBracketScopes = legendMetaBrackets
 
-export const careerWeaponUsageRegionSchema = z.enum(careerWeaponUsageRegionScopes)
-export const careerWeaponUsageBracketSchema = z.enum(careerWeaponUsageBracketScopes)
+const careerWeaponUsageRegionSchema = z.enum(careerWeaponUsageRegionScopes)
+const careerWeaponUsageBracketSchema = z.enum(careerWeaponUsageBracketScopes)
 
 export const careerWeaponUsageInputSchema = z
   .object({
@@ -32,7 +33,7 @@ const nonnegativeInt32 = z.int().min(0).max(2_147_483_647).meta({ format: 'int32
 const nonnegativeIntegerString = z.string().regex(/^(0|[1-9][0-9]*)$/, 'must be a non-negative integer string')
 const positiveIntegerString = z.string().regex(/^[1-9][0-9]*$/, 'must be a positive integer string')
 
-export const careerWeaponExactRatioSchema = z
+const careerWeaponExactRatioSchema = z
   .object({
     numerator: nonnegativeIntegerString,
     denominator: positiveIntegerString,
@@ -46,7 +47,7 @@ const comparisonSchema = z.discriminatedUnion('eligible', [
   z.object({ eligible: z.literal(false), reasons: z.array(comparisonReasonSchema).min(1).max(2) }).strict(),
 ])
 
-export const careerWeaponUsageRowSchema = z
+const careerWeaponUsageRowSchema = z
   .object({
     weapon: z.string().min(1).max(100),
     observedPlayers: nonnegativeInt32,
