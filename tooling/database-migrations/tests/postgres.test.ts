@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsMigrationInventory } from '@brawltome/accounts'
-import { clanMigrationInventory } from '@brawltome/clan'
-import { discoveryMigrationInventory } from '@brawltome/discovery'
+import { accountsModule } from '@brawltome/accounts'
+import { clanModule } from '@brawltome/clan'
+import { discoveryModule } from '@brawltome/discovery'
 import { type Migration, checksumSql, deployedOrder, migratePostgres } from '@brawltome/foundation'
-import { playerMigrationInventory } from '@brawltome/player'
-import { rankingMigrationInventory } from '@brawltome/ranking'
-import { refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
-import { replayAnalysisMigrationInventory } from '@brawltome/replay-analysis'
-import { requestAdmissionMigrationInventory } from '@brawltome/request-admission'
-import { statisticsMigrationInventory } from '@brawltome/statistics'
+import { playerModule } from '@brawltome/player'
+import { rankingModule } from '@brawltome/ranking'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { replayAnalysisModule } from '@brawltome/replay-analysis'
+import { requestAdmissionModule } from '@brawltome/request-admission'
+import { statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { orderedMigrations } from '../src/inventories'
 import { deployedHistory } from './fixtures/deployed-history'
@@ -75,15 +75,15 @@ const deployedPrePlayersImportGlobalHistory = [
 describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   test('every module keeps its deployed migrations first and in their deployed order', () => {
     const inventories = [
-      accountsMigrationInventory,
-      playerMigrationInventory,
-      clanMigrationInventory,
-      rankingMigrationInventory,
-      discoveryMigrationInventory,
-      refreshOperationsMigrationInventory,
-      statisticsMigrationInventory,
-      requestAdmissionMigrationInventory,
-      replayAnalysisMigrationInventory,
+      accountsModule.migrations,
+      playerModule.migrations,
+      clanModule.migrations,
+      rankingModule.migrations,
+      discoveryModule.migrations,
+      refreshOperationsModule.migrations,
+      statisticsModule.migrations,
+      requestAdmissionModule.migrations,
+      replayAnalysisModule.migrations,
     ]
 
     for (const inventory of inventories) {
@@ -96,86 +96,86 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
   test('preserves the complete pre-Clans global history as an applied prefix', async () => {
     const oldGlobalInventory = [
-      ...playerMigrationInventory.slice(0, 3),
-      ...refreshOperationsMigrationInventory.slice(0, 6),
-      ...requestAdmissionMigrationInventory.slice(0, 2),
-      ...accountsMigrationInventory.slice(0, 2),
-      rankingMigrationInventory[0],
+      ...playerModule.migrations.slice(0, 3),
+      ...refreshOperationsModule.migrations.slice(0, 6),
+      ...requestAdmissionModule.migrations.slice(0, 2),
+      ...accountsModule.migrations.slice(0, 2),
+      rankingModule.migrations[0],
     ]
 
     expect(orderedMigrations.slice(0, oldGlobalInventory.length)).toEqual(oldGlobalInventory)
 
     expect(orderedMigrations.slice(oldGlobalInventory.length, deployedOrder.length)).toEqual([
-      clanMigrationInventory[0],
-      refreshOperationsMigrationInventory[6],
-      refreshOperationsMigrationInventory[7],
-      accountsMigrationInventory[2],
-      refreshOperationsMigrationInventory[8],
-      rankingMigrationInventory[1],
-      playerMigrationInventory[3],
-      playerMigrationInventory[4],
-      refreshOperationsMigrationInventory[9],
-      discoveryMigrationInventory[0],
-      accountsMigrationInventory[3],
-      playerMigrationInventory[5],
-      refreshOperationsMigrationInventory[10],
-      refreshOperationsMigrationInventory[11],
-      clanMigrationInventory[1],
-      discoveryMigrationInventory[1],
-      refreshOperationsMigrationInventory[12],
-      statisticsMigrationInventory[0],
-      refreshOperationsMigrationInventory[13],
-      accountsMigrationInventory[4],
-      playerMigrationInventory[6],
-      statisticsMigrationInventory[1],
-      refreshOperationsMigrationInventory[14],
-      clanMigrationInventory[2],
-      rankingMigrationInventory[2],
-      accountsMigrationInventory[5],
-      statisticsMigrationInventory[2],
-      refreshOperationsMigrationInventory[15],
-      statisticsMigrationInventory[3],
-      requestAdmissionMigrationInventory[2],
-      discoveryMigrationInventory[2],
-      accountsMigrationInventory[6],
-      rankingMigrationInventory[3],
-      rankingMigrationInventory[4],
-      playerMigrationInventory[7],
-      rankingMigrationInventory[5],
-      playerMigrationInventory[8],
-      playerMigrationInventory[9],
-      clanMigrationInventory[3],
-      playerMigrationInventory[10],
-      playerMigrationInventory[11],
-      playerMigrationInventory[12],
-      replayAnalysisMigrationInventory[0],
-      accountsMigrationInventory[7],
-      accountsMigrationInventory[8],
-      rankingMigrationInventory[6],
-      rankingMigrationInventory[7],
-      playerMigrationInventory[13],
-      playerMigrationInventory[14],
-      refreshOperationsMigrationInventory[16],
-      rankingMigrationInventory[8],
-      refreshOperationsMigrationInventory[17],
-      refreshOperationsMigrationInventory[18],
-      playerMigrationInventory[15],
-      rankingMigrationInventory[9],
-      rankingMigrationInventory[10],
-      rankingMigrationInventory[11],
-      playerMigrationInventory[16],
-      refreshOperationsMigrationInventory[19],
-      refreshOperationsMigrationInventory[20],
-      refreshOperationsMigrationInventory[21],
-      refreshOperationsMigrationInventory[22],
-      playerMigrationInventory[17],
-      refreshOperationsMigrationInventory[23],
-      refreshOperationsMigrationInventory[24],
-      playerMigrationInventory[18],
-      playerMigrationInventory[19],
-      refreshOperationsMigrationInventory[25],
-      discoveryMigrationInventory[3],
-      discoveryMigrationInventory[4],
+      clanModule.migrations[0],
+      refreshOperationsModule.migrations[6],
+      refreshOperationsModule.migrations[7],
+      accountsModule.migrations[2],
+      refreshOperationsModule.migrations[8],
+      rankingModule.migrations[1],
+      playerModule.migrations[3],
+      playerModule.migrations[4],
+      refreshOperationsModule.migrations[9],
+      discoveryModule.migrations[0],
+      accountsModule.migrations[3],
+      playerModule.migrations[5],
+      refreshOperationsModule.migrations[10],
+      refreshOperationsModule.migrations[11],
+      clanModule.migrations[1],
+      discoveryModule.migrations[1],
+      refreshOperationsModule.migrations[12],
+      statisticsModule.migrations[0],
+      refreshOperationsModule.migrations[13],
+      accountsModule.migrations[4],
+      playerModule.migrations[6],
+      statisticsModule.migrations[1],
+      refreshOperationsModule.migrations[14],
+      clanModule.migrations[2],
+      rankingModule.migrations[2],
+      accountsModule.migrations[5],
+      statisticsModule.migrations[2],
+      refreshOperationsModule.migrations[15],
+      statisticsModule.migrations[3],
+      requestAdmissionModule.migrations[2],
+      discoveryModule.migrations[2],
+      accountsModule.migrations[6],
+      rankingModule.migrations[3],
+      rankingModule.migrations[4],
+      playerModule.migrations[7],
+      rankingModule.migrations[5],
+      playerModule.migrations[8],
+      playerModule.migrations[9],
+      clanModule.migrations[3],
+      playerModule.migrations[10],
+      playerModule.migrations[11],
+      playerModule.migrations[12],
+      replayAnalysisModule.migrations[0],
+      accountsModule.migrations[7],
+      accountsModule.migrations[8],
+      rankingModule.migrations[6],
+      rankingModule.migrations[7],
+      playerModule.migrations[13],
+      playerModule.migrations[14],
+      refreshOperationsModule.migrations[16],
+      rankingModule.migrations[8],
+      refreshOperationsModule.migrations[17],
+      refreshOperationsModule.migrations[18],
+      playerModule.migrations[15],
+      rankingModule.migrations[9],
+      rankingModule.migrations[10],
+      rankingModule.migrations[11],
+      playerModule.migrations[16],
+      refreshOperationsModule.migrations[19],
+      refreshOperationsModule.migrations[20],
+      refreshOperationsModule.migrations[21],
+      refreshOperationsModule.migrations[22],
+      playerModule.migrations[17],
+      refreshOperationsModule.migrations[23],
+      refreshOperationsModule.migrations[24],
+      playerModule.migrations[18],
+      playerModule.migrations[19],
+      refreshOperationsModule.migrations[25],
+      discoveryModule.migrations[3],
+      discoveryModule.migrations[4],
     ])
 
     const databaseName = `brawltome_clan_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -216,56 +216,56 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(deployedOrder).toHaveLength(84)
 
     expect(orderedMigrations.slice(deployedPrePlayersImportGlobalHistory.length, deployedOrder.length)).toEqual([
-      playerMigrationInventory[6],
-      statisticsMigrationInventory[1],
-      refreshOperationsMigrationInventory[14],
-      clanMigrationInventory[2],
-      rankingMigrationInventory[2],
-      accountsMigrationInventory[5],
-      statisticsMigrationInventory[2],
-      refreshOperationsMigrationInventory[15],
-      statisticsMigrationInventory[3],
-      requestAdmissionMigrationInventory[2],
-      discoveryMigrationInventory[2],
-      accountsMigrationInventory[6],
-      rankingMigrationInventory[3],
-      rankingMigrationInventory[4],
-      playerMigrationInventory[7],
-      rankingMigrationInventory[5],
-      playerMigrationInventory[8],
-      playerMigrationInventory[9],
-      clanMigrationInventory[3],
-      playerMigrationInventory[10],
-      playerMigrationInventory[11],
-      playerMigrationInventory[12],
-      replayAnalysisMigrationInventory[0],
-      accountsMigrationInventory[7],
-      accountsMigrationInventory[8],
-      rankingMigrationInventory[6],
-      rankingMigrationInventory[7],
-      playerMigrationInventory[13],
-      playerMigrationInventory[14],
-      refreshOperationsMigrationInventory[16],
-      rankingMigrationInventory[8],
-      refreshOperationsMigrationInventory[17],
-      refreshOperationsMigrationInventory[18],
-      playerMigrationInventory[15],
-      rankingMigrationInventory[9],
-      rankingMigrationInventory[10],
-      rankingMigrationInventory[11],
-      playerMigrationInventory[16],
-      refreshOperationsMigrationInventory[19],
-      refreshOperationsMigrationInventory[20],
-      refreshOperationsMigrationInventory[21],
-      refreshOperationsMigrationInventory[22],
-      playerMigrationInventory[17],
-      refreshOperationsMigrationInventory[23],
-      refreshOperationsMigrationInventory[24],
-      playerMigrationInventory[18],
-      playerMigrationInventory[19],
-      refreshOperationsMigrationInventory[25],
-      discoveryMigrationInventory[3],
-      discoveryMigrationInventory[4],
+      playerModule.migrations[6],
+      statisticsModule.migrations[1],
+      refreshOperationsModule.migrations[14],
+      clanModule.migrations[2],
+      rankingModule.migrations[2],
+      accountsModule.migrations[5],
+      statisticsModule.migrations[2],
+      refreshOperationsModule.migrations[15],
+      statisticsModule.migrations[3],
+      requestAdmissionModule.migrations[2],
+      discoveryModule.migrations[2],
+      accountsModule.migrations[6],
+      rankingModule.migrations[3],
+      rankingModule.migrations[4],
+      playerModule.migrations[7],
+      rankingModule.migrations[5],
+      playerModule.migrations[8],
+      playerModule.migrations[9],
+      clanModule.migrations[3],
+      playerModule.migrations[10],
+      playerModule.migrations[11],
+      playerModule.migrations[12],
+      replayAnalysisModule.migrations[0],
+      accountsModule.migrations[7],
+      accountsModule.migrations[8],
+      rankingModule.migrations[6],
+      rankingModule.migrations[7],
+      playerModule.migrations[13],
+      playerModule.migrations[14],
+      refreshOperationsModule.migrations[16],
+      rankingModule.migrations[8],
+      refreshOperationsModule.migrations[17],
+      refreshOperationsModule.migrations[18],
+      playerModule.migrations[15],
+      rankingModule.migrations[9],
+      rankingModule.migrations[10],
+      rankingModule.migrations[11],
+      playerModule.migrations[16],
+      refreshOperationsModule.migrations[19],
+      refreshOperationsModule.migrations[20],
+      refreshOperationsModule.migrations[21],
+      refreshOperationsModule.migrations[22],
+      playerModule.migrations[17],
+      refreshOperationsModule.migrations[23],
+      refreshOperationsModule.migrations[24],
+      playerModule.migrations[18],
+      playerModule.migrations[19],
+      refreshOperationsModule.migrations[25],
+      discoveryModule.migrations[3],
+      discoveryModule.migrations[4],
     ])
 
     const databaseName = `brawltome_deployed_prefix_${process.pid}_${randomUUID().replaceAll('-', '')}`
@@ -302,10 +302,10 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 2))).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), playerModule.migrations.slice(0, 2))).toBe(2)
 
-      expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory)).toBe(
-        playerMigrationInventory.length - 2,
+      expect(await migratePostgres(databaseUrl.toString(), playerModule.migrations)).toBe(
+        playerModule.migrations.length - 2,
       )
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
@@ -347,7 +347,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      const prefix = playerMigrationInventory.slice(0, 10)
+      const prefix = playerModule.migrations.slice(0, 10)
 
       expect(await migratePostgres(databaseUrl.toString(), prefix)).toBe(prefix.length)
       const client = postgres(databaseUrl.toString(), { max: 1 })
@@ -388,7 +388,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           SELECT source_version FROM players.discovery_state WHERE singleton
         `
 
-        expect(await migratePostgres(databaseUrl.toString(), playerMigrationInventory.slice(0, 11))).toBe(1)
+        expect(await migratePostgres(databaseUrl.toString(), playerModule.migrations.slice(0, 11))).toBe(1)
 
         const careers = await client<{ brawlhalla_id: number; player_name: string; last_success_at: string }[]>`
           SELECT brawlhalla_id, player_name, last_success_at::text
@@ -420,7 +420,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           FROM players.discovery_state WHERE singleton
         `
 
-        await client.unsafe(playerMigrationInventory[10].sql)
+        await client.unsafe(playerModule.migrations[10].sql)
 
         const [after] = await client<{ event_count: number; source_version: string }[]>`
           SELECT (SELECT count(*)::integer FROM players.discovery_outbox) AS event_count, source_version
@@ -449,10 +449,10 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 2))).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 2))).toBe(2)
 
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(
-        refreshOperationsMigrationInventory.length - 2,
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations)).toBe(
+        refreshOperationsModule.migrations.length - 2,
       )
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
@@ -463,7 +463,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         `
 
         expect(history.map(({ identity }) => identity)).toEqual(
-          refreshOperationsMigrationInventory.map(({ identity }) => identity),
+          refreshOperationsModule.migrations.map(({ identity }) => identity),
         )
       } finally {
         await client.end()
@@ -486,7 +486,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 11))).toBe(11)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 11))).toBe(11)
       const client = postgres(databaseUrl.toString(), { max: 1 })
 
       try {
@@ -506,8 +506,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           `
         }
 
-        expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory)).toBe(
-          refreshOperationsMigrationInventory.length - 11,
+        expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations)).toBe(
+          refreshOperationsModule.migrations.length - 11,
         )
 
         const operations = await client<{ resource_key: string; status: string; error_code: string | null }[]>`
@@ -544,8 +544,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 5))).toBe(5)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsMigrationInventory.slice(0, 6))).toBe(1)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 5))).toBe(5)
+      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 6))).toBe(1)
       const client = postgres(databaseUrl.toString(), { max: 1 })
 
       try {
@@ -584,7 +584,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), rankingMigrationInventory.slice(0, 6))).toBe(6)
+      expect(await migratePostgres(databaseUrl.toString(), rankingModule.migrations.slice(0, 6))).toBe(6)
       const client = postgres(databaseUrl.toString(), { max: 1 })
 
       try {
@@ -605,7 +605,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           'snapshot_rows_snapshot_identity_key',
         ])
 
-        expect(await migratePostgres(databaseUrl.toString(), rankingMigrationInventory.slice(0, 8))).toBe(2)
+        expect(await migratePostgres(databaseUrl.toString(), rankingModule.migrations.slice(0, 8))).toBe(2)
 
         expect(await snapshotRowIndexes()).toEqual([
           'snapshot_rows_pkey',

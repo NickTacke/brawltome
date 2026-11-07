@@ -107,7 +107,7 @@ export {
   type SteamPlayerEvidenceResolver,
 } from './verification'
 
-export const playerMigrationInventory = [
+const migrations = [
   initializePlayersSchema,
   addInteractiveRefreshEffects,
   addCanonicalRankedState,
@@ -134,5 +134,5 @@ export const playerMigrationInventory = [
 export const playerModule = {
   name: 'player',
   dependsOn: ['refresh-operations'],
-  migrations: playerMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

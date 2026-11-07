@@ -34,7 +34,7 @@ export {
   type RefreshOperationsDatabases,
 } from './postgres'
 
-export const refreshOperationsMigrationInventory = [
+const migrations = [
   initializeRefreshOperations,
   addSchedulingAndAdmission,
   addInteractiveRefreshReservations,
@@ -67,5 +67,5 @@ export const refreshOperationsModule = {
   name: 'refresh-operations',
   // 0016 reads statistics tables, but only statistics calls it; declaring it would be a cycle
   dependsOn: [],
-  migrations: refreshOperationsMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

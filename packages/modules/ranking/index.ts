@@ -56,7 +56,7 @@ export {
   type RegionalLeaderboardScope,
 } from './v1-leaderboard-source'
 
-export const rankingMigrationInventory = [
+const migrations = [
   initializeImmutable1v1Snapshots,
   addSupportedLeaderboardModes,
   addV2LegacyRankingImport,
@@ -75,5 +75,5 @@ export const rankingMigrationInventory = [
 export const rankingModule = {
   name: 'ranking',
   dependsOn: ['refresh-operations'],
-  migrations: rankingMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

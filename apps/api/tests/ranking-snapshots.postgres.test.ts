@@ -11,7 +11,6 @@ import {
   collectAndPublishLeaderboardGeneration,
   createPostgresRanking,
   leaderboardModes,
-  rankingMigrationInventory,
   rankingModule,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
@@ -19,7 +18,6 @@ import {
   type LeaderboardOperationKind,
   type OperationLease,
   createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -304,8 +302,8 @@ describe('Ranking mode migrations', () => {
     const client = postgres(database.url, { max: 1 })
 
     try {
-      for (const migration of refreshOperationsMigrationInventory.slice(0, 8)) await client.unsafe(migration.sql)
-      await client.unsafe(rankingMigrationInventory[0].sql)
+      for (const migration of refreshOperationsModule.migrations.slice(0, 8)) await client.unsafe(migration.sql)
+      await client.unsafe(rankingModule.migrations[0].sql)
       const operationId = randomUUID()
       const generationId = randomUUID()
       const snapshotId = randomUUID()
@@ -344,8 +342,8 @@ describe('Ranking mode migrations', () => {
         VALUES (${randomUUID()}, ${randomUUID()}, now(), now(), 'source_unavailable', 'legacy failure')
       `
 
-      await client.unsafe(refreshOperationsMigrationInventory[8].sql)
-      await client.unsafe(rankingMigrationInventory[1].sql)
+      await client.unsafe(refreshOperationsModule.migrations[8].sql)
+      await client.unsafe(rankingModule.migrations[1].sql)
 
       const [row] = await client<
         { mode: string; identity_kind: string; player_one_id: number; player_two_id: number | null }[]

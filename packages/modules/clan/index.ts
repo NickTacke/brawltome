@@ -26,15 +26,10 @@ export {
 } from './postgres'
 export { createPostgresClanDiscoverySource, type PostgresClanDiscoverySource } from './discovery-postgres'
 
-export const clanMigrationInventory = [
-  initializeClans,
-  addClanDiscoveryFacts,
-  addV2ClanImportEvidence,
-  allowSparseClanMembers,
-] as const
+const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
 
 export const clanModule = {
   name: 'clan',
   dependsOn: [],
-  migrations: clanMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

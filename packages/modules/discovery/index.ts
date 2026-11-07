@@ -8,7 +8,7 @@ import { validateWordTerms } from './migrations/0005-validate-word-terms'
 export * from './model'
 export { createPostgresDiscovery, type PostgresDiscovery } from './postgres'
 
-export const discoveryMigrationInventory = [
+const migrations = [
   initializeDiscovery,
   generalizeDiscovery,
   addSemanticMigrationEvidence,
@@ -19,5 +19,5 @@ export const discoveryMigrationInventory = [
 export const discoveryModule = {
   name: 'discovery',
   dependsOn: [],
-  migrations: discoveryMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

@@ -450,7 +450,7 @@ export {
   type RankedEvidence,
 } from './source'
 
-export const statisticsMigrationInventory = [
+const migrations = [
   initializeStatisticsCohortTracer,
   addFullLaunchCohort,
   addLegendMetaPublications,
@@ -461,5 +461,5 @@ export const statisticsMigrationInventory = [
 export const statisticsModule = {
   name: 'statistics',
   dependsOn: ['refresh-operations'],
-  migrations: statisticsMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

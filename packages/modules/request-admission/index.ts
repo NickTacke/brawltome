@@ -5,16 +5,12 @@ import { addSourceBackoffs } from './migrations/0003-add-source-backoffs'
 
 export { createPostgresRequestAdmission, type PostgresRequestAdmission } from './postgres'
 
-export const requestAdmissionMigrationInventory = [
-  initializeRequestAdmission,
-  addActorReservations,
-  addSourceBackoffs,
-] as const
+const migrations = [initializeRequestAdmission, addActorReservations, addSourceBackoffs] as const
 
 export const requestAdmissionModule = {
   name: 'request-admission',
   dependsOn: [],
-  migrations: requestAdmissionMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule
 
 export type AdmissionActor =

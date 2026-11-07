@@ -32,7 +32,7 @@ Every `index.ts` exports a `<name>Module` object:
 export const rankingModule = {
   name: 'ranking',
   dependsOn: ['refresh-operations'],
-  migrations: rankingMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule
 ```
 
@@ -101,10 +101,10 @@ The order is:
    lowest identity goes first.
 
 There is no central list of migrations any more, but each module still keeps its own. A new migration is a file in
-the module's `migrations/` folder that is imported in the module's `index.ts` and added to its
-`<name>MigrationInventory` array, which the `<name>Module` object passes on as `migrations`. The runner only reads that
-array, so a file that isn't in it never runs. A new migration that names
-another module's schema must list one of that module's migrations in `requires`, so that module's tables exist first.
+the module's `migrations/` folder that is imported in the module's `index.ts` and added to the `migrations` array
+that the `<name>Module` object passes on. The runner only reads that array, so a file that isn't in it never runs. A
+new migration that names another module's schema must list one of that module's migrations in `requires`, so that
+module's tables exist first.
 The runner refuses a changed checksum on an applied migration, a missing predecessor, an unknown `requires` and cycles.
 
 Migrations still have to be backward compatible with the release that serves during a deploy; see

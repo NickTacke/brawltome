@@ -46,7 +46,7 @@ export function createPostgresAccounts(database: Database) {
   }
 }
 
-export const accountsMigrationInventory = [
+const migrations = [
   initializeAndImportV2Accounts,
   addV2AuthCutoverState,
   addAccountPreferences,
@@ -61,5 +61,5 @@ export const accountsMigrationInventory = [
 export const accountsModule = {
   name: 'accounts',
   dependsOn: [],
-  migrations: accountsMigrationInventory,
+  migrations,
 } satisfies BrawltomeModule

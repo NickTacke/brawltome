@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, refreshOperationsMigrationInventory } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import {
   allocatePort,
@@ -79,7 +79,7 @@ describe('real production runtime lifecycle', () => {
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     test(`API ${signal} keeps liveness separate from known-prefix readiness and exits within bounds`, async () => {
       const control = postgres(connectionString, { max: 1 })
-      const migration = refreshOperationsMigrationInventory[0]
+      const migration = refreshOperationsModule.migrations[0]
 
       await control`
           UPDATE brawltome_migrations.history SET checksum = ${'0'.repeat(64)}
@@ -274,7 +274,7 @@ describe('real production runtime lifecycle', () => {
       provenance: { source: 'runtime-process-test', requestedBy: 'SIGINT-process-test' },
     })
 
-    const migration = refreshOperationsMigrationInventory[0]
+    const migration = refreshOperationsModule.migrations[0]
 
     await control`
         UPDATE brawltome_migrations.history SET checksum = ${'0'.repeat(64)}
@@ -324,8 +324,8 @@ describe('real production runtime lifecycle', () => {
       if (runtime.process.exitCode === null) runtime.process.kill('SIGKILL')
 
       await control`
-          UPDATE brawltome_migrations.history SET checksum = ${refreshOperationsMigrationInventory[0].checksum}
-          WHERE identity = ${refreshOperationsMigrationInventory[0].identity}
+          UPDATE brawltome_migrations.history SET checksum = ${refreshOperationsModule.migrations[0].checksum}
+          WHERE identity = ${refreshOperationsModule.migrations[0].identity}
         `
 
       await removeEffectDelay(control)
