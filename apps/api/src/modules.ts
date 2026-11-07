@@ -9,7 +9,6 @@ import { replayAnalysisModule } from '@brawltome/replay-analysis'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
 
-// the modules the API process loads
 export const apiModules: readonly BrawltomeModule[] = [
   accountsModule,
   refreshOperationsModule,
