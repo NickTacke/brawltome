@@ -1,8 +1,9 @@
+import { rankedModes, rankedRegions } from '@brawltome/game-data/ranked'
 import { z } from './zod'
 
-export const leaderboardRegions = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+export const leaderboardRegions = rankedRegions
 export const leaderboardScopes = ['all', ...leaderboardRegions] as const
-export const leaderboardModes = ['1v1', '2v2', 'solo2v2', '3v3'] as const
+export const leaderboardModes = rankedModes
 
 export const leaderboardRegionSchema = z.enum(leaderboardRegions)
 export const leaderboardScopeSchema = z.enum(leaderboardScopes)

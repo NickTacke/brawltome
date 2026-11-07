@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/game-data": "workspace:*",
     "@asteasolutions/zod-to-openapi": "9.1.0",
     "@trpc/server": "^11.0.0",
     "zod": "4.4.3"
