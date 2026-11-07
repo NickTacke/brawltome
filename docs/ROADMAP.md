@@ -32,7 +32,6 @@ replay analysis). Don't chase parity with other stat sites unless it serves one 
 | #332 Overlay rework | The main differentiator. Needs a Windows machine. Includes the old #101 retry gap |
 | #116 Matches and replays | The backend foundation exists (replay ingestion, R2 storage, bridge). Next is the user-facing match history |
 | #244 Statistics activation | Decide whether `/stats` goes public, based on data-confidence evidence |
-| #365 Drop the V2 `public` tables | 1.5 GB of dead tables. Decide whether to archive them first |
 | #366 Postgres maintenance window | Reclaim bloat after retention (rankings 42 GB, statistics 20 GB); align the image |
 
 ## Later
