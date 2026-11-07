@@ -1,4 +1,5 @@
 import { createPostgresAccounts } from '@brawltome/accounts'
+import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
 import { createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList } from '@brawltome/foundation'
@@ -103,7 +104,7 @@ const refreshEvents = createRefreshEventStreams({ source: refreshOperations, tel
 
 const requestAdmission = createPostgresRequestAdmission(database, {
   authenticatedIpLimit: authenticatedRefreshIpLimit,
-  sourceLimits: { 'brawlhalla-v0': 180 },
+  sourceLimits: { 'brawlhalla-v0': brawlhallaV0RequestLimit },
 })
 
 const ranking = createPostgresRanking(database)
