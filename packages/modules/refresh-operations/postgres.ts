@@ -18,6 +18,8 @@ import {
   type DeadLetterOperations,
   type DeadLetterPage,
   type DeadLetterReason,
+  type DiscoveryEffectChecks,
+  type DiscoveryOwner,
   type DiscoveryProjectionKind,
   type FencedResult,
   type FreshnessAttempt,
@@ -349,6 +351,10 @@ function isDiscoveryProjectionKind(kind: string): kind is DiscoveryProjectionKin
   return (discoveryProjectionKinds as readonly string[]).includes(kind)
 }
 
+function projectionOwner(kind: DiscoveryProjectionKind): DiscoveryOwner {
+  return kind === 'player-discovery-projection' ? 'player' : 'clan'
+}
+
 function isStatisticsCollectionKind(kind: string): kind is StatisticsCollectionKind {
   return (statisticsCollectionKinds as readonly string[]).includes(kind)
 }
@@ -483,14 +489,7 @@ export type RefreshOperationsDatabases = {
 
 export function createPostgresRefreshOperations(
   { database, renewals = database }: RefreshOperationsDatabases,
-  options: {
-    projectionEffectState?: (
-      kind: DiscoveryProjectionKind,
-      effectOperationId: string,
-    ) => Promise<'none' | 'applied' | 'acknowledged'>
-    playerProjectionEffectState?: (effectOperationId: string) => Promise<'none' | 'applied' | 'acknowledged'>
-    reconciliationEffectApplied?: (effectOperationId: string) => Promise<boolean>
-  } = {},
+  options: { discoveryEffects?: DiscoveryEffectChecks } = {},
 ) {
   const client = database.sql
   const renewalClient = renewals.sql
@@ -2009,16 +2008,17 @@ export function createPostgresRefreshOperations(
                     `
                   : []
 
-            const projectionEffect = isDiscoveryProjectionKind(candidate.kind)
-              ? await (options.projectionEffectState?.(candidate.kind, candidate.effect_operation_id) ??
-                  (candidate.kind === 'player-discovery-projection'
-                    ? options.playerProjectionEffectState?.(candidate.effect_operation_id)
-                    : 'none'))
-              : 'none'
+            const projectionEffect =
+              isDiscoveryProjectionKind(candidate.kind) && options.discoveryEffects
+                ? await options.discoveryEffects.projectionEffectState(
+                    projectionOwner(candidate.kind),
+                    candidate.effect_operation_id,
+                  )
+                : 'none'
 
             const reconciliationEffectApplied =
-              candidate.kind === 'discovery-reconciliation'
-                ? await options.reconciliationEffectApplied?.(candidate.effect_operation_id)
+              candidate.kind === 'discovery-reconciliation' && options.discoveryEffects
+                ? await options.discoveryEffects.reconciliationEffectApplied(candidate.effect_operation_id)
                 : false
 
             if (

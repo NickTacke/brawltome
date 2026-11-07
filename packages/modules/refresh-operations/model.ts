@@ -75,6 +75,12 @@ export const discoveryProjectionKinds = ['player-discovery-projection', 'clan-di
 export type DiscoveryProjectionKind = (typeof discoveryProjectionKinds)[number]
 export type DiscoveryOwner = 'player' | 'clan'
 
+// discovery answers these when a projection or reconciliation lease expired, to tell whether its effect already landed
+export type DiscoveryEffectChecks = {
+  projectionEffectState(owner: DiscoveryOwner, effectOperationId: string): Promise<'none' | 'applied' | 'acknowledged'>
+  reconciliationEffectApplied(effectOperationId: string): Promise<boolean>
+}
+
 export const statisticsCollectionKinds = ['statistics-ranked-collection', 'statistics-lifetime-collection'] as const
 export type StatisticsCollectionKind = (typeof statisticsCollectionKinds)[number]
 export type StatisticsCollectionPayload = { cohortId: string; brawlhallaId: number }
