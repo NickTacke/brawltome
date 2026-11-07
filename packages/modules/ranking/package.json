@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
+    "@brawltome/game-data": "workspace:*",
     "@brawltome/refresh-operations": "workspace:*"
   },
   "devDependencies": {

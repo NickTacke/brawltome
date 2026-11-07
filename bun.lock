@@ -170,6 +170,7 @@
       "name": "@brawltome/accounts",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -214,6 +215,7 @@
       "name": "@brawltome/ranking",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
       },
       "devDependencies": {
@@ -224,6 +226,7 @@
       "name": "@brawltome/refresh-operations",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {

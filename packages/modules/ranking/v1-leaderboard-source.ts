@@ -1,10 +1,11 @@
+import { type RankedMode, type RankedRegion, rankedModes, rankedRegions } from '@brawltome/game-data/ranked'
 import { normalizeRegion } from './commands/sweep-helpers'
 
-export const regionalLeaderboardScopes = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
-export type RegionalLeaderboardScope = (typeof regionalLeaderboardScopes)[number]
+export const regionalLeaderboardScopes = rankedRegions
+export type RegionalLeaderboardScope = RankedRegion
 
-export const leaderboardModes = ['1v1', '2v2', 'solo2v2', '3v3'] as const
-export type LeaderboardMode = (typeof leaderboardModes)[number]
+export const leaderboardModes = rankedModes
+export type LeaderboardMode = RankedMode
 
 export type SourcePlayer = { id: number; username: string }
 export type SourceLeaderboardIdentity =

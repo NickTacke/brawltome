@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { rankedModes, rankedRegions } from '@brawltome/game-data/ranked'
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SESSION_EXTEND_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
@@ -12,8 +13,9 @@ export interface Account {
   createdAt: Date
 }
 
-export const LEADERBOARD_BRACKETS = ['1v1', '2v2', 'solo2v2', '3v3'] as const
-export const LEADERBOARD_REGIONS = ['all', 'US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+export const LEADERBOARD_BRACKETS = rankedModes
+// a preference can also pick the global board
+export const LEADERBOARD_REGIONS = ['all', ...rankedRegions] as const
 export const ACCOUNT_THEMES = ['neutral', 'purple'] as const
 
 export interface AccountPreferences {

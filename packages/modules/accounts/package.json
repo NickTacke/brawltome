@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@brawltome/foundation": "workspace:*"
+    "@brawltome/foundation": "workspace:*",
+    "@brawltome/game-data": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",
