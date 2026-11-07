@@ -57,7 +57,6 @@ describe('Brawlhalla source telemetry', () => {
       pause: () => undefined,
       remainingOnDemand: 10,
       remainingBackground: 10,
-      pausedUntilMs: 0,
     }
 
     const client = new BhApiClient({ apiKey: 'irreplaceable-secret', baseUrl, telemetry, queue: queue as never })
