@@ -4,8 +4,8 @@ import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList } from '@brawltome/foundation'
 import {
   createPostgresCareerPlayers,
-  createPostgresLeaderboardPlayerNames,
   createPostgresLeaderboardRanked,
+  createPostgresPlayerReferences,
   createPostgresProfileViews,
   createPostgresRankedPlayers,
 } from '@brawltome/player'
@@ -18,7 +18,6 @@ import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@bra
 import { trpcServer } from '@hono/trpc-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { createDatabasePlayerReferenceQueries } from './adapters/player-reference.database'
 import { SESSION_COOKIE, SESSION_COOKIE_TTL_SEC, buildSessionCookie, parseCookies } from './auth/cookies'
 import { internalSecretValid } from './auth/internal-secret'
 import {
@@ -86,17 +85,11 @@ const rankedPlayerQueries = createPostgresRankedPlayers(database, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
 })
 
-const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(database)
 const profileViews = createPostgresProfileViews(database)
 const leaderboardStandings = createPostgresLeaderboardRanked(database)
 const discovery = createPostgresDiscovery(database)
 
-const playerReferenceQueries = createDatabasePlayerReferenceQueries(
-  database,
-  (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
-  (brawlhallaId) => careerPlayerQueries.referenceById(brawlhallaId),
-  (brawlhallaId) => leaderboardPlayerNames.referenceById(brawlhallaId),
-)
+const playerReferenceQueries = createPostgresPlayerReferences(database)
 
 const refreshOperations = createPostgresRefreshOperations({ database })
 const refreshEvents = createRefreshEventStreams({ source: refreshOperations, telemetry })
