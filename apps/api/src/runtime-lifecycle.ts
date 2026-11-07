@@ -205,9 +205,6 @@ export function createRuntimeLifecycle(options: RuntimeLifecycleOptions) {
     get state(): RuntimeState {
       return state
     },
-    get activeWork(): number {
-      return activeWork
-    },
     get signal(): AbortSignal {
       return shutdownController.signal
     },

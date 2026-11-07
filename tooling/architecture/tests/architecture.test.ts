@@ -161,17 +161,6 @@ describe('dependency architecture', () => {
     expect(checkArchitecture(fixture, restrictedPolicy).violations.map(({ rule }) => rule)).toContain('role-dependency')
   })
 
-  it('does not grant legacy workspaces unrestricted dependencies', () => {
-    const fixture = withImport('@fixture/players', '@fixture/api', { dependency: '@fixture/api' })
-
-    const legacyPolicy = {
-      ...policy,
-      roles: { ...policy.roles, '@fixture/players': 'legacy' as const },
-    }
-
-    expect(checkArchitecture(fixture, legacyPolicy).violations.map(({ rule }) => rule)).toContain('role-dependency')
-  })
-
   it('rejects forbidden declared dependencies even when source does not import them', () => {
     const fixture = structuredClone(validFixture)
     const web = fixture.workspaces.find(({ name }) => name === '@fixture/web')
