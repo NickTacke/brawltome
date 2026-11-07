@@ -1,29 +1,23 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  crossoverSkinIdsByLegend,
-  getCrossoverSkinById,
   getHurtboxByName,
   getLegendById,
-  getLegendByName,
   getLevelById,
   getPowerById,
-  getSkinById,
   hurtboxes,
-  knownHeroIds,
-  knownLevelIds,
   legends,
-  levels,
   powers,
   resolvePlayerAppearance,
-  skins,
 } from '../index'
+import { levels } from '../src/generated/levels'
+import { skins } from '../src/generated/skins'
 
 describe('legends', () => {
   test('has at least the expected core legends', () => {
     expect(legends.length).toBeGreaterThanOrEqual(60)
-    const bodvar = getLegendByName('Viking')
+    const bodvar = getLegendById(3)
 
-    expect(bodvar?.heroId).toBe(3)
+    expect(bodvar?.heroName).toBe('Viking')
     expect(bodvar?.displayName).toBe('BÖDVAR')
     expect(bodvar?.weaponOne).toBe('Hammer')
     expect(bodvar?.weaponTwo).toBe('Sword')
@@ -43,15 +37,6 @@ describe('legends', () => {
       weaponOne: 'Orb',
       weaponTwo: 'Cannon',
     })
-  })
-
-  test('getLegendById returns the same object as getLegendByName', () => {
-    const sample = legends.find((l) => l.isActive)
-
-    if (!sample) throw new Error('no active legend in fixture')
-
-    expect(getLegendById(sample.heroId)).toEqual(sample)
-    expect(getLegendByName(sample.heroName)).toEqual(sample)
   })
 
   test('unknown id returns undefined', () => {
@@ -101,43 +86,7 @@ describe('hurtboxes', () => {
   })
 })
 
-describe('validation ID sets', () => {
-  test('knownHeroIds covers all generated legends', () => {
-    for (const l of legends) expect(knownHeroIds.has(l.heroId)).toBe(true)
-    expect(knownHeroIds.size).toBe(legends.length)
-  })
-
-  test('knownLevelIds covers all generated levels', () => {
-    for (const l of levels) expect(knownLevelIds.has(l.levelId)).toBe(true)
-    expect(knownLevelIds.size).toBe(levels.length)
-  })
-})
-
 describe('skin appearances', () => {
-  test('looks up generated skins and completely groups sorted crossover IDs by owner', () => {
-    const crossover = skins.find((skin) => skin.isCrossover)
-    const nonCrossover = skins.find((skin) => !skin.isCrossover)
-
-    if (!crossover || !nonCrossover) throw new Error('generated catalog needs crossover and base skins')
-
-    expect(getSkinById(crossover.skinId)).toBe(crossover)
-    expect(getSkinById(2_147_483_647)).toBeUndefined()
-    expect(getCrossoverSkinById(crossover.skinId)).toBe(crossover)
-    expect(getCrossoverSkinById(nonCrossover.skinId)).toBeUndefined()
-    expect(getCrossoverSkinById(2_147_483_647)).toBeUndefined()
-
-    const expectedOwners = new Set(skins.filter((skin) => skin.isCrossover).map((skin) => skin.legendId))
-
-    expect(new Set(crossoverSkinIdsByLegend.keys())).toEqual(expectedOwners)
-    for (const [legendId, ids] of crossoverSkinIdsByLegend) {
-      expect(ids).toEqual([...ids].sort((left, right) => left - right))
-
-      expect(ids).toEqual(
-        skins.filter((skin) => skin.isCrossover && skin.legendId === legendId).map((skin) => skin.skinId),
-      )
-    }
-  })
-
   test('resolves an exact crossover with a base legend image fallback', () => {
     const crossover = skins.find((skin) => skin.isCrossover)
 

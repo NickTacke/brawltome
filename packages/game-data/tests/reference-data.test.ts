@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type LegendReference,
-  aggregateWeapons,
   createLegendReferenceIndex,
   legendAvatarUrl,
   legendSlug,
@@ -50,48 +49,5 @@ describe('legend references', () => {
     expect(legendAvatarUrl('bodvar')).toBe('/images/legends/avatars/bodvar.png')
     expect(legendAvatarUrl('king zuva')).toBe('/images/legends/avatars/king%20zuva.png')
     expect(legendAvatarUrl('qinghua & baobao')).toBe('/images/legends/avatars/qinghua%20%26%20baobao.png')
-  })
-
-  test('aggregates resolved legend weapons by descending held time', () => {
-    const index = createLegendReferenceIndex(references)
-
-    const aggregates = aggregateWeapons(
-      [
-        {
-          legendId: 3,
-          damageWeaponOne: 100n,
-          damageWeaponTwo: 50n,
-          timeHeldWeaponOne: 20,
-          timeHeldWeaponTwo: 10,
-          koWeaponOne: 2,
-          koWeaponTwo: 1,
-        },
-        {
-          legendId: 4,
-          damageWeaponOne: 25n,
-          damageWeaponTwo: 75n,
-          timeHeldWeaponOne: 5,
-          timeHeldWeaponTwo: 30,
-          koWeaponOne: 1,
-          koWeaponTwo: 3,
-        },
-        {
-          legendId: 999,
-          damageWeaponOne: 500n,
-          damageWeaponTwo: 500n,
-          timeHeldWeaponOne: 500,
-          timeHeldWeaponTwo: 500,
-          koWeaponOne: 5,
-          koWeaponTwo: 5,
-        },
-      ],
-      index,
-    )
-
-    expect(aggregates).toEqual([
-      { weapon: 'Blasters', timeHeld: 40, damage: 125n, kos: 4 },
-      { weapon: 'Gauntlets', timeHeld: 20, damage: 100n, kos: 2 },
-      { weapon: 'Hammer', timeHeld: 5, damage: 25n, kos: 1 },
-    ])
   })
 })
