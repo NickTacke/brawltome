@@ -1658,5 +1658,3 @@ export async function runOneRefreshOperation(
     ),
   )
 }
-
-export const runOneDurableOperation = runOneRefreshOperation
