@@ -23,7 +23,7 @@ COPY --chmod=0555 infra/app/postgres/configure-dead-letter-role.sh /usr/local/bi
 ENTRYPOINT ["/usr/local/bin/configure-dead-letter-role"]
 CMD []
 
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS base
+FROM oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d AS base
 LABEL org.opencontainers.image.description="Brawlhalla player tracking" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
       org.opencontainers.image.source="https://github.com/NickTacke/brawltome" \
@@ -55,7 +55,7 @@ COPY packages/contracts/package.json packages/contracts/
 COPY tooling/analytics-review/package.json tooling/analytics-review/
 COPY tooling/architecture/package.json tooling/architecture/
 COPY tooling/database-migrations/package.json tooling/database-migrations/
-# bun 1.3.14 intermittently fails extracting large tarballs (e.g. next) at the default network concurrency.
+# bun has intermittently failed extracting large tarballs (e.g. next) at the default network concurrency.
 RUN bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
 
 FROM base AS build

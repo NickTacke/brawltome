@@ -52,7 +52,7 @@ flowchart LR
 
 | Area | Technology |
 | --- | --- |
-| Runtime | Bun 1.3.14 |
+| Runtime | Bun 1.4.4 |
 | API | Hono 4 + tRPC 11 |
 | Web | Next.js 16 + React 19 |
 | Desktop | Tauri 2 |
@@ -76,7 +76,7 @@ flowchart LR
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.3.14
+- [Bun](https://bun.sh/) 1.4.4
 - [Docker](https://www.docker.com/) with Compose
 - A Brawlhalla API key from [dev.brawlhalla.com](https://dev.brawlhalla.com/)
 - Git submodule access only for optional desktop development

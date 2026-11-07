@@ -171,7 +171,7 @@ describe('application profile topology', () => {
     const dockerignore = readFileSync(resolve(root, '.dockerignore'), 'utf8')
     const postgresInit = readFileSync(resolve(root, 'infra/app/postgres/10-runtime-role.sh'), 'utf8')
 
-    expect(dockerfile).toContain('oven/bun:1.3.14@sha256:')
+    expect(dockerfile).toContain('oven/bun:1.4.4@sha256:')
     expect(dockerfile).toContain('node:22.14.0-bookworm-slim@sha256:')
     expect(dockerfile).toContain('postgres:16.8-alpine@sha256:')
     expect(dockerfile).toContain('AS postgres')
