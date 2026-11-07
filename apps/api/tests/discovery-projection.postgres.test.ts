@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
+import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
+import { migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
-import { createPostgresPlayerDiscoverySource, playerMigrationInventory } from '@brawltome/player'
+import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
 import {
   type AdmissionConfig,
   createPostgresRefreshOperations,
-  refreshOperationsMigrationInventory,
+  refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
@@ -14,8 +15,8 @@ import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 let connectionString = ''
 let database: TestDatabase
 
-// starts empty and migrates by hand: player migration 0005 adds its triggers only when the legacy
-// public.player tables exist before it runs, so they are created first
+// starts empty: player migration 0005 adds its triggers only when the legacy public.player tables exist
+// before it runs, so they are created before migrating
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'discovery_projection', modules: [] })
   connectionString = database.connectionString
@@ -38,17 +39,13 @@ beforeAll(async () => {
         PRIMARY KEY (brawlhalla_id, key)
       );
     `)
-
-    for (const migration of [
-      ...playerMigrationInventory,
-      ...refreshOperationsMigrationInventory,
-      ...discoveryMigrationInventory,
-    ]) {
-      await setup.unsafe(migration.sql)
-    }
   } finally {
     await setup.end()
   }
+
+  const modules = [playerModule, refreshOperationsModule, discoveryModule]
+
+  await migratePostgres(connectionString, orderMigrations(modules.flatMap((module) => module.migrations)))
 }, 20_000)
 
 afterAll(async () => {
