@@ -124,8 +124,7 @@ export function createPostgresLeaderboardRanked(database: Database) {
 
   return {
     // Records the 1v1 standings a published leaderboard observed, so players nobody visits still show current
-    // ratings. Only changed values are written and keep their first observation time: V1 serves cached rows, so an
-    // unchanged row says nothing newer than a V0 refresh taken in between.
+    // ratings.
     async applyLeaderboardRanked(input: {
       observedAt: Date
       players: readonly LeaderboardRankedObservation[]
