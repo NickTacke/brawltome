@@ -8,6 +8,7 @@ import { addPinnedPlayerShortcuts } from './migrations/0006-add-pinned-player-sh
 import { addV2AccountsImportEvidence } from './migrations/0007-add-v2-accounts-import-evidence'
 import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-players'
 import { addAccountTheme } from './migrations/0009-add-account-theme'
+import { dropV2AuthState } from './migrations/0010-drop-v2-auth-state'
 import { createAccounts } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
@@ -56,6 +57,7 @@ const migrations = [
   addV2AccountsImportEvidence,
   consolidatePinnedPlayers,
   addAccountTheme,
+  dropV2AuthState,
 ] as const
 
 export const accountsModule = {

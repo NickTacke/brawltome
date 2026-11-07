@@ -5,11 +5,18 @@ import postgres from 'postgres'
 
 const connectionString = process.env.DATABASE_URL
 
+// these tests keep writing to the V2 tables after migrating, so they stop before the V2 tables are dropped
+async function migrationsBeforeV2Drop() {
+  const { orderedMigrations } = await import('../src/inventories')
+
+  return orderedMigrations.filter(({ identity }) => !identity.startsWith('legacy-v2/'))
+}
+
 // databases are built by hand: legacy V2 tables and database settings come before the migrations
 describe.skipIf(!connectionString)('Accounts migration', () => {
   test('creates one account without orphans and ignores V2 sessions created after the migration', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts')
-    const { orderedMigrations } = await import('../src/inventories')
+    const orderedMigrations = await migrationsBeforeV2Drop()
     const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_accounts_race_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
@@ -162,7 +169,7 @@ describe.skipIf(!connectionString)('Accounts migration', () => {
 
   test('copies V2 identities and valid sessions as UTC while preserving legacy tables', async () => {
     const { createPostgresAccounts } = await import('@brawltome/accounts')
-    const { orderedMigrations } = await import('../src/inventories')
+    const orderedMigrations = await migrationsBeforeV2Drop()
     const { migratePostgres } = await import('@brawltome/foundation')
     const databaseName = `brawltome_accounts_${process.pid}_${randomUUID().replaceAll('-', '')}`
     const adminUrl = new URL(connectionString as string)
