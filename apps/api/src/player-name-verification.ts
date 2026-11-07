@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { brawlhallaV0WindowMs } from '@brawltome/bhapi'
 import { parseBoundedInteger } from '@brawltome/foundation'
 import {
   type NameVerificationOutcome,
@@ -75,7 +76,7 @@ export function readPlayerNameVerificationConfig(env: NodeJS.ProcessEnv): Player
       minimum: 5_000,
       maximum: 15 * 60 * 1000,
     }),
-    windowMs: 15 * 60 * 1000,
+    windowMs: brawlhallaV0WindowMs,
   }
 }
 

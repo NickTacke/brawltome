@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { createPostgresAccounts } from '@brawltome/accounts'
-import { BhApiClient, type BhApiClientOptions, createBhApiRequestQueue } from '@brawltome/bhapi'
+import {
+  BhApiClient,
+  type BhApiClientOptions,
+  brawlhallaV0RequestLimit,
+  createBhApiRequestQueue,
+} from '@brawltome/bhapi'
 import { createPostgresClanDiscoverySource, createPostgresClans, processRefreshClanSection } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList } from '@brawltome/foundation'
@@ -91,7 +96,7 @@ const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLH
 
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
-  Math.min(180, brawlhallaV1RequestLimit),
+  Math.min(brawlhallaV0RequestLimit, brawlhallaV1RequestLimit),
 )
 
 const accounts = createPostgresAccounts(databases.main)
@@ -108,7 +113,7 @@ const operations = createPostgresRefreshOperations(
 const requestAdmission = createPostgresRequestAdmission(databases.main, {
   authenticatedIpLimit: readAuthenticatedRefreshIpLimit(process.env.AUTHENTICATED_REFRESH_IP_LIMIT),
   sourceLimits: {
-    'brawlhalla-v0': 180,
+    'brawlhalla-v0': brawlhallaV0RequestLimit,
     'brawlhalla-v1': brawlhallaV1RequestLimit,
   },
   sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60 },
