@@ -9,6 +9,10 @@ function migration(identity: string, predecessor: string | null): Migration {
   return { identity, predecessor, sql, checksum: checksumSql(sql) }
 }
 
+function dependent(name: string, dependsOn: readonly string[]): BrawltomeModule {
+  return { name, dependsOn, migrations: [] }
+}
+
 function moduleWith(name: string, identities: readonly string[]): BrawltomeModule {
   const migrations = identities.map((identity, index) => migration(identity, identities[index - 1] ?? null))
 
@@ -38,5 +42,31 @@ describe('checkModuleList migration owners', () => {
     const modules = [moduleWith('player', ['players/0001']), moduleWith('player-copy', ['players/0002'])]
 
     expect(() => checkModuleList(modules)).toThrow('modules player and player-copy both own migrations under players')
+  })
+})
+
+describe('checkModuleList dependencies', () => {
+  test('rejects a dependency that is not loaded', () => {
+    expect(() => checkModuleList([dependent('player', ['refresh-operations'])])).toThrow(
+      'module player depends on refresh-operations, which is not loaded',
+    )
+  })
+
+  test('rejects a module listed twice', () => {
+    expect(() => checkModuleList([dependent('player', []), dependent('player', [])])).toThrow(
+      'module player is listed twice',
+    )
+  })
+
+  test('rejects modules that depend on each other in a cycle', () => {
+    const modules = [dependent('alpha', ['beta']), dependent('beta', ['gamma']), dependent('gamma', ['beta'])]
+
+    expect(() => checkModuleList(modules)).toThrow('modules depend on each other in a cycle: beta -> gamma -> beta')
+  })
+
+  test('rejects a module that depends on itself', () => {
+    expect(() => checkModuleList([dependent('alpha', ['alpha'])])).toThrow(
+      'modules depend on each other in a cycle: alpha -> alpha',
+    )
   })
 })
