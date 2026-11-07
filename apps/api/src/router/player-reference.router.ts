@@ -1,5 +1,4 @@
 import { nullablePlayerReferenceSchema, playerReferenceByIdInputSchema } from '@brawltome/contracts'
-import { mapPlayerReference } from '../mappers/player-reference.mapper'
 import { internalProcedure, router } from '../trpc/trpc'
 
 export function createPlayerReferenceRouter(procedure = internalProcedure) {
@@ -7,6 +6,6 @@ export function createPlayerReferenceRouter(procedure = internalProcedure) {
     referenceById: procedure
       .input(playerReferenceByIdInputSchema)
       .output(nullablePlayerReferenceSchema)
-      .query(async ({ ctx, input }) => mapPlayerReference(await ctx.playerReferenceQueries.byId(input.id))),
+      .query(({ ctx, input }) => ctx.playerReferenceQueries.byId(input.id)),
   })
 }

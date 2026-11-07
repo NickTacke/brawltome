@@ -96,7 +96,7 @@ export {
   type NameVerificationPreparation,
   type PostgresPlayerNameVerifications,
 } from './name-verification'
-export { createPlayerReferenceQueries, type FindStoredPlayerReference } from './player-reference.queries'
+export { createPostgresPlayerReferences } from './player-references'
 export {
   createPostgresPlayerDiscoverySource,
   type PostgresPlayerDiscoverySource,
