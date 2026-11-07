@@ -606,6 +606,31 @@ describe('telemetry foundation', () => {
     expect(telemetry.stats().seriesDropped).toBe(0)
   })
 
+  test('counts deep crawl metrics with an unknown mode or region as other', () => {
+    const telemetry = createTelemetry({ service: 'operations-worker', sink: createMemorySink(), capacity: 10 })
+
+    telemetry.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode: '1v1', region: 'EU', outcome: 'read' })
+    telemetry.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode: '3v3', region: 'MARS', outcome: 'read' })
+    telemetry.metrics.add('leaderboard_deep_crawl_changed_total', 2, { mode: '2v2', region: 'MARS', change: 'team' })
+    telemetry.metrics.add('leaderboard_deep_crawl_pages_total', 1, { mode: '1v1', region: 'EU', outcome: 'lost' })
+
+    const snapshot = telemetry.metrics.snapshot()
+    const pages = snapshot.find((metric) => metric.name === 'leaderboard_deep_crawl_pages_total')
+    const changed = snapshot.find((metric) => metric.name === 'leaderboard_deep_crawl_changed_total')
+
+    expect(pages?.series.map(({ labels, value }) => ({ labels, value }))).toEqual([
+      { labels: { mode: '1v1', region: 'EU', outcome: 'read' }, value: 1 },
+      { labels: { mode: 'other', region: 'other', outcome: 'read' }, value: 1 },
+    ])
+
+    expect(changed?.series.map(({ labels, value }) => ({ labels, value }))).toEqual([
+      { labels: { mode: '2v2', region: 'other', change: 'team' }, value: 2 },
+    ])
+
+    // only mode and region fold into other, an unknown outcome still drops the series
+    expect(telemetry.stats().seriesDropped).toBe(1)
+  })
+
   test('accepts analytics metrics with allow-listed labels and drops unknown values', () => {
     const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
 
