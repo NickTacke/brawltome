@@ -4,6 +4,7 @@ import { migrationModules } from '../src/modules'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {
   const sql = `SELECT '${identity}';`
+
   return { identity, predecessor, sql, checksum: 'unchecked', requires }
 }
 
@@ -19,7 +20,10 @@ function shuffle<T>(items: readonly T[]): T[] {
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648
     const swapIndex = seed % (index + 1)
-    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+    const item = shuffled[index]
+
+    shuffled[index] = shuffled[swapIndex]
+    shuffled[swapIndex] = item
   }
 
   return shuffled
@@ -32,6 +36,7 @@ function deployedFixture(): Migration[] {
   return deployedOrder.map((identity) => {
     const moduleName = identity.split('/')[0]
     const predecessor = lastInModule.get(moduleName) ?? null
+
     lastInModule.set(moduleName, identity)
 
     return migration(identity, predecessor)
@@ -123,6 +128,7 @@ describe('orderMigrations', () => {
   test('rejects a deployed migration that requires a later one', () => {
     const isFirstDeployed = ({ identity }: Migration) => identity === 'players/0001'
     const firstDeployed = deployedMigrations.find(isFirstDeployed)
+
     if (!firstDeployed) {
       throw new Error('players/0001 is missing from the module migrations')
     }
